@@ -59,23 +59,18 @@ describe('Parent - children tests', () => {
     expect(isNanoContractCreateTx(txInitializeData.tx)).toBe(true);
 
     // NC deposit
-    const txDeposit = await wallet.createAndSendNanoContractTransaction(
-      'deposit',
-      address0,
-      {
-        ncId: txInitialize.hash,
-        args: [],
-        actions: [
-          {
-            type: 'deposit',
-            token: NATIVE_TOKEN_UID,
-            amount: 500n,
-          },
-        ]
-      }
-    );
+    const txDeposit = await wallet.createAndSendNanoContractTransaction('deposit', address0, {
+      ncId: txInitialize.hash,
+      args: [],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 500n,
+        },
+      ],
+    });
     await checkTxValid(wallet, txDeposit);
-    const txDepositData = await wallet.getFullTxById(txDeposit.hash);
 
     // Get NC balance
     const ncStateDeposit = await ncApi.getNanoContractState(
@@ -93,18 +88,11 @@ describe('Parent - children tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: [
-          'Test token',
-          'TKN',
-          200n,
-          true,
-          true
-        ],
-        actions: []
+        args: ['Test token', 'TKN', 200n, true, true],
+        actions: [],
       }
     );
     await checkTxValid(wallet, txCreateToken);
-    const txCreateTokenData = await wallet.getFullTxById(txCreateToken.hash);
 
     // Get NC create token
     const ncStateCreateToken = await ncApi.getNanoContractState(
@@ -114,7 +102,7 @@ describe('Parent - children tests', () => {
       []
     );
 
-    const createTokenUid = ncStateCreateToken.fields['last_created_token'].value;
+    const createTokenUid = ncStateCreateToken.fields.last_created_token.value;
 
     const ncStateCreateTokenBalance = await ncApi.getNanoContractState(
       txInitialize.hash,
@@ -132,16 +120,11 @@ describe('Parent - children tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: [
-          blueprintChildrenId,
-          'cafecafe',
-          'Test contract',
-        ],
-        actions: []
+        args: [blueprintChildrenId, 'cafecafe', 'Test contract'],
+        actions: [],
       }
     );
     await checkTxValid(wallet, txCreateContract);
-    const txCreateContractData = await wallet.getFullTxById(txCreateContract.hash);
 
     // Get NC create contract
     const ncStateCreateContract = await ncApi.getNanoContractState(
@@ -151,7 +134,7 @@ describe('Parent - children tests', () => {
       []
     );
 
-    const createContractId = ncStateCreateContract.fields['last_created_contract'].value;
+    const createContractId = ncStateCreateContract.fields.last_created_contract.value;
 
     // Get NC child state
     const ncStateChildInitial = await ncApi.getNanoContractState(
@@ -164,19 +147,12 @@ describe('Parent - children tests', () => {
     expect(ncStateChildInitial.fields.name.value).toBe('Test contract');
 
     // NC child contract
-    const txChild = await wallet.createAndSendNanoContractTransaction(
-      'set_attr',
-      address0,
-      {
-        ncId: createContractId,
-        args: [
-          'Attr child',
-        ],
-        actions: []
-      }
-    );
+    const txChild = await wallet.createAndSendNanoContractTransaction('set_attr', address0, {
+      ncId: createContractId,
+      args: ['Attr child'],
+      actions: [],
+    });
     await checkTxValid(wallet, txChild);
-    const txChildData = await wallet.getFullTxById(txChild.hash);
 
     // Get NC child state
     const ncStateChild = await ncApi.getNanoContractState(
@@ -185,7 +161,7 @@ describe('Parent - children tests', () => {
       [],
       []
     );
-    
+
     expect(ncStateChild.fields.name.value).toBe('Test contract');
     expect(ncStateChild.fields.attr.value).toBe('Attr child');
   };
@@ -205,7 +181,10 @@ describe('Parent - children tests', () => {
       './__tests__/integration/configuration/blueprints/test_children.py',
       'utf8'
     );
-    const txChildren = await hWallet.createAndSendOnChainBlueprintTransaction(codeChildren, address0);
+    const txChildren = await hWallet.createAndSendOnChainBlueprintTransaction(
+      codeChildren,
+      address0
+    );
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(hWallet, txChildren.hash);
 

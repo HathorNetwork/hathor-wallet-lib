@@ -271,10 +271,14 @@ describe('Full blueprint basic tests', () => {
     expect(possibleValues).toContain(ncStateRandom.fields.random_value.value);
 
     // Set list attrs
-    const txListAttrs = await wallet.createAndSendNanoContractTransaction('set_list_attrs', address0, {
-      ncId: txInitialize.hash,
-      args: [['ab', 'cd', 'efg']],
-    });
+    const txListAttrs = await wallet.createAndSendNanoContractTransaction(
+      'set_list_attrs',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [['ab', 'cd', 'efg']],
+      }
+    );
     await checkTxValid(wallet, txListAttrs);
 
     const txListAttrsState = await ncApi.getNanoContractState(txInitialize.hash, [
