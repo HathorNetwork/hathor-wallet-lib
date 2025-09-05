@@ -29,8 +29,13 @@ import {
   INanoContractActionSchema,
   IArgumentField,
 } from './types';
-import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
+import {
+  getResultHelper,
+  mapActionToActionHeader,
+  validateAndParseBlueprintMethodArgs,
+} from './utils';
 import { IDataInput, IDataOutput } from '../types';
+import { FullNodeTxResponse } from '../wallet/types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
@@ -470,40 +475,39 @@ class NanoContractTransactionBuilder {
   }
 
   /**
-   * Get the blueprint id of the nano contract being executed
+   * Retrieves the blueprint ID for a nano contract by its ID.
    *
-   * @memberof NanoContractTransactionBuilder
-   * @inner
+   * The priority is to get the data from the getFullTxById API because
+   * it gets contract txs that are still to be confirmed by a block. If it fails,
+   * the contract might have been created by another contract, so we fallback to the state
+   * API, which gets the information correctly in that case.
+   *
+   * @returns A promise resolving to the blueprint ID.
+   * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
+   * @throws {Error} If the nano contract ID is not defined.
    */
   async getBlueprintId(): Promise<string> {
-    try {
-      const response = await this.wallet.getFullTxById(this.ncId!);
-      const ncId = response?.tx?.nc_id;
-      const blueprintId = response?.tx?.nc_blueprint_id;
-
-      if (ncId && blueprintId) {
-        return blueprintId;
-      }
-    } catch {
-      // Empty catch block, we will try to get
-      // the blueprint id from the state API
-      // because the contracts created inside contracts
-      // won't be fetched by the getFullTxById API.
-      // We make the getFullTxById the priority fetch
-      // because it fetches contracts that don't have
-      // first block yet, even though it fetches only
-      // contracts that are also a DAG vertex
+    if (!this.ncId) {
+      throw new Error('Nano contract ID is not defined');
     }
 
-    try {
-      const response = await ncApi.getNanoContractState(this.ncId!, [], [], []);
-      return response.blueprint_id;
-    } catch (e) {
-      // Error getting nano contract transaction data from the full node
+    const [txError, txResponse] = (await getResultHelper(() =>
+      this.wallet.getFullTxById(this.ncId)
+    )) as [Error | null, FullNodeTxResponse | null];
+    if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
+      return txResponse.tx.nc_blueprint_id;
+    }
+
+    const [stateError, stateResponse] = await getResultHelper(() =>
+      ncApi.getNanoContractState(this.ncId!, [], [], [])
+    );
+    if (stateError || !stateResponse?.blueprint_id) {
       throw new NanoContractTransactionError(
-        `Error getting nano contract transaction data with id ${this.ncId} from the full node`
+        `Error getting nano contract transaction data with id ${this.ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
       );
     }
+
+    return stateResponse.blueprint_id;
   }
 
   /**
