@@ -299,3 +299,19 @@ export const mapActionToActionHeader = (
     tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
   };
 };
+
+/**
+ * Helper function to execute an async operation and return a tuple of [error, result].
+ * @param fn - The asynchronous function to execute.
+ * @returns A promise resolving to [null, result] on success or [error, null] on failure.
+ */
+export const getResultHelper = async <T>(
+  fn: () => Promise<T>
+): Promise<[Error | null, T | null]> => {
+  try {
+    const result = await fn();
+    return [null, result];
+  } catch (e) {
+    return [e as Error, null];
+  }
+};
