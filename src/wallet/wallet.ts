@@ -413,7 +413,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       await this.storage.saveAccessData(accessData);
     }
 
-    let renewPromise: Promise<void>|null = null;
+    let renewPromise: Promise<void> | null = null;
     if (accessData.acctPathKey) {
       // We can preemtively request/renew the auth token so the wallet can wait for this process
       // to finish while we derive and request the wallet creation.
@@ -472,10 +472,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     try {
       // Here we await the auth token to be provisioned before starting the request that requires it.
-      // If the wallet is being created for the first time this will throw
-      // If the error is a valid error we will also encounter it when we retry for the auth token
       await renewPromise;
-    } catch (err) {}
+    } catch (err) {
+      // If the wallet is being created for the first time we will have an error, or if the error
+      // was valid we will also encounter it when we retry for the auth token, so we can ignore it
+      // here
+    }
 
     await handleCreate(data.status);
 
@@ -1075,7 +1077,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async _validateAndRenewAuthToken(walletId: string, usePassword?: string) {
-
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
