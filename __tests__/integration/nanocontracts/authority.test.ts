@@ -44,7 +44,7 @@ describe('Authority actions blueprint test', () => {
     // and it already has a first block, so it was really executed
     const txAfterExecution = await wallet.getFullTxById(txId);
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
-    expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
+    expect(txAfterExecution.meta.first_block).not.toBeNull();
   };
 
   const executeTests = async (wallet, blueprintId) => {

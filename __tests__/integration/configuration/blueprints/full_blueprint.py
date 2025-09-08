@@ -70,6 +70,10 @@ class FullBlueprint(Blueprint):
 
     attr_random_list: list[str]
 
+    attr_list_0: str
+    attr_list_1: str
+    attr_list_2: str
+
     random_value: str
 
     @public
@@ -124,6 +128,12 @@ class FullBlueprint(Blueprint):
         # so I'm storing the random value, so we can read it
         idx = self.syscall.rng.randint(0, len(self.attr_random_list) - 1)
         self.random_value = self.attr_random_list[idx]
+
+    @public
+    def set_list_attrs(self, ctx: Context, attr: list[str]) -> None:
+        self.attr_list_0 = attr[0]
+        self.attr_list_1 = attr[1]
+        self.attr_list_2 = attr[2]
 
     @view
     def is_attr_optional_filled(self) -> bool:
