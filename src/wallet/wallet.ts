@@ -421,7 +421,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const acctKey = decryptData(accessData.acctPathKey, pinCode);
       const privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(privKeyAccountPath.xpubkey);
-      renewPromise = this.validateAndRenewAuthToken(walletId);
+      renewPromise = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
     const {
@@ -438,13 +438,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // we need to start the process to renew the auth token If for any reason we had to
       // derive the account path xpubkey on the method above.
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-      renewPromise = this.validateAndRenewAuthToken(walletId);
+      renewPromise = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
 
-    const handleCreate = async (data: WalletStatus) => {
+    const handleCreate = async (data: WalletStatus, tokenRenewPromise: Promise<void> | null) => {
       this.walletId = data.walletId;
 
       if (data.status === 'creating') {
@@ -455,6 +455,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         // At this stage, if the wallet is not `ready` or `creating` we should
         // throw an error as there are only three states: `ready`, `creating` or `error`
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, { cause: data.status });
+      }
+
+      if (tokenRenewPromise !== null) {
+        try {
+          await tokenRenewPromise;
+        } catch (err) {
+          this.authToken = null;
+        }
       }
 
       await this.onWalletReady();
@@ -470,16 +478,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress
     );
 
+    // If auth token api fails we can still retry during wallet creation status polling.
+    let renewPromise2: Promise<void> | null = null;
     try {
-      // Here we await the auth token to be provisioned before starting the request that requires it.
+      // Here we await the first auth token api call before continuing the startup process.
       await renewPromise;
     } catch (err) {
-      // If the wallet is being created for the first time we will have an error, or if the error
-      // was valid we will also encounter it when we retry for the auth token, so we can ignore it
-      // here
+      // If the wallet was being created the api would fail, but we will try to request a new token
+      // now that the wallet was created and before it is ready.
+      const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+      renewPromise2 = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
-    await handleCreate(data.status);
+    await handleCreate(data.status, renewPromise2);
 
     this.clearSensitiveData();
   }
