@@ -88,7 +88,7 @@ import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
-const WALLET_STATUS_POLLING_INTERVAL = 3000;
+const WALLET_STATUS_POLLING_INTERVAL = 1000;
 
 enum walletState {
   NOT_STARTED = 'Not started',
