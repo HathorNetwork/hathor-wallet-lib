@@ -2495,6 +2495,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
   it('should throw error if wallet status is not ready after creation', async () => {
     jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
     jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
       success: true,
       status: {
