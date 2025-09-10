@@ -486,6 +486,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } catch (err) {
       // If the wallet was being created the api would fail, but we will try to request a new token
       // now that the wallet was created and before it is ready.
+      this.authToken = null;
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
       renewPromise2 = this._validateAndRenewAuthToken(walletId, pinCode);
     }
