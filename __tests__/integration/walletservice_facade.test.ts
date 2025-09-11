@@ -36,6 +36,11 @@ const emptyWallet = {
   ],
 };
 
+/**
+ * Builds a HathorWalletServiceWallet instance with an empty wallet (only seed)
+ * @param enableWs - Whether to enable websocket connection (default: false)
+ * @returns The wallet instance along with its store and storage for eventual mocking/spying
+ */
 function buildEmptyWalletInstance({ enableWs = false } = {}) {
   const walletData = { words: emptyWallet.words };
   const network = new Network(NETWORK_NAME);
