@@ -287,13 +287,12 @@ describe('wallet public methods', () => {
 describe('empty wallet address methods', () => {
   let wallet: HathorWalletServiceWallet;
   const pinCode = '123456';
-  const password = 'testpass';
   const knownAddresses = emptyWallet.addresses;
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
     ({ wallet } = buildEmptyWalletInstance());
-    await wallet.start({ pinCode, password });
+    await wallet.start({ pinCode, password: 'testpass' });
   });
 
   afterEach(async () => {
