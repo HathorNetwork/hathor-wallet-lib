@@ -1,6 +1,5 @@
 import axios from 'axios';
 import Mnemonic from 'bitcore-mnemonic';
-import { IStore } from 'src/types';
 import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
@@ -25,24 +24,33 @@ const emptyWallet = {
   ],
 };
 
-describe('start', () => {
+function buildEmptyWalletInstance({ enableWs = false } = {}) {
   const walletData = { words: emptyWallet.words };
+  const network = new Network(NETWORK_NAME);
+  const requestPassword = jest.fn().mockResolvedValue('test-password');
+
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed: walletData.words,
+    network,
+    storage,
+    enableWs, // Disable websocket for integration tests
+  });
+
+  return { wallet, store, storage };
+}
+
+describe('start', () => {
   const network = new Network(NETWORK_NAME);
   const requestPassword = jest.fn().mockResolvedValue('test-password');
 
   describe('mandatory parameters validation', () => {
     let wallet: HathorWalletServiceWallet;
-    let storage: Storage;
 
     beforeEach(() => {
-      const store = new MemoryStore();
-      storage = new Storage(store);
-      wallet = new HathorWalletServiceWallet({
-        requestPassword,
-        seed: walletData.words,
-        network,
-        storage,
-      });
+      ({ wallet } = buildEmptyWalletInstance());
     });
 
     afterEach(async () => {
@@ -67,19 +75,10 @@ describe('start', () => {
   describe('handling internal errors', () => {
     let wallet: HathorWalletServiceWallet;
     const events: string[] = [];
-    let store: IStore;
     let storage: Storage;
 
     beforeEach(() => {
-      store = new MemoryStore();
-      storage = new Storage(store);
-      wallet = new HathorWalletServiceWallet({
-        requestPassword,
-        seed: walletData.words,
-        network,
-        storage,
-        enableWs: false, // Disable websocket for integration tests
-      });
+      ({ wallet, storage } = buildEmptyWalletInstance());
 
       // Clear events array
       events.length = 0;
@@ -113,19 +112,10 @@ describe('start', () => {
   describe('successful wallet creation', () => {
     let wallet: HathorWalletServiceWallet;
     const events: string[] = [];
-    let store: IStore;
     let storage: Storage;
 
     beforeEach(() => {
-      store = new MemoryStore();
-      storage = new Storage(store);
-      wallet = new HathorWalletServiceWallet({
-        requestPassword,
-        seed: walletData.words,
-        network,
-        storage,
-        enableWs: false, // Disable websocket for integration tests
-      });
+      ({ wallet, storage } = buildEmptyWalletInstance());
 
       // Clear events array
       events.length = 0;
@@ -202,89 +192,77 @@ describe('start', () => {
       expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
     });
   });
+});
 
-  describe('wallet public methods', () => {
-    let wallet: HathorWalletServiceWallet;
-    let storage: Storage;
-    const pinCode = '123456';
-    const password = 'testpass';
-    const network = new Network(NETWORK_NAME);
+describe('wallet public methods', () => {
+  let wallet: HathorWalletServiceWallet;
 
-    beforeEach(async () => {
-      const store = new MemoryStore();
-      storage = new Storage(store);
-      wallet = new HathorWalletServiceWallet({
-        requestPassword: jest.fn().mockResolvedValue(password),
-        seed: emptyWallet.words,
-        network,
-        storage,
-        enableWs: false,
+  beforeEach(async () => {
+    ({ wallet } = buildEmptyWalletInstance());
+    await wallet.start({ pinCode: '123456', password: 'testpass' });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  it('getServerUrl returns the configured base URL', () => {
+    expect(wallet.getServerUrl()).toBe(FULLNODE_URL);
+  });
+
+  it('getVersionData returns valid version info', async () => {
+    const versionData = await wallet.getVersionData();
+    expect(versionData).toBeDefined();
+    expect(versionData).toEqual(
+      expect.objectContaining({
+        timestamp: expect.any(Number),
+        version: expect.any(String),
+        network: FULLNODE_NETWORK_NAME,
+        minWeight: expect.any(Number),
+        minTxWeight: expect.any(Number),
+        minTxWeightCoefficient: expect.any(Number),
+        minTxWeightK: expect.any(Number),
+        tokenDepositPercentage: expect.any(Number),
+        rewardSpendMinBlocks: expect.any(Number),
+        maxNumberInputs: expect.any(Number),
+        maxNumberOutputs: expect.any(Number),
+        decimalPlaces: expect.any(Number),
+        nativeTokenName: expect.any(String),
+        nativeTokenSymbol: expect.any(String),
+      })
+    );
+
+    // Make sure it contains the same data as a direct fullnode request
+    const fullnodeResponse = await axios
+      .get('version', {
+        baseURL: config.getWalletServiceBaseUrl(),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .catch(e => {
+        // @ts-expect-error - The logger is initialized on setup, but TS cannot infer that
+        loggers.test.log(`Received an error on /version: ${e}`);
+        if (e.response) {
+          return e.response;
+        }
+        return {};
       });
-      await wallet.start({ pinCode, password });
-    });
+    expect(fullnodeResponse.status).toBe(200);
+    expect(fullnodeResponse.data?.success).toBe(true);
 
-    afterEach(async () => {
-      if (wallet) {
-        await wallet.stop({ cleanStorage: true });
-      }
-    });
+    expect(versionData).toEqual(fullnodeResponse.data.data);
+  });
 
-    it('getServerUrl returns the configured base URL', () => {
-      expect(wallet.getServerUrl()).toBe(FULLNODE_URL);
-    });
+  it('getNetwork returns the correct network name', () => {
+    expect(wallet.getNetwork()).toBe(NETWORK_NAME);
+  });
 
-    it('getVersionData returns valid version info', async () => {
-      const versionData = await wallet.getVersionData();
-      expect(versionData).toBeDefined();
-      expect(versionData).toEqual(
-        expect.objectContaining({
-          timestamp: expect.any(Number),
-          version: expect.any(String),
-          network: FULLNODE_NETWORK_NAME,
-          minWeight: expect.any(Number),
-          minTxWeight: expect.any(Number),
-          minTxWeightCoefficient: expect.any(Number),
-          minTxWeightK: expect.any(Number),
-          tokenDepositPercentage: expect.any(Number),
-          rewardSpendMinBlocks: expect.any(Number),
-          maxNumberInputs: expect.any(Number),
-          maxNumberOutputs: expect.any(Number),
-          decimalPlaces: expect.any(Number),
-          nativeTokenName: expect.any(String),
-          nativeTokenSymbol: expect.any(String),
-        })
-      );
-
-      // Make sure it contains the same data as a direct fullnode request
-      const fullnodeResponse = await axios
-        .get('version', {
-          baseURL: config.getWalletServiceBaseUrl(),
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-        .catch(e => {
-          // @ts-expect-error - The logger is initialized on setup, but TS cannot infer that
-          loggers.test.log(`Received an error on /version: ${e}`);
-          if (e.response) {
-            return e.response;
-          }
-          return {};
-        });
-      expect(fullnodeResponse.status).toBe(200);
-      expect(fullnodeResponse.data?.success).toBe(true);
-
-      expect(versionData).toEqual(fullnodeResponse.data.data);
-    });
-
-    it('getNetwork returns the correct network name', () => {
-      expect(wallet.getNetwork()).toBe(NETWORK_NAME);
-    });
-
-    it('getNetworkObject returns a Network instance with correct name', () => {
-      const networkObj = wallet.getNetworkObject();
-      expect(networkObj).toBeInstanceOf(Network);
-      expect(networkObj.name).toBe(NETWORK_NAME);
-    });
+  it('getNetworkObject returns a Network instance with correct name', () => {
+    const networkObj = wallet.getNetworkObject();
+    expect(networkObj).toBeInstanceOf(Network);
+    expect(networkObj.name).toBe(NETWORK_NAME);
   });
 });
