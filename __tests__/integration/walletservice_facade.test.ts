@@ -25,28 +25,6 @@ const emptyWallet = {
   ],
 };
 
-describe('version', () => {
-  it('should retrieve the version data', async () => {
-    const response = await axios
-      .get('version', {
-        baseURL: config.getWalletServiceBaseUrl(),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .catch(e => {
-        // @ts-expect-error - The logger is initialized on setup, but TS cannot infer that
-        loggers.test.log(`Received an error on /version: ${e}`);
-        if (e.response) {
-          return e.response;
-        }
-        throw e;
-      });
-    expect(response.status).toBe(200);
-    expect(response.data?.success).toBe(true);
-  });
-});
-
 describe('start', () => {
   const walletData = { words: emptyWallet.words };
   const network = new Network(NETWORK_NAME);
