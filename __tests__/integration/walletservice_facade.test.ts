@@ -14,6 +14,7 @@ import {
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
+import { delay } from './utils/core.util';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -35,14 +36,31 @@ const emptyWallet = {
     'WUJjQGb4SGSLh44m2JdgAR4kui8mTPb8bK',
   ],
 };
+const walletWithTxs = {
+  words:
+    'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
+  addresses: [
+    'WeSnE5dnrciKahKbTvbUWmY6YM9Ntgi6MJ',
+    'Wj52SGubNZu3JA2ncRXyNGfqyrdnj4XTU2',
+    'Wh1Xs7zPVT9bc6dzzA23Zu8aiP3H8zLkiy',
+    'WdFeZvVJkwAdLDpXLGJpFP9XSDcdrntvAg',
+    'WTdWsgnCPKBuzEKAT4NZkzHaD4gHYMrk4G',
+    'WSBhEBkuLpqu2Fz1j6PUyUa1W4GGybEYSF',
+    'WS8yocEYBykpgjQxAhxjTcjVw9gKtYdys8',
+    'WmkBa6ikYM2sZmiopM6zBGswJKvzs5Noix',
+    'WeEPszSx14og6c3uPXy2vYh7BK9c6Zb9TX',
+    'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
+  ],
+};
 
 /**
- * Builds a HathorWalletServiceWallet instance with an empty wallet (only seed)
+ * Builds a HathorWalletServiceWallet instance with a wallet seed words
  * @param enableWs - Whether to enable websocket connection (default: false)
+ * @param words - The 24 words to use for the wallet (default: empty wallet)
  * @returns The wallet instance along with its store and storage for eventual mocking/spying
  */
-function buildEmptyWalletInstance({ enableWs = false } = {}) {
-  const walletData = { words: emptyWallet.words };
+function buildWalletInstance({ enableWs = false, words = emptyWallet.words } = {}) {
+  const walletData = { words };
   const network = new Network(NETWORK_NAME);
   const requestPassword = jest.fn().mockResolvedValue('test-password');
 
@@ -67,7 +85,7 @@ describe('start', () => {
     let wallet: HathorWalletServiceWallet;
 
     beforeEach(() => {
-      ({ wallet } = buildEmptyWalletInstance());
+      ({ wallet } = buildWalletInstance());
     });
 
     afterEach(async () => {
@@ -95,7 +113,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildEmptyWalletInstance());
+      ({ wallet, storage } = buildWalletInstance());
 
       // Clear events array
       events.length = 0;
@@ -132,7 +150,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildEmptyWalletInstance());
+      ({ wallet, storage } = buildWalletInstance());
 
       // Clear events array
       events.length = 0;
@@ -215,7 +233,7 @@ describe('wallet public methods', () => {
   let wallet: HathorWalletServiceWallet;
 
   beforeEach(async () => {
-    ({ wallet } = buildEmptyWalletInstance());
+    ({ wallet } = buildWalletInstance());
     await wallet.start({ pinCode: '123456', password: 'testpass' });
   });
 
@@ -291,7 +309,7 @@ describe('empty wallet address methods', () => {
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
-    ({ wallet } = buildEmptyWalletInstance());
+    ({ wallet } = buildWalletInstance());
     await wallet.start({ pinCode, password: 'testpass' });
   });
 
@@ -371,5 +389,52 @@ describe('empty wallet address methods', () => {
     await expect(wallet.getPrivateKeyFromAddress(unknownAddress, { pinCode })).rejects.toThrow(
       /does not belong to this wallet/
     );
+  });
+});
+
+describe.only('websocket events', () => {
+  let wallet: HathorWalletServiceWallet;
+  let gWallet: HathorWalletServiceWallet;
+
+  beforeAll(async () => {
+    ({ wallet: gWallet } = buildWalletInstance({
+      enableWs: true,
+      words: WALLET_CONSTANTS.genesis.words,
+    }));
+    await gWallet.start({ pinCode: '123456', password: 'genesispass' });
+  });
+
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
+    await wallet.start({ pinCode: '123456', password: 'testpass' });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  it('should handle new-tx websocket event', async () => {
+    const events: unknown[] = [];
+    wallet.on('new-tx', tx => {
+      events.push(tx);
+      // Add your assertions here after triggering the event
+    });
+
+    gWallet.sendTransaction(walletWithTxs.addresses[0], 10n);
+    await delay(10000);
+
+    expect(events.length).toBe(1);
+    expect(events[0]).toBeDefined();
+  });
+
+  it.skip('should handle update-tx websocket event', async () => {
+    const events: any[] = [];
+    wallet.on('update-tx', tx => {
+      events.push(tx);
+      // Add your assertions here after triggering the event
+    });
+    // TODO: Trigger the event and add assertions
   });
 });
