@@ -186,8 +186,9 @@ services:
       DB_USER: wallet_service_user
       DB_PASS: password
       DB_PORT: 3306
-      REDIS_URL: redis
+      REDIS_URL: redis://redis
       REDIS_PORT: 6379
+      # REDIS_PASSWORD: ""
       AUTH_SECRET: foobar
       EXPLORER_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3001
       WALLET_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3000
@@ -208,7 +209,6 @@ services:
       ALERT_MANAGER_REGION: us-east-1
       ALERT_MANAGER_TOPIC: alert-topic
       PUSH_ALLOWED_PROVIDERS: "fake_provider"
-      REDIS_PASSWORD: ""
       IS_OFFLINE: true
       MOCK_AWS: true # Necessary to avoid calls to AWS on this private network
       ALERT_MANAGER_ACCOUNT_ID: "fake_account_id"
