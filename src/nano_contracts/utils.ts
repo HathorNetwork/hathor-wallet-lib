@@ -11,7 +11,6 @@ import { z } from 'zod';
 import transactionUtils from '../utils/transaction';
 import tokensUtils from '../utils/tokens';
 import SendTransaction from '../new/sendTransaction';
-import HathorWallet from '../new/wallet';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
@@ -21,7 +20,7 @@ import P2SH from '../models/p2sh';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
-import { OutputType } from '../wallet/types';
+import { OutputType, IHathorWallet } from '../wallet/types';
 import { IHistoryTx, IStorage, ITokenData, OutputValueType } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
@@ -106,7 +105,8 @@ export async function getOracleSignedDataFromUser(
   contractId: string,
   argType: string,
   value: unknown,
-  wallet: HathorWallet
+  wallet: IHathorWallet,
+  options: { pinCode?: string } = {}
 ) {
   const field = getFieldParser(argType, wallet.getNetworkObject());
   if (!isSignedDataField(field)) {
@@ -117,7 +117,7 @@ export async function getOracleSignedDataFromUser(
   // Serialize user value
   const serialized = field.inner.toBuffer();
   // Sign user value
-  const signature = await getOracleInputData(oracleData, contractId, serialized, wallet);
+  const signature = await getOracleInputData(oracleData, contractId, serialized, wallet, options);
 
   field.fromUser({
     type: field.value.type, // Type is pre-filled during parser contruction
@@ -139,11 +139,12 @@ export const getOracleInputData = async (
   oracleData: Buffer,
   contractId: string,
   resultSerialized: Buffer,
-  wallet: HathorWallet
+  wallet: IHathorWallet,
+  options: { pinCode?: string } = {}
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
   const actualValue = Buffer.concat([ncId, resultSerialized]);
-  return unsafeGetOracleInputData(oracleData, actualValue, wallet);
+  return unsafeGetOracleInputData(oracleData, actualValue, wallet, options);
 };
 
 /**
@@ -157,7 +158,8 @@ export const getOracleInputData = async (
 export const unsafeGetOracleInputData = async (
   oracleData: Buffer,
   resultSerialized: Buffer,
-  wallet: HathorWallet
+  wallet: IHathorWallet,
+  options: { pinCode?: string } = {}
 ): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
@@ -171,7 +173,7 @@ export const unsafeGetOracleInputData = async (
     if (!wallet.isAddressMine(address)) {
       throw new OracleParseError('Oracle address is not from the loaded wallet.');
     }
-    const oracleKey = await wallet.getPrivateKeyFromAddress(address);
+    const oracleKey = await wallet.getPrivateKeyFromAddress(address, options);
 
     const signatureOracle = transactionUtils.getSignature(
       crypto.Hash.sha256(resultSerialized),
@@ -296,4 +298,20 @@ export const mapActionToActionHeader = (
     amount,
     tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
   };
+};
+
+/**
+ * Helper function to execute an async operation and return a tuple of [error, result].
+ * @param fn - The asynchronous function to execute.
+ * @returns A promise resolving to [null, result] on success or [error, null] on failure.
+ */
+export const getResultHelper = async <T>(
+  fn: () => Promise<T>
+): Promise<[Error | null, T | null]> => {
+  try {
+    const result = await fn();
+    return [null, result];
+  } catch (e) {
+    return [e as Error, null];
+  }
 };

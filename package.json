@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "2.6.1",
+  "version": "2.8.0",
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
@@ -26,6 +26,7 @@
     "zod": "3.23.8"
   },
   "scripts": {
+    "pretest": "patch-package",
     "test": "jest --env=node --forceExit",
     "test:watch": "jest --watch --env=node",
     "build": "babel -d lib --extensions \".ts,.js\" src && tsc",
@@ -69,6 +70,7 @@
     "jest-html-reporter": "3.10.2",
     "jest-localstorage-mock": "2.4.26",
     "mock-socket": "9.3.1",
+    "patch-package": "8.0.0",
     "prettier": "3.3.2",
     "typescript": "5.4.5"
   },

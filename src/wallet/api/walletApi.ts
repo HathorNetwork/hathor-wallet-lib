@@ -19,11 +19,13 @@ import {
   TxProposalUpdateResponseData,
   TokenDetailsResponseData,
   TxOutputResponseData,
+  GetTxOutputsOptions,
   AuthTokenResponseData,
   FullNodeVersionData,
   TxByIdTokensResponseData,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
+  AddressDetailsResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
@@ -45,6 +47,7 @@ import {
   txOutputResponseSchema,
   authTokenResponseSchema,
   txByIdResponseSchema,
+  addressDetailsResponseSchema,
 } from './schemas/walletApi';
 
 /**
@@ -130,6 +133,22 @@ const walletApi = {
     throw new WalletRequestError('Error getting wallet addresses.');
   },
 
+  async getAddressDetails(
+    wallet: HathorWalletServiceWallet,
+    address: string
+  ): Promise<AddressDetailsResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const query = `?address=${address}`;
+    const url = `wallet/address/info${query}`;
+    const response = await axios.get(url);
+
+    if (response.status === 200 && response.data.success === true) {
+      return parseSchema(response.data, addressDetailsResponseSchema);
+    }
+
+    throw new WalletRequestError('Error getting address info.');
+  },
+
   async checkAddressesMine(
     wallet: HathorWalletServiceWallet,
     addresses: string[]
@@ -202,7 +221,7 @@ const walletApi = {
 
   async getTxOutputs(
     wallet: HathorWalletServiceWallet,
-    options = {}
+    options: GetTxOutputsOptions = {}
   ): Promise<TxOutputResponseData> {
     const data = { params: options };
     const axios = await axiosInstance(wallet, true);

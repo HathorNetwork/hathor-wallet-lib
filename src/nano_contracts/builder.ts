@@ -29,11 +29,17 @@ import {
   INanoContractActionSchema,
   IArgumentField,
 } from './types';
-import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
+import {
+  getResultHelper,
+  mapActionToActionHeader,
+  validateAndParseBlueprintMethodArgs,
+} from './utils';
 import { IDataInput, IDataOutput } from '../types';
+import { FullNodeTxResponse } from '../wallet/types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
+import ncApi from '../api/nano';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -469,6 +475,42 @@ class NanoContractTransactionBuilder {
   }
 
   /**
+   * Retrieves the blueprint ID for a nano contract by its ID.
+   *
+   * The priority is to get the data from the getFullTxById API because
+   * it gets contract txs that are still to be confirmed by a block. If it fails,
+   * the contract might have been created by another contract, so we fallback to the state
+   * API, which gets the information correctly in that case.
+   *
+   * @returns A promise resolving to the blueprint ID.
+   * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
+   * @throws {Error} If the nano contract ID is not defined.
+   */
+  async getBlueprintId(): Promise<string> {
+    if (!this.ncId) {
+      throw new Error('Nano contract ID is not defined');
+    }
+
+    const [txError, txResponse] = (await getResultHelper(() =>
+      this.wallet.getFullTxById(this.ncId)
+    )) as [Error | null, FullNodeTxResponse | null];
+    if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
+      return txResponse.tx.nc_blueprint_id;
+    }
+
+    const [stateError, stateResponse] = await getResultHelper(() =>
+      ncApi.getNanoContractState(this.ncId!, [], [], [])
+    );
+    if (stateError || !stateResponse?.blueprint_id) {
+      throw new NanoContractTransactionError(
+        `Error getting nano contract transaction data with id ${this.ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
+      );
+    }
+
+    return stateResponse.blueprint_id;
+  }
+
+  /**
    * Verify if the builder attributes are valid for the nano build
    *
    * @throws {NanoContractTransactionError} In case the attributes are not valid
@@ -490,23 +532,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      let response;
-      try {
-        response = await this.wallet.getFullTxById(this.ncId);
-      } catch {
-        // Error getting nano contract transaction data from the full node
-        throw new NanoContractTransactionError(
-          `Error getting nano contract transaction data with id ${this.ncId} from the full node`
-        );
-      }
-
-      if (!response.tx.nc_id) {
-        throw new NanoContractTransactionError(
-          `Transaction with id ${this.ncId} is not a nano contract transaction.`
-        );
-      }
-
-      this.blueprintId = response.tx.nc_blueprint_id;
+      this.blueprintId = await this.getBlueprintId();
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {
@@ -578,6 +604,7 @@ class NanoContractTransactionBuilder {
         }
       }
       tokens = Array.from(tokenSet);
+
       for (const action of this.actions) {
         // Call action
         switch (action.type) {
@@ -713,7 +740,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
-      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!);
+      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 

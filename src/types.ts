@@ -75,15 +75,11 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
-  // Sequential number used when creating nano header in a transaction
-  // each address has this sequence and we get the next number of the caller
-  seqnum: number;
 }
 
 export interface IAddressMetadataAsRecord {
   numTransactions: number;
   balance: Record<string, IBalance>;
-  seqnum: number;
 }
 
 export interface ITokenData {
@@ -146,7 +142,7 @@ export type IHistoryNanoContractAction =
 
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];
-  address: string;
+  caller_id: string;
   timestamp: number;
 }
 
@@ -462,11 +458,13 @@ export interface IStore {
   addressIter(): AsyncGenerator<IAddressInfo>;
   getAddress(base58: string): Promise<IAddressInfo | null>;
   getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
+  getSeqnumMeta(base58: string): Promise<number | null>;
   getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
   editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void>;
+  editSeqnumMeta(base58: string, seqnum: number): Promise<void>;
 
   // tx history methods
   historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
