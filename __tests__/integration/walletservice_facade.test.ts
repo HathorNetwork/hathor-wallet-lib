@@ -53,6 +53,11 @@ const walletWithTxs = {
   ],
 };
 
+/** Default pin to simplify the tests */
+const pinCode = '123456';
+/** Default password to simplify the tests */
+const password = 'testpass';
+
 /**
  * Builds a HathorWalletServiceWallet instance with a wallet seed words
  * @param enableWs - Whether to enable websocket connection (default: false)
@@ -396,7 +401,85 @@ describe('empty wallet address methods', () => {
   });
 });
 
-describe.only('websocket events', () => {
+describe('basic transaction methods', () => {
+  let wallet: HathorWalletServiceWallet;
+  let gWallet: HathorWalletServiceWallet;
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+    if (gWallet) {
+      await gWallet.stop({ cleanStorage: true });
+    }
+  });
+
+  describe('sendTransaction', () => {
+    it('should send a simple transaction with native token', async () => {
+      ({ wallet: gWallet } = buildWalletInstance({
+        words: WALLET_CONSTANTS.genesis.words,
+      }));
+      await gWallet.start({ pinCode, password });
+
+      const sendTransaction = await gWallet.sendTransaction(walletWithTxs.addresses[0], 10n, {
+        pinCode,
+      });
+
+      // Validate all properties of the returned Transaction object
+      expect(sendTransaction).toEqual(
+        expect.objectContaining({
+          // Core transaction identification
+          hash: expect.any(String),
+
+          // Transaction structure
+          // inputs: expect.arrayContaining([
+          //   expect.objectContaining({
+          //     hash: expect.any(String),
+          //     index: expect.any(Number),
+          //     data: expect.any(Buffer),
+          //   }),
+          // ]),
+          // outputs: expect.arrayContaining([
+          //   expect.objectContaining({
+          //     value: expect.any(BigInt),
+          //     script: expect.any(Buffer),
+          //     tokenData: expect.any(Number),
+          //     decodedScript: expect.anything(), // Can be null
+          //   }),
+          // ]),
+
+          // Transaction metadata
+          version: expect.any(Number),
+          weight: expect.any(Number),
+          nonce: expect.any(Number),
+          signalBits: expect.any(Number),
+          timestamp: expect.any(Number),
+
+          // Transaction relationships
+          parents: expect.arrayContaining([expect.any(String)]),
+          tokens: expect.any(Array), // May be empty array
+
+          // Headers
+          headers: expect.any(Array), // May be empty
+        })
+      );
+
+      // Additional specific validations
+      expect(sendTransaction.hash).toHaveLength(64); // Transaction hash should be 64 hex characters
+      expect(sendTransaction.inputs.length).toBeGreaterThan(0); // Should have at least one input
+      expect(sendTransaction.outputs.length).toBeGreaterThan(0); // Should have at least one output
+      expect(sendTransaction.parents).toHaveLength(2); // Should have exactly 2 parents
+      expect(sendTransaction.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
+
+      // Verify the transaction was sent to the correct address with correct value
+      const recipientOutput = sendTransaction.outputs.find(output => output.value === 10n);
+      expect(recipientOutput).toBeDefined();
+      expect(recipientOutput?.value).toBe(10n);
+    });
+  });
+});
+
+describe('websocket events', () => {
   let wallet: HathorWalletServiceWallet;
   let gWallet: HathorWalletServiceWallet;
 
