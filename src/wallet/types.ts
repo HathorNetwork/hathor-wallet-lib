@@ -709,7 +709,7 @@ export interface FullNodeTx {
       melt?: boolean;
     }>;
     caller_id: string;
-    timestamp: number;
+    timestamp?: number | null;
   };
 }
 

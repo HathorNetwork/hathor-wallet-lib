@@ -138,7 +138,7 @@ export const IHistoryNanoContractContextSchema = z
   .object({
     actions: IHistoryNanoContractActionSchema.array(),
     caller_id: z.string(),
-    timestamp: z.number(),
+    timestamp: z.number().nullish(),
   })
   .passthrough();
 
