@@ -108,7 +108,7 @@ describe('start', () => {
     });
 
     it('should throw error when password is not provided for new wallet from seed', async () => {
-      await expect(wallet.start({ pinCode: '123456' })).rejects.toThrow(
+      await expect(wallet.start({ pinCode })).rejects.toThrow(
         'Password is required when starting the wallet from the seed.'
       );
     });
@@ -142,9 +142,7 @@ describe('start', () => {
       jest.spyOn(storage, 'getAccessData').mockRejectedValueOnce(new Error('Crash'));
 
       // Start the wallet
-      await expect(() => wallet.start({ pinCode: '123456', password: 'testpass' })).rejects.toThrow(
-        'Crash'
-      );
+      await expect(() => wallet.start({ pinCode, password })).rejects.toThrow('Crash');
 
       // Verify wallet is ready
       expect(wallet.isReady()).toBe(false);
@@ -176,7 +174,7 @@ describe('start', () => {
 
     it('should create wallet with words and emit correct state events', async () => {
       // Start the wallet
-      await wallet.start({ pinCode: '123456', password: 'testpass' });
+      await wallet.start({ pinCode, password });
 
       // Verify wallet is ready
       expect(wallet.isReady()).toBe(true);
@@ -225,7 +223,7 @@ describe('start', () => {
       });
 
       // Start the wallet
-      await wallet.start({ pinCode: '123456', password: 'testpass' });
+      await wallet.start({ pinCode, password });
 
       // Verify wallet is ready
       expect(wallet.isReady()).toBe(true);
@@ -243,7 +241,7 @@ describe('wallet public methods', () => {
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
-    await wallet.start({ pinCode: '123456', password: 'testpass' });
+    await wallet.start({ pinCode, password });
   });
 
   afterEach(async () => {
@@ -313,13 +311,12 @@ describe('wallet public methods', () => {
 
 describe('empty wallet address methods', () => {
   let wallet: HathorWalletServiceWallet;
-  const pinCode = '123456';
   const knownAddresses = emptyWallet.addresses;
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
-    await wallet.start({ pinCode, password: 'testpass' });
+    await wallet.start({ pinCode, password });
   });
 
   afterEach(async () => {
@@ -401,7 +398,7 @@ describe('empty wallet address methods', () => {
   });
 });
 
-describe.only('basic transaction methods', () => {
+describe('basic transaction methods', () => {
   let wallet: HathorWalletServiceWallet;
   let gWallet: HathorWalletServiceWallet;
 
@@ -503,12 +500,12 @@ describe('websocket events', () => {
       words: WALLET_CONSTANTS.genesis.words,
       passwordForRequests: genesisPassword,
     }));
-    await gWallet.start({ pinCode: '123456', password: genesisPassword });
+    await gWallet.start({ pinCode, password: genesisPassword });
   });
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
-    await wallet.start({ pinCode: '123456', password: 'testpass' });
+    await wallet.start({ pinCode, password });
   });
 
   afterEach(async () => {
@@ -534,7 +531,7 @@ describe('websocket events', () => {
     });
 
     const sendTransaction = await gWallet.sendTransaction(walletWithTxs.addresses[0], 10n, {
-      pinCode: '123456',
+      pinCode,
     });
     expect(sendTransaction.hash).toBeDefined();
 
@@ -555,13 +552,12 @@ describe('websocket events', () => {
       // Add your assertions here after triggering the event
     });
     // TODO: Trigger the event and add assertions
+    expect(true).toBe(false);
   });
 });
 
 describe('balances', () => {
   let wallet: HathorWalletServiceWallet;
-  const pinCode = '123456';
-  const password = 'testpass';
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
