@@ -401,7 +401,7 @@ describe('empty wallet address methods', () => {
   });
 });
 
-describe('basic transaction methods', () => {
+describe.only('basic transaction methods', () => {
   let wallet: HathorWalletServiceWallet;
   let gWallet: HathorWalletServiceWallet;
 
@@ -425,28 +425,15 @@ describe('basic transaction methods', () => {
         pinCode,
       });
 
-      // Validate all properties of the returned Transaction object
+      // Shallow validate all properties of the returned Transaction object
       expect(sendTransaction).toEqual(
         expect.objectContaining({
           // Core transaction identification
           hash: expect.any(String),
 
-          // Transaction structure
-          // inputs: expect.arrayContaining([
-          //   expect.objectContaining({
-          //     hash: expect.any(String),
-          //     index: expect.any(Number),
-          //     data: expect.any(Buffer),
-          //   }),
-          // ]),
-          // outputs: expect.arrayContaining([
-          //   expect.objectContaining({
-          //     value: expect.any(BigInt),
-          //     script: expect.any(Buffer),
-          //     tokenData: expect.any(Number),
-          //     decodedScript: expect.anything(), // Can be null
-          //   }),
-          // ]),
+          // Inputs and outputs
+          inputs: expect.any(Array),
+          outputs: expect.any(Array),
 
           // Transaction metadata
           version: expect.any(Number),
@@ -464,17 +451,43 @@ describe('basic transaction methods', () => {
         })
       );
 
+      // Deep validate the Inputs and Outputs arrays
+      expect(sendTransaction.inputs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            hash: expect.any(String),
+            index: expect.any(Number),
+            data: expect.any(Buffer),
+          }),
+        ])
+      );
+
+      expect(sendTransaction.outputs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            value: expect.any(BigInt),
+            script: expect.any(Buffer),
+            tokenData: expect.any(Number),
+          }),
+        ])
+      );
+
       // Additional specific validations
       expect(sendTransaction.hash).toHaveLength(64); // Transaction hash should be 64 hex characters
       expect(sendTransaction.inputs.length).toBeGreaterThan(0); // Should have at least one input
       expect(sendTransaction.outputs.length).toBeGreaterThan(0); // Should have at least one output
+      expect(sendTransaction.tokens).toHaveLength(0); // Not populated if only the native token is sent
       expect(sendTransaction.parents).toHaveLength(2); // Should have exactly 2 parents
       expect(sendTransaction.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
 
       // Verify the transaction was sent to the correct address with correct value
       const recipientOutput = sendTransaction.outputs.find(output => output.value === 10n);
-      expect(recipientOutput).toBeDefined();
-      expect(recipientOutput?.value).toBe(10n);
+      expect(recipientOutput).toStrictEqual(
+        expect.objectContaining({
+          value: 10n,
+          tokenData: 0,
+        })
+      );
     });
   });
 });
