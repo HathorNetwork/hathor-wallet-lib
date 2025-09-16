@@ -15,6 +15,7 @@ import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
+import { TxNotFoundError } from '../../src/errors';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -85,6 +86,37 @@ function buildWalletInstance({
   });
 
   return { wallet, store, storage };
+}
+
+/**
+ * Polls the wallet for a transaction by its ID until found or max attempts reached
+ * @param wallet - The wallet instance to poll
+ * @param txId - The transaction ID to look for
+ * @returns The transaction object if found
+ * @throws Error if the transaction is not found after max attempts
+ */
+async function poolForTx(wallet: HathorWalletServiceWallet, txId: string) {
+  const maxAttempts = 10;
+  const delayMs = 1000; // 1 second
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    try {
+      const tx = await wallet.getTxById(txId);
+      if (tx) {
+        loggers.test.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
+        return tx;
+      }
+    } catch (error) {
+      // If the error is of type TxNotFoundError, we continue polling
+      if (!(error instanceof TxNotFoundError)) {
+        throw error; // Re-throw unexpected errors
+      }
+    }
+    attempts++;
+    await delay(delayMs);
+  }
+  throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
 }
 
 describe('start', () => {
@@ -411,7 +443,7 @@ describe('basic transaction methods', () => {
     }
   });
 
-  describe('sendTransaction', () => {
+  describe.only('sendTransaction', () => {
     it('should send a simple transaction with native token', async () => {
       ({ wallet: gWallet } = buildWalletInstance({
         words: WALLET_CONSTANTS.genesis.words,
@@ -483,6 +515,47 @@ describe('basic transaction methods', () => {
         expect.objectContaining({
           value: 10n,
           tokenData: 0,
+        })
+      );
+    });
+
+    it('should send a transaction with a set changeAddress', async () => {
+      ({ wallet } = buildWalletInstance({ words: walletWithTxs.words }));
+      await wallet.start({ pinCode, password });
+
+      const sendTransaction = await wallet.sendTransaction(walletWithTxs.addresses[1], 4n, {
+        pinCode,
+        changeAddress: walletWithTxs.addresses[0],
+      });
+
+      // Verify that the only outputs were the recipient and the change address
+      expect(sendTransaction.outputs.length).toBe(2);
+
+      // Verify the transaction was sent to the correct address with correct value
+      let recipientIndex;
+      let changeIndex;
+      sendTransaction.outputs.forEach((output, index) => {
+        if (output.value === 4n) {
+          recipientIndex = index;
+        } else if (output.value === 6n) {
+          changeIndex = index;
+        }
+      });
+
+      // Confirm the addresses through UTXO queries
+      await poolForTx(wallet, sendTransaction.hash!);
+      const recipientUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, recipientIndex);
+      expect(recipientUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: walletWithTxs.addresses[1],
+          value: 4n,
+        })
+      );
+      const changeUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, changeIndex);
+      expect(changeUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: walletWithTxs.addresses[0],
+          value: 6n,
         })
       );
     });
