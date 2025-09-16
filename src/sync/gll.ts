@@ -6,3 +6,7 @@ const GLL = new PromiseQueue();
 GLL.concurrent = MAX_CONCURRENT_LOAD_TASKS;
 
 export default GLL;
+
+export function stopGLLBackgroundTask() {
+  GLL.stopBackgroundTask();
+}
