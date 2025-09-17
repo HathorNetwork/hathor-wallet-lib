@@ -443,7 +443,7 @@ describe('basic transaction methods', () => {
     }
   });
 
-  describe.only('sendTransaction', () => {
+  describe('sendTransaction - native token', () => {
     it('should send a simple transaction with native token', async () => {
       ({ wallet: gWallet } = buildWalletInstance({
         words: WALLET_CONSTANTS.genesis.words,
@@ -560,6 +560,144 @@ describe('basic transaction methods', () => {
       );
     });
   });
+
+  describe('createNewToken', () => {
+    it('should create a new token without any custom options', async () => {
+      ({ wallet } = buildWalletInstance({
+        words: walletWithTxs.words,
+      }));
+      await wallet.start({ pinCode, password });
+
+      const tokenName = 'TestToken';
+      const tokenSymbol = 'TST';
+      const tokenAmount = 100n;
+
+      const createTokenTx = await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+        pinCode,
+      });
+
+      // Shallow validate all properties of the returned CreateTokenTransaction object
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          // Core transaction identification
+          hash: expect.any(String),
+
+          // Token creation specific properties
+          name: tokenName,
+          symbol: tokenSymbol,
+
+          // Inputs and outputs
+          inputs: expect.any(Array),
+          outputs: expect.any(Array),
+
+          // Transaction metadata
+          version: expect.any(Number),
+          weight: expect.any(Number),
+          nonce: expect.any(Number),
+          signalBits: expect.any(Number),
+          timestamp: expect.any(Number),
+
+          // Transaction relationships
+          parents: expect.arrayContaining([expect.any(String)]),
+          tokens: expect.any(Array), // Should contain the new token UID
+
+          // Headers
+          headers: expect.any(Array), // May be empty
+        })
+      );
+
+      // Deep validate the Outputs array
+      expect(createTokenTx.outputs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            value: expect.any(BigInt),
+            script: expect.any(Buffer),
+            tokenData: expect.any(Number),
+          }),
+        ])
+      );
+
+      // Additional specific validations for token creation
+      expect(createTokenTx.inputs.length).toStrictEqual(1);
+      expect(createTokenTx.outputs.length).toBeGreaterThanOrEqual(3); // Token output + mint authority + melt authority (+ possible change)
+      expect(createTokenTx.tokens).toHaveLength(1); // Should contain the new token UID
+      expect(createTokenTx.parents).toHaveLength(2); // Should have exactly 2 parents
+      expect(createTokenTx.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
+      // expect(createTokenTx.name).toBe(tokenName); // Should have the correct token name
+      // expect(createTokenTx.symbol).toBe(tokenSymbol); // Should have the correct token symbol
+
+      // Validate specific output types for token creation
+      let tokenOutput;
+      let mintAuthorityOutput;
+      let meltAuthorityOutput;
+      let changeOutput;
+
+      createTokenTx.outputs.forEach(output => {
+        if (output.tokenData === 1) {
+          // Token amount output
+          tokenOutput = output;
+        } else if (output.tokenData === 129) {
+          // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is mint mask)
+          if (output.value === 1n) {
+            mintAuthorityOutput = output;
+          } else if (output.value === 2n) {
+            meltAuthorityOutput = output;
+          }
+        } else if (output.tokenData === 0) {
+          // HTR change output
+          changeOutput = output;
+        }
+      });
+
+      // Validate token amount output
+      expect(tokenOutput).toStrictEqual(
+        expect.objectContaining({
+          value: tokenAmount,
+          tokenData: 1,
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate mint authority output (default behavior creates mint authority)
+      expect(mintAuthorityOutput).toStrictEqual(
+        expect.objectContaining({
+          value: 1n, // TOKEN_MINT_MASK
+          tokenData: 129, // AUTHORITY_TOKEN_DATA + mint bit
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate melt authority output (default behavior creates melt authority)
+      expect(meltAuthorityOutput).toStrictEqual(
+        expect.objectContaining({
+          value: 2n, // TOKEN_MELT_MASK
+          tokenData: 129, // AUTHORITY_TOKEN_DATA + melt bit
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate change output exists if there was change from the HTR deposit
+      if (changeOutput) {
+        expect(changeOutput).toStrictEqual(
+          expect.objectContaining({
+            value: expect.any(BigInt),
+            tokenData: 0, // HTR
+            script: expect.any(Buffer),
+          })
+        );
+        expect(changeOutput.value).toBeGreaterThan(0n);
+      }
+
+      // Validate that the token UID is properly set
+      expect(createTokenTx.tokens[0]).toHaveLength(64); // Token UID should be 64 hex characters
+
+      // Verify the transaction can be found after creation
+      await poolForTx(wallet, createTokenTx.hash!);
+      const retrievedTx = await wallet.getTxById(createTokenTx.hash!);
+      expect(retrievedTx).toBeDefined();
+      expect(retrievedTx.txId).toBe(createTokenTx.hash);
+    });
+  })
 });
 
 describe('websocket events', () => {
