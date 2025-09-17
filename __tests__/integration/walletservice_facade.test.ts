@@ -19,7 +19,7 @@ import {
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
-import { TxNotFoundError } from '../../src/errors';
+import { TxNotFoundError, UtxoError } from '../../src/errors';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -601,16 +601,34 @@ describe('basic transaction methods', () => {
     });
   });
 
-  describe('createNewToken, getTokenDetails', () => {
-    it('should create a new token without any custom options', async () => {
-      ({ wallet } = buildWalletInstance({
-        words: walletWithTxs.words,
-      }));
+  describe.only('createNewToken, getTokenDetails', () => {
+    const tokenName = 'TestToken';
+    const tokenSymbol = 'TST';
+    const tokenAmount = 100n;
+
+    it('should not create a new token on a wallet without funds', async () => {
+      ({ wallet } = buildWalletInstance());
       await wallet.start({ pinCode, password });
 
-      const tokenName = 'TestToken';
-      const tokenSymbol = 'TST';
-      const tokenAmount = 100n;
+      await expect(
+        wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, { pinCode })
+      ).rejects.toThrow(UtxoError);
+    });
+
+    it('should create a new token without any custom options', async () => {
+      ({ wallet: gWallet } = buildWalletInstance({
+        words: WALLET_CONSTANTS.genesis.words,
+      }));
+      await gWallet.start({ pinCode, password });
+      const fundTx = await gWallet.sendTransaction(customTokenWallet.addresses[0], 10n, {
+        pinCode,
+      });
+
+      ({ wallet } = buildWalletInstance({
+        words: customTokenWallet.words,
+      }));
+      await wallet.start({ pinCode, password });
+      await poolForTx(wallet, fundTx.hash!);
 
       const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
         pinCode,
