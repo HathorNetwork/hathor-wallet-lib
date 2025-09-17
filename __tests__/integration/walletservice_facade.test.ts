@@ -57,6 +57,22 @@ const walletWithTxs = {
     'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
   ],
 };
+const customTokenWallet = {
+  words:
+    'shine myself welcome feature nurse cement crumble input utility lizard melt great sample slab know leisure salmon path gate iron enlist discover cry radio',
+  addresses: [
+    'WUTMZMaNoewWprYpb8b2etTfRuw2zRS5u3',
+    'WNxz1juhoJk9Y28knsH8ynVXn9s7bYLMkd',
+    'WWBkdHcB7TCjNQUiyFhZpXDU4Tejd7AFd5',
+    'WdcFTovRGiePVSnCpoGUYBgAGyDmXhkaD6',
+    'WjuxR4r487CTGGMJRpcnAZ9bdaH91qt7F5',
+    'WkYJ6SHfS2CTAMCxtrwWm7Mr12YRMx7WzQ',
+    'WTuBXE1WPNgjSxqDfRKy2fiDydT3e2pdiJ',
+    'WTipscpJ14sAZ4Y3f2gY5Tb1RWJYop9QYK',
+    'WhQovEXRSDc7MLMz8Tqy1qJdTy2hef1dYq',
+    'WkUREDxNQX6Qq1NwdLQycxkHFjKujQasWX',
+  ],
+};
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -122,6 +138,26 @@ async function poolForTx(wallet: HathorWalletServiceWallet, txId: string) {
   }
   throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
 }
+
+async function generateNewWalletAddress() {
+  const newWords = walletUtils.generateWalletWords();
+  const { wallet } = buildWalletInstance({ words: newWords });
+  await wallet.start({ pinCode, password });
+
+  const addresses: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    addresses.push((await wallet.getAddressAtIndex(i))!);
+  }
+
+  return {
+    words: newWords,
+    addresses,
+  };
+}
+
+// beforeAll(async () => {
+//   console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
+// });
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
