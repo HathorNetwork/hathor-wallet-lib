@@ -4,14 +4,18 @@ import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import { MemoryStore, Storage } from '../../src';
+import { CreateTokenTransaction, MemoryStore, Output, Storage } from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
   NETWORK_NAME,
   WALLET_CONSTANTS,
 } from './configuration/test-constants';
-import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
+import {
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
@@ -561,7 +565,7 @@ describe('basic transaction methods', () => {
     });
   });
 
-  describe('createNewToken', () => {
+  describe('createNewToken, getTokenDetails', () => {
     it('should create a new token without any custom options', async () => {
       ({ wallet } = buildWalletInstance({
         words: walletWithTxs.words,
@@ -572,9 +576,9 @@ describe('basic transaction methods', () => {
       const tokenSymbol = 'TST';
       const tokenAmount = 100n;
 
-      const createTokenTx = await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+      const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
         pinCode,
-      });
+      })) as CreateTokenTransaction;
 
       // Shallow validate all properties of the returned CreateTokenTransaction object
       expect(createTokenTx).toEqual(
@@ -617,20 +621,19 @@ describe('basic transaction methods', () => {
         ])
       );
 
-      // Additional specific validations for token creation
+      // Additional validations
       expect(createTokenTx.inputs.length).toStrictEqual(1);
       expect(createTokenTx.outputs.length).toBeGreaterThanOrEqual(3); // Token output + mint authority + melt authority (+ possible change)
-      expect(createTokenTx.tokens).toHaveLength(1); // Should contain the new token UID
+      expect(createTokenTx.tokens).toHaveLength(0); // Token creation has this array empty
       expect(createTokenTx.parents).toHaveLength(2); // Should have exactly 2 parents
       expect(createTokenTx.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
-      // expect(createTokenTx.name).toBe(tokenName); // Should have the correct token name
-      // expect(createTokenTx.symbol).toBe(tokenSymbol); // Should have the correct token symbol
+      expect(createTokenTx.name).toBe(tokenName);
+      expect(createTokenTx.symbol).toBe(tokenSymbol);
 
       // Validate specific output types for token creation
-      let tokenOutput;
-      let mintAuthorityOutput;
-      let meltAuthorityOutput;
-      let changeOutput;
+      let tokenOutput: Output;
+      let mintAuthorityOutput: Output;
+      let meltAuthorityOutput: Output;
 
       createTokenTx.outputs.forEach(output => {
         if (output.tokenData === 1) {
@@ -638,18 +641,16 @@ describe('basic transaction methods', () => {
           tokenOutput = output;
         } else if (output.tokenData === 129) {
           // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is mint mask)
-          if (output.value === 1n) {
+          if (output.value === TOKEN_MINT_MASK) {
             mintAuthorityOutput = output;
-          } else if (output.value === 2n) {
+          } else if (output.value === TOKEN_MELT_MASK) {
             meltAuthorityOutput = output;
           }
-        } else if (output.tokenData === 0) {
-          // HTR change output
-          changeOutput = output;
         }
       });
 
       // Validate token amount output
+      // @ts-expect-error - tokenOutput must exist
       expect(tokenOutput).toStrictEqual(
         expect.objectContaining({
           value: tokenAmount,
@@ -659,6 +660,7 @@ describe('basic transaction methods', () => {
       );
 
       // Validate mint authority output (default behavior creates mint authority)
+      // @ts-expect-error - mintAuthorityOutput must exist
       expect(mintAuthorityOutput).toStrictEqual(
         expect.objectContaining({
           value: 1n, // TOKEN_MINT_MASK
@@ -668,6 +670,7 @@ describe('basic transaction methods', () => {
       );
 
       // Validate melt authority output (default behavior creates melt authority)
+      // @ts-expect-error - meltAuthorityOutput must exist
       expect(meltAuthorityOutput).toStrictEqual(
         expect.objectContaining({
           value: 2n, // TOKEN_MELT_MASK
@@ -676,28 +679,23 @@ describe('basic transaction methods', () => {
         })
       );
 
-      // Validate change output exists if there was change from the HTR deposit
-      if (changeOutput) {
-        expect(changeOutput).toStrictEqual(
-          expect.objectContaining({
-            value: expect.any(BigInt),
-            tokenData: 0, // HTR
-            script: expect.any(Buffer),
-          })
-        );
-        expect(changeOutput.value).toBeGreaterThan(0n);
-      }
-
-      // Validate that the token UID is properly set
-      expect(createTokenTx.tokens[0]).toHaveLength(64); // Token UID should be 64 hex characters
-
       // Verify the transaction can be found after creation
-      await poolForTx(wallet, createTokenTx.hash!);
-      const retrievedTx = await wallet.getTxById(createTokenTx.hash!);
-      expect(retrievedTx).toBeDefined();
-      expect(retrievedTx.txId).toBe(createTokenTx.hash);
+      const tokenUid = createTokenTx.hash!;
+      await poolForTx(wallet, tokenUid);
+
+      // Specific token creation validations
+      const tokenDetails = await wallet.getTokenDetails(tokenUid);
+      expect(tokenDetails.tokenInfo).toStrictEqual(
+        expect.objectContaining({
+          id: tokenUid,
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+      expect(tokenDetails.totalSupply).toBe(tokenAmount);
+      expect(tokenDetails.totalTransactions).toBe(1);
     });
-  })
+  });
 });
 
 describe('websocket events', () => {
