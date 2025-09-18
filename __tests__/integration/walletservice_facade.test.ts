@@ -20,6 +20,7 @@ import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
 import { TxNotFoundError, UtxoError } from '../../src/errors';
+import { NATIVE_TOKEN_UID } from '../../lib/constants';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -884,6 +885,140 @@ describe('basic transaction methods', () => {
       expect(tokenDetails.authorities?.mint).toBe(false);
       expect(tokenDetails.authorities?.melt).toBe(false);
     });
+
+    it('should create token with specific addresses', async () => {
+      ({ wallet } = buildWalletInstance({
+        words: customTokenWallet.words,
+      }));
+      await wallet.start({ pinCode, password });
+
+      // Assign specific addresses for each component (starting from index 9 going backwards)
+      const destinationAddress = customTokenWallet.addresses[9]; // Token destination
+      const mintAuthorityAddress = customTokenWallet.addresses[8]; // Mint authority
+      const meltAuthorityAddress = customTokenWallet.addresses[7]; // Melt authority
+      const changeAddress = customTokenWallet.addresses[6]; // Change address
+
+      const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+        pinCode,
+        address: destinationAddress,
+        changeAddress,
+        createMint: true,
+        mintAuthorityAddress: mintAuthorityAddress,
+        createMelt: true,
+        meltAuthorityAddress: meltAuthorityAddress,
+      })) as CreateTokenTransaction;
+
+      // Shallow validate all properties of the returned CreateTokenTransaction object
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          hash: expect.any(String),
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+
+      // Validate specific output types and their addresses
+      let tokenOutput: Output;
+      let mintAuthorityOutput: Output;
+      let meltAuthorityOutput: Output;
+      let changeOutput: Output;
+
+      createTokenTx.outputs.forEach(output => {
+        if (output.tokenData === 1) {
+          // Token amount output
+          tokenOutput = output;
+        } else if (output.tokenData === 129) {
+          // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is mint mask)
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutput = output;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutput = output;
+          }
+        } else if (output.tokenData === 0 && output.value !== TOKEN_MINT_MASK && output.value !== TOKEN_MELT_MASK) {
+          // HTR change output (tokenData 0, not authority)
+          changeOutput = output;
+        }
+      });
+
+      // Verify the transaction can be found after creation
+      const specificAddressTokenUid = createTokenTx.hash!;
+      await poolForTx(wallet, specificAddressTokenUid);
+
+      // Validate that outputs went to the correct addresses through UTXO queries
+      let tokenOutputIndex = -1;
+      let mintAuthorityOutputIndex = -1;
+      let meltAuthorityOutputIndex = -1;
+      let changeOutputIndex = -1;
+
+      createTokenTx.outputs.forEach((output, index) => {
+        if (output.tokenData === 1) {
+          tokenOutputIndex = index;
+        } else if (output.tokenData === 129) {
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutputIndex = index;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutputIndex = index;
+          }
+        } else if (output.tokenData === 0 && output.value !== TOKEN_MINT_MASK && output.value !== TOKEN_MELT_MASK) {
+          changeOutputIndex = index;
+        }
+      });
+
+      // Verify token output went to destination address
+      const tokenUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, tokenOutputIndex);
+      expect(tokenUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: destinationAddress,
+          value: tokenAmount,
+          tokenId: specificAddressTokenUid,
+        })
+      );
+
+      // Verify mint authority output went to mint authority address
+      const mintAuthorityUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, mintAuthorityOutputIndex);
+      expect(mintAuthorityUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: mintAuthorityAddress,
+          value: 0n,
+          tokenId: specificAddressTokenUid,
+        })
+      );
+
+      // Verify melt authority output went to melt authority address
+      const meltAuthorityUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, meltAuthorityOutputIndex);
+      expect(meltAuthorityUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: meltAuthorityAddress,
+          value: 0n,
+          tokenId: specificAddressTokenUid,
+        })
+      );
+
+      // Verify change output went to change address (if exists)
+      if (changeOutputIndex !== -1) {
+        const changeUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, changeOutputIndex);
+        expect(changeUtxo).toStrictEqual(
+          expect.objectContaining({
+            address: changeAddress,
+            tokenId: NATIVE_TOKEN_UID,
+          })
+        );
+      }
+
+      // Specific token creation validations
+      const tokenDetails = await wallet.getTokenDetails(specificAddressTokenUid);
+      expect(tokenDetails.tokenInfo).toStrictEqual(
+        expect.objectContaining({
+          id: specificAddressTokenUid,
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+      expect(tokenDetails.totalSupply).toBe(tokenAmount);
+      expect(tokenDetails.totalTransactions).toBe(1);
+      expect(tokenDetails.authorities?.mint).toBe(true);
+      expect(tokenDetails.authorities?.melt).toBe(true);
+    });
   });
 });
 
@@ -977,7 +1112,7 @@ describe('balances', () => {
       expect(balances.length).toStrictEqual(1);
 
       // Should have HTR (native token) with zero balance for empty wallet
-      const htrBalance = balances.find(b => b.token.id === '00');
+      const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
       expect(htrBalance).toBeDefined();
       expect(htrBalance?.balance).toBe(0n);
     });
@@ -993,7 +1128,7 @@ describe('balances', () => {
       expect(balances.length).toBeGreaterThanOrEqual(1);
 
       // Should have HTR balance
-      const htrBalance = balances.find(b => b.token.id === '00');
+      const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
       expect(htrBalance).toBeDefined();
       expect(typeof htrBalance?.balance).toBe('bigint');
 
@@ -1002,7 +1137,7 @@ describe('balances', () => {
 
     // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
     it('should return balance for specific token when token parameter is provided', async () => {
-      const balances = await wallet.getBalance('00'); // HTR token
+      const balances = await wallet.getBalance(NATIVE_TOKEN_UID); // HTR token
 
       expect(Array.isArray(balances)).toBe(true);
       // When requesting specific token, should return that token's balance
@@ -1010,7 +1145,7 @@ describe('balances', () => {
       expect(balances[0]).toEqual(
         expect.objectContaining({
           token: expect.objectContaining({
-            id: '00',
+            id: NATIVE_TOKEN_UID,
             name: expect.any(String),
             symbol: expect.any(String),
           }),
