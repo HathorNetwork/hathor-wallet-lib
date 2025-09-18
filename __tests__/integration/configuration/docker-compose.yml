@@ -230,6 +230,11 @@ services:
       - "3001:3001"
     networks:
       - hathor-privnet
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; import json; r = urllib.request.urlopen('http://localhost:3000/dev/version'); body = json.loads(r.read()); assert body['success'] == True"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
 networks:
   hathor-privnet:
