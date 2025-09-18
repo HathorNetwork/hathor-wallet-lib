@@ -57,6 +57,9 @@ describe('Full blueprint basic tests', () => {
     const attrInt = 9;
     const attrBytes = Buffer.from('abcd').toString('hex');
     const attrBool = false;
+    const attrSet = ['a', 'b', 'c', 'c'];
+    const attrTuple = [1, 'cafe', 3];
+    const attrList = ['01', '02'];
 
     // NC initialize
     const txInitialize = await wallet.createAndSendNanoContractTransaction(
@@ -78,6 +81,9 @@ describe('Full blueprint basic tests', () => {
           attrInt,
           attrBytes,
           attrBool,
+          attrSet,
+          attrTuple,
+          attrList,
         ],
       }
     );
@@ -103,6 +109,9 @@ describe('Full blueprint basic tests', () => {
         'attr_bytes',
         'attr_bool',
         'attr_optional',
+        'attr_set',
+        'attr_tuple',
+        'attr_list',
       ],
       [],
       [attrCall]
@@ -289,6 +298,109 @@ describe('Full blueprint basic tests', () => {
     expect(txListAttrsState.fields.attr_list_0.value).toBe('ab');
     expect(txListAttrsState.fields.attr_list_1.value).toBe('cd');
     expect(txListAttrsState.fields.attr_list_2.value).toBe('efg');
+
+    // Set tuple
+    const txTuple = await wallet.createAndSendNanoContractTransaction('set_tuple', address0, {
+      ncId: txInitialize.hash,
+      args: [attrTuple],
+    });
+    await checkTxValid(wallet, txTuple);
+
+    // Set list
+    const txList = await wallet.createAndSendNanoContractTransaction('set_list', address0, {
+      ncId: txInitialize.hash,
+      args: [attrList],
+    });
+    await checkTxValid(wallet, txList);
+
+    // Set set
+    const txSet = await wallet.createAndSendNanoContractTransaction('set_set', address0, {
+      ncId: txInitialize.hash,
+      args: [attrSet],
+    });
+    await checkTxValid(wallet, txSet);
+
+    const setCall = `are_elements_inside_set(${JSON.stringify(attrSet)})`;
+    const listCall = `are_elements_inside_list(${JSON.stringify(attrList)})`;
+    const txContainersState = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      ['attr_tuple'],
+      [],
+      [setCall, listCall]
+    );
+
+    expect(txContainersState.fields.attr_tuple.value).toStrictEqual(attrTuple);
+    expect(txContainersState.calls[setCall].value).toBe(true);
+    expect(txContainersState.calls[listCall].value).toBe(true);
+
+    // Set attr dict list tuple
+    const txAttrDictListTuple = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_dict_list_tuple',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [
+          {
+            [contractId]: [
+              [0, '01'],
+              [1, '02'],
+            ],
+          },
+        ],
+      }
+    );
+    await checkTxValid(wallet, txAttrDictListTuple);
+
+    // Set attr dict dict set
+    const dictArg = {
+      [tokenUid]: {
+        [address]: attrSet,
+      },
+    };
+
+    const txAttrDictDictSet = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_dict_dict_set',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [dictArg],
+      }
+    );
+    await checkTxValid(wallet, txAttrDictDictSet);
+
+    // Set attr list dict tuple
+    const txAttrListDictTuple = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_list_dict_tuple',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [
+          [
+            {
+              a: [1, 2],
+            },
+            {
+              b: [3, 4],
+            },
+          ],
+        ],
+      }
+    );
+    await checkTxValid(wallet, txAttrListDictTuple);
+
+    const dictDictSetCall = `are_elements_inside_dict_dict_set(${JSON.stringify(attrSet)})`;
+    const tupleDictListCall = `is_tuple_inside_dict_list(${JSON.stringify([0, '01'])})`;
+    const dictListDictTupleCall = `is_dict_inside_list_dict_tuple(${JSON.stringify({ a: [1, 2] })})`;
+    const callStates = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      [],
+      [],
+      [dictDictSetCall, tupleDictListCall, dictListDictTupleCall]
+    );
+
+    expect(callStates.calls[dictDictSetCall].value).toBe(true);
+    expect(callStates.calls[tupleDictListCall].value).toBe(true);
+    expect(callStates.calls[dictListDictTupleCall].value).toBe(true);
   };
 
   it('Run with on chain blueprint', async () => {
