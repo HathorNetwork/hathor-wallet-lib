@@ -155,9 +155,30 @@ async function generateNewWalletAddress() {
   };
 }
 
-// beforeAll(async () => {
-//   console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
-// });
+beforeAll(async () => {
+  console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
+
+  // Pool for the serverless app to be ready.
+  const { wallet } = buildWalletInstance();
+  let isServerlessReady = false;
+  const startTime = Date.now();
+
+  while (isServerlessReady) {
+    try {
+      await wallet.getVersionData();
+      isServerlessReady = true;
+    } catch (e) {
+      // Ignore errors, serverless app is probably not ready yet
+      loggers.test.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
+    }
+
+    // Timeout after 2 minutes
+    if (Date.now() - startTime > 30000) {
+      throw new Error('Ws-Serverless did not become ready in time');
+    }
+    await delay(3000);
+  }
+});
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
@@ -682,8 +703,6 @@ describe('basic transaction methods', () => {
       expect(createTokenTx.tokens).toHaveLength(0); // Token creation has this array empty
       expect(createTokenTx.parents).toHaveLength(2); // Should have exactly 2 parents
       expect(createTokenTx.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
-      expect(createTokenTx.name).toBe(tokenName);
-      expect(createTokenTx.symbol).toBe(tokenSymbol);
 
       // Validate specific output types for token creation
       let tokenOutput: Output;
@@ -794,6 +813,76 @@ describe('basic transaction methods', () => {
           tokenId: tokenUid,
         })
       );
+    });
+
+    it('should create new token with no authorities', async () => {
+      ({ wallet } = buildWalletInstance({
+        words: customTokenWallet.words,
+      }));
+      await wallet.start({ pinCode, password });
+
+      const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+        pinCode,
+        createMint: false,
+        createMelt: false,
+      })) as CreateTokenTransaction;
+
+      // Shallow validate all properties of the returned CreateTokenTransaction object
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          // Core transaction identification
+          hash: expect.any(String),
+
+          // Token creation specific properties
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+
+      // Validate specific output types for token creation with no authorities
+      let tokenOutput: Output;
+      let authorityOutputsCount = 0;
+
+      createTokenTx.outputs.forEach(output => {
+        if (output.tokenData === 1) {
+          // Token amount output
+          tokenOutput = output;
+        } else if (output.tokenData === 129) {
+          // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is tokenData)
+          authorityOutputsCount++;
+        }
+      });
+
+      // Validate token amount output
+      // @ts-expect-error - tokenOutput must exist
+      expect(tokenOutput).toStrictEqual(
+        expect.objectContaining({
+          value: tokenAmount,
+          tokenData: 1,
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate that no authority outputs were created
+      expect(authorityOutputsCount).toBe(0);
+
+      // Verify the transaction can be found after creation
+      const noAuthTokenUid = createTokenTx.hash!;
+      await poolForTx(wallet, noAuthTokenUid);
+
+      // Specific token creation validations
+      const tokenDetails = await wallet.getTokenDetails(noAuthTokenUid);
+      expect(tokenDetails.tokenInfo).toStrictEqual(
+        expect.objectContaining({
+          id: noAuthTokenUid,
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+      expect(tokenDetails.totalSupply).toBe(tokenAmount);
+      expect(tokenDetails.totalTransactions).toBe(1);
+      expect(tokenDetails.authorities?.mint).toBe(false);
+      expect(tokenDetails.authorities?.melt).toBe(false);
     });
   });
 });
