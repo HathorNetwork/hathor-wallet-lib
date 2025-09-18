@@ -605,6 +605,7 @@ describe('basic transaction methods', () => {
     const tokenName = 'TestToken';
     const tokenSymbol = 'TST';
     const tokenAmount = 100n;
+    let tokenUid: string;
 
     it('should not create a new token on a wallet without funds', async () => {
       ({ wallet } = buildWalletInstance());
@@ -734,7 +735,7 @@ describe('basic transaction methods', () => {
       );
 
       // Verify the transaction can be found after creation
-      const tokenUid = createTokenTx.hash!;
+      tokenUid = createTokenTx.hash!;
       await poolForTx(wallet, tokenUid);
 
       // Specific token creation validations
@@ -748,6 +749,51 @@ describe('basic transaction methods', () => {
       );
       expect(tokenDetails.totalSupply).toBe(tokenAmount);
       expect(tokenDetails.totalTransactions).toBe(1);
+      expect(tokenDetails.authorities?.mint).toBe(true);
+      expect(tokenDetails.authorities?.melt).toBe(true);
+    });
+
+    it('should sendTransaction with custom token', async () => {
+      ({ wallet } = buildWalletInstance({ words: customTokenWallet.words }));
+      await wallet.start({ pinCode, password });
+
+      const recipientAddress = customTokenWallet.addresses[0];
+      const sendTransaction = await wallet.sendTransaction(recipientAddress, 10n, {
+        pinCode,
+        token: tokenUid,
+      });
+      await poolForTx(wallet, sendTransaction.hash!);
+
+      // Verify that the only outputs were the recipient and the change address
+      expect(sendTransaction.outputs.length).toBe(2);
+
+      // Verify the transaction was sent to the correct address with correct value
+      let recipientIndex;
+      let changeIndex;
+      sendTransaction.outputs.forEach((output, index) => {
+        if (output.value === 10n) {
+          recipientIndex = index;
+        } else if (output.value === 90n) {
+          changeIndex = index;
+        }
+      });
+
+      // Confirm the addresses through UTXO queries
+      const recipientUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, recipientIndex);
+      expect(recipientUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: recipientAddress,
+          value: 10n,
+          tokenId: tokenUid,
+        })
+      );
+      const changeUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, changeIndex);
+      expect(changeUtxo).toStrictEqual(
+        expect.objectContaining({
+          value: 90n,
+          tokenId: tokenUid,
+        })
+      );
     });
   });
 });
