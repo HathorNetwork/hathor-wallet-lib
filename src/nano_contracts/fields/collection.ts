@@ -40,6 +40,7 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
     const values: unknown[] = [];
     let bytesReadTotal = 0;
     const lenRead = leb128.decode_unsigned(buf);
+    bytesReadTotal += lenRead.bytesRead;
     const len = lenRead.value;
 
     let listBuf = buf.subarray(lenRead.bytesRead);
