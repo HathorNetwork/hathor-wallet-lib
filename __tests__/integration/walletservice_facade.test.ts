@@ -19,7 +19,7 @@ import {
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
-import { TxNotFoundError, UtxoError } from '../../src/errors';
+import { TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
 import { NATIVE_TOKEN_UID } from '../../lib/constants';
 import { GetAddressesObject } from '../../lib/wallet/types';
 
@@ -1520,8 +1520,7 @@ describe('address management methods', () => {
     it('should throw error for unknown address', async () => {
       const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
-      // TODO: Improve the error assertion validation
-      await expect(wallet.getAddressDetails(unknownAddress)).rejects.toThrow();
+      await expect(wallet.getAddressDetails(unknownAddress)).rejects.toThrow(WalletRequestError);
     });
   });
 });
