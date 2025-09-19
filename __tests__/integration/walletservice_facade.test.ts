@@ -139,7 +139,7 @@ function buildWalletInstance({
 
   const store = new MemoryStore();
   const storage = new Storage(store);
-  const wallet = new HathorWalletServiceWallet({
+  const newWallet = new HathorWalletServiceWallet({
     requestPassword,
     seed: walletData.words,
     network,
@@ -147,24 +147,24 @@ function buildWalletInstance({
     enableWs, // Disable websocket for integration tests
   });
 
-  return { wallet, store, storage };
+  return { wallet: newWallet, store, storage };
 }
 
 /**
  * Polls the wallet for a transaction by its ID until found or max attempts reached
- * @param wallet - The wallet instance to poll
+ * @param walletForPolling - The wallet instance to poll
  * @param txId - The transaction ID to look for
  * @returns The transaction object if found
  * @throws Error if the transaction is not found after max attempts
  */
-async function poolForTx(wallet: HathorWalletServiceWallet, txId: string) {
+async function poolForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
   const maxAttempts = 10;
   const delayMs = 1000; // 1 second
   let attempts = 0;
 
   while (attempts < maxAttempts) {
     try {
-      const tx = await wallet.getTxById(txId);
+      const tx = await walletForPolling.getTxById(txId);
       if (tx) {
         testLogger.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
         return tx;
@@ -183,12 +183,12 @@ async function poolForTx(wallet: HathorWalletServiceWallet, txId: string) {
 
 async function generateNewWalletAddress() {
   const newWords = walletUtils.generateWalletWords();
-  const { wallet } = buildWalletInstance({ words: newWords });
-  await wallet.start({ pinCode, password });
+  const { wallet: newWallet } = buildWalletInstance({ words: newWords });
+  await newWallet.start({ pinCode, password });
 
   const addresses: string[] = [];
   for (let i = 0; i < 10; i++) {
-    addresses.push((await wallet.getAddressAtIndex(i))!);
+    addresses.push((await newWallet.getAddressAtIndex(i))!);
   }
 
   return {
@@ -252,7 +252,6 @@ afterAll(async () => {
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
-
     beforeEach(() => {
       ({ wallet } = buildWalletInstance());
     });
@@ -397,7 +396,6 @@ describe('start', () => {
 });
 
 describe('wallet public methods', () => {
-
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
     await wallet.start({ pinCode, password });
@@ -444,7 +442,6 @@ describe('wallet public methods', () => {
         },
       })
       .catch(e => {
-        // @ts-expect-error - The logger is initialized on setup, but TS cannot infer that
         testLogger.log(`Received an error on /version: ${e}`);
         if (e.response) {
           return e.response;
@@ -557,7 +554,6 @@ describe('empty wallet address methods', () => {
 });
 
 describe('basic transaction methods', () => {
-
   afterEach(async () => {
     if (wallet) {
       await wallet.stop({ cleanStorage: true });
@@ -965,33 +961,6 @@ describe('basic transaction methods', () => {
         })
       );
 
-      // Validate specific output types and their addresses
-      let tokenOutput: Output;
-      let mintAuthorityOutput: Output;
-      let meltAuthorityOutput: Output;
-      let changeOutput: Output;
-
-      createTokenTx.outputs.forEach(output => {
-        if (output.tokenData === 1) {
-          // Token amount output
-          tokenOutput = output;
-        } else if (output.tokenData === 129) {
-          // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is mint mask)
-          if (output.value === TOKEN_MINT_MASK) {
-            mintAuthorityOutput = output;
-          } else if (output.value === TOKEN_MELT_MASK) {
-            meltAuthorityOutput = output;
-          }
-        } else if (
-          output.tokenData === 0 &&
-          output.value !== TOKEN_MINT_MASK &&
-          output.value !== TOKEN_MELT_MASK
-        ) {
-          // HTR change output (tokenData 0, not authority)
-          changeOutput = output;
-        }
-      });
-
       // Verify the transaction can be found after creation
       const specificAddressTokenUid = createTokenTx.hash!;
       await poolForTx(wallet, specificAddressTokenUid);
@@ -1288,7 +1257,6 @@ describe('basic transaction methods', () => {
 });
 
 describe('websocket events', () => {
-
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
     await wallet.start({ pinCode, password });
@@ -1337,7 +1305,6 @@ describe('websocket events', () => {
 });
 
 describe('balances', () => {
-
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
     await wallet.start({ pinCode, password });
