@@ -22,6 +22,8 @@ import { delay } from './utils/core.util';
 import { TxNotFoundError, UtxoError } from '../../src/errors';
 import { NATIVE_TOKEN_UID } from '../../lib/constants';
 
+const testLogger = loggers.test!;
+
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
@@ -145,7 +147,7 @@ async function poolForTx(wallet: HathorWalletServiceWallet, txId: string) {
     try {
       const tx = await wallet.getTxById(txId);
       if (tx) {
-        loggers.test.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
+        testLogger.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
         return tx;
       }
     } catch (error) {
@@ -213,7 +215,7 @@ beforeAll(async () => {
       isServerlessReady = true;
     } catch (e) {
       // Ignore errors, serverless app is probably not ready yet
-      loggers.test.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
+      testLogger.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
     }
 
     // Timeout after 2 minutes
@@ -428,7 +430,7 @@ describe('wallet public methods', () => {
       })
       .catch(e => {
         // @ts-expect-error - The logger is initialized on setup, but TS cannot infer that
-        loggers.test.log(`Received an error on /version: ${e}`);
+        testLogger.log(`Received an error on /version: ${e}`);
         if (e.response) {
           return e.response;
         }
