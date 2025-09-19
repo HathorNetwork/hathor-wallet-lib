@@ -21,6 +21,7 @@ import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
 import { TxNotFoundError, UtxoError } from '../../src/errors';
 import { NATIVE_TOKEN_UID } from '../../lib/constants';
+import { GetAddressesObject } from '../../lib/wallet/types';
 
 const testLogger = loggers.test!;
 
@@ -96,6 +97,22 @@ const multipleTokensWallet = {
     'WQt8Gxy5yWC3xZGsHVrywYJqHyg5xtudun',
     'WcpnSRvzZGAnR6rtQiBnzP7aLnvPstpXbD',
     'WQzooroUKJMrFVv5P1UrPppmQ2YF8ACfAS',
+  ],
+};
+const addressesWallet = {
+  words:
+    'pumpkin tank father organ can doll romance damage because barely vault pride will man rack horn lamp remove enemy brain desert exchange boil salon',
+  addresses: [
+    'WRsDG9VhM4N9DPSpbnpFKnngLEXonaBsuH',
+    'WSTMdCz4BuzGv5q6g8woaCHeyppTZdjXWx',
+    'WPbCV3Lrh28ntoQY2hvC2ppU5TimCZdRaw',
+    'WaAgCebJjWfQCKcDwtpffQ4kt2im7fbsUr',
+    'WXN2wRybweJY4xunPkz6pwfGUmoumCCcUP',
+    'WbEA4E7Rnx98TtRox3UazMQRm1yNoAJcfm',
+    'WZs2Ci9ZxyMzmfdbGfR2nTp9xsxS7rSsDN',
+    'Wf1waSNgXmMoitFjx7TADMemKyCWjhvLUb',
+    'WVTMecGGC9kGzUbQqjB4J7i4KVhLVyMagy',
+    'WjHom47afCW8qEFtBqMq3MT22zxLkuvQag',
   ],
 };
 
@@ -1407,4 +1424,137 @@ describe('balances', () => {
   });
 
   describe.skip('getTxBalance', () => {});
+});
+
+describe('address management methods', () => {
+  const knownAddresses = addressesWallet.addresses;
+
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance({ words: addressesWallet.words }));
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  describe('getAllAddresses', () => {
+    it('should return expected addresses on getAllAddresses', async () => {
+      const allAddresses: GetAddressesObject[] = [];
+      for await (const addr of wallet.getAllAddresses()) {
+        allAddresses.push(addr);
+      }
+
+      // Should return an array of addresses
+      expect(allAddresses.length).toBeGreaterThan(0);
+
+      // Should include the known addresses from addressesWallet
+      allAddresses.forEach(addrObj => {
+        expect(knownAddresses).toContain(addrObj.address);
+      });
+
+      // Should be in order (index 0, 1, 2, etc.)
+      for (let i = 0; i < knownAddresses.length; i++) {
+        expect(allAddresses[i].address).toBe(knownAddresses[i]);
+      }
+    });
+
+    it('should return consistent results on multiple calls', async () => {
+      const allAddressesFirstCall: GetAddressesObject[] = [];
+      for await (const addr of wallet.getAllAddresses()) {
+        allAddressesFirstCall.push(addr);
+      }
+      const allAddressesSecondCall: GetAddressesObject[] = [];
+      for await (const addr of wallet.getAllAddresses()) {
+        allAddressesSecondCall.push(addr);
+      }
+
+      expect(allAddressesFirstCall.length).toBe(allAddressesSecondCall.length);
+      expect(allAddressesFirstCall).toEqual(allAddressesSecondCall);
+    });
+  });
+
+  describe('getCurrentAddress, getNextAddress', () => {
+    it('should return current address with index and address string', () => {
+      const currentAddress = wallet.getCurrentAddress();
+
+      // Should return an object with index and address
+      expect(currentAddress).toEqual(
+        expect.objectContaining({
+          index: expect.any(Number),
+          address: expect.any(String),
+        })
+      );
+
+      expect(currentAddress.index).toBeGreaterThanOrEqual(0);
+      expect(knownAddresses).toContain(currentAddress.address);
+      expect(currentAddress.addressPath).toMatch(/^m\/44'\/280'\/0'\/0\/\d+$/);
+      expect(currentAddress.info).toBeFalsy();
+    });
+
+    it('should return consistent results when called multiple times without changes', () => {
+      const first = wallet.getCurrentAddress();
+      const second = wallet.getCurrentAddress();
+
+      expect(first).toEqual(second);
+    });
+
+    it('should mark addresses as used and not return them anymore', async () => {
+      const initialCurrent = wallet.getCurrentAddress();
+      const secondCurrent = wallet.getCurrentAddress({ markAsUsed: true });
+      const thirdCurrent = wallet.getCurrentAddress();
+
+      expect(initialCurrent).toEqual(secondCurrent);
+      expect(thirdCurrent.index).toBe(secondCurrent.index + 1);
+      expect(thirdCurrent.address).not.toBe(secondCurrent.address);
+    });
+
+    it('should have the same mark as used behavior with getNextAddress', async () => {
+      const currentBefore = wallet.getCurrentAddress();
+      const nextAddress = wallet.getNextAddress();
+      const currentAfter = wallet.getCurrentAddress();
+
+      expect(nextAddress.index).toBe(currentBefore.index + 1);
+      expect(nextAddress.address).not.toBe(currentBefore.address);
+      expect(currentAfter).toEqual(nextAddress);
+    });
+
+    it('should inform when the limit for new addresses has been reached', async () => {
+      // Advance to near the end of known addresses
+      for (let i = 0; i < knownAddresses.length - 1; i++) {
+        wallet.getNextAddress();
+      }
+
+      const current = wallet.getNextAddress();
+      expect(current.index).toBe(knownAddresses.length - 1);
+      expect(current.address).toBe(knownAddresses[knownAddresses.length - 1]);
+      expect(current.info).toBe('GAP_LIMIT_REACHED');
+    });
+  });
+
+  describe('getAddressDetails', () => {
+    it('should return details for known addresses', async () => {
+      // Test first known addresses to verify index mapping
+      for (let i = 0; i < knownAddresses.length; i++) {
+        const details = await wallet.getAddressDetails(knownAddresses[i]);
+        expect(details).toEqual(
+          expect.objectContaining({
+            address: knownAddresses[i],
+            index: i,
+            transactions: 0,
+            seqnum: 0,
+          })
+        );
+      }
+    });
+
+    it('should throw error for unknown address', async () => {
+      const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
+
+      // TODO: Improve the error assertion validation
+      await expect(wallet.getAddressDetails(unknownAddress)).rejects.toThrow();
+    });
+  });
 });
