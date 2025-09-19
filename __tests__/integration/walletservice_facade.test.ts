@@ -74,6 +74,22 @@ const customTokenWallet = {
     'WkUREDxNQX6Qq1NwdLQycxkHFjKujQasWX',
   ],
 };
+const multipleTokensWallet = {
+  words:
+    'object join brain round loyal unfair shine genius brain vocal object crouch simple cake chase october unlock detail ivory kidney saddle immense deer response',
+  addresses: [
+    'Wie8wTxa7P6Vbr1UhADfDfafJftyYsZNMU',
+    'WaCk6XV4zCwdPTvGH6VgkE58ebqEndA6b7',
+    'Wdsez9n6LuWMtKQv3zdnKtQkTeXFw7ATFj',
+    'WdZcUpCoLS1CK5UD7V5Z4d42X92zc7QHEi',
+    'WaaXsw2HdYiBUveqg6QWS5HmkwTNUKUBLD',
+    'WPxVMXd89aaXWXqUcVTjdQPUvuT3wehJxc',
+    'WSbfhb9tkJneSbEJsyzyEURYcTqkPKRUUD',
+    'WQt8Gxy5yWC3xZGsHVrywYJqHyg5xtudun',
+    'WcpnSRvzZGAnR6rtQiBnzP7aLnvPstpXbD',
+    'WQzooroUKJMrFVv5P1UrPppmQ2YF8ACfAS',
+  ],
+};
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -903,9 +919,9 @@ describe('basic transaction methods', () => {
         address: destinationAddress,
         changeAddress,
         createMint: true,
-        mintAuthorityAddress: mintAuthorityAddress,
+        mintAuthorityAddress,
         createMelt: true,
-        meltAuthorityAddress: meltAuthorityAddress,
+        meltAuthorityAddress,
       })) as CreateTokenTransaction;
 
       // Shallow validate all properties of the returned CreateTokenTransaction object
@@ -934,7 +950,11 @@ describe('basic transaction methods', () => {
           } else if (output.value === TOKEN_MELT_MASK) {
             meltAuthorityOutput = output;
           }
-        } else if (output.tokenData === 0 && output.value !== TOKEN_MINT_MASK && output.value !== TOKEN_MELT_MASK) {
+        } else if (
+          output.tokenData === 0 &&
+          output.value !== TOKEN_MINT_MASK &&
+          output.value !== TOKEN_MELT_MASK
+        ) {
           // HTR change output (tokenData 0, not authority)
           changeOutput = output;
         }
@@ -959,7 +979,11 @@ describe('basic transaction methods', () => {
           } else if (output.value === TOKEN_MELT_MASK) {
             meltAuthorityOutputIndex = index;
           }
-        } else if (output.tokenData === 0 && output.value !== TOKEN_MINT_MASK && output.value !== TOKEN_MELT_MASK) {
+        } else if (
+          output.tokenData === 0 &&
+          output.value !== TOKEN_MINT_MASK &&
+          output.value !== TOKEN_MELT_MASK
+        ) {
           changeOutputIndex = index;
         }
       });
@@ -975,7 +999,10 @@ describe('basic transaction methods', () => {
       );
 
       // Verify mint authority output went to mint authority address
-      const mintAuthorityUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, mintAuthorityOutputIndex);
+      const mintAuthorityUtxo = await wallet.getUtxoFromId(
+        specificAddressTokenUid,
+        mintAuthorityOutputIndex
+      );
       expect(mintAuthorityUtxo).toStrictEqual(
         expect.objectContaining({
           address: mintAuthorityAddress,
@@ -985,7 +1012,10 @@ describe('basic transaction methods', () => {
       );
 
       // Verify melt authority output went to melt authority address
-      const meltAuthorityUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, meltAuthorityOutputIndex);
+      const meltAuthorityUtxo = await wallet.getUtxoFromId(
+        specificAddressTokenUid,
+        meltAuthorityOutputIndex
+      );
       expect(meltAuthorityUtxo).toStrictEqual(
         expect.objectContaining({
           address: meltAuthorityAddress,
@@ -1018,6 +1048,215 @@ describe('basic transaction methods', () => {
       expect(tokenDetails.totalTransactions).toBe(1);
       expect(tokenDetails.authorities?.mint).toBe(true);
       expect(tokenDetails.authorities?.melt).toBe(true);
+    });
+
+    it('should create token with all outputs to another wallet', async () => {
+      ({ wallet: gWallet } = buildWalletInstance({
+        words: WALLET_CONSTANTS.genesis.words,
+      }));
+      await gWallet.start({ pinCode, password });
+      const fundTx = await gWallet.sendTransaction(customTokenWallet.addresses[0], 10n, {
+        pinCode,
+      });
+
+      ({ wallet } = buildWalletInstance({
+        words: customTokenWallet.words,
+      }));
+      await wallet.start({ pinCode, password });
+      await poolForTx(wallet, fundTx.hash!);
+
+      // Assign external addresses from multipleTokensWallet (starting from index 9 going backwards)
+      const destinationAddress = multipleTokensWallet.addresses[9]; // Token destination
+      const mintAuthorityAddress = multipleTokensWallet.addresses[8]; // Mint authority
+      const meltAuthorityAddress = multipleTokensWallet.addresses[7]; // Melt authority
+      const changeAddress = multipleTokensWallet.addresses[6]; // Change address
+
+      // First test: Try to use external addresses without proper flags - should fail
+      await expect(
+        wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+          pinCode,
+          address: destinationAddress,
+          changeAddress,
+          createMint: true,
+          mintAuthorityAddress,
+          createMelt: true,
+          meltAuthorityAddress,
+        })
+      ).rejects.toThrow(); // Should throw because external addresses are not allowed without flags
+
+      // Second test: Pass the correct flags to allow external addresses - should succeed
+      const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
+        pinCode,
+        address: destinationAddress,
+        changeAddress,
+        createMint: true,
+        mintAuthorityAddress,
+        createMelt: true,
+        meltAuthorityAddress,
+        allowExternalMintAuthorityAddress: true,
+        allowExternalMeltAuthorityAddress: true,
+      })) as CreateTokenTransaction;
+
+      // Shallow validate all properties of the returned CreateTokenTransaction object
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          // Core transaction identification
+          hash: expect.any(String),
+
+          // Token creation specific properties
+          name: tokenName,
+          symbol: tokenSymbol,
+
+          // Inputs and outputs
+          inputs: expect.any(Array),
+          outputs: expect.any(Array),
+
+          // Transaction metadata
+          version: expect.any(Number),
+          weight: expect.any(Number),
+          nonce: expect.any(Number),
+          signalBits: expect.any(Number),
+          timestamp: expect.any(Number),
+
+          // Transaction relationships
+          parents: expect.arrayContaining([expect.any(String)]),
+          tokens: expect.any(Array), // Should contain the new token UID
+
+          // Headers
+          headers: expect.any(Array), // May be empty
+        })
+      );
+
+      // Deep validate the Outputs array
+      expect(createTokenTx.outputs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            value: expect.any(BigInt),
+            script: expect.any(Buffer),
+            tokenData: expect.any(Number),
+          }),
+        ])
+      );
+
+      // Additional validations
+      expect(createTokenTx.inputs.length).toStrictEqual(1);
+      expect(createTokenTx.outputs.length).toBeGreaterThanOrEqual(3); // Token output + mint authority + melt authority (+ possible change)
+      expect(createTokenTx.tokens).toHaveLength(0); // Token creation has this array empty
+      expect(createTokenTx.parents).toHaveLength(2); // Should have exactly 2 parents
+      expect(createTokenTx.timestamp).toBeGreaterThan(0); // Should have a valid timestamp
+      expect(createTokenTx.name).toBe(tokenName);
+      expect(createTokenTx.symbol).toBe(tokenSymbol);
+
+      // Validate specific output types and their addresses
+      let tokenOutput: Output;
+      let mintAuthorityOutput: Output;
+      let meltAuthorityOutput: Output;
+
+      createTokenTx.outputs.forEach(output => {
+        if (output.tokenData === 1) {
+          // Token amount output
+          tokenOutput = output;
+        } else if (output.tokenData === 129) {
+          // Authority output (tokenData 129 = 128 + 1, where 128 is AUTHORITY_TOKEN_DATA and 1 is mint mask)
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutput = output;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutput = output;
+          }
+        }
+      });
+
+      // Validate token amount output
+      // @ts-expect-error - tokenOutput must exist
+      expect(tokenOutput).toStrictEqual(
+        expect.objectContaining({
+          value: tokenAmount,
+          tokenData: 1,
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate mint authority output
+      // @ts-expect-error - mintAuthorityOutput must exist
+      expect(mintAuthorityOutput).toStrictEqual(
+        expect.objectContaining({
+          value: 1n, // TOKEN_MINT_MASK
+          tokenData: 129, // AUTHORITY_TOKEN_DATA + token_data
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Validate melt authority output
+      // @ts-expect-error - meltAuthorityOutput must exist
+      expect(meltAuthorityOutput).toStrictEqual(
+        expect.objectContaining({
+          value: 2n, // TOKEN_MELT_MASK
+          tokenData: 129, // AUTHORITY_TOKEN_DATA + token_data
+          script: expect.any(Buffer),
+        })
+      );
+
+      // Verify the transaction can be found after creation
+      const externalWalletTokenUid = createTokenTx.hash!;
+      await poolForTx(wallet, externalWalletTokenUid);
+
+      // Since outputs went to external addresses, we need to use the original wallet to query
+      // but note that the wallet service might not be able to query external UTXOs directly
+      // So we'll validate the transaction structure instead of individual UTXO queries
+
+      // Validate that the transaction has the expected structure for external addresses
+      let tokenOutputIndex = -1;
+      let mintAuthorityOutputIndex = -1;
+      let meltAuthorityOutputIndex = -1;
+
+      createTokenTx.outputs.forEach((output, index) => {
+        if (output.tokenData === 1) {
+          tokenOutputIndex = index;
+        } else if (output.tokenData === 129) {
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutputIndex = index;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutputIndex = index;
+          }
+        }
+      });
+
+      // Verify that all expected output indices were found
+      expect(tokenOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(mintAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(meltAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+
+      // Since the outputs went to external addresses, we validate the transaction was created
+      // but the external wallet would need to be started to see the UTXOs
+
+      // Specific token creation validations
+      const tokenDetails = await wallet.getTokenDetails(externalWalletTokenUid);
+      expect(tokenDetails.tokenInfo).toStrictEqual(
+        expect.objectContaining({
+          id: externalWalletTokenUid,
+          name: tokenName,
+          symbol: tokenSymbol,
+        })
+      );
+      expect(tokenDetails.totalSupply).toBe(tokenAmount);
+      expect(tokenDetails.totalTransactions).toBe(1);
+      expect(tokenDetails.authorities?.mint).toBe(true);
+      expect(tokenDetails.authorities?.melt).toBe(true);
+
+      // Additional validation: Verify that the creating wallet doesn't own the token outputs
+      // since they were sent to external addresses
+      const creatorBalance = await wallet.getBalance(externalWalletTokenUid);
+      expect(creatorBalance).toHaveLength(0); // Creator should have no balance or auth for the new token
+
+      const { wallet: destinationWallet } = buildWalletInstance({
+        words: multipleTokensWallet.words,
+      });
+      await destinationWallet.start({ pinCode, password });
+      const destBalance = await destinationWallet.getBalance(externalWalletTokenUid);
+      expect(destBalance).toHaveLength(1);
+      expect(destBalance[0].balance.unlocked).toBe(tokenAmount);
+      expect(destBalance[0].tokenAuthorities.unlocked.mint).toBe(true);
+      expect(destBalance[0].tokenAuthorities.unlocked.melt).toBe(true);
     });
   });
 });
