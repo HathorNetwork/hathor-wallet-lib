@@ -26,6 +26,10 @@ import { NATIVE_TOKEN_UID } from '../../lib/constants';
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 
+/** Genesis Wallet, used to fund all tests */
+const gWallet: HathorWalletServiceWallet = buildWalletInstance({
+  words: WALLET_CONSTANTS.genesis.words,
+}).wallet;
 const emptyWallet = {
   words:
     'buddy kingdom scorpion device uncover donate sense false few leaf oval illegal assume talent express glide above brain end believe abstract will marine crunch',
@@ -172,17 +176,40 @@ async function generateNewWalletAddress() {
   };
 }
 
+async function sendFundTx(
+  address: string,
+  amount: bigint,
+  destinationWallet?: HathorWalletServiceWallet
+) {
+  const fundTx = await gWallet.sendTransaction(address, amount, {
+    pinCode,
+  });
+
+  // Ensure the transaction was sent from the Genesis perspective
+  await poolForTx(gWallet, fundTx.hash!);
+
+  // Ensure the destination wallet is also aware of the transaction
+  if (destinationWallet) {
+    await poolForTx(destinationWallet, fundTx.hash!);
+  }
+
+  return fundTx;
+}
+
 beforeAll(async () => {
   console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
 
-  // Pool for the serverless app to be ready.
-  const { wallet } = buildWalletInstance();
   let isServerlessReady = false;
   const startTime = Date.now();
 
+  // Pool for the serverless app to be ready.
+  const delayBetweenRequests = 3000;
+  const lambdaTimeout = 30000;
   while (isServerlessReady) {
     try {
-      await wallet.getVersionData();
+      // Executing a method that does not depend on the wallet being started,
+      // but that ensures the Wallet Service Lambdas are receiving requests
+      await gWallet.getVersionData();
       isServerlessReady = true;
     } catch (e) {
       // Ignore errors, serverless app is probably not ready yet
@@ -190,11 +217,16 @@ beforeAll(async () => {
     }
 
     // Timeout after 2 minutes
-    if (Date.now() - startTime > 30000) {
+    if (Date.now() - startTime > lambdaTimeout) {
       throw new Error('Ws-Serverless did not become ready in time');
     }
-    await delay(3000);
+    await delay(delayBetweenRequests);
   }
+  await gWallet.start({ pinCode, password });
+});
+
+afterAll(async () => {
+  await gWallet.stop({ cleanStorage: true });
 });
 
 describe('start', () => {
@@ -510,24 +542,15 @@ describe('empty wallet address methods', () => {
 
 describe('basic transaction methods', () => {
   let wallet: HathorWalletServiceWallet;
-  let gWallet: HathorWalletServiceWallet;
 
   afterEach(async () => {
     if (wallet) {
       await wallet.stop({ cleanStorage: true });
     }
-    if (gWallet) {
-      await gWallet.stop({ cleanStorage: true });
-    }
   });
 
   describe('sendTransaction - native token', () => {
     it('should send a simple transaction with native token', async () => {
-      ({ wallet: gWallet } = buildWalletInstance({
-        words: WALLET_CONSTANTS.genesis.words,
-      }));
-      await gWallet.start({ pinCode, password });
-
       const sendTransaction = await gWallet.sendTransaction(walletWithTxs.addresses[0], 10n, {
         pinCode,
       });
@@ -639,7 +662,7 @@ describe('basic transaction methods', () => {
     });
   });
 
-  describe.only('createNewToken, getTokenDetails', () => {
+  describe('createNewToken, getTokenDetails', () => {
     const tokenName = 'TestToken';
     const tokenSymbol = 'TST';
     const tokenAmount = 100n;
@@ -655,13 +678,7 @@ describe('basic transaction methods', () => {
     });
 
     it('should create a new token without any custom options', async () => {
-      ({ wallet: gWallet } = buildWalletInstance({
-        words: WALLET_CONSTANTS.genesis.words,
-      }));
-      await gWallet.start({ pinCode, password });
-      const fundTx = await gWallet.sendTransaction(customTokenWallet.addresses[0], 10n, {
-        pinCode,
-      });
+      const fundTx = await sendFundTx(customTokenWallet.addresses[0], 10n);
 
       ({ wallet } = buildWalletInstance({
         words: customTokenWallet.words,
@@ -1051,13 +1068,7 @@ describe('basic transaction methods', () => {
     });
 
     it('should create token with all outputs to another wallet', async () => {
-      ({ wallet: gWallet } = buildWalletInstance({
-        words: WALLET_CONSTANTS.genesis.words,
-      }));
-      await gWallet.start({ pinCode, password });
-      const fundTx = await gWallet.sendTransaction(customTokenWallet.addresses[0], 10n, {
-        pinCode,
-      });
+      const fundTx = await sendFundTx(customTokenWallet.addresses[0], 10n);
 
       ({ wallet } = buildWalletInstance({
         words: customTokenWallet.words,
@@ -1263,17 +1274,6 @@ describe('basic transaction methods', () => {
 
 describe('websocket events', () => {
   let wallet: HathorWalletServiceWallet;
-  let gWallet: HathorWalletServiceWallet;
-
-  beforeAll(async () => {
-    const genesisPassword = 'genesispass';
-    ({ wallet: gWallet } = buildWalletInstance({
-      enableWs: true,
-      words: WALLET_CONSTANTS.genesis.words,
-      passwordForRequests: genesisPassword,
-    }));
-    await gWallet.start({ pinCode, password: genesisPassword });
-  });
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
@@ -1284,10 +1284,6 @@ describe('websocket events', () => {
     if (wallet) {
       await wallet.stop({ cleanStorage: true });
     }
-  });
-
-  afterAll(async () => {
-    gWallet.stop();
   });
 
   // FIXME: The transactions happen, the websocket connection is active, but the events never arrive
@@ -1302,9 +1298,7 @@ describe('websocket events', () => {
       // Add your assertions here after triggering the event
     });
 
-    const sendTransaction = await gWallet.sendTransaction(walletWithTxs.addresses[0], 10n, {
-      pinCode,
-    });
+    const sendTransaction = await sendFundTx(walletWithTxs.addresses[0], 10n);
     expect(sendTransaction.hash).toBeDefined();
 
     // Wait up to 3 times, 2 seconds each, for events to arrive
@@ -1369,7 +1363,7 @@ describe('balances', () => {
       // Should have HTR balance
       const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
       expect(htrBalance).toBeDefined();
-      expect(typeof htrBalance?.balance).toBe('bigint');
+      expect(typeof htrBalance?.balance).toBe('object');
 
       await walletTxs.stop({ cleanStorage: true });
     });
