@@ -32,6 +32,8 @@ config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 const gWallet: HathorWalletServiceWallet = buildWalletInstance({
   words: WALLET_CONSTANTS.genesis.words,
 }).wallet;
+/** Wallet instance used in tests */
+let wallet: HathorWalletServiceWallet;
 const emptyWallet = {
   words:
     'buddy kingdom scorpion device uncover donate sense false few leaf oval illegal assume talent express glide above brain end believe abstract will marine crunch',
@@ -233,7 +235,6 @@ afterAll(async () => {
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
-    let wallet: HathorWalletServiceWallet;
 
     beforeEach(() => {
       ({ wallet } = buildWalletInstance());
@@ -259,7 +260,6 @@ describe('start', () => {
   });
 
   describe('handling internal errors', () => {
-    let wallet: HathorWalletServiceWallet;
     const events: string[] = [];
     let storage: Storage;
 
@@ -294,7 +294,6 @@ describe('start', () => {
   });
 
   describe('successful wallet creation', () => {
-    let wallet: HathorWalletServiceWallet;
     const events: string[] = [];
     let storage: Storage;
 
@@ -381,7 +380,6 @@ describe('start', () => {
 });
 
 describe('wallet public methods', () => {
-  let wallet: HathorWalletServiceWallet;
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
@@ -454,7 +452,6 @@ describe('wallet public methods', () => {
 });
 
 describe('empty wallet address methods', () => {
-  let wallet: HathorWalletServiceWallet;
   const knownAddresses = emptyWallet.addresses;
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
@@ -543,7 +540,6 @@ describe('empty wallet address methods', () => {
 });
 
 describe('basic transaction methods', () => {
-  let wallet: HathorWalletServiceWallet;
 
   afterEach(async () => {
     if (wallet) {
@@ -1275,7 +1271,6 @@ describe('basic transaction methods', () => {
 });
 
 describe('websocket events', () => {
-  let wallet: HathorWalletServiceWallet;
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
@@ -1325,7 +1320,6 @@ describe('websocket events', () => {
 });
 
 describe('balances', () => {
-  let wallet: HathorWalletServiceWallet;
 
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
