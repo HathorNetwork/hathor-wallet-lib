@@ -105,7 +105,7 @@ services:
       retries: 5
 
   ws-migrator:
-    image: hathornetwork/hathor-wallet-service-migrator
+    image: hathornetwork/hathor-wallet-service-migrator:dev
     restart: "no"  # Critical: don't restart migration service
     depends_on:
       mysql:
@@ -120,7 +120,7 @@ services:
       - hathor-privnet
 
   ws-daemon:
-    image: hathornetwork/hathor-wallet-service-sync-daemon
+    image: hathornetwork/hathor-wallet-service-sync-daemon:dev
     depends_on:
       ws-migrator:
         condition: service_completed_successfully
@@ -163,7 +163,7 @@ services:
       - hathor-privnet
 
   ws-serverless:
-    image: hathornetwork/hathor-wallet-service-service
+    image: hathornetwork/hathor-wallet-service-lambdas:dev
     depends_on:
       fullnode:
         condition: service_healthy
