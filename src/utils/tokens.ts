@@ -6,6 +6,7 @@
  */
 
 import buffer from 'buffer';
+import { WalletServiceStorage } from '../storage';
 import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
@@ -335,7 +336,7 @@ const tokens = {
       unshiftData = null,
       data = null,
       mintAuthorityAddress = null,
-      utxoSelection = bestUtxoSelection,
+      utxoSelection = null,
       skipDepositFee = false,
     }: {
       token?: string | null;
@@ -345,10 +346,11 @@ const tokens = {
       unshiftData?: boolean | null;
       data?: string[] | null;
       mintAuthorityAddress?: string | null;
-      utxoSelection?: UtxoSelectionAlgorithm;
+      utxoSelection?: UtxoSelectionAlgorithm | null;
       skipDepositFee?: boolean;
     } = {}
   ): Promise<IDataTx> {
+    const selectedUtxoSelection = this.getUtxoSelectionAlgorithm(storage, utxoSelection);
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
 
@@ -361,7 +363,7 @@ const tokens = {
 
     if (depositAmount) {
       // get HTR deposit inputs
-      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
+      const selectedUtxos = await selectedUtxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
       const foundAmount = selectedUtxos.amount;
       for (const utxo of selectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));
@@ -446,6 +448,14 @@ const tokens = {
     };
   },
 
+  getUtxoSelectionAlgorithm(storage: IStorage, algorithm: UtxoSelectionAlgorithm | null) {
+    if (storage instanceof WalletServiceStorage) {
+      return storage.walletServiceUtxoSelection.bind(storage);
+    }
+
+    return algorithm ?? bestUtxoSelection;
+  },
+
   /**
    * Generate melt transaction data
    *
@@ -475,16 +485,18 @@ const tokens = {
       changeAddress = null,
       unshiftData = null,
       data = null,
-      utxoSelection = bestUtxoSelection,
+      utxoSelection = null,
     }: {
       createAnotherMelt?: boolean;
       meltAuthorityAddress?: string | null;
       changeAddress?: string | null;
       unshiftData?: boolean | null;
       data?: string[] | null;
-      utxoSelection?: UtxoSelectionAlgorithm;
+      utxoSelection?: UtxoSelectionAlgorithm | null;
     } = {}
   ): Promise<IDataTx> {
+    const selectedUtxoSelection = this.getUtxoSelectionAlgorithm(storage, utxoSelection);
+
     if (authorityMeltInput.token !== token || authorityMeltInput.authorities !== 2n) {
       throw new Error('Melt authority input is not valid');
     }
@@ -513,7 +525,7 @@ const tokens = {
     }
 
     // get inputs that amount to requested melt amount
-    const selectedUtxos = await utxoSelection(storage, token, amount);
+    const selectedUtxos = await selectedUtxoSelection(storage, token, amount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
       inputs.push(helpers.getDataInputFromUtxo(utxo));
@@ -543,7 +555,11 @@ const tokens = {
 
     if (depositAmount > 0) {
       // get HTR deposit inputs
-      const depositSelectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
+      const depositSelectedUtxos = await selectedUtxoSelection(
+        storage,
+        NATIVE_TOKEN_UID,
+        depositAmount
+      );
       const depositFoundAmount = depositSelectedUtxos.amount;
       for (const utxo of depositSelectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));

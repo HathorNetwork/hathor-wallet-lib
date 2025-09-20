@@ -2935,4 +2935,21 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       ).rejects.toThrow('createNanoContractTransaction');
     });
   });
+
+  describe('default storage', () => {
+    it('should use WalletServiceMemoryStore by default', () => {
+      expect(wallet.storage.constructor.name).toBe('WalletServiceStorage');
+    });
+
+    it('should have wallet-service specific storage methods', () => {
+      expect(typeof wallet.storage.getAddressInfo).toBe('function');
+      expect(typeof wallet.storage.getTxSignatures).toBe('function');
+      expect(typeof wallet.storage.getSpentTxs).toBe('function');
+    });
+
+    it('should have config.getNetwork method', () => {
+      expect(typeof wallet.storage.config.getNetwork).toBe('function');
+      expect(wallet.storage.config.getNetwork()).toStrictEqual(wallet.getNetworkObject());
+    });
+  });
 });
