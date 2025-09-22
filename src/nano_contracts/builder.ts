@@ -35,7 +35,6 @@ import {
   validateAndParseBlueprintMethodArgs,
 } from './utils';
 import { IDataInput, IDataOutput } from '../types';
-import { FullNodeTxResponse } from '../wallet/types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';

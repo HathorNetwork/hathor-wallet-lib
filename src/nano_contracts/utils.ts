@@ -20,7 +20,7 @@ import P2SH from '../models/p2sh';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
-import { OutputType, IHathorWallet } from '../wallet/types';
+import { FullNodeTxResponse, OutputType, IHathorWallet } from '../wallet/types';
 import { IHistoryTx, IStorage, ITokenData, OutputValueType } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
@@ -34,6 +34,7 @@ import {
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { getFieldParser } from './ncTypes/parser';
 import { isSignedDataField } from './fields';
+import HathorWallet from '../new/wallet';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -333,9 +334,10 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     throw new Error('Nano contract ID is not defined');
   }
 
-  const [txError, txResponse] = (await getResultHelper(() =>
-    wallet.getFullTxById(ncId)
-  )) as [Error | null, FullNodeTxResponse | null];
+  const [txError, txResponse] = (await getResultHelper(() => wallet.getFullTxById(ncId))) as [
+    Error | null,
+    FullNodeTxResponse | null,
+  ];
   if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
     return txResponse.tx.nc_blueprint_id;
   }
@@ -350,4 +352,4 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
   }
 
   return stateResponse.blueprint_id;
-}
+};
