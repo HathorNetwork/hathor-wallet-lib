@@ -14,6 +14,10 @@ import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 
+interface InjectFundsOptions {
+  waitTimeout?: number;
+}
+
 /**
  * @type {GenesisWalletHelper}
  */
@@ -23,20 +27,21 @@ export class GenesisWalletHelper {
   /**
    * @type HathorWallet
    */
-  hWallet;
+  hWallet!: HathorWallet;
 
   /**
    * Starts a genesis wallet. Also serves as a reference for wallet creation boilerplate.
    * Only returns when the wallet is in a _READY_ state.
    * @returns {Promise<void>}
    */
-  async start() {
+  async start(): Promise<void> {
     const { words } = WALLET_CONSTANTS.genesis;
     const pin = '123456';
     const connection = new Connection({
       network: 'testnet',
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
+      logger: console, // Add required logger parameter
     });
     try {
       this.hWallet = new HathorWallet({
@@ -52,7 +57,7 @@ export class GenesisWalletHelper {
       // Only return the positive response after the wallet is ready
       await waitForWalletReady(this.hWallet);
     } catch (e) {
-      loggers.test.error(`GenesisWalletHelper: ${e.message}`);
+      loggers.test!.error(`GenesisWalletHelper: ${e.message}`);
       throw e;
     }
   }
@@ -72,10 +77,10 @@ export class GenesisWalletHelper {
     destinationWallet: HathorWallet,
     address: string,
     value: OutputValueType,
-    options = {}
+    options: InjectFundsOptions = {}
   ): Promise<Transaction> {
     try {
-      const result = await this.hWallet.sendTransaction(address, value, {
+      const result = await (this.hWallet as any).sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
       });
 
@@ -88,7 +93,7 @@ export class GenesisWalletHelper {
       await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     } catch (e) {
-      loggers.test.error(`Failed to inject funds: ${e.message}`);
+      loggers.test!.error(`Failed to inject funds: ${e.message}`);
       throw e;
     }
   }
@@ -123,7 +128,7 @@ export class GenesisWalletHelper {
     destinationWallet: HathorWallet,
     address: string,
     value: OutputValueType,
-    options = {}
+    options: InjectFundsOptions = {}
   ): Promise<Transaction> {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);

@@ -280,9 +280,7 @@ export async function stopAllWallets(): Promise<void> {
     try {
       await (hWallet as any).stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e: any) {
-      if (loggers.test) {
-        loggers.test.error(e.stack);
-      }
+      loggers.test!.error(e.stack);
     }
     hWallet = startedWallets.pop();
   }
@@ -469,9 +467,7 @@ export async function waitUntilNextTimestamp(hWallet: HathorWallet, txId: string
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...
   const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
-  if (loggers.test) {
-    loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
-  }
+  loggers.test!.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
 }
 
