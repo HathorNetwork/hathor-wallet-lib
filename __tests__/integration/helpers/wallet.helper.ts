@@ -17,10 +17,11 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
+import type { PrecalculatedWalletData } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
-import { MemoryStore, Storage } from '../../../src/storage';
-import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
+import { MemoryStore, Storage } from '../../../src';
+import { TxHistoryProcessingStatus, IHistoryTx, IMultisigData } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
@@ -36,22 +37,73 @@ import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
  * @property {*} _dataToSignCache
  */
 
+interface CreateNewTokenResponse {
+  hash: string;
+  nonce: number;
+  timestamp: number;
+  version: number;
+  weight: number;
+  parents: string[];
+  inputs: any[];
+  outputs: any[];
+  tokens: any[];
+}
+
+interface WalletHelperParams {
+  seed?: string;
+  passphrase?: string;
+  xpriv?: string;
+  xpub?: string;
+  tokenUid?: string;
+  password?: string | null;
+  pinCode?: string | null;
+  debug?: boolean;
+  multisig?: { pubkeys: string[]; numSignatures: number };
+  preCalculatedAddresses?: string[];
+}
+
+interface WalletHelperROOptions {
+  xpub?: string;
+  pinCode?: string | null;
+  preCalculatedAddresses?: string[];
+  hardware?: boolean;
+  multisig?: IMultisigData;
+}
+
+interface MultisigWalletParams {
+  walletIndex?: number;
+  walletWords?: string;
+  preCalculatedAddresses?: string[];
+  pubkeys?: string[];
+  numSignatures?: number;
+}
+
+interface CreateTokenOptions {
+  address?: string;
+  changeAddress?: string;
+  startMiningTx?: boolean;
+  pinCode?: string;
+}
+
+type OutputValueType = number;
+
 /**
  * Generates a connection object for starting wallets.
- * @returns {WalletConnection}
+ * @returns {Connection}
  */
-export function generateConnection() {
+export function generateConnection(): Connection {
   return new Connection({
     network: NETWORK_NAME,
     servers: [FULLNODE_URL],
     connectionTimeout: 30000,
+    logger: console,
   });
 }
 
 export const DEFAULT_PASSWORD = 'password';
 export const DEFAULT_PIN_CODE = '000000';
 
-const startedWallets = [];
+const startedWallets: HathorWallet[] = [];
 
 /**
  * Simplifies the generation of a Wallet for the integration tests.
@@ -82,20 +134,26 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
-export async function generateWalletHelper(param) {
-  /** @type PrecalculatedWalletData */
-  let walletData = {};
+export async function generateWalletHelper(param?: WalletHelperParams): Promise<HathorWallet> {
+  let walletData: PrecalculatedWalletData = {
+    isUsed: false,
+    words: '',
+    addresses: [],
+  };
 
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!param) {
+    if (!precalculationHelpers.test) {
+      throw new Error('Precalculation helper not initialized');
+    }
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
   } else {
-    walletData.words = param.seed;
-    walletData.addresses = param.preCalculatedAddresses;
+    walletData.words = param.seed || '';
+    walletData.addresses = param.preCalculatedAddresses || [];
   }
 
   // Start the wallet
-  const walletConfig = {
+  const walletConfig: any = {
     seed: walletData.words,
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
@@ -128,17 +186,24 @@ export async function generateWalletHelper(param) {
  * @example
  * const hWalletAuto = await generateWalletHelperRO();
  */
-export async function generateWalletHelperRO(options) {
-  /** @type PrecalculatedWalletData */
-  let walletData = {};
-  /** @type string */
-  let xpub;
+export async function generateWalletHelperRO(
+  options: WalletHelperROOptions = {}
+): Promise<HathorWallet> {
+  let walletData: PrecalculatedWalletData = {
+    isUsed: false,
+    words: '',
+    addresses: [],
+  };
+  let xpub: string;
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
+    if (!precalculationHelpers.test) {
+      throw new Error('Precalculation helper not initialized');
+    }
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
     xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
   } else {
-    walletData.addresses = options.preCalculatedAddresses;
+    walletData.addresses = options.preCalculatedAddresses || [];
     xpub = options.xpub;
   }
 
@@ -151,7 +216,7 @@ export async function generateWalletHelperRO(options) {
   const storage = new Storage(store);
 
   // Start the wallet
-  const walletConfig = {
+  const walletConfig: any = {
     xpub,
     connection: generateConnection(),
     storage,
@@ -170,7 +235,7 @@ export async function generateWalletHelperRO(options) {
 /**
  *
  * @param [parameters]
- * @param {number} [parameters.walletIndex] Index of the harcoded wallet that will be used
+ * @param {number} [parameters.walletIndex] Index of the hardcoded wallet that will be used
  * @param {string} [parameters.walletWords] Custom wallet words to be used. If informed, all the
  *                                          other parameters (except walletIndex) become mandatory
  * @param {string[]} [parameters.preCalculatedAddresses] Custom pre-calculated addresses, if
@@ -183,10 +248,12 @@ export async function generateWalletHelperRO(options) {
  *
  * @return {Promise<HathorWallet>}
  */
-export async function generateMultisigWalletHelper(parameters) {
+export async function generateMultisigWalletHelper(
+  parameters: MultisigWalletParams = {}
+): Promise<HathorWallet> {
   // Start the wallet
-  const walletConfig = {
-    seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex],
+  const walletConfig: any = {
+    seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex || 0],
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
@@ -205,15 +272,17 @@ export async function generateMultisigWalletHelper(parameters) {
   return mhWallet;
 }
 
-export async function stopAllWallets() {
+export async function stopAllWallets(): Promise<void> {
   let hWallet = startedWallets.pop();
 
   // Stop all wallets that were started with this helper
   while (hWallet) {
     try {
-      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-    } catch (e) {
-      loggers.test.error(e.stack);
+      await (hWallet as any).stop({ cleanStorage: true, cleanAddresses: true });
+    } catch (e: any) {
+      if (loggers.test) {
+        loggers.test.error(e.stack);
+      }
     }
     hWallet = startedWallets.pop();
   }
@@ -234,8 +303,14 @@ export async function stopAllWallets() {
  *
  * @return {Promise<CreateNewTokenResponse>}
  */
-export async function createTokenHelper(hWallet, name, symbol, amount, options = {}) {
-  const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
+export async function createTokenHelper(
+  hWallet: HathorWallet,
+  name: string,
+  symbol: string,
+  amount: OutputValueType,
+  options: CreateTokenOptions = {}
+): Promise<CreateNewTokenResponse> {
+  const newTokenResponse = await (hWallet as any).createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
@@ -246,15 +321,15 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options =
  * Translates the Wallet Ready event into a promise
  * Waits for the wallet event that indicates this wallet is ready for use.
  * @param hWallet
- * @returns {Promise<unknown>}
+ * @returns {Promise<void>}
  */
-export function waitForWalletReady(hWallet) {
+export function waitForWalletReady(hWallet: HathorWallet): Promise<void> {
   // Only return the positive response after the wallet is ready
-  return new Promise((resolve, reject) => {
-    const handleState = newState => {
-      if (newState === HathorWallet.READY) {
+  return new Promise<void>((resolve, reject) => {
+    const handleState = (newState: any) => {
+      if (newState === (HathorWallet as any).READY) {
         resolve();
-      } else if (newState === HathorWallet.ERROR) {
+      } else if (newState === (HathorWallet as any).ERROR) {
         reject(new Error('Wallet failed to start.'));
       }
     };
@@ -273,7 +348,7 @@ export function waitForWalletReady(hWallet) {
  *
  * @param hWallet
  * @param txId
- * @param [timeout] Timeout in milisseconds. Default value defined on test-constants.
+ * @param [timeout] Timeout in milliseconds. Default value defined on test-constants.
  */
 export async function waitForTxReceived(
   hWallet: HathorWallet,
@@ -318,18 +393,18 @@ export async function waitForTxReceived(
 
   const timeDiff = Date.now().valueOf() - startTime;
   if (DEBUG_LOGGING) {
-    loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
+    loggers.test!.log(`Wait for ${txId} took ${timeDiff}ms.`);
   }
 
   if (storageTx.is_voided === false) {
     // We can't consider the metadata only of the transaction, it affects
-    // also the metadata of the transactions that were spent on it
+    // also the metadata of the transactions that were spent on it.
     // We could await for the update-tx event of the transactions of the inputs to arrive
     // before considering the transaction metadata fully updated, however it's complicated
     // to handle these events, since they might arrive even before we call this method
     // To simplify everything, here we manually set the utxos as spent and process the history
-    // so after the transaction arrives, all the metadata involved on it is updated and we can
-    // continue running the tests to correctly check balances, addresses, and everyting else
+    // so after the transaction arrives, all the metadata involved on it is updated, and we can
+    // continue running the tests to correctly check balances, addresses, and everything else
     await updateInputsSpentBy(hWallet, storageTx);
     await hWallet.storage.processHistory();
   }
@@ -342,10 +417,10 @@ export async function waitForTxReceived(
  * update the spent_by attribute
  *
  * @param {HathorWallet} hWallet
- * @param {IHistoryTx} txId
+ * @param {IHistoryTx} tx
  * @returns {Promise<void>}
  */
-async function updateInputsSpentBy(hWallet, tx) {
+async function updateInputsSpentBy(hWallet: HathorWallet, tx: IHistoryTx): Promise<void> {
   for (const input of tx.inputs) {
     const inputTx = await hWallet.getTx(input.tx_id);
     if (!inputTx) {
@@ -378,25 +453,31 @@ async function updateInputsSpentBy(hWallet, tx) {
  * @param {string} txId
  * @returns {Promise<void>}
  */
-export async function waitUntilNextTimestamp(hWallet, txId) {
-  const { timestamp } = await hWallet.getTx(txId);
+export async function waitUntilNextTimestamp(hWallet: HathorWallet, txId: string): Promise<void> {
+  const tx = await hWallet.getTx(txId);
+  if (!tx) {
+    throw new Error('Transaction not found');
+  }
+  const { timestamp } = tx;
   const nowMilliseconds = Date.now().valueOf();
   const nextValidMilliseconds = (timestamp + 1) * 1000;
 
-  // We are already past the last valid milissecond
+  // We are already past the last valid millisecond
   if (nowMilliseconds > nextValidMilliseconds) {
     return;
   }
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...
   const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
-  loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+  if (loggers.test) {
+    loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+  }
   await delay(timeToWait);
 }
 
 /**
  * This method gets the current height of the network
- * and awaits until the height changes
+ * and waits until the height changes
  *
  * We are ignoring the possibility of reorgs here, we
  * assume that if the height changes, a new block has arrived
@@ -404,14 +485,14 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
  * @param {Storage} storage
  * @returns {Promise<void>}
  */
-export async function waitNextBlock(storage) {
+export async function waitNextBlock(storage: Storage): Promise<void> {
   const currentHeight = await storage.getCurrentHeight();
   let height = currentHeight;
 
   // This timeout is a protection, so the integration tests
   // don't keep running in case of a problem
   // After using the timeout as 120s, we had some timeouts
-  // because the CI runs in a free github runner
+  // because the CI runs in a free GitHub runner
   // so we decided to increase this timeout to 600s, so
   // we don't have this error anymore
   const timeout = 600000;
@@ -499,7 +580,7 @@ export async function waitTxConfirmed(
  * @param {String} txId
  * @returns {Promise<String>}
  */
-export async function getTxFirstBlock(hWallet, txId) {
-  const txData = await hWallet.getFullTxById(txId);
+export async function getTxFirstBlock(hWallet: HathorWallet, txId: string): Promise<string> {
+  const txData = await (hWallet as any).getFullTxById(txId);
   return get(txData, 'meta.first_block');
 }

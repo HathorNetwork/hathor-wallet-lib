@@ -28,7 +28,7 @@ interface MultisigDebugData {
   pubkeys: string[];
 }
 
-interface PrecalculatedWalletData {
+export interface PrecalculatedWalletData {
   isUsed: boolean;
   words: string;
   addresses: string[];
