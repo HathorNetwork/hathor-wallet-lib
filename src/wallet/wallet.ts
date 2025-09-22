@@ -995,36 +995,30 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Get utxos for filling a transaction (legacy method for backward compatibility)
+   * Get utxos for filling a transaction
    *
-   * @param totalAmount The total amount needed
-   * @param options Legacy options for the old interface
+   * @param amount The total amount needed
+   * @param options Options for filtering utxos
    * @memberof HathorWalletServiceWallet
    * @inner
-   * @deprecated Use getUtxos instead
    */
   async getUtxosForAmount(
-    totalAmount: OutputValueType,
+    amount: OutputValueType,
     options: {
-      tokenId?: string;
-      authority?: OutputValueType;
-      addresses?: string[];
-      count?: number;
+      token?: string;
+      filter_address?: string;
     } = {}
   ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
     const newOptions = {
-      tokenId: NATIVE_TOKEN_UID,
-      authority: null as OutputValueType | null,
-      addresses: null as string[] | null,
-      totalAmount,
-      count: 1,
-      ...options,
+      tokenId: options.token || NATIVE_TOKEN_UID,
+      addresses: options.filter_address ? [options.filter_address] : undefined,
+      totalAmount: amount,
       ignoreLocked: true,
       skipSpent: true,
     };
 
-    if (!newOptions.authority && !newOptions.totalAmount) {
-      throw new UtxoError("We need the total amount of utxos if it's not an authority request.");
+    if (!newOptions.totalAmount) {
+      throw new UtxoError("We need the total amount of utxos.");
     }
 
     const data = await walletApi.getTxOutputs(this, newOptions);
@@ -1033,9 +1027,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (data.txOutputs.length === 0) {
       // No utxos available for the requested filter
       utxos = data.txOutputs;
-    } else if (newOptions.authority) {
-      // Requests an authority utxo, then I return the count of requested authority utxos
-      utxos = data.txOutputs.slice(0, newOptions.count);
     } else {
       // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
       // and slice the least possible utxos
@@ -1622,7 +1613,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
-      tokenId: NATIVE_TOKEN_UID,
+      token: NATIVE_TOKEN_UID,
     });
     if (utxos.length === 0) {
       throw new UtxoError(
@@ -1950,7 +1941,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
-      tokenId: NATIVE_TOKEN_UID,
+      token: NATIVE_TOKEN_UID,
     });
     if (utxos.length === 0) {
       throw new UtxoError(
@@ -1959,12 +1950,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 3. Get mint authority
-    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority: TOKEN_MINT_MASK });
-    if (ret.utxos.length === 0) {
+    const mintAuthorities = await this.getMintAuthority(token, { many: false, skipSpent: true });
+    if (mintAuthorities.length === 0) {
       throw new UtxoError(`No authority utxo available for minting tokens. Token: ${token}.`);
     }
     // it's safe to assume that we have an utxo in the array
-    const mintUtxo = ret.utxos[0];
+    const mintUtxo = mintAuthorities[0];
 
     // 4. Create inputs from utxos
     const inputsObj: Input[] = [];
@@ -2116,18 +2107,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
 
     // 2. Get utxos for custom token to melt
-    const { utxos, changeAmount } = await this.getUtxosForAmount(amount, { tokenId: token });
+    const { utxos, changeAmount } = await this.getUtxosForAmount(amount, { token });
     if (utxos.length === 0) {
       throw new UtxoError(`Not enough tokens to be melted. Token: ${token} - Amount: ${amount}.`);
     }
 
-    // 3. Get mint authority
-    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority: TOKEN_MELT_MASK });
-    if (ret.utxos.length === 0) {
+    // 3. Get melt authority
+    const meltAuthorities = await this.getMeltAuthority(token, { many: false, skipSpent: true });
+    if (meltAuthorities.length === 0) {
       throw new UtxoError(`No authority utxo available for melting tokens. Token: ${token}.`);
     }
     // it's safe to assume that we have an utxo in the array
-    const meltUtxo = ret.utxos[0];
+    const meltUtxo = meltAuthorities[0];
 
     // 4. Create inputs from utxos
     const inputsObj: Input[] = [];
@@ -2256,14 +2247,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority });
-    if (ret.utxos.length === 0) {
+    const authorityUtxos = await this.getAuthorityUtxo(token, type, { many: false, only_available_utxos: true });
+    if (authorityUtxos.length === 0) {
       throw new UtxoError(
         `No authority utxo available for delegating authority. Token: ${token} - Type ${type}.`
       );
     }
     // it's safe to assume that we have an utxo in the array
-    const utxo = ret.utxos[0];
+    const utxo = authorityUtxos[0];
 
     // 2. Create input from utxo
     const inputsObj: Input[] = [];
@@ -2360,12 +2351,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority, count });
-    if (ret.utxos.length < count) {
+    const authorityUtxos = await this.getAuthorityUtxo(token, type, { many: true, only_available_utxos: true });
+    if (authorityUtxos.length < count) {
       throw new UtxoError(
-        `Not enough authority utxos available for destroying. Token: ${token} - Type ${type}. Requested quantity ${count} - Available quantity ${ret.utxos.length}`
+        `Not enough authority utxos available for destroying. Token: ${token} - Type ${type}. Requested quantity ${count} - Available quantity ${authorityUtxos.length}`
       );
     }
+    const ret = { utxos: authorityUtxos.slice(0, count) };
 
     // 1. Create input from utxo
     const inputsObj: Input[] = [];
