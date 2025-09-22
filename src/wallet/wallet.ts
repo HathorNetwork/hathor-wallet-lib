@@ -2023,11 +2023,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         let addressIndex: number;
         if (idx === tx.inputs.length - 1) {
           // This is the mint authority input
-          const authAddressIndex = await this.getAddressIndex(mintUtxo.address);
-          if (authAddressIndex === null) {
+          const mintUtxoAddressIndex = await this.getAddressIndex(mintUtxo.address);
+          if (mintUtxoAddressIndex === null) {
             throw new Error(`Authority address ${mintUtxo.address} not found in wallet`);
           }
-          addressIndex = authAddressIndex;
+          addressIndex = mintUtxoAddressIndex;
         } else {
           // This is a regular HTR input
           addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxos[idx].addressPath);
@@ -2198,11 +2198,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         let addressIndex: number;
         if (idx === tx.inputs.length - 1) {
           // This is the melt authority input
-          const authAddressIndex = await this.getAddressIndex(meltUtxo.address);
-          if (authAddressIndex === null) {
+          const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
+          if (meltUtxoAddressIndex === null) {
             throw new Error(`Authority address ${meltUtxo.address} not found in wallet`);
           }
-          addressIndex = authAddressIndex;
+          addressIndex = meltUtxoAddressIndex;
         } else {
           // This is a regular token input
           addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxos[idx].addressPath);
