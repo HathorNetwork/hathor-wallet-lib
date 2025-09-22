@@ -315,3 +315,39 @@ export const getResultHelper = async <T>(
     return [e as Error, null];
   }
 };
+
+/**
+ * Retrieves the blueprint ID for a nano contract by its ID.
+ *
+ * The priority is to get the data from the getFullTxById API because
+ * it gets contract txs that are still to be confirmed by a block. If it fails,
+ * the contract might have been created by another contract, so we fallback to the state
+ * API, which gets the information correctly in that case.
+ *
+ * @returns A promise resolving to the blueprint ID.
+ * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
+ * @throws {Error} If the nano contract ID is not defined.
+ */
+export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promise<string> => {
+  if (!ncId) {
+    throw new Error('Nano contract ID is not defined');
+  }
+
+  const [txError, txResponse] = (await getResultHelper(() =>
+    wallet.getFullTxById(ncId)
+  )) as [Error | null, FullNodeTxResponse | null];
+  if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
+    return txResponse.tx.nc_blueprint_id;
+  }
+
+  const [stateError, stateResponse] = await getResultHelper(() =>
+    ncApi.getNanoContractState(ncId!, [], [], [])
+  );
+  if (stateError || !stateResponse?.blueprint_id) {
+    throw new NanoContractTransactionError(
+      `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
+    );
+  }
+
+  return stateResponse.blueprint_id;
+}
