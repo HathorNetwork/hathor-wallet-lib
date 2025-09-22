@@ -22,11 +22,52 @@ import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
  * @property {string[]} [multisigDebugData.pubkeys] Public keys for this multisig wallet
  */
 
-export const precalculationHelpers = {
+interface MultisigDebugData {
+  total: number;
+  minSignatures: number;
+  pubkeys: string[];
+}
+
+interface PrecalculatedWalletData {
+  isUsed: boolean;
+  words: string;
+  addresses: string[];
+  multisigDebugData?: MultisigDebugData;
+}
+
+interface MultisigConfig {
+  minSignatures: number;
+  wordsArray: string[];
+}
+
+interface GenerateAddressesParams {
+  words?: string;
+  addressIntervalStart?: number;
+  addressIntervalEnd?: number;
+  multisig?: MultisigConfig;
+}
+
+interface GenerateMultipleWalletsParams {
+  commonWallets?: number;
+  verbose?: boolean;
+}
+
+interface GenerateMultisigWalletsParams {
+  wordsArray: string[];
+  minSignatures: number;
+}
+
+interface WalletConfig {
+  pubkeys: string[];
+  total: number;
+  minSignatures: number;
+}
+
+export const precalculationHelpers: { test?: WalletPrecalculationHelper } = {
   /**
    * @type WalletPrecalculationHelper
    */
-  test: null,
+  test: undefined,
 };
 
 export const multisigWalletsData = {
@@ -45,23 +86,23 @@ export const multisigWalletsData = {
     'xpub6CgPUcCCJ9pAK7Rj52hwkxTutSRv91Fq74Hx1SjN62eg6Mp3S3YCJFPChPaDjpp9jCbCZHibBgdKnfNdq6hE9umyjyZKUCySBNF7wkoG4uK',
   ],
   walletConfig: {
-    pubkeys: [],
+    pubkeys: [] as string[],
     total: 5,
     minSignatures: 3,
-  },
+  } as WalletConfig,
 };
 multisigWalletsData.walletConfig.pubkeys = multisigWalletsData.pubkeys;
 
 export class WalletPrecalculationHelper {
   WALLETS_FILENAME = '';
 
-  walletsDb = [];
+  walletsDb: PrecalculatedWalletData[] = [];
 
   /**
    * Initializes the helper with a filename to sync the local wallet storage with.
    * @param walletsFilename
    */
-  constructor(walletsFilename) {
+  constructor(walletsFilename?: string) {
     this.WALLETS_FILENAME = walletsFilename || './tmp/wallets.txt';
   }
 
@@ -75,15 +116,15 @@ export class WalletPrecalculationHelper {
    * @param {{minSignatures:number, wordsArray:string[]}} [params.multisig] Optional multisig object
    * @returns {PrecalculatedWalletData}
    */
-  static generateAddressesFromWords(params = {}) {
+  static generateAddressesFromWords(params: GenerateAddressesParams = {}): PrecalculatedWalletData {
     const timeStart = Date.now().valueOf();
     let wordsInput = params.words;
 
     // Calculating addresses
     const addressIntervalStart = params.addressIntervalStart || 0;
     const addressIntervalEnd = params.addressIntervalEnd || 22;
-    const addressesArray = [];
-    let multisigDebugData = null;
+    const addressesArray: string[] = [];
+    let multisigDebugData: MultisigDebugData | null = null;
     if (params.multisig) {
       // Multisig calculation
       const pubkeys = params.multisig.wordsArray.map(w => walletUtils.getMultiSigXPubFromWords(w));
@@ -122,7 +163,7 @@ export class WalletPrecalculationHelper {
         accountDerivationIndex,
       });
       for (let i = addressIntervalStart; i < addressIntervalEnd; i++) {
-        const addrInfo = deriveAddressFromXPubP2PKH(xpubkey, addressIntervalStart, NETWORK_NAME);
+        const addrInfo = deriveAddressFromXPubP2PKH(xpubkey, i, NETWORK_NAME);
         addressesArray.push(addrInfo.base58);
       }
     }
@@ -132,12 +173,12 @@ export class WalletPrecalculationHelper {
     const timeDiff = timeEnd - timeStart;
     console.log(`Wallet calculation made in ${timeDiff}ms`);
 
-    const returnObject = {
+    const returnObject: PrecalculatedWalletData = {
       isUsed: false,
-      words: wordsInput,
+      words: wordsInput || '',
       addresses: addressesArray,
     };
-    if (params.multisig) {
+    if (params.multisig && multisigDebugData) {
       returnObject.multisigDebugData = multisigDebugData;
     }
     return returnObject;
@@ -149,7 +190,7 @@ export class WalletPrecalculationHelper {
    * @throws SyntaxError
    * @private
    */
-  async _deserializeWalletsFile() {
+  async _deserializeWalletsFile(): Promise<PrecalculatedWalletData[]> {
     const dataBuffer = await fs.readFile(this.WALLETS_FILENAME);
     const strData = dataBuffer.toString();
     try {
@@ -166,7 +207,7 @@ export class WalletPrecalculationHelper {
    * @returns {Promise<void>}
    * @private
    */
-  async _serializeWalletsFile(wallets) {
+  async _serializeWalletsFile(wallets: PrecalculatedWalletData[]): Promise<void> {
     /*
      * The main aim of this file structure is human readability for debugging.
      * The result must be a valid JSON, but with only one line per wallet.
@@ -184,10 +225,12 @@ export class WalletPrecalculationHelper {
    * @param {boolean} [params.verbose] Optional logging of each wallet
    * @returns {{words:string, addresses:string[]}[]}
    */
-  static generateMultipleWallets(params = {}) {
+  static generateMultipleWallets(
+    params: GenerateMultipleWalletsParams = {}
+  ): PrecalculatedWalletData[] {
     const amountOfCommonWallets = params.commonWallets || 100;
 
-    const wallets = [];
+    const wallets: PrecalculatedWalletData[] = [];
     for (let i = 0; i < amountOfCommonWallets; ++i) {
       wallets.push(WalletPrecalculationHelper.generateAddressesFromWords());
       if (params.verbose) console.log(`Generated ${i}`);
@@ -203,8 +246,10 @@ export class WalletPrecalculationHelper {
    * @param {number} params.minSignatures Minimum of signatures for this multisig wallet
    * @returns {PrecalculatedWalletData[]}
    */
-  static generateMultisigWalletsForWords(params = {}) {
-    const resultingWallets = [];
+  static generateMultisigWalletsForWords(
+    params: GenerateMultisigWalletsParams
+  ): PrecalculatedWalletData[] {
+    const resultingWallets: PrecalculatedWalletData[] = [];
     for (const walletWords of params.wordsArray) {
       const multisigWallet = WalletPrecalculationHelper.generateAddressesFromWords({
         words: walletWords,
@@ -222,16 +267,15 @@ export class WalletPrecalculationHelper {
    * Loads a file containing precalculated wallets into the in-memory storage
    * @returns {Promise<void>}
    */
-  async initWithWalletsFile() {
-    const fileData = await this._deserializeWalletsFile();
-    this.walletsDb = fileData;
+  async initWithWalletsFile(): Promise<void> {
+    this.walletsDb = await this._deserializeWalletsFile();
   }
 
   /**
    * Writes the in-memory storage of precalculated wallets into the filesystem
    * @returns {Promise<void>}
    */
-  async storeDbIntoWalletsFile() {
+  async storeDbIntoWalletsFile(): Promise<void> {
     return this._serializeWalletsFile(this.walletsDb);
   }
 
@@ -239,8 +283,11 @@ export class WalletPrecalculationHelper {
    * Fetches the first unused precalculated wallet from the in-memory storage and marks it as used.
    * @returns {PrecalculatedWalletData}
    */
-  getPrecalculatedWallet() {
+  getPrecalculatedWallet(): PrecalculatedWalletData {
     const unusedWallet = this.walletsDb.find(w => !w.isUsed);
+    if (!unusedWallet) {
+      throw new Error('No unused wallets available');
+    }
     unusedWallet.isUsed = true; // We are using it right now. Marking it.
     return unusedWallet;
   }
