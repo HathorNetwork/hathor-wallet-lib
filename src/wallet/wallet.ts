@@ -421,6 +421,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const acctKey = decryptData(accessData.acctPathKey, pinCode);
       const privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(privKeyAccountPath.xpubkey);
+      this.walletId = walletId;
       renewPromise = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
@@ -438,6 +439,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // we need to start the process to renew the auth token If for any reason we had to
       // derive the account path xpubkey on the method above.
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+      this.walletId = walletId;
       renewPromise = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
@@ -488,6 +490,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // now that the wallet was created and before it is ready.
       this.authToken = null;
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+      this.walletId = walletId;
       renewPromise2 = this._validateAndRenewAuthToken(walletId, pinCode);
     }
 
