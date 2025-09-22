@@ -1751,7 +1751,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     skipSpent: boolean;
     maxOutputs?: number;
     filterAddress?: string | null;
-  }): Promise<AuthorityTxOutput[]> {
+  }): Promise<Utxo[]> {
     const apiOptions: GetTxOutputsOptions = {
       tokenId: options.tokenId,
       authority: options.authority,
@@ -1765,12 +1765,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const { txOutputs } = await walletApi.getTxOutputs(this, apiOptions);
 
-    return txOutputs.map(txOutput => ({
-      txId: txOutput.txId,
-      index: txOutput.index,
-      address: txOutput.address,
-      authorities: txOutput.authorities,
-    }));
+    return txOutputs;
   }
 
   /**
@@ -1784,13 +1779,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * @return Promise that resolves with an Array of Utxo objects.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getMintAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
-  ): Promise<AuthorityTxOutput[]> {
+  ): Promise<Utxo[]> {
     const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
@@ -1812,13 +1807,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * @return Promise that resolves with an Array of Utxo objects.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getMeltAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
-  ): Promise<AuthorityTxOutput[]> {
+  ): Promise<Utxo[]> {
     const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
@@ -1841,7 +1836,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'filter_address': Address to filter the utxo to get (default null)
    *  }
    *
-   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * @return Promise that resolves with an Array of Utxo objects.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getAuthorityUtxo(
@@ -1852,7 +1847,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       only_available_utxos?: boolean;
       filter_address?: string | null;
     } = {}
-  ): Promise<AuthorityTxOutput[]> {
+  ): Promise<Utxo[]> {
     let authorityValue: OutputValueType;
     if (authority === 'mint') {
       authorityValue = TOKEN_MINT_MASK;
