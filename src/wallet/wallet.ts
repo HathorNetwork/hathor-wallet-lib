@@ -2260,10 +2260,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const authorityUtxos = await this.getAuthorityUtxo(token, type, {
-      many: false,
-      only_available_utxos: true,
-    });
+    const authorityUtxos =
+      type === 'mint'
+        ? await this.getMintAuthority(token, { many: false, skipSpent: true })
+        : await this.getMeltAuthority(token, { many: false, skipSpent: true });
     if (authorityUtxos.length === 0) {
       throw new UtxoError(
         `No authority utxo available for delegating authority. Token: ${token} - Type ${type}.`
@@ -2362,10 +2362,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const authorityUtxos = await this.getAuthorityUtxo(token, type, {
-      many: true,
-      only_available_utxos: true,
-    });
+    const authorityUtxos =
+      type === 'mint'
+        ? await this.getMintAuthority(token, { many: true, skipSpent: true })
+        : await this.getMeltAuthority(token, { many: true, skipSpent: true });
     if (authorityUtxos.length < count) {
       throw new UtxoError(
         `Not enough authority utxos available for destroying. Token: ${token} - Type ${type}. Requested quantity ${count} - Available quantity ${authorityUtxos.length}`
