@@ -727,6 +727,31 @@ test('prepareMintTokens', async () => {
     },
   });
 
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -879,6 +904,31 @@ test('prepareMeltTokens', async () => {
     },
   });
 
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MELT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -1022,6 +1072,38 @@ test('prepareDelegateAuthorityData', async () => {
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ];
 
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      WR1i8USJWQuaU423fwuFQbezfevmT4vFWX: true,
+    },
+  });
+
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -1160,6 +1242,38 @@ test('prepareDestroyAuthority', async () => {
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ];
+
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      WR1i8USJWQuaU423fwuFQbezfevmT4vFWX: true,
+    },
+  });
+
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
 
   const requestPassword = jest.fn();
   const network = new Network('testnet');

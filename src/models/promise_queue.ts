@@ -43,11 +43,13 @@ export default class PromiseQueue extends EventEmitter {
 
   #intervalId: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
+  constructor(autostart: boolean = true) {
     super();
     this.#queue = new PriorityQueue<() => Promise<void>>();
     this.#jobsRunning = 0;
-    this.#startInterval();
+    if (autostart) {
+      this.#startInterval();
+    }
   }
 
   /**
@@ -73,6 +75,13 @@ export default class PromiseQueue extends EventEmitter {
       clearInterval(this.#intervalId);
       this.#intervalId = null;
     }
+  }
+
+  /**
+   * Allow users to stop the background interval so there is no hanging tasks.
+   */
+  stopBackgroundTask() {
+    this.#clearInterval();
   }
 
   /**

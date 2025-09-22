@@ -56,6 +56,7 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from './template/transaction';
+import { stopGLLBackgroundTask } from './sync/gll';
 
 export {
   PartialTx,
@@ -117,6 +118,7 @@ export {
   TransactionTemplate,
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
+  stopGLLBackgroundTask,
 };
 
 export * from './nano_contracts/types';
