@@ -1751,7 +1751,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     skipSpent: boolean;
     maxOutputs?: number;
     filterAddress?: string | null;
-  }): Promise<Utxo[]> {
+  }): Promise<AuthorityTxOutput[]> {
     const apiOptions: GetTxOutputsOptions = {
       tokenId: options.tokenId,
       authority: options.authority,
@@ -1765,7 +1765,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const { txOutputs } = await walletApi.getTxOutputs(this, apiOptions);
 
-    return txOutputs;
+    return txOutputs.map(txOutput => ({
+      txId: txOutput.txId,
+      index: txOutput.index,
+      address: txOutput.address,
+      authorities: txOutput.authorities,
+    }));
   }
 
   /**
@@ -1779,13 +1784,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Promise that resolves with an Array of Utxo objects.
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getMintAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
-  ): Promise<Utxo[]> {
+  ): Promise<AuthorityTxOutput[]> {
     const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
@@ -1807,13 +1812,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Promise that resolves with an Array of Utxo objects.
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getMeltAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
-  ): Promise<Utxo[]> {
+  ): Promise<AuthorityTxOutput[]> {
     const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
@@ -1836,7 +1841,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'filter_address': Address to filter the utxo to get (default null)
    *  }
    *
-   * @return Promise that resolves with an Array of Utxo objects.
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
    * Returns an empty array in case there are no tx outputs for this type
    * */
   async getAuthorityUtxo(
@@ -1847,7 +1852,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       only_available_utxos?: boolean;
       filter_address?: string | null;
     } = {}
-  ): Promise<Utxo[]> {
+  ): Promise<AuthorityTxOutput[]> {
     let authorityValue: OutputValueType;
     if (authority === 'mint') {
       authorityValue = TOKEN_MINT_MASK;
@@ -2015,13 +2020,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
         // We have an array of utxos and the last input is the one with the authority
-        const addressPath =
-          idx === tx.inputs.length - 1 ? mintUtxo.addressPath : utxos[idx].addressPath;
-        const inputData = this.getInputData(
-          xprivkey,
-          dataToSignHash,
-          HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath)
-        );
+        let addressIndex: number;
+        if (idx === tx.inputs.length - 1) {
+          // This is the mint authority input
+          const authAddressIndex = await this.getAddressIndex(mintUtxo.address);
+          if (authAddressIndex === null) {
+            throw new Error(`Authority address ${mintUtxo.address} not found in wallet`);
+          }
+          addressIndex = authAddressIndex;
+        } else {
+          // This is a regular HTR input
+          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxos[idx].addressPath);
+        }
+        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
         inputObj.setData(inputData);
       }
     }
@@ -2184,13 +2195,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
         // We have an array of utxos and the last input is the one with the authority
-        const addressPath =
-          idx === tx.inputs.length - 1 ? meltUtxo.addressPath : utxos[idx].addressPath;
-        const inputData = this.getInputData(
-          xprivkey,
-          dataToSignHash,
-          HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath)
-        );
+        let addressIndex: number;
+        if (idx === tx.inputs.length - 1) {
+          // This is the melt authority input
+          const authAddressIndex = await this.getAddressIndex(meltUtxo.address);
+          if (authAddressIndex === null) {
+            throw new Error(`Authority address ${meltUtxo.address} not found in wallet`);
+          }
+          addressIndex = authAddressIndex;
+        } else {
+          // This is a regular token input
+          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxos[idx].addressPath);
+        }
+        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
         inputObj.setData(inputData);
       }
     }
@@ -2293,11 +2310,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
-    const inputData = this.getInputData(
-      xprivkey,
-      dataToSignHash,
-      HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath)
-    );
+    const addressIndex = await this.getAddressIndex(utxo.address);
+    if (addressIndex === null) {
+      throw new Error(`Authority address ${utxo.address} not found in wallet`);
+    }
+    const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
     inputsObj[0].setData(inputData);
 
     tx.prepareToSend();
@@ -2375,11 +2392,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const xprivkey = await this.storage.getMainXPrivKey(pinCode);
 
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(
-        xprivkey,
-        dataToSignHash,
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(ret.utxos[idx].addressPath)
-      );
+      const addressIndex = await this.getAddressIndex(ret.utxos[idx].address);
+      if (addressIndex === null) {
+        throw new Error(`Authority address ${ret.utxos[idx].address} not found in wallet`);
+      }
+      const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
       inputObj.setData(inputData);
     }
 
