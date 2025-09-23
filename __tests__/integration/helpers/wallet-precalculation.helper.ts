@@ -11,17 +11,6 @@ import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 
-/**
- * @typedef PrecalculatedWalletData
- * @property {boolean} isUsed Indicates if this wallet was already used
- * @property {string} words 24-word seed
- * @property {string[]} addresses List of pre-calculated addresses
- * @property [multisigDebugData]
- * @property {number} [multisigDebugData.total] Amount of pubkeys composing this multisig wallet
- * @property {number} [multisigDebugData.minSignatures] Minimum amount of signatures
- * @property {string[]} [multisigDebugData.pubkeys] Public keys for this multisig wallet
- */
-
 interface MultisigDebugData {
   total: number;
   minSignatures: number;
@@ -33,34 +22,6 @@ export interface PrecalculatedWalletData {
   words: string;
   addresses: string[];
   multisigDebugData?: MultisigDebugData;
-}
-
-interface MultisigConfig {
-  minSignatures: number;
-  wordsArray: string[];
-}
-
-interface GenerateAddressesParams {
-  words?: string;
-  addressIntervalStart?: number;
-  addressIntervalEnd?: number;
-  multisig?: MultisigConfig;
-}
-
-interface GenerateMultipleWalletsParams {
-  commonWallets?: number;
-  verbose?: boolean;
-}
-
-interface GenerateMultisigWalletsParams {
-  wordsArray: string[];
-  minSignatures: number;
-}
-
-interface WalletConfig {
-  pubkeys: string[];
-  total: number;
-  minSignatures: number;
 }
 
 export const precalculationHelpers: { test?: WalletPrecalculationHelper } = {
@@ -89,7 +50,11 @@ export const multisigWalletsData = {
     pubkeys: [] as string[],
     total: 5,
     minSignatures: 3,
-  } as WalletConfig,
+  } as {
+    pubkeys: string[];
+    total: number;
+    minSignatures: number;
+  },
 };
 multisigWalletsData.walletConfig.pubkeys = multisigWalletsData.pubkeys;
 
@@ -116,7 +81,17 @@ export class WalletPrecalculationHelper {
    * @param {{minSignatures:number, wordsArray:string[]}} [params.multisig] Optional multisig object
    * @returns {PrecalculatedWalletData}
    */
-  static generateAddressesFromWords(params: GenerateAddressesParams = {}): PrecalculatedWalletData {
+  static generateAddressesFromWords(
+    params: {
+      words?: string;
+      addressIntervalStart?: number;
+      addressIntervalEnd?: number;
+      multisig?: {
+        minSignatures: number;
+        wordsArray: string[];
+      };
+    } = {}
+  ): PrecalculatedWalletData {
     const timeStart = Date.now().valueOf();
     let wordsInput = params.words;
 
@@ -226,7 +201,10 @@ export class WalletPrecalculationHelper {
    * @returns {{words:string, addresses:string[]}[]}
    */
   static generateMultipleWallets(
-    params: GenerateMultipleWalletsParams = {}
+    params: {
+      commonWallets?: number;
+      verbose?: boolean;
+    } = {}
   ): PrecalculatedWalletData[] {
     const amountOfCommonWallets = params.commonWallets || 100;
 
@@ -246,9 +224,10 @@ export class WalletPrecalculationHelper {
    * @param {number} params.minSignatures Minimum of signatures for this multisig wallet
    * @returns {PrecalculatedWalletData[]}
    */
-  static generateMultisigWalletsForWords(
-    params: GenerateMultisigWalletsParams
-  ): PrecalculatedWalletData[] {
+  static generateMultisigWalletsForWords(params: {
+    wordsArray: string[];
+    minSignatures: number;
+  }): PrecalculatedWalletData[] {
     const resultingWallets: PrecalculatedWalletData[] = [];
     for (const walletWords of params.wordsArray) {
       const multisigWallet = WalletPrecalculationHelper.generateAddressesFromWords({

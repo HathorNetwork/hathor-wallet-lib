@@ -57,7 +57,7 @@ export class GenesisWalletHelper {
       // Only return the positive response after the wallet is ready
       await waitForWalletReady(this.hWallet);
     } catch (e) {
-      loggers.test!.error(`GenesisWalletHelper: ${e.message}`);
+      loggers.test!.error(`GenesisWalletHelper: ${(e as Error).message}`);
       throw e;
     }
   }
@@ -80,7 +80,7 @@ export class GenesisWalletHelper {
     options: InjectFundsOptions = {}
   ): Promise<Transaction> {
     try {
-      const result = await (this.hWallet as any).sendTransaction(address, value, {
+      const result = await this.hWallet.sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
       });
 
@@ -93,7 +93,7 @@ export class GenesisWalletHelper {
       await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     } catch (e) {
-      loggers.test!.error(`Failed to inject funds: ${e.message}`);
+      loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
       throw e;
     }
   }

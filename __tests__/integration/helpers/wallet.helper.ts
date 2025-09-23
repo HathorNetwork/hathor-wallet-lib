@@ -16,26 +16,12 @@ import {
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
-import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import type { PrecalculatedWalletData } from './wallet-precalculation.helper';
+import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src';
-import { TxHistoryProcessingStatus, IHistoryTx, IMultisigData } from '../../../src/types';
-
-/**
- * @typedef SendTxResponse
- * @property {{hash:string,index:number,data:Buffer}[]} inputs
- * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
- * @property {number} version
- * @property {number} weight
- * @property {number} nonce
- * @property {number} timestamp
- * @property {string[]} parents
- * @property {*[]} tokens
- * @property {string} hash
- * @property {*} _dataToSignCache
- */
+import { IHistoryTx, IMultisigData, TxHistoryProcessingStatus } from '../../../src/types';
 
 interface CreateNewTokenResponse {
   hash: string;
@@ -44,48 +30,10 @@ interface CreateNewTokenResponse {
   version: number;
   weight: number;
   parents: string[];
-  inputs: any[];
-  outputs: any[];
-  tokens: any[];
+  inputs: unknown[];
+  outputs: unknown[];
+  tokens: unknown[];
 }
-
-interface WalletHelperParams {
-  seed?: string;
-  passphrase?: string;
-  xpriv?: string;
-  xpub?: string;
-  tokenUid?: string;
-  password?: string | null;
-  pinCode?: string | null;
-  debug?: boolean;
-  multisig?: { pubkeys: string[]; numSignatures: number };
-  preCalculatedAddresses?: string[];
-}
-
-interface WalletHelperROOptions {
-  xpub?: string;
-  pinCode?: string | null;
-  preCalculatedAddresses?: string[];
-  hardware?: boolean;
-  multisig?: IMultisigData;
-}
-
-interface MultisigWalletParams {
-  walletIndex?: number;
-  walletWords?: string;
-  preCalculatedAddresses?: string[];
-  pubkeys?: string[];
-  numSignatures?: number;
-}
-
-interface CreateTokenOptions {
-  address?: string;
-  changeAddress?: string;
-  startMiningTx?: boolean;
-  pinCode?: string;
-}
-
-type OutputValueType = number;
 
 /**
  * Generates a connection object for starting wallets.
@@ -134,7 +82,18 @@ const startedWallets: HathorWallet[] = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
-export async function generateWalletHelper(param?: WalletHelperParams): Promise<HathorWallet> {
+export async function generateWalletHelper(param?: {
+  seed?: string;
+  passphrase?: string;
+  xpriv?: string;
+  xpub?: string;
+  tokenUid?: string;
+  password?: string | null;
+  pinCode?: string | null;
+  debug?: boolean;
+  multisig?: { pubkeys: string[]; numSignatures: number };
+  preCalculatedAddresses?: string[];
+}): Promise<HathorWallet> {
   let walletData: PrecalculatedWalletData = {
     isUsed: false,
     words: '',
@@ -153,7 +112,7 @@ export async function generateWalletHelper(param?: WalletHelperParams): Promise<
   }
 
   // Start the wallet
-  const walletConfig: any = {
+  const walletConfig = {
     seed: walletData.words,
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
@@ -187,7 +146,13 @@ export async function generateWalletHelper(param?: WalletHelperParams): Promise<
  * const hWalletAuto = await generateWalletHelperRO();
  */
 export async function generateWalletHelperRO(
-  options: WalletHelperROOptions = {}
+  options: {
+    xpub?: string;
+    pinCode?: string | null;
+    preCalculatedAddresses?: string[];
+    hardware?: boolean;
+    multisig?: IMultisigData;
+  } = {}
 ): Promise<HathorWallet> {
   let walletData: PrecalculatedWalletData = {
     isUsed: false,
@@ -216,7 +181,7 @@ export async function generateWalletHelperRO(
   const storage = new Storage(store);
 
   // Start the wallet
-  const walletConfig: any = {
+  const walletConfig = {
     xpub,
     connection: generateConnection(),
     storage,
@@ -249,10 +214,16 @@ export async function generateWalletHelperRO(
  * @return {Promise<HathorWallet>}
  */
 export async function generateMultisigWalletHelper(
-  parameters: MultisigWalletParams = {}
+  parameters: {
+    walletIndex?: number;
+    walletWords?: string;
+    preCalculatedAddresses?: string[];
+    pubkeys?: string[];
+    numSignatures?: number;
+  } = {}
 ): Promise<HathorWallet> {
   // Start the wallet
-  const walletConfig: any = {
+  const walletConfig = {
     seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex || 0],
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
@@ -278,9 +249,9 @@ export async function stopAllWallets(): Promise<void> {
   // Stop all wallets that were started with this helper
   while (hWallet) {
     try {
-      await (hWallet as any).stop({ cleanStorage: true, cleanAddresses: true });
-    } catch (e: any) {
-      loggers.test!.error(e.stack);
+      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+    } catch (e) {
+      loggers.test!.error((e as Error).stack);
     }
     hWallet = startedWallets.pop();
   }
@@ -305,10 +276,15 @@ export async function createTokenHelper(
   hWallet: HathorWallet,
   name: string,
   symbol: string,
-  amount: OutputValueType,
-  options: CreateTokenOptions = {}
+  amount: bigint,
+  options: {
+    address?: string;
+    changeAddress?: string;
+    startMiningTx?: boolean;
+    pinCode?: string;
+  } = {}
 ): Promise<CreateNewTokenResponse> {
-  const newTokenResponse = await (hWallet as any).createNewToken(name, symbol, amount, options);
+  const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
@@ -324,10 +300,10 @@ export async function createTokenHelper(
 export function waitForWalletReady(hWallet: HathorWallet): Promise<void> {
   // Only return the positive response after the wallet is ready
   return new Promise<void>((resolve, reject) => {
-    const handleState = (newState: any) => {
-      if (newState === (HathorWallet as any).READY) {
+    const handleState = (newState: string) => {
+      if (newState === HathorWallet.READY) {
         resolve();
-      } else if (newState === (HathorWallet as any).ERROR) {
+      } else if (newState === HathorWallet.ERROR) {
         reject(new Error('Wallet failed to start.'));
       }
     };
@@ -577,6 +553,6 @@ export async function waitTxConfirmed(
  * @returns {Promise<String>}
  */
 export async function getTxFirstBlock(hWallet: HathorWallet, txId: string): Promise<string> {
-  const txData = await (hWallet as any).getFullTxById(txId);
+  const txData = await hWallet.getFullTxById(txId);
   return get(txData, 'meta.first_block');
 }
