@@ -49,7 +49,7 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 }
 
 export interface ISendTokenOutput {
-  type: OutputType.P2PKH | OutputType.P2SH;
+  type?: OutputType.P2PKH | OutputType.P2SH;
   address: string;
   value: OutputValueType;
   token: string;
@@ -477,7 +477,7 @@ export default class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  async runFromMining(until = null): Promise<Transaction> {
+  async runFromMining(until: 'mine-tx' | null = null): Promise<Transaction> {
     try {
       if (this.transaction === null) {
         throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);

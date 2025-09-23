@@ -87,6 +87,7 @@ export async function generateWalletHelper(param?: {
   passphrase?: string;
   xpriv?: string;
   xpub?: string;
+  storage?: Storage;
   tokenUid?: string;
   password?: string | null;
   pinCode?: string | null;

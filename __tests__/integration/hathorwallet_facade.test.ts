@@ -26,15 +26,15 @@ import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
 import { WalletType } from '../../src/types';
-import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
+import WalletConnection from '../../src/new/connection';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -307,7 +307,7 @@ describe('getTxById', () => {
 
 describe('start', () => {
   it('should reject with invalid parameters', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const connection = generateConnection();
 
     /*
@@ -391,7 +391,13 @@ describe('start', () => {
      */
 
     // A common wallet without a pin code
-    let walletConfig = {
+    let walletConfig: {
+      seed: string;
+      connection: WalletConnection;
+      password?: string;
+      preCalculatedAddresses: string[];
+      pinCode?: string;
+    } = {
       seed: walletData.words,
       connection,
       password: DEFAULT_PASSWORD,
@@ -412,7 +418,7 @@ describe('start', () => {
   });
 
   it('should start a wallet with no history', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Start the wallet
     const walletConfig = {
@@ -445,7 +451,7 @@ describe('start', () => {
 
   it('should start a wallet with a transaction history', async () => {
     // Send a transaction to one of the wallet's addresses
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // We are not using the injectFunds helper method here because
     // we want to send this transaction before the wallet is started
@@ -478,7 +484,7 @@ describe('start', () => {
   });
 
   it("should calculate the wallet's addresses on start", async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Start the wallet
     const walletConfig = {
@@ -542,10 +548,10 @@ describe('start', () => {
   });
 
   it('should start a wallet to manage a specific token', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Creating a new wallet with a known set of words just to generate the custom token
-    let hWallet = await generateWalletHelper({
+    const hWallet = await generateWalletHelper({
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
     });
@@ -560,19 +566,18 @@ describe('start', () => {
     await delay(1000);
     // Stopping this wallet and destroying its memory state
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-    hWallet = null;
 
     // Starting a new wallet re-using the same words, this time with a specific wallet token
-    hWallet = await generateWalletHelper({
+    const newHWallet = await generateWalletHelper({
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
       tokenUid,
     });
-    expect(hWallet.isReady()).toStrictEqual(true); // This operation should work
+    expect(newHWallet.isReady()).toStrictEqual(true); // This operation should work
 
     // Now testing the methods that use this set tokenUid information
     // FIXME: No need to explicitly pass the non-boolean `false` as a tokenUid to get this result.
-    expect(await hWallet.getBalance(false)).toStrictEqual([
+    expect(await newHWallet.getBalance(false as unknown as string)).toStrictEqual([
       {
         token: {
           id: tokenUid,
@@ -599,7 +604,7 @@ describe('start', () => {
     ]);
 
     // FIXME: We should not have to explicitly pass an empty token uid to get this result
-    const txHistory1 = await hWallet.getTxHistory({ token_id: undefined });
+    const txHistory1 = await newHWallet.getTxHistory({ token_id: undefined });
     expect(txHistory1).toStrictEqual([
       expect.objectContaining({
         txId: tokenUid,
@@ -614,7 +619,7 @@ describe('start', () => {
   });
 
   it('should start a wallet via xpub', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -679,7 +684,7 @@ describe('start', () => {
   });
 
   it('should start an externally signed wallet', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -699,7 +704,7 @@ describe('start', () => {
   });
 
   it('should start an externally signed wallet from storage', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -707,6 +712,7 @@ describe('start', () => {
 
     const store = new MemoryStore();
     const storage = new Storage(store);
+    // @ts-expect-error - Mocked method does not match the original signature
     storage.setTxSignatureMethod(async () => {});
     // Creating a new wallet with a known set of words just to generate the custom token
     const hWallet = await generateWalletHelper({
@@ -723,7 +729,7 @@ describe('start', () => {
 
   it('should start a wallet without pin', async () => {
     // Generating the wallet
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const hWallet = await generateWalletHelper({
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
@@ -1238,7 +1244,7 @@ describe('getFullTxById', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  let gWallet;
+  let gWallet: HathorWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton();
     gWallet = hWallet;
@@ -1282,7 +1288,7 @@ describe('getTxConfirmationData', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  let gWallet;
+  let gWallet: HathorWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton();
     gWallet = hWallet;
@@ -1329,7 +1335,7 @@ describe('graphvizNeighborsQuery', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  let gWallet;
+  let gWallet: HathorWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton();
     gWallet = hWallet;
@@ -1573,10 +1579,9 @@ describe('sendTransaction', () => {
       transaction: partiallyAssembledTx,
     });
 
-    /** @type BaseTransactionResponse */
     const sentTx = await finalTx.runFromMining();
     expect(sentTx).toHaveProperty('hash');
-    await waitForTxReceived(mhWallet1, sentTx.hash, 10000); // Multisig transactions take longer
+    await waitForTxReceived(mhWallet1, sentTx.hash!, 10000); // Multisig transactions take longer
 
     const historyTx = await mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
@@ -1787,7 +1792,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating interfaces with only a partial lock of the resources
     const waitFor1 = timelock1 - Date.now().valueOf() + 1000;
-    loggers.test.log(`Will wait for ${waitFor1}ms for timelock1 to expire`);
+    loggers.test!.log(`Will wait for ${waitFor1}ms for timelock1 to expire`);
     await delay(waitFor1);
 
     /*
@@ -1808,7 +1813,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating interfaces with all resources unlocked
     const waitFor2 = timelock2 - Date.now().valueOf() + 1000;
-    loggers.test.log(`Will wait for ${waitFor2}ms for timelock2 to expire`);
+    loggers.test!.log(`Will wait for ${waitFor2}ms for timelock2 to expire`);
     await delay(waitFor2);
 
     // Forcing balance updates
@@ -3116,7 +3121,7 @@ describe('signTx', () => {
 
     // Push transaction to test if fullnode will validate it.
     await sendTransaction.handlePushTx();
-    await waitForTxReceived(hWallet, sendTransaction.transaction.hash);
+    await waitForTxReceived(hWallet, sendTransaction.transaction!.hash!);
   });
 });
 
@@ -3126,7 +3131,7 @@ describe('getTxHistory', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  let gWallet;
+  let gWallet: HathorWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton();
     gWallet = hWallet;
