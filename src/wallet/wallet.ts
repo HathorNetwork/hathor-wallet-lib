@@ -1012,6 +1012,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       filter_address?: string;
     } = {}
   ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
+    if (amount <= 0) {
+      throw new UtxoError('Total amount must be a positive integer.');
+    }
+
     const newOptions = {
       tokenId: options.token || NATIVE_TOKEN_UID,
       addresses: options.filter_address ? [options.filter_address] : undefined,
@@ -1025,19 +1029,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const data = await walletApi.getTxOutputs(this, newOptions);
-    let changeAmount = 0n;
-    let utxos: Utxo[] = [];
-    if (data.txOutputs.length === 0) {
-      // No utxos available for the requested filter
-      utxos = data.txOutputs;
-    } else {
-      // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
-      // and slice the least possible utxos
-      const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
-      changeAmount = ret.changeAmount;
-      utxos = ret.utxos;
-    }
-    return { utxos, changeAmount };
+
+    // Use selectUtxos to handle all error conditions and utxo selection
+    const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
+    return { utxos: ret.utxos, changeAmount: ret.changeAmount };
   }
 
   /**
