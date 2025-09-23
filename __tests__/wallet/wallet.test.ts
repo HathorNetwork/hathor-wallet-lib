@@ -2404,13 +2404,57 @@ describe('getUtxos', () => {
 
     // Test totalAmount that doesn't exceed available UTXOs
     const result = await wallet.getUtxosForAmount(150n, {
-      tokenId: '00',
+      token: '00',
     });
 
     expect(result).toEqual({
       utxos: mockUtxos,
       changeAmount: 50n,
     });
+  });
+
+  it('should throw error for negative amount', async () => {
+    await expect(wallet.getUtxosForAmount(-10n, {})).rejects.toThrow(
+      'Total amount must be a positive integer.'
+    );
+  });
+
+  it('should throw error for zero amount', async () => {
+    await expect(wallet.getUtxosForAmount(0n, {})).rejects.toThrow(
+      'Total amount must be a positive integer.'
+    );
+  });
+
+  it('should throw error when no UTXOs available', async () => {
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: [],
+    });
+
+    await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
+      "Don't have enough utxos to fill total amount."
+    );
+  });
+
+  it('should throw error when UTXOs are insufficient', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 50n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
+      "Don't have enough utxos to fill total amount."
+    );
   });
 });
 
