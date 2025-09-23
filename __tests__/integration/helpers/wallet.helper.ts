@@ -21,7 +21,12 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src';
-import { IHistoryTx, IMultisigData, TxHistoryProcessingStatus } from '../../../src/types';
+import {
+  AddressScanPolicyData,
+  IHistoryTx,
+  IMultisigData,
+  TxHistoryProcessingStatus,
+} from '../../../src/types';
 
 interface CreateNewTokenResponse {
   hash: string;
@@ -94,6 +99,7 @@ export async function generateWalletHelper(param?: {
   debug?: boolean;
   multisig?: { pubkeys: string[]; numSignatures: number };
   preCalculatedAddresses?: string[];
+  scanPolicy?: AddressScanPolicyData;
 }): Promise<HathorWallet> {
   let walletData: PrecalculatedWalletData = {
     isUsed: false,
