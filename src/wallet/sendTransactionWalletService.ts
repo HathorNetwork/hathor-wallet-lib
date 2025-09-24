@@ -181,7 +181,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     for (const [token, needsInputs] of tokenNeedsInputs.entries()) {
       if (needsInputs) {
         const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(tokenAmountMap[token], {
-          tokenId: token,
+          token,
         });
 
         if (utxos.length === 0) {
@@ -487,7 +487,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const utxosAddressPath: string[] = [];
     for (const token in tokenAmountMap) {
       const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(tokenAmountMap[token], {
-        tokenId: token,
+        token,
       });
       if (utxos.length === 0) {
         throw new UtxoError(

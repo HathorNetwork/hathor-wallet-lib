@@ -68,8 +68,8 @@ describe('prepareTxData', () => {
       return null;
     });
 
-    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
-      if (tokenId === NATIVE_TOKEN_UID) {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === NATIVE_TOKEN_UID) {
         return {
           utxos: [
             {
@@ -193,8 +193,8 @@ describe('prepareTxData', () => {
       return null;
     });
 
-    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
-      if (tokenId === '01') {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === '01') {
         return {
           utxos: [
             {
@@ -653,8 +653,8 @@ describe('prepareTxData', () => {
       return null;
     });
 
-    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
-      if (tokenId === '02') {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === '02') {
         return {
           utxos: [
             {
@@ -670,7 +670,7 @@ describe('prepareTxData', () => {
           changeAmount: 10n, // 30 - 20 = 10
         };
       }
-      if (tokenId === NATIVE_TOKEN_UID) {
+      if (token === NATIVE_TOKEN_UID) {
         return {
           utxos: [
             {
@@ -825,8 +825,8 @@ describe('prepareTxData', () => {
     const mockGetType = jest.spyOn(Address.prototype, 'getType');
     mockGetType.mockReturnValue('p2pkh');
 
-    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
-      if (tokenId === NATIVE_TOKEN_UID) {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === NATIVE_TOKEN_UID) {
         return {
           utxos: [
             {
@@ -842,7 +842,7 @@ describe('prepareTxData', () => {
           changeAmount: 5n, // 20 - 15 = 5
         };
       }
-      if (tokenId === '01') {
+      if (token === '01') {
         return {
           utxos: [
             {
@@ -1023,8 +1023,8 @@ describe('selectUtxosToUse', () => {
   });
 
   it('should select UTXOs and create change outputs for multiple tokens', async () => {
-    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
-      if (tokenId === NATIVE_TOKEN_UID) {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === NATIVE_TOKEN_UID) {
         return {
           utxos: [
             {
@@ -1040,7 +1040,7 @@ describe('selectUtxosToUse', () => {
           changeAmount: 50n, // 100 - 50 = 50
         };
       }
-      if (tokenId === '01') {
+      if (token === '01') {
         return {
           utxos: [
             {
@@ -1087,8 +1087,8 @@ describe('selectUtxosToUse', () => {
     expect(addressPaths).toEqual(["m/44'/280'/0'/0/1", "m/44'/280'/0'/0/2"]);
 
     // Verify getUtxosForAmount was called correctly
-    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(50n, { tokenId: NATIVE_TOKEN_UID });
-    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(100n, { tokenId: '01' });
+    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(50n, { token: NATIVE_TOKEN_UID });
+    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(100n, { token: '01' });
 
     // Verify inputs and outputs were updated
     expect(sendTransaction.inputs).toHaveLength(2);

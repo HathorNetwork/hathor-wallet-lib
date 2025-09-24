@@ -309,7 +309,7 @@ export const ncActionSchema = z.object({
 export const ncContextSchema = z.object({
   actions: z.array(ncActionSchema),
   caller_id: AddressSchema,
-  timestamp: z.number(),
+  timestamp: z.number().nullish(),
 });
 
 /**
