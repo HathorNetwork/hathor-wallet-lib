@@ -144,12 +144,12 @@ services:
 
       # Other env vars. Some of them may not be necessary and could be removed in the future
       USE_SSL: "false"
-      NEW_TX_SQS: ""
+      NEW_TX_SQS: "" # Mocked AWS
       PUSH_NOTIFICATION_ENABLED: "false"
-      WALLET_SERVICE_LAMBDA_ENDPOINT: "" # XXX: Confirm if this is really not used
-      ACCOUNT_ID: 1234
+      WALLET_SERVICE_LAMBDA_ENDPOINT: "" # Mocked AWS
+      ACCOUNT_ID: 1234 # Mocked AWS
       ALERT_MANAGER_TOPIC: "alert-topic"
-      ALERT_MANAGER_REGION: "us-east-1"
+      ALERT_MANAGER_REGION: "us-east-1" # Mocked AWS
       APPLICATION_NAME: "hathor-wallet-service"
       NODE_ENV: "test-privnet"
       STAGE: "local"
@@ -175,10 +175,10 @@ services:
       STAGE: local
       NETWORK: "privatenet"
       SERVICE_NAME: hathor-wallet-service
-      MAX_ADDRESS_GAP: 10
+      MAX_ADDRESS_GAP: 10 # Different from default 20 to facilitate tests
       VOIDED_TX_OFFSET: 5
       BLOCK_REWARD_LOCK: 300
-      CONFIRM_FIRST_ADDRESS: false
+      CONFIRM_FIRST_ADDRESS: false # Disabled security in a private network
       WS_DOMAIN: http://fakehost:3002
       DEFAULT_SERVER: http://fullnode:8080/v1a/
       DB_ENDPOINT: mysql
@@ -204,19 +204,19 @@ services:
       FIREBASE_AUTH_PROVIDER_X509_CERT_URL: "fake_auth_provider_x509_cert_url"
       FIREBASE_CLIENT_X509_CERT_URL: "fake_client_x509_cert_url"
       APPLICATION_NAME: "hathor-wallet-service"
-      ACCOUNT_ID: 1234
+      ACCOUNT_ID: 1234 # Mocked AWS
       ALERT_MANAGER_REGION: us-east-1
       ALERT_MANAGER_TOPIC: alert-topic
       PUSH_ALLOWED_PROVIDERS: "fake_provider"
       REDIS_PASSWORD: ""
-      IS_OFFLINE: true
+      IS_OFFLINE: true # Necessary to run the serverless-offline framework
       MOCK_AWS: true # Necessary to avoid calls to AWS on this private network
       ALERT_MANAGER_ACCOUNT_ID: "fake_account_id"
       AWS_VPC_DEFAULT_SG_ID: "1"
       AWS_SUBNET_ID_1: "2"
       AWS_SUBNET_ID_2: "3"
       AWS_SUBNET_ID_3: "4"
-      NFT_AUTO_REVIEW_ENABLED: "false"
+      NFT_AUTO_REVIEW_ENABLED: "false" # Should be enabled when this feature is ready for testing
       TX_HISTORY_MAX_COUNT: ""
       PUSH_NOTIFICATION_ENABLED: "false"
       LOG_LEVEL: "debug"
