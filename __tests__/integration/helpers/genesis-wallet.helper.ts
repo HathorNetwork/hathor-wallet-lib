@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-
+/* eslint max-classes-per-file: ["error", 2] */
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
@@ -13,15 +13,15 @@ import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
+import { HathorWalletServiceWallet } from '../../../src';
+import { buildWalletInstance, poolForTx } from './service-facade.helper';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
 }
 
-/**
- * @type {GenesisWalletHelper}
- */
 let singleton: GenesisWalletHelper | null = null;
+let singletonService: HathorWalletServiceWallet | null = null;
 
 export class GenesisWalletHelper {
   /**
@@ -142,5 +142,87 @@ export class GenesisWalletHelper {
   static async clearListeners(): Promise<void> {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     gWallet.removeAllListeners('new-tx');
+  }
+}
+
+export class GenesisWalletServiceHelper {
+  static pinCode: string = '123456';
+
+  static password: string = 'genesispass';
+
+  static async poolForServerlessAvailable() {
+    let isServerlessReady = false;
+    const startTime = Date.now();
+
+    // Pool for the serverless app to be ready.
+    const delayBetweenRequests = 3000;
+    const lambdaTimeout = 30000;
+    while (isServerlessReady) {
+      try {
+        // Executing a method that does not depend on the wallet being started,
+        // but that ensures the Wallet Service Lambdas are receiving requests
+        await GenesisWalletServiceHelper.getSingleton().getVersionData();
+        isServerlessReady = true;
+      } catch (e) {
+        // Ignore errors, serverless app is probably not ready yet
+        loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
+      }
+
+      // Timeout after 2 minutes
+      if (Date.now() - startTime > lambdaTimeout) {
+        throw new Error('Ws-Serverless did not become ready in time');
+      }
+      await delay(delayBetweenRequests);
+    }
+    loggers.test!.log(`Ws-Serverless became ready in ${(Date.now() - startTime) / 1000} seconds`);
+  }
+
+  static getSingleton(): HathorWalletServiceWallet {
+    if (singletonService) {
+      return singletonService;
+    }
+
+    const { wallet } = buildWalletInstance({
+      words: WALLET_CONSTANTS.genesis.words,
+    });
+
+    singletonService = wallet;
+    return singletonService;
+  }
+
+  static async start({ enableWs = false } = {}): Promise<void> {
+    if (enableWs) {
+      throw new Error(`Not implemented!`);
+    }
+    const gWallet = GenesisWalletServiceHelper.getSingleton();
+    await gWallet.start({
+      pinCode: GenesisWalletServiceHelper.pinCode,
+      password: GenesisWalletServiceHelper.password,
+    });
+  }
+
+  static async injectFunds(
+    address: string,
+    amount: bigint,
+    destinationWallet?: HathorWalletServiceWallet
+  ) {
+    const gWallet = GenesisWalletServiceHelper.getSingleton();
+    const fundTx = await gWallet.sendTransaction(address, amount, {
+      pinCode: GenesisWalletServiceHelper.pinCode,
+    });
+
+    // Ensure the transaction was sent from the Genesis perspective
+    await poolForTx(gWallet, fundTx.hash!);
+
+    // Ensure the destination wallet is also aware of the transaction
+    if (destinationWallet) {
+      await poolForTx(destinationWallet, fundTx.hash!);
+    }
+
+    return fundTx;
+  }
+
+  static async stop() {
+    await GenesisWalletServiceHelper.getSingleton().stop({ cleanStorage: true });
   }
 }
