@@ -69,6 +69,7 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import WalletConnection from './connection';
 import { Utxo } from '../wallet/types';
+import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -155,6 +156,34 @@ type CreateTokenOptions = {
   isCreateNFT?: boolean;
 };
 
+type CreateNFTOptions = Omit<CreateTokenOptions, 'data'|'isCreateNFT'>;
+
+type MintTokensOptions = {
+  address?: string;
+  changeAddress?: string;
+  startMiningTx?: boolean;
+  createAnotherMint?: boolean;
+  mintAuthorityAddress?: string;
+  allowExternalMintAuthorityAddress?: boolean;
+  unshiftData?: boolean;
+  data?: string[] | null;
+  signTx?: boolean;
+  pinCode?: string;
+};
+
+type MeltTokensOptions = {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMelt?: boolean;
+  meltAuthorityAddress?: string | null;
+  allowExternalMeltAuthorityAddress?: boolean;
+  unshiftData?: boolean;
+  data?: string[] | null;
+  pinCode?: string | null;
+  signTx?: boolean;
+  startMiningTx?: boolean;
+};
+
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
@@ -195,9 +224,9 @@ class HathorWallet extends EventEmitter {
 
   state!: number;
 
-  xpriv!: string | null;
+  xpriv?: string | null; // TODO: Improve type: probably shouldn't be null
 
-  seed!: string | null;
+  seed?: string | null; // TODO: Improve type: probably shouldn't be null
 
   xpub!: string | null;
 
@@ -2010,22 +2039,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} MintTokensOptions
-   * @property {string?} [address] destination address of the minted token
-   *                                   (if not sent we choose the next available address to use)
-   * @property {string?} [changeAddress] address of the change output
-   *                                   (if not sent we choose the next available address to use)
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining (default true)
-   * @property {boolean?} [createAnotherMint] boolean to create another mint authority or not for the wallet
-   * @property {string?} [mintAuthorityAddress] address to send the new mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [unshiftData] whether to unshift the data script output
-   * @property {string[]|null?} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {boolean?} [signTx=true] sign transaction instance
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare mint transaction before mining
    *
    * @param {string} tokenUid UID of the token to mint
@@ -2037,7 +2050,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMintTokensData(tokenUid: string, amount: bigint, options: any = {}) {
+  async prepareMintTokensData(tokenUid: string, amount: bigint, options: MintTokensOptions = {}) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
@@ -2111,7 +2124,11 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokensSendTransaction(tokenUid: string, amount: bigint, options: any = {}) {
+  async mintTokensSendTransaction(
+    tokenUid: string,
+    amount: bigint,
+    options: MintTokensOptions = {}
+  ) {
     const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2128,24 +2145,10 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokens(tokenUid: string, amount: bigint, options: any = {}) {
+  async mintTokens(tokenUid: string, amount: bigint, options: MintTokensOptions = {}) {
     const sendTx = await this.mintTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
-
-  /**
-   * @typedef {Object} MeltTokensOptions
-   * @property {string?} [address] address of the HTR deposit back.
-   * @property {string?} [changeAddress] address of the change output.
-   * @property {boolean?} [createAnotherMelt=true] create another melt authority or not.
-   * @property {string?} [meltAuthorityAddress=null] where to send the new melt authority created.
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address to be from another wallet.
-   * @property {boolean?} [unshiftData=false] Add the data outputs in the start of the output list.
-   * @property {string[]?} [data=null] list of data script output to add, UTF-8 encoded.
-   * @property {string?} [pinCode=null] pin to decrypt xpriv information. Optional but required if not set in this.
-   * @property {boolean?} [signTx=true] Sign transaction instance.
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining
-   */
 
   /**
    * Prepare melt transaction before mining
@@ -2159,7 +2162,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMeltTokensData(tokenUid: string, amount: bigint, options: any = {}) {
+  async prepareMeltTokensData(tokenUid: string, amount: bigint, options: MeltTokensOptions = {}) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
@@ -2231,7 +2234,11 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokensSendTransaction(tokenUid: string, amount: bigint, options: any = {}) {
+  async meltTokensSendTransaction(
+    tokenUid: string,
+    amount: bigint,
+    options: MeltTokensOptions = {}
+  ) {
     const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2248,7 +2255,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokens(tokenUid: string, amount: bigint, options: any = {}) {
+  async meltTokens(tokenUid: string, amount: bigint, options: MeltTokensOptions = {}) {
     const sendTx = await this.meltTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
@@ -2299,7 +2306,9 @@ class HathorWallet extends EventEmitter {
     }
 
     if (delegateInput.length === 0) {
-      throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE });
+      const newError: Error & { success?: boolean } = new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
+      newError.success = false;
+      throw newError;
     }
 
     const txData = await tokenUtils.prepareDelegateAuthorityTxData(
@@ -2388,7 +2397,7 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    let destroyInputs;
+    let destroyInputs: string | IUtxo[];
     if (type === 'mint') {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
@@ -2407,7 +2416,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
     }
 
-    const data = [];
+    const data: IUtxo[] = [];
     for (const utxo of destroyInputs) {
       // FIXME: select utxos passing count to the method
       data.push(utxo);
@@ -2536,7 +2545,7 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
-    const result = await new Promise((resolve, reject) => {
+    const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
       walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
@@ -2584,7 +2593,7 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with the addresses and whether it belongs or not { address: boolean }
    * */
   async checkAddressesMine(addresses) {
-    const promises = [];
+    const promises: Promise<{ address: string; mine: boolean }>[] = [];
     for (const address of addresses) {
       promises.push(this.storage.isAddressMine(address).then(mine => ({ address, mine })));
     }
@@ -2657,10 +2666,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Omit<CreateTokenOptions, 'data'|'isCreateNFT'>} CreateNFTOptions
-   */
-
-  /**
    * Create a SendTransaction instance with a create NFT transaction prepared.
    *
    * @param {string} name Name of the token
@@ -2674,11 +2679,16 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNFTSendTransaction(name, symbol, amount, data, options = {}) {
-    /** @type {CreateTokenOptions} */
-    const newOptions = {
-      address: null,
-      changeAddress: null,
+  async createNFTSendTransaction(
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    data: string,
+    options: CreateNFTOptions = {}
+  ) {
+    const newOptions: CreateTokenOptions = {
+      address: undefined,
+      changeAddress: undefined,
       startMiningTx: true,
       pinCode: null,
       createMint: false,
