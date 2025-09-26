@@ -44,6 +44,7 @@ import {
   IHistoryTx,
   IUtxo,
   OutputValueType,
+  ApiVersion,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -116,6 +117,42 @@ type UtxoInfo = {
   tx_id: string;
   locked: boolean;
   index: number;
+};
+
+type ProposedOutput = {
+  address: string;
+  value: OutputValueType;
+  timelock?: number;
+  token: string;
+};
+
+type ProposedInput = {
+  txId: string;
+  index: number;
+  token: string;
+};
+
+type SendManyOutputsOptions = {
+  inputs?: ProposedInput[];
+  changeAddress?: string;
+  startMiningTx?: boolean;
+  pinCode?: string;
+};
+
+type CreateTokenOptions = {
+  address?: string;
+  changeAddress?: string;
+  startMiningTx?: boolean;
+  pinCode?: string;
+  createMint?: boolean;
+  mintAuthorityAddress?: string;
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string;
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[] | null;
+  signTx?: boolean;
+  isCreateNFT?: boolean;
 };
 
 /**
@@ -1247,7 +1284,9 @@ class HathorWallet extends EventEmitter {
       throw new Error('No available utxo to consolidate.');
     }
 
-    const sendTx = await this.sendManyOutputsSendTransaction(outputs, { inputs });
+    const sendTx = await this.sendManyOutputsSendTransaction(outputs, {
+      inputs: inputs as ProposedInput[],
+    });
 
     return {
       total_utxos_consolidated: utxos.length,
@@ -1482,7 +1521,11 @@ class HathorWallet extends EventEmitter {
     };
     const { token, changeAddress, pinCode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsSendTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsSendTransaction(outputs, {
+      inputs: [],
+      changeAddress: changeAddress!,
+      pinCode,
+    });
   }
 
   /**
@@ -1497,33 +1540,14 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
-  async sendTransaction(address: string, value: bigint, options: any = {}) {
+  async sendTransaction(
+    address: string,
+    value: bigint,
+    options: { changeAddress?: string; token?: string; pinCode?: string } = {}
+  ) {
     const sendTx = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
   }
-
-  /**
-   * @typedef {Object} ProposedOutput
-   * @property {string} address
-   * @property {import('../types').OutputValueType} value
-   * @property {number?} timelock
-   * @property {string} token
-   */
-
-  /**
-   * @typedef {Object} ProposedInput
-   * @property {string} txId
-   * @property {number} index
-   * @property {string} token
-   */
-
-  /**
-   * @typedef {Object} SendManyOutputsOptions
-   * @property {ProposedInput[]?} inputs Array of proposed inputs
-   * @property  {string?} [changeAddress] address of the change output
-   * @property  {boolean?} [startMiningTx=true] to trigger start mining
-   * @property  {string?} [pinCode] pin to decrypt xpriv information.
-   */
 
   /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
@@ -1533,7 +1557,10 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<SendTransaction>}
    */
-  async sendManyOutputsSendTransaction(outputs: any[], options: any = {}) {
+  async sendManyOutputsSendTransaction(
+    outputs: ProposedOutput[],
+    options: SendManyOutputsOptions = {}
+  ) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
@@ -1567,7 +1594,10 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
-  async sendManyOutputsTransaction(outputs: any[], options: any = {}) {
+  async sendManyOutputsTransaction(
+    outputs: ProposedOutput[],
+    options: SendManyOutputsOptions = {}
+  ) {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
@@ -1597,7 +1627,7 @@ class HathorWallet extends EventEmitter {
     await this.storage.store.validate();
     await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
-    this.storage.config.setNetwork(this.conn.network);
+    this.storage.config.setNetwork(this.conn.getCurrentNetwork());
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
@@ -1616,20 +1646,20 @@ class HathorWallet extends EventEmitter {
     if (!accessData) {
       if (this.seed) {
         accessData = walletUtils.generateAccessDataFromSeed(this.seed, {
-          multisig: this.multisig,
+          multisig: this.multisig!,
           passphrase: this.passphrase,
-          pin: pinCode,
-          password,
-          networkName: this.conn.network,
+          pin: pinCode!,
+          password: password!,
+          networkName: this.conn.getCurrentNetwork(),
         });
       } else if (this.xpriv) {
         accessData = walletUtils.generateAccessDataFromXpriv(this.xpriv, {
-          multisig: this.multisig,
-          pin: pinCode,
+          multisig: this.multisig!,
+          pin: pinCode!,
         });
       } else if (this.xpub) {
         accessData = walletUtils.generateAccessDataFromXpub(this.xpub, {
-          multisig: this.multisig,
+          multisig: this.multisig!,
         });
       } else {
         throw new Error('This should never happen');
@@ -1642,16 +1672,18 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const info: ApiVersion = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
-    if (info.network.indexOf(this.conn.network) >= 0) {
+    if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
       this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
-      throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);
+      throw new Error(
+        `Wrong network. server=${info.network} expected=${this.conn.getCurrentNetwork()}`
+      );
     }
     return info;
   }
@@ -1726,29 +1758,10 @@ class HathorWallet extends EventEmitter {
    * @inner
    * @deprecated
    */
-  async handleSendPreparedTransaction(transaction: any) {
+  async handleSendPreparedTransaction(transaction: Transaction) {
     const sendTransaction = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
-
-  /**
-   * @typedef {Object} CreateTokenOptions
-   *
-   * @property {string?} [address] address of the minted token
-   * @property {string?} [changeAddress] address of the change output
-   * @property {boolean?} [startMiningTx=true] trigger start mining
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   * @property {boolean?} [createMint=true] should create mint authority
-   * @property {string?} [mintAuthorityAddress] the address to send the mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [createMelt=true] should create melt authority
-   * @property {string?} [meltAuthorityAddress] the address to send the melt authority created
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address
-   *                                                                    to be from another wallet
-   * @property {string[]?} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {boolean?} [signTx=true] sign transaction instance
-   * @property {boolean?} [isCreateNFT=false] if the create token is an NFT creation call
-   */
 
   /**
    * Prepare create token transaction data before mining
@@ -1764,7 +1777,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async prepareCreateNewToken(name: string, symbol: string, amount: bigint, options: any = {}) {
+  async prepareCreateNewToken(
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options: CreateTokenOptions = {}
+  ) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
@@ -1845,7 +1863,7 @@ class HathorWallet extends EventEmitter {
     name: string,
     symbol: string,
     amount: bigint,
-    options: any = {}
+    options: CreateTokenOptions = {}
   ) {
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
     return new SendTransaction({ wallet: this, transaction });
@@ -1863,7 +1881,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNewToken(name: string, symbol: string, amount: bigint, options: any = {}) {
+  async createNewToken(
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options: CreateTokenOptions = {}
+  ) {
     const sendTx = await this.createNewTokenSendTransaction(name, symbol, amount, options);
     return sendTx.runFromMining();
   }
@@ -1886,7 +1909,14 @@ class HathorWallet extends EventEmitter {
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMintAuthority(tokenUid: string, options: any = {}) {
+  async getMintAuthority(
+    tokenUid: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+    } = {}
+  ) {
     return this.getAuthorityUtxo(tokenUid, 'mint', options);
   }
 
@@ -1908,7 +1938,14 @@ class HathorWallet extends EventEmitter {
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMeltAuthority(tokenUid: string, options: any = {}) {
+  async getMeltAuthority(
+    tokenUid: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+    } = {}
+  ) {
     return this.getAuthorityUtxo(tokenUid, 'melt', options);
   }
 
@@ -1931,8 +1968,16 @@ class HathorWallet extends EventEmitter {
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getAuthorityUtxo(tokenUid: string, authority: string, options: any = {}) {
-    let authorityValue;
+  async getAuthorityUtxo(
+    tokenUid: string,
+    authority: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+    } = {}
+  ) {
+    let authorityValue: bigint;
     if (authority === 'mint') {
       authorityValue = BigInt(1);
     } else if (authority === 'melt') {
@@ -1941,17 +1986,23 @@ class HathorWallet extends EventEmitter {
       throw new Error('Invalid authority value.');
     }
 
-    const newOptions = {
+    const newOptions: {
+      token: string;
+      authorities: bigint;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+      max_utxos?: number;
+    } = {
       token: tokenUid,
       authorities: authorityValue,
       only_available_utxos: options.only_available_utxos ?? false,
-      filter_address: options.filter_address ?? null,
+      filter_address: options.filter_address,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
       newOptions.max_utxos = 1;
     }
-    const utxos = [];
+    const utxos: IUtxo[] = [];
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
       utxos.push(utxo);
     }

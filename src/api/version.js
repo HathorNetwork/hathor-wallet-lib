@@ -19,7 +19,7 @@ const versionApi = {
    *
    * @param {function} resolve Method to be called after response arrives
    *
-   * @return {Promise}
+   * @return {Promise<ApiVersion>}
    * @memberof ApiVersion
    * @inner
    */
@@ -39,7 +39,7 @@ const versionApi = {
   /**
    * Get version of full node running in connected server
    *
-   * @return {Promise}
+   * @return {Promise<ApiVersion>}
    * @memberof ApiVersion
    * @inner
    */
