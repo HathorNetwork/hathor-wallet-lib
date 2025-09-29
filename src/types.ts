@@ -70,6 +70,7 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
+  seqnum?: number;
 }
 
 export interface IAddressMetadata {

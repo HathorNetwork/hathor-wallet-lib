@@ -70,6 +70,7 @@ import Address from '../models/address';
 import WalletConnection from './connection';
 import { Utxo } from '../wallet/types';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import { FullNodeTxApiResponse, FullNodeTxApiSuccessResponse } from '../api/schemas/txApi';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -156,7 +157,7 @@ type CreateTokenOptions = {
   isCreateNFT?: boolean;
 };
 
-type CreateNFTOptions = Omit<CreateTokenOptions, 'data'|'isCreateNFT'>;
+type CreateNFTOptions = Omit<CreateTokenOptions, 'data' | 'isCreateNFT'>;
 
 type MintTokensOptions = {
   address?: string;
@@ -676,7 +677,7 @@ class HathorWallet extends EventEmitter {
 
     for (const signatureInfo of await this.getSignatures(tx, { pinCode: pin })) {
       const { inputIndex, signature } = signatureInfo;
-      signatures[inputIndex] = signature;
+      signatures[inputIndex] = signature as unknown as string; // TODO: Revise this conversion
     }
 
     const p2shSig = new P2SHSignature(accessData.multisigData!.pubkey!, signatures);
@@ -2690,12 +2691,12 @@ class HathorWallet extends EventEmitter {
       address: undefined,
       changeAddress: undefined,
       startMiningTx: true,
-      pinCode: null,
+      pinCode: undefined,
       createMint: false,
-      mintAuthorityAddress: null,
+      mintAuthorityAddress: undefined,
       allowExternalMintAuthorityAddress: false,
       createMelt: false,
-      meltAuthorityAddress: null,
+      meltAuthorityAddress: undefined,
       allowExternalMeltAuthorityAddress: false,
       ...options,
     };
@@ -2736,11 +2737,15 @@ class HathorWallet extends EventEmitter {
    * }[]>} List of indexes and their associated address index
    */
   async getWalletInputInfo(tx) {
-    const walletInputs = [];
+    const walletInputs: {
+      inputIndex: number;
+      addressIndex: number;
+      addressPath: string;
+    }[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address
+        spentTx.outputs[input.index].decoded.address!
       );
       if (addressInfo === null) {
         continue;
@@ -2782,7 +2787,12 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const signatures = await this.storage.getTxSignatures(tx, pin);
-    const sigInfoArray = [];
+    const sigInfoArray: {
+      pubkey: string;
+      signature: string;
+      addressPath: string;
+      inputIndex: number;
+    }[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
@@ -2839,7 +2849,7 @@ class HathorWallet extends EventEmitter {
    * @returns {FullNodeTxResponse} Transaction data in the fullnode
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getFullTxById(txId) {
+  async getFullTxById(txId: string) {
     const tx = await new Promise((resolve, reject) => {
       txApi
         .getTransaction(txId, resolve)
@@ -2848,13 +2858,13 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-    if (!tx.success) {
+    if (!(tx as FullNodeTxApiResponse)) {
       HathorWallet._txNotFoundGuard(tx);
 
       throw new Error(`Invalid transaction ${txId}`);
     }
 
-    return tx;
+    return tx as FullNodeTxApiSuccessResponse;
   }
 
   /**
@@ -2866,7 +2876,7 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTxConfirmationData(txId) {
-    const confirmationData = await new Promise((resolve, reject) => {
+    const confirmationData: { success: boolean } = await new Promise((resolve, reject) => {
       txApi
         .getConfirmationData(txId, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
@@ -2893,12 +2903,14 @@ class HathorWallet extends EventEmitter {
    */
   async graphvizNeighborsQuery(txId, graphType, maxLevel) {
     const url = `${this.storage.config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
-    const graphvizData = await new Promise((resolve, reject) => {
-      txApi
-        .getGraphviz(url, resolve)
-        .then(() => reject(new Error('API client did not use the callback')))
-        .catch(err => reject(err));
-    });
+    const graphvizData: { success: boolean; data: string } = await new Promise(
+      (resolve, reject) => {
+        txApi
+          .getGraphviz(url, resolve)
+          .then(() => reject(new Error('API client did not use the callback')))
+          .catch(err => reject(err));
+      }
+    );
 
     // The response will either be a string with the graphviz data or an object
     // { success: boolean, message: string } so we need to check if the response has
@@ -2999,7 +3011,7 @@ class HathorWallet extends EventEmitter {
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances = await this.getTxBalance(fullTx.tx);
+    const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
     const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
@@ -3505,7 +3517,7 @@ class HathorWallet extends EventEmitter {
    */
   async getNanoHeaderSeqnum(address) {
     const addressInfo = await this.storage.getAddressInfo(address);
-    return addressInfo.seqnum + 1;
+    return addressInfo!.seqnum! + 1;
   }
 }
 
