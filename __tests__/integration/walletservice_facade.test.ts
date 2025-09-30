@@ -1177,7 +1177,7 @@ describe('websocket events', () => {
   });
 
   it.skip('should handle update-tx websocket event', async () => {
-    const events: any[] = [];
+    const events: unknown[] = [];
     wallet.on('update-tx', tx => {
       events.push(tx);
       // Add your assertions here after triggering the event
@@ -1651,9 +1651,9 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
     });
 
     it('should throw error for invalid authority type', async () => {
-      await expect(
-        utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'invalid' as any)
-      ).rejects.toThrow('Invalid authority value.');
+      await expect(utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'invalid')).rejects.toThrow(
+        'Invalid authority value.'
+      );
     });
 
     it('should return empty array for non-existent token', async () => {

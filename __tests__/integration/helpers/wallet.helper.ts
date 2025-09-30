@@ -27,20 +27,6 @@ import {
   IMultisigData,
   TxHistoryProcessingStatus,
 } from '../../../src/types';
-import Output from '../../../src/models/output';
-import Input from '../../../src/models/input';
-
-interface CreateNewTokenResponse {
-  hash: string;
-  nonce: number;
-  timestamp: number;
-  version: number;
-  weight: number;
-  parents: string[];
-  inputs: Input[];
-  outputs: Output[];
-  tokens: unknown[];
-}
 
 /**
  * Generates a connection object for starting wallets.
@@ -278,8 +264,6 @@ export async function stopAllWallets(): Promise<void> {
  * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
  * @param {string} [options.pinCode] pin to decrypt xpriv information.
  *                                   Optional but required if not set in this
- *
- * @return {Promise<CreateNewTokenResponse>}
  */
 export async function createTokenHelper(
   hWallet: HathorWallet,
@@ -315,7 +299,7 @@ export async function createTokenHelper(
 export function waitForWalletReady(hWallet: HathorWallet): Promise<void> {
   // Only return the positive response after the wallet is ready
   return new Promise<void>((resolve, reject) => {
-    const handleState = (newState: string) => {
+    const handleState = (newState: number) => {
       if (newState === HathorWallet.READY) {
         resolve();
       } else if (newState === HathorWallet.ERROR) {
@@ -567,7 +551,10 @@ export async function waitTxConfirmed(
  * @param {String} txId
  * @returns {Promise<String>}
  */
-export async function getTxFirstBlock(hWallet: HathorWallet, txId: string): Promise<string> {
+export async function getTxFirstBlock(
+  hWallet: HathorWallet,
+  txId: string
+): Promise<string | null | undefined> {
   const txData = await hWallet.getFullTxById(txId);
   return get(txData, 'meta.first_block');
 }
