@@ -214,7 +214,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   async getBalance(token: string): Promise<IWalletBalanceData> {
     const balance = await this.wallet.getBalance(token);
-    return balance[0];
+    return balance[0] as unknown as IWalletBalanceData; // XXX: Forcing conversion should be avoided in the future
   }
 
   /**
@@ -239,7 +239,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     const utxos: Utxo[] = [];
     // XXX: This may throw, but maybe we should let it.
     for await (const utxo of this.wallet.storage.selectUtxos(newOptions)) {
-      utxos.push(utxo);
+      utxos.push(utxo as unknown as Utxo); // XXX: Forcing conversion should be avoided in the future
     }
     return utxos;
   }
@@ -267,7 +267,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   }
 
   getWallet(): IHathorWallet {
-    return this.wallet;
+    return this.wallet as unknown as IHathorWallet; // XXX: Forcing conversion should be avoided in the future
   }
 
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType {

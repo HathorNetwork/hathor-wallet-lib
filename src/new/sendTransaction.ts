@@ -75,7 +75,7 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'unexpected-error': if an unexpected error happens;
  * */
 export default class SendTransaction extends EventEmitter {
-  wallet: HathorWallet;
+  wallet: HathorWallet | null;
 
   storage: IStorage | null;
 
