@@ -870,13 +870,13 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token = null) {
+  async getBalance(token: string | { uid: string; name: string; symbol: string } | null = null) {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
       throw new WalletError('Not implemented.');
     }
-    const uid = token || this.token!.uid;
+    const uid = typeof token === 'string' ? token : this.token!.uid;
     // Using clone deep so the balance returned will not be updated in case
     // we change the storage
     let tokenData = cloneDeep(await this.storage.getToken(uid));
@@ -2901,7 +2901,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<string>} The graphviz digraph
    */
-  async graphvizNeighborsQuery(txId, graphType, maxLevel) {
+  async graphvizNeighborsQuery(txId: string, graphType?: string, maxLevel?: string | number) {
     const url = `${this.storage.config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
     const graphvizData: { success: boolean; data: string } = await new Promise(
       (resolve, reject) => {

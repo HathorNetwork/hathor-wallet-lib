@@ -20,6 +20,8 @@ interface InjectFundsOptions {
   waitTimeout?: number;
 }
 
+type SuccessfulInjectTransaction = Omit<Transaction, 'hash'> & { hash: string };
+
 let singleton: GenesisWalletHelper | null = null;
 let singletonService: HathorWalletServiceWallet | null = null;
 
@@ -49,7 +51,7 @@ export class GenesisWalletHelper {
         connection,
         password: 'password',
         pinCode: pin,
-        multisig: false,
+        multisig: null,
         preCalculatedAddresses: WALLET_CONSTANTS.genesis.addresses,
       });
       await this.hWallet.start();
@@ -78,11 +80,11 @@ export class GenesisWalletHelper {
     address: string,
     value: OutputValueType,
     options: InjectFundsOptions = {}
-  ): Promise<Transaction> {
+  ) {
     try {
-      const result = await this.hWallet.sendTransaction(address, value, {
+      const result = (await this.hWallet.sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
-      });
+      })) as SuccessfulInjectTransaction;
 
       if (options.waitTimeout === 0) {
         return result;
@@ -129,7 +131,7 @@ export class GenesisWalletHelper {
     address: string,
     value: OutputValueType,
     options: InjectFundsOptions = {}
-  ): Promise<Transaction> {
+  ) {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);
   }

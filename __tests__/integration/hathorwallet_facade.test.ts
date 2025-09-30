@@ -31,6 +31,7 @@ import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
+import Transaction from '../../src/models/transaction';
 import { WalletType } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
@@ -208,6 +209,7 @@ describe('getTxById', () => {
       tx: {
         ...tx1,
         // impossible token_data
+        // @ts-expect-error - Mocked data does not match the original signature
         inputs: [{ ...tx1.inputs[0], token_data: -1 }],
       },
     });
@@ -313,10 +315,12 @@ describe('start', () => {
     /*
      * Invalid parameters on constructing the object
      */
+    // @ts-expect-error - Testing invalid parameters
     expect(() => new HathorWallet()).toThrow('provide a connection');
 
     expect(
       () =>
+        // @ts-expect-error - Testing invalid parameters
         new HathorWallet({
           seed: walletData.words,
           password: DEFAULT_PASSWORD,
@@ -358,6 +362,7 @@ describe('start', () => {
       () =>
         new HathorWallet({
           seed: walletData.words,
+          // @ts-expect-error - Testing invalid parameters
           connection: { state: ConnectionState.CONNECTED },
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
@@ -371,6 +376,7 @@ describe('start', () => {
           connection,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
+          // @ts-expect-error - Testing invalid parameters
           multisig: {},
         })
     ).toThrow('pubkeys and numSignatures');
@@ -479,7 +485,7 @@ describe('start', () => {
     // Validate that it has transactions
     const txHistory = await hWallet.getTxHistory();
     expect(txHistory).toHaveLength(1);
-    expect(txHistory[0].txId).toEqual(injectionTx.hash);
+    expect(txHistory[0].txId).toEqual(injectionTx!.hash);
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
@@ -635,24 +641,39 @@ describe('start', () => {
     await expect(hWallet.isReadonly()).resolves.toBe(true);
 
     // Validating that methods that require the private key will throw on call
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.consolidateUtxos()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.sendTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.sendManyOutputsTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.prepareCreateNewToken()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.prepareMintTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.createAndSendNanoContractTransaction()).rejects.toThrow(
       WalletFromXPubGuard
     );
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.createAndSendNanoContractCreateTokenTransaction()).rejects.toThrow(
       WalletFromXPubGuard
     );
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
+    // @ts-expect-error - Testing invalid parameters
     await expect(hWallet.createOnChainBlueprintTransaction()).rejects.toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
@@ -749,11 +770,13 @@ describe('start', () => {
     // XXX: This is the only method that resolves instead of rejects. Check the standard here.
     await expect(
       hWallet.sendManyOutputsTransaction([
-        { address: await hWallet.getAddressAtIndex(1), value: 1 },
+        // @ts-expect-error - Parameter "token" should be mandatory, but isn't
+        { address: await hWallet.getAddressAtIndex(1), value: 1n },
+        // XXX: Add tests to validate the token parameter
       ])
     ).rejects.toThrow('Pin');
 
-    await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100)).rejects.toThrow('Pin');
+    await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100n)).rejects.toThrow('Pin');
 
     await expect(hWallet.mintTokens(fakeTokenUid, 100n)).rejects.toThrow('Pin');
 
@@ -851,8 +874,8 @@ describe('addresses methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet, currentAddress.address, 1n);
     const currentAfterTx = await hWallet.getCurrentAddress();
     expect(currentAfterTx).toMatchObject({
-      index: currentAddress.index + 1,
-      address: await hWallet.getAddressAtIndex(currentAddress.index + 1),
+      index: currentAddress!.index! + 1,
+      address: await hWallet.getAddressAtIndex(currentAddress!.index! + 1),
     });
   });
 
@@ -964,7 +987,7 @@ describe('getBalance', () => {
 
     // Transferring tokens inside the wallet should not change the balance
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2n);
-    await waitForTxReceived(hWallet, tx1.hash);
+    await waitForTxReceived(hWallet, tx1!.hash!);
     const balance2 = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance2[0].balance).toEqual(balance1[0].balance);
   });
@@ -972,7 +995,7 @@ describe('getBalance', () => {
   it('should get the balance for a custom token', async () => {
     const hWallet = await generateWalletHelper();
 
-    // Validating results for a nonexistant token
+    // Validating results for a nonexistent token
     const emptyBalance = await hWallet.getBalance(fakeTokenUid);
     expect(emptyBalance).toHaveLength(1);
     expect(emptyBalance[0]).toMatchObject({
@@ -1040,30 +1063,30 @@ describe('getFullHistory', () => {
     const rawMoveTx = await hWallet.sendTransaction(txDestinationAddress, txValue, {
       changeAddress: txChangeAddress,
     });
-    await waitForTxReceived(hWallet, rawMoveTx.hash);
+    await waitForTxReceived(hWallet, rawMoveTx!.hash!);
 
     const history = await hWallet.getFullHistory();
     expect(Object.keys(history)).toHaveLength(2);
-    expect(history).toHaveProperty(rawMoveTx.hash);
-    const moveTx = history[rawMoveTx.hash];
+    expect(history).toHaveProperty(rawMoveTx!.hash!);
+    const moveTx = history[rawMoveTx!.hash!];
 
     // Validating transactions properties were correctly translated
     expect(moveTx).toMatchObject({
-      tx_id: rawMoveTx.hash,
-      version: rawMoveTx.version,
-      weight: rawMoveTx.weight,
-      timestamp: rawMoveTx.timestamp,
+      tx_id: rawMoveTx!.hash,
+      version: rawMoveTx!.version,
+      weight: rawMoveTx!.weight,
+      timestamp: rawMoveTx!.timestamp,
       is_voided: false,
-      parents: rawMoveTx.parents,
+      parents: rawMoveTx!.parents,
     });
 
     // Validating inputs
-    expect(moveTx.inputs).toHaveLength(rawMoveTx.inputs.length);
+    expect(moveTx.inputs).toHaveLength(rawMoveTx!.inputs.length);
     for (const inputIndex in moveTx.inputs) {
       expect(moveTx.inputs[inputIndex]).toMatchObject({
         // Translated attributes are correct
-        index: rawMoveTx.inputs[inputIndex].index,
-        tx_id: rawMoveTx.inputs[inputIndex].hash,
+        index: rawMoveTx!.inputs[inputIndex].index,
+        tx_id: rawMoveTx!.inputs[inputIndex].hash,
 
         // Decoded attributes are correct
         token: NATIVE_TOKEN_UID,
@@ -1075,14 +1098,14 @@ describe('getFullHistory', () => {
     }
 
     // Validating outputs
-    expect(moveTx.outputs).toHaveLength(rawMoveTx.outputs.length);
+    expect(moveTx.outputs).toHaveLength(rawMoveTx!.outputs.length);
     for (const outputIndex in moveTx.outputs) {
       const outputObj = moveTx.outputs[outputIndex];
 
       expect(outputObj).toMatchObject({
         // Translated attributes are correct
-        value: rawMoveTx.outputs[outputIndex].value,
-        token_data: rawMoveTx.outputs[outputIndex].tokenData,
+        value: rawMoveTx!.outputs[outputIndex].value,
+        token_data: rawMoveTx!.outputs[outputIndex].tokenData,
 
         // Decoded attributes are correct
         token: NATIVE_TOKEN_UID,
@@ -1176,7 +1199,7 @@ describe('getTxBalance', () => {
 
     // Validating tx balance for a transaction with a single token (htr)
     const tx1 = await hWallet.getTx(tx1Hash);
-    let txBalance = await hWallet.getTxBalance(tx1);
+    let txBalance = await hWallet.getTxBalance(tx1!);
     expect(txBalance).toEqual({
       [NATIVE_TOKEN_UID]: 10n,
     });
@@ -1184,14 +1207,14 @@ describe('getTxBalance', () => {
     // Validating tx balance for a transaction with two tokens (htr+custom)
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'txBalance Token', 'TXBT', 100n);
     const tokenCreationTx = await hWallet.getTx(tokenUid);
-    txBalance = await hWallet.getTxBalance(tokenCreationTx);
+    txBalance = await hWallet.getTxBalance(tokenCreationTx!);
     expect(txBalance).toEqual({
       [tokenUid]: 100n,
       [NATIVE_TOKEN_UID]: -1n,
     });
 
     // Validating that the option to include authority tokens does not change the balance
-    txBalance = await hWallet.getTxBalance(tokenCreationTx, { includeAuthorities: true });
+    txBalance = await hWallet.getTxBalance(tokenCreationTx!, { includeAuthorities: true });
     expect(txBalance).toEqual({
       [tokenUid]: 100n,
       [NATIVE_TOKEN_UID]: -1n,
@@ -1205,18 +1228,18 @@ describe('getTxBalance', () => {
     );
 
     // By default this tx will not have a balance
-    await waitForTxReceived(hWallet, delegateTxHash);
-    const delegateTx = await hWallet.getTx(delegateTxHash);
-    txBalance = await hWallet.getTxBalance(delegateTx);
+    await waitForTxReceived(hWallet, delegateTxHash!);
+    const delegateTx = await hWallet.getTx(delegateTxHash!);
+    txBalance = await hWallet.getTxBalance(delegateTx!);
     expect(Object.keys(txBalance)).toHaveLength(1);
     // When the "includeAuthorities" parameter is added, the balance should be zero
-    txBalance = await hWallet.getTxBalance(delegateTx, { includeAuthorities: true });
+    txBalance = await hWallet.getTxBalance(delegateTx!, { includeAuthorities: true });
     expect(Object.keys(txBalance)).toHaveLength(1);
     expect(txBalance).toHaveProperty(tokenUid, 0n);
 
     // Validating that transactions inside a wallet have zero txBalance
-    await waitUntilNextTimestamp(hWallet, delegateTxHash);
-    const { hash: sameWalletTxHash } = await hWallet.sendManyOutputsTransaction([
+    await waitUntilNextTimestamp(hWallet, delegateTxHash!);
+    const possibleTx = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(0),
         value: 5n,
@@ -1228,10 +1251,12 @@ describe('getTxBalance', () => {
         token: tokenUid,
       },
     ]);
+    expect(possibleTx).toBeInstanceOf(Transaction);
+    const sameWalletTxHash = possibleTx!.hash!;
     await waitForTxReceived(hWallet, sameWalletTxHash);
 
     const sameWalletTx = await hWallet.getTx(sameWalletTxHash);
-    txBalance = await hWallet.getTxBalance(sameWalletTx);
+    txBalance = await hWallet.getTxBalance(sameWalletTx!);
     expect(Object.keys(txBalance)).toHaveLength(2);
     expect(txBalance[NATIVE_TOKEN_UID]).toEqual(0n);
     expect(txBalance).toHaveProperty(tokenUid, 0n);
@@ -1395,7 +1420,7 @@ describe('sendTransaction', () => {
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6n);
 
     // Validating all fields
-    await waitForTxReceived(hWallet, tx1.hash);
+    await waitForTxReceived(hWallet, tx1!.hash!);
     expect(tx1).toMatchObject({
       hash: expect.any(String),
       inputs: expect.any(Array),
@@ -1428,14 +1453,10 @@ describe('sendTransaction', () => {
 
     // Sending a transaction to outside the wallet ( returning funds to genesis )
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      8n,
-      {
-        changeAddress: await hWallet.getAddressAtIndex(5),
-      }
-    );
+    await waitUntilNextTimestamp(hWallet, tx1!.hash!);
+    const tx2Hash = (await hWallet.sendTransaction(await gWallet.getAddressAtIndex(0), 8n, {
+      changeAddress: await hWallet.getAddressAtIndex(5),
+    }))!.hash!;
     await waitForTxReceived(hWallet, tx2Hash);
 
     // Balance was reduced
@@ -1482,7 +1503,7 @@ describe('sendTransaction', () => {
       token: tokenUid,
       changeAddress: await hWallet.getAddressAtIndex(6),
     });
-    await waitForTxReceived(hWallet, tx1.hash);
+    await waitForTxReceived(hWallet, tx1!.hash!);
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(tokenUid);
@@ -1499,15 +1520,11 @@ describe('sendTransaction', () => {
 
     // Transaction outside the wallet
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      80n,
-      {
-        token: tokenUid,
-        changeAddress: await hWallet.getAddressAtIndex(12),
-      }
-    );
+    await waitUntilNextTimestamp(hWallet, tx1!.hash!);
+    const tx2Hash = (await hWallet.sendTransaction(await gWallet.getAddressAtIndex(0), 80n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(12),
+    }))!.hash!;
     await waitForTxReceived(hWallet, tx2Hash);
     await waitForTxReceived(gWallet, tx2Hash);
 
@@ -1583,7 +1600,7 @@ describe('sendTransaction', () => {
     expect(sentTx).toHaveProperty('hash');
     await waitForTxReceived(mhWallet1, sentTx.hash!, 10000); // Multisig transactions take longer
 
-    const historyTx = await mhWallet1.getTx(sentTx.hash);
+    const historyTx = await mhWallet1.getTx(sentTx.hash!);
     expect(historyTx).toMatchObject({
       tx_id: partiallyAssembledTx.hash,
       inputs: [
@@ -1594,7 +1611,7 @@ describe('sendTransaction', () => {
       ],
     });
 
-    const fullNodeTx = await mhWallet1.getFullTxById(sentTx.hash);
+    const fullNodeTx = await mhWallet1.getFullTxById(sentTx.hash!);
     expect(fullNodeTx.tx).toMatchObject({
       hash: partiallyAssembledTx.hash,
       inputs: [
@@ -1626,13 +1643,13 @@ describe('sendManyOutputsTransaction', () => {
       },
     ]);
     expect(rawSimpleTx).toHaveProperty('hash');
-    await waitForTxReceived(hWallet, rawSimpleTx.hash);
-    const decodedSimple = await hWallet.getTx(rawSimpleTx.hash);
-    expect(decodedSimple.inputs).toHaveLength(1);
-    expect(decodedSimple.outputs).toHaveLength(1);
+    await waitForTxReceived(hWallet, rawSimpleTx!.hash!);
+    const decodedSimple = await hWallet.getTx(rawSimpleTx!.hash!);
+    expect(decodedSimple!.inputs).toHaveLength(1);
+    expect(decodedSimple!.outputs).toHaveLength(1);
 
     // Single input and two outputs
-    await waitUntilNextTimestamp(hWallet, rawSimpleTx.hash);
+    await waitUntilNextTimestamp(hWallet, rawSimpleTx!.hash!);
     const rawDoubleOutputTx = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(5),
