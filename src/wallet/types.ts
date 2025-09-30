@@ -437,6 +437,13 @@ export interface IHathorWallet {
     options?: { pinCode?: string }
   ): Promise<Transaction>;
   isAddressMine(address: string): Promise<boolean>;
+  getUtxosForAmount(
+    amount: OutputValueType,
+    options?: {
+      token?: string;
+      filter_address?: string;
+    }
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }>;
   getUtxos(options?: {
     token?: string;
     authorities?: number;
@@ -709,7 +716,7 @@ export interface FullNodeTx {
       melt?: boolean;
     }>;
     caller_id: string;
-    timestamp: number;
+    timestamp?: number | null;
   };
 }
 

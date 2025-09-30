@@ -144,7 +144,7 @@ export type IHistoryNanoContractAction =
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];
   caller_id: string;
-  timestamp: number;
+  timestamp?: number | null;
 }
 
 export interface IHistoryTx {

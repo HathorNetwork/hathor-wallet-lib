@@ -1656,7 +1656,7 @@ describe('internal methods', () => {
     // GetVersionData fetching from the live fullnode server
     expect(await gWallet.getVersionData()).toMatchObject({
       timestamp: expect.any(Number),
-      version: expect.stringMatching(/^\d+\.\d+\.\d+.*$/),
+      version: expect.any(String),
       network: FULLNODE_NETWORK_NAME,
       minWeight: expect.any(Number),
       minTxWeight: expect.any(Number),

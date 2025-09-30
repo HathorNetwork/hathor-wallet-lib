@@ -727,6 +727,31 @@ test('prepareMintTokens', async () => {
     },
   });
 
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -879,6 +904,31 @@ test('prepareMeltTokens', async () => {
     },
   });
 
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MELT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -1022,6 +1072,38 @@ test('prepareDelegateAuthorityData', async () => {
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ];
 
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      WR1i8USJWQuaU423fwuFQbezfevmT4vFWX: true,
+    },
+  });
+
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed =
@@ -1160,6 +1242,38 @@ test('prepareDestroyAuthority', async () => {
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ];
+
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      WR1i8USJWQuaU423fwuFQbezfevmT4vFWX: true,
+    },
+  });
+
+  // Mock getAddressDetails for address index resolution
+  jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+    data: {
+      index: 2,
+      address: addresses[2],
+    },
+  });
+
+  jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+    txOutputs: [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        tokenId: '01',
+        address: addresses[2],
+        value: 1n,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ],
+  });
 
   const requestPassword = jest.fn();
   const network = new Network('testnet');
@@ -2290,13 +2404,57 @@ describe('getUtxos', () => {
 
     // Test totalAmount that doesn't exceed available UTXOs
     const result = await wallet.getUtxosForAmount(150n, {
-      tokenId: '00',
+      token: '00',
     });
 
     expect(result).toEqual({
       utxos: mockUtxos,
       changeAmount: 50n,
     });
+  });
+
+  it('should throw error for negative amount', async () => {
+    await expect(wallet.getUtxosForAmount(-10n, {})).rejects.toThrow(
+      'Total amount must be a positive integer.'
+    );
+  });
+
+  it('should throw error for zero amount', async () => {
+    await expect(wallet.getUtxosForAmount(0n, {})).rejects.toThrow(
+      'Total amount must be a positive integer.'
+    );
+  });
+
+  it('should throw error when no UTXOs available', async () => {
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: [],
+    });
+
+    await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
+      "Don't have enough utxos to fill total amount."
+    );
+  });
+
+  it('should throw error when UTXOs are insufficient', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 50n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
+      "Don't have enough utxos to fill total amount."
+    );
   });
 });
 
@@ -2495,6 +2653,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
   it('should throw error if wallet status is not ready after creation', async () => {
     jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
     jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
       success: true,
       status: {

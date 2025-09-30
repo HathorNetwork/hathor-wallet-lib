@@ -156,6 +156,8 @@ export interface NanoContractStateAPIResponse {
   success: boolean;
   // ID of the nano contract
   nc_id: string;
+  // Blueprint id
+  blueprint_id: string;
   // Blueprint name
   blueprint_name: string;
   // Fields requested

@@ -15,6 +15,7 @@ import {
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests__/integration/helpers/wallet.helper';
+import { stopGLLBackgroundTask } from './src/sync/gll';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
@@ -97,3 +98,6 @@ expect.extend({
     }
   }
 });
+
+// Stop gll interval to avoid background tasks during tests
+stopGLLBackgroundTask();

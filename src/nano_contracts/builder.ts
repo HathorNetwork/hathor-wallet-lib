@@ -29,7 +29,11 @@ import {
   INanoContractActionSchema,
   IArgumentField,
 } from './types';
-import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
+import {
+  getBlueprintId,
+  mapActionToActionHeader,
+  validateAndParseBlueprintMethodArgs,
+} from './utils';
 import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
@@ -490,23 +494,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      let response;
-      try {
-        response = await this.wallet.getFullTxById(this.ncId);
-      } catch {
-        // Error getting nano contract transaction data from the full node
-        throw new NanoContractTransactionError(
-          `Error getting nano contract transaction data with id ${this.ncId} from the full node`
-        );
-      }
-
-      if (!response.tx.nc_id) {
-        throw new NanoContractTransactionError(
-          `Transaction with id ${this.ncId} is not a nano contract transaction.`
-        );
-      }
-
-      this.blueprintId = response.tx.nc_blueprint_id;
+      this.blueprintId = await getBlueprintId(this.ncId, this.wallet);
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {

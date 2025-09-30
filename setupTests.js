@@ -10,6 +10,7 @@ process.env.NODE_ENV = 'test';
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
 import helpers from './src/utils/helpers';
+import { stopGLLBackgroundTask } from './src/sync/gll';
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';
 global.WebSocket = WebSocket;
@@ -75,3 +76,6 @@ expect.extend({
 const { TextEncoder, TextDecoder } = require('util');
 global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
+
+// Stop gll interval to avoid background tasks during tests
+stopGLLBackgroundTask();
