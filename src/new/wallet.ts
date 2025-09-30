@@ -2858,7 +2858,7 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-    if (!(tx as FullNodeTxApiResponse)) {
+    if (!(tx as FullNodeTxApiResponse).success) {
       HathorWallet._txNotFoundGuard(tx);
 
       throw new Error(`Invalid transaction ${txId}`);
