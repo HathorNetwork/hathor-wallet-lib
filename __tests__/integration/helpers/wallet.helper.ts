@@ -20,13 +20,15 @@ import type { PrecalculatedWalletData } from './wallet-precalculation.helper';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
-import { MemoryStore, Storage } from '../../../src';
+import { CreateTokenTransaction, MemoryStore, Storage } from '../../../src';
 import {
   AddressScanPolicyData,
   IHistoryTx,
   IMultisigData,
   TxHistoryProcessingStatus,
 } from '../../../src/types';
+import Output from '../../../src/models/output';
+import Input from '../../../src/models/input';
 
 interface CreateNewTokenResponse {
   hash: string;
@@ -35,8 +37,8 @@ interface CreateNewTokenResponse {
   version: number;
   weight: number;
   parents: string[];
-  inputs: unknown[];
-  outputs: unknown[];
+  inputs: Input[];
+  outputs: Output[];
   tokens: unknown[];
 }
 
@@ -289,10 +291,16 @@ export async function createTokenHelper(
     changeAddress?: string;
     startMiningTx?: boolean;
     pinCode?: string;
+    data?: string[];
   } = {}
-): Promise<CreateNewTokenResponse> {
-  const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
-  const tokenUid = newTokenResponse.hash;
+) {
+  const newTokenResponse = (await hWallet.createNewToken(
+    name,
+    symbol,
+    amount,
+    options
+  )) as CreateTokenTransaction;
+  const tokenUid = newTokenResponse.hash!;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
   return newTokenResponse;
