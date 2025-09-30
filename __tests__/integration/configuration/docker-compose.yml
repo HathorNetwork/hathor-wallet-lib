@@ -1,8 +1,10 @@
-version: "3.9"
 services:
 
+  # Private Network section
+  # All the following services are related to the core of the Private Network
   # For more information on these configs, refer to:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
+  # Fullnode on 8080 , tx mining service on 8035, cpuminer stratum on 8034
 
   fullnode:
     image:
@@ -17,6 +19,7 @@ services:
       "--unsafe-mode", "nano-testnet-bravo",
       "--data", "./tmp",
       "--nc-indexes",
+      "--enable-event-queue",
       "--nc-exec-logs", "all",
     ]
     environment:
@@ -67,6 +70,175 @@ services:
     networks:
       - hathor-privnet
 
+
+  # Wallet Service section
+  # All the following services are related to the Wallet Service
+  # Redis on 6379, MySQL on 3306
+  # Wallet Service Daemon on 8081 and Daemon Websocket on 8082
+  # Wallet Service API Lambda on 3000 and Wallet Service Websocket Lambda on 3001
+
+  mysql:
+    image: centos/mysql-80-centos7 # Necessary to use specific authentication protocol
+    networks:
+      - hathor-privnet
+    environment:
+      MYSQL_ROOT_PASSWORD: hathor
+      MYSQL_DATABASE: wallet_service
+      MYSQL_USER: wallet_service_user
+      MYSQL_PASSWORD: password
+      MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
+    ports:
+      - "3380:3306"
+    healthcheck:
+        test: ["CMD", "mysql", "-h", "mysql", "-u", "wallet_service_user", "-ppassword", "-e", "SELECT 1", "wallet_service"]
+
+  redis:
+    image: redis:6.2
+    networks:
+      - hathor-privnet
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ws-migrator:
+    image: hathornetwork/hathor-wallet-service-migrator:dev
+    restart: "no"  # Critical: don't restart migration service
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENDPOINT: "mysql"
+      DB_NAME: "wallet_service"
+      DB_USER: "wallet_service_user"
+      DB_PASS: "password"
+      DB_PORT: 3306
+    networks:
+      - hathor-privnet
+
+  ws-daemon:
+    image: hathornetwork/hathor-wallet-service-sync-daemon:dev
+    depends_on:
+      ws-migrator:
+        condition: service_completed_successfully
+      fullnode:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    environment:
+      # This  variable is used to set all the necessary dynamic env variables for this pristine environment
+      FETCH_FULLNODE_IDS: true
+
+      # Connection to other services in this private network
+      FULLNODE_HOST: "fullnode:8080"
+      FULLNODE_NETWORK: "nano-testnet-bravo"
+      REDIS_URL: redis://redis:6379
+      DB_ENDPOINT: "mysql"
+      DB_NAME: "wallet_service"
+      DB_USER: "wallet_service_user"
+      DB_PASS: "password"
+      DB_PORT: 3306
+
+      # Other env vars. Some of them may not be necessary and could be removed in the future
+      USE_SSL: "false"
+      NEW_TX_SQS: "" # Mocked AWS
+      PUSH_NOTIFICATION_ENABLED: "false"
+      WALLET_SERVICE_LAMBDA_ENDPOINT: "" # Mocked AWS
+      ACCOUNT_ID: 1234 # Mocked AWS
+      ALERT_MANAGER_TOPIC: "alert-topic"
+      ALERT_MANAGER_REGION: "us-east-1" # Mocked AWS
+      APPLICATION_NAME: "hathor-wallet-service"
+      NODE_ENV: "test-privnet"
+      STAGE: "local"
+      MAX_ADDRESS_GAP: 10
+      NETWORK: "privatenet"
+#      BLOCK_REWARD_LOCK: 1
+    ports:
+      - "8081:8081"
+      - "8082:8082"
+    networks:
+      - hathor-privnet
+
+  ws-serverless:
+    image: hathornetwork/hathor-wallet-service-lambdas:dev
+    depends_on:
+      fullnode:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      ws-daemon:
+        condition: service_started # TODO: Implement healthcheck
+    environment:
+      # Local environment configuration
+      DEFAULT_SERVER: http://fullnode:8080/v1a/
+      IS_OFFLINE: true # Necessary to run the serverless-offline framework
+      MOCK_AWS: true # Necessary to avoid calls to AWS on this private network
+      NODE_ENV: test
+      LOG_LEVEL: "debug"
+
+      # Database config
+      DEV_DB: mysql
+      DB_ENDPOINT: mysql
+      DB_NAME: wallet_service
+      DB_USER: wallet_service_user
+      DB_PASS: password
+      DB_PORT: 3306
+      REDIS_URL: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+
+      # Application configs
+      STAGE: local
+      NETWORK: "privatenet"
+      SERVICE_NAME: hathor-wallet-service
+      APPLICATION_NAME: "hathor-wallet-service"
+      MAX_ADDRESS_GAP: 10 # Different from default 20 to facilitate tests
+      VOIDED_TX_OFFSET: 5
+      BLOCK_REWARD_LOCK: 300
+      CONFIRM_FIRST_ADDRESS: false # Disabled security in a private network
+      WS_DOMAIN: http://fakehost:3002
+      AUTH_SECRET: foobar
+      EXPLORER_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3001
+      WALLET_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3000
+      NFT_AUTO_REVIEW_ENABLED: "false" # Should be enabled when this feature is ready for testing
+      TX_HISTORY_MAX_COUNT: ""
+
+      # Push Notification settings
+      PUSH_NOTIFICATION: false
+      PUSH_NOTIFICATION_ENABLED: "false"
+      FIREBASE_PROJECT_ID: "fake_project_id"
+      FIREBASE_PRIVATE_KEY_ID: "fake_private_key_id"
+      FIREBASE_PRIVATE_KEY: "fake_private_key"
+      FIREBASE_CLIENT_EMAIL: "fake@client_email.com"
+      FIREBASE_CLIENT_ID: "fake_client_id"
+      FIREBASE_AUTH_URI: "fake_auth_uri"
+      FIREBASE_TOKEN_URI: "fake_token_uri"
+      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: "fake_auth_provider_x509_cert_url"
+      FIREBASE_CLIENT_X509_CERT_URL: "fake_client_x509_cert_url"
+      PUSH_ALLOWED_PROVIDERS: "fake_provider"
+
+      # AWS Configs
+      ACCOUNT_ID: 1234 # Mocked AWS
+      ALERT_MANAGER_REGION: us-east-1
+      ALERT_MANAGER_TOPIC: alert-topic
+      ALERT_MANAGER_ACCOUNT_ID: "fake_account_id"
+      AWS_VPC_DEFAULT_SG_ID: "1"
+      AWS_SUBNET_ID_1: "2"
+      AWS_SUBNET_ID_2: "3"
+      AWS_SUBNET_ID_3: "4"
+      AWS_ACCESS_KEY_ID: fake-access-key-id
+      AWS_SECRET_ACCESS_KEY: fake-secret-access-key
+      AWS_REGION: us-east-1
+      AWS_SHARED_CREDENTIALS_FILE: ".aws/credentials" # Credentials for mocked AWS
+      AWS_CONFIG_FILE: ".aws/config" # Config for mocked AWS
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    networks:
+      - hathor-privnet
+
 networks:
   hathor-privnet:
-
