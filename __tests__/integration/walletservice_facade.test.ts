@@ -910,7 +910,9 @@ describe('basic transaction methods', () => {
       // Verify change output went to change address (if exists)
       if (changeOutputIndex !== -1) {
         const changeUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, changeOutputIndex);
+        // eslint-disable-next-line jest/no-conditional-expect -- Test still under construction
         expect(changeUtxo).toStrictEqual(
+          // eslint-disable-next-line jest/no-conditional-expect -- Test still under construction
           expect.objectContaining({
             address: changeAddress,
             tokenId: NATIVE_TOKEN_UID,

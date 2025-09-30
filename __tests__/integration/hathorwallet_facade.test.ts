@@ -36,8 +36,7 @@ import { WalletType } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import WalletConnection from '../../src/new/connection';
-import Output from '../../src/models/output';
-import { HistoryTransactionOutput, P2PKH, P2SH } from '../../src';
+import { HistoryTransactionOutput, P2PKH } from '../../src';
 import { parseScriptData } from '../../src/utils/scripts';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
