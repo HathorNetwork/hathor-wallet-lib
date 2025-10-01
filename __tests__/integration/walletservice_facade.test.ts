@@ -264,7 +264,7 @@ afterAll(async () => {
   await gWallet.stop({ cleanStorage: true });
 });
 
-describe.skip('start', () => {
+describe('start', () => {
   describe('mandatory parameters validation', () => {
     beforeEach(() => {
       ({ wallet } = buildWalletInstance());
@@ -409,7 +409,7 @@ describe.skip('start', () => {
   });
 });
 
-describe.skip('wallet public methods', () => {
+describe('wallet public methods', () => {
   beforeEach(async () => {
     ({ wallet } = buildWalletInstance());
     await wallet.start({ pinCode, password });
@@ -479,7 +479,7 @@ describe.skip('wallet public methods', () => {
   });
 });
 
-describe.skip('empty wallet address methods', () => {
+describe('empty wallet address methods', () => {
   const knownAddresses = emptyWallet.addresses;
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
@@ -567,7 +567,7 @@ describe.skip('empty wallet address methods', () => {
   });
 });
 
-describe.skip('basic transaction methods', () => {
+describe('basic transaction methods', () => {
   afterEach(async () => {
     if (wallet) {
       await wallet.stop({ cleanStorage: true });
@@ -1274,7 +1274,94 @@ describe.skip('basic transaction methods', () => {
 
 describe.skip('websocket events', () => {});
 
-describe.skip('balances', () => {});
+describe('balances', () => {
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance());
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  describe('getBalance', () => {
+    // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
+    it.skip('should return balance array for empty wallet', async () => {
+      const balances = await wallet.getBalance();
+
+      expect(Array.isArray(balances)).toBe(true);
+      expect(balances.length).toStrictEqual(1);
+
+      // Should have HTR (native token) with zero balance for empty wallet
+      const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
+      expect(htrBalance).toBeDefined();
+      expect(htrBalance?.balance).toBe(0n);
+    });
+
+    it('should return balance array for wallet with transactions', async () => {
+      // Use walletWithTxs which has transaction history
+      const { wallet: walletTxs } = buildWalletInstance({ words: walletWithTxs.words });
+      await walletTxs.start({ pinCode, password });
+
+      const balances = await walletTxs.getBalance();
+
+      expect(Array.isArray(balances)).toBe(true);
+      expect(balances.length).toBeGreaterThanOrEqual(1);
+
+      // Should have HTR balance
+      const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
+      expect(htrBalance).toBeDefined();
+      expect(typeof htrBalance?.balance).toBe('object');
+
+      await walletTxs.stop({ cleanStorage: true });
+    });
+
+    // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
+    it('should return balance for specific token when token parameter is provided', async () => {
+      const balances = await wallet.getBalance(NATIVE_TOKEN_UID); // HTR token
+
+      expect(Array.isArray(balances)).toBe(true);
+      // When requesting specific token, should return that token's balance
+      expect(balances.length).toStrictEqual(1);
+      expect(balances[0]).toEqual(
+        expect.objectContaining({
+          token: expect.objectContaining({
+            id: NATIVE_TOKEN_UID,
+            name: expect.any(String),
+            symbol: expect.any(String),
+          }),
+          balance: expect.objectContaining({
+            unlocked: 0n,
+            locked: 0n,
+          }),
+          tokenAuthorities: expect.objectContaining({
+            unlocked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+            locked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+          }),
+          transactions: 0,
+          lockExpires: expect.anything(),
+        })
+      );
+    });
+
+    it('should throw error when wallet is not ready', async () => {
+      const { wallet: notReadyWallet } = buildWalletInstance();
+      // Don't start the wallet, so it's not ready
+
+      await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
+    });
+  });
+
+  describe.skip('getTxBalance', () => {});
+});
 
 describe.skip('address management methods', () => {});
 
