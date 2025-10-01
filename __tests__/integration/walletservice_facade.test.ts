@@ -409,7 +409,75 @@ describe.skip('start', () => {
   });
 });
 
-describe.skip('wallet public methods', () => {});
+describe.skip('wallet public methods', () => {
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance());
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  it('getServerUrl returns the configured base URL', () => {
+    expect(wallet.getServerUrl()).toBe(FULLNODE_URL);
+  });
+
+  it('getVersionData returns valid version info', async () => {
+    const versionData = await wallet.getVersionData();
+    expect(versionData).toBeDefined();
+    expect(versionData).toEqual(
+      expect.objectContaining({
+        timestamp: expect.any(Number),
+        version: expect.any(String),
+        network: FULLNODE_NETWORK_NAME,
+        minWeight: expect.any(Number),
+        minTxWeight: expect.any(Number),
+        minTxWeightCoefficient: expect.any(Number),
+        minTxWeightK: expect.any(Number),
+        tokenDepositPercentage: expect.any(Number),
+        rewardSpendMinBlocks: expect.any(Number),
+        maxNumberInputs: expect.any(Number),
+        maxNumberOutputs: expect.any(Number),
+        decimalPlaces: expect.any(Number),
+        nativeTokenName: expect.any(String),
+        nativeTokenSymbol: expect.any(String),
+      })
+    );
+
+    // Make sure it contains the same data as a direct fullnode request
+    const fullnodeResponse = await axios
+      .get('version', {
+        baseURL: config.getWalletServiceBaseUrl(),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .catch(e => {
+        loggers.test!.log(`Received an error on /version: ${e}`);
+        if (e.response) {
+          return e.response;
+        }
+        return {};
+      });
+    expect(fullnodeResponse.status).toBe(200);
+    expect(fullnodeResponse.data?.success).toBe(true);
+
+    expect(versionData).toEqual(fullnodeResponse.data.data);
+  });
+
+  it('getNetwork returns the correct network name', () => {
+    expect(wallet.getNetwork()).toBe(NETWORK_NAME);
+  });
+
+  it('getNetworkObject returns a Network instance with correct name', () => {
+    const networkObj = wallet.getNetworkObject();
+    expect(networkObj).toBeInstanceOf(Network);
+    expect(networkObj.name).toBe(NETWORK_NAME);
+  });
+});
 
 describe.skip('empty wallet address methods', () => {});
 
