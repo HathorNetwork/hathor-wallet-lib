@@ -7,6 +7,7 @@ import {
   generateWalletHelper,
   waitForTxReceived,
   waitTxConfirmed,
+  waitNextBlock
 } from '../helpers/wallet.helper';
 import {
   CREATE_TOKEN_TX_VERSION,
@@ -635,6 +636,24 @@ describe('full cycle of bet nano contract', () => {
     const address2Info = await wallet.storage.getAddressInfo(address2);
     expect(address2Info.numTransactions).toBe(2);
     expect(address2Info.seqnum).toBe(2);
+
+    // Now we create a bet that will be voided
+    const txBet3 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
+      ncId: tx1.hash,
+      args: [address3, '2x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 200n,
+        },
+      ],
+    });
+    await waitForTxReceived(wallet, txBet3.hash);
+    await waitTxConfirmed(wallet, txBet3.hash, null);
+    const txAfterExecution = await wallet.getFullTxById(txBet3.hash);
+    await waitNextBlock(wallet.storage);
+    console.log('utxos 4', wallet.storage.store.utxos);
   };
 
   const checkErrorsWithBlueprintId = async blueprintId => {
