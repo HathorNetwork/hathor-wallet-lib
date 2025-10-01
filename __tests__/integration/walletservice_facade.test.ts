@@ -479,7 +479,93 @@ describe.skip('wallet public methods', () => {
   });
 });
 
-describe.skip('empty wallet address methods', () => {});
+describe.skip('empty wallet address methods', () => {
+  const knownAddresses = emptyWallet.addresses;
+  const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
+
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance());
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  it('getAddressIndex returns correct index for known address', async () => {
+    for (let i = 0; i < knownAddresses.length; i++) {
+      const index = await wallet.getAddressIndex(knownAddresses[i]);
+      expect(index).toBe(i);
+    }
+  });
+
+  it('getAddressIndex returns null for unknown address', async () => {
+    const index = await wallet.getAddressIndex(unknownAddress);
+    expect(index).toBeNull();
+  });
+
+  it('getAddressPathForIndex returns correct path for index', async () => {
+    for (let i = 0; i < knownAddresses.length; i++) {
+      const path = await wallet.getAddressPathForIndex(i);
+      expect(path.endsWith(`/${i}`)).toBe(true);
+      expect(path).toMatch(/m\/44'\/280'\/0'\/0\/[0-9]+/);
+    }
+  });
+
+  it('getAddressAtIndex returns correct address for index', async () => {
+    for (let i = 0; i < knownAddresses.length; i++) {
+      const address = await wallet.getAddressAtIndex(i);
+      expect(address).toBe(knownAddresses[i]);
+    }
+  });
+
+  it('getAddressPrivKey returns HDPrivateKey for known index', async () => {
+    for (let i = 0; i < knownAddresses.length; i++) {
+      const privKey = await wallet.getAddressPrivKey(pinCode, i);
+      expect(privKey.constructor.name).toBe('HDPrivateKey');
+      // Should have a publicKey and privateKey
+      expect(privKey.publicKey).toBeDefined();
+      expect(privKey.privateKey).toBeDefined();
+    }
+  });
+
+  it('isAddressMine returns true for known addresses', async () => {
+    for (const address of knownAddresses) {
+      const result = await wallet.isAddressMine(address);
+      expect(result).toBe(true);
+    }
+  });
+
+  it('isAddressMine returns false for unknown address', async () => {
+    const result = await wallet.isAddressMine(unknownAddress);
+    expect(result).toBe(false);
+  });
+
+  it('checkAddressesMine returns correct map for known and unknown addresses', async () => {
+    const addresses = [...knownAddresses, unknownAddress];
+    const result = await wallet.checkAddressesMine(addresses);
+    for (let i = 0; i < knownAddresses.length; i++) {
+      expect(result[knownAddresses[i]]).toBe(true);
+    }
+    expect(result[unknownAddress]).toBe(false);
+  });
+
+  it('getPrivateKeyFromAddress returns PrivateKey for known address', async () => {
+    for (const address of knownAddresses) {
+      const privKey = await wallet.getPrivateKeyFromAddress(address, { pinCode });
+      expect(privKey.constructor.name).toBe('PrivateKey');
+      expect(privKey.toString()).toMatch(/[A-Fa-f0-9]{64}/);
+    }
+  });
+
+  it('getPrivateKeyFromAddress throws for unknown address', async () => {
+    await expect(wallet.getPrivateKeyFromAddress(unknownAddress, { pinCode })).rejects.toThrow(
+      /does not belong to this wallet/
+    );
+  });
+});
 
 describe.skip('basic transaction methods', () => {});
 
