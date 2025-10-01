@@ -264,7 +264,150 @@ afterAll(async () => {
   await gWallet.stop({ cleanStorage: true });
 });
 
-describe.skip('start', () => {});
+describe.skip('start', () => {
+  describe('mandatory parameters validation', () => {
+    beforeEach(() => {
+      ({ wallet } = buildWalletInstance());
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should throw error when pinCode is not provided', async () => {
+      await expect(wallet.start({})).rejects.toThrow(
+        'Pin code is required when starting the wallet.'
+      );
+    });
+
+    it('should throw error when password is not provided for new wallet from seed', async () => {
+      await expect(wallet.start({ pinCode })).rejects.toThrow(
+        'Password is required when starting the wallet from the seed.'
+      );
+    });
+  });
+
+  describe('handling internal errors', () => {
+    const events: string[] = [];
+    let storage: Storage;
+
+    beforeEach(() => {
+      ({ wallet, storage } = buildWalletInstance());
+
+      // Clear events array
+      events.length = 0;
+
+      // Listen for state events
+      wallet.on('state', state => {
+        events.push(`state:${state}`);
+      });
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should handle getAccessData unexpected errors', async () => {
+      // XXX: This test belongs to the unit tests, but adding it here temporarily for coverage
+      jest.spyOn(storage, 'getAccessData').mockRejectedValueOnce(new Error('Crash'));
+
+      // Start the wallet
+      await expect(() => wallet.start({ pinCode, password })).rejects.toThrow('Crash');
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(false);
+    });
+  });
+
+  describe('successful wallet creation', () => {
+    const events: string[] = [];
+    let storage: Storage;
+
+    beforeEach(() => {
+      ({ wallet, storage } = buildWalletInstance());
+
+      // Clear events array
+      events.length = 0;
+
+      // Listen for state events
+      wallet.on('state', state => {
+        events.push(`state:${state}`);
+      });
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should create wallet with words and emit correct state events', async () => {
+      // Start the wallet
+      await wallet.start({ pinCode, password });
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(true);
+
+      // Verify correct state transitions occurred
+      expect(events).toContain('state:Loading');
+      expect(events).toContain('state:Ready');
+
+      // Verify wallet has correct network
+      expect(wallet.getNetwork()).toBe(NETWORK_NAME);
+
+      // Verify wallet has addresses available
+      const currentAddress = wallet.getCurrentAddress();
+      expect(currentAddress.index).toBeDefined();
+      expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+
+      // Verify websocket is disabled for this test
+      expect(wallet.isWsEnabled()).toBe(false);
+    });
+
+    it('should create wallet with xpriv', async () => {
+      // Generate access data to get the xpriv
+      const seed = emptyWallet.words;
+      const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+        networkName: 'testnet',
+        password: '1234',
+        pin: '1234',
+      });
+
+      // Derive auth xpriv and account key
+      const code = new Mnemonic(seed);
+      const xpriv = code.toHDPrivateKey('', new Network('testnet'));
+      const authxpriv = xpriv.deriveChild(WALLET_SERVICE_AUTH_DERIVATION_PATH).xprivkey;
+      const acctKey = decryptData(accessData.acctPathKey!, '1234');
+
+      // Build wallet with xpriv and authxpriv
+      const network = new Network(NETWORK_NAME);
+      const requestPassword = jest.fn().mockResolvedValue('test-password');
+      wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpriv: acctKey,
+        authxpriv,
+        network,
+        storage,
+        enableWs: false, // Disable websocket for integration tests
+      });
+
+      // Start the wallet
+      await wallet.start({ pinCode, password });
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(true);
+
+      // Verify wallet has addresses available
+      const currentAddress = wallet.getCurrentAddress();
+      expect(currentAddress.index).toBeDefined();
+      expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+    });
+  });
+});
 
 describe.skip('wallet public methods', () => {});
 
