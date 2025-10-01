@@ -1380,7 +1380,7 @@ class HathorWallet extends EventEmitter {
       // This is a voided transaction update event.
       // voided transactions require a full history reprocess.
       await this.storage.processHistory();
-    } else {
+    } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
     }
