@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { TIMEOUT } from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
@@ -17,9 +17,29 @@ import config from '../../config';
  */
 
 /**
+ * Delay function for retry backoff
+ */
+const delay = (ms: number): Promise<void> =>
+  new Promise(resolve => {
+    setTimeout(resolve, ms);
+  });
+
+/**
+ * Extending AxiosRequestConfig to include a retry count for our interceptor
+ */
+type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
+  _retryCount?: number;
+};
+
+const SLOW_WALLET_MAX_RETRIES = 20;
+const SLOW_WALLET_RETRY_DELAY_MS = 200;
+
+/**
  * Create an axios instance to be used when sending requests
  *
- * @param {number} timeout Timeout in milliseconds for the request
+ * @param {HathorWalletServiceWallet} wallet - The wallet instance
+ * @param {boolean} needsAuth - Whether authentication is required
+ * @param {number} timeout - Timeout in milliseconds for the main request
  */
 export const axiosInstance = async (
   wallet: HathorWalletServiceWallet,
@@ -55,7 +75,41 @@ export const axiosInstance = async (
     defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
 
-  return axios.create(defaultOptions);
+  const instance = axios.create(defaultOptions);
+
+  // Add retry interceptor for socket hang up errors
+  instance.interceptors.response.use(
+    // Success response handler
+    response => response,
+    // Error response handler with retry logic
+    async error => {
+      // Fetching the retry count from the request config, or initializing it if not present
+      const requestConfig = ((error as AxiosError).config as AxiosRequestConfigWithRetry)!;
+      const currentRetryCount = requestConfig._retryCount || 0;
+
+      // Check if we should retry
+      const shouldRetry =
+        wallet._expectSlowLambdas &&
+        error.message === 'socket hang up' &&
+        currentRetryCount < SLOW_WALLET_MAX_RETRIES;
+
+      // Throw any error found if we shouldn't retry
+      if (!shouldRetry) {
+        return Promise.reject(error);
+      }
+
+      // Modifying the request config for the retry and attempting a new request
+      requestConfig._retryCount = currentRetryCount + 1;
+
+      // Wait before retrying
+      await delay(SLOW_WALLET_RETRY_DELAY_MS);
+
+      // Retry the request
+      return instance(requestConfig);
+    }
+  );
+
+  return instance;
 };
 
 export default axiosInstance;

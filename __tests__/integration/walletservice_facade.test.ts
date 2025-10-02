@@ -159,6 +159,7 @@ function buildWalletInstance({
     network,
     storage,
     enableWs, // Disable websocket for integration tests
+    expectSlowLambdas: true,
   });
 
   return { wallet: newWallet, store, storage };
