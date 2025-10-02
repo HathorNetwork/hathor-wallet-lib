@@ -50,7 +50,8 @@ export function buildWalletInstance({
     seed: walletData.words,
     network,
     storage,
-    enableWs, // Disable websocket for integration tests
+    expectSlowLambdas: true, // Activate a specific error handling to accommodate for the slow test environment
+    enableWs, // Disable websocket for integration tests by default
   });
 
   return { wallet: newWallet, store, storage };

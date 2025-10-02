@@ -106,6 +106,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
 
+  // The test environment for the Wallet Service can be slow, and we need to adapt to this
+  // with special error handling conditions.
+  _expectSlowLambdas: boolean;
+
   // Method to request the password from the client
   private requestPassword: () => Promise<string>;
 
@@ -161,6 +165,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
+    expectSlowLambdas = false,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -171,6 +176,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
+    expectSlowLambdas?: boolean;
   }) {
     super();
 
@@ -205,6 +211,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
     this._isWsEnabled = enableWs;
+    this._expectSlowLambdas = expectSlowLambdas;
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
