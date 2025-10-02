@@ -15,13 +15,13 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  NATIVE_TOKEN_UID,
 } from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
 import { UtxoError, WalletRequestError } from '../../src/errors';
-import { NATIVE_TOKEN_UID } from '../../lib/constants';
-import { GetAddressesObject } from '../../lib/wallet/types';
+import { GetAddressesObject } from '../../src/wallet/types';
 import {
   buildWalletInstance,
   emptyWallet,
