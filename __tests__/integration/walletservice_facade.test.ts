@@ -12,6 +12,7 @@ import {
   WALLET_CONSTANTS,
 } from './configuration/test-constants';
 import {
+  NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
@@ -20,8 +21,7 @@ import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
 import { TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
-import { NATIVE_TOKEN_UID } from '../../lib/constants';
-import { GetAddressesObject } from '../../lib/wallet/types';
+import { GetAddressesObject } from '../../src/wallet/types';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
