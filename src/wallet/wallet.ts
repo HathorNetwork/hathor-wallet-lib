@@ -497,14 +497,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let renewPromise2: Promise<void> | null = null;
     try {
       // Here we await the first auth token api call before continuing the startup process.
-      const [promiseResult] = await Promise.allSettled([renewPromise]);
+      const promiseResult = await renewPromise;
 
-      if (promiseResult.status === 'rejected') {
-        throw promiseResult.reason;
-      }
-
-      if (promiseResult.value?.status === 'failed') {
-        throw promiseResult.value.error;
+      if (promiseResult?.status === 'failed') {
+        throw promiseResult.error;
       }
     } catch (err) {
       // If the wallet was being created the api would fail, but we will try to request a new token
