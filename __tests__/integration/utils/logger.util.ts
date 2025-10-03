@@ -10,13 +10,17 @@
 import winston from './placeholder-logger.util';
 import testConfig from '../configuration/test.config';
 
-export const loggers = {
+export const loggers: {
+  test?: LoggerUtil;
+  walletBenchmark?: LoggerUtil;
+  txBenchmark?: LoggerUtil;
+} = {
   /**
    * @type: TxLogger
    */
-  test: null,
-  walletBenchmark: null,
-  txBenchmark: null,
+  test: undefined,
+  walletBenchmark: undefined,
+  txBenchmark: undefined,
 };
 
 /**
@@ -106,7 +110,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  log(input, metadata) {
+  log(input, metadata?) {
     this.#logger.info(input, metadata);
   }
 
@@ -117,7 +121,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  warn(input, metadata) {
+  warn(input, metadata?) {
     this.#logger.warn(input, metadata);
   }
 
@@ -128,7 +132,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  error(input, metadata) {
+  error(input, metadata?) {
     this.#logger.error(input, metadata);
   }
 }
