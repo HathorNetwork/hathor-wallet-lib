@@ -31,7 +31,7 @@ type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retryCount?: number;
 };
 
-const SLOW_WALLET_MAX_RETRIES = 10;
+const SLOW_WALLET_MAX_RETRIES = 20;
 const SLOW_WALLET_RETRY_DELAY_MS = 200;
 
 /**
