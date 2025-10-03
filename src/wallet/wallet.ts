@@ -420,7 +420,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       await this.storage.saveAccessData(accessData);
     }
 
-    let renewPromise: Promise<void> | null = null;
+    let renewPromise: Promise<void | { status: string; error: Error }> | null = null;
     if (accessData.acctPathKey) {
       // We can preemtively request/renew the auth token so the wallet can wait for this process
       // to finish while we derive and request the wallet creation.
@@ -429,7 +429,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(privKeyAccountPath.xpubkey);
       this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode);
+      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => ({
+        status: 'failed',
+        error: err,
+      }));
     }
 
     const {
@@ -447,7 +450,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // derive the account path xpubkey on the method above.
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
       this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode);
+      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => ({
+        status: 'failed',
+        error: err,
+      }));
     }
 
     this.xpub = xpub;
@@ -491,7 +497,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let renewPromise2: Promise<void> | null = null;
     try {
       // Here we await the first auth token api call before continuing the startup process.
-      await renewPromise;
+      const [promiseResult] = await Promise.allSettled([renewPromise]);
+
+      if (promiseResult.status === 'rejected') {
+        throw promiseResult.reason;
+      }
+
+      if (promiseResult.value?.status === 'failed') {
+        throw promiseResult.value.error;
+      }
     } catch (err) {
       // If the wallet was being created the api would fail, but we will try to request a new token
       // now that the wallet was created and before it is ready.
@@ -2216,17 +2230,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Melt custom token units
    *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async meltTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
-    this.failIfWalletNotReady();
-    const tx = await this.prepareMeltTokensData(token, amount, options);
-    return this.handleSendPreparedTransaction(tx);
-  }
-
-  /**
-   * Prepare delegate authority data, sign the inputs and returns an object ready to be mined
    *
    * @memberof HathorWalletServiceWallet
    * @inner
