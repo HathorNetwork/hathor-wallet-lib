@@ -7,6 +7,7 @@
 
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { TIMEOUT } from '../../constants';
+import helpers from '../../utils/helpers';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -15,14 +16,6 @@ import config from '../../config';
  *
  * @module Axios
  */
-
-/**
- * Delay function for retry backoff
- */
-const delay = (ms: number): Promise<void> =>
-  new Promise(resolve => {
-    setTimeout(resolve, ms);
-  });
 
 /**
  * Extending AxiosRequestConfig to include a retry count for our interceptor
@@ -105,7 +98,7 @@ export const axiosInstance = async (
       requestConfig._retryCount = currentRetryCount + 1;
 
       // Wait before retrying: 100ms, 200ms, 400ms, 800ms and then 1000ms
-      await delay(
+      await helpers.sleep(
         Math.min(
           SLOW_WALLET_RETRY_DELAY_BASE_MS * 2 ** currentRetryCount,
           SLOW_WALLET_RETRY_DELAY_MAX_MS
