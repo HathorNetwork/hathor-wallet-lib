@@ -31,8 +31,9 @@ type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retryCount?: number;
 };
 
-const SLOW_WALLET_MAX_RETRIES = 20;
-const SLOW_WALLET_RETRY_DELAY_MS = 200;
+const SLOW_WALLET_MAX_RETRIES = 10;
+const SLOW_WALLET_RETRY_DELAY_BASE_MS = 100;
+const SLOW_WALLET_RETRY_DELAY_MAX_MS = 1000;
 
 /**
  * Create an axios instance to be used when sending requests
@@ -95,14 +96,21 @@ export const axiosInstance = async (
 
       // Throw any error found if we shouldn't retry
       if (!shouldRetry) {
+        // eslint-disable-next-line no-console
+        console.error(`Failed request to ${requestConfig.url}: ${error.message}`);
         return Promise.reject(error);
       }
 
       // Modifying the request config for the retry and attempting a new request
       requestConfig._retryCount = currentRetryCount + 1;
 
-      // Wait before retrying
-      await delay(SLOW_WALLET_RETRY_DELAY_MS);
+      // Wait before retrying: 100ms, 200ms, 400ms, 800ms and then 1000ms
+      await delay(
+        Math.min(
+          SLOW_WALLET_RETRY_DELAY_BASE_MS * 2 ** currentRetryCount,
+          SLOW_WALLET_RETRY_DELAY_MAX_MS
+        )
+      );
 
       // Retry the request
       return instance(requestConfig);
