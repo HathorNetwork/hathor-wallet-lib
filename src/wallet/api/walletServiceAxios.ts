@@ -22,11 +22,12 @@ import config from '../../config';
  */
 type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retryCount?: number;
+  _retryStart?: number;
 };
 
 const SLOW_WALLET_MAX_RETRIES = 10;
 const SLOW_WALLET_RETRY_DELAY_BASE_MS = 100;
-const SLOW_WALLET_RETRY_DELAY_MAX_MS = 1000;
+const SLOW_WALLET_RETRY_DELAY_MAX_MS = 2000;
 
 /**
  * Create an axios instance to be used when sending requests
@@ -79,6 +80,7 @@ export const axiosInstance = async (
     async error => {
       // Fetching the retry count from the request config, or initializing it if not present
       const requestConfig = ((error as AxiosError).config as AxiosRequestConfigWithRetry)!;
+      const initialRetryTime = requestConfig._retryStart || Date.now();
       const currentRetryCount = requestConfig._retryCount || 0;
 
       // Check if we should retry
@@ -90,14 +92,17 @@ export const axiosInstance = async (
       // Throw any error found if we shouldn't retry
       if (!shouldRetry) {
         // eslint-disable-next-line no-console
-        console.error(`Failed request to ${requestConfig.url}: ${error.message}`);
+        console.error(
+          `Failed request to ${requestConfig.url}: ${error.message}. Took ${Date.now() - initialRetryTime}ms and ${currentRetryCount} retries.`
+        );
         return Promise.reject(error);
       }
 
       // Modifying the request config for the retry and attempting a new request
+      requestConfig._retryStart = initialRetryTime;
       requestConfig._retryCount = currentRetryCount + 1;
 
-      // Wait before retrying: 100ms, 200ms, 400ms, 800ms and then 1000ms
+      // Wait before retrying: 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
       await helpers.sleep(
         Math.min(
           SLOW_WALLET_RETRY_DELAY_BASE_MS * 2 ** currentRetryCount,
