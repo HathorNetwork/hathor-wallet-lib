@@ -305,8 +305,6 @@ const walletApi = {
       }
     }
 
-    // eslint-disable-next-line no-console -- We need debug data about this error
-    console.error(`Error creating auth token: ${JSON.stringify(response.data)}`);
     throw new WalletRequestError('Error requesting auth token.');
   },
 

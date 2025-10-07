@@ -1133,8 +1133,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       this.authToken = data.token;
     } catch (err) {
-      // eslint-disable-next-line no-console -- Debugging efforts need console
-      console.log(`Error renewing auth token: ${err}`);
       // We should not throw here since this method is called in a fire-and-forget manner
       this.authToken = null;
     }
