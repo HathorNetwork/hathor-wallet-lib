@@ -30,6 +30,7 @@ import {
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
 import { parseSchema } from '../../utils/bigint';
+import helpers from '../../utils/helpers';
 import {
   addressesResponseSchema,
   checkAddressesMineResponseSchema,
@@ -289,6 +290,21 @@ const walletApi = {
       return parseSchema(response.data, authTokenResponseSchema);
     }
 
+    if (
+      wallet._expectSlowLambdas &&
+      response.data?.success === false &&
+      response.data?.error === 'wallet-not-found'
+    ) {
+      await helpers.sleep(1000);
+      // Retrying the request to allow for the Wallet Service to process a newly created wallet under
+      // test conditions
+      const retryResponse = await axios.post('auth/token', data);
+
+      if (retryResponse.status === 200 && retryResponse.data.success === true) {
+        return parseSchema(retryResponse.data, authTokenResponseSchema);
+      }
+    }
+
     throw new WalletRequestError('Error requesting auth token.');
   },
 
@@ -298,6 +314,8 @@ const walletApi = {
   ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
+
+    // The service might answer a status code 200 but output an error message
     if (response.status === 200 && response.data) {
       if (!response.data.success) {
         walletApi._txNotFoundGuard(response.data);
@@ -308,6 +326,14 @@ const walletApi = {
       return parseSchema(response.data, txByIdResponseSchema);
     }
 
+    // The server also might return a 404 if the tx is not found. Checking its data too
+    if (response.status === 404 && response.data) {
+      walletApi._txNotFoundGuard(response.data);
+      throw new WalletRequestError('Error getting transaction by its id.', {
+        cause: response.data,
+      });
+    }
+
     throw new WalletRequestError('Error getting transaction by its id.', {
       cause: response.data,
     });
@@ -315,8 +341,12 @@ const walletApi = {
 
   _txNotFoundGuard(data: unknown) {
     const message = get<unknown, string, string>(data, 'message', '');
-
     if (message === 'Transaction not found') {
+      throw new TxNotFoundError();
+    }
+
+    const errorMessage = get<unknown, string, string>(data, 'error', '');
+    if (errorMessage === 'tx-not-found') {
       throw new TxNotFoundError();
     }
   },
