@@ -241,7 +241,7 @@ beforeAll(async () => {
   // Pool for the serverless app to be ready.
   const delayBetweenRequests = 3000;
   const lambdaTimeout = 30000;
-  while (isServerlessReady) {
+  while (!isServerlessReady) {
     try {
       // Executing a method that does not depend on the wallet being started,
       // but that ensures the Wallet Service Lambdas are receiving requests
