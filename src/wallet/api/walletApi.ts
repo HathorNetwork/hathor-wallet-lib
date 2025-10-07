@@ -30,6 +30,7 @@ import {
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
 import { parseSchema } from '../../utils/bigint';
+import helpers from '../../utils/helpers';
 import {
   addressesResponseSchema,
   checkAddressesMineResponseSchema,
@@ -287,6 +288,21 @@ const walletApi = {
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, authTokenResponseSchema);
+    }
+
+    if (
+      wallet._expectSlowLambdas &&
+      response.data?.success === false &&
+      response.data?.error === 'wallet-not-found'
+    ) {
+      await helpers.sleep(1000);
+      // Retrying the request to allow for the Wallet Service to process a newly created wallet under
+      // test conditions
+      const retryResponse = await axios.post('auth/token', data);
+
+      if (retryResponse.status === 200 && retryResponse.data.success === true) {
+        return parseSchema(retryResponse.data, authTokenResponseSchema);
+      }
     }
 
     throw new WalletRequestError('Error requesting auth token.');

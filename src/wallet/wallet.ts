@@ -1124,6 +1124,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Renew the auth token on the wallet service
    *
+   * Note: This method is called in a fire-and-forget manner, so it should not throw exceptions when failing.
+   *
    * @param {HDPrivateKey} privKey - private key to sign the auth message
    * @param {number} timestamp - Current timestamp to assemble the signature
    *
@@ -1135,10 +1137,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new Error('Wallet not ready yet.');
     }
 
-    const sign = this.signMessage(privKey, timestamp, this.walletId);
-    const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
+    try {
+      const sign = this.signMessage(privKey, timestamp, this.walletId);
+      const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
 
-    this.authToken = data.token;
+      this.authToken = data.token;
+    } catch (err) {
+      // We should not throw here since this method is called in a fire-and-forget manner
+      this.authToken = null;
+    }
   }
 
   /**
