@@ -1125,6 +1125,70 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Get read-only auth token using only the xpubkey (no signature required)
+   * This allows read-only access to wallet data without needing private keys
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getReadOnlyAuthToken(): Promise<string> {
+    if (!this.xpub) {
+      throw new Error('xpub is required to get read-only auth token.');
+    }
+
+    if (!this.walletId) {
+      // Derive walletId from xpub if not set
+      this.walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
+    }
+
+    const data = await walletApi.createReadOnlyAuthToken(this, this.xpub);
+    this.authToken = data.token;
+
+    return data.token;
+  }
+
+  /**
+   * Start wallet in read-only mode using only the xpubkey
+   * This allows querying wallet data without needing private keys or authentication
+   *
+   * @throws {WalletRequestError} If wallet is not initialized or not ready
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async startReadOnly(): Promise<void> {
+    if (!this.xpub) {
+      throw new Error('xpub is required to start wallet in read-only mode.');
+    }
+
+    this.setState(walletState.LOADING);
+
+    // Derive walletId from xpub
+    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
+    this.walletId = walletId;
+
+    // Get read-only auth token
+    await this.getReadOnlyAuthToken();
+
+    // Check wallet status to ensure it's ready
+    const walletStatus = await walletApi.getWalletStatus(this);
+
+    if (walletStatus.status.status === 'creating') {
+      // If the wallet is still being created, poll until it's ready
+      await this.pollForWalletStatus();
+    } else if (walletStatus.status.status !== 'ready') {
+      // If wallet is in error state or doesn't exist
+      throw new WalletRequestError(
+        'Wallet must be initialized and ready before starting in read-only mode.',
+        { cause: walletStatus.status }
+      );
+    }
+
+    // Wallet is ready, complete the startup process
+    await this.onWalletReady();
+  }
+
+  /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
    * @param outputs Array of proposed outputs
