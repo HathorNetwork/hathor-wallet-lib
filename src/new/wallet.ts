@@ -815,7 +815,7 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.markAsUsed=false] if true, we will locally mark this address as used
    *                                             and won't return it again to be used
    *
-   * @return {Promise<{ address:string, index:number, addressPath:string }>}
+   * @return {Promise<{ address:string, index:number, addressPath:string, info: string }>}
    *
    * @memberof HathorWallet
    * @inner
@@ -824,8 +824,9 @@ class HathorWallet extends EventEmitter {
     const address = await this.storage.getCurrentAddress(markAsUsed);
     const index = await this.getAddressIndex(address);
     const addressPath = await this.getAddressPathForIndex(index!);
+    const info = '';
 
-    return { address, index, addressPath };
+    return { address, index, addressPath, info };
   }
 
   /**

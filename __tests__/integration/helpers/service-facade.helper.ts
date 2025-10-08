@@ -4,6 +4,7 @@ import { HathorWalletServiceWallet, MemoryStore, Storage, walletUtils } from '..
 import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { TxNotFoundError } from '../../../src/errors';
+import { precalculationHelpers } from './wallet-precalculation.helper';
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -29,16 +30,31 @@ export const emptyWallet = {
 
 /**
  * Builds a HathorWalletServiceWallet instance with a wallet seed words
+ * If no words are provided, it will use a precalculated wallet for faster tests and return its addresses.
  * @param enableWs - Whether to enable websocket connection (default: false)
- * @param words - The 24 words to use for the wallet (default: empty wallet)
+ * @param words - The 24 words to use for the wallet (default: random wallet)
  * @param passwordForRequests - The password that will be returned by the mocked requestPassword function (default: 'test-password')
  * @returns The wallet instance along with its store and storage for eventual mocking/spying
  */
 export function buildWalletInstance({
   enableWs = false,
-  words = emptyWallet.words,
+  words = '',
   passwordForRequests = 'test-password',
 } = {}) {
+  let addresses: string[] = [];
+
+  // If no words are provided, use an empty precalculated wallet
+  if (!words) {
+    if (!precalculationHelpers.test) {
+      throw new Error('Precalculation helper not initialized');
+    }
+    const preFetchedWallet = precalculationHelpers.test.getPrecalculatedWallet();
+    // eslint-disable-next-line no-param-reassign -- Simple way of setting a default value
+    words = preFetchedWallet.words;
+    addresses = preFetchedWallet.addresses;
+  }
+
+  // Builds the wallet parameters
   const walletData = { words };
   const network = new Network(NETWORK_NAME);
   const requestPassword = jest.fn().mockResolvedValue(passwordForRequests);
@@ -54,7 +70,7 @@ export function buildWalletInstance({
     enableWs, // Disable websocket for integration tests by default
   });
 
-  return { wallet: newWallet, store, storage };
+  return { wallet: newWallet, store, storage, addresses };
 }
 
 /**
