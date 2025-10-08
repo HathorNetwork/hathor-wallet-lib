@@ -2233,6 +2233,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Melt custom token units
    *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async meltTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareMeltTokensData(token, amount, options);
+    return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Prepare delegate authority data, sign the inputs and returns an object ready to be mined
    *
    * @memberof HathorWalletServiceWallet
    * @inner
