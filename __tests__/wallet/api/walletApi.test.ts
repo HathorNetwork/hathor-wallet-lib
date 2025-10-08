@@ -673,4 +673,42 @@ describe('walletApi', () => {
     const result = await walletApi.getFullTxById(wallet, 'tx1');
     expect(result).toEqual(mockResponseOptionalFields);
   });
+
+  test('createReadOnlyAuthToken', async () => {
+    const xpubkey =
+      'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W8kWb3XNVy8HKXfXd8pKf3Xmb';
+    const mockResponse = {
+      success: true,
+      token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ3aWQiOiJ0ZXN0LXdhbGxldC1pZCIsImFjY2Vzc1R5cGUiOiJyZWFkLW9ubHkiLCJpYXQiOjE2OTY1ODg4MDAsImV4cCI6MTY5NjU5MDYwMH0.test',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponse,
+    } as AxiosResponse);
+
+    const result = await walletApi.createReadOnlyAuthToken(wallet, xpubkey);
+    expect(result).toEqual(mockResponse);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('auth/readonly-token', { xpubkey });
+
+    // Should throw on invalid response status
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
+      'Error requesting read-only auth token.'
+    );
+
+    // Should throw on success: false
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 200,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
+      'Error requesting read-only auth token.'
+    );
+  });
 });
