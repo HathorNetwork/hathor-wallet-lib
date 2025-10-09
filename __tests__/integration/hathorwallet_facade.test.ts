@@ -318,7 +318,7 @@ describe('start', () => {
      * Invalid parameters on constructing the object
      */
     // @ts-expect-error - Testing invalid parameters
-    expect(() => new HathorWallet()).toThrow('provide a connection');
+    expect(() => new HathorWallet({})).toThrow('provide a connection');
 
     expect(
       () =>
