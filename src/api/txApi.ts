@@ -92,7 +92,7 @@ const txApi = {
    * @memberof ApiTransaction
    * @inner
    */
-  getConfirmationData(id, resolve) {
+  getConfirmationData(id: string, resolve) {
     const data = { id };
     return createRequestInstance(resolve)
       .get(`transaction_acc_weight`, { params: data })

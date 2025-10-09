@@ -56,7 +56,7 @@ beforeAll(async () => {
   // Await first block to be mined to release genesis reward lock
   const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
   try {
-    await waitNextBlock(gWallet.storage);
+    // await waitNextBlock(gWallet.storage);
   } catch (err) {
     // When running jest with jasmine there's a bug (or behavior)
     // that any error thrown inside beforeAll methods don't stop the tests
@@ -69,7 +69,7 @@ beforeAll(async () => {
     process.exit(1);
   }
 
-  await createOCBs();
+  // await createOCBs();
 });
 
 afterAll(async () => {

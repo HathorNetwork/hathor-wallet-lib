@@ -104,14 +104,17 @@ export const fullnodeTxApiMetaSchema = z.object({
   first_block_height: z.number().nullish(),
 });
 
+export const transactionApiSuccessSchema = z.object({
+  success: z.literal(true),
+  tx: fullnodeTxApiTxSchema.passthrough(),
+  meta: fullnodeTxApiMetaSchema.passthrough(),
+  spent_outputs: z.record(z.coerce.number(), z.string()),
+});
+
 export const transactionApiSchema = z.discriminatedUnion('success', [
-  z.object({
-    success: z.literal(true),
-    tx: fullnodeTxApiTxSchema.passthrough(),
-    meta: fullnodeTxApiMetaSchema.passthrough(),
-    spent_outputs: z.record(z.coerce.number(), z.string()),
-  }),
+  transactionApiSuccessSchema,
   z.object({ success: z.literal(false), message: z.string().nullish() }),
 ]);
 
 export type FullNodeTxApiResponse = z.infer<typeof transactionApiSchema>;
+export type FullNodeTxApiSuccessResponse = z.infer<typeof transactionApiSuccessSchema>;
