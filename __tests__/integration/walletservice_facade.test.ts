@@ -29,6 +29,7 @@ import {
   poolForTx,
 } from './helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -38,86 +39,11 @@ config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const walletWithTxs = {
-  words:
-    'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
-  addresses: [
-    'WeSnE5dnrciKahKbTvbUWmY6YM9Ntgi6MJ',
-    'Wj52SGubNZu3JA2ncRXyNGfqyrdnj4XTU2',
-    'Wh1Xs7zPVT9bc6dzzA23Zu8aiP3H8zLkiy',
-    'WdFeZvVJkwAdLDpXLGJpFP9XSDcdrntvAg',
-    'WTdWsgnCPKBuzEKAT4NZkzHaD4gHYMrk4G',
-    'WSBhEBkuLpqu2Fz1j6PUyUa1W4GGybEYSF',
-    'WS8yocEYBykpgjQxAhxjTcjVw9gKtYdys8',
-    'WmkBa6ikYM2sZmiopM6zBGswJKvzs5Noix',
-    'WeEPszSx14og6c3uPXy2vYh7BK9c6Zb9TX',
-    'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
-  ],
-};
-const customTokenWallet = {
-  words:
-    'shine myself welcome feature nurse cement crumble input utility lizard melt great sample slab know leisure salmon path gate iron enlist discover cry radio',
-  addresses: [
-    'WUTMZMaNoewWprYpb8b2etTfRuw2zRS5u3',
-    'WNxz1juhoJk9Y28knsH8ynVXn9s7bYLMkd',
-    'WWBkdHcB7TCjNQUiyFhZpXDU4Tejd7AFd5',
-    'WdcFTovRGiePVSnCpoGUYBgAGyDmXhkaD6',
-    'WjuxR4r487CTGGMJRpcnAZ9bdaH91qt7F5',
-    'WkYJ6SHfS2CTAMCxtrwWm7Mr12YRMx7WzQ',
-    'WTuBXE1WPNgjSxqDfRKy2fiDydT3e2pdiJ',
-    'WTipscpJ14sAZ4Y3f2gY5Tb1RWJYop9QYK',
-    'WhQovEXRSDc7MLMz8Tqy1qJdTy2hef1dYq',
-    'WkUREDxNQX6Qq1NwdLQycxkHFjKujQasWX',
-  ],
-};
-const multipleTokensWallet = {
-  words:
-    'object join brain round loyal unfair shine genius brain vocal object crouch simple cake chase october unlock detail ivory kidney saddle immense deer response',
-  addresses: [
-    'Wie8wTxa7P6Vbr1UhADfDfafJftyYsZNMU',
-    'WaCk6XV4zCwdPTvGH6VgkE58ebqEndA6b7',
-    'Wdsez9n6LuWMtKQv3zdnKtQkTeXFw7ATFj',
-    'WdZcUpCoLS1CK5UD7V5Z4d42X92zc7QHEi',
-    'WaaXsw2HdYiBUveqg6QWS5HmkwTNUKUBLD',
-    'WPxVMXd89aaXWXqUcVTjdQPUvuT3wehJxc',
-    'WSbfhb9tkJneSbEJsyzyEURYcTqkPKRUUD',
-    'WQt8Gxy5yWC3xZGsHVrywYJqHyg5xtudun',
-    'WcpnSRvzZGAnR6rtQiBnzP7aLnvPstpXbD',
-    'WQzooroUKJMrFVv5P1UrPppmQ2YF8ACfAS',
-  ],
-};
-const addressesWallet = {
-  words:
-    'pumpkin tank father organ can doll romance damage because barely vault pride will man rack horn lamp remove enemy brain desert exchange boil salon',
-  addresses: [
-    'WRsDG9VhM4N9DPSpbnpFKnngLEXonaBsuH',
-    'WSTMdCz4BuzGv5q6g8woaCHeyppTZdjXWx',
-    'WPbCV3Lrh28ntoQY2hvC2ppU5TimCZdRaw',
-    'WaAgCebJjWfQCKcDwtpffQ4kt2im7fbsUr',
-    'WXN2wRybweJY4xunPkz6pwfGUmoumCCcUP',
-    'WbEA4E7Rnx98TtRox3UazMQRm1yNoAJcfm',
-    'WZs2Ci9ZxyMzmfdbGfR2nTp9xsxS7rSsDN',
-    'Wf1waSNgXmMoitFjx7TADMemKyCWjhvLUb',
-    'WVTMecGGC9kGzUbQqjB4J7i4KVhLVyMagy',
-    'WjHom47afCW8qEFtBqMq3MT22zxLkuvQag',
-  ],
-};
-const utxosWallet = {
-  words:
-    'provide bunker age agree renew size popular license best kidney range flag they bulk survey letter concert mobile february clean nuclear inherit voyage capable',
-  addresses: [
-    'WQvAdYAqZf69nsgzVwSMwfRWcBRHJJU1qH',
-    'We4fZtzxod2M3w1u8h4TNpaMYrYWqXxNqd',
-    'WioaJZPzytLVniJ9MTinLiWih1VaoRfaUV',
-    'WmRLJj5P1rj1bErNADJnweq8mXBNLmNiAL',
-    'WXpXoREmV2hFuMX83dup7YMqJqRW5Y94Av',
-    'WirQUza1XdqnN7DcAMdXvysTntq9DB3xz6',
-    'Wb26hUGD6du7nkecrAeaRbBoZS4Z3dynby',
-    'WXgFTQm7uNYTj8gsz3GWNg58jCvaPn96hD',
-    'WdcFv1fKjbPPqSXHkdo22QE2bbZnbXADHK',
-    'WTm47mTSd7ompdinkZM3LiF4VE7AeQttzo',
-  ],
-};
+const walletWithTxs = precalculationHelpers.test!.getPrecalculatedWallet();
+const customTokenWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+const multipleTokensWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+const addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+const utxosWallet = precalculationHelpers.test!.getPrecalculatedWallet();
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -125,7 +51,6 @@ const pinCode = '123456';
 const password = 'testpass';
 
 beforeAll(async () => {
-  console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
   await GenesisWalletServiceHelper.poolForServerlessAvailable();
   await GenesisWalletServiceHelper.start();
 });
@@ -137,7 +62,7 @@ afterAll(async () => {
 describe('start', () => {
   describe('mandatory parameters validation', () => {
     beforeEach(() => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     });
 
     afterEach(async () => {
@@ -164,7 +89,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -198,7 +123,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -281,7 +206,7 @@ describe('start', () => {
 
 describe('wallet public methods', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -354,7 +279,7 @@ describe('empty wallet address methods', () => {
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -564,7 +489,7 @@ describe('basic transaction methods', () => {
     let tokenUid: string;
 
     it('should not create a new token on a wallet without funds', async () => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
       await wallet.start({ pinCode, password });
 
       await expect(
@@ -1191,7 +1116,7 @@ describe('websocket events', () => {
 
 describe('balances', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -1268,7 +1193,7 @@ describe('balances', () => {
     });
 
     it('should throw error when wallet is not ready', async () => {
-      const { wallet: notReadyWallet } = buildWalletInstance();
+      const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
       // Don't start the wallet, so it's not ready
 
       await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
