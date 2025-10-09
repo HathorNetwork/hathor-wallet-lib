@@ -22,14 +22,9 @@ import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
 import { UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
-import {
-  buildWalletInstance,
-  emptyWallet,
-  generateNewWalletAddress,
-  poolForTx,
-} from './helpers/service-facade.helper';
+import { buildWalletInstance, emptyWallet, poolForTx } from './helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { PrecalculatedWalletData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -39,11 +34,11 @@ config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const walletWithTxs = precalculationHelpers.test!.getPrecalculatedWallet();
-const customTokenWallet = precalculationHelpers.test!.getPrecalculatedWallet();
-const multipleTokensWallet = precalculationHelpers.test!.getPrecalculatedWallet();
-const addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
-const utxosWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+let walletWithTxs: PrecalculatedWalletData;
+let customTokenWallet: PrecalculatedWalletData;
+let multipleTokensWallet: PrecalculatedWalletData;
+let addressesWallet: PrecalculatedWalletData;
+let utxosWallet: PrecalculatedWalletData;
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -53,6 +48,12 @@ const password = 'testpass';
 beforeAll(async () => {
   await GenesisWalletServiceHelper.poolForServerlessAvailable();
   await GenesisWalletServiceHelper.start();
+
+  walletWithTxs = precalculationHelpers.test!.getPrecalculatedWallet();
+  customTokenWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+  multipleTokensWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+  addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+  utxosWallet = precalculationHelpers.test!.getPrecalculatedWallet();
 });
 
 afterAll(async () => {
