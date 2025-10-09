@@ -133,7 +133,8 @@ describe('Read-Only Wallet Access', () => {
       });
 
       // Mock the connection setup
-      jest.spyOn(wallet as any, 'isWsEnabled').mockReturnValue(false);
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
       await wallet.startReadOnly();
 
@@ -197,7 +198,8 @@ describe('Read-Only Wallet Access', () => {
       });
 
       // Mock the connection setup
-      jest.spyOn(wallet as any, 'isWsEnabled').mockReturnValue(false);
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
       await wallet.startReadOnly();
 
@@ -268,7 +270,7 @@ describe('Read-Only Wallet Access', () => {
 
       // Track state changes
       const states: string[] = [];
-      wallet.on('state', (state) => {
+      wallet.on('state', state => {
         states.push(state);
       });
 
@@ -301,7 +303,8 @@ describe('Read-Only Wallet Access', () => {
       });
 
       // Mock the connection setup
-      jest.spyOn(wallet as any, 'isWsEnabled').mockReturnValue(false);
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
       await wallet.startReadOnly();
 
@@ -350,9 +353,11 @@ describe('Read-Only Wallet Access', () => {
       });
 
       // Mock the connection setup
-      jest.spyOn(wallet as any, 'isWsEnabled').mockReturnValue(false);
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
-      const onWalletReadySpy = jest.spyOn(wallet as any, 'onWalletReady');
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady');
 
       await wallet.startReadOnly();
 
@@ -402,7 +407,8 @@ describe('Read-Only Wallet Access', () => {
       });
 
       // Mock the connection setup
-      jest.spyOn(wallet as any, 'isWsEnabled').mockReturnValue(false);
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
       await wallet.startReadOnly();
 
