@@ -24,7 +24,10 @@ import { UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
 import { buildWalletInstance, emptyWallet, poolForTx } from './helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
-import { PrecalculatedWalletData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import {
+  PrecalculatedWalletData,
+  precalculationHelpers,
+} from './helpers/wallet-precalculation.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -52,7 +55,6 @@ beforeAll(async () => {
   walletWithTxs = precalculationHelpers.test!.getPrecalculatedWallet();
   customTokenWallet = precalculationHelpers.test!.getPrecalculatedWallet();
   multipleTokensWallet = precalculationHelpers.test!.getPrecalculatedWallet();
-  addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
   utxosWallet = precalculationHelpers.test!.getPrecalculatedWallet();
 });
 
@@ -189,6 +191,7 @@ describe('start', () => {
         network,
         storage,
         enableWs: false, // Disable websocket for integration tests
+        expectSlowLambdas: true,
       });
 
       // Start the wallet
@@ -1205,9 +1208,11 @@ describe('balances', () => {
 });
 
 describe('address management methods', () => {
-  const knownAddresses = addressesWallet.addresses;
+  let knownAddresses: string[];
 
   beforeEach(async () => {
+    addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+    knownAddresses = addressesWallet.addresses;
     ({ wallet } = buildWalletInstance({ words: addressesWallet.words }));
     await wallet.start({ pinCode, password });
   });
