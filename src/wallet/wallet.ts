@@ -363,12 +363,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *  {
    *   'pinCode': PIN to encrypt the auth xpriv on storage
    *   'password': Password to decrypt xpriv information
+   *   'waitReady': Whether to wait for the wallet to be ready (default: true)
    *  }
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode, password }: { pinCode?: string; password?: string } = {}) {
+  async start({
+    pinCode,
+    password,
+    waitReady = true,
+  }: { pinCode?: string; password?: string; waitReady?: boolean } = {}) {
     if (!pinCode) {
       throw new Error('Pin code is required when starting the wallet.');
     }
@@ -479,6 +484,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress
     );
+
+    // Set walletId immediately after wallet creation
+    this.walletId = data.status.walletId;
+
+    // If waitReady is false, return immediately after wallet creation
+    if (!waitReady) {
+      this.clearSensitiveData();
+      return;
+    }
 
     // If auth token api fails we can still retry during wallet creation status polling.
     let renewPromise2: Promise<void> | null = null;

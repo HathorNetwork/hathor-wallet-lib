@@ -300,7 +300,7 @@ const walletApi = {
       xpubkey,
     };
     const axios = await axiosInstance(wallet, false);
-    const response = await axios.post('auth/readonly-token', data);
+    const response = await axios.post('auth/token/readonly', data);
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, authTokenResponseSchema);
     }

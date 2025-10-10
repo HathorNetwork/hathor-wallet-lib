@@ -319,7 +319,7 @@ export interface DestroyAuthorityOptions {
 }
 
 export interface IHathorWallet {
-  start(options: { pinCode: string; password: string }): Promise<void>;
+  start(options: { pinCode: string; password: string; waitReady?: boolean }): Promise<void>;
   startReadOnly(): Promise<void>;
   getReadOnlyAuthToken(): Promise<string>;
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
