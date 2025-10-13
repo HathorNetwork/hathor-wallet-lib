@@ -690,7 +690,7 @@ describe('walletApi', () => {
 
     const result = await walletApi.createReadOnlyAuthToken(wallet, xpubkey);
     expect(result).toEqual(mockResponse);
-    expect(mockAxiosInstance.post).toHaveBeenCalledWith('auth/readonly-token', { xpubkey });
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('auth/token/readonly', { xpubkey });
 
     // Should throw on invalid response status
     mockAxiosInstance.post.mockResolvedValueOnce({

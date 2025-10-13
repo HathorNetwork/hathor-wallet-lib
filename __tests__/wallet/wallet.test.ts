@@ -2626,7 +2626,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
   });
 
   it('should handle UninitializedWalletError during access data loading', async () => {
-    jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest
+      .spyOn(wallet.storage, 'getAccessData')
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
 
     await expect(wallet.start({ pinCode: '123' })).rejects.toThrow(
       'Password is required when starting the wallet from the seed.'
@@ -2643,7 +2645,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
     jest
       .spyOn(walletWithoutSeed.storage, 'getAccessData')
-      .mockRejectedValue(new UninitializedWalletError());
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
     jest.spyOn(walletApi, 'createWallet').mockRejectedValue(new Error('Test error'));
 
     await expect(walletWithoutSeed.start({ pinCode: '123', password: '123' })).rejects.toThrow(
@@ -2652,7 +2654,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
   });
 
   it('should throw error if wallet status is not ready after creation', async () => {
-    jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest
+      .spyOn(wallet.storage, 'getAccessData')
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
     jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
     jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
       success: true,
@@ -2673,7 +2677,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
   describe('waitReady parameter', () => {
     it('should return immediately after wallet creation when waitReady is false', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       const mockWalletId = 'test-wallet-id';
@@ -2709,7 +2715,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     it('should wait for wallet to be ready when waitReady is true (default)', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       const mockWalletId = 'test-wallet-id';
@@ -2749,7 +2757,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     it('should wait for wallet to be ready when waitReady is not specified (default behavior)', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       const mockWalletId = 'test-wallet-id';
@@ -2790,7 +2800,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     it('should poll for wallet status when waitReady is true and wallet is creating', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       const mockWalletId = 'test-wallet-id';
@@ -2831,7 +2843,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     it('should not poll for wallet status when waitReady is false and wallet is creating', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       const mockWalletId = 'test-wallet-id';
@@ -2859,7 +2873,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     it('should clear sensitive data regardless of waitReady value', async () => {
-      jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
       jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
