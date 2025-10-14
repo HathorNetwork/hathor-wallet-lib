@@ -1095,6 +1095,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     };
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
+      // Check if we're in read-only mode (no auth private key available)
+      // In read-only mode, we need to use the read-only auth token endpoint
+      if (!this.authPrivKey && !usePassword && this.xpub) {
+        // Read-only mode: renew using xpubkey without signature
+        await this.getReadOnlyAuthToken();
+        return;
+      }
+
       let privKey = this.authPrivKey;
 
       if (!privKey) {
