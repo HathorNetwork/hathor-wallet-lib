@@ -7,6 +7,7 @@ import {
   generateWalletHelper,
   waitForTxReceived,
   waitTxConfirmed,
+  waitNextBlock,
 } from '../helpers/wallet.helper';
 import {
   CREATE_TOKEN_TX_VERSION,
@@ -635,6 +636,26 @@ describe('full cycle of bet nano contract', () => {
     const address2Info = await wallet.storage.getAddressInfo(address2);
     expect(address2Info.numTransactions).toBe(2);
     expect(address2Info.seqnum).toBe(2);
+
+    // Now we create a bet that will be voided
+    const utxosBefore = new Map(wallet.storage.store.utxos);
+    const txBet3 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
+      ncId: tx1.hash,
+      args: [address3, '2x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 200n,
+        },
+      ],
+    });
+    await waitForTxReceived(wallet, txBet3.hash);
+    await waitTxConfirmed(wallet, txBet3.hash, null);
+    await waitNextBlock(wallet.storage);
+    const utxosAfter = new Map(wallet.storage.store.utxos);
+    // Validate that the utxos are the same before the tx is created and after it's voided
+    expect(Object.fromEntries(utxosBefore)).toStrictEqual(Object.fromEntries(utxosAfter));
   };
 
   const checkErrorsWithBlueprintId = async blueprintId => {
