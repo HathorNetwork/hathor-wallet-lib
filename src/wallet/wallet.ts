@@ -767,9 +767,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private async onWalletReady() {
+  private async onWalletReady(skipAddressFetch: boolean = false) {
     // We should wait for new addresses before setting wallet to ready
-    await this.getNewAddresses(true);
+    // Skip address fetching if requested (useful for read-only wallets that don't need gap addresses)
+    if (!skipAddressFetch) {
+      await this.getNewAddresses(true);
+    }
 
     if (this.isWsEnabled()) {
       this.setupConnection();
@@ -1173,15 +1176,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Start wallet in read-only mode using only the xpubkey
    * This allows querying wallet data without needing private keys or authentication
    *
+   * @param options.skipAddressFetch - If true, skips fetching gap addresses (faster startup, ~300ms-1s saved)
    * @throws {WalletRequestError} If wallet is not initialized or not ready
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async startReadOnly(): Promise<void> {
+  async startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void> {
     if (!this.xpub) {
       throw new Error('xpub is required to start wallet in read-only mode.');
     }
+
+    const skipAddressFetch = options?.skipAddressFetch || false;
 
     this.setState(walletState.LOADING);
 
@@ -1194,7 +1200,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     try {
       await this.getReadOnlyAuthToken();
       // Token obtained successfully, wallet is ready
-      await this.onWalletReady();
+      await this.onWalletReady(skipAddressFetch);
     } catch (error) {
       // Token request failed, check wallet status to determine why
       const walletStatus = await walletApi.getWalletStatus(this);
@@ -1204,7 +1210,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         await this.pollForWalletStatus();
         // After polling completes, get the token now that wallet is ready
         await this.getReadOnlyAuthToken();
-        await this.onWalletReady();
+        await this.onWalletReady(skipAddressFetch);
       } else {
         // Wallet is in error state or other invalid state
         throw new WalletRequestError(

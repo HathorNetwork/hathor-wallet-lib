@@ -358,6 +358,236 @@ describe('Read-Only Wallet Access', () => {
       expect(onWalletReadySpy).toHaveBeenCalled();
       expect(wallet.isReady()).toBe(true);
     });
+
+    describe('skipAddressFetch option', () => {
+      it('should skip address fetching when skipAddressFetch is true', async () => {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+        mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
+          success: true,
+          token: mockToken,
+        });
+
+        // Mock the connection setup
+        // @ts-expect-error - Accessing private method for testing
+        jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+        await wallet.startReadOnly({ skipAddressFetch: true });
+
+        expect(wallet.isReady()).toBe(true);
+        expect(mockGetNewAddresses).not.toHaveBeenCalled();
+      });
+
+      it('should fetch addresses when skipAddressFetch is false', async () => {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+        mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
+          success: true,
+          token: mockToken,
+        });
+
+        mockGetNewAddresses.mockResolvedValueOnce({
+          success: true,
+          addresses: [
+            {
+              address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+              index: 0,
+              addressPath: "m/44'/280'/0'/0/0",
+            },
+          ],
+        });
+
+        // Mock the connection setup
+        // @ts-expect-error - Accessing private method for testing
+        jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+        await wallet.startReadOnly({ skipAddressFetch: false });
+
+        expect(wallet.isReady()).toBe(true);
+        expect(mockGetNewAddresses).toHaveBeenCalled();
+        expect(mockGetNewAddresses).toHaveBeenCalledTimes(1);
+      });
+
+      it('should fetch addresses by default when no options are provided', async () => {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+        mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
+          success: true,
+          token: mockToken,
+        });
+
+        mockGetNewAddresses.mockResolvedValueOnce({
+          success: true,
+          addresses: [
+            {
+              address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+              index: 0,
+              addressPath: "m/44'/280'/0'/0/0",
+            },
+          ],
+        });
+
+        // Mock the connection setup
+        // @ts-expect-error - Accessing private method for testing
+        jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+        await wallet.startReadOnly();
+
+        expect(wallet.isReady()).toBe(true);
+        expect(mockGetNewAddresses).toHaveBeenCalled();
+        expect(mockGetNewAddresses).toHaveBeenCalledTimes(1);
+      });
+
+      it('should skip address fetching when skipAddressFetch is true with polling', async () => {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
+        const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+        // Clear any previous mock implementations
+        mockCreateReadOnlyAuthToken.mockReset();
+        mockGetWalletStatus.mockReset();
+
+        // First call to getReadOnlyAuthToken fails because wallet is not ready
+        mockCreateReadOnlyAuthToken
+          .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
+          // Second call succeeds after polling
+          .mockResolvedValueOnce({
+            success: true,
+            token: mockToken,
+          });
+
+        // First call returns 'creating' status, subsequent calls return 'ready'
+        mockGetWalletStatus
+          .mockResolvedValueOnce({
+            success: true,
+            status: {
+              walletId: mockWalletId,
+              xpubkey: xpub,
+              status: 'creating',
+              maxGap: 20,
+              createdAt: 123456789,
+              readyAt: null,
+            },
+          })
+          .mockResolvedValue({
+            success: true,
+            status: {
+              walletId: mockWalletId,
+              xpubkey: xpub,
+              status: 'ready',
+              maxGap: 20,
+              createdAt: 123456789,
+              readyAt: 123456790,
+            },
+          });
+
+        // Mock the connection setup
+        // @ts-expect-error - Accessing private method for testing
+        jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+        await wallet.startReadOnly({ skipAddressFetch: true });
+
+        expect(wallet.isReady()).toBe(true);
+        // Even with polling, addresses should not be fetched when skipAddressFetch is true
+        expect(mockGetNewAddresses).not.toHaveBeenCalled();
+      });
+
+      it('should fetch addresses with polling when skipAddressFetch is false', async () => {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
+        const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+        // First call to getReadOnlyAuthToken fails because wallet is not ready
+        mockCreateReadOnlyAuthToken
+          .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
+          // Second call succeeds after polling
+          .mockResolvedValueOnce({
+            success: true,
+            token: mockToken,
+          });
+
+        // First call returns 'creating' status
+        mockGetWalletStatus.mockResolvedValueOnce({
+          success: true,
+          status: {
+            walletId: mockWalletId,
+            xpubkey: xpub,
+            status: 'creating',
+            maxGap: 20,
+            createdAt: 123456789,
+            readyAt: null,
+          },
+        });
+
+        // Subsequent polling calls return 'ready' status
+        mockGetWalletStatus.mockResolvedValue({
+          success: true,
+          status: {
+            walletId: mockWalletId,
+            xpubkey: xpub,
+            status: 'ready',
+            maxGap: 20,
+            createdAt: 123456789,
+            readyAt: 123456790,
+          },
+        });
+
+        mockGetNewAddresses.mockResolvedValueOnce({
+          success: true,
+          addresses: [
+            {
+              address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+              index: 0,
+              addressPath: "m/44'/280'/0'/0/0",
+            },
+          ],
+        });
+
+        // Mock the connection setup
+        // @ts-expect-error - Accessing private method for testing
+        jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+        await wallet.startReadOnly({ skipAddressFetch: false });
+
+        expect(wallet.isReady()).toBe(true);
+        // Addresses should be fetched even with polling
+        expect(mockGetNewAddresses).toHaveBeenCalled();
+        expect(mockGetNewAddresses).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 
   describe('Integration with IHathorWallet interface', () => {
@@ -369,24 +599,15 @@ describe('Read-Only Wallet Access', () => {
       });
 
       const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
-      const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
       const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+      // Clear any previous mock implementations
+      mockCreateReadOnlyAuthToken.mockReset();
+      mockGetNewAddresses.mockReset();
 
       mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
         success: true,
         token: mockToken,
-      });
-
-      mockGetWalletStatus.mockResolvedValueOnce({
-        success: true,
-        status: {
-          walletId: mockWalletId,
-          xpubkey: xpub,
-          status: 'ready',
-          maxGap: 20,
-          createdAt: 123456789,
-          readyAt: 123456790,
-        },
       });
 
       mockGetNewAddresses.mockResolvedValueOnce({
