@@ -262,6 +262,8 @@ export default class SendTransaction extends EventEmitter {
    * Prepare transaction data from inputs and outputs
    * Fill the inputs if needed, create output change if needed and sign inputs
    *
+   * @param {string | null} pin Pin to use in this method (overwrites this.pin)
+   *
    * @throws SendTxError
    *
    * @return {Transaction} Transaction object prepared to be mined
@@ -269,16 +271,18 @@ export default class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  async prepareTx(): Promise<Transaction> {
+  async prepareTx(pin = null): Promise<Transaction> {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
+
+    const pinToUse = pin ?? this.pin ?? '';
     const txData = this.fullTxData || (await this.prepareTxData());
     try {
-      if (!this.pin) {
+      if (!pinToUse) {
         throw new Error('Pin is not set.');
       }
-      this.transaction = await transactionUtils.prepareTransaction(txData, this.pin, this.storage);
+      this.transaction = await transactionUtils.prepareTransaction(txData, pinToUse, this.storage);
       // This will validate if the transaction has more than the max number of inputs and outputs.
       this.transaction.validate();
       return this.transaction;
@@ -527,9 +531,9 @@ export default class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  async run(until = null) {
+  async run(until = null, pin = null) {
     try {
-      await this.prepareTx();
+      await this.prepareTx(pin);
       if (until === 'prepare-tx') {
         return this.transaction;
       }

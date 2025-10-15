@@ -5,22 +5,24 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
+    Blueprint,
+    Context,
     Amount,
     BlueprintId,
     ContractId,
     TokenUid,
     NCAction,
     NCDepositAction,
+    NCFail,
+    export,
     public,
 )
 
 class TooManyActions(NCFail):
     pass
 
+@export
 class TestParentBlueprint(Blueprint):
     last_created_token: TokenUid
 
@@ -43,11 +45,9 @@ class TestParentBlueprint(Blueprint):
 
     @public
     def create_token(self, ctx: Context, name: str, symbol: str, amount: Amount, mint_authority: bool, melt_authority: bool) -> None:
-        self.last_created_token = self.syscall.create_token(name, symbol, amount, mint_authority, melt_authority)
+        self.last_created_token = self.syscall.create_deposit_token(name, symbol, amount, mint_authority, melt_authority)
  
     @public
     def create_child_contract(self, ctx: Context, blueprint_id: BlueprintId, salt: bytes, contract_name: str) -> None:
         return_tuple = self.syscall.create_contract(blueprint_id, salt, [], contract_name)
         self.last_created_contract = return_tuple[0]
- 
-__blueprint__ = TestParentBlueprint
