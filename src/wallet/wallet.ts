@@ -1189,25 +1189,30 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
 
-    // Get read-only auth token
-    await this.getReadOnlyAuthToken();
+    // Try to get read-only auth token
+    // This will succeed only if wallet is in 'ready' state
+    try {
+      await this.getReadOnlyAuthToken();
+      // Token obtained successfully, wallet is ready
+      await this.onWalletReady();
+    } catch (error) {
+      // Token request failed, check wallet status to determine why
+      const walletStatus = await walletApi.getWalletStatus(this);
 
-    // Check wallet status to ensure it's ready
-    const walletStatus = await walletApi.getWalletStatus(this);
-
-    if (walletStatus.status.status === 'creating') {
-      // If the wallet is still being created, poll until it's ready
-      await this.pollForWalletStatus();
-    } else if (walletStatus.status.status !== 'ready') {
-      // If wallet is in error state or doesn't exist
-      throw new WalletRequestError(
-        'Wallet must be initialized and ready before starting in read-only mode.',
-        { cause: walletStatus.status }
-      );
+      if (walletStatus.status.status === 'creating') {
+        // Wallet is still being created, poll until it's ready
+        await this.pollForWalletStatus();
+        // After polling completes, get the token now that wallet is ready
+        await this.getReadOnlyAuthToken();
+        await this.onWalletReady();
+      } else {
+        // Wallet is in error state or other invalid state
+        throw new WalletRequestError(
+          'Wallet must be initialized and ready before starting in read-only mode.',
+          { cause: walletStatus.status }
+        );
+      }
     }
-
-    // Wallet is ready, complete the startup process
-    await this.onWalletReady();
   }
 
   /**

@@ -104,21 +104,10 @@ describe('Read-Only Wallet Access', () => {
       const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
       const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
 
+      // When wallet is ready, getReadOnlyAuthToken succeeds immediately
       mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
         success: true,
         token: mockToken,
-      });
-
-      mockGetWalletStatus.mockResolvedValueOnce({
-        success: true,
-        status: {
-          walletId: mockWalletId,
-          xpubkey: xpub,
-          status: 'ready',
-          maxGap: 20,
-          createdAt: 123456789,
-          readyAt: 123456790,
-        },
       });
 
       mockGetNewAddresses.mockResolvedValueOnce({
@@ -141,7 +130,8 @@ describe('Read-Only Wallet Access', () => {
       expect(wallet.isReady()).toBe(true);
       expect(wallet.walletId).toBe(HathorWalletServiceWallet.getWalletIdFromXPub(xpub));
       expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledWith(wallet, xpub);
-      expect(mockGetWalletStatus).toHaveBeenCalled();
+      // Optimization: getWalletStatus should NOT be called when token succeeds
+      expect(mockGetWalletStatus).not.toHaveBeenCalled();
     });
 
     it('should poll for wallet status when wallet is creating', async () => {
@@ -155,10 +145,14 @@ describe('Read-Only Wallet Access', () => {
       const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
       const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
 
-      mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
-        success: true,
-        token: mockToken,
-      });
+      // First call to getReadOnlyAuthToken fails because wallet is not ready
+      mockCreateReadOnlyAuthToken
+        .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
+        // Second call succeeds after polling
+        .mockResolvedValueOnce({
+          success: true,
+          token: mockToken,
+        });
 
       // First call returns 'creating' status
       mockGetWalletStatus.mockResolvedValueOnce({
@@ -204,8 +198,10 @@ describe('Read-Only Wallet Access', () => {
       await wallet.startReadOnly();
 
       expect(wallet.isReady()).toBe(true);
-      // getWalletStatus should be called at least twice (initial + polling)
+      // getWalletStatus should be called at least twice (initial check + polling)
       expect(mockGetWalletStatus).toHaveBeenCalledTimes(2);
+      // getReadOnlyAuthToken should be called twice (failed + succeeded after poll)
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(2);
     });
 
     it('should throw error if wallet is not ready', async () => {
@@ -218,12 +214,10 @@ describe('Read-Only Wallet Access', () => {
       const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
       const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
 
-      // Mock both calls since startReadOnly will be called twice
-      mockCreateReadOnlyAuthToken.mockResolvedValue({
-        success: true,
-        token: mockToken,
-      });
+      // getReadOnlyAuthToken fails because wallet is not ready
+      mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
 
+      // getWalletStatus returns error state
       mockGetWalletStatus.mockResolvedValue({
         success: true,
         status: {
