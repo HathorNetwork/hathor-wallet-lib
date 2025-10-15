@@ -262,7 +262,7 @@ export default class SendTransaction extends EventEmitter {
    * Prepare transaction data from inputs and outputs
    * Fill the inputs if needed, create output change if needed and sign inputs
    *
-   * @param {string | null} Pin to use in this method (overwrites this.pin)
+   * @param {string | null} pin Pin to use in this method (overwrites this.pin)
    *
    * @throws SendTxError
    *
