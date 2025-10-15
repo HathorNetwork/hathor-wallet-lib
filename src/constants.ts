@@ -97,12 +97,6 @@ export const NANO_CONTRACTS_INITIALIZE_METHOD = 'initialize';
 export const ON_CHAIN_BLUEPRINTS_INFO_VERSION = 1;
 
 /**
- * Create token information version
- * so far we expect name and symbol
- */
-export const TOKEN_INFO_VERSION = 1;
-
-/**
  * Max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
  */
 export const MAX_OUTPUT_VALUE_32: OutputValueType = 2n ** 31n - 1n;

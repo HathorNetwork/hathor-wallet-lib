@@ -48,6 +48,32 @@ export enum HistorySyncMode {
 }
 
 /**
+ * Token version enum
+ * Defines the different token creation versions supported by the Hathor Network protocol.
+ *
+ * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
+ */
+export enum TokenVersion {
+  /**
+   * Native token (HTR) - Version 0
+   * The original Hathor native token, exists since genesis.
+   */
+  NATIVE = 0,
+
+  /**
+   * Custom token with deposit - Version 1
+   * Requires HTR deposit (TOKEN_DEPOSIT_PERCENTAGE) to create custom tokens.
+   */
+  DEPOSIT = 1,
+
+  /**
+   * Token with fee support - Version 2
+   * Supports fee payment in custom tokens via FeeHeader.
+   */
+  FEE = 2,
+}
+
+/**
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
  */
