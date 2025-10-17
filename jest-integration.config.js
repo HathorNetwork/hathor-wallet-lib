@@ -15,7 +15,6 @@ module.exports = {
   testTimeout: 20 * 60 * 1000, // May be adjusted with optimizations
   setupFilesAfterEnv: ['<rootDir>/setupTests-integration.js'],
   maxConcurrency: 1,
-  forceExit: true,
   coverageThreshold: {
     global: {
       statements: 42,
