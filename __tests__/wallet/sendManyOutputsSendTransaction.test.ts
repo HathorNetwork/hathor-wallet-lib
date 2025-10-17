@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
