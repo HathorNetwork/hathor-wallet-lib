@@ -52,6 +52,7 @@ import ncApi from './api/nano';
 import * as nanoUtils from './nano_contracts/utils';
 import NanoContractTransactionParser from './nano_contracts/parser';
 import * as bigIntUtils from './utils/bigint';
+import { calculateFee, calculateTokenCreationTxFee } from './utils/fee';
 import {
   TransactionTemplate,
   TransactionTemplateBuilder,
@@ -117,6 +118,8 @@ export {
   nanoUtils,
   NanoContractTransactionParser,
   bigIntUtils,
+  calculateFee,
+  calculateTokenCreationTxFee,
   TransactionTemplate,
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,

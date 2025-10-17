@@ -112,6 +112,7 @@ export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
+  version?: number;
 }
 
 export interface ITokenMetadata {
@@ -296,6 +297,8 @@ export interface IDataOutputOptionals {
 
 export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) &
   IDataOutputOptionals;
+
+export type IDataOutputWithToken = IDataOutput & { token: string };
 
 export interface IDataInput {
   txId: string;

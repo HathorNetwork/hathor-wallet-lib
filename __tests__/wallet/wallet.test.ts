@@ -817,6 +817,17 @@ test('prepareMintTokens', async () => {
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const _spy4 = jest
+    .spyOn(wallet.storage, 'getToken')
+    .mockImplementation(async (tokenId: string) => {
+      if (tokenId === '00') {
+        return { uid: '00', name: 'Hathor', symbol: 'HTR', version: 0 };
+      }
+      if (tokenId === '01') {
+        return { uid: '01', name: 'Token', symbol: 'TKN', version: 0 };
+      }
+      return null;
+    });
 
   // error because of wrong authority output address
   await expect(
@@ -992,6 +1003,17 @@ test('prepareMeltTokens', async () => {
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const _spy4 = jest
+    .spyOn(wallet.storage, 'getToken')
+    .mockImplementation(async (tokenId: string) => {
+      if (tokenId === '00') {
+        return { uid: '00', name: 'Hathor', symbol: 'HTR', version: 0 };
+      }
+      if (tokenId === '01') {
+        return { uid: '01', name: 'Token', symbol: 'TKN', version: 0 };
+      }
+      return null;
+    });
 
   // error because of wrong authority output address
   await expect(

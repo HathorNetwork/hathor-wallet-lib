@@ -293,3 +293,8 @@ export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLIC
  * Max argument length in bytes (64Kib)
  */
 export const NC_ARGS_MAX_BYTES_LENGTH = 2n ** 16n;
+
+/**
+ * Fee per output for fee-based tokens
+ */
+export const FEE_PER_OUTPUT: number = 1;
