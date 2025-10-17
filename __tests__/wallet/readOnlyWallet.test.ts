@@ -515,6 +515,8 @@ describe('Read-Only Wallet Access', () => {
         await wallet.startReadOnly({ skipAddressFetch: true });
 
         expect(wallet.isReady()).toBe(true);
+        // Polling should have been triggered
+        expect(mockGetWalletStatus).toHaveBeenCalledTimes(2);
         // Even with polling, addresses should not be fetched when skipAddressFetch is true
         expect(mockGetNewAddresses).not.toHaveBeenCalled();
       });
