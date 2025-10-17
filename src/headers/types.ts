@@ -12,6 +12,7 @@
  */
 export const enum VertexHeaderId {
   NANO_HEADER = '10',
+  FEE_HEADER = '20',
 }
 
 export function getVertexHeaderIdBuffer(id: VertexHeaderId): Buffer {
@@ -23,6 +24,8 @@ export function getVertexHeaderIdFromBuffer(buf: Buffer): VertexHeaderId {
   switch (vertexId) {
     case VertexHeaderId.NANO_HEADER:
       return VertexHeaderId.NANO_HEADER;
+    case VertexHeaderId.FEE_HEADER:
+      return VertexHeaderId.FEE_HEADER;
     default:
       throw new Error('Invalid VertexHeaderId');
   }

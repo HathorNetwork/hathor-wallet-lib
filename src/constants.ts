@@ -223,6 +223,11 @@ export const MAX_INPUTS: number = 255;
 export const MAX_OUTPUTS: number = 255;
 
 /**
+ * Maximum number of fee entries in a FeeHeader
+ */
+export const MAX_FEE_HEADER_ENTRIES: number = 16;
+
+/**
  * Percentage of Hathor to deposit when creating a token
  */
 export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
