@@ -7,26 +7,28 @@
 
 from typing import Optional
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
+    Blueprint,
+    Context,
     Address,
     Amount,
     BlueprintId,
     ContractId,
     NCDepositAction,
+    NCFail,
     NCWithdrawalAction,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
     VertexId,
+    export,
     public,
     view,
 )
 
 
+@export
 class FullBlueprint(Blueprint):
     vertex: VertexId
 
@@ -214,6 +216,3 @@ class FullBlueprint(Blueprint):
         if element not in self.attr_list_dict_tuple:
             return False
         return True
- 
-
-__blueprint__ = FullBlueprint

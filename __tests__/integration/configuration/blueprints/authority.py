@@ -12,22 +12,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
+    Blueprint,
+    Context,
     NCAction,
     NCDepositAction,
     NCGrantAuthorityAction,
     NCAcquireAuthorityAction,
     NCWithdrawalAction,
+    NCFail,
     TokenUid,
+    export,
     public,
 )
 
 class TooManyActions(NCFail):
     pass
 
+@export
 class AuthorityBlueprint(Blueprint):
     def _get_action(self, ctx: Context) -> NCAction:
         """Return the only action available; fails otherwise."""
@@ -83,6 +85,3 @@ class AuthorityBlueprint(Blueprint):
     @public
     def revoke(self, ctx: Context, token_uid: TokenUid, revoke_mint: bool, revoke_melt: bool) -> None:
         self.syscall.revoke_authorities(token_uid=token_uid, revoke_mint=revoke_mint, revoke_melt=revoke_melt)
-
-
-__blueprint__ = AuthorityBlueprint
