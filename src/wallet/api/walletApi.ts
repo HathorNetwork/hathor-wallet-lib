@@ -308,6 +308,22 @@ const walletApi = {
     throw new WalletRequestError('Error requesting auth token.');
   },
 
+  async createReadOnlyAuthToken(
+    wallet: HathorWalletServiceWallet,
+    xpubkey: string
+  ): Promise<AuthTokenResponseData> {
+    const data = {
+      xpubkey,
+    };
+    const axios = await axiosInstance(wallet, false);
+    const response = await axios.post('auth/token/readonly', data);
+    if (response.status === 200 && response.data.success === true) {
+      return parseSchema(response.data, authTokenResponseSchema);
+    }
+
+    throw new WalletRequestError('Error requesting read-only auth token.');
+  },
+
   async getTxById(
     wallet: HathorWalletServiceWallet,
     txId: string
