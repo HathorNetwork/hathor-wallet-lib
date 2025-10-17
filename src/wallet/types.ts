@@ -52,6 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
+  version?: number; // Token version (HTR doesn't have a version)
 }
 
 export interface Balance {

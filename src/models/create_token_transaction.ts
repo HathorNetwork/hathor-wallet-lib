@@ -9,7 +9,6 @@ import buffer from 'buffer';
 import { clone } from 'lodash';
 import {
   CREATE_TOKEN_TX_VERSION,
-  TOKEN_INFO_VERSION,
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
   DEFAULT_SIGNAL_BITS,
@@ -22,6 +21,7 @@ import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import ScriptData from './script_data';
 import { OutputType } from '../wallet/types';
+import { TokenVersion } from '../types';
 import type Header from '../headers/base';
 
 type optionsType = {
@@ -33,12 +33,15 @@ type optionsType = {
   tokens?: string[];
   hash?: string | null;
   headers?: Header[];
+  tokenVersion?: TokenVersion;
 };
 
 class CreateTokenTransaction extends Transaction {
   name: string;
 
   symbol: string;
+
+  tokenVersion: TokenVersion;
 
   constructor(
     name: string,
@@ -56,6 +59,7 @@ class CreateTokenTransaction extends Transaction {
       tokens: [],
       hash: null,
       headers: [],
+      tokenVersion: TokenVersion.DEPOSIT, // Default to version 1 for backward compatibility
     };
     const newOptions = Object.assign(defaultOptions, options);
 
@@ -63,6 +67,7 @@ class CreateTokenTransaction extends Transaction {
     this.version = CREATE_TOKEN_TX_VERSION;
     this.name = name;
     this.symbol = symbol;
+    this.tokenVersion = newOptions.tokenVersion!;
   }
 
   /**
@@ -119,7 +124,7 @@ class CreateTokenTransaction extends Transaction {
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
     // Token info version
-    array.push(intToBytes(TOKEN_INFO_VERSION, 1));
+    array.push(intToBytes(this.tokenVersion, 1));
     // Token name size
     array.push(intToBytes(nameBytes.length, 1));
     // Token name
@@ -131,7 +136,7 @@ class CreateTokenTransaction extends Transaction {
   }
 
   getTokenInfoFromBytes(srcBuf: Buffer): Buffer {
-    let tokenInfoVersion;
+    let tokenVersion;
     let lenName;
     let lenSymbol;
     let bufName;
@@ -140,11 +145,15 @@ class CreateTokenTransaction extends Transaction {
     let buf = Buffer.from(srcBuf);
 
     /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
-    [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
+    [tokenVersion, buf] = unpackToInt(1, false, buf);
 
-    if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
-      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenInfoVersion}`);
+    // Validate that the version is within the known enum values
+    const validVersions = new Set([TokenVersion.DEPOSIT, TokenVersion.FEE]);
+    if (!(tokenVersion in validVersions)) {
+      throw new CreateTokenTxInvalid(`Invalid token version: ${tokenVersion}`);
     }
+
+    this.tokenVersion = tokenVersion as TokenVersion;
 
     [lenName, buf] = unpackToInt(1, false, buf);
 

@@ -24,6 +24,7 @@ import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
+import { calculateTokenCreationTxFee, calculateFee } from '../utils/fee';
 import config from '../config';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
@@ -77,7 +78,14 @@ import {
   PinRequiredError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
+import {
+  IStorage,
+  IWalletAccessData,
+  OutputValueType,
+  WalletType,
+  IHistoryTx,
+  TokenVersion,
+} from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import {
   NanoContractVertexType,
@@ -1555,6 +1563,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: boolean;
       pinCode: string | null;
       signTx: boolean;
+      tokenInfoVersion: TokenVersion | null;
     };
     const newOptions: optionsType = {
       address: null,
@@ -1569,6 +1578,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: false,
       pinCode: null,
       signTx: true,
+      tokenInfoVersion: TokenVersion.DEPOSIT,
       ...options,
     };
 
@@ -1590,29 +1600,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    let deposit = tokens.getDepositAmount(amount, depositPercent);
+    let depositAmount = tokens.getDepositAmount(amount, depositPercent);
 
     if (newOptions.data && newOptions.data.length > 0) {
       // For data outputs, we have a fee of 0.01 HTR per data output
-      deposit += tokens.getDataFee(newOptions.data.length);
-    }
-
-    // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
-      token: NATIVE_TOKEN_UID,
-    });
-    if (utxos.length === 0) {
-      throw new UtxoError(
-        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
-      );
-    }
-
-    const utxosAddressPath: string[] = [];
-    // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
-    const inputsObj: Input[] = [];
-    for (const utxo of utxos) {
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-      utxosAddressPath.push(utxo.addressPath);
+      depositAmount += tokens.getDataFee(newOptions.data.length);
     }
 
     // Create outputs
@@ -1653,21 +1645,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (changeAmount) {
-      // c. HTR change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
-    }
-
     if (newOptions.createMelt) {
-      // d. Melt authority
+      // c. Melt authority
       const meltAuthorityAddress =
         newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
       const meltAuthorityAddressObj = new Address(meltAuthorityAddress, { network: this.network });
@@ -1685,7 +1664,46 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(...dataOutputs);
     }
 
-    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
+    // Calculate fee if token version is FEE
+    let fee = 0;
+    if (newOptions.tokenInfoVersion === TokenVersion.FEE) {
+      fee = calculateTokenCreationTxFee(outputsObj);
+    }
+
+    // 2. Get utxos for HTR (deposit + fee)
+    const { utxos, changeAmount } = await this.getUtxosForAmount(depositAmount + BigInt(fee), {
+      token: NATIVE_TOKEN_UID,
+    });
+    if (utxos.length === 0) {
+      throw new UtxoError(
+        `No utxos available to fill the request. Token: HTR - Amount: ${depositAmount + BigInt(fee)}.`
+      );
+    }
+
+    const utxosAddressPath: string[] = [];
+    // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
+    const inputsObj: Input[] = [];
+    for (const utxo of utxos) {
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+      utxosAddressPath.push(utxo.addressPath);
+    }
+
+    // Add change output if needed
+    if (changeAmount) {
+      const changeAddressStr =
+        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, { network: this.network });
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript();
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    }
+
+    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj, {
+      tokenVersion: newOptions.tokenInfoVersion ?? undefined,
+    });
 
     // Sign transaction
     if (newOptions.signTx) {
@@ -1923,19 +1941,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // 1. Calculate HTR deposit needed
     const depositPercent = this.storage.getTokenDepositPercentage();
-    const deposit = tokens.getDepositAmount(amount, depositPercent);
+    const depositAmount = tokens.getDepositAmount(amount, depositPercent);
 
-    // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
-      token: NATIVE_TOKEN_UID,
-    });
-    if (utxos.length === 0) {
-      throw new UtxoError(
-        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
-      );
-    }
-
-    // 3. Get mint authority
+    // 2. Get mint authority
     const mintAuthorities = await this.getMintAuthority(token, { many: false, skipSpent: true });
     if (mintAuthorities.length === 0) {
       throw new UtxoError(`No authority utxo available for minting tokens. Token: ${token}.`);
@@ -1943,18 +1951,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // it's safe to assume that we have an utxo in the array
     const mintUtxo = mintAuthorities[0];
 
-    // 4. Create inputs from utxos
-    const inputsObj: Input[] = [];
-    for (const utxo of utxos) {
-      // First add HTR utxos
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-    }
-
-    // Then add a single mint authority utxo
-    inputsObj.push(new Input(mintUtxo.txId, mintUtxo.index));
-
-    // Create outputs
-    const outputsObj: Output[] = [];
+    // 3. Create preliminary outputs (to calculate fee)
+    const preliminaryOutputs: Output[] = [];
     // a. Token amount
     const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
     const address = new Address(addressToUse, { network: this.network });
@@ -1962,7 +1960,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
     const p2pkhScript = address.getScript();
-    outputsObj.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
+    preliminaryOutputs.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
@@ -1973,10 +1971,56 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
       }
       const p2pkhAuthorityScript = authorityAddressObj.getScript();
-      outputsObj.push(
+      preliminaryOutputs.push(
         new Output(TOKEN_MINT_MASK, p2pkhAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA })
       );
     }
+
+    // 4. Fetch token data and calculate fee
+    const tokenData = await this.storage.getToken(token);
+    if (!tokenData) {
+      throw new Error(`Token ${token} not found`);
+    }
+    const nativeTokenData = await this.storage.getToken(NATIVE_TOKEN_UID);
+    if (!nativeTokenData) {
+      throw new Error(`Native token ${NATIVE_TOKEN_UID} not found`);
+    }
+    const tokenMap = new Map();
+    tokenMap.set(token, tokenData);
+    tokenMap.set(NATIVE_TOKEN_UID, nativeTokenData);
+
+    // Map preliminary outputs to include token UID (tokenData 0 = HTR, tokenData 1 = custom token)
+    const preliminaryOutputsWithToken = preliminaryOutputs.map(output => ({
+      ...output,
+      token: output.tokenData === 0 ? NATIVE_TOKEN_UID : token,
+      tokenId: output.tokenData === 0 ? NATIVE_TOKEN_UID : token,
+    })) as (Output & { token: string; tokenId: string })[];
+
+    const fee = await calculateFee([], preliminaryOutputsWithToken, tokenMap);
+
+    // 5. Get utxos for HTR (deposit + fee)
+    const totalHtrRequired = depositAmount + BigInt(fee);
+    const { utxos, changeAmount } = await this.getUtxosForAmount(totalHtrRequired, {
+      token: NATIVE_TOKEN_UID,
+    });
+    if (utxos.length === 0) {
+      throw new UtxoError(
+        `No utxos available to fill the request. Token: HTR - Amount: ${totalHtrRequired}.`
+      );
+    }
+
+    // 6. Create inputs from utxos
+    const inputsObj: Input[] = [];
+    for (const utxo of utxos) {
+      // First add HTR utxos
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+    }
+
+    // Then add a single mint authority utxo
+    inputsObj.push(new Input(mintUtxo.txId, mintUtxo.index));
+
+    // 7. Create final outputs
+    const outputsObj: Output[] = [...preliminaryOutputs];
 
     if (changeAmount) {
       // c. HTR change output
@@ -2168,6 +2212,87 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(new Output(changeAmount, p2pkhChangeScript, { tokenData: 1 }));
     }
 
+    // 5. Fetch token data and calculate fee for FEE tokens
+    const tokenData = await this.storage.getToken(token);
+    if (!tokenData) {
+      throw new Error(`Token ${token} not found`);
+    }
+    const nativeTokenData = await this.storage.getToken(NATIVE_TOKEN_UID);
+    if (!nativeTokenData) {
+      throw new Error(`Native token ${NATIVE_TOKEN_UID} not found`);
+    }
+    const tokenMap = new Map();
+    tokenMap.set(token, tokenData);
+    tokenMap.set(NATIVE_TOKEN_UID, nativeTokenData);
+
+    // Map outputs to include token UID (tokenData 0 = HTR, tokenData 1 = custom token)
+    const outputsWithToken = outputsObj.map(output => ({
+      ...output,
+      token: output.tokenData === 0 ? NATIVE_TOKEN_UID : token,
+      tokenId: output.tokenData === 0 ? NATIVE_TOKEN_UID : token,
+    })) as (Output & { token: string; tokenId: string })[];
+
+    const fee = await calculateFee(utxos, outputsWithToken, tokenMap);
+
+    // 6. Check if we need additional HTR for fee
+    let htrUtxos: Utxo[] = [];
+    const depositAmount = BigInt(withdraw || 0);
+    const totalHTRNeeded = depositAmount + BigInt(fee);
+
+    if (totalHTRNeeded > depositAmount) {
+      // We need additional HTR beyond the withdraw amount
+      const additionalHTRNeeded = totalHTRNeeded - depositAmount;
+      const result = await this.getUtxosForAmount(additionalHTRNeeded, { token: NATIVE_TOKEN_UID });
+      htrUtxos = result.utxos;
+      const htrChangeAmount = result.changeAmount;
+
+      if (htrUtxos.length === 0) {
+        throw new UtxoError(
+          `Not enough HTR tokens for deposit or fee. Token: HTR - Amount: ${additionalHTRNeeded}.`
+        );
+      }
+
+      // Add HTR inputs
+      for (const htrUtxo of htrUtxos) {
+        inputsObj.push(new Input(htrUtxo.txId, htrUtxo.index));
+      }
+
+      // Update HTR output to reflect the correct amount (withdraw + change - fee)
+      if (htrChangeAmount || withdraw) {
+        const totalHTROutput = BigInt(withdraw || 0) + BigInt(htrChangeAmount) - BigInt(fee);
+        if (totalHTROutput > 0) {
+          // Find and update the HTR output if it exists, or create a new one
+          const htrOutputIndex = outputsObj.findIndex(output => output.tokenData === 0);
+          if (htrOutputIndex >= 0) {
+            outputsObj[htrOutputIndex] = new Output(totalHTROutput, p2pkhScript, { tokenData: 0 });
+          } else {
+            outputsObj.unshift(new Output(totalHTROutput, p2pkhScript, { tokenData: 0 }));
+          }
+        } else {
+          // Remove HTR output if total is 0 or negative
+          const htrOutputIndex = outputsObj.findIndex(output => output.tokenData === 0);
+          if (htrOutputIndex >= 0) {
+            outputsObj.splice(htrOutputIndex, 1);
+          }
+        }
+      }
+    } else if (fee > 0) {
+      // Fee is covered by withdraw, but we need to adjust the HTR output
+      const htrOutputIndex = outputsObj.findIndex(output => output.tokenData === 0);
+      const totalHTROutput = depositAmount - BigInt(fee);
+
+      if (totalHTROutput > 0) {
+        if (htrOutputIndex >= 0) {
+          outputsObj[htrOutputIndex] = new Output(totalHTROutput, p2pkhScript, { tokenData: 0 });
+        } else {
+          outputsObj.unshift(new Output(totalHTROutput, p2pkhScript, { tokenData: 0 }));
+        }
+      } else if (htrOutputIndex >= 0) {
+        // Remove HTR output if fee consumes all withdraw
+        outputsObj.splice(htrOutputIndex, 1);
+      }
+    }
+
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
 
@@ -2182,9 +2307,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
-        // We have an array of utxos and the last input is the one with the authority
+        // Input structure: [token utxos, melt authority, htr utxos (if needed)]
         let addressIndex: number;
-        if (idx === tx.inputs.length - 1) {
+        if (idx < utxos.length) {
+          // This is a regular token input
+          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
+            utxos[idx].addressPath
+          );
+        } else if (idx === utxos.length) {
           // This is the melt authority input
           const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
           if (meltUtxoAddressIndex === null) {
@@ -2192,9 +2322,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           }
           addressIndex = meltUtxoAddressIndex;
         } else {
-          // This is a regular token input
+          // This is an HTR input
+          const htrUtxoIdx = idx - utxos.length - 1;
           addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
-            utxos[idx].addressPath
+            htrUtxos[htrUtxoIdx].addressPath
           );
         }
         const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
