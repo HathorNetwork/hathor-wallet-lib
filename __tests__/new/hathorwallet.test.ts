@@ -27,6 +27,7 @@ import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
+import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
   constructor() {
@@ -40,6 +41,10 @@ class FakeHathorWallet {
     }
   }
 }
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test('getFullTxById', async () => {
   const hWallet = new FakeHathorWallet();
@@ -819,7 +824,7 @@ test('checkPinAndPassword', async () => {
 
 test('getTxHistory', async () => {
   const fakeNetwork = new Network('testnet');
-  const fakePubkey = Buffer.from('abcd', 'hex');
+  const fakeAddress = 'mock-address';
 
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -836,7 +841,7 @@ test('getTxHistory', async () => {
       is_voided: false,
       nc_id: 'mock-nc-id',
       nc_method: 'mock-nc-method',
-      nc_pubkey: fakePubkey,
+      nc_address: fakeAddress,
       first_block: 'mock-first-block-hash',
     };
   }
@@ -849,9 +854,6 @@ test('getTxHistory', async () => {
   jest.spyOn(storage, 'tokenHistory').mockImplementation(historyMock);
 
   hWallet.getNetworkObject = jest.fn().mockReturnValue(fakeNetwork);
-  const addrFromPubkey = jest
-    .spyOn(addressUtils, 'getAddressFromPubkey')
-    .mockReturnValue({ base58: 'mock-address' });
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid' })).resolves.toStrictEqual([
     {
@@ -862,7 +864,7 @@ test('getTxHistory', async () => {
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
-      ncCaller: { base58: 'mock-address' },
+      ncCaller: expect.objectContaining({ base58: 'mock-address' }),
       firstBlock: 'mock-first-block-hash',
     },
   ]);
@@ -876,13 +878,10 @@ test('getTxHistory', async () => {
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
-      ncCaller: { base58: 'mock-address' },
+      ncCaller: expect.objectContaining({ base58: 'mock-address' }),
       firstBlock: 'mock-first-block-hash',
     },
   ]);
-
-  expect(addrFromPubkey).toHaveBeenCalledTimes(2);
-  expect(addrFromPubkey).toHaveBeenCalledWith(fakePubkey, fakeNetwork);
 });
 
 test('isHardwareWallet', async () => {
@@ -982,6 +981,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
@@ -1027,6 +1027,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
@@ -1094,6 +1095,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos({ ...fakeTokenToDepositUtxo, value: amountAvailable }),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     await expect(
@@ -1102,7 +1104,7 @@ describe('prepare transactions without signature', () => {
         pinCode: '1234',
         signTx: false, // skip the signature
       })
-    ).rejects.toThrow('Not enough HTR tokens for deposit: 10 required, 1 available');
+    ).rejects.toThrow('Not enough HTR tokens for deposit or fee: 10 required, 1 available');
   });
 
   test('prepareMeltTokensData', async () => {
@@ -1138,6 +1140,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1193,6 +1196,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1267,6 +1271,7 @@ describe('prepare transactions without signature', () => {
     hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToMeltUtxo));
     hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToDepositUtxo));
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1348,11 +1353,15 @@ describe('prepare transactions without signature', () => {
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
-    hWallet.storage = getStorage({
+    const storage = getStorage({
       readOnly: false,
       currentAddress: fakeAddress.base58,
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
+
+    jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+    hWallet.storage = storage;
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
 
     // prepare melt

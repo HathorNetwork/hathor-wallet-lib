@@ -6,6 +6,7 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 
+import { TokenInfoVersion } from '../../models/enum/token_info_version';
 import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
@@ -161,6 +162,8 @@ export class TxTemplateContext {
   tokenName?: string;
 
   tokenSymbol?: string;
+
+  tokenVersion?: TokenInfoVersion;
 
   vars: Record<string, unknown>;
 

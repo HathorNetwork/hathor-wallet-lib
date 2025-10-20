@@ -68,9 +68,19 @@ import {
   WalletRequestError,
   WalletError,
   UninitializedWalletError,
+  TokenNotFoundError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType, IHistoryTx } from '../types';
+import {
+  IStorage,
+  IWalletAccessData,
+  OutputValueType,
+  IHistoryTx,
+  IDataOutputWithToken,
+  ITokenData,
+} from '../types';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
+import { Fee } from '../models/fee';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -539,7 +549,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {
-      if (this.newAddresses.find(newAddress => newAddress.address === output.address)) {
+      // Check if the output's decoded address matches any of the wallet's new addresses
+      if (
+        output.decoded &&
+        output.decoded.address &&
+        this.newAddresses.find(newAddress => newAddress.address === output.decoded.address)
+      ) {
         // break early
         shouldGetNewAddresses = true;
         break;
@@ -1241,6 +1256,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: string | null;
       pinCode: string | null;
       signTx: boolean;
+      tokenInfoVersion: TokenInfoVersion | null;
     };
     const newOptions: optionsType = {
       address: null,
@@ -1254,6 +1270,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: null,
       pinCode: null,
       signTx: true,
+      tokenInfoVersion: TokenInfoVersion.DEPOSIT,
       ...options,
     };
 
@@ -1272,35 +1289,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError('The melt authority address must belong to your wallet.');
       }
     }
-
+    const tokenInfoVersion = newOptions.tokenInfoVersion || TokenInfoVersion.DEPOSIT;
     const isNFT = newOptions.nftData !== null;
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    let deposit = tokens.getDepositAmount(amount, depositPercent);
+    let deposit = 0n;
+    if (tokenInfoVersion === TokenInfoVersion.DEPOSIT) {
+      const depositPercent = this.storage.getTokenDepositPercentage();
+      deposit = tokens.getDepositAmount(amount, depositPercent);
 
-    if (isNFT) {
-      // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1n;
-    }
-
-    // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxos({
-      tokenId: NATIVE_TOKEN_UID,
-      totalAmount: deposit,
-    });
-    if (utxos.length === 0) {
-      throw new UtxoError(
-        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
-      );
-    }
-
-    const utxosAddressPath: string[] = [];
-    // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
-    const inputsObj: Input[] = [];
-    for (const utxo of utxos) {
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-      utxosAddressPath.push(utxo.addressPath);
+      // we only require a deposit for NFTs created with the deposit version
+      if (isNFT) {
+        // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
+        deposit += 1n;
+      }
     }
 
     // Create outputs
@@ -1310,24 +1312,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(helpers.createNFTOutput(newOptions.nftData!));
     }
     // a. Token amount
-    const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
-    const address = new Address(addressToUse, { network: this.network });
-    if (!address.isValid()) {
-      throw new SendTxError(`Address ${newOptions.address} is not valid.`);
-    }
+    const address = this.validateAddressAndThrow(newOptions.address);
 
     const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
 
     if (newOptions.createMintAuthority) {
       // b. Mint authority
-      const mintAuthorityAddress =
-        newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const mintAuthorityAddressObj = new Address(mintAuthorityAddress, { network: this.network });
-      if (!mintAuthorityAddressObj.isValid()) {
-        throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
-      }
-
+      const mintAuthorityAddressObj = this.validateAddressAndThrow(newOptions.mintAuthorityAddress);
       const p2pkhMintAuthorityScript = mintAuthorityAddressObj.getScript();
       outputsObj.push(
         new Output(TOKEN_MINT_MASK, p2pkhMintAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA })
@@ -1336,12 +1328,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (newOptions.createMeltAuthority) {
       // c. Melt authority
-      const meltAuthorityAddress =
-        newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const meltAuthorityAddressObj = new Address(meltAuthorityAddress, { network: this.network });
-      if (!meltAuthorityAddressObj.isValid()) {
-        throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
-      }
+      const meltAuthorityAddressObj = this.validateAddressAndThrow(newOptions.meltAuthorityAddress);
 
       const p2pkhMeltAuthorityScript = meltAuthorityAddressObj.getScript();
       outputsObj.push(
@@ -1349,20 +1336,37 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (changeAmount) {
-      // d. HTR change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    // 2. Calculate the fee, we are using a simplified fee calculation since in this method we only have outputs related to the token creation
+    const fee = Fee.calculateTokenCreationTxFee(outputsObj);
+
+    // 3. Get utxos for HTR
+    const totalAmount = deposit + BigInt(fee);
+    const { utxos, changeAmount } = await this.getUtxos({
+      tokenId: NATIVE_TOKEN_UID,
+      totalAmount,
+    });
+    if (utxos.length === 0) {
+      throw new UtxoError(
+        `No utxos available to fill the request. Token: HTR - Amount: ${totalAmount}.`
+      );
     }
 
-    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
+    const utxosAddressPath: string[] = [];
+    // 2. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
+    const inputsObj: Input[] = [];
+    for (const utxo of utxos) {
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+      utxosAddressPath.push(utxo.addressPath);
+    }
+
+    if (changeAmount) {
+      // d. HTR change output
+      outputsObj.push(this.generateChangeOutput(changeAmount, newOptions.changeAddress));
+    }
+
+    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj, {
+      tokenInfoVersion,
+    });
 
     // Sign transaction
     if (newOptions.signTx) {
@@ -1537,38 +1541,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    // 1. Calculate HTR deposit needed
-    const depositPercent = this.storage.getTokenDepositPercentage();
-    const deposit = tokens.getDepositAmount(amount, depositPercent);
+    // Get token info
+    const { tokenInfo } = await this.getTokenDetails(token);
 
-    // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxos({
-      tokenId: NATIVE_TOKEN_UID,
-      totalAmount: deposit,
-    });
-    if (utxos.length === 0) {
-      throw new UtxoError(
-        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
-      );
+    if (!tokenInfo) {
+      throw new TokenNotFoundError(token);
     }
 
-    // 3. Get mint authority
+    // 1. Calculate HTR deposit needed
+    let deposit = 0n;
+    if (tokenInfo?.version === TokenInfoVersion.DEPOSIT) {
+      const depositPercent = this.storage.getTokenDepositPercentage();
+      deposit = tokens.getDepositAmount(amount, depositPercent);
+    }
+
+    // 2. Get mint authority
     const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MINT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for minting tokens. Token: ${token}.`);
     }
     // it's safe to assume that we have an utxo in the array
     const mintUtxo = ret.utxos[0];
-
-    // 4. Create inputs from utxos
-    const inputsObj: Input[] = [];
-    for (const utxo of utxos) {
-      // First add HTR utxos
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-    }
-
-    // Then add a single mint authority utxo
-    inputsObj.push(new Input(mintUtxo.txId, mintUtxo.index));
 
     // Create outputs
     const outputsObj: Output[] = [];
@@ -1595,17 +1588,38 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
+    const mappedOutputs = outputsObj.map(output => this.mapToDataOutput(output, token));
+
+    // We pass an empty array in the Inputs, because we are minting and won't hit the edge case of melting without output
+    const _tokens = new Map<string, ITokenData>();
+    _tokens.set(tokenInfo.id, { ...tokenInfo, uid: tokenInfo.id });
+    const fee = await Fee.calculate([], mappedOutputs, _tokens);
+
+    // 4. Get utxos for HTR
+    const totalAmount = deposit + BigInt(fee);
+    const { utxos, changeAmount } = await this.getUtxos({
+      tokenId: NATIVE_TOKEN_UID,
+      totalAmount,
+    });
+    if (utxos.length === 0) {
+      throw new UtxoError(
+        `No utxos available to fill the request. Token: HTR - Amount: ${totalAmount}.`
+      );
+    }
+
+    // 3. Create inputs from utxos
+    const inputsObj: Input[] = [];
+    for (const utxo of utxos) {
+      // First add HTR utxos
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+    }
+
+    // Then add a single mint authority utxo
+    inputsObj.push(new Input(mintUtxo.txId, mintUtxo.index));
+
     if (changeAmount) {
       // c. HTR change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+      outputsObj.push(this.generateChangeOutput(changeAmount, newOptions.changeAddress));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -1705,9 +1719,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    // 1. Calculate HTR deposit needed
-    const depositPercent = this.storage.getTokenDepositPercentage();
-    const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
+    // Get token info
+    const tokenData = await this.storage.getToken(token);
+    if (!tokenData) {
+      throw new SendTxError(`Token ${token} not found.`);
+    }
+
+    // 1. Calculate HTR withdraw
+    let withdraw = 0n;
+    if (tokenData?.version === TokenInfoVersion.DEPOSIT) {
+      const depositPercent = this.storage.getTokenDepositPercentage();
+      withdraw = tokens.getWithdrawAmount(amount, depositPercent);
+    }
 
     // 2. Get utxos for custom token to melt
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amount });
@@ -1715,7 +1738,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new UtxoError(`Not enough tokens to be melted. Token: ${token} - Amount: ${amount}.`);
     }
 
-    // 3. Get mint authority
+    // 3. Get melt authority
     const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MELT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for melting tokens. Token: ${token}.`);
@@ -1724,38 +1747,29 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const meltUtxo = ret.utxos[0];
 
     // 4. Create inputs from utxos
-    const inputsObj: Input[] = [];
+    const inputsObj: Utxo[] = [];
     for (const utxo of utxos) {
-      // First add HTR utxos
-      inputsObj.push(new Input(utxo.txId, utxo.index));
+      inputsObj.push(utxo);
     }
 
     // Then add a single mint authority utxo (it's safe to assume that we have an utxo in the array)
-    inputsObj.push(new Input(meltUtxo.txId, meltUtxo.index));
+    inputsObj.push(meltUtxo);
 
     // Create outputs
     const outputsObj: Output[] = [];
+
     // a. Deposit back
-    const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
-    const address = new Address(addressToUse, { network: this.network });
-    if (!address.isValid()) {
-      throw new SendTxError(`Address ${newOptions.address} is not valid.`);
-    }
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript();
+    // We may have nothing to get back
     if (withdraw) {
-      // We may have nothing to get back
+      const address = this.validateAddressAndThrow(newOptions.address);
+      const p2pkh = new P2PKH(address);
+      const p2pkhScript = p2pkh.createScript();
       outputsObj.push(new Output(withdraw, p2pkhScript, { tokenData: 0 }));
     }
 
     if (newOptions.createAnotherMelt) {
       // b. Melt authority
-      const authorityAddress =
-        newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const authorityAddressObj = new Address(authorityAddress, { network: this.network });
-      if (!authorityAddressObj.isValid()) {
-        throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
-      }
+      const authorityAddressObj = this.validateAddressAndThrow(newOptions.meltAuthorityAddress);
       const p2pkhAuthorityScript = authorityAddressObj.getScript();
       outputsObj.push(
         new Output(TOKEN_MELT_MASK, p2pkhAuthorityScript, {
@@ -1766,18 +1780,36 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (changeAmount) {
       // c. Token change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript, { tokenData: 1 }));
+      outputsObj.push(this.generateChangeOutput(changeAmount, newOptions.changeAddress, 1));
     }
 
-    const tx = new Transaction(inputsObj, outputsObj);
+    // We charge the fee based in the outputs
+    if (tokenData?.version === TokenInfoVersion.FEE) {
+      const mappedOutputs = outputsObj.map(output => this.mapToDataOutput(output, token));
+      const fee = await Fee.calculate(
+        inputsObj,
+        mappedOutputs,
+        new Map([[tokenData.uid, tokenData]])
+      );
+
+      // Get utxos for HTR
+      const { utxos: htrUtxos, changeAmount: htrChangeAmount } = await this.getUtxos({
+        tokenId: NATIVE_TOKEN_UID,
+        totalAmount: BigInt(fee),
+      });
+
+      if (htrUtxos.length === 0) {
+        throw new UtxoError(`No utxos available to fill the request. Token: HTR - Amount: ${fee}.`);
+      }
+
+      // Htr isn't billable, so we can append it here after calculating the fee
+      if (htrChangeAmount) {
+        // HTR change output
+        outputsObj.push(this.generateChangeOutput(htrChangeAmount, newOptions.changeAddress));
+      }
+    }
+
+    const tx = new Transaction(inputsObj.map(helpers.parseToInput), outputsObj);
     tx.tokens = [token];
 
     // Sign transaction
@@ -1805,6 +1837,65 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     tx.prepareToSend();
     return tx;
+  }
+
+  private mapToDataOutput(output: Output, token: string) {
+    let authorities = 0n;
+    if (output.isAuthority()) {
+      if (output.isMint()) {
+        authorities = 1n;
+      }
+      if (output.isMelt()) {
+        authorities = 2n;
+      }
+    }
+    return {
+      token,
+      value: output.value,
+      authorities,
+      data: '',
+      type: output.getType(this.network) as never,
+    } satisfies IDataOutputWithToken;
+  }
+
+  /**
+   * Generate a change output with the given amount. If the address is not provided, it will
+   * use the current address.
+   * @param amount Token amount
+   * @param address address string
+   * @param tokenData token data to be used in the output
+   * @returns an Output object
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   * @throws SendTxError if the address is not valid
+   */
+  private generateChangeOutput(amount: bigint, address: string | null, tokenData?: number) {
+    const changeAddressStr = address || this.getCurrentAddress({ markAsUsed: true }).address;
+    const changeAddress = this.validateAddressAndThrow(changeAddressStr);
+    const p2pkhChange = new P2PKH(changeAddress);
+    const p2pkhChangeScript = p2pkhChange.createScript();
+    return new Output(amount, p2pkhChangeScript, { tokenData });
+  }
+
+  /**
+   * Validate and throw if the provided address is not valid, it will use the current address if
+   * the address is not provided.
+   * @param address address string
+   * @returns the valid the address instance
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   * @throws SendTxError if the address is not valid
+   */
+  private validateAddressAndThrow(
+    address: string | null,
+    { markAsUsed }: { markAsUsed: boolean } = { markAsUsed: true }
+  ): Address {
+    const _address = address || this.getCurrentAddress({ markAsUsed }).address;
+    const addressInstance = new Address(_address, { network: this.network });
+    if (!addressInstance.isValid()) {
+      throw new SendTxError(`Address ${address} is not valid.`);
+    }
+    return addressInstance;
   }
 
   /**

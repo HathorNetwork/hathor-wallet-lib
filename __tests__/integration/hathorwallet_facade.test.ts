@@ -35,6 +35,7 @@ import { WalletType } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
+import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -642,6 +643,9 @@ describe('start', () => {
     await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.createAndSendNanoContractTransaction()).rejects.toThrow(
+      WalletFromXPubGuard
+    );
+    await expect(hWallet.createAndSendNanoContractCreateTokenTransaction()).rejects.toThrow(
       WalletFromXPubGuard
     );
     await expect(hWallet.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
@@ -2069,7 +2073,7 @@ describe('mintTokens', () => {
 
     // Should not mint more tokens than the HTR funds allow
     await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit: 90 required, \d+ available$/
+      /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/
     );
 
     // Minting more of the tokens
@@ -3034,7 +3038,7 @@ describe('getToken methods', () => {
     expect(details).toStrictEqual({
       totalSupply: 100n,
       totalTransactions: 1,
-      tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
+      tokenInfo: { name: 'Details Token', symbol: 'DTOK', version: TokenInfoVersion.DEPOSIT },
       authorities: { mint: true, melt: true },
     });
 

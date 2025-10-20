@@ -6,6 +6,7 @@
  */
 
 import { OutputValueType } from '../types';
+import { TokenInfoVersion } from './enum/token_info_version';
 
 /**
  * An output object enriched by the wallet's history methods
@@ -58,6 +59,7 @@ export type HistoryTransaction = {
   parents: string[];
   token_name?: string;
   token_symbol?: string;
+  token_info_version?: TokenInfoVersion;
   tokens: string[];
 };
 

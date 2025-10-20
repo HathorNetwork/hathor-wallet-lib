@@ -10,6 +10,7 @@ import healthApi from './api/health';
 import versionApi from './api/version';
 import * as axios from './api/axiosInstance';
 import metadataApi from './api/metadataApi';
+import featuresApi from './api/featuresApi';
 import { Storage } from './storage/storage';
 import { MemoryStore } from './storage/memory_store';
 import network from './network';
@@ -47,9 +48,7 @@ import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
 import { AtomicSwapServiceConnection } from './swapService/swapConnection';
 import ncApi from './api/nano';
-import NanoContractSerializer from './nano_contracts/serializer';
 import * as nanoUtils from './nano_contracts/utils';
-import NanoContractDeserializer from './nano_contracts/deserializer';
 import NanoContractTransactionParser from './nano_contracts/parser';
 import * as bigIntUtils from './utils/bigint';
 import {
@@ -57,6 +56,8 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from './template/transaction';
+import * as enums from './models/enum';
+import type { TokenInfo } from './wallet/types';
 
 export {
   PartialTx,
@@ -70,6 +71,7 @@ export {
   healthApi,
   versionApi,
   metadataApi,
+  featuresApi,
   errors,
   ErrorMessages,
   constants,
@@ -111,15 +113,16 @@ export {
   WalletType,
   HistorySyncMode,
   ncApi,
-  NanoContractSerializer,
   nanoUtils,
-  NanoContractDeserializer,
   NanoContractTransactionParser,
   bigIntUtils,
   TransactionTemplate,
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
+  TokenInfo,
+  enums,
 };
 
 export * from './nano_contracts/types';
 export * from './models/types';
+export * from './models/enum';

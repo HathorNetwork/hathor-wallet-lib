@@ -40,6 +40,7 @@ import { createOutputScriptFromAddress } from '../../utils/address';
 import { JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
 import { getWalletAddress, getWalletBalance } from './setvarcommands';
+import { TokenInfoVersion } from '../../models/enum/token_info_version';
 
 /**
  * Find and run the executor function for the instruction.
@@ -728,8 +729,14 @@ export async function execConfigInstruction(
     ctx.vars,
     ConfigInstruction.shape.tokenSymbol
   );
+  const tokenVersion = getVariable<TokenInfoVersion | undefined>(
+    ins.tokenVersion,
+    ctx.vars,
+    ConfigInstruction.shape.tokenVersion
+  );
+
   ctx.log(
-    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol})`
+    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) tokenVersion(${tokenVersion})`
   );
 
   if (version) {
@@ -743,6 +750,9 @@ export async function execConfigInstruction(
   }
   if (tokenSymbol) {
     ctx.tokenSymbol = tokenSymbol;
+  }
+  if (tokenVersion) {
+    ctx.tokenVersion = tokenVersion;
   }
 }
 

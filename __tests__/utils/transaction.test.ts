@@ -13,7 +13,7 @@ import {
   CREATE_TOKEN_TX_VERSION,
   DEFAULT_TX_VERSION,
   MERGED_MINED_BLOCK_VERSION,
-  NANO_CONTRACTS_VERSION,
+  ON_CHAIN_BLUEPRINTS_VERSION,
   POA_BLOCK_VERSION,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
@@ -26,6 +26,7 @@ import Transaction from '../../src/models/transaction';
 import Output from '../../src/models/output';
 import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
+import NanoContractHeader from '../../src/nano_contracts/header';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
@@ -87,6 +88,71 @@ test('getSignature', () => {
   // A signature made with this util matches the public key
   expect(
     crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(signatureDER), privkey.toPublicKey())
+  ).toBe(true);
+});
+
+test('getSignatureForTx signing nano contract when we are not the caller', async () => {
+  const xpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const ownAddr = 'address-is-mine';
+  jest.spyOn(storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr => {
+    switch (addr) {
+      case ownAddr:
+        return {
+          base58: addr,
+          bip32AddressIndex: 10,
+          numTransactions: 1,
+          balance: new Map(),
+        };
+      default:
+        return null;
+    }
+  });
+  async function* getSpentMock(inputs) {
+    yield {
+      index: 0,
+      input: inputs[0],
+      tx: {
+        outputs: [{ decoded: { address: ownAddr } }],
+      },
+    };
+  }
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
+  const input = new Input('cafe', 0);
+
+  const nano = new NanoContractHeader(
+    'cafed4d0',
+    'drip',
+    Buffer.from('cafe', 'hex'),
+    [],
+    1,
+    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp')
+  );
+  const tx = new Transaction([input], [], { headers: [nano] });
+  expect(tx.isNanoContract()).toBeTruthy();
+
+  const sigData = await transaction.getSignatureForTx(tx, storage, '123');
+
+  // Caller will be null if address is not ours
+  expect(sigData.ncCallerSignature).toBeNull();
+  // Other signatures will work as expected
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0]).toStrictEqual({
+    inputIndex: 0,
+    addressIndex: 10,
+    signature: expect.anything(),
+    pubkey: xpriv.derive(10).publicKey.toDER(),
+  });
+
+  const hashdata = tx.getDataToSignHash();
+  expect(
+    crypto.ECDSA.verify(
+      hashdata,
+      crypto.Signature.fromDER(sigData.inputSignatures[0].signature),
+      xpriv.deriveChild(10).publicKey
+    )
   ).toBe(true);
 });
 
@@ -464,8 +530,10 @@ test('getTxType', () => {
   expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe(
     'Merged Mining Block'
   );
-  expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
+  expect(transaction.getTxType({ version: ON_CHAIN_BLUEPRINTS_VERSION })).toBe(
+    'On-Chain Blueprint'
+  );
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });
 

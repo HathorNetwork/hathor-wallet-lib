@@ -27,6 +27,8 @@ import {
 } from '../types';
 import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
+import tokens from '../utils/tokens';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,
@@ -517,9 +519,14 @@ export class MemoryStore implements IStore {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
     }
-    this.tokens.set(tokenConfig.uid, tokenConfig);
+
+    const newTokenConfig = { ...tokenConfig }; // Clone the token config to avoid modifying the original object
+    if (!tokens.isHathorToken(newTokenConfig.uid) && !newTokenConfig.version) {
+      newTokenConfig.version = TokenInfoVersion.DEPOSIT;
+    }
+    this.tokens.set(newTokenConfig.uid, newTokenConfig);
     if (meta !== undefined) {
-      this.tokensMetadata.set(tokenConfig.uid, meta);
+      this.tokensMetadata.set(newTokenConfig.uid, meta);
     }
   }
 

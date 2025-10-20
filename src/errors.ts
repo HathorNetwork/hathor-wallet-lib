@@ -64,6 +64,18 @@ export class CreateTokenTxInvalid extends Error {}
 export class TokenValidationError extends Error {}
 
 /**
+ * Error thrown when a token is not found
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class TokenNotFoundError extends Error {
+  constructor(token: string) {
+    super(`Token ${token} not found in tokens.`);
+  }
+}
+
+/**
  * Error thrown when validating a registration of new NFT
  *
  * @memberof Errors
@@ -398,3 +410,5 @@ export class GlobalLoadLockTaskError extends Error {
     this.innerError = innerError;
   }
 }
+
+export class NanoHeaderNotFound extends Error {}

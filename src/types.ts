@@ -9,6 +9,7 @@ import { Config } from './config';
 import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
+import { TokenInfoVersion } from './models/enum/token_info_version';
 
 /**
  * Logger interface where each method is a leveled log method.
@@ -75,17 +76,22 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  // Sequential number used when creating nano header in a transaction
+  // each address has this sequence and we get the next number of the caller
+  seqnum: number;
 }
 
 export interface IAddressMetadataAsRecord {
   numTransactions: number;
   balance: Record<string, IBalance>;
+  seqnum: number;
 }
 
 export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
+  version?: TokenInfoVersion; // HTR is the only token without a version
 }
 
 export interface ITokenMetadata {
@@ -108,6 +114,44 @@ export interface IAuthoritiesBalance {
   melt: ITokenBalance;
 }
 
+export interface IHistoryNanoContractActionWithdrawal {
+  type: 'withdrawal';
+  token_uid: string;
+  amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionDeposit {
+  type: 'deposit';
+  token_uid: string;
+  amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionGrantAuthority {
+  type: 'grant_authority';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
+}
+
+export interface IHistoryNanoContractActionAcquireAuthority {
+  type: 'acquire_authority';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
+}
+
+export type IHistoryNanoContractAction =
+  | IHistoryNanoContractActionDeposit
+  | IHistoryNanoContractActionWithdrawal
+  | IHistoryNanoContractActionGrantAuthority
+  | IHistoryNanoContractActionAcquireAuthority;
+
+export interface IHistoryNanoContractContext {
+  actions: IHistoryNanoContractAction[];
+  address: string;
+  timestamp: number;
+}
+
 export interface IHistoryTx {
   tx_id: string;
   signalBits?: number;
@@ -121,6 +165,7 @@ export interface IHistoryTx {
   parents: string[];
   token_name?: string; // For create token transaction
   token_symbol?: string; // For create token transaction
+  token_info_version?: TokenInfoVersion; // For create token transaction
   tokens?: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
@@ -128,7 +173,10 @@ export interface IHistoryTx {
   nc_blueprint_id?: string; // For nano contract
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
-  nc_pubkey?: string; // For nano contract. Pubkey in hex
+  nc_address?: string; // For nano contract. address in base58
+  nc_pubkey?: string; // For on-chain-blueprints. pubkey DER encoded as hex
+  nc_context?: IHistoryNanoContractContext;
+  nc_seqnum?: number; // For nano contract
   first_block?: string | null;
 }
 
@@ -210,6 +258,8 @@ export interface IDataOutputOptionals {
 export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) &
   IDataOutputOptionals;
 
+export type IDataOutputWithToken = IDataOutput & { token: string };
+
 export interface IDataInput {
   txId: string;
   index: number;
@@ -220,9 +270,15 @@ export interface IDataInput {
   data?: string;
 }
 
+interface IDataTokenCreationTx {
+  name: string;
+  symbol: string;
+  tokenInfoVersion: number;
+}
+
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
-export interface IDataTx {
+export interface IDataTx extends Partial<IDataTokenCreationTx> {
   signalBits?: number;
   version?: number;
   inputs: IDataInput[];
@@ -232,8 +288,6 @@ export interface IDataTx {
   nonce?: number;
   timestamp?: number;
   parents?: string[];
-  name?: string; // For create token transaction
-  symbol?: string; // For create token transaction
 }
 
 export interface IUtxoId {
@@ -571,105 +625,13 @@ export interface IStorage {
   updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
 }
 
-/**
- */
-export interface IKVStoreIndex<TValidate> {
-  indexVersion: string;
-  validate(): Promise<TValidate>;
-  checkVersion(): Promise<void>;
-  close(): Promise<void>;
-}
-
 export interface AddressIndexValidateResponse {
   firstIndex: number;
   lastIndex: number;
 }
 
-export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateResponse> {
-  getAddressInfo(base58: string): Promise<IAddressInfo | null>;
-  addressExists(base58: string): Promise<boolean>;
-  addressIter(): AsyncGenerator<IAddressInfo>;
-  setAddressMeta(uid: string, meta: IAddressMetadata): Promise<void>;
-  getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
-  getAddressAtIndex(index: number): Promise<string | null>;
-  saveAddress(info: IAddressInfo): Promise<void>;
-  addressCount(): Promise<number>;
-  clearMeta(): Promise<void>;
-  clear(): Promise<void>;
-}
-
 export interface HistoryIndexValidateResponse {
   count: number;
-}
-
-export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateResponse> {
-  historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
-  getTx(txId: string): Promise<IHistoryTx | null>;
-  saveTx(tx: IHistoryTx): Promise<void>;
-  historyCount(): Promise<number>;
-  clear(): Promise<void>;
-}
-
-export interface IKVUtxoIndex extends IKVStoreIndex<void> {
-  utxoIter(): AsyncGenerator<IUtxo>;
-  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
-  saveUtxo(utxo: IUtxo): Promise<void>;
-  saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
-  iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
-  unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
-  clear(): Promise<void>;
-}
-
-export interface IKVTokenIndex extends IKVStoreIndex<void> {
-  tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
-  registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
-  hasToken(tokenUid: string): Promise<boolean>;
-  getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
-  getTokenMetadata(tokenUid: string): Promise<ITokenMetadata | null>;
-  saveToken(tokenConfig: ITokenData): Promise<void>;
-  saveMetadata(uid: string, meta: ITokenMetadata): Promise<void>;
-  registerToken(token: ITokenData): Promise<void>;
-  unregisterToken(tokenUid: string): Promise<void>;
-  isTokenRegistered(tokenUid: string): Promise<boolean>;
-  deleteTokens(tokens: string[]): Promise<void>;
-  editTokenMeta(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
-  clearMeta(): Promise<void>;
-  clear(cleanTokens?: boolean, cleanRegisteredTokens?: boolean): Promise<void>;
-}
-
-export interface IKVWalletIndex extends IKVStoreIndex<void> {
-  getAccessData(): Promise<IWalletAccessData | null>;
-  saveAccessData(data: IWalletAccessData): Promise<void>;
-  getWalletData(): Promise<IWalletData>;
-  getLastLoadedAddressIndex(): Promise<number>;
-  setLastLoadedAddressIndex(value: number): Promise<void>;
-  getLastUsedAddressIndex(): Promise<number>;
-  setLastUsedAddressIndex(value: number): Promise<void>;
-  getCurrentHeight(): Promise<number>;
-  setCurrentHeight(height: number): Promise<void>;
-  setCurrentAddressIndex(value: number): Promise<void>;
-  getCurrentAddressIndex(): Promise<number>;
-  setGapLimit(value: number): Promise<void>;
-  getGapLimit(): Promise<number>;
-  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
-  getScanningPolicy(): Promise<AddressScanPolicy>;
-  setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
-  getScanningPolicyData(): Promise<AddressScanPolicyData>;
-
-  getItem(key: string): Promise<unknown>;
-  setItem(key: string, value: unknown): Promise<void>;
-
-  cleanAccessData(): Promise<void>;
-  cleanWalletData(clear: boolean): Promise<void>;
-}
-
-export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
-  isNanoContractRegistered(ncId: string): Promise<boolean>;
-  getNanoContract(ncId: string): Promise<INcData | null>;
-  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
-  unregisterNanoContract(ncId: string): Promise<void>;
-  updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
-  clear(): Promise<void>;
 }
 
 export interface INcData {
