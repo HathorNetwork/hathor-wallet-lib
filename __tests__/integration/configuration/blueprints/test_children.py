@@ -5,13 +5,15 @@
 # LICENSE file in the root directory of this source tree.
 #
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
+    Blueprint,
+    Context,
+    NCFail,
+    export,
     public,
 )
 
+@export
 class TestChildrenBlueprint(Blueprint):
     name: str
 
@@ -24,5 +26,3 @@ class TestChildrenBlueprint(Blueprint):
     @public
     def set_attr(self, ctx: Context, attr: str) -> None:
         self.attr = attr
- 
-__blueprint__ = TestChildrenBlueprint

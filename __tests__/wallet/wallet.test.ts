@@ -2626,7 +2626,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
   });
 
   it('should handle UninitializedWalletError during access data loading', async () => {
-    jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest
+      .spyOn(wallet.storage, 'getAccessData')
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
 
     await expect(wallet.start({ pinCode: '123' })).rejects.toThrow(
       'Password is required when starting the wallet from the seed.'
@@ -2643,7 +2645,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
     jest
       .spyOn(walletWithoutSeed.storage, 'getAccessData')
-      .mockRejectedValue(new UninitializedWalletError());
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
     jest.spyOn(walletApi, 'createWallet').mockRejectedValue(new Error('Test error'));
 
     await expect(walletWithoutSeed.start({ pinCode: '123', password: '123' })).rejects.toThrow(
@@ -2652,7 +2654,9 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
   });
 
   it('should throw error if wallet status is not ready after creation', async () => {
-    jest.spyOn(wallet.storage, 'getAccessData').mockRejectedValue(new UninitializedWalletError());
+    jest
+      .spyOn(wallet.storage, 'getAccessData')
+      .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
     jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
     jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
       success: true,
@@ -2669,6 +2673,309 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     await expect(wallet.start({ pinCode: '123', password: '123' })).rejects.toThrow(
       WalletRequestError
     );
+  });
+
+  describe('waitReady parameter', () => {
+    it('should return immediately after wallet creation when waitReady is false', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const pollForWalletStatusSpy = jest.spyOn(wallet, 'pollForWalletStatus');
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady');
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: false });
+
+      // Verify wallet was not polled for status
+      expect(pollForWalletStatusSpy).not.toHaveBeenCalled();
+
+      // Verify onWalletReady was not called
+      expect(onWalletReadySpy).not.toHaveBeenCalled();
+
+      // Verify walletId was set
+      expect(wallet.walletId).toBe(mockWalletId);
+
+      // Verify wallet is not ready
+      expect(wallet.isReady()).toBe(false);
+    });
+
+    it('should wait for wallet to be ready when waitReady is true (default)', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'ready',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: Date.now(),
+        },
+      });
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: true });
+
+      // Verify onWalletReady was called
+      expect(onWalletReadySpy).toHaveBeenCalled();
+
+      // Verify walletId was set
+      expect(wallet.walletId).toBe(mockWalletId);
+    });
+
+    it('should wait for wallet to be ready when waitReady is not specified (default behavior)', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'ready',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: Date.now(),
+        },
+      });
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      // Call start without waitReady parameter
+      await wallet.start({ pinCode: '123', password: '123' });
+
+      // Verify onWalletReady was called (default behavior)
+      expect(onWalletReadySpy).toHaveBeenCalled();
+
+      // Verify walletId was set
+      expect(wallet.walletId).toBe(mockWalletId);
+    });
+
+    it('should poll for wallet status when waitReady is true and wallet is creating', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const pollForWalletStatusSpy = jest
+        .spyOn(wallet, 'pollForWalletStatus')
+        .mockResolvedValue(undefined);
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: true });
+
+      // Verify wallet was polled for status
+      expect(pollForWalletStatusSpy).toHaveBeenCalled();
+    });
+
+    it('should not poll for wallet status when waitReady is false and wallet is creating', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const pollForWalletStatusSpy = jest.spyOn(wallet, 'pollForWalletStatus');
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: false });
+
+      // Verify wallet was NOT polled for status
+      expect(pollForWalletStatusSpy).not.toHaveBeenCalled();
+
+      // Wallet should still be in LOADING state
+      expect(wallet.isReady()).toBe(false);
+    });
+
+    it('should clear sensitive data regardless of waitReady value', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: 'test-wallet-id',
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const clearSensitiveDataSpy = jest.spyOn(wallet, 'clearSensitiveData');
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: false });
+
+      // Verify sensitive data was cleared
+      expect(clearSensitiveDataSpy).toHaveBeenCalled();
+    });
+
+    it('should call pollForWalletStatus when waitReady is true and status is creating', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      const pollForWalletStatusSpy = jest
+        .spyOn(wallet, 'pollForWalletStatus')
+        .mockResolvedValue(undefined);
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: true });
+
+      // Verify pollForWalletStatus was called
+      expect(pollForWalletStatusSpy).toHaveBeenCalled();
+      // Verify onWalletReady was called
+      expect(onWalletReadySpy).toHaveBeenCalled();
+      // Verify walletId was set
+      expect(wallet.walletId).toBe(mockWalletId);
+    });
+
+    it('should not call pollForWalletStatus when waitReady is false and status is creating', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'test-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const pollForWalletStatusSpy = jest.spyOn(wallet, 'pollForWalletStatus');
+      // @ts-expect-error - Accessing private method for testing
+      const onWalletReadySpy = jest.spyOn(wallet, 'onWalletReady');
+
+      await wallet.start({ pinCode: '123', password: '123', waitReady: false });
+
+      // Verify pollForWalletStatus was NOT called
+      expect(pollForWalletStatusSpy).not.toHaveBeenCalled();
+      // Verify onWalletReady was NOT called
+      expect(onWalletReadySpy).not.toHaveBeenCalled();
+      // Verify walletId was set
+      expect(wallet.walletId).toBe(mockWalletId);
+    });
   });
 });
 
