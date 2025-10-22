@@ -23,8 +23,9 @@ jest.mock('../../src/wallet/api/walletApi', () => ({
 describe('Read-Only Wallet Access', () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
+  // Valid change path xpub (depth 4) from wallet utils tests
   const xpub =
-    'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W8kWb3XNVy8HKXfXd8pKf3Xmb';
+    'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
   const mockToken =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ3aWQiOiJ0ZXN0LXdhbGxldC1pZCIsImFjY2Vzc1R5cGUiOiJyZWFkLW9ubHkiLCJpYXQiOjE2OTY1ODg4MDAsImV4cCI6MTY5NjU5MDYwMH0.test';
   const mockWalletId = '23b44673413f093180ed37ce34b6577d7dedbdec9c1d909fe42be1b0bc341ec9';
@@ -632,6 +633,57 @@ describe('Read-Only Wallet Access', () => {
       // Wallet should be ready for read operations
       expect(wallet.isReady()).toBe(true);
       expect(() => wallet.failIfWalletNotReady()).not.toThrow();
+    });
+
+    it('should save accessData and enable storage-dependent methods', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
+      });
+
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+      const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+      mockCreateReadOnlyAuthToken.mockResolvedValueOnce({
+        success: true,
+        token: mockToken,
+      });
+
+      mockGetNewAddresses.mockResolvedValueOnce({
+        success: true,
+        addresses: [
+          {
+            address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // Mock the connection setup
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+      await wallet.startReadOnly();
+
+      // Verify accessData was saved
+      const accessData = await wallet.storage.getAccessData();
+      expect(accessData).toBeDefined();
+      expect(accessData?.xpubkey).toBe(xpub);
+      expect(accessData?.walletType).toBe('p2pkh');
+      expect(accessData?.walletFlags).toBe(0b00000001); // WALLET_FLAGS.READONLY
+
+      // Verify storage-dependent methods work
+      const walletType = await wallet.storage.getWalletType();
+      expect(walletType).toBe('p2pkh');
+
+      const isReadonly = await wallet.storage.isReadonly();
+      expect(isReadonly).toBe(true);
+
+      // Verify getAddressPathForIndex works (this was the original issue)
+      const addressPath = await wallet.getAddressPathForIndex(0);
+      expect(addressPath).toBe("m/44'/280'/0'/0/0");
     });
   });
 });

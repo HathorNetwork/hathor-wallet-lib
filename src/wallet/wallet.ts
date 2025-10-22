@@ -1195,6 +1195,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
 
+    // Save accessData for read-only wallet
+    // This is required for methods like getAddressPathForIndex() that need walletType
+    const accessData = walletUtils.generateAccessDataFromXpub(this.xpub);
+    await this.storage.saveAccessData(accessData);
+
     // Try to get read-only auth token
     // This will succeed only if wallet is in 'ready' state
     try {
@@ -2637,6 +2642,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async getAddressPathForIndex(index: number): Promise<string> {
     const walletType = await this.storage.getWalletType();
+
     if (walletType === WalletType.MULTISIG) {
       // P2SH
       return `${P2SH_ACCT_PATH}/0/${index}`;
