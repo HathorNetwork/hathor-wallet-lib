@@ -83,6 +83,9 @@ class NanoContractHeader extends Header {
    * @inner
    */
   serializeFields(array: Buffer[], addScript: boolean) {
+    // First add the header ID
+    array.push(getVertexHeaderIdBuffer(VertexHeaderId.NANO_HEADER));
+
     // nano contract id
     array.push(hexToBuffer(this.id));
 
@@ -137,10 +140,6 @@ class NanoContractHeader extends Header {
    * @inner
    */
   serialize(array: Buffer[]) {
-    // First add the header ID
-    array.push(getVertexHeaderIdBuffer(VertexHeaderId.NANO_HEADER));
-
-    // Then the serialized header
     this.serializeFields(array, true);
   }
 
