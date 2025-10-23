@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { NATIVE_TOKEN_UID } from '../../../constants';
 import { txIdSchema } from '../../../schemas';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
+import { TokenVersion } from '../../../types';
 
 /**
  * Schema for validating Hathor addresses.
@@ -110,6 +111,7 @@ export const tokenInfoSchema = z.object({
   id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
+  version: z.nativeEnum(TokenVersion),
 });
 
 /**

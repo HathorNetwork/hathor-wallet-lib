@@ -58,6 +58,9 @@ import {
   WalletTxTemplateInterpreter,
 } from './template/transaction';
 import { stopGLLBackgroundTask } from './sync/gll';
+import * as enums from './models/enum';
+import type { TokenInfo } from './wallet/types';
+import { Fee } from './utils/fee';
 
 export {
   PartialTx,
@@ -95,6 +98,7 @@ export {
   CreateTokenTransaction,
   Network,
   FeeHeader,
+  Fee,
   addressUtils,
   cryptoUtils,
   dateFormatter as dateUtils,
@@ -121,9 +125,12 @@ export {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
   stopGLLBackgroundTask,
+  TokenInfo,
+  enums,
 };
 
 export * from './nano_contracts/types';
 export * from './models/types';
 export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';
 export type { IFeeEntry } from './types';
+export * from './models/enum';

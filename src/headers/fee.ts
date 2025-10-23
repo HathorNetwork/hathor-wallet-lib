@@ -49,6 +49,8 @@ class FeeHeader extends Header {
    * @inner
    */
   serializeFields(array: Buffer[]) {
+    array.push(getVertexHeaderIdBuffer(VertexHeaderId.FEE_HEADER));
+
     // Number of entries
     array.push(intToBytes(this.entries.length, 1));
 
@@ -80,9 +82,6 @@ class FeeHeader extends Header {
    * @inner
    */
   serialize(array: Buffer[]) {
-    // First add the header ID
-    array.push(getVertexHeaderIdBuffer(VertexHeaderId.FEE_HEADER));
-
     // Then the serialized fields
     this.serializeFields(array);
   }

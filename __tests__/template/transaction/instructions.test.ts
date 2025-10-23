@@ -29,6 +29,7 @@ import {
   UtxoSelectInstruction,
   getVariable,
 } from '../../../src/template/transaction/instructions';
+import { TokenVersion } from '../../../src/types';
 
 describe('parsing variable references', () => {
   it('should validate template variable reference strings', () => {
@@ -681,6 +682,7 @@ describe('should parse template instructions', () => {
         signalBits: 254,
         tokenName: 'foo',
         tokenSymbol: 'bar',
+        tokenVersion: TokenVersion.DEPOSIT,
       }).success
     ).toBe(true);
     // Parse with defaults
@@ -690,6 +692,7 @@ describe('should parse template instructions', () => {
       })
     ).toStrictEqual({
       type: 'action/config',
+      tokenVersion: TokenVersion.DEPOSIT,
     });
     // parse with template refs
     expect(
@@ -699,6 +702,7 @@ describe('should parse template instructions', () => {
         signalBits: '{signalBitsKey}',
         tokenName: '{tokenNameKey}',
         tokenSymbol: '{tokenSymbolKey}',
+        tokenVersion: '{tokenVersionKey}',
       })
     ).toStrictEqual({
       type: 'action/config',
@@ -706,6 +710,7 @@ describe('should parse template instructions', () => {
       signalBits: '{signalBitsKey}',
       tokenName: '{tokenNameKey}',
       tokenSymbol: '{tokenSymbolKey}',
+      tokenVersion: '{tokenVersionKey}',
     });
     // Error cases
     expect(
