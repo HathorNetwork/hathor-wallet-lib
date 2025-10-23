@@ -60,6 +60,7 @@ import {
   HistorySyncMode,
   getDefaultLogger,
 } from '../types';
+import { TokenVersion } from '../models/enum';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -84,6 +85,7 @@ import Address from '../models/address';
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
  * @typedef {import('../models/transaction').default} Transaction
+ * @typedef {import('../types').TokenVersion} TokenVersion
  */
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -735,7 +737,7 @@ class HathorWallet extends EventEmitter {
    * @param {string|null|undefined} token
    *
    * @return {Promise<{
-   *   token: {id:string, name:string, symbol:string},
+   *   token: {id:string, name:string, symbol:string, version: TokenVersion},
    *   balance: {unlocked:bigint, locked:bigint},
    *   transactions:number,
    *   lockExpires:number|null,
@@ -775,6 +777,7 @@ class HathorWallet extends EventEmitter {
           id: tokenData.uid,
           name: tokenData.name,
           symbol: tokenData.symbol,
+          version: tokenData.version,
         },
         balance: tokenData.balance.tokens,
         transactions: tokenData.numTransactions,
@@ -1732,6 +1735,7 @@ class HathorWallet extends EventEmitter {
    * @property {string[]?} [data=null] list of data strings using utf8 encoding to add each as a data script output
    * @property {boolean?} [signTx=true] sign transaction instance
    * @property {boolean?} [isCreateNFT=false] if the create token is an NFT creation call
+   * @property {TokenVersion?} [tokenVersion=TokenVersion.DEPOSIT] version of the token to be created
    */
 
   /**
@@ -1771,6 +1775,7 @@ class HathorWallet extends EventEmitter {
       data: null,
       isCreateNFT: false,
       signTx: true,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...options,
     };
 
@@ -1811,6 +1816,7 @@ class HathorWallet extends EventEmitter {
         meltAuthorityAddress: newOptions.meltAuthorityAddress,
         data: newOptions.data,
         isCreateNFT: newOptions.isCreateNFT,
+        tokenVersion: newOptions.tokenVersion,
       }
     );
     return transactionUtils.prepareTransaction(txData, pin, this.storage, {
@@ -2471,6 +2477,7 @@ class HathorWallet extends EventEmitter {
             uid: this.tokenUid,
             name: response.name,
             symbol: response.symbol,
+            version: response.version,
           };
         } else {
           throw Error(response.message);
@@ -2490,6 +2497,7 @@ class HathorWallet extends EventEmitter {
    *   tokenInfo: {
    *     name: string,
    *     symbol: string,
+   *     version: TokenVersion,
    *   },
    *   authorities: {
    *     mint: boolean,
@@ -2507,7 +2515,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(result.message);
     }
 
-    const { name, symbol, mint, melt, total, transactions_count }: any = result;
+    const { name, symbol, mint, melt, total, transactions_count, version } = result;
 
     // Transform to the same format the wallet service facade responds
     return {
@@ -2517,6 +2525,7 @@ class HathorWallet extends EventEmitter {
         id: tokenId,
         name,
         symbol,
+        version,
       },
       authorities: {
         mint: mint.length > 0,
@@ -2883,6 +2892,7 @@ class HathorWallet extends EventEmitter {
    *     version: number,
    *     voided: boolean,
    *     weight: number,
+   *     tokenId: string,
    *     tokenName: string,
    *     tokenSymbol: string,
    *     balance: bigint
