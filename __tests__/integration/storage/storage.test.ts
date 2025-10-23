@@ -9,6 +9,7 @@ import {
   waitForWalletReady,
   waitForTxReceived,
 } from '../helpers/wallet.helper';
+import { InvalidPasswdError } from '../../../src/errors';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
 import SendTransaction from '../../../src/new/sendTransaction';
@@ -80,9 +81,11 @@ describe('locked utxos', () => {
           token: NATIVE_TOKEN_UID,
         },
       ],
-      pin: DEFAULT_PIN_CODE,
+      pin: 'xxx', // instance with wrong pin to validate pin as parameter
     });
-    await sendTx.prepareTx();
+    await expect(sendTx.prepareTx()).rejects.toThrow(InvalidPasswdError);
+    // Will work with the correct PIN as parameter
+    await sendTx.prepareTx(DEFAULT_PIN_CODE);
     await sendTx.updateOutputSelected(true);
     // This shouldn't fail since if we did not have tokens the prepareTx should have failed
     const input = sendTx.transaction.inputs[0];

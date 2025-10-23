@@ -28,6 +28,7 @@ import Input from './models/input';
 import Transaction from './models/transaction';
 import CreateTokenTransaction from './models/create_token_transaction';
 import Network from './models/network';
+import FeeHeader from './headers/fee';
 import * as addressUtils from './utils/address';
 import * as cryptoUtils from './utils/crypto';
 import tokensUtils from './utils/tokens';
@@ -93,6 +94,7 @@ export {
   Transaction,
   CreateTokenTransaction,
   Network,
+  FeeHeader,
   addressUtils,
   cryptoUtils,
   dateFormatter as dateUtils,
@@ -124,3 +126,4 @@ export {
 export * from './nano_contracts/types';
 export * from './models/types';
 export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';
+export type { IFeeEntry } from './types';

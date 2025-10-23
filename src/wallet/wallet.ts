@@ -363,12 +363,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *  {
    *   'pinCode': PIN to encrypt the auth xpriv on storage
    *   'password': Password to decrypt xpriv information
+   *   'waitReady': Whether to wait for the wallet to be ready (default: true)
    *  }
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode, password }: { pinCode?: string; password?: string } = {}) {
+  async start({
+    pinCode,
+    password,
+    waitReady = true,
+  }: { pinCode?: string; password?: string; waitReady?: boolean } = {}) {
     if (!pinCode) {
       throw new Error('Pin code is required when starting the wallet.');
     }
@@ -479,6 +484,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress
     );
+
+    // Set walletId immediately after wallet creation
+    this.walletId = data.status.walletId;
+
+    // If waitReady is false, return immediately after wallet creation
+    if (!waitReady) {
+      this.clearSensitiveData();
+      return;
+    }
 
     // If auth token api fails we can still retry during wallet creation status polling.
     let renewPromise2: Promise<void> | null = null;
@@ -753,9 +767,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private async onWalletReady() {
+  private async onWalletReady(skipAddressFetch: boolean = false) {
     // We should wait for new addresses before setting wallet to ready
-    await this.getNewAddresses(true);
+    // Skip address fetching if requested (useful for read-only wallets that don't need gap addresses)
+    if (!skipAddressFetch) {
+      await this.getNewAddresses(true);
+    }
 
     if (this.isWsEnabled()) {
       this.setupConnection();
@@ -1081,6 +1098,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     };
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
+      // Check if we're in read-only mode (no auth private key available)
+      // In read-only mode, we need to use the read-only auth token endpoint
+      if (!this.authPrivKey && !usePassword && this.xpub) {
+        // Read-only mode: renew using xpubkey without signature
+        await this.getReadOnlyAuthToken();
+        return;
+      }
+
       let privKey = this.authPrivKey;
 
       if (!privKey) {
@@ -1122,6 +1147,83 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
 
     this.authToken = data.token;
+  }
+
+  /**
+   * Get read-only auth token using only the xpubkey (no signature required)
+   * This allows read-only access to wallet data without needing private keys
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getReadOnlyAuthToken(): Promise<string> {
+    if (!this.xpub) {
+      throw new Error('xpub is required to get read-only auth token.');
+    }
+
+    if (!this.walletId) {
+      // Derive walletId from xpub if not set
+      this.walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
+    }
+
+    const data = await walletApi.createReadOnlyAuthToken(this, this.xpub);
+    this.authToken = data.token;
+
+    return data.token;
+  }
+
+  /**
+   * Start wallet in read-only mode using only the xpubkey
+   * This allows querying wallet data without needing private keys or authentication
+   *
+   * @param options.skipAddressFetch - If true, skips fetching gap addresses (faster startup, ~300ms-1s saved)
+   * @throws {WalletRequestError} If wallet is not initialized or not ready
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void> {
+    if (!this.xpub) {
+      throw new Error('xpub is required to start wallet in read-only mode.');
+    }
+
+    const skipAddressFetch = options?.skipAddressFetch || false;
+
+    this.setState(walletState.LOADING);
+
+    // Derive walletId from xpub
+    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
+    this.walletId = walletId;
+
+    // Save accessData for read-only wallet
+    // This is required for methods like getAddressPathForIndex() that need walletType
+    const accessData = walletUtils.generateAccessDataFromXpub(this.xpub);
+    await this.storage.saveAccessData(accessData);
+
+    // Try to get read-only auth token
+    // This will succeed only if wallet is in 'ready' state
+    try {
+      await this.getReadOnlyAuthToken();
+      // Token obtained successfully, wallet is ready
+      await this.onWalletReady(skipAddressFetch);
+    } catch (error) {
+      // Token request failed, check wallet status to determine why
+      const walletStatus = await walletApi.getWalletStatus(this);
+
+      if (walletStatus.status.status === 'creating') {
+        // Wallet is still being created, poll until it's ready
+        await this.pollForWalletStatus();
+        // After polling completes, get the token now that wallet is ready
+        await this.getReadOnlyAuthToken();
+        await this.onWalletReady(skipAddressFetch);
+      } else {
+        // Wallet is in error state or other invalid state
+        throw new WalletRequestError(
+          'Wallet must be initialized and ready before starting in read-only mode.',
+          { cause: walletStatus.status }
+        );
+      }
+    }
   }
 
   /**
@@ -2540,6 +2642,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async getAddressPathForIndex(index: number): Promise<string> {
     const walletType = await this.storage.getWalletType();
+
     if (walletType === WalletType.MULTISIG) {
       // P2SH
       return `${P2SH_ACCT_PATH}/0/${index}`;

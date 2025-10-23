@@ -7,26 +7,28 @@
 
 from typing import Optional
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
+    Blueprint,
+    Context,
     Address,
     Amount,
     BlueprintId,
     ContractId,
     NCDepositAction,
+    NCFail,
     NCWithdrawalAction,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
     VertexId,
+    export,
     public,
     view,
 )
 
 
+@export
 class FullBlueprint(Blueprint):
     vertex: VertexId
 
@@ -70,11 +72,11 @@ class FullBlueprint(Blueprint):
 
     attr_random_list: list[str]
 
-    attr_list_0: str
-    attr_list_1: str
-    attr_list_2: str
+    attr_list_0: str | None
+    attr_list_1: str | None
+    attr_list_2: str | None
 
-    random_value: str
+    random_value: str | None
 
     attr_dict_list_tuple: dict[ContractId, list[tuple[int, bytes]]]
     attr_dict_dict_set: dict[TokenUid, dict[Address, set[str]]]
@@ -100,10 +102,22 @@ class FullBlueprint(Blueprint):
         self.attr_int = attr_int
         self.attr_bytes = attr_bytes
         self.attr_bool = attr_bool
-        #self.attr_set = attr_set
-        #self.attr_tuple = attr_tuple
-        #self.attr_list = attr_list
+        self.attr_set = attr_set
+        self.attr_tuple = attr_tuple
+        self.attr_list = attr_list
         self.attr_optional = None
+        self.attr_dict_address = {}
+        self.attr_dict_bytes = {}
+        self.attr_dict_str = {}
+        self.attr_dict_str_bytes = {}
+        self.attr_random_list = []
+        self.attr_list_0 = None
+        self.attr_list_1 = None
+        self.attr_list_2 = None
+        self.random_value = None
+        self.attr_dict_list_tuple = {}
+        self.attr_dict_dict_set = {}
+        self.attr_list_dict_tuple = []
 
     @public
     def set_optional(self, ctx: Context, value: Optional[str]) -> None:
@@ -165,11 +179,9 @@ class FullBlueprint(Blueprint):
 
     @public
     def set_attr_dict_dict_set(self, ctx: Context, value: dict[TokenUid, dict[Address, set[str]]]) -> None:
-        partial = self.attr_dict_dict_set.get(self.token_uid, {})
-        partial2 = partial.get(self.address, set())
-        partial2.update(value[self.token_uid][self.address])
-        partial.update({ self.address: partial2 })
-        self.attr_dict_dict_set[self.token_uid] = partial
+        for token, dict_set in value.items():
+            for addr, addr_set in dict_set.items():
+                self.attr_dict_dict_set.get(token, {}).get(addr, set()).update(addr_set)
 
     @public
     def set_attr_list_dict_tuple(self, ctx: Context, value: list[dict[str, tuple[int, int]]]) -> None:
@@ -214,6 +226,3 @@ class FullBlueprint(Blueprint):
         if element not in self.attr_list_dict_tuple:
             return False
         return True
- 
-
-__blueprint__ = FullBlueprint
