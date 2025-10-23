@@ -271,11 +271,9 @@ export const mapActionToActionHeader = (
 ): NanoContractActionHeader => {
   const headerActionType = ActionTypeToActionHeaderType[action.type];
 
-  const mappedTokens: ITokenData[] = tokens.map(token => {
+  const mappedTokens: Partial<ITokenData>[] = tokens.map(token => {
     return {
       uid: token,
-      name: '',
-      symbol: '',
     };
   });
 

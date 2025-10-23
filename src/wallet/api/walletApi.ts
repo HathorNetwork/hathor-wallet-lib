@@ -181,7 +181,7 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, tokenDetailsResponseSchema);
     }
-    throw new WalletRequestError('Error getting token details.');
+    throw new WalletRequestError(`Error getting token ${tokenId} details.`);
   },
 
   async getBalances(
