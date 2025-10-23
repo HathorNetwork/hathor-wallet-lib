@@ -7,7 +7,7 @@
 
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
-import { HistorySyncMode, WalletType } from '../../src/types';
+import { HistorySyncMode, WalletType, TokenVersion } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   scanPolicyStartAddresses,
@@ -126,6 +126,7 @@ describe('_updateTokensData', () => {
       uid: 'mock-token',
       name: 'Mock Token 1',
       symbol: 'MT1',
+      version: TokenVersion.DEPOSIT,
     };
     const store = new MemoryStore();
     const storage = new Storage(store);
@@ -133,6 +134,7 @@ describe('_updateTokensData', () => {
       success: true,
       name: mockToken.name,
       symbol: mockToken.symbol,
+      version: mockToken.version,
       mint: [],
       melt: [],
       total: 0,
@@ -152,6 +154,7 @@ describe('_updateTokensData', () => {
       name: mockToken.name,
       symbol: mockToken.symbol,
       uid: mockToken.uid,
+      version: mockToken.version,
     });
   });
 
@@ -161,6 +164,7 @@ describe('_updateTokensData', () => {
       uid: 'mock-token',
       name: 'Mock Token 1',
       symbol: 'MT1',
+      version: TokenVersion.DEPOSIT,
     };
     const store = new MemoryStore();
     const storage = new Storage(store);
@@ -181,6 +185,7 @@ describe('_updateTokensData', () => {
         success: true,
         name: mockToken.name,
         symbol: mockToken.symbol,
+        version: mockToken.version,
         mint: [],
         melt: [],
         total: 0,
@@ -208,6 +213,7 @@ describe('_updateTokensData', () => {
       name: mockToken.name,
       symbol: mockToken.symbol,
       uid: mockToken.uid,
+      version: mockToken.version,
     });
   });
 
@@ -387,6 +393,7 @@ test('addCreatedTokenFromTx', async () => {
     uid: 'd00d',
     name: 'Token A',
     symbol: 'tkA',
+    version: 1,
   });
   await expect(storage.getToken('d00d')).resolves.not.toBeNull();
 });
