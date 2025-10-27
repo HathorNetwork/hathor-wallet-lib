@@ -521,8 +521,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.authToken = null;
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
       this.walletId = walletId;
-      renewPromise2 = this.validateAndRenewAuthToken(pinCode).catch(err => {
-        renewPromise2Error = err;
+      renewPromise2 = this.validateAndRenewAuthToken(pinCode).catch(renew2Err => {
+        renewPromise2Error = renew2Err;
       });
     }
 
