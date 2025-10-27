@@ -430,7 +430,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.walletId = walletId;
       renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
         renewPromiseError = err;
-      )};
+      });
     }
 
     const {
@@ -450,7 +450,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.walletId = walletId;
       renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
         renewPromiseError = err;
-      )};
+      });
     }
 
     this.xpub = xpub;
@@ -523,7 +523,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.walletId = walletId;
       renewPromise2 = this.validateAndRenewAuthToken(pinCode).catch(err => {
         renewPromise2Error = err;
-      )};
+      });
     }
 
     await handleCreate(data.status, renewPromise2);
