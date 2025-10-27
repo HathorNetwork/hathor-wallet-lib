@@ -2976,6 +2976,101 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       // Verify walletId was set
       expect(wallet.walletId).toBe(mockWalletId);
     });
+
+    it('should handle async errors from first validateAndRenewAuthToken before await', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+
+      // Mock validateAndRenewAuthToken to reject immediately (async error before await)
+      const authError = new Error('Auth token validation failed');
+      jest.spyOn(wallet, 'validateAndRenewAuthToken').mockRejectedValue(authError);
+
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: 'test-wallet-id',
+          xpubkey: 'test-xpub',
+          status: 'ready',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: Date.now(),
+        },
+      });
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      // The wallet should handle the auth error gracefully
+      await wallet.start({ pinCode: '123', password: '123' });
+
+      // Auth token should be cleared when error occurs
+      expect(wallet.authToken).toBeNull();
+
+      // validateAndRenewAuthToken should be called twice:
+      // 1. First attempt that fails
+      // 2. Second retry after wallet creation
+      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle async errors from second validateAndRenewAuthToken in handleCreate', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+
+      // Mock first call to succeed, but second call (retry) to fail
+      const authError = new Error('Auth token renewal failed on retry');
+      jest
+        .spyOn(wallet, 'validateAndRenewAuthToken')
+        .mockRejectedValueOnce(new Error('First auth attempt failed'))
+        .mockRejectedValueOnce(authError);
+
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: 'test-wallet-id',
+          xpubkey: 'test-xpub',
+          status: 'ready',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: Date.now(),
+        },
+      });
+
+      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
+        success: true,
+        addresses: [
+          {
+            address: 'test-address',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      // The wallet should handle both auth errors gracefully
+      await wallet.start({ pinCode: '123', password: '123' });
+
+      // Auth token should be cleared when errors occur
+      expect(wallet.authToken).toBeNull();
+
+      // validateAndRenewAuthToken should be called twice (both failed)
+      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(2);
+    });
   });
 });
 
