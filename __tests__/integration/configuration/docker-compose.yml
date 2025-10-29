@@ -40,6 +40,7 @@ services:
       retries: 10
 
   tx-mining-service:
+    platform: linux/amd64
     image:
       ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service}
     depends_on:

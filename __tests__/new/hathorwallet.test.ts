@@ -27,6 +27,7 @@ import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
+import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
   constructor() {
@@ -40,6 +41,10 @@ class FakeHathorWallet {
     }
   }
 }
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
 test('getFullTxById', async () => {
   const hWallet = new FakeHathorWallet();
@@ -976,6 +981,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
@@ -1021,6 +1027,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
@@ -1088,6 +1095,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos({ ...fakeTokenToDepositUtxo, value: amountAvailable }),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     await expect(
@@ -1096,7 +1104,7 @@ describe('prepare transactions without signature', () => {
         pinCode: '1234',
         signTx: false, // skip the signature
       })
-    ).rejects.toThrow('Not enough HTR tokens for deposit: 10 required, 1 available');
+    ).rejects.toThrow('Not enough HTR tokens for deposit or fee: 10 required, 1 available');
   });
 
   test('prepareMeltTokensData', async () => {
@@ -1132,6 +1140,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1187,6 +1196,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1261,6 +1271,7 @@ describe('prepare transactions without signature', () => {
     hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToMeltUtxo));
     hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToDepositUtxo));
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare melt
     const txData = await hWallet.prepareMeltTokensData('01', 100, {
@@ -1342,11 +1353,15 @@ describe('prepare transactions without signature', () => {
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
-    hWallet.storage = getStorage({
+    const storage = getStorage({
       readOnly: false,
       currentAddress: fakeAddress.base58,
       selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
     });
+
+    jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+    hWallet.storage = storage;
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
 
     // prepare melt

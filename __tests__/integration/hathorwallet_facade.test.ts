@@ -31,7 +31,7 @@ import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
-import { WalletType } from '../../src/types';
+import { WalletType, TokenVersion } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
@@ -2072,7 +2072,7 @@ describe('mintTokens', () => {
 
     // Should not mint more tokens than the HTR funds allow
     await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit: 90 required, \d+ available$/
+      /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/
     );
 
     // Minting more of the tokens
@@ -2182,9 +2182,15 @@ describe('mintTokens', () => {
     const expectedAmount5 = expectedAmount4 + 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
-    const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
-    expect(dataOutput5).toHaveProperty('value', 1n);
-    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+    const dataOutput5 = mintResponse5.outputs.filter(
+      o => o.getType(hWallet.getNetworkObject()) === 'data'
+    );
+    expect(dataOutput5).toHaveLength(1);
+    expect(dataOutput5[0]).toHaveProperty('value', 1n);
+    expect(dataOutput5[0]).toHaveProperty(
+      'script',
+      Buffer.from([6, 102, 111, 111, 98, 97, 114, 172])
+    );
 
     const mintResponse6 = await hWallet.mintTokens(tokenUid, 100n, {
       unshiftData: true,
@@ -3037,7 +3043,7 @@ describe('getToken methods', () => {
     expect(details).toStrictEqual({
       totalSupply: 100n,
       totalTransactions: 1,
-      tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
+      tokenInfo: { name: 'Details Token', symbol: 'DTOK', version: TokenVersion.DEPOSIT },
       authorities: { mint: true, melt: true },
     });
 
