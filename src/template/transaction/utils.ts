@@ -36,7 +36,7 @@ export async function selectTokens(
     inputs.push(new Input(utxo.txId, utxo.index));
     // Update the balance
     const origTx = await interpreter.getTx(utxo.txId);
-    ctx.balance.addBalanceFromUtxo(origTx, utxo.index);
+    await ctx.balance.addBalanceFromUtxo(interpreter, origTx, utxo.index);
   }
 
   // Then add inputs to context
@@ -50,7 +50,7 @@ export async function selectTokens(
     const tokenData = ctx.addToken(token);
     const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
     const output = new Output(changeAmount, script, { tokenData });
-    ctx.balance.addOutput(changeAmount, token);
+    await ctx.balance.addOutput(interpreter, changeAmount, token);
     ctx.addOutputs(-1, output);
   }
 }
@@ -76,7 +76,7 @@ export async function selectAuthorities(
     inputs.push(new Input(utxo.txId, utxo.index));
     // Update the balance
     const origTx = await interpreter.getTx(utxo.txId);
-    ctx.balance.addBalanceFromUtxo(origTx, utxo.index);
+    await ctx.balance.addBalanceFromUtxo(interpreter, origTx, utxo.index);
   }
 
   // Then add inputs to context

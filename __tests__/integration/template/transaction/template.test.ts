@@ -11,7 +11,13 @@ import SendTransaction from '../../../../src/new/sendTransaction';
 import transactionUtils from '../../../../src/utils/transaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../../src/constants';
+import { TokenVersion } from '../../../../src/types';
 
 const DEBUG = true;
 
@@ -436,5 +442,79 @@ describe('Template execution', () => {
         }),
       ])
     );
+  });
+});
+describe('Template execution with fee tokens', () => {
+  let hWallet: HathorWallet;
+  let interpreter: WalletTxTemplateInterpreter;
+  let tokenUid: string;
+
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper(null);
+    interpreter = new WalletTxTemplateInterpreter(hWallet);
+    const address = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, {});
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should be able to create a custom token', async () => {
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({
+        createToken: true,
+        tokenName: 'FeeBasedToken',
+        tokenSymbol: 'FBT',
+        tokenVersion: TokenVersion.FEE,
+      })
+      .addFee({ amount: 1 })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 1000, useCreatedToken: true })
+      .addAuthorityOutput({ authority: 'mint', address: '{addr}', useCreatedToken: true, count: 1 })
+      .addAuthorityOutput({ authority: 'melt', address: '{addr}', useCreatedToken: true, count: 1 })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+
+    expect(tx.outputs).toHaveLength(4);
+
+    // HTR change
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(9n);
+
+    // Created token
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(1000n);
+
+    // 1 mint authorities
+    expect(tx.outputs[2].tokenData).toBe(129);
+    expect(tx.outputs[2].value).toBe(1n);
+
+    // 1 melt authorities
+    expect(tx.outputs[3].tokenData).toBe(129);
+    expect(tx.outputs[3].value).toBe(2n);
+
+    expect(tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+
+    expect(tx.getFeeHeader()).toBeDefined();
+    expect(tx.getFeeHeader()?.entries).toHaveLength(1);
+    expect(tx.getFeeHeader()?.entries[0].tokenIndex).toBe(0);
+    expect(tx.getFeeHeader()?.entries[0].amount).toBe(1n);
+
+    // TODO-RAUL: enable this piece when hathorlib got merged
+    // tx.prepareToSend();
+    // const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    // await sendTx.runFromMining();
+    // expect(tx.hash).not.toBeNull();
+    // if (tx.hash === null) {
+    //   throw new Error('Transaction does not have a hash');
+    // }
+    // tokenUid = tx.hash;
+    // await waitForTxReceived(hWallet, tx.hash, undefined);
   });
 });

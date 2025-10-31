@@ -6,18 +6,56 @@
  */
 /* eslint max-classes-per-file: ["error", 3] */
 
+// eslint-disable-next-line max-classes-per-file
 import { z } from 'zod';
 import { TokenVersion, IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  FEE_PER_OUTPUT,
+  FEE_DIVISOR,
+} from '../../constants';
 import { NanoAction } from './instructions';
+import { ITxTemplateInterpreter } from './types';
 
-export interface TokenBalance {
+export class TokenBalance {
   tokens: OutputValueType;
+
+  tokenVersion?: TokenVersion;
+
   mint_authorities: number;
+
   melt_authorities: number;
+
+  /**
+   * Count of non-authority outputs that is used to calculate the fee
+   */
+  chargeableOutputs: number;
+
+  /**
+   * Count of non-authority inputs that is used to calculate the fee
+   */
+  chargeableInputs: number;
+
+  constructor() {
+    this.tokens = 0n;
+    this.mint_authorities = 0;
+    this.melt_authorities = 0;
+    this.chargeableOutputs = 0;
+    this.chargeableInputs = 0;
+  }
+
+  needsToAddInputs() {
+    return this.tokens > 0;
+  }
+
+  needsToAddOutputs() {
+    return this.tokens < 0;
+  }
 }
 
 export class TxBalance {
@@ -33,16 +71,14 @@ export class TxBalance {
   /**
    * Get the current balance of the given token.
    */
-  getTokenBalance(token: string): TokenBalance {
-    if (!this.balance[token]) {
-      this.balance[token] = {
-        tokens: 0n,
-        mint_authorities: 0,
-        melt_authorities: 0,
-      };
-    }
+  async getTokenBalance(interpreter: ITxTemplateInterpreter, token: string): Promise<TokenBalance> {
+    const balance = this.balance[token] || new TokenBalance();
 
-    return this.balance[token];
+    if (!balance.tokenVersion) {
+      balance.tokenVersion = await this.getTokenVersion(interpreter, token);
+    }
+    this.setTokenBalance(token, balance);
+    return balance;
   }
 
   /**
@@ -51,11 +87,7 @@ export class TxBalance {
    */
   getCreatedTokenBalance(): TokenBalance {
     if (!this.createdTokenBalance) {
-      this.createdTokenBalance = {
-        tokens: 0n,
-        mint_authorities: 0,
-        melt_authorities: 0,
-      };
+      this.createdTokenBalance = new TokenBalance();
     }
     return this.createdTokenBalance;
   }
@@ -77,13 +109,13 @@ export class TxBalance {
   /**
    * Add balance from utxo of the given transaction.
    */
-  addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+  async addBalanceFromUtxo(interpreter: ITxTemplateInterpreter, tx: IHistoryTx, index: number) {
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }
     const output = tx.outputs[index];
     const { token } = output;
-    const balance = this.getTokenBalance(token);
+    const balance = await this.getTokenBalance(interpreter, token);
 
     if (transactionUtils.isAuthorityOutput(output)) {
       if (transactionUtils.isMint(output)) {
@@ -95,6 +127,10 @@ export class TxBalance {
       }
     } else {
       balance.tokens += output.value;
+
+      if (balance.tokenVersion === TokenVersion.FEE) {
+        balance.chargeableInputs += 1;
+      }
     }
 
     this.setTokenBalance(token, balance);
@@ -103,26 +139,39 @@ export class TxBalance {
   /**
    * Remove the balance given from the token balance.
    */
-  addOutput(amount: OutputValueType, token: string) {
-    const balance = this.getTokenBalance(token);
+  async addOutput(interpreter: ITxTemplateInterpreter, amount: OutputValueType, token: string) {
+    const balance = await this.getTokenBalance(interpreter, token);
     balance.tokens -= amount;
+
+    if (balance.tokenVersion === TokenVersion.FEE) {
+      balance.chargeableOutputs += 1;
+    }
     this.setTokenBalance(token, balance);
   }
 
   /**
    * Remove the balance from the token being created.
    */
-  addCreatedTokenOutput(amount: OutputValueType) {
+  addCreatedTokenOutput(amount: OutputValueType, tokenVersion: TokenVersion) {
     const balance = this.getCreatedTokenBalance();
     balance.tokens -= amount;
+
+    if (tokenVersion === TokenVersion.FEE) {
+      balance.chargeableOutputs += 1;
+    }
     this.setCreatedTokenBalance(balance);
   }
 
   /**
    * Remove the specified authority from the balance of the given token.
    */
-  addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
-    const balance = this.getTokenBalance(token);
+  async addOutputAuthority(
+    interpreter: ITxTemplateInterpreter,
+    count: number,
+    token: string,
+    authority: 'mint' | 'melt'
+  ) {
+    const balance = await this.getTokenBalance(interpreter, token);
     if (authority === 'mint') {
       balance.mint_authorities -= count;
     }
@@ -144,6 +193,42 @@ export class TxBalance {
       balance.melt_authorities -= count;
     }
     this.setCreatedTokenBalance(balance);
+  }
+
+  /**
+   * Calculate the total fee based on the number of chargeable outputs and inputs for each token in the transaction.
+   *
+   * **This method should be used only after the balances has been calculated using the addBalanceFromUtxo, and addOutput methods.**
+   *
+   * The fee is determined using the following rules:
+   * - If a token has one or more chargeable outputs, the fee is calculated as `chargeable_outputs * FEE_PER_OUTPUT`.
+   * - If a token has zero chargeable outputs but one or more chargeable inputs, a flat fee of `FEE_PER_OUTPUT` is applied.
+   * @returns the total fee in HTR
+   */
+  calculateFee() {
+    let fee = 0;
+    for (const token of Object.keys(this.balance)) {
+      const balance = this.balance[token];
+
+      if (balance.chargeableOutputs > 0) {
+        fee += balance.chargeableOutputs * FEE_PER_OUTPUT;
+      } else if (balance.chargeableInputs > 0) {
+        fee += FEE_PER_OUTPUT;
+      }
+    }
+    return fee;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  private async getTokenVersion(
+    interpreter: ITxTemplateInterpreter,
+    token: string
+  ): Promise<TokenVersion> {
+    if (token === NATIVE_TOKEN_UID) {
+      return TokenVersion.NATIVE;
+    }
+    const tokenDetails = await interpreter.getTokenDetails(token);
+    return tokenDetails.tokenInfo.version;
   }
 }
 
@@ -194,6 +279,8 @@ export class TxTemplateContext {
 
   tokenVersion?: TokenVersion;
 
+  fees: Map<string, bigint>;
+
   vars: Record<string, unknown>;
 
   _logs: string[];
@@ -213,6 +300,7 @@ export class TxTemplateContext {
     this._logs = [];
     this._logger = logger ?? getDefaultLogger();
     this.debug = debug;
+    this.fees = new Map();
   }
 
   /**
@@ -312,5 +400,20 @@ export class TxTemplateContext {
     }
 
     this.outputs.splice(position, 0, ...outputs);
+  }
+
+  /**
+   * Add a token that will be used to pay fees when the transaction is built.
+   * @param token token uid
+   * @param amount amount of the fee in the smallest unit ("cents").
+   */
+  addFee(token: string, amount: bigint) {
+    if (token !== NATIVE_TOKEN_UID && amount % BigInt(FEE_DIVISOR)) {
+      throw new Error(
+        `Invalid fee amount for token ${token}: ${amount}. Must be a multiple of ${FEE_DIVISOR}`
+      );
+    }
+    const fee = this.fees.get(token) || 0n;
+    this.fees.set(token, fee + amount);
   }
 }

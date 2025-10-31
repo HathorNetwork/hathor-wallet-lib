@@ -278,6 +278,12 @@ export const NanoMethodInstruction = z.object({
   actions: NanoAction.array().default([]),
 });
 
+export const FeeInstruction = z.object({
+  type: z.literal('action/fee'),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+  amount: TemplateRef.or(AmountSchema),
+});
+
 export const TxTemplateInstruction = z.discriminatedUnion('type', [
   RawInputInstruction,
   UtxoSelectInstruction,
@@ -291,6 +297,7 @@ export const TxTemplateInstruction = z.discriminatedUnion('type', [
   ConfigInstruction,
   SetVarInstruction,
   NanoMethodInstruction,
+  FeeInstruction,
 ]);
 
 export const TransactionTemplate = z.array(TxTemplateInstruction);

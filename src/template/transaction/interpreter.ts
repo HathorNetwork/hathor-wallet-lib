@@ -16,8 +16,9 @@ import {
   IGetUtxoResponse,
   IWalletBalanceData,
   TxInstance,
+  IWalletTokenDetails,
 } from './types';
-import { IHistoryTx, OutputValueType } from '../../types';
+import { IFeeEntry, IHistoryTx, OutputValueType } from '../../types';
 import { IHathorWallet, Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import Address from '../../models/address';
@@ -37,7 +38,8 @@ import CreateTokenTransaction from '../../models/create_token_transaction';
 import NanoContractHeader from '../../nano_contracts/header';
 import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
 import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
-import type Header from '../../headers/base';
+import type { Header } from '../../headers';
+import { FeeHeader } from '../../headers';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -169,6 +171,17 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       headers.push(nanoHeader);
     }
 
+    if (context.fees.size > 0) {
+      const entries: IFeeEntry[] = [];
+      const mappedTokens = context.tokens.map(t => ({ uid: t }));
+      for (const [token, amount] of context.fees.entries()) {
+        const tokenIndex = tokensUtils.getTokenIndex(mappedTokens, token);
+        entries.push({ amount, tokenIndex });
+      }
+      const feeHeader = new FeeHeader(entries);
+      headers.push(feeHeader);
+    }
+
     if (context.version === DEFAULT_TX_VERSION) {
       return new Transaction(context.inputs, context.outputs, {
         signalBits: context.signalBits,
@@ -189,7 +202,11 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        { signalBits: context.signalBits, headers }
+        {
+          signalBits: context.signalBits,
+          headers,
+          // tokenInfoVersion: context.tokenVersion,
+        }
       );
     }
     throw new Error('Unsupported Version byte provided');
@@ -275,5 +292,9 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType {
     return tokensUtils.getMintDeposit(mintAmount, this.wallet.storage);
+  }
+
+  async getTokenDetails(token: string): Promise<IWalletTokenDetails> {
+    return this.wallet.getTokenDetails(token);
   }
 }
