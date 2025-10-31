@@ -2433,6 +2433,7 @@ class HathorWallet extends EventEmitter {
       totalSupply: total,
       totalTransactions: transactions_count,
       tokenInfo: {
+        id: tokenId,
         name,
         symbol,
       },
