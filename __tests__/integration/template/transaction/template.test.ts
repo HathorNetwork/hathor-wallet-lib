@@ -12,6 +12,7 @@ import transactionUtils from '../../../../src/utils/transaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
+import { TokenVersion } from '../../../../src/types';
 
 const DEBUG = true;
 
@@ -436,5 +437,161 @@ describe('Template execution', () => {
         }),
       ])
     );
+  });
+});
+
+describe.skip('Template execution with fee tokens', () => {
+  let hWallet: HathorWallet;
+  let interpreter: WalletTxTemplateInterpreter;
+  let tokenUid: string;
+
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper(null);
+    interpreter = new WalletTxTemplateInterpreter(hWallet);
+    const address = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, {});
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should be not able to create a custom fee token without providing a fee header', async () => {
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({
+        createToken: true,
+        tokenName: 'Tmpl Test Fee Token 01',
+        tokenSymbol: 'TTT01',
+        tokenVersion: TokenVersion.FEE,
+      })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 5 })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+
+    expect(tx.outputs).toHaveLength(2);
+
+    // HTR change
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(9n);
+
+    // Created token
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(9999999n);
+
+    // Not have a fee header
+    expect(tx.headers).toHaveLength(0);
+
+    // after validate send the tx to the mining service
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.hash).not.toBeNull();
+    if (tx.hash === null) {
+      throw new Error('Transaction does not have a hash');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+  });
+
+  it('should be able to create a custom fee token providing a fee header', async () => {
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({
+        createToken: true,
+        tokenName: 'Tmpl Test Fee Token 01',
+        tokenSymbol: 'TTT01',
+        tokenVersion: TokenVersion.FEE,
+      })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 9999999, useCreatedToken: true })
+      .addFee({ amount: 1 })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+
+    expect(tx.outputs).toHaveLength(2);
+
+    // HTR change
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(9n);
+
+    // Created token
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(9999999n);
+
+    // Have a fee header
+    expect(tx.headers).toHaveLength(1);
+    expect(tx.getFeeHeader()).not.toBeNull();
+    expect(tx.getFeeHeader()!.entries).toHaveLength(1);
+    expect(tx.getFeeHeader()!.entries[0].tokenIndex).toBe(0);
+    expect(tx.getFeeHeader()!.entries[0].amount).toBe(1n);
+
+    // after validate send the tx to the mining service
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.hash).not.toBeNull();
+    if (tx.hash === null) {
+      throw new Error('Transaction does not have a hash');
+    }
+    tokenUid = tx.hash;
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+  });
+  it('should be able to complete the fees of a transaction', async () => {
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({
+        createToken: true,
+        tokenName: 'Tmpl Test Fee Token 01',
+        tokenSymbol: 'TTT01',
+        tokenVersion: TokenVersion.FEE,
+      })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 5 })
+      .addTokenOutput({ address: '{addr}', amount: 9999999, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 9999999, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 9999999, useCreatedToken: true })
+      .addTokenOutput({ address: '{addr}', amount: 9999999, useCreatedToken: true })
+      .addCompleteAction({ calculateFee: true, token: '00' })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+
+    expect(tx.outputs).toHaveLength(6);
+
+    // HTR change
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(9n);
+
+    // Created token
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(9999999n);
+
+    // Have a fee header
+    expect(tx.headers).toHaveLength(1);
+    expect(tx.getFeeHeader()).not.toBeNull();
+    expect(tx.getFeeHeader()!.entries).toHaveLength(1);
+    expect(tx.getFeeHeader()!.entries[0].tokenIndex).toBe(0);
+    expect(tx.getFeeHeader()!.entries[0].amount).toBe(4n);
+
+    // after validate send the tx to the mining service
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.hash).not.toBeNull();
+    if (tx.hash === null) {
+      throw new Error('Transaction does not have a hash');
+    }
+
+    await waitForTxReceived(hWallet, tx.hash, undefined);
   });
 });

@@ -6,18 +6,67 @@
  */
 /* eslint max-classes-per-file: ["error", 3] */
 
+// eslint-disable-next-line max-classes-per-file
 import { z } from 'zod';
 import { TokenVersion, IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  FEE_PER_OUTPUT,
+  FEE_DIVISOR,
+} from '../../constants';
 import { NanoAction } from './instructions';
+import { ITxTemplateInterpreter } from './types';
 
-export interface TokenBalance {
+export class TokenBalance {
   tokens: OutputValueType;
+
+  tokenVersion?: TokenVersion;
+
   mint_authorities: number;
+
   melt_authorities: number;
+
+  /**
+   * Count of non-authority outputs that is used to calculate the fee
+   */
+  chargeableOutputs: number;
+
+  /**
+   * Count of non-authority inputs that is used to calculate the fee
+   */
+  chargeableInputs: number;
+
+  constructor(tokenVersion?: TokenVersion) {
+    this.tokens = 0n;
+    this.mint_authorities = 0;
+    this.melt_authorities = 0;
+    this.chargeableOutputs = 0;
+    this.chargeableInputs = 0;
+    this.tokenVersion = tokenVersion;
+  }
+
+  needsToAddInputs() {
+    return this.tokens > 0;
+  }
+
+  needsToAddOutputs() {
+    return this.tokens < 0;
+  }
+
+  calculateFee(): bigint {
+    let fee = 0;
+    if (this.chargeableOutputs > 0) {
+      fee += this.chargeableOutputs * FEE_PER_OUTPUT;
+    } else if (this.chargeableInputs > 0) {
+      fee += FEE_PER_OUTPUT;
+    }
+    return BigInt(fee);
+  }
 }
 
 export class TxBalance {
@@ -25,23 +74,24 @@ export class TxBalance {
 
   createdTokenBalance: null | TokenBalance;
 
-  constructor() {
+  private _interpreter: ITxTemplateInterpreter;
+
+  constructor(interpreter: ITxTemplateInterpreter) {
     this.balance = {};
     this.createdTokenBalance = null;
+    this._interpreter = interpreter;
   }
 
   /**
    * Get the current balance of the given token.
    */
-  getTokenBalance(token: string): TokenBalance {
-    if (!this.balance[token]) {
-      this.balance[token] = {
-        tokens: 0n,
-        mint_authorities: 0,
-        melt_authorities: 0,
-      };
-    }
+  async getTokenBalance(token: string): Promise<TokenBalance> {
+    const balance = this.balance[token] || new TokenBalance();
 
+    if (!balance.tokenVersion) {
+      balance.tokenVersion = await this.getTokenVersion(token);
+    }
+    this.setTokenBalance(token, balance);
     return this.balance[token];
   }
 
@@ -49,13 +99,9 @@ export class TxBalance {
    * Get the current balance of the token being created.
    * Obs: only valid for create token transactions.
    */
-  getCreatedTokenBalance(): TokenBalance {
+  getCreatedTokenBalance(tokenVersion: TokenVersion): TokenBalance {
     if (!this.createdTokenBalance) {
-      this.createdTokenBalance = {
-        tokens: 0n,
-        mint_authorities: 0,
-        melt_authorities: 0,
-      };
+      this.createdTokenBalance = new TokenBalance(tokenVersion);
     }
     return this.createdTokenBalance;
   }
@@ -77,13 +123,13 @@ export class TxBalance {
   /**
    * Add balance from utxo of the given transaction.
    */
-  addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+  async addBalanceFromUtxo(tx: IHistoryTx, index: number) {
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }
     const output = tx.outputs[index];
     const { token } = output;
-    const balance = this.getTokenBalance(token);
+    const balance = await this.getTokenBalance(token);
 
     if (transactionUtils.isAuthorityOutput(output)) {
       if (transactionUtils.isMint(output)) {
@@ -95,6 +141,10 @@ export class TxBalance {
       }
     } else {
       balance.tokens += output.value;
+
+      if (balance.tokenVersion === TokenVersion.FEE) {
+        balance.chargeableInputs += 1;
+      }
     }
 
     this.setTokenBalance(token, balance);
@@ -103,26 +153,34 @@ export class TxBalance {
   /**
    * Remove the balance given from the token balance.
    */
-  addOutput(amount: OutputValueType, token: string) {
-    const balance = this.getTokenBalance(token);
+  async addOutput(amount: OutputValueType, token: string) {
+    const balance = await this.getTokenBalance(token);
     balance.tokens -= amount;
+
+    if (balance.tokenVersion === TokenVersion.FEE) {
+      balance.chargeableOutputs += 1;
+    }
     this.setTokenBalance(token, balance);
   }
 
   /**
    * Remove the balance from the token being created.
    */
-  addCreatedTokenOutput(amount: OutputValueType) {
-    const balance = this.getCreatedTokenBalance();
+  addCreatedTokenOutput(amount: OutputValueType, tokenVersion: TokenVersion) {
+    const balance = this.getCreatedTokenBalance(tokenVersion);
     balance.tokens -= amount;
+
+    if (balance.tokenVersion === TokenVersion.FEE) {
+      balance.chargeableOutputs += 1;
+    }
     this.setCreatedTokenBalance(balance);
   }
 
   /**
    * Remove the specified authority from the balance of the given token.
    */
-  addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
-    const balance = this.getTokenBalance(token);
+  async addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
+    const balance = await this.getTokenBalance(token);
     if (authority === 'mint') {
       balance.mint_authorities -= count;
     }
@@ -135,8 +193,12 @@ export class TxBalance {
   /**
    * Remove the authority from the balance of the token being created.
    */
-  addCreatedTokenOutputAuthority(count: number, authority: 'mint' | 'melt') {
-    const balance = this.getCreatedTokenBalance();
+  addCreatedTokenOutputAuthority(
+    count: number,
+    authority: 'mint' | 'melt',
+    tokenVersion: TokenVersion
+  ) {
+    const balance = this.getCreatedTokenBalance(tokenVersion);
     if (authority === 'mint') {
       balance.mint_authorities -= count;
     }
@@ -144,6 +206,42 @@ export class TxBalance {
       balance.melt_authorities -= count;
     }
     this.setCreatedTokenBalance(balance);
+  }
+
+  /**
+   * Calculate the total fee based on the number of chargeable outputs and inputs for each token in the transaction.
+   *
+   * **This method should be used only after the balances has been calculated using the addBalanceFromUtxo, and addOutput methods.**
+   *
+   * The fee is determined using the following rules:
+   * - If a token has one or more chargeable outputs, the fee is calculated as `chargeable_outputs * FEE_PER_OUTPUT`.
+   * - If a token has zero chargeable outputs but one or more chargeable inputs, a flat fee of `FEE_PER_OUTPUT` is applied.
+   * @returns the total fee in HTR
+   */
+  calculateFee(): bigint {
+    let fee = 0n;
+
+    if (this.createdTokenBalance) {
+      fee += this.createdTokenBalance.calculateFee();
+    }
+
+    for (const token of Object.keys(this.balance)) {
+      fee += this.balance[token].calculateFee();
+    }
+    return fee;
+  }
+
+  private async getTokenVersion(token: string): Promise<TokenVersion> {
+    if (token === NATIVE_TOKEN_UID) {
+      return TokenVersion.NATIVE;
+    }
+    // TODO-RAUL: remove this one when the wallet-service image gets updated with the version returned by the API
+    try {
+      const tokenDetails = await this._interpreter.getTokenDetails(token);
+      return tokenDetails.tokenInfo.version;
+    } catch (error) {
+      return TokenVersion.DEPOSIT;
+    }
   }
 }
 
@@ -194,6 +292,8 @@ export class TxTemplateContext {
 
   tokenVersion?: TokenVersion;
 
+  private _fees: Map<string, bigint>;
+
   vars: Record<string, unknown>;
 
   _logs: string[];
@@ -202,17 +302,18 @@ export class TxTemplateContext {
 
   debug: boolean;
 
-  constructor(logger?: ILogger, debug: boolean = false) {
+  constructor(interpreter: ITxTemplateInterpreter, logger?: ILogger, debug: boolean = false) {
     this.inputs = [];
     this.outputs = [];
     this.tokens = [];
     this.version = DEFAULT_TX_VERSION;
     this.signalBits = 0;
-    this.balance = new TxBalance();
+    this.balance = new TxBalance(interpreter);
     this.vars = {};
     this._logs = [];
     this._logger = logger ?? getDefaultLogger();
     this.debug = debug;
+    this._fees = new Map();
   }
 
   /**
@@ -228,6 +329,10 @@ export class TxTemplateContext {
 
   get logArray(): string[] {
     return this._logs;
+  }
+
+  get fees(): Map<string, bigint> {
+    return this._fees;
   }
 
   /**
@@ -312,5 +417,20 @@ export class TxTemplateContext {
     }
 
     this.outputs.splice(position, 0, ...outputs);
+  }
+
+  /**
+   * Add a token that will be used to pay fees when the transaction is built.
+   * @param token token uid
+   * @param amount amount of the fee in the smallest unit ("cents").
+   */
+  addFee(token: string, amount: bigint) {
+    if (token !== NATIVE_TOKEN_UID && amount % BigInt(FEE_DIVISOR)) {
+      throw new Error(
+        `Invalid fee amount for token ${token}: ${amount}. Must be a multiple of ${FEE_DIVISOR}`
+      );
+    }
+    const fee = this._fees.get(token) || 0n;
+    this._fees.set(token, fee + amount);
   }
 }
