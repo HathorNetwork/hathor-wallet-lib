@@ -38,8 +38,8 @@ import CreateTokenTransaction from '../../models/create_token_transaction';
 import NanoContractHeader from '../../nano_contracts/header';
 import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
 import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
-import type { Header } from '../../headers';
-import { FeeHeader } from '../../headers';
+import type Header from '../../headers/base';
+import FeeHeader from '../../headers/fee';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -155,11 +155,22 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     );
   }
 
+  private static buildFeeHeader(ctx: TxTemplateContext): FeeHeader {
+    const entries: IFeeEntry[] = Array.from(ctx.fees.entries()).map(([tokenUid, amount]) => ({
+      tokenIndex: tokensUtils.getTokenIndex(
+        ctx.tokens.map(t => ({ uid: t })),
+        tokenUid
+      ),
+      amount,
+    }));
+    return new FeeHeader(entries);
+  }
+
   async build(
     instructions: z.infer<typeof TransactionTemplate>,
     debug: boolean = false
   ): Promise<TxInstance> {
-    const context = new TxTemplateContext(this.wallet.logger, debug);
+    const context = new TxTemplateContext(this, this.wallet.logger, debug);
 
     for (const ins of TransactionTemplate.parse(instructions)) {
       await runInstruction(this, context, ins);
@@ -172,13 +183,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     }
 
     if (context.fees.size > 0) {
-      const entries: IFeeEntry[] = [];
-      const mappedTokens = context.tokens.map(t => ({ uid: t }));
-      for (const [token, amount] of context.fees.entries()) {
-        const tokenIndex = tokensUtils.getTokenIndex(mappedTokens, token);
-        entries.push({ amount, tokenIndex });
-      }
-      const feeHeader = new FeeHeader(entries);
+      const feeHeader = WalletTxTemplateInterpreter.buildFeeHeader(context);
       headers.push(feeHeader);
     }
 
@@ -202,11 +207,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        {
-          signalBits: context.signalBits,
-          headers,
-          // tokenInfoVersion: context.tokenVersion,
-        }
+        { signalBits: context.signalBits, headers, tokenInfoVersion: context.tokenVersion }
       );
     }
     throw new Error('Unsupported Version byte provided');

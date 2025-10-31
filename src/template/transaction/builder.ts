@@ -39,7 +39,6 @@ const ConfigInsArgs = ConfigInstruction.omit({ type: true });
 const SetVarInsArgs = SetVarInstruction.omit({ type: true });
 const NanoMethodInsArgs = NanoMethodInstruction.omit({ type: true });
 const FeeInsArgs = FeeInstruction.omit({ type: true });
-
 export class TransactionTemplateBuilder {
   template: z.infer<typeof TransactionTemplate>;
 
@@ -191,6 +190,9 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
+  /**
+   * FeeInstruction is used to set the fee header for a transaction.
+   */
   addFee(ins: z.input<typeof FeeInsArgs>) {
     const parsedIns = FeeInstruction.parse({
       type: 'action/fee',

@@ -173,7 +173,7 @@ export const CompleteTxInstruction = z.object({
   skipSelection: z.boolean().default(false), // do NOT add inputs to the tx
   skipChange: z.boolean().default(false), // do NOT add outputs from outstanding tokens.
   skipAuthorities: z.boolean().default(false), // Only select tokens
-  calculateFee: z.boolean().default(false), // For token creation
+  calculateFee: z.boolean().default(false), // For token creation and transactions with fee based tokens
 });
 
 export const ConfigInstruction = z.object({
