@@ -293,7 +293,7 @@ export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLIC
 /**
  * Fee per output
  */
-export const FEE_PER_OUTPUT: number = 1;
+export const FEE_PER_OUTPUT: bigint = 1n;
 
 /**
  * Max argument length in bytes (64Kib)

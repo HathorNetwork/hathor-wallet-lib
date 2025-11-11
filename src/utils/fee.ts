@@ -44,10 +44,10 @@ export class Fee {
       }
       // melt operation without outputs should be charged
       if (nonAuthorityInputs.has(token) && !nonAuthorityOutputs.has(token)) {
-        fee += BigInt(FEE_PER_OUTPUT);
+        fee += FEE_PER_OUTPUT;
       }
 
-      fee += BigInt((nonAuthorityOutputs.get(token) || []).length) * BigInt(FEE_PER_OUTPUT);
+      fee += BigInt((nonAuthorityOutputs.get(token) || []).length) * FEE_PER_OUTPUT;
     }
 
     return fee;
@@ -62,7 +62,7 @@ export class Fee {
    * @static
    */
   static calculateTokenCreationTxFee(outputs: Omit<TokenUtxo, 'token'>[]): bigint {
-    return BigInt(Fee.getNonAuthorityOutputs(outputs).length * FEE_PER_OUTPUT);
+    return BigInt(Fee.getNonAuthorityOutputs(outputs).length) * FEE_PER_OUTPUT;
   }
 
   /**

@@ -77,7 +77,7 @@ describe('Fee test suite', () => {
         tokenData: 1,
       }),
     ];
-    const expectedFee = BigInt(1 * FEE_PER_OUTPUT);
+    const expectedFee = FEE_PER_OUTPUT;
     // Act
     const fee = Fee.calculateTokenCreationTxFee(outputs);
 
@@ -116,7 +116,7 @@ describe('Fee test suite', () => {
     const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
 
     // Assert
-    expect(fee).toStrictEqual(BigInt(FEE_PER_OUTPUT));
+    expect(fee).toStrictEqual(FEE_PER_OUTPUT);
   });
 
   it('should charge fee based on the number of outputs', async () => {
@@ -136,6 +136,6 @@ describe('Fee test suite', () => {
     const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
 
     // Assert
-    expect(fee).toStrictEqual(BigInt(3 * FEE_PER_OUTPUT));
+    expect(fee).toStrictEqual(3n * FEE_PER_OUTPUT);
   });
 });
