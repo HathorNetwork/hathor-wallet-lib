@@ -157,7 +157,9 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getBlueprintSourceCode(blueprintId: string): Promise<NanoContractBlueprintSourceCodeAPIResponse> {
+  async getBlueprintSourceCode(
+    blueprintId: string
+  ): Promise<NanoContractBlueprintSourceCodeAPIResponse> {
     const data = { blueprint_id: blueprintId };
     const axiosInstance = await createRequestInstance();
     try {
@@ -236,7 +238,9 @@ const ncApi = {
     const data = { count, after, before, search, order };
     const axiosInstance = await createRequestInstance();
     try {
-      const response = await axiosInstance.get(`nano_contract/blueprint/on_chain`, { params: data });
+      const response = await axiosInstance.get(`nano_contract/blueprint/on_chain`, {
+        params: data,
+      });
       const responseData = response.data;
       if (response.status === 200 && responseData.success) {
         return responseData;
