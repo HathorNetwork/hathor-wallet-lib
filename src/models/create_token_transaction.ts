@@ -32,7 +32,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
-  tokenInfoVersion?: TokenVersion;
+  tokenVersion?: TokenVersion;
   headers?: Header[];
 };
 
@@ -41,7 +41,7 @@ class CreateTokenTransaction extends Transaction {
 
   symbol: string;
 
-  tokenInfoVersion: TokenVersion;
+  tokenVersion: TokenVersion;
 
   constructor(
     name: string,
@@ -58,7 +58,7 @@ class CreateTokenTransaction extends Transaction {
       parents: [],
       tokens: [],
       hash: null,
-      tokenInfoVersion: TokenVersion.DEPOSIT,
+      tokenVersion: TokenVersion.DEPOSIT,
       headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
@@ -67,7 +67,7 @@ class CreateTokenTransaction extends Transaction {
     this.version = CREATE_TOKEN_TX_VERSION;
     this.name = name;
     this.symbol = symbol;
-    this.tokenInfoVersion = newOptions.tokenInfoVersion ?? TokenVersion.DEPOSIT;
+    this.tokenVersion = newOptions.tokenVersion ?? TokenVersion.DEPOSIT;
   }
 
   /**
@@ -103,7 +103,7 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   serializeTokenInfo(array: Buffer[]) {
-    if (!this.tokenInfoVersion) {
+    if (!this.tokenVersion) {
       throw new CreateTokenTxInvalid('Token version is required when creating a new token');
     }
 
@@ -129,7 +129,7 @@ class CreateTokenTransaction extends Transaction {
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
 
     // Token info version
-    array.push(intToBytes(this.tokenInfoVersion, 1));
+    array.push(intToBytes(this.tokenVersion, 1));
     // Token name size
     array.push(intToBytes(nameBytes.length, 1));
     // Token name
@@ -141,7 +141,7 @@ class CreateTokenTransaction extends Transaction {
   }
 
   getTokenInfoFromBytes(srcBuf: Buffer): Buffer {
-    let tokenInfoVersion;
+    let tokenVersion;
     let lenName;
     let lenSymbol;
     let bufName;
@@ -150,12 +150,12 @@ class CreateTokenTransaction extends Transaction {
     let buf = Buffer.from(srcBuf);
 
     /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
-    [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
-    this.tokenInfoVersion = tokenInfoVersion;
+    [tokenVersion, buf] = unpackToInt(1, false, buf);
+    this.tokenVersion = tokenVersion;
 
     const allowedVersions = new Set([TokenVersion.DEPOSIT, TokenVersion.FEE]);
-    if (!allowedVersions.has(tokenInfoVersion)) {
-      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenInfoVersion}`);
+    if (!allowedVersions.has(tokenVersion)) {
+      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenVersion}`);
     }
 
     [lenName, buf] = unpackToInt(1, false, buf);

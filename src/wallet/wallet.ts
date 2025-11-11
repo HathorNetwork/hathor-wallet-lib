@@ -1688,7 +1688,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: boolean;
       pinCode: string | null;
       signTx: boolean;
-      tokenInfoVersion: TokenVersion | null;
+      tokenVersion: TokenVersion | null;
     };
     const newOptions: optionsType = {
       address: null,
@@ -1703,7 +1703,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: false,
       pinCode: null,
       signTx: true,
-      tokenInfoVersion: TokenVersion.DEPOSIT,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...options,
     };
 
@@ -1722,11 +1722,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError('The melt authority address must belong to your wallet.');
       }
     }
-    const tokenInfoVersion = newOptions.tokenInfoVersion || TokenVersion.DEPOSIT;
+    const tokenVersion = newOptions.tokenVersion || TokenVersion.DEPOSIT;
 
     // 1. Calculate HTR deposit needed
     let deposit = 0n;
-    if (tokenInfoVersion === TokenVersion.DEPOSIT) {
+    if (tokenVersion === TokenVersion.DEPOSIT) {
       const depositPercent = this.storage.getTokenDepositPercentage();
       deposit += tokens.getDepositAmount(amount, depositPercent);
     }
@@ -1768,7 +1768,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 2. Calculate the fee, we are using a simplified fee calculation since in this method we only have outputs related to the token creation
     // Data outputs are not included in this fee calculation because they have their own fee (0.01 HTR per data output)
     let fee = 0n;
-    if (tokenInfoVersion === TokenVersion.FEE) {
+    if (tokenVersion === TokenVersion.FEE) {
       fee = Fee.calculateTokenCreationTxFee([...outputsObj]);
     }
 
@@ -1817,7 +1817,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj, {
-      tokenInfoVersion,
+      tokenVersion,
       headers,
     });
 

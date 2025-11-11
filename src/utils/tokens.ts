@@ -169,7 +169,7 @@ const tokens = {
    * @param {string} uid Token uid
    * @param {string} name Token name
    * @param {string} symbol Token symbol
-   * @param {string} version Token version, defaults to TokenInfoVersion.DEPOSIT
+   * @param {string} version Token version, defaults to TokenVersion.DEPOSIT
    *
    * @return {string} Configuration string of the token
    *

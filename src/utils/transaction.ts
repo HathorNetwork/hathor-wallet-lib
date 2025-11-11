@@ -613,7 +613,7 @@ const transaction = {
       timestamp: txData.timestamp || null,
       parents: txData.parents || [],
       tokens: txData.tokens || [],
-      tokenInfoVersion: txData.tokenVersion,
+      tokenVersion: txData.tokenVersion,
       headers: txData.headers || [],
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {

@@ -388,7 +388,7 @@ const helpers = {
       weight: data.weight,
       timestamp: data.timestamp,
       tokens: data.tokens,
-      tokenInfoVersion: data.tokenInfoVersion,
+      tokenVersion: data.tokenVersion,
     };
 
     if (data.version === CREATE_TOKEN_TX_VERSION) {

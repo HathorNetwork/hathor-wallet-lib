@@ -1545,7 +1545,7 @@ describe('sendTransaction', () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
 
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 8000n, {
@@ -1999,7 +1999,7 @@ describe('createNewToken', () => {
 
     // Creating the new token
     const newTokenResponse = await hWallet.createNewToken('TokenName', 'TKN', 8582n, {
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
 
     // Validating the creation tx
@@ -2008,7 +2008,7 @@ describe('createNewToken', () => {
       name: 'TokenName',
       symbol: 'TKN',
       version: 2,
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
       headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
     });
     const tokenUid = newTokenResponse.hash;
@@ -2037,7 +2037,7 @@ describe('createNewToken', () => {
     const { hash: fbtUid } = await hWallet.createNewToken('FeeBasedToken', 'FBT', 8582n, {
       address: destinationAddress,
       changeAddress,
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
     await waitForTxReceived(hWallet, fbtUid);
     // Validating the tokens are on the correct addresses
@@ -2075,7 +2075,7 @@ describe('createNewToken', () => {
     const fbtResponse = await hWallet.createNewToken('FeeBasedToken', 'FBT', 8582n, {
       createMint: false,
       createMelt: false,
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
     expect(fbtResponse).toHaveProperty('hash');
     validateFeeAmount(fbtResponse.headers, 1n);
@@ -2109,7 +2109,7 @@ describe('createNewToken', () => {
       mintAuthorityAddress: addr10,
       createMelt: true,
       meltAuthorityAddress: addr11,
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
 
     expect(fbtResponse).toHaveProperty('hash');
@@ -2215,7 +2215,7 @@ describe('mintTokens', () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
-    const options = { tokenInfoVersion: TokenVersion.FEE };
+    const options = { tokenVersion: TokenVersion.FEE };
     const { hash: fbtUid } = await createTokenHelper(
       hWallet,
       'FeeBasedToken',
@@ -2389,7 +2389,7 @@ describe('mintTokens', () => {
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 13n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
     const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
     let expectedHtrFunds = 11n;
 
@@ -2632,7 +2632,7 @@ describe('meltTokens', () => {
 
     // Creating the token
     const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     });
     expectedHtrAmount -= 1n; // 14
 

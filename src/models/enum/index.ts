@@ -1,1 +1,1 @@
-export { TokenVersion as TokenInfoVersion } from '../../types';
+export { TokenVersion } from '../../types';

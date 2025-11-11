@@ -139,7 +139,7 @@ test('New tx', () => {
 test('Deposit token tx', () => {
   const network = new Network('testnet');
   const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
-    tokenInfoVersion: TokenVersion.DEPOSIT,
+    tokenVersion: TokenVersion.DEPOSIT,
   });
   const info: Buffer[] = [];
   tx.serializeTokenInfo(info);
@@ -182,7 +182,7 @@ test('Fee token tx', () => {
   // Arrange
   const network = new Network('testnet');
   const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
-    tokenInfoVersion: TokenVersion.FEE,
+    tokenVersion: TokenVersion.FEE,
   });
   const info: Buffer[] = [];
   tx.serializeTokenInfo(info);
@@ -221,7 +221,7 @@ test('Fee token tx', () => {
   expect(tx2.symbol).toBe('TST');
   expect(tx2.name).toBe(tx.name);
   expect(tx2.symbol).toBe(tx.symbol);
-  expect(tx2.tokenInfoVersion).toBe(TokenVersion.FEE);
+  expect(tx2.tokenVersion).toBe(TokenVersion.FEE);
 });
 
 test('Invalid token info version tx', () => {
@@ -229,7 +229,7 @@ test('Invalid token info version tx', () => {
   const invalidVersion = 99 as TokenVersion;
   const network = new Network('testnet');
   const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
-    tokenInfoVersion: invalidVersion,
+    tokenVersion: invalidVersion,
   });
   const info: Buffer[] = [];
   tx.serializeTokenInfo(info);

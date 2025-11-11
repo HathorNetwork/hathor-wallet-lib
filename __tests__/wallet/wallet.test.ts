@@ -2582,7 +2582,7 @@ test('prepareCreateNewToken - fee token with mint authority and change outputs',
     createMintAuthority: true,
     mintAuthorityAddress: addresses[2],
     pinCode: '123456',
-    tokenInfoVersion: TokenVersion.FEE,
+    tokenVersion: TokenVersion.FEE,
   });
 
   expect(result.inputs).toEqual([expect.objectContaining({ data: expect.any(Object) })]);
@@ -2649,7 +2649,7 @@ test('prepareCreateNewToken - fee token without enough HTR for fee', async () =>
       createMintAuthority: true,
       mintAuthorityAddress: addresses[2],
       pinCode: '123456',
-      tokenInfoVersion: TokenVersion.FEE,
+      tokenVersion: TokenVersion.FEE,
     })
   ).rejects.toThrow('No utxos available to fill the request. Token: HTR - Amount: 1000.');
 
