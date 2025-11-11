@@ -2760,15 +2760,15 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} txId The transaction to query
    * @param {string} graphType The graph type to query
-   * @param {string} maxLevel Max level to render
+   * @param {number} maxLevel Max level to render
    *
    * @returns {Promise<string>} The graphviz digraph
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async graphvizNeighborsQuery(txId, graphType, maxLevel) {
-    const url = `${this.storage.config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
     const graphvizData = await new Promise((resolve, reject) => {
       txApi
-        .getGraphviz(url, resolve)
+        .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
