@@ -331,7 +331,7 @@ const transaction = {
     }
 
     // we should enforce the conversion before doing the subtraction
-    const changeAmount = BigInt(filledAmount) - BigInt(totalAmount);
+    const changeAmount = filledAmount - totalAmount;
 
     return {
       utxos: utxosToUse,
