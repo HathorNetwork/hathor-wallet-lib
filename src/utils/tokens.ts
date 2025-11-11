@@ -222,7 +222,7 @@ const tokens = {
     }
     // if the config has 4 elements, it means that it is a token created before
     // we allowed the token versions
-    let version = this.getDefaultTokenVersion();
+    let version = this.getDefaultCustomTokenVersion();
     if (configArr.length === 5) {
       version = Number(configArr.pop()!);
     }
@@ -234,13 +234,13 @@ const tokens = {
   },
 
   /**
-   * Gets the default token version. Before the token versioning system was implemented,
+   * Gets the default custom token version. Before the custom token versioning system was implemented,
    * all tokens were created with the same version (DEPOSIT).
-   * @returns {TokenVersion} The default token version to be used when creating a token
+   * @returns {TokenVersion} The default custom token version to be used when creating a token
    * @memberof Tokens
    * @inner
    */
-  getDefaultTokenVersion(): TokenVersion {
+  getDefaultCustomTokenVersion(): TokenVersion {
     return TokenVersion.DEPOSIT;
   },
 
@@ -258,7 +258,7 @@ const tokens = {
     if (!this.isHathorToken(tokenData.uid) && !tokenData.version) {
       return {
         ...tokenData,
-        version: this.getDefaultTokenVersion(),
+        version: this.getDefaultCustomTokenVersion(),
       } satisfies ITokenData;
     }
     return tokenData;
