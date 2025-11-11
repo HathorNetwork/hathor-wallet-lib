@@ -1732,7 +1732,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (newOptions.data && newOptions.data.length > 0) {
-      // For data outputs, we have a fee of 0.01 HTR per data output (this fee isn't related to the transaction fee that is calculated based in the token version)
+      // We require a 0.01 HTR deposit for each data output created
       deposit += tokens.getDataFee(newOptions.data.length);
     }
 
@@ -1751,14 +1751,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // a. Token amount
-    const address = this.validateAddressAndThrow(newOptions.address);
+    const address = this.validateAddress(newOptions.address);
 
     const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
 
     if (newOptions.createMint) {
       // b. Mint authority
-      const mintAuthorityAddressObj = this.validateAddressAndThrow(newOptions.mintAuthorityAddress);
+      const mintAuthorityAddressObj = this.validateAddress(newOptions.mintAuthorityAddress);
       const p2pkhMintAuthorityScript = mintAuthorityAddressObj.getScript();
       outputsObj.push(
         new Output(TOKEN_MINT_MASK, p2pkhMintAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA })
@@ -1789,13 +1789,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (changeAmount) {
-      // d. HTR change output
+      // c. HTR change output
       outputsObj.push(this.createOutput(changeAmount, newOptions.changeAddress));
     }
 
     if (newOptions.createMelt) {
-      // c. Melt authority
-      const meltAuthorityAddressObj = this.validateAddressAndThrow(newOptions.meltAuthorityAddress);
+      // d. Melt authority
+      const meltAuthorityAddressObj = this.validateAddress(newOptions.meltAuthorityAddress);
 
       const p2pkhMeltAuthorityScript = meltAuthorityAddressObj.getScript();
       outputsObj.push(
@@ -1804,7 +1804,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const utxosAddressPath: string[] = [];
-    // 2. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
+    // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
     const inputsObj: Input[] = [];
     for (const utxo of utxos) {
       inputsObj.push(new Input(utxo.txId, utxo.index));
@@ -2084,7 +2084,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
-      const authorityAddressObj = this.validateAddressAndThrow(newOptions.mintAuthorityAddress);
+      const authorityAddressObj = this.validateAddress(newOptions.mintAuthorityAddress);
       const p2pkhAuthorityScript = authorityAddressObj.getScript();
       outputsObj.push(
         new Output(TOKEN_MINT_MASK, p2pkhAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA })
@@ -2281,7 +2281,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (newOptions.createAnotherMelt) {
       // b. Melt authority
-      const authorityAddressObj = this.validateAddressAndThrow(newOptions.meltAuthorityAddress);
+      const authorityAddressObj = this.validateAddress(newOptions.meltAuthorityAddress);
       const p2pkhAuthorityScript = authorityAddressObj.getScript();
       outputsObj.push(
         new Output(TOKEN_MELT_MASK, p2pkhAuthorityScript, {
@@ -2399,7 +2399,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   private createOutput(amount: bigint, address: string | null, tokenData?: number): Output {
     const addressStr = address || this.getCurrentAddress({ markAsUsed: true }).address;
-    const addressObj = this.validateAddressAndThrow(addressStr);
+    const addressObj = this.validateAddress(addressStr);
     return new Output(amount, new P2PKH(addressObj).createScript(), { tokenData });
   }
 
@@ -2412,7 +2412,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    * @throws SendTxError if the address is not valid
    */
-  private validateAddressAndThrow(
+  private validateAddress(
     address: string | null,
     { markAsUsed }: { markAsUsed: boolean } = { markAsUsed: true }
   ): Address {
