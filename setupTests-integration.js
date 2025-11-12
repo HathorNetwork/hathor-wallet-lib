@@ -66,6 +66,7 @@ async function createOCBs() {
 
 // This function will run before each test file is executed
 beforeAll(async () => {
+  console.log('Before all setup', global.__INTEGRATION_SETUP_DONE__);
   // Per-file setup: Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
   const { testName } = global;
   const testLogger = new LoggerUtil(testName);
@@ -94,7 +95,9 @@ beforeAll(async () => {
       process.exit(1);
     }
 
+    console.log('AWAIT CREATE OCBs')
     await createOCBs();
+    console.log('AFTER AWAIT CREATE OCBs')
 
     global.__INTEGRATION_SETUP_DONE__ = true;
   }
