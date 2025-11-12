@@ -2480,14 +2480,7 @@ describe('mintTokens', () => {
         }),
       ])
     );
-    expect(mintResponse.headers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          tokenIndex: 0,
-          amount: 1n,
-        }),
-      ])
-    );
+    validateFeeAmount(mintResponse.headers, 1n);
     expectedHtrFunds -= 1n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
