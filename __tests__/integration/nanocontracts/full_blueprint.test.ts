@@ -536,7 +536,6 @@ describe('Full blueprint basic tests', () => {
     expect(builtInBlueprintList.blueprints.length).toBe(0);
 
     const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
-    console.log('ocb', onChainBlueprintList);
     expect(onChainBlueprintList.success).toBe(true);
     expect(onChainBlueprintList.blueprints.length).toBe(5);
 

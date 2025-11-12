@@ -19,10 +19,7 @@ import { stopGLLBackgroundTask } from './src/sync/gll';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
-// Global flag to track if one-time setup has run
-global.__INTEGRATION_SETUP_DONE__ = global.__INTEGRATION_SETUP_DONE__ || false;
-
-async function createOCBs() {
+async function createOCBs(sharedState) {
   const { seed } = WALLET_CONSTANTS.ocb;
   const ocbWallet = await generateWalletHelper({ seed });
   const address0 = await ocbWallet.getAddressAtIndex(0);
@@ -31,17 +28,17 @@ async function createOCBs() {
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
   const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
   await waitTxConfirmed(ocbWallet, txBet.hash, null);
-  global.BET_BLUEPRINT_ID = txBet.hash;
+  sharedState.blueprintIds.BET_BLUEPRINT_ID = txBet.hash;
 
   const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
   const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
   await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
-  global.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
+  sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
 
   const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
   const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
   await waitTxConfirmed(ocbWallet, txFull.hash, null);
-  global.FULL_BLUEPRINT_ID = txFull.hash;
+  sharedState.blueprintIds.FULL_BLUEPRINT_ID = txFull.hash;
 
   const codeParent = fs.readFileSync(
     './__tests__/integration/configuration/blueprints/test_parent.py',
@@ -50,7 +47,7 @@ async function createOCBs() {
 
   const txParent = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
   await waitTxConfirmed(ocbWallet, txParent.hash);
-  global.PARENT_BLUEPRINT_ID = txParent.hash;
+  sharedState.blueprintIds.PARENT_BLUEPRINT_ID = txParent.hash;
 
   const codeChildren = fs.readFileSync(
     './__tests__/integration/configuration/blueprints/test_children.py',
@@ -61,12 +58,11 @@ async function createOCBs() {
     address0
   );
   await waitTxConfirmed(ocbWallet, txChildren.hash);
-  global.CHILDREN_BLUEPRINT_ID = txChildren.hash;
+  sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID = txChildren.hash;
 }
 
 // This function will run before each test file is executed
 beforeAll(async () => {
-  console.log('Before all setup', global.__INTEGRATION_SETUP_DONE__);
   // Per-file setup: Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
   const { testName } = global;
   const testLogger = new LoggerUtil(testName);
@@ -77,8 +73,9 @@ beforeAll(async () => {
   precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
   await precalculationHelpers.test.initWithWalletsFile();
 
-  // One-time setup: Run only once across all test files
-  if (!global.__INTEGRATION_SETUP_DONE__) {
+  // One-time setup: Run only once across all test files (using shared state from CustomEnvironment)
+  const sharedState = global.__SHARED_STATE__;
+  if (!sharedState.setupDone) {
     // Await first block to be mined to release genesis reward lock
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     try {
@@ -95,12 +92,17 @@ beforeAll(async () => {
       process.exit(1);
     }
 
-    console.log('AWAIT CREATE OCBs')
-    await createOCBs();
-    console.log('AFTER AWAIT CREATE OCBs')
+    await createOCBs(sharedState);
 
-    global.__INTEGRATION_SETUP_DONE__ = true;
+    sharedState.setupDone = true;
   }
+
+  // Copy blueprint IDs from shared state to global for test access
+  global.BET_BLUEPRINT_ID = sharedState.blueprintIds.BET_BLUEPRINT_ID;
+  global.AUTHORITY_BLUEPRINT_ID = sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID;
+  global.FULL_BLUEPRINT_ID = sharedState.blueprintIds.FULL_BLUEPRINT_ID;
+  global.PARENT_BLUEPRINT_ID = sharedState.blueprintIds.PARENT_BLUEPRINT_ID;
+  global.CHILDREN_BLUEPRINT_ID = sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID;
 });
 
 afterAll(async () => {
