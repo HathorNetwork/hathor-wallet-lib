@@ -537,26 +537,15 @@ describe('Full blueprint basic tests', () => {
 
     const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
     expect(onChainBlueprintList.success).toBe(true);
-    expect(onChainBlueprintList.blueprints.length).toBe(4);
-    expect(onChainBlueprintList.blueprints[0].id).toBe(blueprintId);
-    expect(onChainBlueprintList.blueprints[0].name).toBe('FullBlueprint');
+    expect(onChainBlueprintList.blueprints.length).toBe(5);
 
     const nanoList = await ncApi.getNanoContractCreationList();
-    expect(nanoList.nc_creation_txs.length).toBe(1);
-    expect(nanoList.nc_creation_txs[0].blueprint_id).toBe(blueprintId);
-    expect(nanoList.nc_creation_txs[0].nano_contract_id).toBe(txInitialize.hash);
+    // The correct length depends on the execution order, so I
+    // just make sure there is at least one
+    expect(nanoList.nc_creation_txs.length).toBeGreaterThan(0);
   };
 
   it('Run with on chain blueprint', async () => {
-    // Use the blueprint code
-    const code = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/full_blueprint.py',
-      'utf8'
-    );
-    const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address0);
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, tx.hash);
-    // Execute the blueprint tests
-    await executeTests(hWallet, tx.hash);
+    await executeTests(hWallet, global.FULL_BLUEPRINT_ID);
   });
 });

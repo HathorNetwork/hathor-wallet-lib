@@ -39,6 +39,26 @@ async function createOCBs() {
   const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
   await waitTxConfirmed(ocbWallet, txFull.hash, null);
   global.FULL_BLUEPRINT_ID = txFull.hash;
+
+  const codeParent = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/test_parent.py',
+    'utf8'
+  );
+
+  const txParent = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
+  await waitTxConfirmed(ocbWallet, txParent.hash);
+  global.PARENT_BLUEPRINT_ID = txParent.hash;
+
+  const codeChildren = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/test_children.py',
+    'utf8'
+  );
+  const txChildren = await ocbWallet.createAndSendOnChainBlueprintTransaction(
+    codeChildren,
+    address0
+  );
+  await waitTxConfirmed(ocbWallet, txChildren.hash);
+  global.CHILDREN_BLUEPRINT_ID = txChildren.hash;
 }
 
 // This function will run before each test file is executed
