@@ -22,6 +22,7 @@ import {
   ConfigInstruction,
   SetVarInstruction,
   NanoMethodInstruction,
+  FeeInstruction,
 } from './instructions';
 
 // Helper schemas to validate the arguments of each command in the builder args
@@ -37,7 +38,7 @@ const CompleteTxInsArgs = CompleteTxInstruction.omit({ type: true });
 const ConfigInsArgs = ConfigInstruction.omit({ type: true });
 const SetVarInsArgs = SetVarInstruction.omit({ type: true });
 const NanoMethodInsArgs = NanoMethodInstruction.omit({ type: true });
-
+const FeeInsArgs = FeeInstruction.omit({ type: true });
 export class TransactionTemplateBuilder {
   template: z.infer<typeof TransactionTemplate>;
 
@@ -182,6 +183,19 @@ export class TransactionTemplateBuilder {
   addNanoMethodExecution(ins: z.input<typeof NanoMethodInsArgs>) {
     const parsedIns = NanoMethodInstruction.parse({
       type: 'nano/execute',
+      ...ins,
+    });
+    this.template.push(parsedIns);
+
+    return this;
+  }
+
+  /**
+   * FeeInstruction is used to set the fee header for a transaction.
+   */
+  addFee(ins: z.input<typeof FeeInsArgs>) {
+    const parsedIns = FeeInstruction.parse({
+      type: 'action/fee',
       ...ins,
     });
     this.template.push(parsedIns);

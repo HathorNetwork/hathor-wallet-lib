@@ -8,7 +8,7 @@
 import { z } from 'zod';
 import { TransactionTemplate } from './instructions';
 import { TxTemplateContext } from './context';
-import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../types';
+import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType, TokenVersion } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
 import { IHathorWallet, Utxo } from '../../wallet/types';
@@ -50,6 +50,20 @@ export interface IWalletBalanceData {
   };
 }
 
+export interface IWalletTokenDetails {
+  totalSupply: bigint;
+  totalTransactions: number;
+  tokenInfo: {
+    name: string;
+    symbol: string;
+    version: TokenVersion;
+  };
+  authorities: {
+    mint: boolean;
+    melt: boolean;
+  };
+}
+
 export interface ITxTemplateInterpreter {
   build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean): Promise<TxInstance>;
   getAddress(markAsUsed?: boolean): Promise<string>;
@@ -62,4 +76,5 @@ export interface ITxTemplateInterpreter {
   getNetwork(): Network;
   getWallet(): IHathorWallet;
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType;
+  getTokenDetails(token: string): Promise<IWalletTokenDetails>;
 }
