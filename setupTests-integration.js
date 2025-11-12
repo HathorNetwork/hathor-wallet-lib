@@ -19,6 +19,9 @@ import { stopGLLBackgroundTask } from './src/sync/gll';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
+// Global flag to track if one-time setup has run
+global.__INTEGRATION_SETUP_DONE__ = global.__INTEGRATION_SETUP_DONE__ || false;
+
 async function createOCBs() {
   const { seed } = WALLET_CONSTANTS.ocb;
   const ocbWallet = await generateWalletHelper({ seed });
@@ -63,33 +66,38 @@ async function createOCBs() {
 
 // This function will run before each test file is executed
 beforeAll(async () => {
-  // Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
+  // Per-file setup: Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
   const { testName } = global;
   const testLogger = new LoggerUtil(testName);
   testLogger.init({ filePrettyPrint: true });
   loggers.test = testLogger;
 
-  // Loading pre-calculated wallets
+  // Per-file setup: Loading pre-calculated wallets
   precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
   await precalculationHelpers.test.initWithWalletsFile();
 
-  // Await first block to be mined to release genesis reward lock
-  const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-  try {
-    await waitNextBlock(gWallet.storage);
-  } catch (err) {
-    // When running jest with jasmine there's a bug (or behavior)
-    // that any error thrown inside beforeAll methods don't stop the tests
-    // https://github.com/jestjs/jest/issues/2713
-    // The solution for that is to capture the error and call process.exit
-    // https://github.com/jestjs/jest/issues/2713#issuecomment-319822476
-    // The downside of that is that we don't get logs, however is the only
-    // way for now. We should stop using jasmine soon (and change for jest-circus)
-    // when we do some package upgrades
-    process.exit(1);
-  }
+  // One-time setup: Run only once across all test files
+  if (!global.__INTEGRATION_SETUP_DONE__) {
+    // Await first block to be mined to release genesis reward lock
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    try {
+      await waitNextBlock(gWallet.storage);
+    } catch (err) {
+      // When running jest with jasmine there's a bug (or behavior)
+      // that any error thrown inside beforeAll methods don't stop the tests
+      // https://github.com/jestjs/jest/issues/2713
+      // The solution for that is to capture the error and call process.exit
+      // https://github.com/jestjs/jest/issues/2713#issuecomment-319822476
+      // The downside of that is that we don't get logs, however is the only
+      // way for now. We should stop using jasmine soon (and change for jest-circus)
+      // when we do some package upgrades
+      process.exit(1);
+    }
 
-  await createOCBs();
+    await createOCBs();
+
+    global.__INTEGRATION_SETUP_DONE__ = true;
+  }
 });
 
 afterAll(async () => {
