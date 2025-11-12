@@ -31,10 +31,9 @@ import {
   TokenOutputInstruction,
   TxTemplateInstruction,
   UtxoSelectInstruction,
-  FeeInstruction,
   getVariable,
 } from './instructions';
-import { TokenBalance, TxTemplateContext } from './context';
+import { TxTemplateContext } from './context';
 import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
 import Input from '../../models/input';
 import Output from '../../models/output';
@@ -149,7 +148,7 @@ export async function execRawInputInstruction(
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
   // Add balance to the ctx.balance
-  await ctx.balance.addBalanceFromUtxo(interpreter, origTx, index);
+  await ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
   ctx.addInputs(position, input);
@@ -285,11 +284,11 @@ export async function execRawOutputInstruction(
     tokenData = ctx.addToken(token);
     if (authority) {
       ctx.log(`Creating authority output`);
-      await ctx.balance.addOutputAuthority(_interpreter, 1, token, authority);
+      await ctx.balance.addOutputAuthority(1, token, authority);
     } else {
       ctx.log(`Creating token output`);
       if (amount) {
-        await ctx.balance.addOutput(_interpreter, amount, token);
+        await ctx.balance.addOutput(amount, token);
       }
     }
   }
@@ -345,7 +344,7 @@ export async function execDataOutputInstruction(
     ctx.log(`Using token(${token})`);
     // Add token to tokens array
     tokenData = ctx.addToken(token);
-    await ctx.balance.addOutput(_interpreter, 1n, token);
+    await ctx.balance.addOutput(1n, token);
   }
 
   const dataScript = new ScriptData(data);
@@ -391,7 +390,7 @@ export async function execTokenOutputInstruction(
     ctx.log(`Using token(${token})`);
     // Add token to tokens array
     tokenData = ctx.addToken(token);
-    await ctx.balance.addOutput(interpreter, amount, token);
+    await ctx.balance.addOutput(amount, token);
   }
 
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
@@ -450,7 +449,7 @@ export async function execAuthorityOutputInstruction(
     // Add token to tokens array
     tokenData = ctx.addToken(token);
     // Add balance to the ctx.balance
-    await ctx.balance.addOutputAuthority(interpreter, count, token, authority);
+    await ctx.balance.addOutputAuthority(count, token, authority);
   }
 
   let amount: OutputValueType | undefined = 0n;
@@ -670,7 +669,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} mint outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(interpreter, count, tokenUid, 'mint');
+      await ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, changeScript, {
@@ -697,7 +696,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(interpreter, origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -709,7 +708,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} melt outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(interpreter, count, tokenUid, 'melt');
+      await ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, changeScript, {
@@ -736,7 +735,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(interpreter, origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context

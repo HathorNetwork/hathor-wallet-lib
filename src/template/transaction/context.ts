@@ -59,9 +59,9 @@ export class TokenBalance {
   }
 
   calculateFee(): bigint {
-    let fee = 0;
+    let fee = 0n;
     if (this.chargeableOutputs > 0) {
-      fee += this.chargeableOutputs * FEE_PER_OUTPUT;
+      fee += BigInt(this.chargeableOutputs) * FEE_PER_OUTPUT;
     } else if (this.chargeableInputs > 0) {
       fee += FEE_PER_OUTPUT;
     }

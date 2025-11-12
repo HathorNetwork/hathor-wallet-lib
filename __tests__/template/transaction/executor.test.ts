@@ -593,7 +593,6 @@ const ShuffleExecutorTest = async executor => {
 };
 
 const ChargeableInputsTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockFeeTokenDetails),
     getTx: jest.fn().mockReturnValue(
@@ -613,6 +612,7 @@ const ChargeableInputsTest = async executor => {
       })
     ),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
 
   // Add two non-authority inputs from the same transaction
   const ins1 = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
@@ -633,11 +633,11 @@ const ChargeableInputsTest = async executor => {
 };
 
 const ChargeableOutputsTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockFeeTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
 
   // Add three token outputs
   const ins1 = TokenOutputInstruction.parse({

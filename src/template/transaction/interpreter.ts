@@ -207,7 +207,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        { signalBits: context.signalBits, headers, tokenInfoVersion: context.tokenVersion }
+        { signalBits: context.signalBits, headers, tokenVersion: context.tokenVersion }
       );
     }
     throw new Error('Unsupported Version byte provided');
