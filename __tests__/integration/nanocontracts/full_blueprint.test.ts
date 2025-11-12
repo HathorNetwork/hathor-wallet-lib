@@ -524,6 +524,28 @@ describe('Full blueprint basic tests', () => {
     expect(callStates.calls[dictDictSetCall].value).toBe(true);
     expect(callStates.calls[tupleDictListCall].value).toBe(true);
     expect(callStates.calls[dictListDictTupleCall].value).toBe(true);
+
+    // Test nano APIs
+    const blueprintSourceCode = await ncApi.getBlueprintSourceCode(blueprintId);
+    expect(blueprintSourceCode.id).toBe(blueprintId);
+    expect(blueprintSourceCode.source_code).toEqual(expect.any(String));
+
+    const builtInBlueprintList = await ncApi.getBuiltInBlueprintList();
+    expect(builtInBlueprintList.success).toBe(true);
+    expect(builtInBlueprintList.has_more).toBe(false);
+    expect(builtInBlueprintList.blueprints.length).toBe(0);
+
+    const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
+    expect(onChainBlueprintList.success).toBe(true);
+    expect(onChainBlueprintList.has_more).toBe(false);
+    expect(onChainBlueprintList.blueprints.length).toBe(4);
+    expect(onChainBlueprintList.blueprints[0].id).toBe(blueprintId);
+    expect(onChainBlueprintList.blueprints[0].name).toBe('FullBlueprint');
+
+    const nanoList = await ncApi.getNanoContractCreationList();
+    expect(nanoList.nc_creation_txs.length).toBe(1);
+    expect(nanoList.nc_creation_txs[0].blueprint_id).toBe(blueprintId);
+    expect(nanoList.nc_creation_txs[0].nano_contract_id).toBe(txInitialize.hash);
   };
 
   it('Run with on chain blueprint', async () => {
