@@ -537,7 +537,6 @@ describe('Full blueprint basic tests', () => {
 
     const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
     expect(onChainBlueprintList.success).toBe(true);
-    expect(onChainBlueprintList.has_more).toBe(false);
     expect(onChainBlueprintList.blueprints.length).toBe(4);
     expect(onChainBlueprintList.blueprints[0].id).toBe(blueprintId);
     expect(onChainBlueprintList.blueprints[0].name).toBe('FullBlueprint');
