@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
@@ -639,9 +638,6 @@ describe('Authority actions blueprint test', () => {
   it('Run with on chain blueprint', async () => {
     // We use the address0 to inject funds because they are needed for the nano tests execution
     const address0 = await hWallet.getAddressAtIndex(0);
-    // We use the address10 as caller of the ocb tx
-    // so we don't mess with the number of transactions for address0 tests
-    const address10 = await hWallet.getAddressAtIndex(10);
 
     // We already added funds to this address
     const address0Meta = await hWallet.storage.store.getAddressMeta(address0);
