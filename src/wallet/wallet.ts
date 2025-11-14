@@ -106,6 +106,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
 
+  // The test environment for the Wallet Service can be slow, and we need to adapt to this
+  // with special error handling conditions.
+  _expectSlowLambdas: boolean;
+
   // Method to request the password from the client
   private requestPassword: () => Promise<string>;
 
@@ -161,6 +165,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
+    expectSlowLambdas = false,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -171,6 +176,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
+    expectSlowLambdas?: boolean;
   }) {
     super();
 
@@ -205,6 +211,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
     this._isWsEnabled = enableWs;
+    this._expectSlowLambdas = expectSlowLambdas;
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
@@ -1150,6 +1157,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Renew the auth token on the wallet service
    *
+   * Note: This method is called in a fire-and-forget manner, so it should not throw exceptions when failing.
+   *
    * @param {HDPrivateKey} privKey - private key to sign the auth message
    * @param {number} timestamp - Current timestamp to assemble the signature
    *
@@ -1161,10 +1170,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new Error('Wallet not ready yet.');
     }
 
-    const sign = this.signMessage(privKey, timestamp, this.walletId);
-    const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
+    try {
+      const sign = this.signMessage(privKey, timestamp, this.walletId);
+      const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
 
-    this.authToken = data.token;
+      this.authToken = data.token;
+    } catch (err) {
+      // We should not throw here since this method is called in a fire-and-forget manner
+      this.authToken = null;
+    }
   }
 
   /**
