@@ -16,10 +16,19 @@ import Network from '../../src/models/network';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
-import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
+import {
+  CreateTokenTxInvalid,
+  MaximumNumberInputsError,
+  MaximumNumberOutputsError,
+  ParseError,
+} from '../../src/errors';
 import { nftCreationTx } from '../__fixtures__/sample_txs';
+import { TokenVersion } from '../../src/types';
 
-const compareTxs = (tx, tx2) => {
+const compareTxs = (
+  tx: Transaction | CreateTokenTransaction,
+  tx2: Transaction | CreateTokenTransaction
+) => {
   expect(tx2.version).toBe(tx.version);
   expect(tx2.tokens.length).toBe(tx.tokens.length);
   expect(tx2.inputs.length).toBe(tx.inputs.length);
@@ -127,10 +136,12 @@ test('New tx', () => {
   }).toThrow(ParseError);
 });
 
-test('Token tx', () => {
+test('Deposit token tx', () => {
   const network = new Network('testnet');
-  const tx = new CreateTokenTransaction('Test', 'TST', [], []);
-  const info = [];
+  const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
+    tokenVersion: TokenVersion.DEPOSIT,
+  });
+  const info: Buffer[] = [];
   tx.serializeTokenInfo(info);
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
@@ -157,13 +168,101 @@ test('Token tx', () => {
   ];
   tx.hash = '723ca83484495bcbb4cf849a835800a28cfac5440a8f517fffb095c52c461858';
 
-  const tx2 = helpers.createTxFromHex(tx.toHex(), network);
+  const tx2 = helpers.createTxFromHex(tx.toHex(), network) as CreateTokenTransaction;
+  expect(tx2).toBeInstanceOf(CreateTokenTransaction);
   compareTxs(tx, tx2);
 
   expect(tx2.name).toBe('Test');
   expect(tx2.symbol).toBe('TST');
   expect(tx2.name).toBe(tx.name);
   expect(tx2.symbol).toBe(tx.symbol);
+});
+
+test('Fee token tx', () => {
+  // Arrange
+  const network = new Network('testnet');
+  const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
+    tokenVersion: TokenVersion.FEE,
+  });
+  const info: Buffer[] = [];
+  tx.serializeTokenInfo(info);
+  expect(info.length).toBe(5);
+  expect(info[2].toString('hex')).toBe('54657374');
+  expect(info[4].toString('hex')).toBe('545354');
+
+  const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
+  const output1 = new Output(1000n, p2pkhScript1);
+  output1.parseScript(network);
+  const inputDataHex =
+    '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
+  const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {
+    data: hexToBuffer(inputDataHex),
+  });
+  tx.inputs = [input1];
+  tx.outputs = [output1];
+  tx.timestamp = 1550249810;
+  tx.weight = tx.calculateWeight();
+  tx.nonce = 12345;
+  tx.parents = [
+    '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+    '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c',
+  ];
+  tx.hash = 'ef164429258e1b5ba59f72888926d577035bf53a6761e8839dbc99b85053e735';
+
+  // Act
+  const tx2 = helpers.createTxFromHex(tx.toHex(), network) as CreateTokenTransaction;
+
+  // Assert
+  expect(tx2).toBeInstanceOf(CreateTokenTransaction);
+  compareTxs(tx, tx2);
+  expect(tx2.name).toBe('Test');
+  expect(tx2.symbol).toBe('TST');
+  expect(tx2.name).toBe(tx.name);
+  expect(tx2.symbol).toBe(tx.symbol);
+  expect(tx2.tokenVersion).toBe(TokenVersion.FEE);
+});
+
+test('Invalid token info version tx', () => {
+  // Arrange
+  const invalidVersion = 99 as TokenVersion;
+  const network = new Network('testnet');
+  const tx = new CreateTokenTransaction('Test', 'TST', [], [], {
+    tokenVersion: invalidVersion,
+  });
+  const info: Buffer[] = [];
+  tx.serializeTokenInfo(info);
+  expect(info.length).toBe(5);
+  expect(info[2].toString('hex')).toBe('54657374');
+  expect(info[4].toString('hex')).toBe('545354');
+
+  const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
+  const output1 = new Output(1000n, p2pkhScript1);
+  output1.parseScript(network);
+  const inputDataHex =
+    '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
+  const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {
+    data: hexToBuffer(inputDataHex),
+  });
+  tx.inputs = [input1];
+  tx.outputs = [output1];
+  tx.timestamp = 1550249810;
+  tx.weight = tx.calculateWeight();
+  tx.nonce = 12345;
+  tx.parents = [
+    '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+    '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c',
+  ];
+  tx.hash = '723ca83484495bcbb4cf849a835800a28cfac5440a8f517fffb095c52c461858';
+
+  // Act
+  const act = () => () => helpers.createTxFromHex(tx.toHex(), network);
+
+  // Assert
+  expect(act()).toThrow(CreateTokenTxInvalid);
 });
 
 test('Tx validation', () => {
@@ -174,7 +273,7 @@ test('Tx validation', () => {
   const p2pkh1 = new P2PKH(address1);
   const p2pkhScript1 = p2pkh1.createScript();
   const output1 = new Output(1000n, p2pkhScript1);
-  const outputs = [];
+  const outputs: Output[] = [];
   for (let i = 0; i < 255; i++) {
     outputs.push(output1);
   }
@@ -192,7 +291,7 @@ test('Tx validation', () => {
 
   tx.outputs = [];
 
-  const inputs = [];
+  const inputs: Input[] = [];
   const input1 = new Input('abc', 0);
   for (let i = 0; i < 255; i++) {
     inputs.push(input1);
@@ -213,13 +312,13 @@ test('Transaction type', () => {
   const address1 = new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q');
   const p2pkh1 = new P2PKH(address1);
   const p2pkhScript1 = p2pkh1.createScript();
-  const outputs1 = [new Output(100, p2pkhScript1), new Output(300, p2pkhScript1)];
+  const outputs1 = [new Output(100n, p2pkhScript1), new Output(300n, p2pkhScript1)];
   const tx1 = new Transaction([], outputs1, {
     version: 1,
     hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
   });
 
-  const outputs2 = [new Output(100, p2pkhScript1), new Output(300, p2pkhScript1)];
+  const outputs2 = [new Output(100n, p2pkhScript1), new Output(300n, p2pkhScript1)];
   const inputs2 = [
     new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0),
   ];
@@ -228,7 +327,7 @@ test('Transaction type', () => {
     hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d',
   });
 
-  const outputs3 = [new Output(2000, p2pkhScript1)];
+  const outputs3 = [new Output(2000n, p2pkhScript1)];
   const tx3 = new Transaction([], outputs3, {
     version: 0,
     hash: '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b',
@@ -262,13 +361,13 @@ test('Known transactions hash', () => {
   );
   expect(tx.inputs[0].index).toBe(1);
   expect(tx.outputs[0].value).toBe(100n);
-  expect(tx.outputs[0].decodedScript.timelock).toBeNull();
+  expect(tx.outputs[0].decodedScript?.timelock).toBeNull();
   expect(tx.outputs[0].tokenData).toBe(0);
-  expect(tx.outputs[0].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[0].decodedScript?.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.outputs[1].value).toBe(23n);
-  expect(tx.outputs[1].decodedScript.timelock).toBeNull();
+  expect(tx.outputs[1].decodedScript?.timelock).toBeNull();
   expect(tx.outputs[1].tokenData).toBe(0);
-  expect(tx.outputs[1].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[1].decodedScript?.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.weight).toBe(8.000001);
   expect(tx.timestamp).toBe(1625080359);
   expect(tx.parents.length).toBe(2);
@@ -377,7 +476,7 @@ describe('NFT Validation', () => {
     expect.assertions(1);
     const historyTx = cloneNftSample();
 
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     expect(() => txInstance.validateNft(network)).not.toThrow();
   });
@@ -388,7 +487,7 @@ describe('NFT Validation', () => {
 
     // Removing all outputs from index 1 onwards
     historyTx.outputs.length = 1;
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     expect(() => txInstance.validateNft(network)).toThrow('minimum');
   });
@@ -396,7 +495,7 @@ describe('NFT Validation', () => {
   it('should validate maximum outputs of a transaction', () => {
     expect.assertions(2);
     const historyTx = cloneNftSample();
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     // Adding outputs within allowed limit
     for (let i = 1; i < MAX_OUTPUTS; ++i) {

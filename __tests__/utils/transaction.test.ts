@@ -27,6 +27,7 @@ import Output from '../../src/models/output';
 import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
 import NanoContractHeader from '../../src/nano_contracts/header';
+import { TokenVersion } from '../../src/types';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
@@ -620,7 +621,9 @@ test('convertTransactionToHistoryTx', async () => {
                 spent_by: null,
               },
             ],
-            tokens: [{ uid: 'token-B', name: 'Token B', symbol: 'TKB' }],
+            tokens: [
+              { uid: 'token-B', name: 'Token B', symbol: 'TKB', version: TokenVersion.DEPOSIT },
+            ],
             inputs: [],
             nonce: '',
             timestamp: 0,

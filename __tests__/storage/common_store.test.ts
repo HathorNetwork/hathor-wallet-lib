@@ -7,7 +7,7 @@
 
 import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
-import { ILockedUtxo, IStore, IUtxo, OutputValueType } from '../../src/types';
+import { ILockedUtxo, IStore, IUtxo, OutputValueType, TokenVersion } from '../../src/types';
 
 describe('locked utxo methods', () => {
   const spyDate = jest.spyOn(Date, 'now');
@@ -181,7 +181,12 @@ describe('registered tokens', () => {
 
   async function testRegisteredTokens(store) {
     const storage = new Storage(store);
-    await storage.registerToken({ uid: 'abc1', name: 'test token 1', symbol: 'TST1' });
+    await storage.registerToken({
+      uid: 'abc1',
+      name: 'test token 1',
+      symbol: 'TST1',
+      version: TokenVersion.DEPOSIT,
+    });
     await expect(storage.isTokenRegistered('abc1')).resolves.toEqual(true);
     await expect(storage.isTokenRegistered('abc2')).resolves.toEqual(false);
   }

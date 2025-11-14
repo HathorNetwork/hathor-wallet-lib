@@ -24,9 +24,11 @@ import {
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
   INcData,
+  TokenVersion,
 } from '../types';
 import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
+import tokens from '../utils/tokens';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,
@@ -546,9 +548,16 @@ export class MemoryStore implements IStore {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
     }
-    this.tokens.set(tokenConfig.uid, tokenConfig);
+
+    const newTokenConfig = { ...tokenConfig }; // Clone the token config to avoid modifying the original object
+    if (!tokens.isHathorToken(newTokenConfig.uid) && !newTokenConfig.version) {
+      // TODO: remove this once we have this configured in the wallet-service. Since any fee token will be in the utxo
+      // all the tokens are deposit
+      newTokenConfig.version = TokenVersion.DEPOSIT;
+    }
+    this.tokens.set(newTokenConfig.uid, newTokenConfig);
     if (meta !== undefined) {
-      this.tokensMetadata.set(tokenConfig.uid, meta);
+      this.tokensMetadata.set(newTokenConfig.uid, meta);
     }
   }
 
