@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
@@ -639,26 +638,12 @@ describe('Authority actions blueprint test', () => {
   it('Run with on chain blueprint', async () => {
     // We use the address0 to inject funds because they are needed for the nano tests execution
     const address0 = await hWallet.getAddressAtIndex(0);
-    // We use the address10 as caller of the ocb tx
-    // so we don't mess with the number of transactions for address0 tests
-    const address10 = await hWallet.getAddressAtIndex(10);
 
     // We already added funds to this address
     const address0Meta = await hWallet.storage.store.getAddressMeta(address0);
     expect(address0Meta?.numTransactions).toBe(1);
 
-    // Use the blueprint code
-    const code = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/authority.py',
-      'utf8'
-    );
-    const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address10);
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, tx.hash);
-    // We must have one transaction in the address10 now
-    const newAddress10Meta = await hWallet.storage.store.getAddressMeta(address10);
-    expect(newAddress10Meta.numTransactions).toBe(1);
     // Execute the authority blueprint tests
-    await executeTests(hWallet, tx.hash);
+    await executeTests(hWallet, global.AUTHORITY_BLUEPRINT_ID);
   });
 });

@@ -148,11 +148,11 @@ test('graphvizNeighborsQuery', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.storage = storage;
 
-  const getGraphvizSpy = jest.spyOn(txApi, 'getGraphviz');
+  const getGraphvizNeighborsSpy = jest.spyOn(txApi, 'getGraphvizNeighbors');
 
   const mockData = 'digraph {}';
 
-  getGraphvizSpy.mockImplementation((_url, resolve) => {
+  getGraphvizNeighborsSpy.mockImplementation((_tx, _graphType, _maxLevel, resolve) => {
     resolve(mockData);
   });
 
@@ -160,7 +160,7 @@ test('graphvizNeighborsQuery', async () => {
 
   expect(graphvizNeighborsQueryResponse).toStrictEqual(mockData);
 
-  getGraphvizSpy.mockImplementation((_url, resolve) =>
+  getGraphvizNeighborsSpy.mockImplementation((_tx, _graphType, _maxLevel, resolve) =>
     resolve({
       success: false,
       message: 'Invalid tx',
@@ -171,7 +171,7 @@ test('graphvizNeighborsQuery', async () => {
     'Invalid transaction tx1'
   );
 
-  getGraphvizSpy.mockImplementation((_url, resolve) =>
+  getGraphvizNeighborsSpy.mockImplementation((_tx, _graphType, _maxLevel, resolve) =>
     resolve({
       success: false,
       message: 'Transaction not found',
@@ -180,13 +180,13 @@ test('graphvizNeighborsQuery', async () => {
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow(TxNotFoundError);
 
-  getGraphvizSpy.mockImplementation(() => {
+  getGraphvizNeighborsSpy.mockImplementation(() => {
     throw new Error('unhandled error');
   });
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow('unhandled error');
 
   // Resolve the promise without calling the resolve param
-  getGraphvizSpy.mockImplementation(() => Promise.resolve());
+  getGraphvizNeighborsSpy.mockImplementation(() => Promise.resolve());
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow(
     'API client did not use the callback'
   );

@@ -224,3 +224,48 @@ export type CreateNanoTxData = {
   actions?: NanoContractAction[];
   args?: unknown[];
 };
+
+export interface NanoContractBlueprintSourceCodeAPIResponse {
+  // Blueprint ID
+  blueprint_id: string;
+  // Blueprint source code
+  source_code: string;
+}
+
+export interface BlueprintListItem {
+  // Blueprint ID
+  id: string;
+  // Blueprint name
+  name: string;
+}
+
+export interface NanoContractBlueprintListAPIResponse {
+  // If the request succeeded
+  success: boolean;
+  // List of blueprints
+  blueprints: BlueprintListItem[];
+  // Has more blueprints to fetch
+  has_more: boolean;
+}
+
+export interface NanoContractCreationListItem {
+  // Nano contract ID
+  nc_id: string;
+  // Blueprint ID
+  blueprint_id: string;
+  // Blueprint name
+  blueprint_name: string;
+  // Transaction ID that created the nano contract
+  tx_id: string;
+  // Timestamp of creation
+  timestamp: number;
+}
+
+export interface NanoContractCreationListAPIResponse {
+  // If the request succeeded
+  success: boolean;
+  // List of nano contract creations
+  contracts: NanoContractCreationListItem[];
+  // Has more contracts to fetch
+  has_more: boolean;
+}

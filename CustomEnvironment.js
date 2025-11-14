@@ -10,6 +10,12 @@ import * as path from 'path';
 // eslint-disable-next-line import/no-extraneous-dependencies
 const NodeEnvironment = require('jest-environment-node').TestEnvironment;
 
+// Module-level state that persists across all test environments in the same worker
+const sharedState = {
+  setupDone: false,
+  blueprintIds: {}
+};
+
 /**
  * Extracts the test name from an absolute path received by the context
  * @param {string} filePath Absolute path
@@ -48,6 +54,8 @@ export default class CustomEnvironment extends NodeEnvironment {
   async setup() {
     await super.setup();
     this.global.testName = this.testName;
+    // Expose shared state to test environment (persists across test files in same worker)
+    this.global.__SHARED_STATE__ = sharedState;
   }
 
   /*

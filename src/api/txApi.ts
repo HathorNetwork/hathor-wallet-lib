@@ -202,6 +202,32 @@ const txApi = {
       );
   },
 
+  /**
+   * Call api to get graphviz neighbors
+   *
+   * @param {string} tx Transaction hash
+   * @param {string} graphType Type of graph ('funds', 'verification', etc.)
+   * @param {number} maxLevel Maximum depth level for the graph
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiTransaction
+   * @inner
+   */
+  getGraphvizNeighbors(tx, graphType, maxLevel, resolve) {
+    const data = { tx, graph_type: graphType, max_level: maxLevel };
+    return createRequestInstance(resolve)
+      .get(`graphviz/neighbours.dot`, { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
+  },
+
   // Expose the txApi zod schemas
   schemas: {
     transactionApi: transactionApiSchema,

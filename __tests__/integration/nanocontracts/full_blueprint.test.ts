@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
@@ -524,18 +523,28 @@ describe('Full blueprint basic tests', () => {
     expect(callStates.calls[dictDictSetCall].value).toBe(true);
     expect(callStates.calls[tupleDictListCall].value).toBe(true);
     expect(callStates.calls[dictListDictTupleCall].value).toBe(true);
+
+    // Test nano APIs
+    const blueprintSourceCode = await ncApi.getBlueprintSourceCode(blueprintId);
+    expect(blueprintSourceCode.id).toBe(blueprintId);
+    expect(blueprintSourceCode.source_code).toEqual(expect.any(String));
+
+    const builtInBlueprintList = await ncApi.getBuiltInBlueprintList();
+    expect(builtInBlueprintList.success).toBe(true);
+    expect(builtInBlueprintList.has_more).toBe(false);
+    expect(builtInBlueprintList.blueprints.length).toBe(0);
+
+    const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
+    expect(onChainBlueprintList.success).toBe(true);
+    expect(onChainBlueprintList.blueprints.length).toBe(5);
+
+    const nanoList = await ncApi.getNanoContractCreationList();
+    // The correct length depends on the execution order, so I
+    // just make sure there is at least one
+    expect(nanoList.nc_creation_txs.length).toBeGreaterThan(0);
   };
 
   it('Run with on chain blueprint', async () => {
-    // Use the blueprint code
-    const code = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/full_blueprint.py',
-      'utf8'
-    );
-    const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address0);
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, tx.hash);
-    // Execute the blueprint tests
-    await executeTests(hWallet, tx.hash);
+    await executeTests(hWallet, global.FULL_BLUEPRINT_ID);
   });
 });
