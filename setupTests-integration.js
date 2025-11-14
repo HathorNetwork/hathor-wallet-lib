@@ -19,7 +19,7 @@ import { stopGLLBackgroundTask } from './src/sync/gll';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
-async function createOCBs() {
+async function createOCBs(sharedState) {
   const { seed } = WALLET_CONSTANTS.ocb;
   const ocbWallet = await generateWalletHelper({ seed });
   const address0 = await ocbWallet.getAddressAtIndex(0);
@@ -28,48 +28,81 @@ async function createOCBs() {
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
   const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
   await waitTxConfirmed(ocbWallet, txBet.hash, null);
-  global.BET_BLUEPRINT_ID = txBet.hash;
+  sharedState.blueprintIds.BET_BLUEPRINT_ID = txBet.hash;
 
   const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
   const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
   await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
-  global.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
+  sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
 
   const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
   const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
   await waitTxConfirmed(ocbWallet, txFull.hash, null);
-  global.FULL_BLUEPRINT_ID = txFull.hash;
+  sharedState.blueprintIds.FULL_BLUEPRINT_ID = txFull.hash;
+
+  const codeParent = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/test_parent.py',
+    'utf8'
+  );
+
+  const txParent = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
+  await waitTxConfirmed(ocbWallet, txParent.hash);
+  sharedState.blueprintIds.PARENT_BLUEPRINT_ID = txParent.hash;
+
+  const codeChildren = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/test_children.py',
+    'utf8'
+  );
+  const txChildren = await ocbWallet.createAndSendOnChainBlueprintTransaction(
+    codeChildren,
+    address0
+  );
+  await waitTxConfirmed(ocbWallet, txChildren.hash);
+  sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID = txChildren.hash;
 }
 
 // This function will run before each test file is executed
 beforeAll(async () => {
-  // Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
+  // Per-file setup: Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
   const { testName } = global;
   const testLogger = new LoggerUtil(testName);
   testLogger.init({ filePrettyPrint: true });
   loggers.test = testLogger;
 
-  // Loading pre-calculated wallets
+  // Per-file setup: Loading pre-calculated wallets
   precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
   await precalculationHelpers.test.initWithWalletsFile();
 
-  // Await first block to be mined to release genesis reward lock
-  const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-  try {
-    await waitNextBlock(gWallet.storage);
-  } catch (err) {
-    // When running jest with jasmine there's a bug (or behavior)
-    // that any error thrown inside beforeAll methods don't stop the tests
-    // https://github.com/jestjs/jest/issues/2713
-    // The solution for that is to capture the error and call process.exit
-    // https://github.com/jestjs/jest/issues/2713#issuecomment-319822476
-    // The downside of that is that we don't get logs, however is the only
-    // way for now. We should stop using jasmine soon (and change for jest-circus)
-    // when we do some package upgrades
-    process.exit(1);
+  // One-time setup: Run only once across all test files (using shared state from CustomEnvironment)
+  const sharedState = global.__SHARED_STATE__;
+  if (!sharedState.setupDone) {
+    // Await first block to be mined to release genesis reward lock
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    try {
+      await waitNextBlock(gWallet.storage);
+    } catch (err) {
+      // When running jest with jasmine there's a bug (or behavior)
+      // that any error thrown inside beforeAll methods don't stop the tests
+      // https://github.com/jestjs/jest/issues/2713
+      // The solution for that is to capture the error and call process.exit
+      // https://github.com/jestjs/jest/issues/2713#issuecomment-319822476
+      // The downside of that is that we don't get logs, however is the only
+      // way for now. We should stop using jasmine soon (and change for jest-circus)
+      // when we do some package upgrades
+      process.exit(1);
+    }
+
+    await createOCBs(sharedState);
+
+    sharedState.setupDone = true;
   }
 
-  await createOCBs();
+  // Copy blueprint IDs from shared state to global for test access
+  global.BET_BLUEPRINT_ID = sharedState.blueprintIds.BET_BLUEPRINT_ID;
+  global.AUTHORITY_BLUEPRINT_ID = sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID;
+  global.FULL_BLUEPRINT_ID = sharedState.blueprintIds.FULL_BLUEPRINT_ID;
+  global.PARENT_BLUEPRINT_ID = sharedState.blueprintIds.PARENT_BLUEPRINT_ID;
+  global.CHILDREN_BLUEPRINT_ID = sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID;
 });
 
 afterAll(async () => {
