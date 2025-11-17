@@ -426,6 +426,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     let renewPromise: Promise<void> | null = null;
+    let renewPromiseError = null;
     if (accessData.acctPathKey) {
       // We can preemtively request/renew the auth token so the wallet can wait for this process
       // to finish while we derive and request the wallet creation.
@@ -434,7 +435,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(privKeyAccountPath.xpubkey);
       this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode);
+      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
+        renewPromiseError = err;
+      });
     }
 
     const {
@@ -452,12 +455,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // derive the account path xpubkey on the method above.
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
       this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode);
+      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
+        renewPromiseError = err;
+      });
     }
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
 
+    let renewPromise2Error = null;
     const handleCreate = async (data: WalletStatus, tokenRenewPromise: Promise<void> | null) => {
       this.walletId = data.walletId;
 
@@ -473,6 +479,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       if (tokenRenewPromise !== null) {
         try {
+          if (renewPromise2Error) {
+            // If an error happened async before this await, we must
+            // throw it, for it to be captured by the following catch
+            throw renewPromise2Error;
+          }
           await tokenRenewPromise;
         } catch (err) {
           this.authToken = null;
@@ -504,6 +515,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // If auth token api fails we can still retry during wallet creation status polling.
     let renewPromise2: Promise<void> | null = null;
     try {
+      if (renewPromiseError) {
+        // If an error happened async before this await, we must
+        // throw it, for it to be captured by the following catch
+        throw renewPromiseError;
+      }
       // Here we await the first auth token api call before continuing the startup process.
       await renewPromise;
     } catch (err) {
@@ -512,7 +528,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.authToken = null;
       const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
       this.walletId = walletId;
-      renewPromise2 = this.validateAndRenewAuthToken(pinCode);
+      renewPromise2 = this.validateAndRenewAuthToken(pinCode).catch(renew2Err => {
+        renewPromise2Error = renew2Err;
+      });
     }
 
     await handleCreate(data.status, renewPromise2);
@@ -1208,6 +1226,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Derive walletId from xpub
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
+
+    // Save accessData for read-only wallet
+    // This is required for methods like getAddressPathForIndex() that need walletType
+    const accessData = walletUtils.generateAccessDataFromXpub(this.xpub);
+    await this.storage.saveAccessData(accessData);
 
     // Try to get read-only auth token
     // This will succeed only if wallet is in 'ready' state
@@ -2651,6 +2674,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async getAddressPathForIndex(index: number): Promise<string> {
     const walletType = await this.storage.getWalletType();
+
     if (walletType === WalletType.MULTISIG) {
       // P2SH
       return `${P2SH_ACCT_PATH}/0/${index}`;
