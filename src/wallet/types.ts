@@ -178,6 +178,11 @@ export interface TxProposalUpdateResponseData {
   txHex: string; // Hex of the serialized tx
 }
 
+export interface TxProposalDeleteResponseData {
+  success: boolean;
+  txProposalId: string; // Id of the tx proposal
+}
+
 export interface RequestError {
   success: boolean;
   error: string; // Error code
