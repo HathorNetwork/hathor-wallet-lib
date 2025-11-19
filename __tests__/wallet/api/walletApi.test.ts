@@ -12,7 +12,8 @@ const seed =
 const mockAxiosInstance = {
   get: jest.fn(),
   post: jest.fn(),
-} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post'>>;
+  delete: jest.fn(),
+} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post' | 'delete'>>;
 
 // Mock the axiosInstance function to return our mock instance
 jest.mock('../../../src/wallet/api/walletServiceAxios', () => ({
@@ -711,5 +712,43 @@ describe('walletApi', () => {
     await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
       'Error requesting read-only auth token.'
     );
+  });
+
+  test('deleteTxProposal', async () => {
+    const txProposalId = 'proposal-id';
+    const mockResponse = {
+      success: true,
+      txProposalId,
+    };
+
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponse,
+    } as AxiosResponse);
+
+    const result = await walletApi.deleteTxProposal(wallet, txProposalId);
+    expect(result).toEqual(mockResponse);
+    expect(mockAxiosInstance.delete).toHaveBeenCalledWith(`tx/proposal/${txProposalId}`);
+
+    // Should throw on invalid response status
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow(
+      'Error deleting tx proposal.'
+    );
+
+    // Should throw on invalid schema
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        success: true,
+        // Missing txProposalId
+      },
+    } as AxiosResponse);
+
+    await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow();
   });
 });

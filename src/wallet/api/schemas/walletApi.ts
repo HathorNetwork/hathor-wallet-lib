@@ -212,6 +212,14 @@ export const txProposalUpdateResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * Response schema for deleting a transaction proposal.
+ * Contains the proposal ID
+ */
+export const txProposalDeleteResponseSchema = baseResponseSchema.extend({
+  txProposalId: z.string(),
+});
+
+/**
  * Schema for full node version data.
  * Contains network parameters and configuration values.
  * Uses passthrough() to allow additional fields in the response without breaking validation,
@@ -586,6 +594,7 @@ export const walletApiSchemas = {
   balanceResponse: balanceResponseSchema,
   txProposalCreateResponse: txProposalCreateResponseSchema,
   txProposalUpdateResponse: txProposalUpdateResponseSchema,
+  txProposalDeleteResponse: txProposalDeleteResponseSchema,
   fullNodeVersionData: fullNodeVersionDataSchema,
   fullNodeTxResponse: fullNodeTxResponseSchema,
   fullNodeTxConfirmationDataResponse: fullNodeTxConfirmationDataResponseSchema,
