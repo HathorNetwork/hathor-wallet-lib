@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { NATIVE_TOKEN_UID } from '../../constants';
+import { TokenVersion } from '../../types';
 
 const TEMPLATE_REFERENCE_NAME_RE = /[\w\d]+/;
 const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
@@ -182,6 +183,7 @@ export const ConfigInstruction = z.object({
   createToken: TemplateRef.or(z.boolean().optional()),
   tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
   tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
+  tokenVersion: TemplateRef.or(z.nativeEnum(TokenVersion).default(TokenVersion.DEPOSIT)),
 });
 
 export const SetVarGetWalletAddressOpts = z.object({
