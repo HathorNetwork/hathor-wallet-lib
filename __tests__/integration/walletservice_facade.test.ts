@@ -24,6 +24,7 @@ import { TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors
 import { GetAddressesObject } from '../../src/wallet/types';
 
 // Set base URL for the wallet service API inside the privatenet test container
+config.setServerUrl(FULLNODE_URL);
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 
