@@ -615,7 +615,10 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
-      await this.storage.saveAddress(address);
+      const policyData = await this.storage.getScanningPolicyData();
+      if (policyData.policy !== SCANNING_POLICY.SINGLE) {
+        await this.storage.saveAddress(address);
+      }
     }
     return address.base58;
   }
