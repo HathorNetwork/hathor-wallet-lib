@@ -23,7 +23,7 @@ module.exports = {
       lines: 42,
     },
     // We need a high coverage for the HathorWallet class
-    './src/new/wallet.js': {
+    './src/new/wallet.ts': {
       statements: 92,
       branches: 85,
       functions: 90,
