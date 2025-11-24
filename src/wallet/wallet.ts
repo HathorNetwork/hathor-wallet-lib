@@ -85,7 +85,7 @@ import {
   CreateNanoTxData,
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
-import { HathorWallet } from '../index';
+import HathorWallet from '../new/wallet';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
