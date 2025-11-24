@@ -826,19 +826,19 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getTxHistory(options = {}) {
-    const newOptions = {
+  async getTxHistory(options: any = {}): Promise<any> {
+    const newOptions: any = {
       token_id: NATIVE_TOKEN_UID,
       count: 15,
       skip: 0,
       ...options,
     };
-    const { skip } = newOptions;
-    let { count } = newOptions;
-    const uid = newOptions.token_id || this.token.uid;
+    const { skip }: any = newOptions;
+    let { count }: any = newOptions;
+    const uid: any = newOptions.token_id || this.token.uid;
 
-    const txs = [];
-    let it = 0;
+    const txs: any = [];
+    let it: any = 0;
     for await (const tx of this.storage.tokenHistory(uid)) {
       if (it < skip) {
         it++;
@@ -847,8 +847,8 @@ class HathorWallet extends EventEmitter {
       if (count <= 0) {
         break;
       }
-      const txbalance = await this.getTxBalance(tx);
-      const txHistory = {
+      const txbalance: any = await this.getTxBalance(tx);
+      const txHistory: any = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
@@ -877,8 +877,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getTokens() {
-    const tokens = [];
+  async getTokens(): Promise<any> {
+    const tokens: any = [];
     for await (const token of this.storage.getAllTokens()) {
       tokens.push(token.uid);
     }
@@ -893,7 +893,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<DecodedTx|null>} Data from the transaction to get.
    *                          Can be null if the wallet does not contain the tx.
    */
-  async getTx(id) {
+  async getTx(id: any): Promise<any> {
     return this.storage.getTx(id);
   }
 
@@ -921,8 +921,8 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<AddressInfo>} Aggregated information about the given address
    *
    */
-  async getAddressInfo(address, options = {}) {
-    const { token = NATIVE_TOKEN_UID } = options;
+  async getAddressInfo(address: any, options: any = {}): Promise<any> {
+    const { token = NATIVE_TOKEN_UID }: any = options;
 
     // Throws an error if the address does not belong to this wallet
     if (!(await this.storage.isAddressMine(address))) {
@@ -930,11 +930,11 @@ class HathorWallet extends EventEmitter {
     }
 
     // Derivation path index
-    const addressData = await this.storage.getAddressInfo(address);
-    const index = addressData.bip32AddressIndex;
+    const addressData: any = await this.storage.getAddressInfo(address);
+    const index: any = addressData.bip32AddressIndex;
 
     // Address information that will be calculated below
-    const addressInfo = {
+    const addressInfo: any = {
       total_amount_received: 0n,
       total_amount_sent: 0n,
       total_amount_available: 0n,
@@ -952,20 +952,20 @@ class HathorWallet extends EventEmitter {
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        const is_address_valid = output.decoded && output.decoded.address === address;
-        const is_token_valid = token === output.token;
-        const is_authority = transactionUtils.isAuthorityOutput(output);
+        const is_address_valid: any = output.decoded && output.decoded.address === address;
+        const is_token_valid: any = token === output.token;
+        const is_authority: any = transactionUtils.isAuthorityOutput(output);
         if (!is_address_valid || !is_token_valid || is_authority) {
           continue;
         }
 
-        const is_spent = output.spent_by !== null;
-        const is_time_locked = transactionUtils.isOutputLocked(output);
+        const is_spent: any = output.spent_by !== null;
+        const is_time_locked: any = transactionUtils.isOutputLocked(output);
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
-        const nowHeight = await this.storage.getCurrentHeight();
-        const rewardLock = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
-        const is_locked = is_time_locked || is_height_locked;
+        const nowHeight: any = await this.storage.getCurrentHeight();
+        const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
+        const is_height_locked: any = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
+        const is_locked: any = is_time_locked || is_height_locked;
 
         addressInfo.total_amount_received += output.value;
 
@@ -1024,8 +1024,8 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<UtxoDetails>} Utxos and meta information about it
    *
    */
-  async getUtxos(options = {}) {
-    const newOptions = {
+  async getUtxos(options: any = {}): Promise<any> {
+    const newOptions: any = {
       token: options.token,
       authorities: 0,
       max_utxos: options.max_utxos,
@@ -1036,24 +1036,24 @@ class HathorWallet extends EventEmitter {
       only_available_utxos: options.only_available_utxos,
     };
     /** @type {UtxoDetails} */
-    const utxoDetails = {
+    const utxoDetails: any = {
       total_amount_available: 0n,
       total_utxos_available: 0n,
       total_amount_locked: 0n,
       total_utxos_locked: 0n,
       utxos: [],
     };
-    const nowTs = Math.floor(Date.now() / 1000);
-    const isTimeLocked = timestamp => timestamp && nowTs && nowTs < timestamp;
-    const nowHeight = await this.storage.getCurrentHeight();
-    const rewardLock = this.storage.version?.reward_spend_min_blocks;
+    const nowTs: any = Math.floor(Date.now() / 1000);
+    const isTimeLocked: any = (timestamp: any) => timestamp && nowTs && nowTs < timestamp;
+    const nowHeight: any = await this.storage.getCurrentHeight();
+    const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
 
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      const isLocked =
+      const isLocked: any =
         isTimeLocked(utxo.timelock) ||
         transactionUtils.isHeightLocked(utxo.height, nowHeight, rewardLock);
 
-      const utxoInfo = {
+      const utxoInfo: any = {
         address: utxo.address,
         amount: utxo.value,
         tx_id: utxo.txId,
@@ -1098,11 +1098,11 @@ class HathorWallet extends EventEmitter {
    * @generator
    * @yields {Utxo} all available utxos
    */
-  async *getAvailableUtxos(options = {}) {
+  async *getAvailableUtxos(options: any = {}): AsyncGenerator<any> {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
-      const addressIndex = await this.getAddressIndex(utxo.address);
-      const addressPath = await this.getAddressPathForIndex(addressIndex);
+      const addressIndex: any = await this.getAddressIndex(utxo.address);
+      const addressPath: any = await this.getAddressPathForIndex(addressIndex);
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1127,15 +1127,15 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<{utxos: Utxo[], changeAmount: OutputValueType}>} Utxos and change information.
    */
-  async getUtxosForAmount(amount, options = {}) {
-    const newOptions = {
+  async getUtxosForAmount(amount: any, options: any = {}): Promise<any> {
+    const newOptions: any = {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
       order_by_value: 'desc',
     };
 
-    const utxos = [];
+    const utxos: any = [];
     for await (const utxo of this.getAvailableUtxos(newOptions)) {
       utxos.push(utxo);
     }
@@ -1154,7 +1154,7 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [value=true] The value to set the utxos.
    * @param {number?} [ttl=null]
    */
-  async markUtxoSelected(txId, index, value = true, ttl = null) {
+  async markUtxoSelected(txId: any, index: any, value: any = true, ttl: any = null): Promise<any> {
     await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
@@ -1174,17 +1174,17 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<PrepareConsolidateUtxosDataResult>} Required data to consolidate utxos
    *
    */
-  async prepareConsolidateUtxosData(destinationAddress, options = {}) {
-    const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
-    const inputs = [];
-    const utxos = [];
-    let total_amount = 0n;
+  async prepareConsolidateUtxosData(destinationAddress: any, options: any = {}): Promise<any> {
+    const utxoDetails: any = await this.getUtxos({ ...options, only_available_utxos: true });
+    const inputs: any = [];
+    const utxos: any = [];
+    let total_amount: any = 0n;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === this.storage.version.max_number_inputs) {
         // Max number of inputs reached
         break;
       }
-      const utxo = utxoDetails.utxos[i];
+      const utxo: any = utxoDetails.utxos[i];
       inputs.push({
         txId: utxo.tx_id,
         index: utxo.index,
@@ -1192,7 +1192,7 @@ class HathorWallet extends EventEmitter {
       utxos.push(utxo);
       total_amount += utxo.amount;
     }
-    const outputs = [
+    const outputs: any = [
       {
         address: destinationAddress,
         value: total_amount,
@@ -1220,11 +1220,11 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<ConsolidationResultSendTx>}
    *
    */
-  async consolidateUtxosSendTransaction(destinationAddress, options = {}) {
+  async consolidateUtxosSendTransaction(destinationAddress: any, options: any = {}): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
-    const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(
+    const { outputs, inputs, utxos, total_amount }: any = await this.prepareConsolidateUtxosData(
       destinationAddress,
       options
     );
@@ -1264,11 +1264,11 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<ConsolidationResult>} Indicates that the transaction is sent or not
    *
    */
-  async consolidateUtxos(destinationAddress, options = {}) {
-    const { total_utxos_consolidated, total_amount, sendTx, utxos } =
+  async consolidateUtxos(destinationAddress: any, options: any = {}): Promise<any> {
+    const { total_utxos_consolidated, total_amount, sendTx, utxos }: any =
       await this.consolidateUtxosSendTransaction(destinationAddress, options);
 
-    const tx = await sendTx.run();
+    const tx: any = await sendTx.run();
 
     return {
       total_utxos_consolidated,
@@ -1314,8 +1314,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getFullHistory() {
-    const history = {};
+  async getFullHistory(): Promise<any> {
+    const history: any = {};
     for await (const tx of this.storage.txHistory()) {
       history[tx.tx_id] = tx;
     }
@@ -1328,8 +1328,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async processTxQueue() {
-    let wsData = this.wsTxQueue.dequeue();
+  async processTxQueue(): Promise<any> {
+    let wsData: any = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
       // save new txdata
@@ -1457,17 +1457,17 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<SendTransaction>} Promise that resolves when transaction is sent
    */
-  async sendTransactionInstance(address, value, options = {}) {
+  async sendTransactionInstance(address: any, value: any, options: any = {}): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
-    const newOptions = {
+    const newOptions: any = {
       token: '00',
       changeAddress: null,
       ...options,
     };
-    const { token, changeAddress, pinCode } = newOptions;
-    const outputs = [{ address, value, token }];
+    const { token, changeAddress, pinCode }: any = newOptions;
+    const outputs: any = [{ address, value, token }];
     return this.sendManyOutputsSendTransaction(outputs, { inputs: [], changeAddress, pinCode });
   }
 
@@ -1483,8 +1483,8 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
-  async sendTransaction(address, value, options = {}) {
-    const sendTx = await this.sendTransactionInstance(address, value, options);
+  async sendTransaction(address: any, value: any, options: any = {}): Promise<any> {
+    const sendTx: any = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
   }
 
@@ -1519,11 +1519,11 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<SendTransaction>}
    */
-  async sendManyOutputsSendTransaction(outputs, options = {}) {
+  async sendManyOutputsSendTransaction(outputs: any, options: any = {}): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
-    const newOptions = {
+    const newOptions: any = {
       inputs: [],
       changeAddress: null,
       startMiningTx: true,
@@ -1531,11 +1531,11 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin = newOptions.pinCode || this.pinCode;
+    const pin: any = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress }: any = newOptions;
     return new SendTransaction({
       wallet: this,
       outputs,
@@ -1553,8 +1553,8 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
-  async sendManyOutputsTransaction(outputs, options = {}) {
-    const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
+  async sendManyOutputsTransaction(outputs: any, options: any = {}): Promise<any> {
+    const sendTransaction: any = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
 
@@ -1567,10 +1567,10 @@ class HathorWallet extends EventEmitter {
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
    */
-  async start(optionsParams = {}) {
-    const options = { pinCode: null, password: null, ...optionsParams };
-    const pinCode = options.pinCode || this.pinCode;
-    const password = options.password || this.password;
+  async start(optionsParams: any = {}): Promise<any> {
+    const options: any = { pinCode: null, password: null, ...optionsParams };
+    const pinCode: any = options.pinCode || this.pinCode;
+    const password: any = options.password || this.password;
     if (!this.xpub && !pinCode) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
@@ -1671,9 +1671,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPrivKey(pinCode, addressIndex) {
-    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
-    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+  async getAddressPrivKey(pinCode: any, addressIndex: any): Promise<any> {
+    const mainXPrivKey: any = await this.storage.getMainXPrivKey(pinCode);
+    const addressHDPrivKey: any = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
     return addressHDPrivKey;
   }
@@ -1691,9 +1691,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async signMessageWithAddress(message, index, pinCode) {
-    const addressHDPrivKey = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: any, index: any, pinCode: any): Promise<any> {
+    const addressHDPrivKey: any = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage: any = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
   }
@@ -1711,8 +1711,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    * @deprecated
    */
-  async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction({ wallet: this, transaction });
+  async handleSendPreparedTransaction(transaction: any): Promise<any> {
+    const sendTransaction: any = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
 
@@ -1749,11 +1749,11 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async prepareCreateNewToken(name, symbol, amount, options = {}) {
+  async prepareCreateNewToken(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
-    const newOptions = {
+    const newOptions: any = {
       address: null,
       changeAddress: null,
       startMiningTx: true,
@@ -1770,14 +1770,14 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin = newOptions.pinCode || this.pinCode;
+    const pin: any = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
@@ -1785,15 +1785,15 @@ class HathorWallet extends EventEmitter {
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const txData = await tokenUtils.prepareCreateTokenData(
+    const txData: any = await tokenUtils.prepareCreateTokenData(
       mintAddress,
       name,
       symbol,
@@ -1826,8 +1826,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNewTokenSendTransaction(name, symbol, amount, options = {}) {
-    const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
+  async createNewTokenSendTransaction(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
+    const transaction: any = await this.prepareCreateNewToken(name, symbol, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
@@ -1843,8 +1843,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNewToken(name, symbol, amount, options = {}) {
-    const sendTx = await this.createNewTokenSendTransaction(name, symbol, amount, options);
+  async createNewToken(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
+    const sendTx: any = await this.createNewTokenSendTransaction(name, symbol, amount, options);
     return sendTx.runFromMining();
   }
 
