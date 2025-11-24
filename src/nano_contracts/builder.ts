@@ -189,13 +189,11 @@ class NanoContractTransactionBuilder {
 
   /**
    * Guard that asserts `this.wallet` is not null and narrows its type for the caller.
-   * Throws a NanoContractTransactionError if wallet is not set.
+   * Throws a TypeError if wallet is not set.
    */
   private assertWallet(): asserts this is { wallet: HathorWallet } {
     if (!this.wallet) {
-      throw new NanoContractTransactionError(
-        'Wallet is required to build nano contract transactions.'
-      );
+      throw new TypeError('Wallet is required to build nano contract transactions.');
     }
   }
 

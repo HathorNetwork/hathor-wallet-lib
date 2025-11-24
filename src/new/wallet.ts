@@ -11,29 +11,17 @@
 /* eslint-enable @typescript-eslint/ban-ts-comment */
 
 /**
- * TypeScript Migration - Phase 0 (IN PROGRESS)
+ * TypeScript Migration In Progress
  *
  * Status: Constructor and key public methods have been typed with 'any'
- * - ✅ Constructor parameters typed
- * - ✅ Core wallet methods (getBalance, getAddress*, getCurrentAddress, etc.)
- * - ✅ Connection and state management methods
- * - ✅ Signature and transaction assembly methods
- * - ⏳ Remaining utility and helper methods (to be typed incrementally)
  *
- * Migration Strategy:
- * - Phase 0: Add 'any' types to establish TypeScript syntax (CURRENT - PARTIAL)
- * - Phase 1: Replace 'any' with proper interfaces and types
- * - Phase 2: Enable strict type checking incrementally
+ * Next Steps:
+ * - Replace 'any' with proper interfaces and types
+ * - Enable strict type checking incrementally
+ * - Integrate with external definitions in other files
  *
  * Note: @ts-nocheck is enabled to allow gradual migration without breaking the build
  *
- * Strict checks currently disabled:
- * - noImplicitAny
- * - strictNullChecks
- * - strictFunctionTypes
- * - strictBindCallApply
- * - strictPropertyInitialization
- * - noImplicitThis
  */
 
 import { cloneDeep, get } from 'lodash';
