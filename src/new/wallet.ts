@@ -36,9 +36,9 @@
  * - noImplicitThis
  */
 
-import { cloneDeep, get, method, reject, result } from 'lodash';
+import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
-import EventEmitter, { EventEmitter } from 'events';
+import EventEmitter from 'events';
 import {
   NATIVE_TOKEN_UID,
   P2SH_ACCT_PATH,
