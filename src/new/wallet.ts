@@ -36,9 +36,9 @@
  * - noImplicitThis
  */
 
-import { cloneDeep, get } from 'lodash';
+import { cloneDeep, get, method, reject, result } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
-import EventEmitter from 'events';
+import EventEmitter, { EventEmitter } from 'events';
 import {
   NATIVE_TOKEN_UID,
   P2SH_ACCT_PATH,
@@ -131,6 +131,13 @@ const ConnectionState = {
  *                          one for each request sent to the server.
  */
 class HathorWallet extends EventEmitter {
+  /*
+   * List of mandatory proprieties that are not properly declared
+   */
+  storage: any;
+
+  logger: any;
+
   /**
    * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
@@ -964,7 +971,11 @@ class HathorWallet extends EventEmitter {
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
         const nowHeight: any = await this.storage.getCurrentHeight();
         const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked: any = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
+        const is_height_locked: any = transactionUtils.isHeightLocked(
+          tx.height,
+          nowHeight,
+          rewardLock
+        );
         const is_locked: any = is_time_locked || is_height_locked;
 
         addressInfo.total_amount_received += output.value;
@@ -1749,7 +1760,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async prepareCreateNewToken(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
+  async prepareCreateNewToken(
+    name: any,
+    symbol: any,
+    amount: any,
+    options: any = {}
+  ): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
@@ -1826,7 +1842,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNewTokenSendTransaction(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
+  async createNewTokenSendTransaction(
+    name: any,
+    symbol: any,
+    amount: any,
+    options: any = {}
+  ): Promise<any> {
     const transaction: any = await this.prepareCreateNewToken(name, symbol, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2202,7 +2223,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareDelegateAuthorityData(tokenUid: any, type: any, destinationAddress: any, options: any = {}): Promise<any> {
+  async prepareDelegateAuthorityData(
+    tokenUid: any,
+    type: any,
+    destinationAddress: any,
+    options: any = {}
+  ): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
@@ -2256,7 +2282,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async delegateAuthoritySendTransaction(tokenUid: any, type: any, destinationAddress: any, options: any = {}): Promise<any> {
+  async delegateAuthoritySendTransaction(
+    tokenUid: any,
+    type: any,
+    destinationAddress: any,
+    options: any = {}
+  ): Promise<any> {
     const transaction: any = await this.prepareDelegateAuthorityData(
       tokenUid,
       type,
@@ -2279,7 +2310,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async delegateAuthority(tokenUid: any, type: any, destinationAddress: any, options: any = {}): Promise<any> {
+  async delegateAuthority(
+    tokenUid: any,
+    type: any,
+    destinationAddress: any,
+    options: any = {}
+  ): Promise<any> {
     const sendTx: any = await this.delegateAuthoritySendTransaction(
       tokenUid,
       type,
@@ -2308,7 +2344,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareDestroyAuthorityData(tokenUid: any, type: any, count: any, options: any = {}): Promise<any> {
+  async prepareDestroyAuthorityData(
+    tokenUid: any,
+    type: any,
+    count: any,
+    options: any = {}
+  ): Promise<any> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
@@ -2365,7 +2406,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async destroyAuthoritySendTransaction(tokenUid: any, type: any, count: any, options: any = {}): Promise<any> {
+  async destroyAuthoritySendTransaction(
+    tokenUid: any,
+    type: any,
+    count: any,
+    options: any = {}
+  ): Promise<any> {
     const transaction: any = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2604,7 +2650,13 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async createNFTSendTransaction(name: any, symbol: any, amount: any, data: any, options: any = {}): Promise<any> {
+  async createNFTSendTransaction(
+    name: any,
+    symbol: any,
+    amount: any,
+    data: any,
+    options: any = {}
+  ): Promise<any> {
     /** @type {CreateTokenOptions} */
     const newOptions: any = {
       address: null,
@@ -2915,7 +2967,9 @@ class HathorWallet extends EventEmitter {
     fullTx.tx.outputs = fullTx.tx.outputs.map((output: any) =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map((input: any) => hydrateWithTokenUid(input, fullTx.tx.tokens));
+    fullTx.tx.inputs = fullTx.tx.inputs.map((input: any) =>
+      hydrateWithTokenUid(input, fullTx.tx.tokens)
+    );
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
@@ -3025,7 +3079,12 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<Transaction>}
    */
-  async createAndSendNanoContractTransaction(method: any, address: any, data: any, options: any = {}): Promise<any> {
+  async createAndSendNanoContractTransaction(
+    method: any,
+    address: any,
+    data: any,
+    options: any = {}
+  ): Promise<any> {
     const sendTransaction: any = await this.createNanoContractTransaction(
       method,
       address,
@@ -3045,7 +3104,12 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<SendTransaction>}
    */
-  async createNanoContractTransaction(method: any, address: any, data: any, options: any = {}): Promise<any> {
+  async createNanoContractTransaction(
+    method: any,
+    address: any,
+    data: any,
+    options: any = {}
+  ): Promise<any> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
@@ -3171,7 +3235,9 @@ class HathorWallet extends EventEmitter {
       !newCreateTokenOptions.allowExternalMintAuthorityAddress
     ) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newCreateTokenOptions.mintAuthorityAddress);
+      const isAddressMine: any = await this.isAddressMine(
+        newCreateTokenOptions.mintAuthorityAddress
+      );
       if (!isAddressMine) {
         throw new NanoContractTransactionError(
           'The mint authority address must belong to your wallet.'
@@ -3184,7 +3250,9 @@ class HathorWallet extends EventEmitter {
       !newCreateTokenOptions.allowExternalMeltAuthorityAddress
     ) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newCreateTokenOptions.meltAuthorityAddress);
+      const isAddressMine: any = await this.isAddressMine(
+        newCreateTokenOptions.meltAuthorityAddress
+      );
       if (!isAddressMine) {
         throw new NanoContractTransactionError(
           'The melt authority address must belong to your wallet.'
@@ -3373,8 +3441,16 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<OnChainBlueprint>}
    */
-  async createAndSendOnChainBlueprintTransaction(code: any, address: any, options: any = {}): Promise<any> {
-    const sendTransaction: any = await this.createOnChainBlueprintTransaction(code, address, options);
+  async createAndSendOnChainBlueprintTransaction(
+    code: any,
+    address: any,
+    options: any = {}
+  ): Promise<any> {
+    const sendTransaction: any = await this.createOnChainBlueprintTransaction(
+      code,
+      address,
+      options
+    );
     return sendTransaction.runFromMining();
   }
 
@@ -3426,6 +3502,18 @@ class HathorWallet extends EventEmitter {
   async getNanoHeaderSeqnum(address: any): Promise<any> {
     const addressInfo: any = await this.storage.getAddressInfo(address);
     return addressInfo.seqnum + 1;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async startReadOnly(
+    options?: { skipAddressFetch?: boolean | undefined } | undefined
+  ): Promise<void> {
+    throw new Error('Not Implemented');
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async getReadOnlyAuthToken(): Promise<string> {
+    throw new Error('Not implemented.');
   }
 }
 
