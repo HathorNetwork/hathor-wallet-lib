@@ -269,3 +269,14 @@ export interface NanoContractCreationListAPIResponse {
   // Has more contracts to fetch
   has_more: boolean;
 }
+
+export interface NanoContractLogsAPIResponse {
+  // If the request succeeded
+  success: boolean;
+  // Nano contract ID
+  nc_id: string;
+  // Execution metadata
+  nc_execution: string | null;
+  // Logs organized by block ID (hex string keys)
+  logs: Record<string, any>;
+}
