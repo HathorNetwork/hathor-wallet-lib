@@ -278,5 +278,5 @@ export interface NanoContractLogsAPIResponse {
   // Execution metadata
   nc_execution: string | null;
   // Logs organized by block ID (hex string keys)
-  logs: Record<string, any>;
+  logs: Record<string, unknown>;
 }
