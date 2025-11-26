@@ -85,6 +85,7 @@ import {
   CreateNanoTxData,
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
+import HathorWallet from '../new/wallet';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -2710,7 +2711,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(this)
+      .setWallet(this as unknown as HathorWallet) // FIXME: Should accept IHathorWallet instead
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
@@ -2875,7 +2876,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(this)
+      .setWallet(this as unknown as HathorWallet) // FIXME: Should accept IHathorWallet instead
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
