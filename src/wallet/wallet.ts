@@ -426,7 +426,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       await this.storage.saveAccessData(accessData);
     }
 
-    let renewPromise: Promise<void> | null = null;
+    let renewPromise: Promise<void | { status?: unknown; error?: unknown }> | null = null;
     let renewPromiseError = null;
     if (accessData.acctPathKey) {
       // We can preemtively request/renew the auth token so the wallet can wait for this process

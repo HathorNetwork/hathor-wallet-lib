@@ -432,10 +432,8 @@ class NanoContractTransactionBuilder {
     inputs.push({
       txId: utxo.txId,
       index: utxo.index,
-      // @ts-expect-error - This property should not be here, but it's working
       value: utxo.value,
       authorities: utxo.authorities,
-      // @ts-expect-error - This property should not be here, but it's working
       token: utxo.token,
       address: utxo.address,
     });
