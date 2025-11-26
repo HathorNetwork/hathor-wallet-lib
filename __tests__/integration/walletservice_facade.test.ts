@@ -173,7 +173,7 @@ function buildWalletInstance({
  * @returns The transaction object if found
  * @throws Error if the transaction is not found after max attempts
  */
-async function poolForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
+async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
   const maxAttempts = 10;
   const delayMs = 1000; // 1 second
   let attempts = 0;
@@ -182,7 +182,7 @@ async function poolForTx(walletForPolling: HathorWalletServiceWallet, txId: stri
     try {
       const tx = await walletForPolling.getTxById(txId);
       if (tx) {
-        loggers.test!.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
+        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
         return tx;
       }
     } catch (error) {
@@ -223,23 +223,21 @@ async function sendFundTx(
   });
 
   // Ensure the transaction was sent from the Genesis perspective
-  await poolForTx(gWallet, fundTx.hash!);
+  await pollForTx(gWallet, fundTx.hash!);
 
   // Ensure the destination wallet is also aware of the transaction
   if (destinationWallet) {
-    await poolForTx(destinationWallet, fundTx.hash!);
+    await pollForTx(destinationWallet, fundTx.hash!);
   }
 
   return fundTx;
 }
 
 beforeAll(async () => {
-  console.log(`${JSON.stringify(await generateNewWalletAddress(), null, 2)}`);
-
   let isServerlessReady = false;
   const startTime = Date.now();
 
-  // Pool for the serverless app to be ready.
+  // Poll for the serverless app to be ready.
   const delayBetweenRequests = 3000;
   const lambdaTimeout = 30000;
   while (!isServerlessReady) {
@@ -672,7 +670,7 @@ describe('basic transaction methods', () => {
       });
 
       // Confirm the addresses through UTXO queries
-      await poolForTx(wallet, sendTransaction.hash!);
+      await pollForTx(wallet, sendTransaction.hash!);
       const recipientUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, recipientIndex);
       expect(recipientUtxo).toStrictEqual(
         expect.objectContaining({
@@ -712,7 +710,7 @@ describe('basic transaction methods', () => {
         words: customTokenWallet.words,
       }));
       await wallet.start({ pinCode, password });
-      await poolForTx(wallet, fundTx.hash!);
+      await pollForTx(wallet, fundTx.hash!);
 
       const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
         pinCode,
@@ -817,7 +815,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       tokenUid = createTokenTx.hash!;
-      await poolForTx(wallet, tokenUid);
+      await pollForTx(wallet, tokenUid);
 
       // Specific token creation validations
       const tokenDetails = await wallet.getTokenDetails(tokenUid);
@@ -843,7 +841,7 @@ describe('basic transaction methods', () => {
         pinCode,
         token: tokenUid,
       });
-      await poolForTx(wallet, sendTransaction.hash!);
+      await pollForTx(wallet, sendTransaction.hash!);
 
       // Verify that the only outputs were the recipient and the change address
       expect(sendTransaction.outputs.length).toBe(2);
@@ -930,7 +928,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const noAuthTokenUid = createTokenTx.hash!;
-      await poolForTx(wallet, noAuthTokenUid);
+      await pollForTx(wallet, noAuthTokenUid);
 
       // Specific token creation validations
       const tokenDetails = await wallet.getTokenDetails(noAuthTokenUid);
@@ -980,7 +978,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const specificAddressTokenUid = createTokenTx.hash!;
-      await poolForTx(wallet, specificAddressTokenUid);
+      await pollForTx(wallet, specificAddressTokenUid);
 
       // Validate that outputs went to the correct addresses through UTXO queries
       let tokenOutputIndex = -1;
@@ -1077,7 +1075,7 @@ describe('basic transaction methods', () => {
         words: customTokenWallet.words,
       }));
       await wallet.start({ pinCode, password });
-      await poolForTx(wallet, fundTx.hash!);
+      await pollForTx(wallet, fundTx.hash!);
 
       // Assign external addresses from multipleTokensWallet (starting from index 9 going backwards)
       const destinationAddress = multipleTokensWallet.addresses[9]; // Token destination
@@ -1212,7 +1210,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const externalWalletTokenUid = createTokenTx.hash!;
-      await poolForTx(wallet, externalWalletTokenUid);
+      await pollForTx(wallet, externalWalletTokenUid);
 
       // Since outputs went to external addresses, we need to use the original wallet to query
       // but note that the wallet service might not be able to query external UTXOs directly
@@ -1515,12 +1513,12 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
       pinCode,
       changeAddress: utxosWallet.addresses[0],
     });
-    await poolForTx(utxosTestWallet, fundTx2.hash!);
+    await pollForTx(utxosTestWallet, fundTx2.hash!);
     const fundTx3 = await utxosTestWallet.sendTransaction(utxosWallet.addresses[2], 30n, {
       pinCode,
       changeAddress: utxosWallet.addresses[0],
     });
-    await poolForTx(utxosTestWallet, fundTx3.hash!);
+    await pollForTx(utxosTestWallet, fundTx3.hash!);
     // Create a custom token to test authority UTXOs
     const createTokenTx = await utxosTestWallet.createNewToken('UtxoTestToken', 'UTT', 200n, {
       pinCode,
@@ -1532,7 +1530,7 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
 
     createdTokenUid = createTokenTx.hash!;
 
-    await poolForTx(utxosTestWallet, createdTokenUid);
+    await pollForTx(utxosTestWallet, createdTokenUid);
   });
 
   afterAll(async () => {
@@ -1761,7 +1759,7 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
         createMint: false,
         createMelt: false,
       });
-      await poolForTx(utxosTestWallet, noAuthTokenTx.hash!);
+      await pollForTx(utxosTestWallet, noAuthTokenTx.hash!);
 
       const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'mint');
       const meltAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'melt');
