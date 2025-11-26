@@ -3059,7 +3059,7 @@ describe('getToken methods', () => {
     expect(details).toStrictEqual({
       totalSupply: 100n,
       totalTransactions: 1,
-      tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
+      tokenInfo: { id: tokenUid, name: 'Details Token', symbol: 'DTOK' },
       authorities: { mint: true, melt: true },
     });
 

@@ -118,6 +118,11 @@ class Bet(Blueprint):
         self.final_result = None
         self.total = Amount(0)
 
+        self.bets_total = {}
+        self.bets_address = {}
+        self.address_details = {}
+        self.withdrawals = {}
+
     @view
     def has_result(self) -> bool:
         """Return True if the final result has already been set."""

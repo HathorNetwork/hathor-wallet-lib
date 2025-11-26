@@ -17,11 +17,12 @@ from hathor import (
 class TestChildrenBlueprint(Blueprint):
     name: str
 
-    attr: str
+    attr: str | None
 
     @public
     def initialize(self, ctx: Context, name: str) -> None:
         self.name = name
+        self.attr = None
 
     @public
     def set_attr(self, ctx: Context, attr: str) -> None:

@@ -147,6 +147,26 @@ export interface IHistoryNanoContractContext {
   timestamp?: number | null;
 }
 
+/**
+ * Fee entry in a Fee Header.
+ * Represents a token and amount used to pay transaction fees.
+ */
+export interface IFeeEntry {
+  /**
+   * Index of the token in the transaction's tokens array.
+   * References tx.tokens[tokenIndex].
+   * Must be in the range [0, tx.tokens.length).
+   */
+  tokenIndex: number;
+
+  /**
+   * Amount of the fee in the smallest unit ("cents").
+   * Must be positive.
+   * MUST be a multiple of (1 / TOKEN_DEPOSIT_PERCENTAGE).
+   */
+  amount: OutputValueType;
+}
+
 export interface IHistoryTx {
   tx_id: string;
   signalBits?: number;

@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
@@ -167,28 +166,6 @@ describe('Parent - children tests', () => {
   };
 
   it('Run with on chain blueprint', async () => {
-    // Use the blueprint code
-    const codeParent = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/test_parent.py',
-      'utf8'
-    );
-
-    const txParent = await hWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, txParent.hash);
-
-    const codeChildren = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/test_children.py',
-      'utf8'
-    );
-    const txChildren = await hWallet.createAndSendOnChainBlueprintTransaction(
-      codeChildren,
-      address0
-    );
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, txChildren.hash);
-
-    // Execute the blueprint tests
-    await executeTests(hWallet, txParent.hash, txChildren.hash);
+    await executeTests(hWallet, global.PARENT_BLUEPRINT_ID, global.CHILDREN_BLUEPRINT_ID);
   });
 });
