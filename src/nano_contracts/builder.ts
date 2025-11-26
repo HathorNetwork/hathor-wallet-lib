@@ -188,6 +188,16 @@ class NanoContractTransactionBuilder {
   }
 
   /**
+   * Guard that asserts `this.wallet` is not null and narrows its type for the caller.
+   * Throws a TypeError if wallet is not set.
+   */
+  private assertWallet(): asserts this is { wallet: HathorWallet } {
+    if (!this.wallet) {
+      throw new TypeError('Wallet is required to build nano contract transactions.');
+    }
+  }
+
+  /**
    * Set vertex type
    *
    * @param {vertexType} The vertex type
@@ -217,6 +227,7 @@ class NanoContractTransactionBuilder {
   async executeDeposit(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
         "Can't execute a deposit with an action which type is different than deposit."
@@ -313,6 +324,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeWithdrawal(action: NanoContractAction): IDataOutput | null {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
         "Can't execute a withdrawal with an action which type is different than withdrawal."
@@ -381,6 +393,7 @@ class NanoContractTransactionBuilder {
   async executeGrantAuthority(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute a grant authority with an action which type is different than grant authority."
@@ -449,6 +462,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeAcquireAuthority(action: NanoContractAction): IDataOutput | null {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute an acquire authority with an action which type is different than acquire authority."
@@ -481,6 +495,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async verify() {
+    this.assertWallet();
     if (this.method === NANO_CONTRACTS_INITIALIZE_METHOD && !this.blueprintId) {
       // Initialize needs the blueprint ID
       throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
@@ -622,6 +637,7 @@ class NanoContractTransactionBuilder {
     outputs: IDataOutput[],
     tokens: string[]
   ): Promise<Transaction | CreateTokenTransaction> {
+    this.assertWallet();
     if (this.vertexType === NanoContractVertexType.TRANSACTION) {
       return transactionUtils.createTransactionFromData(
         {
@@ -682,6 +698,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<Transaction> {
+    this.assertWallet();
     let inputs;
     let outputs;
     let tokens;

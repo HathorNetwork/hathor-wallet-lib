@@ -26,6 +26,7 @@ import {
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
   AddressDetailsResponseData,
+  TxProposalDeleteResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
@@ -49,6 +50,7 @@ import {
   authTokenResponseSchema,
   txByIdResponseSchema,
   addressDetailsResponseSchema,
+  txProposalDeleteResponseSchema,
 } from './schemas/walletApi';
 
 /**
@@ -263,11 +265,11 @@ const walletApi = {
   async deleteTxProposal(
     wallet: HathorWalletServiceWallet,
     id: string
-  ): Promise<TxProposalUpdateResponseData> {
+  ): Promise<TxProposalDeleteResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.delete(`tx/proposal/${id}`);
     if (response.status === 200) {
-      return parseSchema(response.data, txProposalUpdateResponseSchema);
+      return parseSchema(response.data, txProposalDeleteResponseSchema);
     }
     throw new WalletRequestError('Error deleting tx proposal.');
   },

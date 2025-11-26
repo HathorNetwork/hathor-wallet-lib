@@ -178,6 +178,11 @@ export interface TxProposalUpdateResponseData {
   txHex: string; // Hex of the serialized tx
 }
 
+export interface TxProposalDeleteResponseData {
+  success: boolean;
+  txProposalId: string; // Id of the tx proposal
+}
+
 export interface RequestError {
   success: boolean;
   error: string; // Error code
@@ -342,8 +347,8 @@ export interface IHathorWallet {
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
-  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject;
-  getNextAddress(): AddressInfoObject;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type
+  getNextAddress(): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(
@@ -393,7 +398,7 @@ export interface IHathorWallet {
     count: number,
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
-  getFullHistory(): TransactionFullObject[];
+  getFullHistory(): TransactionFullObject[] | Promise<unknown>; // FIXME: Should have a single return type;
   getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
