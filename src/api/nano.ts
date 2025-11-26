@@ -16,6 +16,7 @@ import {
   NanoContractHistoryAPIResponse,
   NanoContractStateAPIResponse,
   NanoContractStateAPIParameters,
+  NanoContractLogsAPIResponse,
 } from '../nano_contracts/types';
 
 /**
@@ -284,6 +285,38 @@ const ncApi = {
       throw new NanoRequestError('Error getting nano contract creation list.', null, response);
     } catch (error: unknown) {
       throw new NanoRequestError('Error getting nano contract creation list.', error);
+    }
+  },
+
+  /**
+   * Call get nano contract logs API
+   *
+   * @param id Nano Contract ID
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getNanoContractLogs(id: string): Promise<NanoContractLogsAPIResponse> {
+    const data = { id };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/logs`, { params: data });
+      const responseData = response.data;
+      if (response.status === 200 && responseData.success) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting nano contract logs.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Nano contract not found.', e, e.response);
+        }
+      }
+
+      throw new NanoRequestError('Error getting nano contract logs.', error);
     }
   },
 };
