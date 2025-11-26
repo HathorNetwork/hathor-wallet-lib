@@ -29,6 +29,14 @@ const SLOW_WALLET_MAX_RETRIES = 10;
 const SLOW_WALLET_RETRY_DELAY_BASE_MS = 100;
 const SLOW_WALLET_RETRY_DELAY_MAX_MS = 2000;
 
+const SLOW_WALLET_COMMON_ERROR_MESSAGES = [
+  // Common error for the Wallet Service when running under serverless-offline
+  // Happens especially often during tests in a dockerized private blockchain
+  'socket hang up',
+
+  // Add more common error messages lowercased here if needed
+];
+
 /**
  * Create an axios instance to be used when sending requests
  *
@@ -86,14 +94,16 @@ export const axiosInstance = async (
       // Check if we should retry
       const shouldRetry =
         wallet._expectSlowLambdas &&
-        error.message === 'socket hang up' &&
+        SLOW_WALLET_COMMON_ERROR_MESSAGES.includes(error.message.toLowerCase()) &&
         currentRetryCount < SLOW_WALLET_MAX_RETRIES;
 
       // Throw any error found if we shouldn't retry
       if (!shouldRetry) {
         // eslint-disable-next-line no-console
         console.error(
-          `Failed request to ${requestConfig.url}: ${error.message}. Took ${Date.now() - initialRetryTime}ms and ${currentRetryCount} retries.`
+          currentRetryCount > 0
+            ? `Failed request to ${requestConfig.url}: ${error.message}. Took ${Date.now() - initialRetryTime}ms and ${currentRetryCount} retries.`
+            : `Failed request to ${requestConfig.url}: ${error.message}.`
         );
         return Promise.reject(error);
       }
