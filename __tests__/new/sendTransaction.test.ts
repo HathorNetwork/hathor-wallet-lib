@@ -15,6 +15,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';
 import transaction from '../../src/utils/transaction';
 import { OutputType } from '../../src/wallet/types';
+import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 test('type methods', () => {
   // The ISendInput and ISendOutput were created to satisfy the old facade methods while using typescript
@@ -77,6 +78,7 @@ test('prepareTxData', async () => {
     })
   );
   jest.spyOn(storage, 'isAddressMine').mockReturnValue(true);
+  const spyGetToken = jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
   const preparedTx = {
     validate: jest.fn(),
   };
@@ -172,6 +174,7 @@ test('prepareTxData', async () => {
   await expect(sendTransaction.prepareTx()).resolves.toBe(preparedTx);
 
   prepareSpy.mockRestore();
+  spyGetToken.mockRestore();
 });
 
 test('invalid method calls', async () => {

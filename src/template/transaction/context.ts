@@ -7,7 +7,7 @@
 /* eslint max-classes-per-file: ["error", 3] */
 
 import { z } from 'zod';
-import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
+import { TokenVersion, IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
@@ -191,6 +191,8 @@ export class TxTemplateContext {
   tokenSymbol?: string;
 
   nanoContext?: NanoContractContext;
+
+  tokenVersion?: TokenVersion;
 
   vars: Record<string, unknown>;
 

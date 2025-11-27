@@ -7,30 +7,35 @@
 
 import EventEmitter from 'events';
 import { shuffle } from 'lodash';
-import { SELECT_OUTPUTS_TIMEOUT, NATIVE_TOKEN_UID } from '../constants';
-import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
-import { WalletError, SendTxError } from '../errors';
+import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import { ErrorMessages } from '../errorMessages';
-import helpers from '../utils/helpers';
-import MineTransaction from '../wallet/mineTransaction';
+import { SendTxError, WalletError } from '../errors';
 import Address from '../models/address';
-import { OutputType } from '../wallet/types';
-import {
-  IStorage,
-  IDataTx,
-  IDataOutput,
-  IDataInput,
-  IUtxoSelectionOptions,
-  isDataOutputCreateToken,
-  WalletType,
-  OutputValueType,
-} from '../types';
-import Transaction from '../models/transaction';
-import { bestUtxoSelection } from '../utils/utxo';
-import { addCreatedTokenFromTx } from '../utils/storage';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import { Fee } from '../utils/fee';
+import Transaction from '../models/transaction';
+import {
+  IDataInput,
+  IDataOutput,
+  IDataOutputWithToken,
+  IDataTx,
+  isDataOutputCreateToken,
+  IStorage,
+  IUtxoSelectionOptions,
+  OutputValueType,
+  WalletType,
+} from '../types';
+import helpers from '../utils/helpers';
+import { addCreatedTokenFromTx } from '../utils/storage';
+import tokens from '../utils/tokens';
+import transactionUtils from '../utils/transaction';
+import { bestUtxoSelection } from '../utils/utxo';
+import MineTransaction from '../wallet/mineTransaction';
+import { OutputType } from '../wallet/types';
 import HathorWallet from './wallet';
+import Header from '../headers/base';
+import FeeHeader from '../headers/fee';
 
 export interface ISendInput {
   txId: string;
@@ -218,41 +223,69 @@ export default class SendTransaction extends EventEmitter {
       });
     }
 
-    const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
-    for (const [token, chooseInputs] of tokenMap) {
-      const options: IUtxoSelectionOptions = {
-        token,
-        chooseInputs,
-      };
-      if (this.changeAddress) {
-        options.changeAddress = this.changeAddress;
-      }
-      try {
-        const proposedData = await prepareSendTokensData(this.storage, txData, options);
-        partialTxData.inputs.push(...proposedData.inputs);
-        partialTxData.outputs.push(...proposedData.outputs);
-      } catch (e) {
-        if (e instanceof Error) {
-          throw new SendTxError(e.message);
-        }
-        throw e;
-      }
-    }
-
-    let outputs: IDataOutput[];
-    if (partialTxData.outputs.length === 0) {
-      outputs = txData.outputs;
-    } else {
-      // Shuffle outputs, so we don't have change output always in the same index
-      outputs = shuffle([...txData.outputs, ...partialTxData.outputs]);
-    }
-
+    const shouldChooseHTRInputs = tokenMap.get(HTR_UID) || false;
+    // we remove HTR from the tokenMap since we will calculate the fee based on the inputs and outputs
+    // and we don't want to select inputs for HTR before that
     tokenMap.delete(HTR_UID);
+
+    const partialTxData = await prepareSendManyTokensData(
+      this.storage,
+      txData,
+      tokenMap,
+      this.changeAddress
+    );
+
+    const partialInputs = [...txData.inputs, ...partialTxData.inputs];
+    const partialOutputs = [...txData.outputs, ...partialTxData.outputs] as IDataOutputWithToken[];
+
+    // calculate the fee based in the inputs and outputs, including the change output
+    // fee is always in HTR
+    const fee = await Fee.calculate(
+      partialInputs,
+      partialOutputs,
+      await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
+    );
+    const headers: Header[] = [];
+    if (fee > 0) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
+    }
+
+    // We only need to grab HTR inputs if they weren't provided or tha tx has a fee
+    const options: IUtxoSelectionOptions = {
+      token: HTR_UID,
+      chooseInputs: shouldChooseHTRInputs || fee > 0,
+    };
+
+    if (this.changeAddress) {
+      options.changeAddress = this.changeAddress;
+    }
+
+    const partialHtrTxData = await prepareSendTokensData(
+      this.storage,
+      {
+        inputs: partialInputs,
+        outputs: partialOutputs,
+      },
+      options,
+      fee
+    );
+
+    const shouldShuffleOutputs =
+      partialTxData.outputs.length > 0 || partialHtrTxData.outputs.length > 0;
+    // we initialize the outputs with the provided outputs to keep the order
+    let outputs = [...txData.outputs];
+    if (shouldShuffleOutputs) {
+      // Shuffle outputs, so we don't have change output always in the same index
+      outputs = shuffle([...partialOutputs, ...partialHtrTxData.outputs]);
+    }
+
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       outputs,
-      inputs: [...txData.inputs, ...partialTxData.inputs],
+      inputs: [...partialInputs, ...partialHtrTxData.inputs],
+      // We already removed HTR from the tokenMap
       tokens: Array.from(tokenMap.keys()),
+      headers,
     };
 
     return this.fullTxData;
@@ -582,29 +615,49 @@ export default class SendTransaction extends EventEmitter {
  * We will only check a single token
  *
  * @param {IStorage} storage
- * @param {IDataTx} dataTx
+ * @param {Pick<IDataTx, 'inputs' | 'outputs'>} dataTx inputs and outputs from dataTx
  * @param {IUtxoSelectionOptions} options
  */
 export async function prepareSendTokensData(
   storage: IStorage,
-  dataTx: IDataTx,
-  options: IUtxoSelectionOptions = {}
+  dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
+  options: IUtxoSelectionOptions = {},
+  fee: bigint = 0n
 ): Promise<Pick<IDataTx, 'inputs' | 'outputs'>> {
-  async function getOutputTypeFromWallet(): Promise<'p2pkh' | 'p2sh'> {
-    const walletType = await storage.getWalletType();
-    if (walletType === WalletType.P2PKH) {
-      return 'p2pkh';
+  try {
+    return await _prepareSendTokensData(storage, dataTx, options, fee);
+  } catch (e) {
+    if (e instanceof Error) {
+      throw new SendTxError(e.message);
     }
-    if (walletType === WalletType.MULTISIG) {
-      return 'p2sh';
-    }
-    throw new Error('Unsupported wallet type.');
+    throw e;
   }
+}
 
+async function getOutputTypeFromWallet(storage: IStorage): Promise<'p2pkh' | 'p2sh'> {
+  const walletType = await storage.getWalletType();
+  if (walletType === WalletType.P2PKH) {
+    return 'p2pkh';
+  }
+  if (walletType === WalletType.MULTISIG) {
+    return 'p2sh';
+  }
+  throw new Error('Unsupported wallet type.');
+}
+
+async function _prepareSendTokensData(
+  storage: IStorage,
+  dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
+  options: IUtxoSelectionOptions = {},
+  fee: bigint = 0n
+): Promise<Pick<IDataTx, 'inputs' | 'outputs'>> {
   const token = options.token || NATIVE_TOKEN_UID;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
   const newtxData: Pick<IDataTx, 'inputs' | 'outputs'> = { inputs: [], outputs: [] };
   let outputAmount = 0n;
+
+  // we add the fee to be considered in the output amount
+  outputAmount = fee;
 
   // Calculate balance for the token on the transaction
   for (const output of dataTx.outputs) {
@@ -640,7 +693,7 @@ export async function prepareSendTokensData(
         changeAddress: options.changeAddress,
       });
       const changeOutput: IDataOutput = {
-        type: await getOutputTypeFromWallet(),
+        type: await getOutputTypeFromWallet(storage),
         token,
         value: newUtxos.amount - outputAmount,
         address: changeAddress,
@@ -683,7 +736,7 @@ export async function prepareSendTokensData(
         changeAddress: options.changeAddress,
       });
       newtxData.outputs.push({
-        type: await getOutputTypeFromWallet(),
+        type: await getOutputTypeFromWallet(storage),
         token,
         value: inputAmount - outputAmount,
         address: changeAddress,
@@ -693,8 +746,36 @@ export async function prepareSendTokensData(
       });
     }
   }
-
   return newtxData;
+}
+
+/**
+ * Check the tx data and propose inputs and outputs to complete the transaction.
+ * We will check all the tokens and choose the inputs for each token based on the tokenMap value
+ * @param {IStorage} storage
+ * @param {IDataTx} dataTx
+ * @param {IUtxoSelectionOptions} options
+ */
+export async function prepareSendManyTokensData(
+  storage: IStorage,
+  txData: IDataTx,
+  tokenMap: Map<string, boolean>,
+  changeAddress: string | null
+): Promise<Pick<IDataTx, 'outputs' | 'inputs'>> {
+  const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
+  for (const [token, chooseInputs] of tokenMap) {
+    const options: IUtxoSelectionOptions = {
+      token,
+      chooseInputs,
+    };
+    if (changeAddress) {
+      options.changeAddress = changeAddress;
+    }
+    const proposedData = await prepareSendTokensData(storage, txData, options);
+    partialTxData.inputs.push(...proposedData.inputs);
+    partialTxData.outputs.push(...proposedData.outputs);
+  }
+  return partialTxData;
 }
 
 /**

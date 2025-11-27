@@ -7,7 +7,6 @@
 
 import { z } from 'zod';
 import { clone, shuffle } from 'lodash';
-import { OutputValueType } from 'src/types';
 import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
@@ -53,6 +52,7 @@ import {
   getWalletBalance,
 } from './setvarcommands';
 import { selectAuthorities, selectTokens } from './utils';
+import { TokenVersion, OutputValueType } from '../../types';
 
 /**
  * Find and run the executor function for the instruction.
@@ -680,13 +680,18 @@ export async function execConfigInstruction(
     ctx.vars,
     ConfigInstruction.shape.tokenSymbol
   );
+  const tokenVersion = getVariable<TokenVersion | undefined>(
+    ins.tokenVersion,
+    ctx.vars,
+    ConfigInstruction.shape.tokenVersion
+  );
   const createToken = getVariable<boolean | undefined>(
     ins.createToken,
     ctx.vars,
     ConfigInstruction.shape.createToken
   );
   ctx.log(
-    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) createToken(${createToken})`
+    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) tokenVersion(${tokenVersion}) createToken(${createToken})`
   );
 
   if (version) {
@@ -700,6 +705,9 @@ export async function execConfigInstruction(
   }
   if (tokenSymbol) {
     ctx.tokenSymbol = tokenSymbol;
+  }
+  if (tokenVersion) {
+    ctx.tokenVersion = tokenVersion;
   }
   if (createToken) {
     ctx.useCreateTokenTxContext();
