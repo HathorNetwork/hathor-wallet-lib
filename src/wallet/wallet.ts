@@ -1633,6 +1633,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async checkAddressesMine(addresses: string[]): Promise<WalletAddressMap> {
+    if (addresses.length === 0) {
+      return {};
+    }
+
     const response = await walletApi.checkAddressesMine(this, addresses);
 
     return response.addresses;
