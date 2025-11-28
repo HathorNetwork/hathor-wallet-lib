@@ -70,6 +70,7 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
+  seqnum?: number;
 }
 
 export interface IAddressMetadata {
@@ -616,6 +617,7 @@ export interface IStorage {
     connection?: FullNodeConnection;
     cleanStorage?: boolean;
     cleanAddresses?: boolean;
+    cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;

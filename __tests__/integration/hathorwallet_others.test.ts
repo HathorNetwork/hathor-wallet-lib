@@ -21,15 +21,29 @@ import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { ConnectionState } from '../../src/wallet/types';
 import HathorWallet from '../../src/new/wallet';
 import { MemoryStore } from '../../src/storage';
-import { IHistoryTx } from '../../src/types';
+import { IHistoryTx, OutputValueType, SCANNING_POLICY } from '../../src/types';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
+
+/** @see HathorWallet.prototype.getAvailableUtxos */
+interface Utxo {
+  txId: string;
+  index: number;
+  tokenId: string;
+  address: string;
+  value: string;
+  authorities: OutputValueType;
+  timelock: number | null;
+  heightlock: number | null;
+  locked: boolean;
+  addressPath: string;
+}
 
 describe('processing transaction metadata changes', () => {
   let hWallet: HathorWallet;
 
   beforeEach(async () => {
-    hWallet = await generateWalletHelper(null);
+    hWallet = await generateWalletHelper();
   });
 
   afterEach(async () => {
@@ -477,8 +491,7 @@ describe('processing transaction metadata changes', () => {
 });
 
 describe('getAddressInfo', () => {
-  /** @type HathorWallet */
-  let hWallet;
+  let hWallet: HathorWallet;
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
   });
@@ -729,9 +742,6 @@ describe('getAvailableUtxos', () => {
   });
 
   it('should correctly identify all utxos on an empty wallet', async () => {
-    /**
-     * @type HathorWallet
-     */
     const hWallet = await generateWalletHelper();
 
     // Get correct results for an empty wallet
@@ -770,9 +780,6 @@ describe('getAvailableUtxos', () => {
   });
 
   it('should filter by address', async () => {
-    /**
-     * @type HathorWallet
-     */
     const hWallet = await generateWalletHelper();
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
@@ -815,9 +822,6 @@ describe('getAvailableUtxos', () => {
   });
 
   it('should filter by custom token', async () => {
-    /**
-     * @type HathorWallet
-     */
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(
@@ -844,7 +848,7 @@ describe('getAvailableUtxos', () => {
     // Validate that the custom token utxo is listed with its authority tokens
     // By default list only funds
     utxoGenerator = hWallet.getAvailableUtxos({ token: tokenUid });
-    let allResults = [];
+    let allResults: Utxo[] = [];
     for await (const u of utxoGenerator) {
       allResults.push(u);
     }
@@ -887,9 +891,8 @@ describe('getAvailableUtxos', () => {
 });
 
 describe('getUtxosForAmount', () => {
-  /** @type HathorWallet */
-  let hWallet;
-  let fundTx1hash;
+  let hWallet: HathorWallet;
+  let fundTx1hash: string;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
@@ -913,7 +916,7 @@ describe('getUtxosForAmount', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr1 = await hWallet.getAddressAtIndex(1);
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
-    fundTx1hash = tx1.hash;
+    fundTx1hash = tx1.hash!;
 
     // No change amount
     await expect(hWallet.getUtxosForAmount(10n)).resolves.toStrictEqual({
@@ -1094,12 +1097,9 @@ describe('getUtxosForAmount', () => {
 });
 
 describe('consolidateUtxos', () => {
-  /** @type HathorWallet */
-  let hWallet1;
-  /** @type HathorWallet */
-  let hWallet2;
-  /** @type string */
-  let tokenHash;
+  let hWallet1: HathorWallet;
+  let hWallet2: HathorWallet;
+  let tokenHash: string;
 
   /*
    * The test initialization creates two wallets,
@@ -1132,7 +1132,7 @@ describe('consolidateUtxos', () => {
    * @param {string} [token]
    * @returns {Promise<void>}
    */
-  async function cleanWallet1(token) {
+  async function cleanWallet1(token: string): Promise<void> {
     const [balanceObj] = await hWallet1.getBalance(token);
     const tokenBalance = balanceObj?.balance?.unlocked || 0n;
     if (tokenBalance === 0n) {
@@ -1493,10 +1493,8 @@ describe('consolidateUtxos', () => {
 });
 
 describe('getAuthorityUtxos', () => {
-  /** @type HathorWallet */
-  let hWallet;
-  /** @type string */
-  let tokenHash;
+  let hWallet: HathorWallet;
+  let tokenHash: string;
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
   });
@@ -1616,10 +1614,8 @@ describe('getAuthorityUtxos', () => {
 
 // This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
-  /** @type HathorWallet */
-  let gWallet;
-  /** @type HathorWallet */
-  let hWallet;
+  let gWallet: HathorWallet;
+  let hWallet: HathorWallet;
   beforeAll(async () => {
     const { hWallet: ghWallet } = await GenesisWalletHelper.getSingleton();
     gWallet = ghWallet;
@@ -1703,15 +1699,14 @@ describe('internal methods', () => {
 });
 
 describe('index-limit address scanning policy', () => {
-  /** @type HathorWallet */
-  let hWallet;
+  let hWallet: HathorWallet;
   beforeAll(async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     hWallet = await generateWalletHelper({
       seed: walletData.words,
-      addresses: walletData.addresses,
+      preCalculatedAddresses: walletData.addresses,
       scanPolicy: {
-        policy: 'index-limit',
+        policy: SCANNING_POLICY.INDEX_LIMIT,
         startIndex: 0,
         endIndex: 9,
       },

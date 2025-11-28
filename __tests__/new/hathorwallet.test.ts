@@ -46,6 +46,7 @@ test('getFullTxById', async () => {
 
   const getTxSpy = jest.spyOn(txApi, 'getTransaction');
 
+  // @ts-expect-error -- Mocked method does not follow closely the original signature
   getTxSpy.mockImplementation((_txId, resolve) => {
     resolve({
       success: true,
@@ -59,6 +60,7 @@ test('getFullTxById', async () => {
   expect(getFullTxByIdResponse.success).toStrictEqual(true);
   expect(getFullTxByIdResponse.tx.hash).toStrictEqual('tx1');
 
+  // @ts-expect-error -- Mocked method does not follow closely the original signature
   getTxSpy.mockImplementation((_txId, resolve) =>
     resolve({
       success: false,
@@ -552,6 +554,7 @@ test('getAddressPrivKey', async () => {
   const conn = {
     network: 'testnet',
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
     on: jest.fn(),
     start: jest.fn(),
   };
@@ -589,6 +592,7 @@ test('signMessageWithAddress', async () => {
   const conn = {
     network: 'testnet',
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
     on: jest.fn(),
     start: jest.fn(),
   };
@@ -718,6 +722,7 @@ test('start', async () => {
   const conn = {
     network: 'testnet',
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
     on: jest.fn(),
     start: jest.fn(),
   };
