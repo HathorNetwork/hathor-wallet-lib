@@ -15,6 +15,12 @@ type TokenUtxo = IDataInput | Utxo | IUtxo | IDataInput | IDataOutputWithToken |
 export class Fee {
   /**
    * Calculate the fee for a transaction.
+   *
+   * https://github.com/HathorNetwork/rfcs/pull/94
+   * According to the fee rfc, the fee is calculated based on the number of non-authority outputs.
+   * If the transaction is a create token transaction, the fee is calculated based on the number of outputs related to the token being created.
+   * If the transaction is a melt operation, the fee is calculated based on the number of outputs related to the token being melted. In this case, we should consider the melt operation without outputs as a non-authority output.
+   *
    * @param inputs the inputs of the transaction
    * @param outputs the outputs of the transaction
    * @param tokens the map with token data

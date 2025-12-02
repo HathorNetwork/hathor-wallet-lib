@@ -549,12 +549,8 @@ export class MemoryStore implements IStore {
       throw new Error('Already have this token');
     }
 
-    const newTokenConfig = { ...tokenConfig }; // Clone the token config to avoid modifying the original object
-    if (!tokens.isHathorToken(newTokenConfig.uid) && !newTokenConfig.version) {
-      // TODO: remove this once we have this configured in the wallet-service. Since any fee token will be in the utxo
-      // all the tokens are deposit
-      newTokenConfig.version = TokenVersion.DEPOSIT;
-    }
+    // TODO: remove this once we have this configured in the wallet-service. Since any fee token will be in the utxo
+    const newTokenConfig = { version: TokenVersion.DEPOSIT, ...tokenConfig }; // Clone the token config to avoid modifying the original object
     this.tokens.set(newTokenConfig.uid, newTokenConfig);
     if (meta !== undefined) {
       this.tokensMetadata.set(newTokenConfig.uid, meta);

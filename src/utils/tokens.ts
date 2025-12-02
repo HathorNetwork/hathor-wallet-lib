@@ -374,6 +374,7 @@ const tokens = {
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
+   * @param {TokenVersion} [options.tokenVersion=TokenVersion.DEPOSIT] Token version to be used for the transaction
    *
    * @returns {Promise<IDataTx>} The transaction data
    */
@@ -424,7 +425,7 @@ const tokens = {
       if (!tokenData) {
         throw new SendTxError(`Token ${token} not found.`);
       }
-      _tokenVersion = tokenData.version;
+      _tokenVersion = tokenData.version!;
     }
 
     // mintInput
@@ -489,7 +490,7 @@ const tokens = {
           if (!skipDepositFee && data) {
             // The deposit amount will be the quantity of data strings in the array
             // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
-            depositAmount += this.getDataScriptOutputFee() * BigInt(data.length);
+            depositAmount += this.getDataFee(data.length);
           }
         }
         break;

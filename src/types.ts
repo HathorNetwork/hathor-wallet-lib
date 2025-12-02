@@ -98,7 +98,7 @@ export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
-  version: TokenVersion;
+  version?: TokenVersion;
 }
 
 export interface ITokenMetadata {

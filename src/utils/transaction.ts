@@ -330,7 +330,6 @@ const transaction = {
       throw new UtxoError("Don't have enough utxos to fill total amount.");
     }
 
-    // we should enforce the conversion before doing the subtraction
     const changeAmount = filledAmount - totalAmount;
 
     return {
@@ -613,11 +612,20 @@ const transaction = {
       timestamp: txData.timestamp || null,
       parents: txData.parents || [],
       tokens: txData.tokens || [],
-      tokenVersion: txData.tokenVersion,
       headers: txData.headers || [],
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {
-      return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
+      const createTokenOptions = {
+        ...options,
+        tokenVersion: txData.tokenVersion,
+      };
+      return new CreateTokenTransaction(
+        txData.name!,
+        txData.symbol!,
+        inputs,
+        outputs,
+        createTokenOptions
+      );
     }
     if (options.version === DEFAULT_TX_VERSION) {
       return new Transaction(inputs, outputs, options);
