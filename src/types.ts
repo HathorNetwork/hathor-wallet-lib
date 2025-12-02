@@ -300,7 +300,7 @@ export interface IDataInput {
 interface IDataTokenCreationTx {
   name: string;
   symbol: string;
-  tokenVersion: TokenVersion;
+  tokenVersion: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions
