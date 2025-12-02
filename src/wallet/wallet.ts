@@ -1733,7 +1733,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (newOptions.data && newOptions.data.length > 0) {
-      // We require a 0.01 HTR deposit for each data output created
+      // We require a 0.01 HTR fee for each data output created
       deposit += tokens.getDataFee(newOptions.data.length);
     }
 
@@ -2399,8 +2399,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @throws SendTxError if the address is not valid
    */
   private createOutput(amount: bigint, address: string | null, tokenData?: number): Output {
-    const addressStr = address || this.getCurrentAddress({ markAsUsed: true }).address;
-    const addressObj = this.validateAddress(addressStr);
+    const addressObj = this.validateAddress(address);
     return new Output(amount, new P2PKH(addressObj).createScript(), { tokenData });
   }
 

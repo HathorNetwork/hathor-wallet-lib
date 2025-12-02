@@ -654,10 +654,7 @@ async function _prepareSendTokensData(
   const token = options.token || NATIVE_TOKEN_UID;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
   const newtxData: Pick<IDataTx, 'inputs' | 'outputs'> = { inputs: [], outputs: [] };
-  let outputAmount = 0n;
-
-  // we add the fee to be considered in the output amount
-  outputAmount = fee;
+  let outputAmount = fee;
 
   // Calculate balance for the token on the transaction
   for (const output of dataTx.outputs) {

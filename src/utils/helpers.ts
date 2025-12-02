@@ -388,11 +388,20 @@ const helpers = {
       weight: data.weight,
       timestamp: data.timestamp,
       tokens: data.tokens,
-      tokenVersion: data.tokenVersion,
     };
 
     if (data.version === CREATE_TOKEN_TX_VERSION) {
-      return new CreateTokenTransaction(data.name, data.symbol, inputs, outputs, options);
+      const createTokenOptions = {
+        ...options,
+        tokenVersion: data.tokenVersion,
+      };
+      return new CreateTokenTransaction(
+        data.name,
+        data.symbol,
+        inputs,
+        outputs,
+        createTokenOptions
+      );
     }
     if (data.version === DEFAULT_TX_VERSION) {
       return new Transaction(inputs, outputs, options);
