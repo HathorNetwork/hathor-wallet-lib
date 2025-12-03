@@ -198,6 +198,8 @@ export default class SendTransaction extends EventEmitter {
       }
     }
 
+    const requiresFees: { txId: string; index: number }[] = [];
+
     for (const input of this.inputs) {
       const inputTx = await this.storage.getTx(input.txId);
       if (inputTx === null || !inputTx.outputs[input.index]) {
@@ -207,10 +209,15 @@ export default class SendTransaction extends EventEmitter {
       }
       const spentOut = inputTx.outputs[input.index];
       if (!tokenMap.has(spentOut.token)) {
-        // The input select is from a token that is not in the outputs
-        const err = new SendTxError(ErrorMessages.INVALID_INPUT);
-        err.errorData = { txId: input.txId, index: input.index };
-        throw err;
+        // the inputs should be used to pay fees, otherwise it's an invalid input and it will raise an error after the fee is calculated
+        if (HTR_UID === spentOut.token) {
+          requiresFees.push({ txId: input.txId, index: input.index });
+        } else {
+          // The input select is from a token that is not in the outputs
+          const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+          err.errorData = { txId: input.txId, index: input.index };
+          throw err;
+        }
       }
       tokenMap.set(spentOut.token, false);
       txData.inputs.push({
@@ -223,7 +230,12 @@ export default class SendTransaction extends EventEmitter {
       });
     }
 
-    const shouldChooseHTRInputs = tokenMap.get(HTR_UID) || false;
+    // If the user provided HTR inputs, tokenMap.get(HTR_UID) will be false
+    // In that case, we should NOT choose inputs automatically (accept what user provided)
+    // Otherwise (true or undefined), we should choose HTR inputs if needed for fee
+    const tokenMapHasHTR = tokenMap.has(HTR_UID);
+    let shouldChooseHTRInputs = tokenMap.get(HTR_UID) || false;
+
     // we remove HTR from the tokenMap since we will calculate the fee based on the inputs and outputs
     // and we don't want to select inputs for HTR before that
     tokenMap.delete(HTR_UID);
@@ -245,15 +257,25 @@ export default class SendTransaction extends EventEmitter {
       partialOutputs,
       await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
     );
+
+    if (requiresFees.length > 0 && fee === 0n) {
+      const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+      err.errorData = requiresFees;
+      throw err;
+    }
+
     const headers: Header[] = [];
     if (fee > 0) {
       headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
+      // if any HTR input or output was provided, we need to choose inputs for HTR
+      if (!tokenMapHasHTR) {
+        shouldChooseHTRInputs = true;
+      }
     }
 
-    // We only need to grab HTR inputs if they weren't provided or tha tx has a fee
     const options: IUtxoSelectionOptions = {
       token: HTR_UID,
-      chooseInputs: shouldChooseHTRInputs || fee > 0,
+      chooseInputs: shouldChooseHTRInputs,
     };
 
     if (this.changeAddress) {

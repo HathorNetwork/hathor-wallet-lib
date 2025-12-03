@@ -207,7 +207,7 @@ export class UtxoError extends WalletError {}
 export class SendTxError extends WalletError {
   // XXX: There are only two out of dozens of places where this object is used instead of a string.
   //      This should be made consistently for strings
-  errorData: string | { txId: string; index: number } = '';
+  errorData: string | { txId: string; index: number } | { txId: string; index: number }[] = '';
 }
 
 /**

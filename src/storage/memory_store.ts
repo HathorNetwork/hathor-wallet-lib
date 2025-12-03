@@ -28,7 +28,6 @@ import {
 } from '../types';
 import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
-import tokens from '../utils/tokens';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,

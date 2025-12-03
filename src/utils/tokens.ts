@@ -373,7 +373,7 @@ const tokens = {
    * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
-   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token fees
    * @param {TokenVersion} [options.tokenVersion=TokenVersion.DEPOSIT] Token version to be used for the transaction
    *
    * @returns {Promise<IDataTx>} The transaction data
@@ -468,7 +468,9 @@ const tokens = {
         break;
       case TokenVersion.FEE:
         // is creating a new token
-        if (!isMintingToken) {
+        if (skipDepositFee) {
+          feeAmount = 0n;
+        } else if (!isMintingToken) {
           feeAmount = Fee.calculateTokenCreationTxFee(outputs);
         } else {
           const mappedOutputs = outputs.map(
@@ -486,8 +488,7 @@ const tokens = {
             await tokens.getTokensByManyIds(storage, new Set(tokensArray))
           );
 
-          // TODO-RAUL: check the behaviour of the skipDepositFee and if we should skip the entire fee calculation
-          if (!skipDepositFee && data) {
+          if (data) {
             // The deposit amount will be the quantity of data strings in the array
             // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
             depositAmount += this.getDataFee(data.length);
