@@ -142,10 +142,7 @@ describe('Full blueprint basic tests', () => {
     });
     await checkTxValid(wallet, txAmount);
 
-    const ncStateAmount = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      ['amount']
-    );
+    const ncStateAmount = await ncApi.getNanoContractState(txInitialize.hash, ['amount']);
 
     expect(ncStateAmount.fields.amount.value).toBe(0);
 
@@ -155,10 +152,7 @@ describe('Full blueprint basic tests', () => {
     });
     await checkTxValid(wallet, txAmount2);
 
-    const ncStateAmount2 = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      ['amount']
-    );
+    const ncStateAmount2 = await ncApi.getNanoContractState(txInitialize.hash, ['amount']);
 
     expect(ncStateAmount2.fields.amount.value).toBe(amount);
 
