@@ -10,7 +10,7 @@ import { FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
 import { IDataInput, IDataOutputWithToken, ITokenData, IUtxo, TokenVersion } from '../types';
 import Output from '../models/output';
 
-type TokenUtxo = IDataInput | Utxo | IUtxo | IDataInput | IDataOutputWithToken | Output;
+type TokenElement = IDataInput | Utxo | IUtxo | IDataInput | IDataOutputWithToken | Output;
 
 export class Fee {
   /**
@@ -31,8 +31,8 @@ export class Fee {
     outputs: (IDataOutputWithToken | Output)[],
     tokens: Map<string, ITokenData | TokenInfo>
   ): Promise<bigint> {
-    const nonAuthorityInputs = Fee.getNonAuthorityUtxoByTokenUid(inputs);
-    const nonAuthorityOutputs = Fee.getNonAuthorityUtxoByTokenUid(outputs);
+    const nonAuthorityInputs = Fee.groupTokenElementsByTokenUid(inputs);
+    const nonAuthorityOutputs = Fee.groupTokenElementsByTokenUid(outputs);
 
     const tokensSet = new Set([...nonAuthorityInputs.keys(), ...nonAuthorityOutputs.keys()]);
     tokensSet.delete(NATIVE_TOKEN_UID);
@@ -67,8 +67,8 @@ export class Fee {
    * @memberof Fee
    * @static
    */
-  static calculateTokenCreationTxFee(outputs: Omit<TokenUtxo, 'token'>[]): bigint {
-    return BigInt(Fee.getNonAuthorityOutputs(outputs).length) * FEE_PER_OUTPUT;
+  static calculateTokenCreationTxFee(outputs: Omit<TokenElement, 'token'>[]): bigint {
+    return BigInt(Fee.getNonAuthorityTokenElement(outputs).length) * FEE_PER_OUTPUT;
   }
 
   /**
@@ -78,52 +78,52 @@ export class Fee {
    * @memberof Fee
    * @static
    */
-  static getNonAuthorityOutputs(
-    outputs: (TokenUtxo | Omit<TokenUtxo, 'token'>)[]
-  ): (TokenUtxo | Omit<TokenUtxo, 'token'>)[] {
-    return outputs.filter(output => !Fee.isAuthorityUtxo(output as never)); // casting to never since we don't need the token property here.
+  static getNonAuthorityTokenElement(
+    outputs: (TokenElement | Omit<TokenElement, 'token'>)[]
+  ): (TokenElement | Omit<TokenElement, 'token'>)[] {
+    return outputs.filter(output => !Fee.isAuthorityTokenElement(output as never)); // casting to never since we don't need the token property here.
   }
 
   /**
-   * Check if the utxo is an authority utxo by checking the `isAuthority` method or ther `authorities` property.
-   * @param utxo utxo to check
-   * @returns true if the utxo is an authority utxo, false otherwise
+   * Check if the token element is an authority by checking the `isAuthority` method or the `authorities` property.
+   * @param tokenElement token element to check
+   * @returns true if the token element is an authority, false otherwise
    * @memberof Fee
    * @static
    */
-  static isAuthorityUtxo(utxo: TokenUtxo): boolean {
-    if (utxo instanceof Output) {
-      return utxo.isAuthority();
+  static isAuthorityTokenElement(tokenElement: TokenElement): boolean {
+    if (tokenElement instanceof Output) {
+      return tokenElement.isAuthority();
     }
-    return utxo.authorities !== 0n;
+    return tokenElement.authorities !== 0n;
   }
 
   /**
-   * Check if the utxo is a non-authority utxo by checking the isAuthorityUtxo method, then grouping them by token UID.
-   * @param utxos an array of utxos to check
-   * @returns a map where the keys are the token UIDs and the values are arrays of non-authority utxos for that token
+   * Check if the token element is a non-authority token element by checking the isAuthorityTokenElement method, then grouping them by token UID.
+   * @param tokenElements an array of token elements to check
+   * @returns a map where the keys are the token UIDs and the values are arrays of non-authority token elements for that token
    * @memberof Fee
    * @static
    */
-  static getNonAuthorityUtxoByTokenUid(utxos: TokenUtxo[]): Map<string, TokenUtxo[]> {
-    const map = new Map<string, TokenUtxo[]>();
+  static groupTokenElementsByTokenUid(tokenElements: TokenElement[]): Map<string, TokenElement[]> {
+    const map = new Map<string, TokenElement[]>();
 
-    for (const utxo of utxos) {
-      if (!Fee.isAuthorityUtxo(utxo)) {
+    for (const tokenElement of tokenElements) {
+      if (!Fee.isAuthorityTokenElement(tokenElement)) {
         let tokenUid: string = '';
-        if ('token' in utxo) {
-          tokenUid = utxo.token;
+        if ('token' in tokenElement) {
+          tokenUid = tokenElement.token;
         }
-        if ('tokenId' in utxo) {
-          tokenUid = utxo.tokenId;
+        if ('tokenId' in tokenElement) {
+          tokenUid = tokenElement.tokenId;
         }
         if (!tokenUid) {
-          throw new Error('Token UID not found in utxo');
+          throw new Error('Token UID not found in token element');
         }
         if (!map.has(tokenUid)) {
           map.set(tokenUid, []);
         }
-        map.get(tokenUid)?.push(utxo);
+        map.get(tokenUid)?.push(tokenElement);
       }
     }
     return map;

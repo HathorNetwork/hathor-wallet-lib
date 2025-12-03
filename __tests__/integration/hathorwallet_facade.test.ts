@@ -1603,6 +1603,67 @@ describe('sendTransaction', () => {
     ).toHaveProperty('numTransactions', 1);
   });
 
+  it('should send fee token with manually provided HTR input (no HTR output)', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'FeeTokenManualInput',
+      'FTMI',
+      100n,
+      {
+        tokenVersion: TokenVersion.FEE,
+      }
+    );
+
+    // Get UTXOs for both HTR and the fee token
+    const { utxos: utxosHtr } = await hWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+    const { utxos: utxosToken } = await hWallet.getUtxos({ token: tokenUid });
+
+    // Get the first UTXO of each token
+    const htrUtxo = utxosHtr[0];
+    const tokenUtxo = utxosToken[0];
+
+    // Send transaction with manually provided inputs (HTR + token) and only token output
+    // This tests the scenario where user provides HTR input to pay for fee
+    // but has no HTR output (only token output)
+    const tx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: await hWallet.getAddressAtIndex(5),
+          value: 50n,
+          token: tokenUid,
+        },
+      ],
+      {
+        inputs: [
+          { txId: htrUtxo.tx_id, index: htrUtxo.index },
+          { txId: tokenUtxo.tx_id, index: tokenUtxo.index },
+        ],
+      }
+    );
+
+    validateFeeAmount(tx.headers, 2n);
+    await waitForTxReceived(hWallet, tx.hash);
+
+    // Validate the transaction was created correctly
+    const decodedTx = await hWallet.getTx(tx.hash);
+
+    // Should have 2 inputs (HTR + token)
+    expect(decodedTx.inputs).toHaveLength(2);
+    expect(decodedTx.inputs).toContainEqual(
+      expect.objectContaining({ tx_id: htrUtxo.tx_id, index: htrUtxo.index })
+    );
+    expect(decodedTx.inputs).toContainEqual(
+      expect.objectContaining({ tx_id: tokenUtxo.tx_id, index: tokenUtxo.index })
+    );
+
+    // Should have outputs: token output (50) + token change (50) + HTR change
+    expect(decodedTx.outputs).toContainEqual(
+      expect.objectContaining({ value: 50n, token: tokenUid })
+    );
+  });
+
   it('should send a multisig transaction', async () => {
     // Initialize 3 wallets from the same multisig and inject funds in them to test
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
