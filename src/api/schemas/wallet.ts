@@ -37,7 +37,7 @@ export const generalTokenInfoSchema = z.discriminatedUnion('success', [
       success: z.literal(true),
       name: z.string(),
       symbol: z.string(),
-      version: z.number(),
+      version: z.number().optional().nullable(),
       mint: mintMeltUtxoSchema.array(),
       melt: mintMeltUtxoSchema.array(),
       total: bigIntCoercibleSchema,

@@ -511,7 +511,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
   async function fetchTokenData(
     uid: string
   ): Promise<
-    GeneralTokenInfoSchema | { success: true; name: string; symbol: string; version: TokenVersion }
+    GeneralTokenInfoSchema | { success: true; name: string; symbol: string; version?: TokenVersion }
   > {
     let retryCount = 0;
 
@@ -562,7 +562,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
       }
 
       const { name, symbol, version } = response;
-      const tokenData = { uid, name, symbol, version };
+      const tokenData: ITokenData = { uid, name, symbol, version: version ?? undefined };
 
       await storage.addToken(tokenData);
     }
