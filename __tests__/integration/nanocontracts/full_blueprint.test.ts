@@ -134,6 +134,34 @@ describe('Full blueprint basic tests', () => {
     expect(ncState.fields.attr_optional.value).toBe(null);
     expect(ncState.calls[attrCall].value).toBe(false);
 
+    // Set amount
+    // First we set to 0 to validade we can set 0 as args, then to the variable
+    const txAmount = await wallet.createAndSendNanoContractTransaction('set_amount', address0, {
+      ncId: txInitialize.hash,
+      args: [0],
+    });
+    await checkTxValid(wallet, txAmount);
+
+    const ncStateAmount = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      ['amount']
+    );
+
+    expect(ncStateAmount.fields.amount.value).toBe(0);
+
+    const txAmount2 = await wallet.createAndSendNanoContractTransaction('set_amount', address0, {
+      ncId: txInitialize.hash,
+      args: [amount],
+    });
+    await checkTxValid(wallet, txAmount2);
+
+    const ncStateAmount2 = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      ['amount']
+    );
+
+    expect(ncStateAmount2.fields.amount.value).toBe(amount);
+
     // Set optional
     const attrOptional = 'test';
     const txOptional = await wallet.createAndSendNanoContractTransaction('set_optional', address0, {
