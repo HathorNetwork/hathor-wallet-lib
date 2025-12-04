@@ -150,7 +150,7 @@ export async function execRawInputInstruction(
   const { token } = origTx.outputs[index];
   await ctx.cacheTokenDetails(interpreter, token);
   // Add balance to the ctx.balance
-  ctx.balance.addBalanceFromUtxo(origTx, index);
+  await ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
   ctx.addInputs(position, input);
@@ -286,11 +286,11 @@ export async function execRawOutputInstruction(
     tokenData = await ctx.addToken(interpreter, token);
     if (authority) {
       ctx.log(`Creating authority output`);
-      ctx.balance.addOutputAuthority(1, token, authority);
+      await ctx.balance.addOutputAuthority(1, token, authority);
     } else {
       ctx.log(`Creating token output`);
       if (amount) {
-        ctx.balance.addOutput(amount, token);
+        await ctx.balance.addOutput(amount, token);
       }
     }
   }
@@ -451,7 +451,7 @@ export async function execAuthorityOutputInstruction(
     // Add token to tokens array
     tokenData = await ctx.addToken(interpreter, token);
     // Add balance to the ctx.balance
-    ctx.balance.addOutputAuthority(count, token, authority);
+    await ctx.balance.addOutputAuthority(count, token, authority);
   }
 
   let amount: OutputValueType | undefined = 0n;
@@ -619,7 +619,6 @@ export async function execCompleteTxInstruction(
 
   // calculate token creation deposit
   if (calculateFee && ctx.isCreateTokenTxContext()) {
-    ctx.log(`Calculating token creation fee`);
     let deposit = 0n;
 
     if (ctx.tokenVersion === TokenVersion.DEPOSIT) {
@@ -670,7 +669,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} mint outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
+      await ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, changeScript, {
@@ -697,7 +696,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -709,7 +708,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} melt outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
+      await ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, changeScript, {
@@ -736,7 +735,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
