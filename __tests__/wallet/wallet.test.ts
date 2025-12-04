@@ -567,6 +567,16 @@ test('checkAddressesMine', async () => {
   );
 });
 
+test('checkAddressesMine with empty array', async () => {
+  const wallet = buildWalletToAuthenticateApiCall();
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
+
+  // Should return empty object without making API call
+  const walletAddressMap = await wallet.checkAddressesMine([]);
+
+  expect(walletAddressMap).toStrictEqual({});
+});
+
 test('generateCreateWalletAuthData should return correct auth data', async () => {
   const requestPassword = jest.fn();
 
