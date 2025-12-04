@@ -267,7 +267,7 @@ export default class SendTransaction extends EventEmitter {
     const headers: Header[] = [];
     if (fee > 0) {
       headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
-      // if any HTR input or output was provided, we need to choose inputs for HTR
+      // if the token map doesn't have HTR, it means that the user didn't provide any HTR input or output, so we need to choose inputs for HTR to pay fees
       if (!tokenMapHasHTR) {
         shouldChooseHTRInputs = true;
       }
