@@ -16,8 +16,9 @@ import {
   IGetUtxoResponse,
   IWalletBalanceData,
   TxInstance,
+  IWalletTokenDetails,
 } from './types';
-import { IHistoryTx, OutputValueType } from '../../types';
+import { IFeeEntry, IHistoryTx, OutputValueType } from '../../types';
 import { IHathorWallet, Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import Address from '../../models/address';
@@ -38,6 +39,7 @@ import NanoContractHeader from '../../nano_contracts/header';
 import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
 import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
 import type Header from '../../headers/base';
+import FeeHeader from '../../headers/fee';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -153,11 +155,22 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     );
   }
 
+  private static buildFeeHeader(ctx: TxTemplateContext): FeeHeader {
+    const entries: IFeeEntry[] = Array.from(ctx.fees.entries()).map(([tokenUid, amount]) => ({
+      tokenIndex: tokensUtils.getTokenIndex(
+        ctx.tokens.map(t => ({ uid: t })),
+        tokenUid
+      ),
+      amount,
+    }));
+    return new FeeHeader(entries);
+  }
+
   async build(
     instructions: z.infer<typeof TransactionTemplate>,
     debug: boolean = false
   ): Promise<TxInstance> {
-    const context = new TxTemplateContext(this.wallet.logger, debug);
+    const context = new TxTemplateContext(this, this.wallet.logger, debug);
 
     for (const ins of TransactionTemplate.parse(instructions)) {
       await runInstruction(this, context, ins);
@@ -167,6 +180,11 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     if (context.nanoContext) {
       const nanoHeader = await this.buildNanoHeader(context);
       headers.push(nanoHeader);
+    }
+
+    if (context.fees.size > 0) {
+      const feeHeader = WalletTxTemplateInterpreter.buildFeeHeader(context);
+      headers.push(feeHeader);
     }
 
     if (context.version === DEFAULT_TX_VERSION) {
@@ -275,5 +293,9 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType {
     return tokensUtils.getMintDeposit(mintAmount, this.wallet.storage);
+  }
+
+  async getTokenDetails(token: string): Promise<IWalletTokenDetails> {
+    return this.wallet.getTokenDetails(token);
   }
 }
