@@ -42,7 +42,7 @@ export class AmountField extends NCFieldBase<number | bigint | string, bigint> {
   }
 
   fromUser(data: unknown): AmountField {
-    const value = z.coerce.bigint().positive().parse(data);
+    const value = z.coerce.bigint().nonnegative().parse(data);
     this.value = value;
     return this;
   }

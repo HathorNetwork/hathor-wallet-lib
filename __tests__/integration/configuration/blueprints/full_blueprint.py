@@ -124,6 +124,10 @@ class FullBlueprint(Blueprint):
         self.attr_optional = value
 
     @public
+    def set_amount(self, ctx: Context, value: Amount) -> None:
+        self.amount = value
+
+    @public
     def set_dict_address(self, ctx: Context, key: Address, value: Amount) -> None:
         self.attr_dict_address[key] = value
  
