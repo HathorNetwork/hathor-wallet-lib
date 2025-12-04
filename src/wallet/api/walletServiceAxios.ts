@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { TIMEOUT } from '../../constants';
+import helpers from '../../utils/helpers';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -17,9 +18,31 @@ import config from '../../config';
  */
 
 /**
+ * Extending AxiosRequestConfig to include a retry count for our interceptor
+ */
+type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
+  _retryCount?: number;
+  _retryStart?: number;
+};
+
+const SLOW_WALLET_MAX_RETRIES = 10;
+const SLOW_WALLET_RETRY_DELAY_BASE_MS = 100;
+const SLOW_WALLET_RETRY_DELAY_MAX_MS = 2000;
+
+const SLOW_WALLET_COMMON_ERROR_MESSAGES = [
+  // Common error for the Wallet Service when running under serverless-offline
+  // Happens especially often during tests in a dockerized private blockchain
+  'socket hang up',
+
+  // Add more common error messages lowercased here if needed
+];
+
+/**
  * Create an axios instance to be used when sending requests
  *
- * @param {number} timeout Timeout in milliseconds for the request
+ * @param {HathorWalletServiceWallet} wallet - The wallet instance
+ * @param {boolean} needsAuth - Whether authentication is required
+ * @param {number} timeout - Timeout in milliseconds for the main request
  */
 export const axiosInstance = async (
   wallet: HathorWalletServiceWallet,
@@ -55,7 +78,54 @@ export const axiosInstance = async (
     defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
 
-  return axios.create(defaultOptions);
+  const instance = axios.create(defaultOptions);
+
+  // Add retry interceptor for socket hang up errors
+  instance.interceptors.response.use(
+    // Success response handler
+    response => response,
+    // Error response handler with retry logic
+    async error => {
+      // Fetching the retry count from the request config, or initializing it if not present
+      const requestConfig = ((error as AxiosError).config as AxiosRequestConfigWithRetry)!;
+      const initialRetryTime = requestConfig._retryStart || Date.now();
+      const currentRetryCount = requestConfig._retryCount || 0;
+
+      // Check if we should retry
+      const shouldRetry =
+        wallet._expectSlowLambdas &&
+        SLOW_WALLET_COMMON_ERROR_MESSAGES.includes(error.message.toLowerCase()) &&
+        currentRetryCount < SLOW_WALLET_MAX_RETRIES;
+
+      // Throw any error found if we shouldn't retry
+      if (!shouldRetry) {
+        // eslint-disable-next-line no-console
+        console.error(
+          currentRetryCount > 0
+            ? `Failed request to ${requestConfig.url}: ${error.message}. Took ${Date.now() - initialRetryTime}ms and ${currentRetryCount} retries.`
+            : `Failed request to ${requestConfig.url}: ${error.message}.`
+        );
+        return Promise.reject(error);
+      }
+
+      // Modifying the request config for the retry and attempting a new request
+      requestConfig._retryStart = initialRetryTime;
+      requestConfig._retryCount = currentRetryCount + 1;
+
+      // Wait before retrying: 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
+      await helpers.sleep(
+        Math.min(
+          SLOW_WALLET_RETRY_DELAY_BASE_MS * 2 ** currentRetryCount,
+          SLOW_WALLET_RETRY_DELAY_MAX_MS
+        )
+      );
+
+      // Retry the request
+      return instance(requestConfig);
+    }
+  );
+
+  return instance;
 };
 
 export default axiosInstance;

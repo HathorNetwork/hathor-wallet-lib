@@ -38,6 +38,7 @@ import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
+import HathorWalletServiceWallet from '../wallet/wallet';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -57,7 +58,7 @@ class NanoContractTransactionBuilder {
 
   serializedArgs: Buffer | null;
 
-  wallet: HathorWallet | null;
+  wallet: HathorWallet | HathorWalletServiceWallet | null;
 
   // So far we support Transaction or CreateTokenTransaction
   vertexType: NanoContractVertexType | null;
@@ -177,12 +178,12 @@ class NanoContractTransactionBuilder {
   /**
    * Set object wallet attribute
    *
-   * @param {wallet} Wallet object building this transaction
+   * @param {HathorWallet | HathorWalletServiceWallet} wallet Wallet object building this transaction
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setWallet(wallet: HathorWallet) {
+  setWallet(wallet: HathorWallet | HathorWalletServiceWallet) {
     this.wallet = wallet;
     return this;
   }
@@ -239,7 +240,7 @@ class NanoContractTransactionBuilder {
     }
 
     const changeAddressParam = action.changeAddress;
-    if (changeAddressParam && !(await this.wallet.isAddressMine(changeAddressParam))) {
+    if (changeAddressParam && !(await this.wallet!.isAddressMine(changeAddressParam))) {
       throw new NanoContractTransactionError('Change address must belong to the same wallet.');
     }
 
@@ -257,21 +258,21 @@ class NanoContractTransactionBuilder {
       const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
         this.createTokenOptions!.amount,
         dataArray.length,
-        this.wallet.storage
+        this.wallet!.storage
       );
       amount += htrToCreateToken;
       this.tokenFeeAddedInDeposit = true;
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
+    const utxoOptions: { token: string; filter_address?: string } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
 
     let utxosData;
     try {
-      utxosData = await this.wallet.getUtxosForAmount(amount, utxoOptions);
+      utxosData = await this.wallet!.getUtxosForAmount(amount, utxoOptions);
     } catch (e) {
       if (e instanceof UtxoError) {
         throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
@@ -281,7 +282,7 @@ class NanoContractTransactionBuilder {
     }
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
-      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+      await this.wallet!.markUtxoSelected(utxo.txId, utxo.index, true);
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
@@ -296,9 +297,9 @@ class NanoContractTransactionBuilder {
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
       const changeAddressStr =
-        changeAddressParam || (await this.wallet.getCurrentAddress()).address;
+        changeAddressParam || (await this.wallet!.getCurrentAddress()).address;
       outputs.push({
-        type: getAddressType(changeAddressStr, this.wallet.getNetworkObject()),
+        type: getAddressType(changeAddressStr, this.wallet!.getNetworkObject()),
         address: changeAddressStr,
         value: utxosData.changeAmount,
         timelock: null,
@@ -318,7 +319,7 @@ class NanoContractTransactionBuilder {
    * the contract will pay for the deposit fee,
    * then creates the output only of the difference
    *
-   * @param {action} Action to be completed (must be a withdrawal type)
+   * @param {NanoContractAction} action Action to be completed (must be a withdrawal type)
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
@@ -353,7 +354,7 @@ class NanoContractTransactionBuilder {
         const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
           this.createTokenOptions!.amount,
           dataArray.length,
-          this.wallet.storage
+          this.wallet!.storage
         );
         withdrawalAmount -= htrToCreateToken;
       }
@@ -372,7 +373,7 @@ class NanoContractTransactionBuilder {
 
     // Create the output with the withdrawal address and amount
     return {
-      type: getAddressType(action.address, this.wallet.getNetworkObject()),
+      type: getAddressType(action.address, this.wallet!.getNetworkObject()),
       address: action.address,
       value: withdrawalAmount,
       timelock: null,
@@ -407,12 +408,12 @@ class NanoContractTransactionBuilder {
     }
 
     const authorityAddressParam = action.authorityAddress;
-    if (authorityAddressParam && !(await this.wallet.isAddressMine(authorityAddressParam))) {
+    if (authorityAddressParam && !(await this.wallet!.isAddressMine(authorityAddressParam))) {
       throw new NanoContractTransactionError('Authority address must belong to the same wallet.');
     }
 
     // Get the utxos with the authority of the action and create the input
-    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, {
+    const utxos = await this.wallet!.getAuthorityUtxo(action.token, action.authority, {
       many: false,
       only_available_utxos: true,
       filter_address: action.address,
@@ -427,7 +428,7 @@ class NanoContractTransactionBuilder {
     const inputs: IDataInput[] = [];
     // The method gets only one utxo
     const utxo = utxos[0];
-    await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+    await this.wallet!.markUtxoSelected(utxo.txId, utxo.index, true);
     inputs.push({
       txId: utxo.txId,
       index: utxo.index,
@@ -441,7 +442,7 @@ class NanoContractTransactionBuilder {
     // If there's the authorityAddress param, then we must create another authority output for this address
     if (action.authorityAddress) {
       outputs.push({
-        type: getAddressType(action.authorityAddress, this.wallet.getNetworkObject()),
+        type: getAddressType(action.authorityAddress, this.wallet!.getNetworkObject()),
         address: action.authorityAddress,
         value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
         timelock: null,
@@ -477,7 +478,7 @@ class NanoContractTransactionBuilder {
 
     // Create the output with the authority of the action
     return {
-      type: getAddressType(action.address, this.wallet.getNetworkObject()),
+      type: getAddressType(action.address, this.wallet!.getNetworkObject()),
       address: action.address,
       value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
       timelock: null,
@@ -509,7 +510,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      this.blueprintId = await getBlueprintId(this.ncId, this.wallet);
+      this.blueprintId = await getBlueprintId(this.ncId, this.wallet as HathorWallet);
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {
@@ -528,7 +529,7 @@ class NanoContractTransactionBuilder {
       this.blueprintId,
       this.method,
       this.args,
-      this.wallet.getNetworkObject()
+      this.wallet!.getNetworkObject()
     );
   }
 
@@ -646,7 +647,7 @@ class NanoContractTransactionBuilder {
           outputs,
           tokens,
         },
-        this.wallet.getNetworkObject()
+        this.wallet!.getNetworkObject()
       );
     }
 
@@ -665,7 +666,7 @@ class NanoContractTransactionBuilder {
         this.createTokenOptions.name,
         this.createTokenOptions.symbol,
         this.createTokenOptions.amount,
-        this.wallet.storage,
+        this.wallet!.storage,
         {
           changeAddress: this.createTokenOptions.changeAddress,
           createMint: this.createTokenOptions.createMint,
@@ -683,7 +684,7 @@ class NanoContractTransactionBuilder {
       data.outputs = concat(data.outputs, outputs);
       data.tokens = uniq(concat(data.tokens, tokens));
 
-      return transactionUtils.createTransactionFromData(data, this.wallet.getNetworkObject());
+      return transactionUtils.createTransactionFromData(data, this.wallet!.getNetworkObject());
     }
 
     throw new NanoContractTransactionError('Invalid vertex type.');
@@ -719,7 +720,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
-      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
+      const seqnum = await this.wallet!.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 
@@ -748,7 +749,7 @@ class NanoContractTransactionBuilder {
       }
 
       for (const input of inputs) {
-        await this.wallet.markUtxoSelected(input.txId, input.index, false);
+        await this.wallet!.markUtxoSelected(input.txId, input.index, false);
       }
 
       throw e;
