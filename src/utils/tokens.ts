@@ -89,7 +89,7 @@ const tokens = {
       const isDuplicate = await this.checkDuplicateTokenInfo(tokenData, storage);
       if (isDuplicate) {
         throw new TokenValidationError(
-          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol}) - ${isDuplicate.token.version}`
+          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`
         );
       }
     }
@@ -169,7 +169,6 @@ const tokens = {
    * @param {string} uid Token uid
    * @param {string} name Token name
    * @param {string} symbol Token symbol
-   * @param {string} version Token version, defaults to TokenVersion.DEPOSIT
    *
    * @return {string} Configuration string of the token
    *
@@ -177,14 +176,8 @@ const tokens = {
    * @inner
    *
    */
-  getConfigurationString(
-    uid: string,
-    name: string,
-    symbol: string,
-    version: TokenVersion = TokenVersion.DEPOSIT
-  ): string {
-    const versionString = version !== TokenVersion.DEPOSIT ? `:${version}` : '';
-    const partialConfig = `${name}:${symbol}:${uid}${versionString}`;
+  getConfigurationString(uid: string, name: string, symbol: string): string {
+    const partialConfig = `${name}:${symbol}:${uid}`;
     const checksum = helpers.getChecksum(buffer.Buffer.from(partialConfig));
     return `[${partialConfig}:${checksum.toString('hex')}]`;
   },
@@ -192,11 +185,11 @@ const tokens = {
   /**
    * Returns token from configuration string
    * Configuration string has the following format:
-   * `[name:symbol:uid:version?:checksum]`
+   * [name:symbol:uid:checksum]
    *
    * @param {string} config Configuration string with token data plus a checksum
    *
-   * @return {ITokenData} token {'uid', 'name', 'symbol', 'version'} or null in case config is invalid
+   * @return {Object} token {'uid', 'name', 'symbol'} or null in case config is invalid
    *
    * @memberof Tokens
    * @inner
@@ -220,17 +213,11 @@ const tokens = {
     if (correctChecksum.toString('hex') !== checksum[0]) {
       return null;
     }
-    // if the config has 4 elements, it means that it is a token created before
-    // we allowed the token versions
-    let version = this.getDefaultCustomTokenVersion();
-    if (configArr.length === 5) {
-      version = Number(configArr.pop()!);
-    }
     const uid = configArr.pop()!;
     const symbol = configArr.pop()!;
     // Assuming that the name might have : on it
     const name = configArr.join(':');
-    return { uid, name, symbol, version };
+    return { uid, name, symbol };
   },
 
   /**

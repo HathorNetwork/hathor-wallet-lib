@@ -17,7 +17,6 @@ test('Validate configuration string', async () => {
   const uid2 = '0000cafe5e95c492352a6f1cab81b33d56694299f1da2b437107b2b1edde9687';
   const name = 'Test Token';
   const symbol = 'TST';
-  const version = TokenVersion.DEPOSIT;
   const configString = `[${name}:${symbol}:${uid}:8d977dec]`;
 
   const apiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo');
@@ -47,7 +46,7 @@ test('Validate configuration string', async () => {
   ).rejects.toThrow(TokenValidationError);
 
   // should throw if token is already registered
-  await store.registerToken({ uid, name, symbol, version });
+  await store.registerToken({ uid, name, symbol, version: TokenVersion.DEPOSIT });
   await expect(
     tokens.validateTokenToAddByConfigurationString(configString, storage)
   ).rejects.toThrow('You already have this token');
@@ -119,11 +118,11 @@ test('Validate configuration string', async () => {
   // With no conflicts in storage and the api confirming the token is valid
   // we expect the token data to be returned
   apiSpy.mockImplementation((_, cb) => {
-    cb({ success: true, name, symbol, version });
+    cb({ success: true, name, symbol, version: TokenVersion.DEPOSIT });
   });
   await expect(
     tokens.validateTokenToAddByConfigurationString(configString, storage)
-  ).resolves.toEqual({ uid, name, symbol, version });
+  ).resolves.toEqual({ uid, name, symbol });
 
   apiSpy.mockRestore();
 });
