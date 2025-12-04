@@ -547,8 +547,6 @@ export class MemoryStore implements IStore {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
     }
-
-    // TODO: remove this once we have this configured in the wallet-service. Since any fee token will be in the utxo
     const newTokenConfig = { version: TokenVersion.DEPOSIT, ...tokenConfig }; // Clone the token config to avoid modifying the original object
     this.tokens.set(newTokenConfig.uid, newTokenConfig);
     if (meta !== undefined) {
