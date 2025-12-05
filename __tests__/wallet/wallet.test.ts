@@ -2173,7 +2173,7 @@ describe('getUtxos', () => {
       tokenId: '00',
       authority: undefined,
       addresses: undefined,
-      totalAmount: undefined,
+      maxAmount: undefined,
       smallerThan: undefined,
       biggerThan: undefined,
       maxOutputs: 10,
@@ -2225,7 +2225,7 @@ describe('getUtxos', () => {
       tokenId: customTokenId,
       authority: undefined,
       addresses: undefined,
-      totalAmount: undefined,
+      maxAmount: undefined,
       smallerThan: undefined,
       biggerThan: undefined,
       maxOutputs: 1,
@@ -2319,7 +2319,7 @@ describe('getUtxos', () => {
       tokenId: '00',
       authority: undefined,
       addresses: undefined,
-      totalAmount: undefined,
+      maxAmount: undefined,
       smallerThan: 200,
       biggerThan: undefined,
       maxOutputs: 10,
@@ -2367,7 +2367,7 @@ describe('getUtxos', () => {
       tokenId: '00',
       authority: undefined,
       addresses: undefined,
-      totalAmount: undefined,
+      maxAmount: undefined,
       smallerThan: undefined,
       biggerThan: 100,
       maxOutputs: 10,
@@ -2465,6 +2465,74 @@ describe('getUtxos', () => {
     await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
       "Don't have enough utxos to fill total amount."
     );
+  });
+
+  it('should pass max_amount as maxAmount to the API', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 30n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+      {
+        txId: 'tx2',
+        index: 1,
+        value: 20n,
+        address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/1",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    const result = await wallet.getUtxos({
+      token: '00',
+      max_amount: 55,
+      max_utxos: 10,
+    });
+
+    expect(result).toEqual({
+      total_amount_available: 50n,
+      total_utxos_available: 2n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [
+        {
+          address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+          amount: 30n,
+          tx_id: 'tx1',
+          locked: false,
+          index: 0,
+        },
+        {
+          address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+          amount: 20n,
+          tx_id: 'tx2',
+          locked: false,
+          index: 1,
+        },
+      ],
+    });
+
+    expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
+      tokenId: '00',
+      authority: undefined,
+      addresses: undefined,
+      maxAmount: 55n,
+      smallerThan: undefined,
+      biggerThan: undefined,
+      maxOutputs: 10,
+      ignoreLocked: true,
+      skipSpent: true,
+    });
   });
 });
 
@@ -3153,6 +3221,35 @@ describe('HathorWalletServiceWallet additional methods', () => {
     const result = await wallet.getBalance('token1');
     expect(walletApi.getBalances).toHaveBeenCalledWith(wallet, 'token1');
     expect(result).toEqual(mockBalance);
+  });
+
+  it('should return 0 balance for token not found', async () => {
+    jest.spyOn(walletApi, 'getBalances').mockResolvedValue({
+      success: true,
+      balances: [],
+    });
+
+    const result = await wallet.getBalance('unknown-token');
+    expect(walletApi.getBalances).toHaveBeenCalledWith(wallet, 'unknown-token');
+    expect(result).toEqual([
+      {
+        token: {
+          id: 'unknown-token',
+          name: '',
+          symbol: '',
+        },
+        balance: {
+          unlocked: 0n,
+          locked: 0n,
+        },
+        tokenAuthorities: {
+          unlocked: { mint: false, melt: false },
+          locked: { mint: false, melt: false },
+        },
+        transactions: 0,
+        lockExpires: null,
+      },
+    ]);
   });
 
   it('should get tokens list', async () => {

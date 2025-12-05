@@ -879,6 +879,31 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
     this.failIfWalletNotReady();
     const data = await walletApi.getBalances(this, token);
+
+    // If a specific token was requested but not found, return a default 0 balance
+    // This matches the behavior of the fullnode facade
+    if (token !== null && data.balances.length === 0) {
+      return [
+        {
+          token: {
+            id: token,
+            name: '',
+            symbol: '',
+          },
+          balance: {
+            unlocked: 0n,
+            locked: 0n,
+          },
+          tokenAuthorities: {
+            unlocked: { mint: false, melt: false },
+            locked: { mint: false, melt: false },
+          },
+          transactions: 0,
+          lockExpires: null,
+        },
+      ];
+    }
+
     return data.balances;
   }
 
@@ -987,7 +1012,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
       authority: newOptions.authorities ? BigInt(newOptions.authorities) : undefined,
       addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
-      totalAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
+      maxAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
       maxOutputs: newOptions.max_utxos || 255,

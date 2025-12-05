@@ -210,6 +210,7 @@ export interface GetTxOutputsOptions {
   maxOutputs?: number;
   addresses?: string[] | null;
   totalAmount?: OutputValueType;
+  maxAmount?: OutputValueType;
   smallerThan?: number;
   biggerThan?: number;
   count?: number;
