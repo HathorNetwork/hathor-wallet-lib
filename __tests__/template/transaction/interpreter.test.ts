@@ -47,4 +47,26 @@ describe('Wallet tx-template interpreter', () => {
     await expect(interpreter.getChangeAddress(ctx)).resolves.toStrictEqual('mocked-address');
     expect(wallet.getCurrentAddress).toHaveBeenCalledTimes(1);
   });
+
+  it('should get token details from the wallet api', async () => {
+    const mockValue = {
+      totalSupply: 1000n,
+      totalTransactions: 1,
+      tokenInfo: {
+        name: 'FeeBasedToken',
+        symbol: 'FBT',
+        version: 2, // TokenVersion.FEE
+      },
+      authorities: {
+        mint: true,
+        melt: true,
+      },
+    };
+    const wallet = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockValue),
+    } as unknown as HathorWallet;
+    const interpreter = new WalletTxTemplateInterpreter(wallet);
+    await expect(interpreter.getTokenDetails('fbt-token-uid')).resolves.toStrictEqual(mockValue);
+    expect(wallet.getTokenDetails).toHaveBeenCalledTimes(1);
+  });
 });
