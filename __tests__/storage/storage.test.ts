@@ -32,6 +32,7 @@ import {
   IUtxoId,
   OutputValueType,
   WALLET_FLAGS,
+  TokenVersion,
 } from '../../src/types';
 
 describe('handleStop', () => {
@@ -59,7 +60,12 @@ describe('handleStop', () => {
       return out;
     }
     const storage = new Storage(store);
-    const testToken = { uid: 'testtoken', name: 'Test token', symbol: 'TST' };
+    const testToken = {
+      uid: 'testtoken',
+      name: 'Test token',
+      symbol: 'TST',
+      version: TokenVersion.DEPOSIT,
+    };
     await storage.saveAccessData(accessData);
     await loadAddresses(0, 20, storage);
     await storage.addTx({

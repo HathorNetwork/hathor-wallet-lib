@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OutputValueType } from '../types';
+import { OutputValueType, TokenVersion } from '../types';
 
 /**
  * An output object enriched by the wallet's history methods
@@ -58,6 +58,7 @@ export type HistoryTransaction = {
   parents: string[];
   token_name?: string;
   token_symbol?: string;
+  token_version?: TokenVersion;
   tokens: string[];
 };
 

@@ -6,6 +6,8 @@
  */
 
 import buffer from 'buffer';
+import FeeHeader from '../headers/fee';
+import Header from '../headers/base';
 import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
@@ -18,16 +20,24 @@ import helpers from './helpers';
 import {
   IDataInput,
   IDataOutput,
+  IDataOutputWithToken,
   IDataTx,
   IStorage,
   ITokenData,
   OutputValueType,
   UtxoSelectionAlgorithm,
+  TokenVersion,
 } from '../types';
 import { getAddressType } from './address';
-import { InsufficientFundsError, TokenValidationError } from '../errors';
+import {
+  InsufficientFundsError,
+  SendTxError,
+  TokenNotFoundError,
+  TokenValidationError,
+} from '../errors';
 import { bestUtxoSelection } from './utxo';
 import walletApi from '../api/wallet';
+import { Fee } from './fee';
 
 const tokens = {
   /**
@@ -211,6 +221,37 @@ const tokens = {
   },
 
   /**
+   * Gets the default custom token version. Before the custom token versioning system was implemented,
+   * all tokens were created with the same version (DEPOSIT).
+   * @returns {TokenVersion} The default custom token version to be used when creating a token
+   * @memberof Tokens
+   * @inner
+   */
+  getDefaultCustomTokenVersion(): TokenVersion {
+    return TokenVersion.DEPOSIT;
+  },
+
+  /**
+   * Receive a tokenData without an version and set it to the default version.
+   * **NOTE**: HTR tokens doesn't have a version, so we don't set it.
+   * @returns {ITokenData} The tokenData with the default version set.
+   * @memberof Tokens
+   * @inner
+   */
+  setDefaultTokenVersion(tokenData: ITokenData): ITokenData {
+    if (!tokenData.uid) {
+      throw new Error('Token uid is required to set the default token version');
+    }
+    if (!this.isHathorToken(tokenData.uid) && !tokenData.version) {
+      return {
+        ...tokenData,
+        version: this.getDefaultCustomTokenVersion(),
+      } satisfies ITokenData;
+    }
+    return tokenData;
+  },
+
+  /**
    * Gets the token index to be added to the tokenData in the output from tx
    *
    * @param {Object} tokensArray Array of token configs
@@ -221,7 +262,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokenIndex(tokensArray: ITokenData[], uid: string): number {
+  getTokenIndex(tokensArray: Partial<ITokenData>[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
     if (uid === NATIVE_TOKEN_UID) {
@@ -319,7 +360,8 @@ const tokens = {
    * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
-   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token fees
+   * @param {TokenVersion} [options.tokenVersion=TokenVersion.DEPOSIT] Token version to be used for the transaction
    *
    * @returns {Promise<IDataTx>} The transaction data
    */
@@ -337,6 +379,7 @@ const tokens = {
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
       skipDepositFee = false,
+      tokenVersion = TokenVersion.DEPOSIT,
     }: {
       token?: string | null;
       mintInput?: IDataInput | null;
@@ -347,49 +390,32 @@ const tokens = {
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
-    } = {}
+      tokenVersion: TokenVersion;
+    }
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
 
-    let depositAmount = 0n;
-    // We might have transactions where the nano contract will pay for deposit fees
-    // so we must consider the skipDepositFee flag to skip the utxo selection
-    if (!skipDepositFee) {
-      depositAmount += this.getTransactionHTRDeposit(amount, data?.length ?? 0, storage);
+    // variable that will be overridden when minting a token, so we can use the token version from the token data
+    // when creating a token, we use the token version passed as parameter
+    let _tokenVersion: TokenVersion = tokenVersion;
+
+    const isMintingToken = token !== null;
+    if (!isMintingToken && !tokenVersion) {
+      throw new Error('Token version is required when creating a token');
+    }
+    const tokensArray = isMintingToken ? [token] : [];
+
+    // check in the wallet storage if it has the token
+    if (isMintingToken) {
+      const tokenData = await storage.getToken(token);
+      if (!tokenData) {
+        throw new SendTxError(`Token ${token} not found.`);
+      }
+      _tokenVersion = tokenData.version!;
     }
 
-    if (depositAmount) {
-      // get HTR deposit inputs
-      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
-      const foundAmount = selectedUtxos.amount;
-      for (const utxo of selectedUtxos.utxos) {
-        inputs.push(helpers.getDataInputFromUtxo(utxo));
-      }
-
-      if (foundAmount < depositAmount) {
-        const availableAmount = selectedUtxos.available ?? 0;
-        throw new InsufficientFundsError(
-          `Not enough HTR tokens for deposit: ${depositAmount} required, ${availableAmount} available`
-        );
-      }
-
-      // get output change
-      if (foundAmount > depositAmount) {
-        const cAddress = await storage.getChangeAddress({ changeAddress });
-
-        outputs.push({
-          type: getAddressType(cAddress, storage.config.getNetwork()),
-          address: cAddress,
-          value: foundAmount - depositAmount,
-          timelock: null,
-          token: NATIVE_TOKEN_UID,
-          authorities: 0n,
-          isChange: true,
-        });
-      }
-    }
-
+    // mintInput
     if (mintInput !== null) {
       // We are spending a mint input to mint more tokens
       inputs.push(mintInput);
@@ -415,6 +441,92 @@ const tokens = {
       });
     }
 
+    // read fee amount as deposit when dealing with deposit tokens.
+    let depositAmount = 0n;
+    let feeAmount = 0n;
+
+    switch (_tokenVersion) {
+      case TokenVersion.DEPOSIT:
+        // We might have transactions where the nano contract will pay for deposit fees
+        // so we must consider the skipDepositFee flag to skip the utxo selection
+        if (!skipDepositFee) {
+          depositAmount += this.getTransactionHTRDeposit(amount, data?.length ?? 0, storage);
+        }
+        break;
+      case TokenVersion.FEE:
+        // is creating a new token
+        if (skipDepositFee) {
+          feeAmount = 0n;
+        } else if (!isMintingToken) {
+          feeAmount = Fee.calculateTokenCreationTxFee(outputs);
+        } else {
+          const mappedOutputs = outputs.map(
+            output =>
+              ({
+                ...output,
+                token: token!,
+              }) satisfies IDataOutputWithToken
+          );
+          // since we control the inputs, we can assume we don't have any melt operation that should be charged at this point.
+          // so we can pass an empty array for inputs
+          feeAmount = await Fee.calculate(
+            [],
+            mappedOutputs,
+            await tokens.getTokensByManyIds(storage, new Set(tokensArray))
+          );
+
+          if (data) {
+            // The deposit amount will be the quantity of data strings in the array
+            // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
+            depositAmount += this.getDataFee(data.length);
+          }
+        }
+        break;
+      default:
+        throw new Error('Invalid token version');
+    }
+
+    // get HTR deposit inputs
+    // we are using a sum because fee will be always 0 when we have a deposit token and vice versa
+    const requiredAmount = depositAmount + feeAmount;
+    if (requiredAmount > 0) {
+      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, requiredAmount);
+      const foundAmount = selectedUtxos.amount;
+      for (const utxo of selectedUtxos.utxos) {
+        inputs.push(helpers.getDataInputFromUtxo(utxo));
+      }
+
+      if (foundAmount < requiredAmount) {
+        const availableAmount = selectedUtxos.available ?? 0;
+        throw new InsufficientFundsError(
+          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${availableAmount} available`
+        );
+      }
+
+      // get output change
+      if (foundAmount > requiredAmount) {
+        const cAddress = await storage.getChangeAddress({ changeAddress });
+
+        // place at the beginning of the array to keep the order of the outputs
+        outputs.unshift({
+          type: getAddressType(cAddress, storage.config.getNetwork()),
+          address: cAddress,
+          value: foundAmount - requiredAmount,
+          timelock: null,
+          token: NATIVE_TOKEN_UID,
+          authorities: 0n,
+          isChange: true,
+        });
+      }
+    }
+
+    const headers: Header[] = [];
+    if (feeAmount > 0) {
+      const feeHeader = new FeeHeader([{ tokenIndex: 0, amount: feeAmount }]);
+      headers.push(feeHeader);
+    }
+
+    // data outputs uses HTR so it doesn't count for the fee calculation and we can add them here
     if (data !== null) {
       for (const dataString of data) {
         const outputData = {
@@ -437,12 +549,13 @@ const tokens = {
       }
     }
 
-    const tokensArray = token !== null ? [token] : [];
-
     return {
       inputs,
       outputs,
       tokens: tokensArray,
+      // append the token version if we are creating a new token
+      ...(!isMintingToken ? { tokenVersion: _tokenVersion } : {}),
+      headers,
     };
   },
 
@@ -489,30 +602,43 @@ const tokens = {
       throw new Error('Melt authority input is not valid');
     }
     const inputs: IDataInput[] = [authorityMeltInput];
-    const outputs: IDataOutput[] = [];
+    const outputs: IDataOutputWithToken[] = [];
     const tokensArray = [authorityMeltInput.token];
-    const depositPercent = storage.getTokenDepositPercentage();
-    let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
+
+    // check in the wallet storage if it has the token
+    const tokenData = await storage.getToken(token);
+    if (!tokenData) {
+      throw new SendTxError(`Token ${token} not found.`);
+    }
+
+    let withdrawAmount = 0n;
+
     // The deposit amount will be the quantity of data strings in the array
     // multiplied by the fee or 0 if there are no data outputs
+    // it will be required even when dealing with fee based tokens
     let depositAmount = data !== null ? this.getDataScriptOutputFee() * BigInt(data.length) : 0n;
 
-    // We only make these calculations if we are creating data outputs because the transaction needs to deposit the fee
-    if (depositAmount > 0) {
-      // If we are creating data outputs the withdrawal amount may be used to create the data outputs
-      // This may prevent finding HTR inputs to meet the deposit amount if we are creating HTR with the melt.
-      if (withdrawAmount >= depositAmount) {
-        // We can use part of the withdraw tokens as deposit
-        withdrawAmount -= depositAmount;
-        depositAmount = 0n;
-      } else {
-        // Deposit is greater than withdraw, we will use all withdrawn tokens and still need to find utxos to meet deposit
-        depositAmount -= withdrawAmount;
-        withdrawAmount = 0n;
+    if (tokenData.version === TokenVersion.DEPOSIT) {
+      const depositPercent = storage.getTokenDepositPercentage();
+      withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
+
+      // We only make these calculations if we are creating data outputs because the transaction needs to deposit the fee
+      if (depositAmount > 0) {
+        // If we are creating data outputs the withdrawal amount may be used to create the data outputs
+        // This may prevent finding HTR inputs to meet the deposit amount if we are creating HTR with the melt.
+        if (withdrawAmount >= depositAmount) {
+          // We can use part of the withdraw tokens as deposit
+          withdrawAmount -= depositAmount;
+          depositAmount = 0n;
+        } else {
+          // Deposit is greater than withdraw, we will use all withdrawn tokens and still need to find utxos to meet deposit
+          depositAmount -= withdrawAmount;
+          withdrawAmount = 0n;
+        }
       }
     }
 
-    // get inputs that amount to requested melt amount
+    // get token inputs that amount to requested melt amount
     const selectedUtxos = await utxoSelection(storage, token, amount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
@@ -526,7 +652,7 @@ const tokens = {
       );
     }
 
-    // get output change
+    // get token output change
     if (foundAmount > amount) {
       const cAddress = await storage.getChangeAddress({ changeAddress });
 
@@ -539,36 +665,6 @@ const tokens = {
         authorities: 0n,
         isChange: true,
       });
-    }
-
-    if (depositAmount > 0) {
-      // get HTR deposit inputs
-      const depositSelectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
-      const depositFoundAmount = depositSelectedUtxos.amount;
-      for (const utxo of depositSelectedUtxos.utxos) {
-        inputs.push(helpers.getDataInputFromUtxo(utxo));
-      }
-
-      if (depositFoundAmount < depositAmount) {
-        throw new InsufficientFundsError(
-          `Not enough HTR tokens for deposit: ${depositAmount} required, ${depositFoundAmount} available`
-        );
-      }
-
-      // get output change
-      if (depositFoundAmount > depositAmount) {
-        const cAddress = await storage.getChangeAddress({ changeAddress });
-
-        outputs.push({
-          type: getAddressType(cAddress, storage.config.getNetwork()),
-          address: cAddress,
-          value: depositFoundAmount - depositAmount,
-          timelock: null,
-          token: NATIVE_TOKEN_UID,
-          authorities: 0n,
-          isChange: true,
-        });
-      }
     }
 
     if (createAnotherMelt) {
@@ -584,7 +680,7 @@ const tokens = {
     }
 
     // When melting an amount smaller than 100 (1.00), the withdraw value will be 0, then we don't need to add output for that
-    if (withdrawAmount > 0) {
+    if (withdrawAmount > 0 && tokenData.version === TokenVersion.DEPOSIT) {
       outputs.push({
         value: withdrawAmount,
         address,
@@ -595,6 +691,44 @@ const tokens = {
       });
     }
 
+    // calculate the transaction fee and add it to the headers
+    const feeAmount = await Fee.calculate(inputs, outputs, new Map([[tokenData.uid, tokenData]]));
+    const headers: Header[] = [];
+    if (feeAmount > 0) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: feeAmount }]));
+    }
+
+    const requiredAmount = depositAmount + feeAmount;
+    if (requiredAmount > 0) {
+      // get HTR required inputs to pay the deposit + fee;
+      const htrSelectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, requiredAmount);
+      const htrFoundAmount = htrSelectedUtxos.amount;
+      for (const utxo of htrSelectedUtxos.utxos) {
+        inputs.push(helpers.getDataInputFromUtxo(utxo));
+      }
+
+      if (htrFoundAmount < requiredAmount) {
+        throw new InsufficientFundsError(
+          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${htrFoundAmount} available`
+        );
+      }
+
+      // get output change
+      if (htrFoundAmount > requiredAmount) {
+        const cAddress = await storage.getChangeAddress({ changeAddress });
+
+        outputs.push({
+          type: getAddressType(cAddress, storage.config.getNetwork()),
+          address: cAddress,
+          value: htrFoundAmount - requiredAmount,
+          timelock: null,
+          token: NATIVE_TOKEN_UID,
+          authorities: 0n,
+          isChange: true,
+        });
+      }
+    }
+
     if (data !== null) {
       for (const dataString of data) {
         const outputData = {
@@ -603,7 +737,7 @@ const tokens = {
           value: 1n,
           token: NATIVE_TOKEN_UID,
           authorities: 0n,
-        } as IDataOutput;
+        } as IDataOutputWithToken;
 
         if (unshiftData) {
           outputs.unshift(outputData);
@@ -617,6 +751,7 @@ const tokens = {
       inputs,
       outputs,
       tokens: tokensArray,
+      headers,
     };
   },
 
@@ -654,6 +789,7 @@ const tokens = {
       data = null,
       isCreateNFT = false,
       skipDepositFee = false,
+      tokenVersion = TokenVersion.DEPOSIT,
     }: {
       changeAddress?: string | null;
       createMint?: boolean;
@@ -663,6 +799,7 @@ const tokens = {
       data?: string[] | null;
       isCreateNFT?: boolean;
       skipDepositFee?: boolean;
+      tokenVersion?: TokenVersion;
     } = {}
   ): Promise<IDataTx> {
     const mintOptions = {
@@ -672,6 +809,7 @@ const tokens = {
       unshiftData: isCreateNFT,
       data,
       skipDepositFee,
+      tokenVersion,
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
@@ -696,6 +834,8 @@ const tokens = {
     txData.version = CREATE_TOKEN_TX_VERSION;
     txData.name = name;
     txData.symbol = symbol;
+    // Version of the token being created
+    txData.tokenVersion = tokenVersion;
 
     return txData;
   },
@@ -800,6 +940,23 @@ const tokens = {
   getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
     const depositPercent = storage.getTokenDepositPercentage();
     return this.getDepositAmount(mintAmount, depositPercent);
+  },
+
+  /**
+   * Get tokens from the wallet
+   * @param storage Storage with tokens within
+   * @param ids ids to search by
+   */
+  async getTokensByManyIds(storage: IStorage, ids: Set<string>): Promise<Map<string, ITokenData>> {
+    const _tokens = new Map<string, ITokenData>();
+    for await (const tokenUid of ids) {
+      const tokenData = await storage.getToken(tokenUid);
+      if (!tokenData) {
+        throw new TokenNotFoundError(tokenUid);
+      }
+      _tokens.set(tokenUid, tokenData);
+    }
+    return _tokens;
   },
 };
 

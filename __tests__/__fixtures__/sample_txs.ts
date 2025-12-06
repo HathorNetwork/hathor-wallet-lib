@@ -4,6 +4,8 @@ export const nftCreationTx = {
   weight: 8.000001,
   timestamp: 1656543561,
   is_voided: false,
+  signalBits: 0,
+  nonce: 0,
   inputs: [
     {
       value: 100n,
