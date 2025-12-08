@@ -195,6 +195,7 @@ describe('walletApi', () => {
           id: '0000000000000000000000000000000000000000000000000000000000000001',
           name: 'Token 1',
           symbol: 'TK1',
+          version: 1, // TokenVersion.DEPOSIT
         },
         totalSupply: 1000n,
         totalTransactions: 5,
@@ -230,6 +231,7 @@ describe('walletApi', () => {
             id: '0000000000000000000000000000000000000000000000000000000000000002',
             name: 'Token 1',
             symbol: 'TK1',
+            version: 1, // TokenVersion.DEPOSIT
           },
           balance: {
             unlocked: 100n,

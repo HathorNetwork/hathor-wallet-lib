@@ -11,7 +11,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { encryptData } from '../../src/utils/crypto';
-import { WalletType } from '../../src/types';
+import { TokenVersion, WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';
 
 test('default values', async () => {
@@ -164,12 +164,17 @@ test('token methods', async () => {
   // Starts empty
   expect(store.tokens.size).toEqual(0);
 
-  await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01' });
+  await store.saveToken({
+    uid: '01',
+    name: 'Token 01',
+    symbol: 'TK01',
+    version: TokenVersion.DEPOSIT,
+  });
   expect(store.tokens.size).toEqual(1);
   expect(store.tokens.get('01')).toBeDefined();
   expect(store.tokensMetadata.get('01')).toBeUndefined();
   await store.saveToken(
-    { uid: '02', name: 'Token 02', symbol: 'TK02' },
+    { uid: '02', name: 'Token 02', symbol: 'TK02', version: TokenVersion.DEPOSIT },
     {
       numTransactions: 1,
       balance: {
@@ -191,8 +196,18 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(0);
 
-  await store.registerToken({ uid: '02', name: 'Token 02', symbol: 'TK02' });
-  await store.registerToken({ uid: '03', name: 'Token 03', symbol: 'TK03' });
+  await store.registerToken({
+    uid: '02',
+    name: 'Token 02',
+    symbol: 'TK02',
+    version: TokenVersion.DEPOSIT,
+  });
+  await store.registerToken({
+    uid: '03',
+    name: 'Token 03',
+    symbol: 'TK03',
+    version: TokenVersion.DEPOSIT,
+  });
 
   registered = [];
   for await (const token of store.registeredTokenIter()) {
@@ -207,7 +222,7 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.saveToken({ uid: '00', name: 'Hathor', symbol: 'HTR' });
+  await store.saveToken({ uid: '00', name: 'Hathor', symbol: 'HTR', version: TokenVersion.NATIVE });
   await store.editTokenMeta('00', {
     numTransactions: 10,
     balance: { tokens: { locked: 1n, unlocked: 2n } },
@@ -305,7 +320,12 @@ test('access data methods', async () => {
   // Clean storage but keep registered tokens
   await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
   await store.saveTx(tx_history[0]);
-  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await store.registerToken({
+    uid: 'testtoken',
+    name: 'Test token',
+    symbol: 'TST',
+    version: TokenVersion.DEPOSIT,
+  });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
@@ -317,7 +337,12 @@ test('access data methods', async () => {
   // Clean only registered tokens
   await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
   await store.saveTx(tx_history[0]);
-  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await store.registerToken({
+    uid: 'testtoken',
+    name: 'Test token',
+    symbol: 'TST',
+    version: TokenVersion.DEPOSIT,
+  });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
@@ -327,7 +352,12 @@ test('access data methods', async () => {
   expect(store.registeredTokens.size).toEqual(0);
 
   // Clean all
-  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await store.registerToken({
+    uid: 'testtoken',
+    name: 'Test token',
+    symbol: 'TST',
+    version: TokenVersion.DEPOSIT,
+  });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);

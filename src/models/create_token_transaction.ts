@@ -9,7 +9,6 @@ import buffer from 'buffer';
 import { clone } from 'lodash';
 import {
   CREATE_TOKEN_TX_VERSION,
-  TOKEN_INFO_VERSION,
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
   DEFAULT_SIGNAL_BITS,
@@ -22,6 +21,7 @@ import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import ScriptData from './script_data';
 import { OutputType } from '../wallet/types';
+import { TokenVersion } from '../types';
 import type Header from '../headers/base';
 
 type optionsType = {
@@ -32,6 +32,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
+  tokenVersion?: TokenVersion;
   headers?: Header[];
 };
 
@@ -39,6 +40,8 @@ class CreateTokenTransaction extends Transaction {
   name: string;
 
   symbol: string;
+
+  tokenVersion: TokenVersion;
 
   constructor(
     name: string,
@@ -55,6 +58,7 @@ class CreateTokenTransaction extends Transaction {
       parents: [],
       tokens: [],
       hash: null,
+      tokenVersion: TokenVersion.DEPOSIT,
       headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
@@ -63,6 +67,7 @@ class CreateTokenTransaction extends Transaction {
     this.version = CREATE_TOKEN_TX_VERSION;
     this.name = name;
     this.symbol = symbol;
+    this.tokenVersion = newOptions.tokenVersion ?? TokenVersion.DEPOSIT;
   }
 
   /**
@@ -98,6 +103,10 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   serializeTokenInfo(array: Buffer[]) {
+    if (!this.tokenVersion) {
+      throw new CreateTokenTxInvalid('Token version is required when creating a new token');
+    }
+
     if (!this.name || !this.symbol) {
       throw new CreateTokenTxInvalid(
         'Token name and symbol are required when creating a new token'
@@ -118,8 +127,9 @@ class CreateTokenTransaction extends Transaction {
 
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
+
     // Token info version
-    array.push(intToBytes(TOKEN_INFO_VERSION, 1));
+    array.push(intToBytes(this.tokenVersion, 1));
     // Token name size
     array.push(intToBytes(nameBytes.length, 1));
     // Token name
@@ -131,7 +141,7 @@ class CreateTokenTransaction extends Transaction {
   }
 
   getTokenInfoFromBytes(srcBuf: Buffer): Buffer {
-    let tokenInfoVersion;
+    let tokenVersion;
     let lenName;
     let lenSymbol;
     let bufName;
@@ -140,10 +150,12 @@ class CreateTokenTransaction extends Transaction {
     let buf = Buffer.from(srcBuf);
 
     /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
-    [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
+    [tokenVersion, buf] = unpackToInt(1, false, buf);
+    this.tokenVersion = tokenVersion;
 
-    if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
-      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenInfoVersion}`);
+    const allowedVersions = new Set([TokenVersion.DEPOSIT, TokenVersion.FEE]);
+    if (!allowedVersions.has(tokenVersion)) {
+      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenVersion}`);
     }
 
     [lenName, buf] = unpackToInt(1, false, buf);
@@ -233,7 +245,7 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   static createFromBytes(buf: Buffer, network: Network): CreateTokenTransaction {
-    const tx = new CreateTokenTransaction('', '', [], []);
+    const tx = CreateTokenTransaction.createEmpty();
 
     // Cloning buffer so we don't mutate anything sent by the user
     // as soon as it's available natively we should use an immutable buffer
@@ -310,6 +322,17 @@ class CreateTokenTransaction extends Transaction {
     if (mintOutputs > 1 || meltOutputs > 1) {
       throw new NftValidationError('A maximum of 1 of each mint and melt is allowed');
     }
+  }
+
+  /**
+   * Create an empty transaction
+   * @return {CreateTokenTransaction} Transaction object
+   * @memberof CreateTokenTransaction
+   * @static
+   * @inner
+   */
+  static createEmpty(): CreateTokenTransaction {
+    return new CreateTokenTransaction('', '', [], []);
   }
 }
 
