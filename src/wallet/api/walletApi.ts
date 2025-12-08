@@ -344,7 +344,8 @@ const walletApi = {
       return parseSchema(response.data, txByIdResponseSchema);
     }
 
-    // The server also might return a 404 if the tx is not found. Checking its data too
+    // A serverless-offline instance may return a 404 with an error body. In those cases
+    // we pass the response data to the guard for additional validations.
     if (response.status === 404 && response.data) {
       walletApi._txNotFoundGuard(response.data);
       throw new WalletRequestError('Error getting transaction by its id.', {
