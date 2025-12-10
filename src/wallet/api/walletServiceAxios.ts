@@ -6,7 +6,12 @@
  */
 
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { TIMEOUT } from '../../constants';
+import {
+  REQUEST_DEFAULT_MAX_RETRIES,
+  REQUEST_DEFAULT_RETRY_DELAY_BASE_MS,
+  REQUEST_DEFAULT_RETRY_DELAY_MAX_MS,
+  TIMEOUT,
+} from '../../constants';
 import helpers from '../../utils/helpers';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
@@ -24,14 +29,6 @@ type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retryCount?: number;
   _retryStart?: number;
 };
-
-/**
- * A set of default values for the retry configuration, in case the wallet
- * does not provide all of them
- */
-const DEFAULT_MAX_RETRIES = 3;
-const DEFAULT_RETRY_DELAY_BASE_MS = 100;
-const DEFAULT_RETRY_DELAY_MAX_MS = 1000;
 
 /**
  * Create an axios instance to be used when sending requests
@@ -76,9 +73,9 @@ export const axiosInstance = async (
 
   // Retry configuration from the Wallet instance
   const walletHasRetryConfig = !!wallet.retryConfig;
-  const maxRetries = wallet.retryConfig?.maxRetries ?? DEFAULT_MAX_RETRIES;
-  const retryDelayBaseMs = wallet.retryConfig?.delayBaseMs ?? DEFAULT_RETRY_DELAY_BASE_MS;
-  const retryDelayMaxMs = wallet.retryConfig?.delayMaxMs ?? DEFAULT_RETRY_DELAY_MAX_MS;
+  const maxRetries = wallet.retryConfig?.maxRetries ?? REQUEST_DEFAULT_MAX_RETRIES;
+  const retryDelayBaseMs = wallet.retryConfig?.delayBaseMs ?? REQUEST_DEFAULT_RETRY_DELAY_BASE_MS;
+  const retryDelayMaxMs = wallet.retryConfig?.delayMaxMs ?? REQUEST_DEFAULT_RETRY_DELAY_MAX_MS;
 
   const instance = axios.create(defaultOptions);
 

@@ -52,6 +52,7 @@ import {
   addressDetailsResponseSchema,
   txProposalDeleteResponseSchema,
 } from './schemas/walletApi';
+import { REQUEST_DEFAULT_RETRY_DELAY_BASE_MS } from '../../constants';
 
 /**
  * Api calls for wallet
@@ -293,11 +294,11 @@ const walletApi = {
     }
 
     if (
-      wallet._expectSlowLambdas &&
+      wallet.retryConfig &&
       response.data?.success === false &&
       response.data?.error === 'wallet-not-found'
     ) {
-      await helpers.sleep(1000);
+      await helpers.sleep(wallet.retryConfig.delayBaseMs ?? REQUEST_DEFAULT_RETRY_DELAY_BASE_MS);
       // Retrying the request to allow for the Wallet Service to process a newly created wallet under
       // test conditions
       const retryResponse = await axios.post('auth/token', data);
