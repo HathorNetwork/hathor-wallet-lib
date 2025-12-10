@@ -111,13 +111,6 @@ export const axiosInstance = async (
         return Promise.reject(error);
       }
 
-      // Logging the retry attempt
-      const myErr: AxiosError = error;
-      // eslint-disable-next-line no-console
-      console.log(
-        `Retrying for error: ${myErr.message}, code: ${myErr.code}, status: ${myErr.response?.status}`
-      );
-
       // Modifying the request config for the retry and attempting a new request
       requestConfig._retryStart = initialRetryTime;
       requestConfig._retryCount = currentRetryCount + 1;
