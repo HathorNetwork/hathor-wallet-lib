@@ -25,9 +25,13 @@ type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
   _retryStart?: number;
 };
 
-const SLOW_WALLET_MAX_RETRIES = 10;
-const SLOW_WALLET_RETRY_DELAY_BASE_MS = 100;
-const SLOW_WALLET_RETRY_DELAY_MAX_MS = 2000;
+/**
+ * A set of default values for the retry configuration, in case the wallet
+ * does not provide all of them
+ */
+const DEFAULT_MAX_RETRIES = 3;
+const DEFAULT_RETRY_DELAY_BASE_MS = 100;
+const DEFAULT_RETRY_DELAY_MAX_MS = 1000;
 
 const SLOW_WALLET_COMMON_ERROR_MESSAGES = [
   // Common error for the Wallet Service when running under serverless-offline
@@ -78,6 +82,12 @@ export const axiosInstance = async (
     defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
 
+  // Retry configuration from the Wallet instance
+  const walletHasRetry = !!wallet.retryConfig;
+  const maxRetries = wallet.retryConfig?.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const retryDelayBaseMs = wallet.retryConfig?.delayBaseMs ?? DEFAULT_RETRY_DELAY_BASE_MS;
+  const retryDelayMaxMs = wallet.retryConfig?.delayMaxMs ?? DEFAULT_RETRY_DELAY_MAX_MS;
+
   const instance = axios.create(defaultOptions);
 
   // Add retry interceptor for socket hang up errors
@@ -93,9 +103,9 @@ export const axiosInstance = async (
 
       // Check if we should retry
       const shouldRetry =
-        wallet._expectSlowLambdas &&
+        walletHasRetry &&
         SLOW_WALLET_COMMON_ERROR_MESSAGES.includes(error.message.toLowerCase()) &&
-        currentRetryCount < SLOW_WALLET_MAX_RETRIES;
+        currentRetryCount < maxRetries;
 
       // Throw any error found if we shouldn't retry
       if (!shouldRetry) {
@@ -113,12 +123,7 @@ export const axiosInstance = async (
       requestConfig._retryCount = currentRetryCount + 1;
 
       // Wait before retrying: 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
-      await helpers.sleep(
-        Math.min(
-          SLOW_WALLET_RETRY_DELAY_BASE_MS * 2 ** currentRetryCount,
-          SLOW_WALLET_RETRY_DELAY_MAX_MS
-        )
-      );
+      await helpers.sleep(Math.min(retryDelayBaseMs * 2 ** currentRetryCount, retryDelayMaxMs));
 
       // Retry the request
       return instance(requestConfig);

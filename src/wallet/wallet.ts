@@ -110,6 +110,18 @@ enum walletState {
   READY = 'Ready',
 }
 
+/**
+ * Configuration for request retries
+ * @property maxRetries - Maximum number of retries
+ * @property delayBaseMs - Minimum delay in milliseconds for retries
+ * @property delayMaxMs - Maximum delay in milliseconds for retries
+ */
+type RequestRetryConfig = {
+  maxRetries: number;
+  delayBaseMs: number;
+  delayMaxMs: number;
+};
+
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // String with wallet passphrase
   passphrase: string;
@@ -120,9 +132,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
 
-  // The test environment for the Wallet Service can be slow, and we need to adapt to this
-  // with special error handling conditions.
-  _expectSlowLambdas: boolean;
+  // Configuration for requesting retries within this instance
+  retryConfig?: RequestRetryConfig;
 
   // Method to request the password from the client
   private requestPassword: () => Promise<string>;
@@ -179,7 +190,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
-    expectSlowLambdas = false,
+    retryConfig = undefined,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -190,7 +201,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
-    expectSlowLambdas?: boolean;
+    retryConfig?: RequestRetryConfig;
   }) {
     super();
 
@@ -225,7 +236,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
     this._isWsEnabled = enableWs;
-    this._expectSlowLambdas = expectSlowLambdas;
+    if (retryConfig) {
+      this.retryConfig = {
+        maxRetries: retryConfig.maxRetries,
+        delayBaseMs: retryConfig.delayBaseMs,
+        delayMaxMs: retryConfig.delayMaxMs,
+      };
+    }
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;

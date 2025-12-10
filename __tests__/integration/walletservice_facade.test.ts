@@ -28,6 +28,16 @@ config.setServerUrl(FULLNODE_URL);
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 
+/**
+ * Default retry config for tests to avoid flakiness with the serverless-offline of the wallet
+ * service
+ */
+const defaultTestRetryConfig = {
+  maxRetries: 10,
+  delayBaseMs: 100,
+  delayMaxMs: 2000,
+};
+
 /** Genesis Wallet, used to fund all tests */
 const gWallet: HathorWalletServiceWallet = buildWalletInstance({
   words: WALLET_CONSTANTS.genesis.words,
@@ -160,7 +170,7 @@ function buildWalletInstance({
     network,
     storage,
     enableWs, // Disable websocket for integration tests
-    expectSlowLambdas: true,
+    retryConfig: defaultTestRetryConfig,
   });
 
   return { wallet: newWallet, store, storage };
@@ -195,22 +205,6 @@ async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: stri
     await delay(delayMs);
   }
   throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
-}
-
-async function generateNewWalletAddress() {
-  const newWords = walletUtils.generateWalletWords();
-  const { wallet: newWallet } = buildWalletInstance({ words: newWords });
-  await newWallet.start({ pinCode, password });
-
-  const addresses: string[] = [];
-  for (let i = 0; i < 10; i++) {
-    addresses.push((await newWallet.getAddressAtIndex(i))!);
-  }
-
-  return {
-    words: newWords,
-    addresses,
-  };
 }
 
 async function sendFundTx(
@@ -393,7 +387,7 @@ describe('start', () => {
         network,
         storage,
         enableWs: false, // Disable websocket for integration tests
-        expectSlowLambdas: true,
+        retryConfig: defaultTestRetryConfig,
       });
 
       // Start the wallet
