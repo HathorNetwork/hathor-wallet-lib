@@ -33,14 +33,6 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_BASE_MS = 100;
 const DEFAULT_RETRY_DELAY_MAX_MS = 1000;
 
-const SLOW_WALLET_COMMON_ERROR_MESSAGES = [
-  // Common error for the Wallet Service when running under serverless-offline
-  // Happens especially often during tests in a dockerized private blockchain
-  'socket hang up',
-
-  // Add more common error messages lowercased here if needed
-];
-
 /**
  * Create an axios instance to be used when sending requests
  *
@@ -83,7 +75,7 @@ export const axiosInstance = async (
   }
 
   // Retry configuration from the Wallet instance
-  const walletHasRetry = !!wallet.retryConfig;
+  const walletHasRetryConfig = !!wallet.retryConfig;
   const maxRetries = wallet.retryConfig?.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayBaseMs = wallet.retryConfig?.delayBaseMs ?? DEFAULT_RETRY_DELAY_BASE_MS;
   const retryDelayMaxMs = wallet.retryConfig?.delayMaxMs ?? DEFAULT_RETRY_DELAY_MAX_MS;
@@ -101,11 +93,12 @@ export const axiosInstance = async (
       const initialRetryTime = requestConfig._retryStart || Date.now();
       const currentRetryCount = requestConfig._retryCount || 0;
 
-      // Check if we should retry
-      const shouldRetry =
-        walletHasRetry &&
-        SLOW_WALLET_COMMON_ERROR_MESSAGES.includes(error.message.toLowerCase()) &&
-        currentRetryCount < maxRetries;
+      // For now, any response that does not have a status will be considered eligible for this automatic retry, not any
+      // deliberate error code from the server. Those will have to be dealt with by the caller explicitly.
+      const isStatusEmpty = !error.response?.status;
+
+      // Consolidating the criteria for retrying
+      const shouldRetry = walletHasRetryConfig && isStatusEmpty && currentRetryCount < maxRetries;
 
       // Throw any error found if we shouldn't retry
       if (!shouldRetry) {
@@ -117,6 +110,13 @@ export const axiosInstance = async (
         );
         return Promise.reject(error);
       }
+
+      // Logging the retry attempt
+      const myErr: AxiosError = error;
+      // eslint-disable-next-line no-console
+      console.log(
+        `Retrying for error: ${myErr.message}, code: ${myErr.code}, status: ${myErr.response?.status}`
+      );
 
       // Modifying the request config for the retry and attempting a new request
       requestConfig._retryStart = initialRetryTime;
