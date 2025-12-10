@@ -112,7 +112,9 @@ export const axiosInstance = async (
       requestConfig._retryStart = initialRetryTime;
       requestConfig._retryCount = currentRetryCount + 1;
 
-      // Wait before retrying: 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
+      // Wait before retrying, growing from baseMs to maxMs
+      // For example, with a base of 100 and a max of 2000:
+      // 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
       await helpers.sleep(Math.min(retryDelayBaseMs * 2 ** currentRetryCount, retryDelayMaxMs));
 
       // Retry the request
