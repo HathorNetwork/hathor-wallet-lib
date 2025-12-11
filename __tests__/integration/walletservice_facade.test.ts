@@ -28,16 +28,6 @@ config.setServerUrl(FULLNODE_URL);
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 
-/**
- * Default retry config for tests to avoid flakiness with the serverless-offline of the wallet
- * service
- */
-const defaultTestRetryConfig = {
-  maxRetries: 10,
-  delayBaseMs: 100,
-  delayMaxMs: 2000,
-};
-
 /** Genesis Wallet, used to fund all tests */
 const gWallet: HathorWalletServiceWallet = buildWalletInstance({
   words: WALLET_CONSTANTS.genesis.words,
@@ -170,7 +160,6 @@ function buildWalletInstance({
     network,
     storage,
     enableWs, // Disable websocket for integration tests
-    retryConfig: defaultTestRetryConfig,
   });
 
   return { wallet: newWallet, store, storage };
@@ -387,7 +376,6 @@ describe('start', () => {
         network,
         storage,
         enableWs: false, // Disable websocket for integration tests
-        retryConfig: defaultTestRetryConfig,
       });
 
       // Start the wallet

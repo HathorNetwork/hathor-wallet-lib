@@ -5,14 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import {
-  REQUEST_DEFAULT_MAX_RETRIES,
-  REQUEST_DEFAULT_RETRY_DELAY_BASE_MS,
-  REQUEST_DEFAULT_RETRY_DELAY_MAX_MS,
-  TIMEOUT,
-} from '../../constants';
-import helpers from '../../utils/helpers';
+import axios from 'axios';
+import { TIMEOUT } from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -21,14 +15,6 @@ import config from '../../config';
  *
  * @module Axios
  */
-
-/**
- * Extending AxiosRequestConfig to include a retry count for our interceptor
- */
-type AxiosRequestConfigWithRetry = InternalAxiosRequestConfig & {
-  _retryCount?: number;
-  _retryStart?: number;
-};
 
 /**
  * Create an axios instance to be used when sending requests
@@ -71,58 +57,7 @@ export const axiosInstance = async (
     defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
 
-  // Retry configuration from the Wallet instance
-  const walletHasRetryConfig = !!wallet.retryConfig;
-  const maxRetries = wallet.retryConfig?.maxRetries ?? REQUEST_DEFAULT_MAX_RETRIES;
-  const retryDelayBaseMs = wallet.retryConfig?.delayBaseMs ?? REQUEST_DEFAULT_RETRY_DELAY_BASE_MS;
-  const retryDelayMaxMs = wallet.retryConfig?.delayMaxMs ?? REQUEST_DEFAULT_RETRY_DELAY_MAX_MS;
-
-  const instance = axios.create(defaultOptions);
-
-  // Add retry interceptor for socket hang up errors
-  instance.interceptors.response.use(
-    // Success response handler
-    response => response,
-    // Error response handler with retry logic
-    async error => {
-      // Fetching the retry count from the request config, or initializing it if not present
-      const requestConfig = ((error as AxiosError).config as AxiosRequestConfigWithRetry)!;
-      const initialRetryTime = requestConfig._retryStart || Date.now();
-      const currentRetryCount = requestConfig._retryCount || 0;
-
-      // For now, any response that does not have a status will be considered eligible for this automatic retry, not any
-      // deliberate error code from the server. Those will have to be dealt with by the caller explicitly.
-      const isStatusEmpty = !error.response?.status;
-
-      // Consolidating the criteria for retrying
-      const shouldRetry = walletHasRetryConfig && isStatusEmpty && currentRetryCount < maxRetries;
-
-      // Throw any error found if we shouldn't retry
-      if (!shouldRetry) {
-        // eslint-disable-next-line no-console
-        console.error(
-          currentRetryCount > 0
-            ? `Failed request to ${requestConfig.url}: ${error.message}. Took ${Date.now() - initialRetryTime}ms and ${currentRetryCount} retries.`
-            : `Failed request to ${requestConfig.url}: ${error.message}.`
-        );
-        return Promise.reject(error);
-      }
-
-      // Modifying the request config for the retry and attempting a new request
-      requestConfig._retryStart = initialRetryTime;
-      requestConfig._retryCount = currentRetryCount + 1;
-
-      // Wait before retrying, growing from baseMs to maxMs
-      // For example, with a base of 100 and a max of 2000:
-      // 100ms, 200ms, 400ms, 800ms, 1600ms and then 2000ms
-      await helpers.sleep(Math.min(retryDelayBaseMs * 2 ** currentRetryCount, retryDelayMaxMs));
-
-      // Retry the request
-      return instance(requestConfig);
-    }
-  );
-
-  return instance;
+  return axios.create(defaultOptions);
 };
 
 export default axiosInstance;

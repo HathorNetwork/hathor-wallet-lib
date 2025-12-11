@@ -170,19 +170,6 @@ export const TIMEOUT: number = 10000;
 export const SEND_TOKENS_TIMEOUT: number = 300000;
 
 /**
- * A default value for retrying failed requests, in case a wallet instance does not have it properly set.
- */
-export const REQUEST_DEFAULT_MAX_RETRIES = 3;
-/**
- * A default base delay in milliseconds for retrying failed requests, in case a wallet instance does not have it properly set.
- */
-export const REQUEST_DEFAULT_RETRY_DELAY_BASE_MS = 100;
-/**
- * A default maximum delay in milliseconds for retrying failed requests, in case a wallet instance does not have it properly set.
- */
-export const REQUEST_DEFAULT_RETRY_DELAY_MAX_MS = 1000;
-
-/**
  * Number of iterations to execute when hashing the password
  *
  * Even though NIST recommeds at least 10,000 iterations (https://pages.nist.gov/800-63-3/sp800-63b.html#sec5),
