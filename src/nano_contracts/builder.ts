@@ -30,16 +30,14 @@ import {
   IArgumentField,
 } from './types';
 import {
-  getResultHelper,
+  getBlueprintId,
   mapActionToActionHeader,
   validateAndParseBlueprintMethodArgs,
 } from './utils';
 import { IDataInput, IDataOutput } from '../types';
-import { FullNodeTxResponse } from '../wallet/types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
-import ncApi from '../api/nano';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -190,6 +188,16 @@ class NanoContractTransactionBuilder {
   }
 
   /**
+   * Guard that asserts `this.wallet` is not null and narrows its type for the caller.
+   * Throws a TypeError if wallet is not set.
+   */
+  private assertWallet(): asserts this is { wallet: HathorWallet } {
+    if (!this.wallet) {
+      throw new TypeError('Wallet is required to build nano contract transactions.');
+    }
+  }
+
+  /**
    * Set vertex type
    *
    * @param {vertexType} The vertex type
@@ -219,6 +227,7 @@ class NanoContractTransactionBuilder {
   async executeDeposit(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
         "Can't execute a deposit with an action which type is different than deposit."
@@ -315,6 +324,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeWithdrawal(action: NanoContractAction): IDataOutput | null {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
         "Can't execute a withdrawal with an action which type is different than withdrawal."
@@ -383,6 +393,7 @@ class NanoContractTransactionBuilder {
   async executeGrantAuthority(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute a grant authority with an action which type is different than grant authority."
@@ -451,6 +462,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeAcquireAuthority(action: NanoContractAction): IDataOutput | null {
+    this.assertWallet();
     if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute an acquire authority with an action which type is different than acquire authority."
@@ -475,42 +487,6 @@ class NanoContractTransactionBuilder {
   }
 
   /**
-   * Retrieves the blueprint ID for a nano contract by its ID.
-   *
-   * The priority is to get the data from the getFullTxById API because
-   * it gets contract txs that are still to be confirmed by a block. If it fails,
-   * the contract might have been created by another contract, so we fallback to the state
-   * API, which gets the information correctly in that case.
-   *
-   * @returns A promise resolving to the blueprint ID.
-   * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
-   * @throws {Error} If the nano contract ID is not defined.
-   */
-  async getBlueprintId(): Promise<string> {
-    if (!this.ncId) {
-      throw new Error('Nano contract ID is not defined');
-    }
-
-    const [txError, txResponse] = (await getResultHelper(() =>
-      this.wallet.getFullTxById(this.ncId)
-    )) as [Error | null, FullNodeTxResponse | null];
-    if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
-      return txResponse.tx.nc_blueprint_id;
-    }
-
-    const [stateError, stateResponse] = await getResultHelper(() =>
-      ncApi.getNanoContractState(this.ncId!, [], [], [])
-    );
-    if (stateError || !stateResponse?.blueprint_id) {
-      throw new NanoContractTransactionError(
-        `Error getting nano contract transaction data with id ${this.ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
-      );
-    }
-
-    return stateResponse.blueprint_id;
-  }
-
-  /**
    * Verify if the builder attributes are valid for the nano build
    *
    * @throws {NanoContractTransactionError} In case the attributes are not valid
@@ -519,6 +495,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async verify() {
+    this.assertWallet();
     if (this.method === NANO_CONTRACTS_INITIALIZE_METHOD && !this.blueprintId) {
       // Initialize needs the blueprint ID
       throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
@@ -532,7 +509,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      this.blueprintId = await this.getBlueprintId();
+      this.blueprintId = await getBlueprintId(this.ncId, this.wallet);
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {
@@ -660,6 +637,7 @@ class NanoContractTransactionBuilder {
     outputs: IDataOutput[],
     tokens: string[]
   ): Promise<Transaction | CreateTokenTransaction> {
+    this.assertWallet();
     if (this.vertexType === NanoContractVertexType.TRANSACTION) {
       return transactionUtils.createTransactionFromData(
         {
@@ -720,6 +698,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<Transaction> {
+    this.assertWallet();
     let inputs;
     let outputs;
     let tokens;

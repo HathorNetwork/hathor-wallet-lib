@@ -37,6 +37,7 @@ import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
 import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
+import FeeHeader from '../headers/fee';
 import HeaderParser from '../headers/parser';
 import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
@@ -787,6 +788,29 @@ class Transaction {
    */
   getNanoHeaders(): NanoContractHeader[] {
     return NanoContractHeader.getHeadersFromTx(this);
+  }
+
+  /**
+   * Check if the transaction has a fee header.
+   *
+   * @return {boolean} True if the transaction has a fee header, false otherwise
+   * @memberof Transaction
+   * @inner
+   */
+  hasFeeHeader(): boolean {
+    return this.headers.some(header => header instanceof FeeHeader);
+  }
+
+  /**
+   * Get the fee header from the transaction.
+   * Assumes there is at most one fee header per transaction.
+   *
+   * @return {FeeHeader | null} The fee header or null if not found
+   * @memberof Transaction
+   * @inner
+   */
+  getFeeHeader(): FeeHeader | null {
+    return FeeHeader.getHeadersFromTx(this);
   }
 }
 

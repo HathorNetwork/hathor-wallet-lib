@@ -166,6 +166,7 @@ describe('Wallet API Schemas', () => {
             id: token1,
             name: 'Token 1',
             symbol: 'T1',
+            version: 1, // TokenVersion.DEPOSIT
           },
           totalSupply: '1000',
           totalTransactions: 5,
@@ -209,6 +210,7 @@ describe('Wallet API Schemas', () => {
               id: token1,
               name: 'Token 1',
               symbol: 'T1',
+              version: 1, // TokenVersion.DEPOSIT
             },
             balance: {
               unlocked: '100',

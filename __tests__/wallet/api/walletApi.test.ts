@@ -12,7 +12,8 @@ const seed =
 const mockAxiosInstance = {
   get: jest.fn(),
   post: jest.fn(),
-} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post'>>;
+  delete: jest.fn(),
+} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post' | 'delete'>>;
 
 // Mock the axiosInstance function to return our mock instance
 jest.mock('../../../src/wallet/api/walletServiceAxios', () => ({
@@ -194,6 +195,7 @@ describe('walletApi', () => {
           id: '0000000000000000000000000000000000000000000000000000000000000001',
           name: 'Token 1',
           symbol: 'TK1',
+          version: 1, // TokenVersion.DEPOSIT
         },
         totalSupply: 1000n,
         totalTransactions: 5,
@@ -229,6 +231,7 @@ describe('walletApi', () => {
             id: '0000000000000000000000000000000000000000000000000000000000000002',
             name: 'Token 1',
             symbol: 'TK1',
+            version: 1, // TokenVersion.DEPOSIT
           },
           balance: {
             unlocked: 100n,
@@ -672,5 +675,82 @@ describe('walletApi', () => {
     // This should not throw since the optional fields are handled properly
     const result = await walletApi.getFullTxById(wallet, 'tx1');
     expect(result).toEqual(mockResponseOptionalFields);
+  });
+
+  test('createReadOnlyAuthToken', async () => {
+    const xpubkey =
+      'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W8kWb3XNVy8HKXfXd8pKf3Xmb';
+    const mockResponse = {
+      success: true,
+      token:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ3aWQiOiJ0ZXN0LXdhbGxldC1pZCIsImFjY2Vzc1R5cGUiOiJyZWFkLW9ubHkiLCJpYXQiOjE2OTY1ODg4MDAsImV4cCI6MTY5NjU5MDYwMH0.test',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponse,
+    } as AxiosResponse);
+
+    const result = await walletApi.createReadOnlyAuthToken(wallet, xpubkey);
+    expect(result).toEqual(mockResponse);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('auth/token/readonly', { xpubkey });
+
+    // Should throw on invalid response status
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
+      'Error requesting read-only auth token.'
+    );
+
+    // Should throw on success: false
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 200,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
+      'Error requesting read-only auth token.'
+    );
+  });
+
+  test('deleteTxProposal', async () => {
+    const txProposalId = 'proposal-id';
+    const mockResponse = {
+      success: true,
+      txProposalId,
+    };
+
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponse,
+    } as AxiosResponse);
+
+    const result = await walletApi.deleteTxProposal(wallet, txProposalId);
+    expect(result).toEqual(mockResponse);
+    expect(mockAxiosInstance.delete).toHaveBeenCalledWith(`tx/proposal/${txProposalId}`);
+
+    // Should throw on invalid response status
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow(
+      'Error deleting tx proposal.'
+    );
+
+    // Should throw on invalid schema
+    mockAxiosInstance.delete.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        success: true,
+        // Missing txProposalId
+      },
+    } as AxiosResponse);
+
+    await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow();
   });
 });

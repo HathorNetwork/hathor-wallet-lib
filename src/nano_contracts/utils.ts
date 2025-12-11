@@ -20,7 +20,7 @@ import P2SH from '../models/p2sh';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
-import { OutputType, IHathorWallet } from '../wallet/types';
+import { FullNodeTxResponse, OutputType, IHathorWallet } from '../wallet/types';
 import { IHistoryTx, IStorage, ITokenData, OutputValueType } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
@@ -34,6 +34,7 @@ import {
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { getFieldParser } from './ncTypes/parser';
 import { isSignedDataField } from './fields';
+import HathorWallet from '../new/wallet';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -270,11 +271,9 @@ export const mapActionToActionHeader = (
 ): NanoContractActionHeader => {
   const headerActionType = ActionTypeToActionHeaderType[action.type];
 
-  const mappedTokens: ITokenData[] = tokens.map(token => {
+  const mappedTokens: Partial<ITokenData>[] = tokens.map(token => {
     return {
       uid: token,
-      name: '',
-      symbol: '',
     };
   });
 
@@ -314,4 +313,41 @@ export const getResultHelper = async <T>(
   } catch (e) {
     return [e as Error, null];
   }
+};
+
+/**
+ * Retrieves the blueprint ID for a nano contract by its ID.
+ *
+ * The priority is to get the data from the getFullTxById API because
+ * it gets contract txs that are still to be confirmed by a block. If it fails,
+ * the contract might have been created by another contract, so we fallback to the state
+ * API, which gets the information correctly in that case.
+ *
+ * @returns A promise resolving to the blueprint ID.
+ * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
+ * @throws {Error} If the nano contract ID is not defined.
+ */
+export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promise<string> => {
+  if (!ncId) {
+    throw new Error('Nano contract ID is not defined');
+  }
+
+  const [txError, txResponse] = (await getResultHelper(() => wallet.getFullTxById(ncId))) as [
+    Error | null,
+    FullNodeTxResponse | null,
+  ];
+  if (!txError && txResponse?.tx?.nc_id && txResponse.tx.nc_blueprint_id) {
+    return txResponse.tx.nc_blueprint_id;
+  }
+
+  const [stateError, stateResponse] = await getResultHelper(() =>
+    ncApi.getNanoContractState(ncId!, [], [], [])
+  );
+  if (stateError || !stateResponse?.blueprint_id) {
+    throw new NanoContractTransactionError(
+      `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
+    );
+  }
+
+  return stateResponse.blueprint_id;
 };

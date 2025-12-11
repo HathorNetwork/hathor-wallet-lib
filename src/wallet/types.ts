@@ -6,12 +6,12 @@
  */
 
 import bitcore from 'bitcore-lib';
+import { TokenVersion, IStorage, OutputValueType, IHistoryTx } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { IStorage, OutputValueType, IHistoryTx } from '../types';
 import { CreateNanoTxData } from '../nano_contracts/types';
 
 // Type used in create token methods so we can have defaults for required params
@@ -52,6 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
+  version: TokenVersion; // Token version
 }
 
 export interface Balance {
@@ -176,6 +177,11 @@ export interface TxProposalUpdateResponseData {
   success: boolean;
   txProposalId: string; // Id of the tx proposal
   txHex: string; // Hex of the serialized tx
+}
+
+export interface TxProposalDeleteResponseData {
+  success: boolean;
+  txProposalId: string; // Id of the tx proposal
 }
 
 export interface RequestError {
@@ -319,7 +325,9 @@ export interface DestroyAuthorityOptions {
 }
 
 export interface IHathorWallet {
-  start(options: { pinCode: string; password: string }): Promise<void>;
+  start(options: { pinCode: string; password: string; waitReady?: boolean }): Promise<void>;
+  startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void>;
+  getReadOnlyAuthToken(): Promise<string>;
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
@@ -340,8 +348,8 @@ export interface IHathorWallet {
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
-  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject;
-  getNextAddress(): AddressInfoObject;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type
+  getNextAddress(): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(
@@ -391,7 +399,7 @@ export interface IHathorWallet {
     count: number,
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
-  getFullHistory(): TransactionFullObject[];
+  getFullHistory(): TransactionFullObject[] | Promise<unknown>; // FIXME: Should have a single return type;
   getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
@@ -437,6 +445,13 @@ export interface IHathorWallet {
     options?: { pinCode?: string }
   ): Promise<Transaction>;
   isAddressMine(address: string): Promise<boolean>;
+  getUtxosForAmount(
+    amount: OutputValueType,
+    options?: {
+      token?: string;
+      filter_address?: string;
+    }
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }>;
   getUtxos(options?: {
     token?: string;
     authorities?: number;
@@ -709,7 +724,7 @@ export interface FullNodeTx {
       melt?: boolean;
     }>;
     caller_id: string;
-    timestamp: number;
+    timestamp?: number | null;
   };
 }
 

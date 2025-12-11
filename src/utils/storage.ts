@@ -27,6 +27,7 @@ import {
   ISingleAddressScanPolicy,
   IIndexLimitAddressScanPolicy,
   AddressScanPolicyData,
+  TokenVersion,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -523,7 +524,9 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
 export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
   async function fetchTokenData(
     uid: string
-  ): Promise<GeneralTokenInfoSchema | { success: true; name: string; symbol: string }> {
+  ): Promise<
+    GeneralTokenInfoSchema | { success: true; name: string; symbol: string; version?: TokenVersion }
+  > {
     let retryCount = 0;
 
     if (uid === NATIVE_TOKEN_UID) {
@@ -532,6 +535,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
         success: true,
         name: nativeToken.name,
         symbol: nativeToken.symbol,
+        version: nativeToken.version,
       };
     }
 
@@ -571,8 +575,8 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
         throw new Error(response.message);
       }
 
-      const { name, symbol } = response;
-      const tokenData = { uid, name, symbol };
+      const { name, symbol, version } = response;
+      const tokenData: ITokenData = { uid, name, symbol, version: version ?? undefined };
 
       await storage.addToken(tokenData);
     }
@@ -1018,6 +1022,7 @@ export async function addCreatedTokenFromTx(
     uid: tx.hash,
     name: tx.name,
     symbol: tx.symbol,
+    version: tx.tokenVersion,
   };
 
   await storage.addToken(tokenInfo);

@@ -12,22 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from math import floor
 from typing import Optional, TypeAlias
 
-from hathor.nanocontracts.blueprint import Blueprint
-from hathor.nanocontracts.context import Context
-from hathor.nanocontracts.exception import NCFail
-from hathor.nanocontracts.types import (
+from hathor import (
     Address,
+    Blueprint,
+    Context,
     NCAction,
     NCDepositAction,
     NCWithdrawalAction,
+    NCFail,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
     public,
+    export,
     view,
 )
 
@@ -63,6 +63,7 @@ class InvalidOracleSignature(NCFail):
     pass
 
 
+@export
 class Bet(Blueprint):
     """Bet blueprint with final result provided by an oracle.
 
@@ -117,6 +118,11 @@ class Bet(Blueprint):
         self.final_result = None
         self.total = Amount(0)
 
+        self.bets_total = {}
+        self.bets_address = {}
+        self.address_details = {}
+        self.withdrawals = {}
+
     @view
     def has_result(self) -> bool:
         """Return True if the final result has already been set."""
@@ -154,7 +160,7 @@ class Bet(Blueprint):
         assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
-        if ctx.timestamp > self.date_last_bet:
+        if ctx.block.timestamp > self.date_last_bet:
             raise TooLate(f'cannot place bets after {self.date_last_bet}')
         amount = Amount(action.amount)
         self.total = Amount(self.total + amount)
@@ -191,7 +197,9 @@ class Bet(Blueprint):
         assert isinstance(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
-        address = Address(ctx.caller_id)
+        caller_address = ctx.get_caller_address()
+        assert caller_address is not None
+        address = Address(caller_address)
         allowed = self.get_max_withdrawal(address)
         if action.amount > allowed:
             raise InsufficientBalance(f'withdrawal amount is greater than available (max: {allowed})')
@@ -217,7 +225,5 @@ class Bet(Blueprint):
         if result_total == 0:
             return Amount(0)
         address_total = self.bets_address.get((self.final_result, address), 0)
-        percentage = address_total / result_total
-        return Amount(floor(percentage * self.total))
-
-__blueprint__ = Bet
+        winner_amount = Amount(address_total * self.total // result_total)
+        return winner_amount

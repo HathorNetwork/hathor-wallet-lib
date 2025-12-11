@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { NATIVE_TOKEN_UID } from '../../../constants';
 import { txIdSchema } from '../../../schemas';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
+import { TokenVersion } from '../../../types';
 
 /**
  * Schema for validating Hathor addresses.
@@ -110,6 +111,7 @@ export const tokenInfoSchema = z.object({
   id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
+  version: z.nativeEnum(TokenVersion),
 });
 
 /**
@@ -212,6 +214,14 @@ export const txProposalUpdateResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * Response schema for deleting a transaction proposal.
+ * Contains the proposal ID
+ */
+export const txProposalDeleteResponseSchema = baseResponseSchema.extend({
+  txProposalId: z.string(),
+});
+
+/**
  * Schema for full node version data.
  * Contains network parameters and configuration values.
  * Uses passthrough() to allow additional fields in the response without breaking validation,
@@ -309,7 +319,7 @@ export const ncActionSchema = z.object({
 export const ncContextSchema = z.object({
   actions: z.array(ncActionSchema),
   caller_id: AddressSchema,
-  timestamp: z.number(),
+  timestamp: z.number().nullish(),
 });
 
 /**
@@ -586,6 +596,7 @@ export const walletApiSchemas = {
   balanceResponse: balanceResponseSchema,
   txProposalCreateResponse: txProposalCreateResponseSchema,
   txProposalUpdateResponse: txProposalUpdateResponseSchema,
+  txProposalDeleteResponse: txProposalDeleteResponseSchema,
   fullNodeVersionData: fullNodeVersionDataSchema,
   fullNodeTxResponse: fullNodeTxResponseSchema,
   fullNodeTxConfirmationDataResponse: fullNodeTxConfirmationDataResponseSchema,

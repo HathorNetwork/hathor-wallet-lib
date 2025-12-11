@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
@@ -7,6 +6,7 @@ import ncApi from '../../../src/api/nano';
 import { bufferToHex } from '../../../src/utils/buffer';
 import helpersUtils from '../../../src/utils/helpers';
 import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
+import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
 describe('Full blueprint basic tests', () => {
   /** @type HathorWallet */
@@ -45,6 +45,7 @@ describe('Full blueprint basic tests', () => {
   };
 
   const executeTests = async (wallet, blueprintId) => {
+    const network = wallet.getNetworkObject();
     const vertexId = '00008f315e8268b39a0ed2ffb31e58f7a883e41229cbd866a2d392d77888aa98';
     const amount = 1234;
     const address = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
@@ -57,6 +58,9 @@ describe('Full blueprint basic tests', () => {
     const attrInt = 9;
     const attrBytes = Buffer.from('abcd').toString('hex');
     const attrBool = false;
+    const attrSet = ['a', 'b', 'c', 'c'];
+    const attrTuple = [1, 'cafe', 3];
+    const attrList = ['01', '02'];
 
     // NC initialize
     const txInitialize = await wallet.createAndSendNanoContractTransaction(
@@ -78,6 +82,9 @@ describe('Full blueprint basic tests', () => {
           attrInt,
           attrBytes,
           attrBool,
+          attrSet,
+          attrTuple,
+          attrList,
         ],
       }
     );
@@ -103,6 +110,9 @@ describe('Full blueprint basic tests', () => {
         'attr_bytes',
         'attr_bool',
         'attr_optional',
+        'attr_set',
+        'attr_tuple',
+        'attr_list',
       ],
       [],
       [attrCall]
@@ -123,6 +133,28 @@ describe('Full blueprint basic tests', () => {
     expect(ncState.fields.attr_bool.value).toBe(attrBool);
     expect(ncState.fields.attr_optional.value).toBe(null);
     expect(ncState.calls[attrCall].value).toBe(false);
+
+    // Set amount
+    // First we set to 0 to validade we can set 0 as args, then to the variable
+    const txAmount = await wallet.createAndSendNanoContractTransaction('set_amount', address0, {
+      ncId: txInitialize.hash,
+      args: [0],
+    });
+    await checkTxValid(wallet, txAmount);
+
+    const ncStateAmount = await ncApi.getNanoContractState(txInitialize.hash, ['amount']);
+
+    expect(ncStateAmount.fields.amount.value).toBe(0);
+
+    const txAmount2 = await wallet.createAndSendNanoContractTransaction('set_amount', address0, {
+      ncId: txInitialize.hash,
+      args: [amount],
+    });
+    await checkTxValid(wallet, txAmount2);
+
+    const ncStateAmount2 = await ncApi.getNanoContractState(txInitialize.hash, ['amount']);
+
+    expect(ncStateAmount2.fields.amount.value).toBe(amount);
 
     // Set optional
     const attrOptional = 'test';
@@ -289,18 +321,252 @@ describe('Full blueprint basic tests', () => {
     expect(txListAttrsState.fields.attr_list_0.value).toBe('ab');
     expect(txListAttrsState.fields.attr_list_1.value).toBe('cd');
     expect(txListAttrsState.fields.attr_list_2.value).toBe('efg');
+
+    // Set tuple
+    const txTuple = await wallet.createAndSendNanoContractTransaction('set_tuple', address0, {
+      ncId: txInitialize.hash,
+      args: [attrTuple],
+    });
+    await checkTxValid(wallet, txTuple);
+    const txTupleData = await wallet.getFullTxById(txTuple.hash);
+
+    const txTupleParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_tuple',
+      txTupleData.tx.nc_address,
+      network,
+      txTupleData.tx.nc_args
+    );
+    await txTupleParser.parseArguments();
+    expect(txTupleParser.address?.base58).toBe(address0);
+    expect(txTupleParser.parsedArgs).not.toBeNull();
+    expect(txTupleParser.parsedArgs).toHaveLength(1);
+    expect(txTupleParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'tuple[int, str, int]',
+      value: ['1', 'cafe', '3'],
+    });
+
+    // Set list
+    const txList = await wallet.createAndSendNanoContractTransaction('set_list', address0, {
+      ncId: txInitialize.hash,
+      args: [attrList],
+    });
+    await checkTxValid(wallet, txList);
+
+    const txListData = await wallet.getFullTxById(txList.hash);
+
+    const txListParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_list',
+      txListData.tx.nc_address,
+      network,
+      txListData.tx.nc_args
+    );
+    await txListParser.parseArguments();
+    expect(txListParser.address?.base58).toBe(address0);
+    expect(txListParser.parsedArgs).not.toBeNull();
+    expect(txListParser.parsedArgs).toHaveLength(1);
+    expect(txListParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'list[bytes]',
+      value: attrList,
+    });
+
+    // Set set
+    const txSet = await wallet.createAndSendNanoContractTransaction('set_set', address0, {
+      ncId: txInitialize.hash,
+      args: [attrSet],
+    });
+    await checkTxValid(wallet, txSet);
+    const txSetData = await wallet.getFullTxById(txSet.hash);
+
+    const txSetParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_set',
+      txSetData.tx.nc_address,
+      network,
+      txSetData.tx.nc_args
+    );
+    await txSetParser.parseArguments();
+    expect(txSetParser.address?.base58).toBe(address0);
+    expect(txSetParser.parsedArgs).not.toBeNull();
+    expect(txSetParser.parsedArgs).toHaveLength(1);
+    expect(txSetParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'set[str]',
+      value: attrSet,
+    });
+
+    const setCall = `are_elements_inside_set(${JSON.stringify(attrSet)})`;
+    const listCall = `are_elements_inside_list(${JSON.stringify(attrList)})`;
+    const txContainersState = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      ['attr_tuple'],
+      [],
+      [setCall, listCall]
+    );
+
+    expect(txContainersState.fields.attr_tuple.value).toStrictEqual(attrTuple);
+    expect(txContainersState.calls[setCall].value).toBe(true);
+    expect(txContainersState.calls[listCall].value).toBe(true);
+
+    // Set attr dict list tuple
+    const argAttrDictListTuple = {
+      [contractId]: [
+        [0, '01'],
+        [1, '02'],
+      ],
+    };
+    const argAttrDictListTupleParsed = {
+      [contractId]: [
+        ['0', '01'],
+        ['1', '02'],
+      ],
+    };
+    const txAttrDictListTuple = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_dict_list_tuple',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [argAttrDictListTuple],
+      }
+    );
+    await checkTxValid(wallet, txAttrDictListTuple);
+    const txAttrDictListTupleData = await wallet.getFullTxById(txAttrDictListTuple.hash);
+
+    const txAttrDictListTupleParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_attr_dict_list_tuple',
+      txAttrDictListTupleData.tx.nc_address,
+      network,
+      txAttrDictListTupleData.tx.nc_args
+    );
+    await txAttrDictListTupleParser.parseArguments();
+    expect(txAttrDictListTupleParser.address?.base58).toBe(address0);
+    expect(txAttrDictListTupleParser.parsedArgs).not.toBeNull();
+    expect(txAttrDictListTupleParser.parsedArgs).toHaveLength(1);
+    expect(txAttrDictListTupleParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'dict[ContractId, list[tuple[int, bytes]]]',
+      value: argAttrDictListTupleParsed,
+    });
+
+    // Set attr dict dict set
+    const dictArg = {
+      [tokenUid]: {
+        [address]: attrSet,
+      },
+    };
+
+    const txAttrDictDictSet = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_dict_dict_set',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [dictArg],
+      }
+    );
+    await checkTxValid(wallet, txAttrDictDictSet);
+    const txAttrDictDictSetData = await wallet.getFullTxById(txAttrDictDictSet.hash);
+
+    const txAttrDictDictSetParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_attr_dict_dict_set',
+      txAttrDictDictSetData.tx.nc_address,
+      network,
+      txAttrDictDictSetData.tx.nc_args
+    );
+    await txAttrDictDictSetParser.parseArguments();
+    expect(txAttrDictDictSetParser.address?.base58).toBe(address0);
+    expect(txAttrDictDictSetParser.parsedArgs).not.toBeNull();
+    expect(txAttrDictDictSetParser.parsedArgs).toHaveLength(1);
+    expect(txAttrDictDictSetParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'dict[TokenUid, dict[Address, set[str]]]',
+      value: dictArg,
+    });
+
+    // Set attr list dict tuple
+    const txAttrListDictTuple = await wallet.createAndSendNanoContractTransaction(
+      'set_attr_list_dict_tuple',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [
+          [
+            {
+              a: [1, 2],
+            },
+            {
+              b: [3, 4],
+            },
+          ],
+        ],
+      }
+    );
+    await checkTxValid(wallet, txAttrListDictTuple);
+    const txAttrListDictTupleData = await wallet.getFullTxById(txAttrListDictTuple.hash);
+
+    const txAttrListDictTupleParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_attr_list_dict_tuple',
+      txAttrListDictTupleData.tx.nc_address,
+      network,
+      txAttrListDictTupleData.tx.nc_args
+    );
+    await txAttrListDictTupleParser.parseArguments();
+    expect(txAttrListDictTupleParser.address?.base58).toBe(address0);
+    expect(txAttrListDictTupleParser.parsedArgs).not.toBeNull();
+    expect(txAttrListDictTupleParser.parsedArgs).toHaveLength(1);
+    expect(txAttrListDictTupleParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'list[dict[str, tuple[int, int]]]',
+      value: [
+        {
+          a: ['1', '2'],
+        },
+        {
+          b: ['3', '4'],
+        },
+      ],
+    });
+
+    const dictDictSetCall = `are_elements_inside_dict_dict_set(${JSON.stringify(attrSet)})`;
+    const tupleDictListCall = `is_tuple_inside_dict_list(${JSON.stringify([0, '01'])})`;
+    const dictListDictTupleCall = `is_dict_inside_list_dict_tuple(${JSON.stringify({ a: [1, 2] })})`;
+    const callStates = await ncApi.getNanoContractState(
+      txInitialize.hash,
+      [],
+      [],
+      [dictDictSetCall, tupleDictListCall, dictListDictTupleCall]
+    );
+
+    expect(callStates.calls[dictDictSetCall].value).toBe(true);
+    expect(callStates.calls[tupleDictListCall].value).toBe(true);
+    expect(callStates.calls[dictListDictTupleCall].value).toBe(true);
+
+    // Test nano APIs
+    const blueprintSourceCode = await ncApi.getBlueprintSourceCode(blueprintId);
+    expect(blueprintSourceCode.id).toBe(blueprintId);
+    expect(blueprintSourceCode.source_code).toEqual(expect.any(String));
+
+    const builtInBlueprintList = await ncApi.getBuiltInBlueprintList();
+    expect(builtInBlueprintList.success).toBe(true);
+    expect(builtInBlueprintList.has_more).toBe(false);
+    expect(builtInBlueprintList.blueprints.length).toBe(0);
+
+    const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
+    expect(onChainBlueprintList.success).toBe(true);
+    expect(onChainBlueprintList.blueprints.length).toBe(5);
+
+    const nanoList = await ncApi.getNanoContractCreationList();
+    // The correct length depends on the execution order, so I
+    // just make sure there is at least one
+    expect(nanoList.nc_creation_txs.length).toBeGreaterThan(0);
   };
 
   it('Run with on chain blueprint', async () => {
-    // Use the blueprint code
-    const code = fs.readFileSync(
-      './__tests__/integration/configuration/blueprints/full_blueprint.py',
-      'utf8'
-    );
-    const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address0);
-    // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(hWallet, tx.hash);
-    // Execute the blueprint tests
-    await executeTests(hWallet, tx.hash);
+    await executeTests(hWallet, global.FULL_BLUEPRINT_ID);
   });
 });

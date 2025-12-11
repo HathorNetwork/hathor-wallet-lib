@@ -28,6 +28,7 @@ import Input from './models/input';
 import Transaction from './models/transaction';
 import CreateTokenTransaction from './models/create_token_transaction';
 import Network from './models/network';
+import FeeHeader from './headers/fee';
 import * as addressUtils from './utils/address';
 import * as cryptoUtils from './utils/crypto';
 import tokensUtils from './utils/tokens';
@@ -56,6 +57,10 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from './template/transaction';
+import { stopGLLBackgroundTask } from './sync/gll';
+import * as enums from './models/enum';
+import type { TokenInfo } from './wallet/types';
+import { Fee } from './utils/fee';
 
 export {
   PartialTx,
@@ -92,6 +97,8 @@ export {
   Transaction,
   CreateTokenTransaction,
   Network,
+  FeeHeader,
+  Fee,
   addressUtils,
   cryptoUtils,
   dateFormatter as dateUtils,
@@ -117,8 +124,13 @@ export {
   TransactionTemplate,
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
+  stopGLLBackgroundTask,
+  TokenInfo,
+  enums,
 };
 
 export * from './nano_contracts/types';
 export * from './models/types';
 export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';
+export type { IFeeEntry } from './types';
+export * from './models/enum';

@@ -21,6 +21,7 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   P2PKH_ACCT_PATH,
+  TOKEN_AUTHORITY_MASK,
 } from '../../src/constants';
 import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
@@ -31,10 +32,13 @@ import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
-import { WalletType } from '../../src/types';
+import { WalletType, TokenVersion } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
+import FeeHeader from '../../src/headers/fee';
+import Header from '../../src/headers/base';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -578,6 +582,7 @@ describe('start', () => {
           id: tokenUid,
           name: 'Dedicated Wallet Token',
           symbol: 'DWT',
+          version: TokenVersion.DEPOSIT,
         },
         balance: {
           unlocked: 100n,
@@ -1375,6 +1380,21 @@ describe('graphvizNeighborsQuery', () => {
   });
 });
 
+const validateFeeAmount = (headers: Header[], amount: bigint) => {
+  // validate fee amount
+  expect(headers).toHaveLength(1);
+  expect(headers[0]).toEqual(
+    expect.objectContaining({
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          tokenIndex: 0,
+          amount,
+        }),
+      ]),
+    })
+  );
+};
+
 describe('sendTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -1520,6 +1540,128 @@ describe('sendTransaction', () => {
     expect(
       await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
     ).toHaveProperty('numTransactions', 1);
+  });
+  it('should send custom fee token transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 8000n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(6),
+    });
+    validateFeeAmount(tx1.headers, 2n);
+    await waitForTxReceived(hWallet, tx1.hash);
+
+    // Validating balance stays the same for internal transactions
+    let fbtBalance = await hWallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(8582n);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+
+    // Transaction outside the wallet
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    await waitUntilNextTimestamp(hWallet, tx1.hash);
+    const { hash: tx2Hash, headers: tx2Headers } = await hWallet.sendTransaction(
+      await gWallet.getAddressAtIndex(0),
+      82n,
+      {
+        token: tokenUid,
+        changeAddress: await hWallet.getAddressAtIndex(12),
+      }
+    );
+    validateFeeAmount(tx2Headers, 2n);
+    await waitForTxReceived(hWallet, tx2Hash);
+    await waitForTxReceived(gWallet, tx2Hash);
+
+    // Balance was reduced
+    fbtBalance = await hWallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(8500n);
+
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(5n);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      2
+    );
+    expect(
+      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
+    ).toHaveProperty('numTransactions', 1);
+  });
+
+  it('should send fee token with manually provided HTR input (no HTR output)', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'FeeTokenManualInput',
+      'FTMI',
+      100n,
+      {
+        tokenVersion: TokenVersion.FEE,
+      }
+    );
+
+    // Get UTXOs for both HTR and the fee token
+    const { utxos: utxosHtr } = await hWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+    const { utxos: utxosToken } = await hWallet.getUtxos({ token: tokenUid });
+
+    // Get the first UTXO of each token
+    const htrUtxo = utxosHtr[0];
+    const tokenUtxo = utxosToken[0];
+
+    // Send transaction with manually provided inputs (HTR + token) and only token output
+    // This tests the scenario where user provides HTR input to pay for fee
+    // but has no HTR output (only token output)
+    const tx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: await hWallet.getAddressAtIndex(5),
+          value: 50n,
+          token: tokenUid,
+        },
+      ],
+      {
+        inputs: [
+          { txId: htrUtxo.tx_id, index: htrUtxo.index },
+          { txId: tokenUtxo.tx_id, index: tokenUtxo.index },
+        ],
+      }
+    );
+
+    validateFeeAmount(tx.headers, 2n);
+    await waitForTxReceived(hWallet, tx.hash);
+
+    // Validate the transaction was created correctly
+    const decodedTx = await hWallet.getTx(tx.hash);
+
+    // Should have 2 inputs (HTR + token)
+    expect(decodedTx.inputs).toHaveLength(2);
+    expect(decodedTx.inputs).toContainEqual(
+      expect.objectContaining({ tx_id: htrUtxo.tx_id, index: htrUtxo.index })
+    );
+    expect(decodedTx.inputs).toContainEqual(
+      expect.objectContaining({ tx_id: tokenUtxo.tx_id, index: tokenUtxo.index })
+    );
+
+    // Should have outputs: token output (50) + token change (50) + HTR change
+    expect(decodedTx.outputs).toContainEqual(
+      expect.objectContaining({ value: 50n, token: tokenUid })
+    );
   });
 
   it('should send a multisig transaction', async () => {
@@ -1906,7 +2048,37 @@ describe('createNewToken', () => {
     // Validating wallet balance is updated with this new token
     await waitForTxReceived(hWallet, tokenUid);
     const tknBalance = await hWallet.getBalance(tokenUid);
+    expect(tknBalance[0].token.version).toBe(TokenVersion.DEPOSIT);
     expect(tknBalance[0].balance.unlocked).toBe(100n);
+  });
+
+  it('should create a new token fee token', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+
+    // Creating the new token
+    const newTokenResponse = await hWallet.createNewToken('TokenName', 'TKN', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    // Validating the creation tx
+    expect(newTokenResponse).toMatchObject({
+      hash: expect.any(String),
+      name: 'TokenName',
+      symbol: 'TKN',
+      version: 2,
+      tokenVersion: TokenVersion.FEE,
+      headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
+    });
+    const tokenUid = newTokenResponse.hash;
+
+    // Validating wallet balance is updated with this new token
+    await waitForTxReceived(hWallet, tokenUid);
+    const tknBalance = await hWallet.getBalance(tokenUid);
+    expect(tknBalance[0].token.version).toBe(TokenVersion.FEE);
+    expect(tknBalance[0].balance.unlocked).toBe(8582n);
   });
 
   it('should create a new token on the correct addresses', async () => {
@@ -1918,20 +2090,30 @@ describe('createNewToken', () => {
     // Creating the new token
     const destinationAddress = await hWallet.getAddressAtIndex(4);
     const changeAddress = await hWallet.getAddressAtIndex(8);
-    const { hash: tokenUid } = await hWallet.createNewToken('NewToken Name', 'NTKN', 100n, {
+    const { hash: dbtUid } = await hWallet.createNewToken('NewToken Name', 'NTKN', 100n, {
       address: destinationAddress,
       changeAddress,
     });
-    await waitForTxReceived(hWallet, tokenUid);
+    await waitForTxReceived(hWallet, dbtUid);
+    const { hash: fbtUid } = await hWallet.createNewToken('FeeBasedToken', 'FBT', 8582n, {
+      address: destinationAddress,
+      changeAddress,
+      tokenVersion: TokenVersion.FEE,
+    });
+    await waitForTxReceived(hWallet, fbtUid);
     // Validating the tokens are on the correct addresses
-    const { utxos: utxosTokens } = await hWallet.getUtxos({ token: tokenUid });
-    expect(utxosTokens).toContainEqual(
+    const { utxos: utxosDbt } = await hWallet.getUtxos({ token: dbtUid });
+    const { utxos: utxosFbt } = await hWallet.getUtxos({ token: fbtUid });
+    expect(utxosDbt).toContainEqual(
       expect.objectContaining({ address: destinationAddress, amount: 100n })
+    );
+    expect(utxosFbt).toContainEqual(
+      expect.objectContaining({ address: destinationAddress, amount: 8582n })
     );
 
     const { utxos: utxosHtr } = await hWallet.getUtxos();
     expect(utxosHtr).toContainEqual(
-      expect.objectContaining({ address: changeAddress, amount: 9n })
+      expect.objectContaining({ address: changeAddress, amount: 8n })
     );
   });
 
@@ -1939,21 +2121,28 @@ describe('createNewToken', () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 2n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('Immutable Token', 'ITKN', 100n, {
+    const dbtResponse = await hWallet.createNewToken('Immutable Token', 'ITKN', 100n, {
       createMint: false,
       createMelt: false,
     });
+    expect(dbtResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, dbtResponse.hash);
+    let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', 1n);
 
-    // Validating the creation tx
-    expect(newTokenResponse).toHaveProperty('hash');
-
-    // Checking for authority outputs on the transaction
-    const authorityOutputs = newTokenResponse.outputs.filter(o => transaction.isAuthorityOutput(o));
-    expect(authorityOutputs).toHaveLength(0);
-    await waitForTxReceived(hWallet, newTokenResponse.hash);
+    const fbtResponse = await hWallet.createNewToken('FeeBasedToken', 'FBT', 8582n, {
+      createMint: false,
+      createMelt: false,
+      tokenVersion: TokenVersion.FEE,
+    });
+    expect(fbtResponse).toHaveProperty('hash');
+    validateFeeAmount(fbtResponse.headers, 1n);
+    await waitForTxReceived(hWallet, fbtResponse.hash);
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', 0n);
   });
 
   it('Create token using mint/melt address', async () => {
@@ -1962,39 +2151,57 @@ describe('createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr10 = await hWallet.getAddressAtIndex(10);
     const addr11 = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 2n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('New Token', 'NTKN', 100n, {
+    const dbtResponse = await hWallet.createNewToken('New Token', 'NTKN', 100n, {
       createMint: true,
       mintAuthorityAddress: addr10,
       createMelt: true,
       meltAuthorityAddress: addr11,
     });
-
     // Validating the creation tx
-    expect(newTokenResponse).toHaveProperty('hash');
-    await waitForTxReceived(hWallet, newTokenResponse.hash);
+    expect(dbtResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, dbtResponse.hash);
 
-    // Validating a new mint authority was created by default
-    const authorityOutputs = newTokenResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
-    );
-    expect(authorityOutputs).toHaveLength(2);
-    const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
-    const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
-    // Validate that the mint output was sent to the correct address
-    expect(mintP2pkh.address.base58).toEqual(addr10);
+    // Creating the new token
+    const fbtResponse = await hWallet.createNewToken('New Token', 'NTKN', 8582n, {
+      createMint: true,
+      mintAuthorityAddress: addr10,
+      createMelt: true,
+      meltAuthorityAddress: addr11,
+      tokenVersion: TokenVersion.FEE,
+    });
 
-    const meltOutput = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
-    const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
-    // Validate that the melt output was sent to the correct address
-    expect(meltP2pkh.address.base58).toEqual(addr11);
+    expect(fbtResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, fbtResponse.hash);
 
-    // Validating custom token balance
-    const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
-    const expectedAmount = 100n;
-    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+    const validateAuthorityOutputs = async (
+      response: CreateTokenTransaction,
+      expectedAmount: bigint
+    ) => {
+      // Validating a new mint authority was created by default
+      const authorityOutputs = response.outputs.filter(o =>
+        transaction.isAuthorityOutput({ token_data: o.tokenData })
+      );
+      expect(authorityOutputs).toHaveLength(2);
+      const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
+      const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
+      // Validate that the mint output was sent to the correct address
+      expect(mintP2pkh.address.base58).toEqual(addr10);
+
+      const meltOutput = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
+      const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
+      // Validate that the melt output was sent to the correct address
+      expect(meltP2pkh.address.base58).toEqual(addr11);
+
+      // Validating custom token balance
+      const tokenBalance = await hWallet.getBalance(response.hash);
+      expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+    };
+
+    validateAuthorityOutputs(dbtResponse, 100n);
+    validateAuthorityOutputs(fbtResponse, 8582n);
   });
 
   it('Create token using external mint/melt address', async () => {
@@ -2067,13 +2274,27 @@ describe('mintTokens', () => {
   it('should mint new tokens', async () => {
     // Setting up the custom token
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
+    const options = { tokenVersion: TokenVersion.FEE };
+    const { hash: fbtUid } = await createTokenHelper(
+      hWallet,
+      'FeeBasedToken',
+      'FBT',
+      8582n,
+      options
+    );
+    await waitForTxReceived(hWallet, fbtUid);
 
     // Should not mint more tokens than the HTR funds allow
     await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit: 90 required, \d+ available$/
+      /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/
     );
+    await expect(hWallet.mintTokens(fbtUid, 9000n)).rejects.toThrow(
+      /^Not enough HTR tokens for deposit or fee: 1 required, \d+ available$/
+    );
+
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 9n);
 
     // Minting more of the tokens
     const mintAmount = BigInt(getRandomInt(100, 50));
@@ -2182,9 +2403,15 @@ describe('mintTokens', () => {
     const expectedAmount5 = expectedAmount4 + 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
-    const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
-    expect(dataOutput5).toHaveProperty('value', 1n);
-    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+    const dataOutput5 = mintResponse5.outputs.filter(
+      o => o.getType(hWallet.getNetworkObject()) === 'data'
+    );
+    expect(dataOutput5).toHaveLength(1);
+    expect(dataOutput5[0]).toHaveProperty('value', 1n);
+    expect(dataOutput5[0]).toHaveProperty(
+      'script',
+      Buffer.from([6, 102, 111, 111, 98, 97, 114, 172])
+    );
 
     const mintResponse6 = await hWallet.mintTokens(tokenUid, 100n, {
       unshiftData: true,
@@ -2220,9 +2447,12 @@ describe('mintTokens', () => {
 
     // Setting up scenario
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 13n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
-    let expectedHtrFunds = 9n;
+    const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+    let expectedHtrFunds = 11n;
 
     // Minting less than 1.00 tokens consumes 0.01 HTR
     let mintResponse;
@@ -2256,6 +2486,63 @@ describe('mintTokens', () => {
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 201n);
     expectedHtrFunds -= 3n;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // fee token minting
+    // minting less than 1.00 tokens consumes 0.01 HTR based in the outputs length
+    mintResponse = await hWallet.mintTokens(fbtUid, 1n);
+    expectedHtrFunds -= 1n;
+    expect(mintResponse.tokens.length).toBe(1);
+    expect(mintResponse.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 0,
+          value: expectedHtrFunds,
+        }),
+        expect.objectContaining({
+          tokenData: 1,
+          value: 1n,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK + 1,
+          value: TOKEN_MINT_MASK,
+        }),
+      ])
+    );
+    expect(mintResponse.headers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entries: expect.arrayContaining([
+            expect.objectContaining({
+              tokenIndex: 0,
+              amount: 1n,
+            }),
+          ]),
+        }),
+      ])
+    );
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // minting any amount of tokens should consume 0.01 HTR
+    const randomMintAmount = BigInt(Math.floor(Math.random() * (1_000_000_000 - 2 + 1)) + 2);
+    mintResponse = await hWallet.mintTokens(fbtUid, randomMintAmount);
+    expect(mintResponse.tokens.length).toBe(1);
+    expect(mintResponse.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 1,
+          value: randomMintAmount,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK + 1,
+          value: TOKEN_MINT_MASK,
+        }),
+      ])
+    );
+    validateFeeAmount(mintResponse.headers, 1n);
+    expectedHtrFunds -= 1n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
@@ -2386,6 +2673,181 @@ describe('meltTokens', () => {
     const dataOutput5 = meltResponse5.outputs[0];
     expect(dataOutput5).toHaveProperty('value', 1n);
     expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+  });
+
+  it('should melt fee based tokens', async () => {
+    const hWallet = await generateWalletHelper();
+    let expectedHtrAmount = 15n;
+    await GenesisWalletHelper.injectFunds(
+      hWallet,
+      await hWallet.getAddressAtIndex(0),
+      expectedHtrAmount
+    );
+
+    // Creating the token
+    const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+    expectedHtrAmount -= 1n; // 14
+
+    let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Should not melt more than there is available
+    await expect(hWallet.meltTokens(fbtUid, 99999n)).rejects.toThrow(
+      'Not enough tokens to melt: 99999 requested, 8582 available'
+    );
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Melting some tokens
+    const meltAmount = BigInt(getRandomInt(99, 10));
+    const { hash, headers } = await hWallet.meltTokens(fbtUid, meltAmount);
+    await waitForTxReceived(hWallet, hash);
+    validateFeeAmount(headers, 1n);
+    expectedHtrAmount -= 1n; // 13
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(fbtUid);
+    const expectedAmount = 8582n - meltAmount;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+
+    // Melt tokens with defined melt authority address
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const meltResponse = await hWallet.meltTokens(fbtUid, 1000n, {
+      meltAuthorityAddress: address0,
+    });
+    validateFeeAmount(meltResponse.headers, 1n);
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expectedHtrAmount -= 1n; // 12
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Validating a new melt authority was created by default
+    const authorityOutputs = meltResponse.outputs.filter(o =>
+      transaction.isAuthorityOutput({ token_data: o.tokenData })
+    );
+    expect(authorityOutputs).toHaveLength(1);
+    const authorityOutput = authorityOutputs[0];
+    expect(authorityOutput.value).toEqual(TOKEN_MELT_MASK);
+    const p2pkh = authorityOutput.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p2pkh.address.base58).toEqual(address0);
+
+    // Validating custom token balance
+    const tokenBalance2 = await hWallet.getBalance(fbtUid);
+    const expectedAmount2 = expectedAmount - 1000n;
+    expect(tokenBalance2[0]).toHaveProperty('balance.unlocked', expectedAmount2);
+
+    // Melt tokens with external address should return error
+    const hWallet2 = await generateWalletHelper();
+    const externalAddress = await hWallet2.getAddressAtIndex(0);
+
+    await expect(
+      hWallet.meltTokens(fbtUid, 100n, { meltAuthorityAddress: externalAddress })
+    ).rejects.toThrow('must belong to your wallet');
+
+    // Melt tokens with external address but allowing it
+    const meltResponse3 = await hWallet.meltTokens(fbtUid, 100n, {
+      meltAuthorityAddress: externalAddress,
+      allowExternalMeltAuthorityAddress: true,
+    });
+    validateFeeAmount(meltResponse3.headers, 1n);
+    await waitForTxReceived(hWallet, meltResponse3.hash);
+    await waitForTxReceived(hWallet2, meltResponse3.hash);
+    expectedHtrAmount -= 1n; // 11
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Validating a new melt authority was created by default
+    const authorityOutputs3 = meltResponse3.outputs.filter(o =>
+      transaction.isAuthorityOutput({ token_data: o.tokenData })
+    );
+    expect(authorityOutputs3).toHaveLength(1);
+    const authorityOutput3 = authorityOutputs3[0];
+    expect(authorityOutput3.value).toEqual(TOKEN_MELT_MASK);
+    const p3pkh = authorityOutput3.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p3pkh.address.base58).toEqual(externalAddress);
+
+    // Validating custom token balance
+    const tokenBalance3 = await hWallet.getBalance(fbtUid);
+    const expectedAmount3 = expectedAmount2 - 100n;
+    expect(tokenBalance3[0]).toHaveProperty('balance.unlocked', expectedAmount3);
+
+    // Delegate melt back to wallet 1
+    const delegateResponse = await hWallet2.delegateAuthority(fbtUid, 'melt', address0);
+    expect(delegateResponse.hash).toBeDefined();
+    await waitForTxReceived(hWallet, delegateResponse.hash);
+    await waitForTxReceived(hWallet2, delegateResponse.hash);
+
+    const meltResponse4 = await hWallet.meltTokens(fbtUid, 100n, { data: ['foobar'] });
+    validateFeeAmount(meltResponse4.headers, 1n);
+    expect(meltResponse4.hash).toBeDefined();
+    await waitForTxReceived(hWallet, meltResponse4.hash);
+    expectedHtrAmount -= 2n; // 9 fee + 1 htr from data output
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Validating there is a correct reference to the custom token
+    expect(meltResponse4).toHaveProperty('tokens.length', 1);
+    expect(meltResponse4.tokens[0]).toEqual(fbtUid);
+
+    // Validating custom token balance
+    const tokenBalance4 = await hWallet.getBalance(fbtUid);
+    const expectedAmount4 = expectedAmount3 - 100n;
+    expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
+
+    const dataOutput4 = meltResponse4.outputs[meltResponse4.outputs.length - 1];
+    expect(dataOutput4).toHaveProperty('value', 1n);
+    expect(dataOutput4).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+
+    const meltResponse5 = await hWallet.meltTokens(fbtUid, 100n, {
+      unshiftData: true,
+      data: ['foobar'],
+    });
+    validateFeeAmount(meltResponse.headers, 1n);
+    expect(meltResponse5.hash).toBeDefined();
+    await waitForTxReceived(hWallet, meltResponse5.hash);
+    expectedHtrAmount -= 2n; // 7 fee + 1 htr from data output
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    // Validating there is a correct reference to the custom token
+    expect(meltResponse5).toHaveProperty('tokens.length', 1);
+    expect(meltResponse5.tokens[0]).toEqual(fbtUid);
+
+    // Validating custom token balance
+    const tokenBalance5 = await hWallet.getBalance(fbtUid);
+    const expectedAmount5 = expectedAmount4 - 100n;
+    expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
+
+    const dataOutput5 = meltResponse5.outputs[0];
+    expect(dataOutput5).toHaveProperty('value', 1n);
+    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+
+    // melting without any output should charge 1 fee
+    const meltResponse6 = await hWallet.meltTokens(fbtUid, expectedAmount5);
+    validateFeeAmount(meltResponse6.headers, 1n);
+    expect(meltResponse6.hash).toBeDefined();
+    expect(meltResponse6.outputs).toHaveLength(2);
+    expect(meltResponse6.outputs.filter(o => o.tokenData === 1).length).toBe(0);
+    await waitForTxReceived(hWallet, meltResponse6.hash);
+    expectedHtrAmount -= 1n; // 6 fee
+
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
+
+    const tokenBalance6 = await hWallet.getBalance(fbtUid);
+    expect(tokenBalance6[0]).toHaveProperty('balance.unlocked', 0n);
   });
 
   it('should recover correct amount of HTR on melting', async () => {
@@ -3037,7 +3499,12 @@ describe('getToken methods', () => {
     expect(details).toStrictEqual({
       totalSupply: 100n,
       totalTransactions: 1,
-      tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
+      tokenInfo: {
+        id: tokenUid,
+        name: 'Details Token',
+        symbol: 'DTOK',
+        version: TokenVersion.DEPOSIT,
+      },
       authorities: { mint: true, melt: true },
     });
 

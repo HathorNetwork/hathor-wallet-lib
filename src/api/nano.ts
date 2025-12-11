@@ -10,9 +10,13 @@ import { createRequestInstance } from './axiosInstance';
 import { NanoRequest404Error, NanoRequestError } from '../errors';
 import {
   NanoContractBlueprintInformationAPIResponse,
+  NanoContractBlueprintSourceCodeAPIResponse,
+  NanoContractBlueprintListAPIResponse,
+  NanoContractCreationListAPIResponse,
   NanoContractHistoryAPIResponse,
   NanoContractStateAPIResponse,
   NanoContractStateAPIParameters,
+  NanoContractLogsAPIResponse,
 } from '../nano_contracts/types';
 
 /**
@@ -142,6 +146,177 @@ const ncApi = {
       }
 
       throw new NanoRequestError('Error getting blueprint information.', error);
+    }
+  },
+
+  /**
+   * Call get blueprint source code
+   *
+   * @param blueprintId Blueprint ID
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getBlueprintSourceCode(
+    blueprintId: string
+  ): Promise<NanoContractBlueprintSourceCodeAPIResponse> {
+    const data = { blueprint_id: blueprintId };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/blueprint/source`, { params: data });
+      const responseData = response.data;
+      if (response.status === 200) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting blueprint source code.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Blueprint not found.', e, e.response);
+        }
+      }
+
+      throw new NanoRequestError('Error getting blueprint source code.', error);
+    }
+  },
+
+  /**
+   * Call get built-in blueprint list
+   *
+   * @param count Quantity of elements to return
+   * @param after Used for pagination in the results
+   * @param before Used for pagination in the results
+   * @param search Search term to filter blueprints
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getBuiltInBlueprintList(
+    count: number | null = null,
+    after: string | null = null,
+    before: string | null = null,
+    search: string | null = null
+  ): Promise<NanoContractBlueprintListAPIResponse> {
+    const data = { count, after, before, search };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/blueprint/builtin`, { params: data });
+      const responseData = response.data;
+      if (response.status === 200 && responseData.success) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting built-in blueprint list.', null, response);
+    } catch (error: unknown) {
+      throw new NanoRequestError('Error getting built-in blueprint list.', error);
+    }
+  },
+
+  /**
+   * Call get on-chain blueprint list
+   *
+   * @param count Quantity of elements to return
+   * @param after Used for pagination in the results
+   * @param before Used for pagination in the results
+   * @param search Search term to filter blueprints
+   * @param order Sort order for results
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getOnChainBlueprintList(
+    count: number | null = null,
+    after: string | null = null,
+    before: string | null = null,
+    search: string | null = null,
+    order: string | null = null
+  ): Promise<NanoContractBlueprintListAPIResponse> {
+    const data = { count, after, before, search, order };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/blueprint/on_chain`, {
+        params: data,
+      });
+      const responseData = response.data;
+      if (response.status === 200 && responseData.success) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting on-chain blueprint list.', null, response);
+    } catch (error: unknown) {
+      throw new NanoRequestError('Error getting on-chain blueprint list.', error);
+    }
+  },
+
+  /**
+   * Call get nano contract creation list
+   *
+   * @param count Quantity of elements to return
+   * @param after Used for pagination in the results
+   * @param before Used for pagination in the results
+   * @param search Search term to filter contracts
+   * @param order Sort order for results
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getNanoContractCreationList(
+    count: number | null = null,
+    after: string | null = null,
+    before: string | null = null,
+    search: string | null = null,
+    order: string | null = null
+  ): Promise<NanoContractCreationListAPIResponse> {
+    const data = { count, after, before, search, order };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/creation/`, { params: data });
+      const responseData = response.data;
+      if (response.status === 200 && responseData.success) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting nano contract creation list.', null, response);
+    } catch (error: unknown) {
+      throw new NanoRequestError('Error getting nano contract creation list.', error);
+    }
+  },
+
+  /**
+   * Call get nano contract logs API
+   *
+   * @param id Nano Contract ID
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getNanoContractLogs(id: string): Promise<NanoContractLogsAPIResponse> {
+    const data = { id };
+    const axiosInstance = await createRequestInstance();
+    try {
+      const response = await axiosInstance.get(`nano_contract/logs`, { params: data });
+      const responseData = response.data;
+      if (response.status === 200 && responseData.success) {
+        return responseData;
+      }
+
+      throw new NanoRequestError('Error getting nano contract logs.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Nano contract not found.', e, e.response);
+        }
+      }
+
+      throw new NanoRequestError('Error getting nano contract logs.', error);
     }
   },
 };

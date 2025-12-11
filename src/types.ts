@@ -9,6 +9,18 @@ import { Config } from './config';
 import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
+import Header from './headers/base';
+
+/**
+ * Token version used to identify the type of token during the token creation process.
+ */
+export enum TokenVersion {
+  NATIVE = 0,
+
+  DEPOSIT = 1,
+
+  FEE = 2,
+}
 
 /**
  * Logger interface where each method is a leveled log method.
@@ -86,6 +98,7 @@ export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
+  version?: TokenVersion;
 }
 
 export interface ITokenMetadata {
@@ -143,7 +156,27 @@ export type IHistoryNanoContractAction =
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];
   caller_id: string;
-  timestamp: number;
+  timestamp?: number | null;
+}
+
+/**
+ * Fee entry in a Fee Header.
+ * Represents a token and amount used to pay transaction fees.
+ */
+export interface IFeeEntry {
+  /**
+   * Index of the token in the transaction's tokens array.
+   * References tx.tokens[tokenIndex].
+   * Must be in the range [0, tx.tokens.length).
+   */
+  tokenIndex: number;
+
+  /**
+   * Amount of the fee in the smallest unit ("cents").
+   * Must be positive.
+   * MUST be a multiple of (1 / TOKEN_DEPOSIT_PERCENTAGE).
+   */
+  amount: OutputValueType;
 }
 
 export interface IHistoryTx {
@@ -159,6 +192,7 @@ export interface IHistoryTx {
   parents: string[];
   token_name?: string; // For create token transaction
   token_symbol?: string; // For create token transaction
+  token_version?: TokenVersion; // For create token transaction
   tokens?: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
@@ -251,6 +285,8 @@ export interface IDataOutputOptionals {
 export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) &
   IDataOutputOptionals;
 
+export type IDataOutputWithToken = IDataOutput & { token: string };
+
 export interface IDataInput {
   txId: string;
   index: number;
@@ -261,9 +297,15 @@ export interface IDataInput {
   data?: string;
 }
 
+interface IDataTokenCreationTx {
+  name: string;
+  symbol: string;
+  tokenVersion: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
+}
+
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
-export interface IDataTx {
+export interface IDataTx extends Partial<IDataTokenCreationTx> {
   signalBits?: number;
   version?: number;
   inputs: IDataInput[];
@@ -273,8 +315,7 @@ export interface IDataTx {
   nonce?: number;
   timestamp?: number;
   parents?: string[];
-  name?: string; // For create token transaction
-  symbol?: string; // For create token transaction
+  headers?: Header[];
 }
 
 export interface IUtxoId {

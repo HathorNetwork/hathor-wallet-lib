@@ -7,6 +7,7 @@ import {
   generateWalletHelper,
   waitForTxReceived,
   waitTxConfirmed,
+  waitNextBlock,
 } from '../helpers/wallet.helper';
 import {
   CREATE_TOKEN_TX_VERSION,
@@ -28,6 +29,7 @@ import {
 import {
   NanoContractTransactionError,
   NanoRequest404Error,
+  NanoRequestError,
   PinRequiredError,
 } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
@@ -516,6 +518,14 @@ describe('full cycle of bet nano contract', () => {
       expect(txIds).toContain(tx.hash);
     }
 
+    // Get NC logs
+    const ncLogs = await ncApi.getNanoContractLogs(tx1.hash);
+    expect(ncLogs.success).toBe(true);
+    expect(ncLogs.nc_id).toBe(tx1.hash);
+    expect(ncLogs.nc_execution).toBeDefined();
+    expect(ncLogs.logs).toBeDefined();
+    expect(typeof ncLogs.logs).toBe('object');
+
     // Get tx history with success
     const txHistory = await wallet.getTxHistory();
     expect(txHistory).toHaveLength(4);
@@ -635,6 +645,26 @@ describe('full cycle of bet nano contract', () => {
     const address2Info = await wallet.storage.getAddressInfo(address2);
     expect(address2Info.numTransactions).toBe(2);
     expect(address2Info.seqnum).toBe(2);
+
+    // Now we create a bet that will be voided
+    const utxosBefore = new Map(wallet.storage.store.utxos);
+    const txBet3 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
+      ncId: tx1.hash,
+      args: [address3, '2x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 200n,
+        },
+      ],
+    });
+    await waitForTxReceived(wallet, txBet3.hash);
+    await waitTxConfirmed(wallet, txBet3.hash, null);
+    await waitNextBlock(wallet.storage);
+    const utxosAfter = new Map(wallet.storage.store.utxos);
+    // Validate that the utxos are the same before the tx is created and after it's voided
+    expect(Object.fromEntries(utxosBefore)).toStrictEqual(Object.fromEntries(utxosAfter));
   };
 
   const checkErrorsWithBlueprintId = async blueprintId => {
@@ -808,5 +838,11 @@ describe('full cycle of bet nano contract', () => {
 
     // Add the pin back in case there are more tests here
     ocbWallet.pinCode = oldOcbPin;
+
+    // Test getNanoContractLogs with invalid NC ID (should throw error)
+    await expect(ncApi.getNanoContractLogs('invalid_nc_id')).rejects.toThrow(NanoRequestError);
+
+    // Test getNanoContractLogs with a valid hash but not a nano contract
+    await expect(ncApi.getNanoContractLogs(fundsTx.hash)).rejects.toThrow(NanoRequestError);
   });
 });
