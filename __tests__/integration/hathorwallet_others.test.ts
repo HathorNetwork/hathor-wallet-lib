@@ -1614,6 +1614,111 @@ describe('getAuthorityUtxos', () => {
   });
 });
 
+describe('index-limit address scanning policy', () => {
+  /** @type HathorWallet */
+  let hWallet;
+  beforeAll(async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      addresses: walletData.addresses,
+      scanPolicy: {
+        policy: 'index-limit',
+        startIndex: 0,
+        endIndex: 9,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+  });
+
+  it('should start a wallet configured to index-limit', async () => {
+    // 0-9 addresses = 10
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(10);
+
+    // 0-14 addresses = 15
+    await hWallet.indexLimitLoadMore(5);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(15);
+
+    // 0-24 addresses = 25
+    await hWallet.indexLimitSetEndIndex(24);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
+
+    // Setting below current loaded index will be a no-op
+    await hWallet.indexLimitSetEndIndex(5);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
+  });
+});
+
+describe('single address scanning policy', () => {
+  /** @type HathorWallet */
+  let hWallet;
+  beforeAll(async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      addresses: walletData.addresses,
+      scanPolicy: {
+        policy: 'single',
+        index: 5,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+  });
+
+  it('should start a wallet configured to single address', async () => {
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+
+    // Send tokens to address 5 (the loaded one)
+    const address5 = await hWallet.getAddressAtIndex(5);
+    await GenesisWalletHelper.injectFunds(hWallet, address5, 10n);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+
+    // Send more transactions from the same wallet to the same address
+    const tx1 = await hWallet.sendTransaction(address5, 1n);
+    await waitForTxReceived(hWallet, tx1.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 10n }),
+        }),
+      ])
+    );
+
+    // Send a tx to an unloaded address before the current one
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const tx2 = await hWallet.sendTransaction(address0, 1n);
+    await waitForTxReceived(hWallet, tx2.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 9n }),
+        }),
+      ])
+    );
+
+    // Send a tx to an unloaded address before the current one
+    const address10 = await hWallet.getAddressAtIndex(10);
+    const tx3 = await hWallet.sendTransaction(address10, 1n);
+    await waitForTxReceived(hWallet, tx3.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 8n }),
+        }),
+      ])
+    );
+  });
+});
+
 // This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
   /** @type HathorWallet */
@@ -1699,43 +1804,5 @@ describe('internal methods', () => {
     // Simulate that we received an event of the connection becoming active
     await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
     expect(spy).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('index-limit address scanning policy', () => {
-  /** @type HathorWallet */
-  let hWallet;
-  beforeAll(async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
-    hWallet = await generateWalletHelper({
-      seed: walletData.words,
-      addresses: walletData.addresses,
-      scanPolicy: {
-        policy: 'index-limit',
-        startIndex: 0,
-        endIndex: 9,
-      },
-    });
-  });
-
-  afterAll(async () => {
-    await hWallet.stop();
-  });
-
-  it('should start a wallet configured to index-limit', async () => {
-    // 0-9 addresses = 10
-    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(10);
-
-    // 0-14 addresses = 15
-    await hWallet.indexLimitLoadMore(5);
-    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(15);
-
-    // 0-24 addresses = 25
-    await hWallet.indexLimitSetEndIndex(24);
-    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
-
-    // Setting below current loaded index will be a no-op
-    await hWallet.indexLimitSetEndIndex(5);
-    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
   });
 });

@@ -59,6 +59,7 @@ import {
   WalletType,
   HistorySyncMode,
   getDefaultLogger,
+  isSingleScanPolicy,
 } from '../types';
 import { TokenVersion } from '../models/enum';
 import transactionUtils from '../utils/transaction';
@@ -659,7 +660,10 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
-      await this.storage.saveAddress(address);
+      const policyData = await this.storage.getScanningPolicyData();
+      if (!isSingleScanPolicy(policyData)) {
+        await this.storage.saveAddress(address);
+      }
     }
     return address.base58;
   }
