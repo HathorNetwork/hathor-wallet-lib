@@ -128,6 +128,24 @@ class HathorWallet extends EventEmitter {
 
   logger: any;
 
+  /** Wallet state: CLOSED — disconnected from the server. */
+  static CLOSED = 0;
+
+  /** Wallet state: CONNECTING — currently establishing a connection. */
+  static CONNECTING = 1;
+
+  /** Wallet state: SYNCING — connected and syncing transaction history. */
+  static SYNCING = 2;
+
+  /** Wallet state: READY — synced and ready to be used. */
+  static READY = 3;
+
+  /** Wallet state: ERROR — the wallet encountered an error. */
+  static ERROR = 4;
+
+  /** Wallet state: PROCESSING — performing an internal processing task. */
+  static PROCESSING = 5;
+
   /**
    * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
@@ -3514,13 +3532,5 @@ class HathorWallet extends EventEmitter {
     throw new Error('Not implemented.');
   }
 }
-
-// State constants.
-HathorWallet.CLOSED = 0;
-HathorWallet.CONNECTING = 1;
-HathorWallet.SYNCING = 2;
-HathorWallet.READY = 3;
-HathorWallet.ERROR = 4;
-HathorWallet.PROCESSING = 5;
 
 export default HathorWallet;
