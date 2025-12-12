@@ -1594,6 +1594,17 @@ class HathorWallet extends EventEmitter {
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
     if (this.preCalculatedAddresses) {
+      // Single address policy should not load extraneous addresses.
+      if (this.scanPolicy?.policy === SCANNING_POLICY.SINGLE) {
+        const index = this.scanPolicy?.index ?? 0;
+        if (index < this.preCalculatedAddresses.length) {
+          await this.storage.saveAddress({
+            base58: this.preCalculatedAddresses[index],
+            bip32AddressIndex: index,
+          });
+        }
+      }
+
       for (const [index, addr] of this.preCalculatedAddresses.entries()) {
         await this.storage.saveAddress({
           base58: addr,

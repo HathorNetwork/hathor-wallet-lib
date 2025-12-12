@@ -97,6 +97,9 @@ import {
   WalletType,
   ITokenData,
   TokenVersion,
+  AddressScanPolicy,
+  SCANNING_POLICY,
+  AddressScanPolicyData,
 } from '../types';
 import { Fee } from '../utils/fee';
 
@@ -163,6 +166,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
 
+  private scanPolicy: AddressScanPolicyData | null;
+
   public storage: IStorage;
 
   constructor({
@@ -175,6 +180,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
+    scanPolicy = null,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -185,6 +191,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
+    scanPolicy?: AddressScanPolicyData | null;
   }) {
     super();
 
@@ -246,7 +253,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.newAddresses = [];
     this.indexToUse = -1;
-    // TODO should we have a debug mode?
+    this.scanPolicy = scanPolicy;
   }
 
   /**
@@ -878,6 +885,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // asynchronous, so we will get an empty or partial array of addresses if they are not all loaded.
       this.failIfWalletNotReady();
     }
+
+    if (this.scanPolicy?.policy === SCANNING_POLICY.SINGLE) {
+      const addressIndex = this.scanPolicy.index ?? 0;
+      const data = await walletApi.getAddresses(this, addressIndex);
+      this.newAddresses = data.addresses.map(addr => ({
+        address: addr.address,
+        index: addr.index,
+        addressPath: `m/44'/280'/0'/0/${addr.index}`,
+      }));
+      this.indexToUse = 0;
+      return;
+    }
+
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
     this.indexToUse = 0;
