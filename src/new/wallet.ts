@@ -297,7 +297,7 @@ class HathorWallet extends EventEmitter {
    * const wallet = new HathorWallet({
    *   connection: myConnection,
    *   seed: '24 word mnemonic phrase here...',
-   *   password: 'encryption-password',
+   *   password: 'plaintext-password',
    *   pinCode: '123456',
    * });
    *
