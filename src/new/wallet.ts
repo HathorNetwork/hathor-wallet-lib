@@ -66,6 +66,7 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
+  FullNodeVersionData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -444,7 +445,7 @@ class HathorWallet extends EventEmitter {
    * Gets the current server url from connection
    * @return {string} The server url. Ex.: 'http://server.com:8083'
    */
-  getServerUrl(): any {
+  getServerUrl() {
     return this.conn.getCurrentServer();
   }
 
@@ -452,14 +453,14 @@ class HathorWallet extends EventEmitter {
    * Gets the current network from connection
    * @return {string} The network name. Ex.: 'mainnet', 'testnet'
    */
-  getNetwork(): any {
+  getNetwork() {
     return this.conn.getCurrentNetwork();
   }
 
   /**
    * Gets the network model object
    */
-  getNetworkObject(): any {
+  getNetworkObject() {
     return new Network(this.getNetwork());
   }
 
@@ -472,8 +473,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getVersionData(): Promise<any> {
-    const versionData: any = await new Promise((resolve: any, reject: any) => {
+  async getVersionData(): Promise<FullNodeVersionData> {
+    const versionData: any = await new Promise((resolve, reject) => {
       versionApi.getVersion(resolve).catch((error: any) => reject(error));
     });
 
@@ -502,7 +503,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  changeServer(newServer: any): any {
+  changeServer(newServer: string) {
     this.storage.config.setServerUrl(newServer);
   }
 
@@ -616,14 +617,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Enable debug mode.
    * */
-  enableDebugMode(): any {
+  enableDebugMode() {
     this.debug = true;
   }
 
   /**
    * Disable debug mode.
    */
-  disableDebugMode(): any {
+  disableDebugMode() {
     this.debug = false;
   }
 
@@ -1526,7 +1527,7 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  setState(state) {
+  setState(state: WalletState) {
     if (state === HathorWallet.PROCESSING && state !== this.state) {
       // XXX: will not await this so we can process history on background.
       this.onEnterStateProcessing().catch(e => {
@@ -2583,7 +2584,7 @@ class HathorWallet extends EventEmitter {
    * garbage collect it. JavaScript currently does not provide a standard way to trigger
    * garbage collection
    * */
-  clearSensitiveData(): any {
+  clearSensitiveData() {
     this.xpriv = undefined;
     this.seed = undefined;
   }
@@ -2682,7 +2683,7 @@ class HathorWallet extends EventEmitter {
     };
   }
 
-  isReady(): any {
+  isReady() {
     return this.state === HathorWallet.READY;
   }
 
