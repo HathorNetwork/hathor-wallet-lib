@@ -31,7 +31,6 @@ import {
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
 import { parseSchema } from '../../utils/bigint';
-import helpers from '../../utils/helpers';
 import {
   addressesResponseSchema,
   checkAddressesMineResponseSchema,
@@ -327,15 +326,6 @@ const walletApi = {
         });
       }
       return parseSchema(response.data, txByIdResponseSchema);
-    }
-
-    // A serverless-offline instance may return a 404 with an error body. In those cases
-    // we pass the response data to the guard for additional validations.
-    if (response.status === 404 && response.data) {
-      walletApi._txNotFoundGuard(response.data);
-      throw new WalletRequestError('Error getting transaction by its id.', {
-        cause: response.data,
-      });
     }
 
     throw new WalletRequestError('Error getting transaction by its id.', {
