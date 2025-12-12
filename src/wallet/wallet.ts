@@ -97,7 +97,6 @@ import {
   WalletType,
   ITokenData,
   TokenVersion,
-  AddressScanPolicy,
   SCANNING_POLICY,
   AddressScanPolicyData,
 } from '../types';
