@@ -59,6 +59,7 @@ import {
   WalletType,
   HistorySyncMode,
   getDefaultLogger,
+  isSingleScanPolicy,
 } from '../types';
 import { TokenVersion } from '../models/enum';
 import transactionUtils from '../utils/transaction';
@@ -660,7 +661,7 @@ class HathorWallet extends EventEmitter {
         address = await deriveAddressP2SH(index, this.storage);
       }
       const policyData = await this.storage.getScanningPolicyData();
-      if (policyData.policy !== SCANNING_POLICY.SINGLE) {
+      if (!isSingleScanPolicy(policyData)) {
         await this.storage.saveAddress(address);
       }
     }
@@ -1594,17 +1595,6 @@ class HathorWallet extends EventEmitter {
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
     if (this.preCalculatedAddresses) {
-      // Single address policy should not load extraneous addresses.
-      if (this.scanPolicy?.policy === SCANNING_POLICY.SINGLE) {
-        const index = this.scanPolicy?.index ?? 0;
-        if (index < this.preCalculatedAddresses.length) {
-          await this.storage.saveAddress({
-            base58: this.preCalculatedAddresses[index],
-            bip32AddressIndex: index,
-          });
-        }
-      }
-
       for (const [index, addr] of this.preCalculatedAddresses.entries()) {
         await this.storage.saveAddress({
           base58: addr,
