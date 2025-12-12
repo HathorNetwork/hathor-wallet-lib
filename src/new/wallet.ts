@@ -43,6 +43,7 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
+import Connection from '../connection';
 import {
   AddressError,
   NanoContractTransactionError,
@@ -58,9 +59,14 @@ import {
   TxHistoryProcessingStatus,
   WalletType,
   HistorySyncMode,
+  WalletState,
   getDefaultLogger,
+  IStorage,
+  ILogger,
+  AddressScanPolicyData,
+  ITokenData,
+  TokenVersion,
 } from '../types';
-import { TokenVersion } from '../models/enum';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -102,6 +108,66 @@ const ConnectionState = {
 };
 
 /**
+ * Parameters for HathorWallet constructor
+ *
+ * @remarks
+ * TODO: Future enhancement - Use discriminated unions to enforce "must provide
+ * one of seed/xpriv/xpub" at compile time instead of runtime validation.
+ * Example approach:
+ * ```
+ * type WalletInit =
+ *   | { seed: string; passphrase?: string; xpriv?: never; xpub?: never }
+ *   | { xpriv: string; seed?: never; passphrase?: never; xpub?: never }
+ *   | { xpub: string; seed?: never; passphrase?: never; xpriv?: never }
+ * ```
+ */
+export interface HathorWalletConstructorParams {
+  // Required
+  /** Connection to the fullnode server */
+  connection: Connection;
+
+  // Optional - Storage
+  /** Storage implementation (defaults to MemoryStore if not provided) */
+  storage?: IStorage;
+
+  // Wallet initialization (must provide one of: seed, xpriv, or xpub)
+  // Runtime validation enforces this constraint
+
+  /** 24-word mnemonic phrase for wallet initialization */
+  seed?: string;
+  /** Optional passphrase for additional seed encryption (BIP39) */
+  passphrase?: string;
+  /** Extended private key (xpriv) for wallet initialization */
+  xpriv?: string;
+  /** Extended public key (xpub) for read-only wallet */
+  xpub?: string;
+
+  // Token configuration
+  /** UID of the token to track (defaults to HTR) */
+  tokenUid?: string;
+
+  // Security
+  /** Password to encrypt the seed in storage */
+  password?: string | null;
+  /** PIN code to execute wallet actions */
+  pinCode?: string | null;
+
+  // Configuration
+  /** Enable debug mode for detailed logging */
+  debug?: boolean;
+  /** Callback executed before reloading wallet data */
+  beforeReloadCallback?: (() => void) | null;
+  /** Multisig configuration for P2SH wallets */
+  multisig?: { pubkeys: string[]; numSignatures: number } | null;
+  /** Pre-calculated addresses to load into storage */
+  preCalculatedAddresses?: string[] | null;
+  /** Address scanning policy configuration */
+  scanPolicy?: AddressScanPolicyData | null;
+  /** Logger instance for wallet operations */
+  logger?: ILogger | null;
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -121,72 +187,154 @@ const ConnectionState = {
  *                          one for each request sent to the server.
  */
 class HathorWallet extends EventEmitter {
-  /*
-   * List of mandatory proprieties that are not properly declared
-   */
-  storage: any;
+  // Core dependencies
+  storage: IStorage;
 
-  logger: any;
+  logger: ILogger;
+
+  conn: Connection;
+
+  // Wallet state
+  state: WalletState;
+
+  // Wallet keys (may be undefined after cleared for security)
+  xpriv?: string;
+
+  seed?: string;
+
+  xpub?: string;
+
+  // Token configuration
+  token: ITokenData | null;
+
+  tokenUid: string;
+
+  // Security
+  passphrase: string;
+
+  pinCode: string | null;
+
+  password: string | null;
+
+  // Address management
+  preCalculatedAddresses: string[] | null;
+
+  // Connection state
+  firstConnection: boolean;
+
+  walletStopped: boolean;
+
+  // Configuration
+  debug: boolean;
+
+  beforeReloadCallback: (() => void) | null;
+
+  multisig?: { pubkeys: string[]; numSignatures: number };
+
+  // Transaction queue
+  wsTxQueue: Queue;
+
+  newTxPromise: Promise<void>;
+
+  // Scanning & sync configuration
+  scanPolicy: AddressScanPolicyData | null;
+
+  isSignedExternally: boolean;
+
+  historySyncMode: HistorySyncMode;
+
+  // Template interpreter
+  txTemplateInterpreter: WalletTxTemplateInterpreter;
 
   /**
-   * @param {Object} param
-   * @param {FullnodeConnection} param.connection A connection to the server
-   * @param {import('../types').IStorage} param.storage A storage
-   * @param {string} param.seed 24 words separated by space
-   * @param {string} [param.passphrase=''] Wallet passphrase
-   * @param {string} [param.xpriv]
-   * @param {string} [param.xpub]
-   * @param {string} [param.tokenUid] UID of the token to handle on this wallet
-   * @param {string} [param.password] Password to encrypt the seed
-   * @param {string} [param.pinCode] PIN to execute wallet actions
-   * @param {boolean} [param.debug] Activates debug mode
-   * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
-   * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
-   * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
-   * @param {import('../types').ILogger} [param.logger] The logger instance to use
-   * the address scan policy.
+   * Wallet state: CLOSED — disconnected from the server.
+   * @deprecated Use WalletState.CLOSED instead
    */
-  constructor({
-    connection,
-    storage,
+  static CLOSED: WalletState = WalletState.CLOSED;
 
-    seed,
-    passphrase = '',
+  /**
+   * Wallet state: CONNECTING — currently establishing a connection.
+   * @deprecated Use WalletState.CONNECTING instead
+   */
+  static CONNECTING: WalletState = WalletState.CONNECTING;
 
-    xpriv,
+  /**
+   * Wallet state: SYNCING — connected and syncing transaction history.
+   * @deprecated Use WalletState.SYNCING instead
+   */
+  static SYNCING: WalletState = WalletState.SYNCING;
 
-    xpub,
+  /**
+   * Wallet state: READY — synced and ready to be used.
+   * @deprecated Use WalletState.READY instead
+   */
+  static READY: WalletState = WalletState.READY;
 
-    tokenUid = NATIVE_TOKEN_UID,
+  /**
+   * Wallet state: ERROR — the wallet encountered an error.
+   * @deprecated Use WalletState.ERROR instead
+   */
+  static ERROR: WalletState = WalletState.ERROR;
 
-    password = null,
-    pinCode = null,
+  /**
+   * Wallet state: PROCESSING — performing an internal processing task.
+   * @deprecated Use WalletState.PROCESSING instead
+   */
+  static PROCESSING: WalletState = WalletState.PROCESSING;
 
-    // debug mode
-    debug = false,
-    // Callback to be executed before reload data
-    beforeReloadCallback = null,
-    multisig = null,
-    preCalculatedAddresses = null,
-    scanPolicy = null,
-    logger = null,
-  }: {
-    connection?: any;
-    storage?: any;
-    seed?: any;
-    passphrase?: any;
-    xpriv?: any;
-    xpub?: any;
-    tokenUid?: any;
-    password?: any;
-    pinCode?: any;
-    debug?: any;
-    beforeReloadCallback?: any;
-    multisig?: any;
-    preCalculatedAddresses?: any;
-    scanPolicy?: any;
-    logger?: any;
-  } = {}) {
+  /**
+   * Creates a new HathorWallet instance.
+   *
+   * @remarks
+   * Must provide exactly one of: seed, xpriv, or xpub for wallet initialization.
+   * - Use seed + password for full wallet with encryption
+   * - Use xpriv for full wallet without seed encryption
+   * - Use xpub for read-only wallet (watch-only mode)
+   *
+   * @example
+   * ```typescript
+   * // Full wallet with seed
+   * const wallet = new HathorWallet({
+   *   connection: myConnection,
+   *   seed: '24 word mnemonic phrase here...',
+   *   password: 'encryption-password',
+   *   pinCode: '123456',
+   * });
+   *
+   * // Read-only wallet
+   * const readOnlyWallet = new HathorWallet({
+   *   connection: myConnection,
+   *   xpub: 'xpub...',
+   * });
+   * ```
+   */
+  constructor(
+    {
+      connection,
+      storage,
+
+      seed,
+      passphrase = '',
+
+      xpriv,
+
+      xpub,
+
+      tokenUid = NATIVE_TOKEN_UID,
+
+      password = null,
+      pinCode = null,
+
+      // debug mode
+      debug = false,
+      // Callback to be executed before reload data
+      beforeReloadCallback = null,
+      multisig = null,
+      preCalculatedAddresses = null,
+      scanPolicy = null,
+      logger = null,
+    }: HathorWalletConstructorParams = {} as HathorWalletConstructorParams
+  ) {
     super();
 
     if (!connection) {
@@ -3514,13 +3662,5 @@ class HathorWallet extends EventEmitter {
     throw new Error('Not implemented.');
   }
 }
-
-// State constants.
-HathorWallet.CLOSED = 0;
-HathorWallet.CONNECTING = 1;
-HathorWallet.SYNCING = 2;
-HathorWallet.READY = 3;
-HathorWallet.ERROR = 4;
-HathorWallet.PROCESSING = 5;
 
 export default HathorWallet;
