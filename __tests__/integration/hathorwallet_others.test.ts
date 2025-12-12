@@ -1683,7 +1683,7 @@ describe('single address scanning policy', () => {
     const tx1 = await hWallet.sendTransaction(address5, 1n);
     await waitForTxReceived(hWallet, tx1.hash);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
-    await expect(hWallet.getBalance()).resolves.toEqual(
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           balance: expect.objectContaining({ unlocked: 10n }),
@@ -1696,7 +1696,7 @@ describe('single address scanning policy', () => {
     const tx2 = await hWallet.sendTransaction(address0, 1n);
     await waitForTxReceived(hWallet, tx2.hash);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
-    await expect(hWallet.getBalance()).resolves.toEqual(
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           balance: expect.objectContaining({ unlocked: 9n }),
@@ -1709,7 +1709,7 @@ describe('single address scanning policy', () => {
     const tx3 = await hWallet.sendTransaction(address10, 1n);
     await waitForTxReceived(hWallet, tx3.hash);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
-    await expect(hWallet.getBalance()).resolves.toEqual(
+    await expect(hWallet.getBalance('00')).resolves.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           balance: expect.objectContaining({ unlocked: 8n }),
