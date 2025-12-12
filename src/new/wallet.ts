@@ -66,6 +66,9 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
+  FullNodeVersionData,
+  IWalletAccessData,
+  IMultisigData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -442,38 +445,38 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current server url from connection
-   * @return {string} The server url. Ex.: 'http://server.com:8083'
+   * @returns The server url. Ex.: 'http://server.com:8083'
    */
-  getServerUrl(): any {
+  getServerUrl() {
     return this.conn.getCurrentServer();
   }
 
   /**
    * Gets the current network from connection
-   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
+   * @returns The network name. Ex.: 'mainnet', 'testnet'
    */
-  getNetwork(): any {
+  getNetwork() {
     return this.conn.getCurrentNetwork();
   }
 
   /**
    * Gets the network model object
    */
-  getNetworkObject(): any {
+  getNetworkObject() {
     return new Network(this.getNetwork());
   }
 
   /**
    * Gets version data from the fullnode
    *
-   * @return {FullNodeVersionData} The data information from the fullnode
+   * @returns The data information from the fullnode
    *
    * @memberof HathorWallet
    * @inner
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getVersionData(): Promise<any> {
-    const versionData: any = await new Promise((resolve: any, reject: any) => {
+  async getVersionData(): Promise<FullNodeVersionData> {
+    const versionData: any = await new Promise((resolve, reject) => {
       versionApi.getVersion(resolve).catch((error: any) => reject(error));
     });
 
@@ -497,12 +500,11 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the server url to connect to
-   * @param {String} newServer The new server to change to
    *
    * @memberof HathorWallet
    * @inner
    * */
-  changeServer(newServer: any): any {
+  changeServer(newServer: string) {
     this.storage.config.setServerUrl(newServer);
   }
 
@@ -576,10 +578,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the access data object from storage.
-   * @returns {Promise<import('../types').IWalletAccessData>}
    */
-  async getAccessData(): Promise<any> {
-    const accessData: any = await this.storage.getAccessData();
+  async getAccessData() {
+    const accessData = await this.storage.getAccessData();
     if (!accessData) {
       throw new WalletError('Wallet was not initialized.');
     }
@@ -588,21 +589,18 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the configured wallet type.
-   * @returns {Promise<string>} The wallet type
    */
-  async getWalletType(): Promise<any> {
-    const accessData: any = await this.getAccessData();
+  async getWalletType() {
+    const accessData = await this.getAccessData();
     return accessData.walletType;
   }
 
   /**
    * Get the multisig data object from storage.
    * Only works if the wallet is a multisig wallet.
-   *
-   * @returns {Promise<import('../types').IMultisigData>}
    */
-  async getMultisigData(): Promise<any> {
-    const accessData: any = await this.getAccessData();
+  async getMultisigData() {
+    const accessData = await this.getAccessData();
     if (accessData.walletType !== WalletType.MULTISIG) {
       throw new WalletError('Wallet is not a multisig wallet.');
     }
@@ -616,23 +614,22 @@ class HathorWallet extends EventEmitter {
   /**
    * Enable debug mode.
    * */
-  enableDebugMode(): any {
+  enableDebugMode() {
     this.debug = true;
   }
 
   /**
    * Disable debug mode.
    */
-  disableDebugMode(): any {
+  disableDebugMode() {
     this.debug = false;
   }
 
   /**
    * Check that this wallet is readonly.
    * This can be shortcircuted if the wallet is meant to be signed externally.
-   * @returns {Promise<boolean>}
    */
-  async isReadonly(): Promise<any> {
+  async isReadonly() {
     if (this.isSignedExternally) {
       return false;
     }
@@ -774,10 +771,10 @@ class HathorWallet extends EventEmitter {
    *
    * @async
    * @generator
-   * @returns {AsyncGenerator<{address: string, index: number, transactions: number}>} transactions is the count of txs for this address
+   * @returns Address object with the count of txs for this address
    * @memberof HathorWallet
    * */
-  async *getAllAddresses(): AsyncGenerator<any> {
+  async *getAllAddresses() {
     // We add the count of transactions
     // in order to replicate the same return as the new
     // wallet service facade
@@ -793,13 +790,13 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address from specific derivation index
    *
-   * @return {Promise<string>} Address
+   * @returns Address
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressAtIndex(index: any): Promise<any> {
-    let address: any = await this.storage.getAddressAtIndex(index);
+  async getAddressAtIndex(index: number) {
+    let address = await this.storage.getAddressAtIndex(index);
 
     if (address === null) {
       if ((await this.storage.getWalletType()) === 'p2pkh') {
@@ -815,15 +812,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address path from specific derivation index
    *
-   * @param {number} index Address path index
-   *
-   * @return {Promise<string>} Address path for the given index
+   * @param index Address path index
+   * @returns Address path for the given index
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPathForIndex(index: any): Promise<any> {
-    const walletType: any = await this.storage.getWalletType();
+  async getAddressPathForIndex(index: number) {
+    const walletType = await this.storage.getWalletType();
     if (walletType === WalletType.MULTISIG) {
       // P2SH
       return `${P2SH_ACCT_PATH}/0/${index}`;
@@ -837,28 +833,23 @@ class HathorWallet extends EventEmitter {
    * Get address to be used in the wallet
    *
    * @param [options]
-   * @param {boolean} [options.markAsUsed=false] if true, we will locally mark this address as used
-   *                                             and won't return it again to be used
-   *
-   * @return {Promise<{ address:string, index:number, addressPath:string }>}
+   * @param [options.markAsUsed] if true, we will locally mark this address as used and won't return it again to be used
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getCurrentAddress({ markAsUsed = false }: any = {}): Promise<any> {
-    const address: any = await this.storage.getCurrentAddress(markAsUsed);
-    const index: any = await this.getAddressIndex(address);
-    const addressPath: any = await this.getAddressPathForIndex(index);
+  async getCurrentAddress({ markAsUsed = false } = {}) {
+    const address = await this.storage.getCurrentAddress(markAsUsed);
+    const index = await this.getAddressIndex(address);
+    const addressPath = await this.getAddressPathForIndex(index);
 
     return { address, index, addressPath };
   }
 
   /**
    * Get the next address after the current available
-   *
-   * @return {Promise<{ address:string, index:number, addressPath:string }>}
    */
-  async getNextAddress(): Promise<any> {
+  async getNextAddress() {
     // First we mark the current address as used, then return the next
     await this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();
@@ -1061,14 +1052,13 @@ class HathorWallet extends EventEmitter {
   /**
    * Get information of a given address
    *
-   * @param {string} address Address to get information of
-   * @param {AddressInfoOptions} options Optional parameters to filter the results
-   *
-   * @returns {Promise<AddressInfo>} Aggregated information about the given address
+   * @param address Address to get information of
+   * @param options Optional parameters to filter the results
+   * @returns Aggregated information about the given address
    *
    */
-  async getAddressInfo(address: any, options: any = {}): Promise<any> {
-    const { token = NATIVE_TOKEN_UID }: any = options;
+  async getAddressInfo(address: string, options = {}) {
+    const { token = NATIVE_TOKEN_UID } = options;
 
     // Throws an error if the address does not belong to this wallet
     if (!(await this.storage.isAddressMine(address))) {
@@ -1526,7 +1516,7 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  setState(state) {
+  setState(state: WalletState) {
     if (state === HathorWallet.PROCESSING && state !== this.state) {
       // XXX: will not await this so we can process history on background.
       this.onEnterStateProcessing().catch(e => {
@@ -1813,17 +1803,15 @@ class HathorWallet extends EventEmitter {
   /**
    * Returns an address' HDPrivateKey given an index and the encryption password
    *
-   * @param {string} pinCode - The PIN used to encrypt data in accessData
-   * @param {number} addressIndex - The address' index to fetch
-   *
-   * @returns {Promise<HDPrivateKey>} Promise that resolves with the HDPrivateKey
+   * @param pinCode - The PIN used to encrypt data in accessData
+   * @param addressIndex - The address' index to fetch
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPrivKey(pinCode: any, addressIndex: any): Promise<any> {
-    const mainXPrivKey: any = await this.storage.getMainXPrivKey(pinCode);
-    const addressHDPrivKey: any = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+  async getAddressPrivKey(pinCode: string, addressIndex: number) {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
     return addressHDPrivKey;
   }
@@ -2583,7 +2571,7 @@ class HathorWallet extends EventEmitter {
    * garbage collect it. JavaScript currently does not provide a standard way to trigger
    * garbage collection
    * */
-  clearSensitiveData(): any {
+  clearSensitiveData() {
     this.xpriv = undefined;
     this.seed = undefined;
   }
@@ -2682,36 +2670,34 @@ class HathorWallet extends EventEmitter {
     };
   }
 
-  isReady(): any {
+  isReady() {
     return this.state === HathorWallet.READY;
   }
 
   /**
    * Check if address is from the loaded wallet
    *
-   * @param {string} address Address to check
-   *
-   * @return {Promise<boolean>}
-   * */
-  async isAddressMine(address: any): Promise<any> {
+   * @param address Address to check
+   */
+  async isAddressMine(address: string) {
     return this.storage.isAddressMine(address);
   }
 
   /**
    * Check if a list of addresses are from the loaded wallet
    *
-   * @param {string[]} addresses Addresses to check
+   * @param addresses Addresses to check
    *
-   * @return {Object} Object with the addresses and whether it belongs or not { address: boolean }
-   * */
-  async checkAddressesMine(addresses: any): Promise<any> {
-    const promises: any = [];
+   * @returns Object with the addresses and whether it belongs or not { address: boolean }
+   */
+  async checkAddressesMine(addresses: string[]) {
+    const promises = [];
     for (const address of addresses) {
-      promises.push(this.storage.isAddressMine(address).then((mine: any) => ({ address, mine })));
+      promises.push(this.storage.isAddressMine(address).then(mine => ({ address, mine })));
     }
 
-    const results: any = await Promise.all(promises);
-    return results.reduce((acc: any, result: any) => {
+    const results = await Promise.all(promises);
+    return results.reduce((acc, result) => {
       acc[result.address] = result.mine;
       return acc;
     }, {});
@@ -2721,12 +2707,10 @@ class HathorWallet extends EventEmitter {
    * Get index of address
    * Returns null if address does not belong to the wallet
    *
-   * @param {string} address Address to get the index
-   *
-   * @return {Promise<number | null>}
-   * */
-  async getAddressIndex(address: any): Promise<any> {
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+   * @param address Address to get the index
+   */
+  async getAddressIndex(address: string) {
+    const addressInfo = await this.storage.getAddressInfo(address);
     return get(addressInfo, 'bip32AddressIndex', null);
   }
 
@@ -3168,36 +3152,29 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Check if the pin used to encrypt the main key is valid.
-   * @param {string} pin
-   * @returns {Promise<boolean>}
    */
-  async checkPin(pin: any): Promise<any> {
+  async checkPin(pin: string) {
     return this.storage.checkPin(pin);
   }
 
   /**
    * Check if the password used to encrypt the seed is valid.
-   * @param {string} password
-   * @returns {Promise<boolean>}
    */
-  async checkPassword(password: any): Promise<any> {
+  async checkPassword(password: string) {
     return this.storage.checkPassword(password);
   }
 
   /**
-   * @param {string} pin
-   * @param {string} password
-   * @returns {Promise<boolean>}
+   * Check if both pin and password are valid.
    */
-  async checkPinAndPassword(pin: any, password: any): Promise<any> {
+  async checkPinAndPassword(pin: string, password: string) {
     return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned here
   }
 
   /**
    * Check if the wallet is a hardware wallet.
-   * @returns {Promise<boolean>}
    */
-  async isHardwareWallet(): Promise<any> {
+  async isHardwareWallet() {
     return this.storage.isHardwareWallet();
   }
 
@@ -3434,32 +3411,30 @@ class HathorWallet extends EventEmitter {
   /**
    * Generate and return the PrivateKey for an address
    *
-   * @param {string} address Address to get the PrivateKey from
+   * @param address Address to get the PrivateKey from
    * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
-   *
-   * @returns {Promise<HDPrivateKey>}
+   * @param [options.pinCode] PIN to decrypt the private key.
+   *                          Optional but required if not set in instance
    */
-  async getPrivateKeyFromAddress(address: any, options: any = {}): Promise<any> {
+  async getPrivateKeyFromAddress(address: string, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    const addressIndex: any = await this.getAddressIndex(address);
+    const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
     }
 
-    const xprivkey: any = await this.storage.getMainXPrivKey(pin);
-    const key: any = HDPrivateKey(xprivkey);
+    const xprivkey = await this.storage.getMainXPrivKey(pin);
+    const key = HDPrivateKey(xprivkey);
     // Derive key to addressIndex
-    const derivedKey: any = key.deriveNonCompliantChild(addressIndex);
+    const derivedKey = key.deriveNonCompliantChild(addressIndex);
     return derivedKey.privateKey;
   }
 
