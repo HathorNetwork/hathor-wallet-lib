@@ -19,7 +19,9 @@ import config from '../../config';
 /**
  * Create an axios instance to be used when sending requests
  *
- * @param {number} timeout Timeout in milliseconds for the request
+ * @param {HathorWalletServiceWallet} wallet - The wallet instance
+ * @param {boolean} needsAuth - Whether authentication is required
+ * @param {number} timeout - Timeout in milliseconds for the main request
  */
 export const axiosInstance = async (
   wallet: HathorWalletServiceWallet,

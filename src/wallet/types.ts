@@ -52,7 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
-  version: TokenVersion; // Token version
+  version?: TokenVersion; // Token version
 }
 
 export interface Balance {
