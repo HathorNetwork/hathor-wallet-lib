@@ -536,7 +536,7 @@ export default class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  async runFromMining(until = null): Promise<Transaction> {
+  async runFromMining(until: 'mine-tx' | null = null): Promise<Transaction> {
     try {
       if (this.transaction === null) {
         throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
