@@ -4,7 +4,7 @@ import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import { CreateTokenTransaction, MemoryStore, Output, Storage } from '../../src';
+import { CreateTokenTransaction, Output, Storage } from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
@@ -12,245 +12,60 @@ import {
   WALLET_CONSTANTS,
 } from './configuration/test-constants';
 import {
-  NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  NATIVE_TOKEN_UID,
 } from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
 import { delay } from './utils/core.util';
-import { TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
+import { UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
+import { buildWalletInstance, emptyWallet, poolForTx } from './helpers/service-facade.helper';
+import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
+import {
+  PrecalculatedWalletData,
+  precalculationHelpers,
+} from './helpers/wallet-precalculation.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
-config.setServerUrl(FULLNODE_URL);
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
 config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
 
 /** Genesis Wallet, used to fund all tests */
-const gWallet: HathorWalletServiceWallet = buildWalletInstance({
-  words: WALLET_CONSTANTS.genesis.words,
-}).wallet;
+const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const emptyWallet = {
-  words:
-    'buddy kingdom scorpion device uncover donate sense false few leaf oval illegal assume talent express glide above brain end believe abstract will marine crunch',
-  addresses: [
-    'WkHNZyrKNusTtu3EHfvozEqcBdK7RoEMR7',
-    'WivGyxDjWxijcns3hpGvEJKhjR9HMgFzZ5',
-    'WXQSeMcNt67hVpmgwYqmYLsddgXeGYP4mq',
-    'WTMH3NQs8YXyNguqwLyqoTKDFTfkJLxMzX',
-    'WTUiHeiajtt1MXd1Jb3TEeWUysfNJfig35',
-    'WgzZ4MNcuX3sBgLC5Fa6dTTQaoy4ccLdv5',
-    'WU6UQCnknGLh1WP392Gq6S69JmheS5kzZ2',
-    'WX7cKt38FfgKFWFxSa2YzCWeCPgMbRR98h',
-    'WZ1ABXsuwHHfLzeAWMX7RYs5919LPBaYpp',
-    'WUJjQGb4SGSLh44m2JdgAR4kui8mTPb8bK',
-  ],
-};
-const walletWithTxs = {
-  words:
-    'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
-  addresses: [
-    'WeSnE5dnrciKahKbTvbUWmY6YM9Ntgi6MJ',
-    'Wj52SGubNZu3JA2ncRXyNGfqyrdnj4XTU2',
-    'Wh1Xs7zPVT9bc6dzzA23Zu8aiP3H8zLkiy',
-    'WdFeZvVJkwAdLDpXLGJpFP9XSDcdrntvAg',
-    'WTdWsgnCPKBuzEKAT4NZkzHaD4gHYMrk4G',
-    'WSBhEBkuLpqu2Fz1j6PUyUa1W4GGybEYSF',
-    'WS8yocEYBykpgjQxAhxjTcjVw9gKtYdys8',
-    'WmkBa6ikYM2sZmiopM6zBGswJKvzs5Noix',
-    'WeEPszSx14og6c3uPXy2vYh7BK9c6Zb9TX',
-    'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
-  ],
-};
-const customTokenWallet = {
-  words:
-    'shine myself welcome feature nurse cement crumble input utility lizard melt great sample slab know leisure salmon path gate iron enlist discover cry radio',
-  addresses: [
-    'WUTMZMaNoewWprYpb8b2etTfRuw2zRS5u3',
-    'WNxz1juhoJk9Y28knsH8ynVXn9s7bYLMkd',
-    'WWBkdHcB7TCjNQUiyFhZpXDU4Tejd7AFd5',
-    'WdcFTovRGiePVSnCpoGUYBgAGyDmXhkaD6',
-    'WjuxR4r487CTGGMJRpcnAZ9bdaH91qt7F5',
-    'WkYJ6SHfS2CTAMCxtrwWm7Mr12YRMx7WzQ',
-    'WTuBXE1WPNgjSxqDfRKy2fiDydT3e2pdiJ',
-    'WTipscpJ14sAZ4Y3f2gY5Tb1RWJYop9QYK',
-    'WhQovEXRSDc7MLMz8Tqy1qJdTy2hef1dYq',
-    'WkUREDxNQX6Qq1NwdLQycxkHFjKujQasWX',
-  ],
-};
-const multipleTokensWallet = {
-  words:
-    'object join brain round loyal unfair shine genius brain vocal object crouch simple cake chase october unlock detail ivory kidney saddle immense deer response',
-  addresses: [
-    'Wie8wTxa7P6Vbr1UhADfDfafJftyYsZNMU',
-    'WaCk6XV4zCwdPTvGH6VgkE58ebqEndA6b7',
-    'Wdsez9n6LuWMtKQv3zdnKtQkTeXFw7ATFj',
-    'WdZcUpCoLS1CK5UD7V5Z4d42X92zc7QHEi',
-    'WaaXsw2HdYiBUveqg6QWS5HmkwTNUKUBLD',
-    'WPxVMXd89aaXWXqUcVTjdQPUvuT3wehJxc',
-    'WSbfhb9tkJneSbEJsyzyEURYcTqkPKRUUD',
-    'WQt8Gxy5yWC3xZGsHVrywYJqHyg5xtudun',
-    'WcpnSRvzZGAnR6rtQiBnzP7aLnvPstpXbD',
-    'WQzooroUKJMrFVv5P1UrPppmQ2YF8ACfAS',
-  ],
-};
-const addressesWallet = {
-  words:
-    'pumpkin tank father organ can doll romance damage because barely vault pride will man rack horn lamp remove enemy brain desert exchange boil salon',
-  addresses: [
-    'WRsDG9VhM4N9DPSpbnpFKnngLEXonaBsuH',
-    'WSTMdCz4BuzGv5q6g8woaCHeyppTZdjXWx',
-    'WPbCV3Lrh28ntoQY2hvC2ppU5TimCZdRaw',
-    'WaAgCebJjWfQCKcDwtpffQ4kt2im7fbsUr',
-    'WXN2wRybweJY4xunPkz6pwfGUmoumCCcUP',
-    'WbEA4E7Rnx98TtRox3UazMQRm1yNoAJcfm',
-    'WZs2Ci9ZxyMzmfdbGfR2nTp9xsxS7rSsDN',
-    'Wf1waSNgXmMoitFjx7TADMemKyCWjhvLUb',
-    'WVTMecGGC9kGzUbQqjB4J7i4KVhLVyMagy',
-    'WjHom47afCW8qEFtBqMq3MT22zxLkuvQag',
-  ],
-};
-const utxosWallet = {
-  words:
-    'provide bunker age agree renew size popular license best kidney range flag they bulk survey letter concert mobile february clean nuclear inherit voyage capable',
-  addresses: [
-    'WQvAdYAqZf69nsgzVwSMwfRWcBRHJJU1qH',
-    'We4fZtzxod2M3w1u8h4TNpaMYrYWqXxNqd',
-    'WioaJZPzytLVniJ9MTinLiWih1VaoRfaUV',
-    'WmRLJj5P1rj1bErNADJnweq8mXBNLmNiAL',
-    'WXpXoREmV2hFuMX83dup7YMqJqRW5Y94Av',
-    'WirQUza1XdqnN7DcAMdXvysTntq9DB3xz6',
-    'Wb26hUGD6du7nkecrAeaRbBoZS4Z3dynby',
-    'WXgFTQm7uNYTj8gsz3GWNg58jCvaPn96hD',
-    'WdcFv1fKjbPPqSXHkdo22QE2bbZnbXADHK',
-    'WTm47mTSd7ompdinkZM3LiF4VE7AeQttzo',
-  ],
-};
+let walletWithTxs: PrecalculatedWalletData;
+let customTokenWallet: PrecalculatedWalletData;
+let multipleTokensWallet: PrecalculatedWalletData;
+let addressesWallet: PrecalculatedWalletData;
+let utxosWallet: PrecalculatedWalletData;
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
 /** Default password to simplify the tests */
 const password = 'testpass';
 
-/**
- * Builds a HathorWalletServiceWallet instance with a wallet seed words
- * @param enableWs - Whether to enable websocket connection (default: false)
- * @param words - The 24 words to use for the wallet (default: empty wallet)
- * @param passwordForRequests - The password that will be returned by the mocked requestPassword function (default: 'test-password')
- * @returns The wallet instance along with its store and storage for eventual mocking/spying
- */
-function buildWalletInstance({
-  enableWs = false,
-  words = emptyWallet.words,
-  passwordForRequests = 'test-password',
-} = {}) {
-  const walletData = { words };
-  const network = new Network(NETWORK_NAME);
-  const requestPassword = jest.fn().mockResolvedValue(passwordForRequests);
-
-  const store = new MemoryStore();
-  const storage = new Storage(store);
-  const newWallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed: walletData.words,
-    network,
-    storage,
-    enableWs, // Disable websocket for integration tests
-  });
-
-  return { wallet: newWallet, store, storage };
-}
-
-/**
- * Polls the wallet for a transaction by its ID until found or max attempts reached
- * @param walletForPolling - The wallet instance to poll
- * @param txId - The transaction ID to look for
- * @returns The transaction object if found
- * @throws Error if the transaction is not found after max attempts
- */
-async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
-  const maxAttempts = 10;
-  const delayMs = 1000; // 1 second
-  let attempts = 0;
-
-  while (attempts < maxAttempts) {
-    try {
-      const tx = await walletForPolling.getTxById(txId);
-      if (tx) {
-        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
-        return tx;
-      }
-    } catch (error) {
-      // If the error is of type TxNotFoundError, we continue polling
-      if (!(error instanceof TxNotFoundError)) {
-        throw error; // Re-throw unexpected errors
-      }
-    }
-    attempts++;
-    await delay(delayMs);
-  }
-  throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
-}
-
-async function sendFundTx(
-  address: string,
-  amount: bigint,
-  destinationWallet?: HathorWalletServiceWallet
-) {
-  const fundTx = await gWallet.sendTransaction(address, amount, {
-    pinCode,
-  });
-
-  // Ensure the transaction was sent from the Genesis perspective
-  await pollForTx(gWallet, fundTx.hash!);
-
-  // Ensure the destination wallet is also aware of the transaction
-  if (destinationWallet) {
-    await pollForTx(destinationWallet, fundTx.hash!);
-  }
-
-  return fundTx;
-}
-
 beforeAll(async () => {
-  let isServerlessReady = false;
-  const startTime = Date.now();
+  await GenesisWalletServiceHelper.poolForServerlessAvailable();
+  await GenesisWalletServiceHelper.start();
 
-  // Poll for the serverless app to be ready.
-  const delayBetweenRequests = 3000;
-  const lambdaTimeout = 30000;
-  while (!isServerlessReady) {
-    try {
-      // Executing a method that does not depend on the wallet being started,
-      // but that ensures the Wallet Service Lambdas are receiving requests
-      await gWallet.getVersionData();
-      isServerlessReady = true;
-    } catch (e) {
-      // Ignore errors, serverless app is probably not ready yet
-      loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
-    }
-
-    // Timeout after 2 minutes
-    if (Date.now() - startTime > lambdaTimeout) {
-      throw new Error('Ws-Serverless did not become ready in time');
-    }
-    await delay(delayBetweenRequests);
-  }
-  await gWallet.start({ pinCode, password });
+  walletWithTxs = precalculationHelpers.test!.getPrecalculatedWallet();
+  customTokenWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+  multipleTokensWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+  utxosWallet = precalculationHelpers.test!.getPrecalculatedWallet();
 });
 
 afterAll(async () => {
-  await gWallet.stop({ cleanStorage: true });
+  await GenesisWalletServiceHelper.stop();
 });
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
     beforeEach(() => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     });
 
     afterEach(async () => {
@@ -277,7 +92,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -311,7 +126,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -394,7 +209,7 @@ describe('start', () => {
 
 describe('wallet public methods', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -467,7 +282,7 @@ describe('empty wallet address methods', () => {
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -652,7 +467,7 @@ describe('basic transaction methods', () => {
       });
 
       // Confirm the addresses through UTXO queries
-      await pollForTx(wallet, sendTransaction.hash!);
+      await poolForTx(wallet, sendTransaction.hash!);
       const recipientUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, recipientIndex);
       expect(recipientUtxo).toStrictEqual(
         expect.objectContaining({
@@ -677,7 +492,7 @@ describe('basic transaction methods', () => {
     let tokenUid: string;
 
     it('should not create a new token on a wallet without funds', async () => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
       await wallet.start({ pinCode, password });
 
       await expect(
@@ -686,13 +501,11 @@ describe('basic transaction methods', () => {
     });
 
     it('should create a new token without any custom options', async () => {
-      const fundTx = await sendFundTx(customTokenWallet.addresses[0], 10n);
-
       ({ wallet } = buildWalletInstance({
         words: customTokenWallet.words,
       }));
       await wallet.start({ pinCode, password });
-      await pollForTx(wallet, fundTx.hash!);
+      await GenesisWalletServiceHelper.injectFunds(customTokenWallet.addresses[0], 10n, wallet);
 
       const createTokenTx = (await wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, {
         pinCode,
@@ -797,7 +610,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       tokenUid = createTokenTx.hash!;
-      await pollForTx(wallet, tokenUid);
+      await poolForTx(wallet, tokenUid);
 
       // Specific token creation validations
       const tokenDetails = await wallet.getTokenDetails(tokenUid);
@@ -823,7 +636,7 @@ describe('basic transaction methods', () => {
         pinCode,
         token: tokenUid,
       });
-      await pollForTx(wallet, sendTransaction.hash!);
+      await poolForTx(wallet, sendTransaction.hash!);
 
       // Verify that the only outputs were the recipient and the change address
       expect(sendTransaction.outputs.length).toBe(2);
@@ -910,7 +723,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const noAuthTokenUid = createTokenTx.hash!;
-      await pollForTx(wallet, noAuthTokenUid);
+      await poolForTx(wallet, noAuthTokenUid);
 
       // Specific token creation validations
       const tokenDetails = await wallet.getTokenDetails(noAuthTokenUid);
@@ -960,7 +773,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const specificAddressTokenUid = createTokenTx.hash!;
-      await pollForTx(wallet, specificAddressTokenUid);
+      await poolForTx(wallet, specificAddressTokenUid);
 
       // Validate that outputs went to the correct addresses through UTXO queries
       let tokenOutputIndex = -1;
@@ -1025,9 +838,9 @@ describe('basic transaction methods', () => {
       // Verify change output went to change address (if exists)
       if (changeOutputIndex !== -1) {
         const changeUtxo = await wallet.getUtxoFromId(specificAddressTokenUid, changeOutputIndex);
-        // eslint-disable-next-line jest/no-conditional-expect -- Improve this test later by ensuring UTXOs and changes
+        // eslint-disable-next-line jest/no-conditional-expect -- Test still under construction
         expect(changeUtxo).toStrictEqual(
-          // eslint-disable-next-line jest/no-conditional-expect -- Improve this test later by ensuring UTXOs and changes
+          // eslint-disable-next-line jest/no-conditional-expect -- Test still under construction
           expect.objectContaining({
             address: changeAddress,
             tokenId: NATIVE_TOKEN_UID,
@@ -1051,13 +864,11 @@ describe('basic transaction methods', () => {
     });
 
     it('should create token with all outputs to another wallet', async () => {
-      const fundTx = await sendFundTx(customTokenWallet.addresses[0], 10n);
-
       ({ wallet } = buildWalletInstance({
         words: customTokenWallet.words,
       }));
       await wallet.start({ pinCode, password });
-      await pollForTx(wallet, fundTx.hash!);
+      await GenesisWalletServiceHelper.injectFunds(customTokenWallet.addresses[0], 10n, wallet);
 
       // Assign external addresses from multipleTokensWallet (starting from index 9 going backwards)
       const destinationAddress = multipleTokensWallet.addresses[9]; // Token destination
@@ -1192,7 +1003,7 @@ describe('basic transaction methods', () => {
 
       // Verify the transaction can be found after creation
       const externalWalletTokenUid = createTokenTx.hash!;
-      await pollForTx(wallet, externalWalletTokenUid);
+      await poolForTx(wallet, externalWalletTokenUid);
 
       // Since outputs went to external addresses, we need to use the original wallet to query
       // but note that the wallet service might not be able to query external UTXOs directly
@@ -1255,11 +1066,60 @@ describe('basic transaction methods', () => {
   });
 });
 
-describe.skip('websocket events', () => {});
+describe('websocket events', () => {
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance({ enableWs: true, words: walletWithTxs.words }));
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  // FIXME: The transactions happen, the websocket connection is active, but the events never arrive
+  it.skip('should handle new-tx websocket event', async () => {
+    const events: unknown[] = [];
+    wallet.on('new-tx', tx => {
+      events.push(tx);
+      // Add your assertions here after triggering the event
+    });
+    wallet.on('update-tx', tx => {
+      events.push(tx);
+      // Add your assertions here after triggering the event
+    });
+
+    const sendTransaction = await GenesisWalletServiceHelper.injectFunds(
+      walletWithTxs.addresses[0],
+      10n
+    );
+    expect(sendTransaction.hash).toBeDefined();
+
+    // Wait up to 3 times, 2 seconds each, for events to arrive
+    for (let i = 0; i < 3; i++) {
+      if (events.length > 0) break;
+      await delay(2000);
+    }
+
+    expect(events.length).toBeGreaterThanOrEqual(1);
+    expect(events[0]).toBeDefined();
+  });
+
+  it.skip('should handle update-tx websocket event', async () => {
+    const events: unknown[] = [];
+    wallet.on('update-tx', tx => {
+      events.push(tx);
+      // Add your assertions here after triggering the event
+    });
+    // TODO: Trigger the event and add assertions
+    expect(true).toBe(false);
+  });
+});
 
 describe('balances', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -1302,7 +1162,7 @@ describe('balances', () => {
     });
 
     // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
-    it.skip('should return balance for specific token when token parameter is provided', async () => {
+    it('should return balance for specific token when token parameter is provided', async () => {
       const balances = await wallet.getBalance(NATIVE_TOKEN_UID); // HTR token
 
       expect(Array.isArray(balances)).toBe(true);
@@ -1336,7 +1196,7 @@ describe('balances', () => {
     });
 
     it('should throw error when wallet is not ready', async () => {
-      const { wallet: notReadyWallet } = buildWalletInstance();
+      const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
       // Don't start the wallet, so it's not ready
 
       await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
@@ -1347,9 +1207,11 @@ describe('balances', () => {
 });
 
 describe('address management methods', () => {
-  const knownAddresses = addressesWallet.addresses;
+  let knownAddresses: string[];
 
   beforeEach(async () => {
+    addressesWallet = precalculationHelpers.test!.getPrecalculatedWallet();
+    knownAddresses = addressesWallet.addresses;
     ({ wallet } = buildWalletInstance({ words: addressesWallet.words }));
     await wallet.start({ pinCode, password });
   });
@@ -1488,19 +1350,19 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
     await utxosTestWallet.start({ pinCode, password });
 
     // Fund the wallet with multiple transactions to create various UTXOs
-    await sendFundTx(utxosWallet.addresses[0], 100n, utxosTestWallet);
+    await GenesisWalletServiceHelper.injectFunds(utxosWallet.addresses[0], 100n, utxosTestWallet);
 
     // Create additional UTXOs by sending to different addresses
     const fundTx2 = await utxosTestWallet.sendTransaction(utxosWallet.addresses[1], 20n, {
       pinCode,
       changeAddress: utxosWallet.addresses[0],
     });
-    await pollForTx(utxosTestWallet, fundTx2.hash!);
+    await poolForTx(utxosTestWallet, fundTx2.hash!);
     const fundTx3 = await utxosTestWallet.sendTransaction(utxosWallet.addresses[2], 30n, {
       pinCode,
       changeAddress: utxosWallet.addresses[0],
     });
-    await pollForTx(utxosTestWallet, fundTx3.hash!);
+    await poolForTx(utxosTestWallet, fundTx3.hash!);
     // Create a custom token to test authority UTXOs
     const createTokenTx = await utxosTestWallet.createNewToken('UtxoTestToken', 'UTT', 200n, {
       pinCode,
@@ -1512,7 +1374,7 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
 
     createdTokenUid = createTokenTx.hash!;
 
-    await pollForTx(utxosTestWallet, createdTokenUid);
+    await poolForTx(utxosTestWallet, createdTokenUid);
   });
 
   afterAll(async () => {
@@ -1741,7 +1603,7 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
         createMint: false,
         createMelt: false,
       });
-      await pollForTx(utxosTestWallet, noAuthTokenTx.hash!);
+      await poolForTx(utxosTestWallet, noAuthTokenTx.hash!);
 
       const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'mint');
       const meltAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'melt');
