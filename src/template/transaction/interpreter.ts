@@ -242,7 +242,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     const utxos: Utxo[] = [];
     // XXX: This may throw, but maybe we should let it.
     for await (const utxo of this.wallet.storage.selectUtxos(newOptions)) {
-      utxos.push(utxo);
+      utxos.push(utxo as unknown as Utxo); // Forcing conversion until we consolidate types
     }
     return utxos;
   }
