@@ -67,6 +67,8 @@ import {
   ITokenData,
   TokenVersion,
   FullNodeVersionData,
+  IWalletAccessData,
+  IMultisigData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -443,7 +445,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current server url from connection
-   * @return {string} The server url. Ex.: 'http://server.com:8083'
+   * @returns The server url. Ex.: 'http://server.com:8083'
    */
   getServerUrl() {
     return this.conn.getCurrentServer();
@@ -451,7 +453,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current network from connection
-   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
+   * @returns The network name. Ex.: 'mainnet', 'testnet'
    */
   getNetwork() {
     return this.conn.getCurrentNetwork();
@@ -467,7 +469,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Gets version data from the fullnode
    *
-   * @return {FullNodeVersionData} The data information from the fullnode
+   * @returns The data information from the fullnode
    *
    * @memberof HathorWallet
    * @inner
@@ -498,7 +500,6 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the server url to connect to
-   * @param {String} newServer The new server to change to
    *
    * @memberof HathorWallet
    * @inner
@@ -577,10 +578,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the access data object from storage.
-   * @returns {Promise<import('../types').IWalletAccessData>}
    */
-  async getAccessData(): Promise<any> {
-    const accessData: any = await this.storage.getAccessData();
+  async getAccessData() {
+    const accessData = await this.storage.getAccessData();
     if (!accessData) {
       throw new WalletError('Wallet was not initialized.');
     }
@@ -589,21 +589,18 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the configured wallet type.
-   * @returns {Promise<string>} The wallet type
    */
-  async getWalletType(): Promise<any> {
-    const accessData: any = await this.getAccessData();
+  async getWalletType() {
+    const accessData = await this.getAccessData();
     return accessData.walletType;
   }
 
   /**
    * Get the multisig data object from storage.
    * Only works if the wallet is a multisig wallet.
-   *
-   * @returns {Promise<import('../types').IMultisigData>}
    */
-  async getMultisigData(): Promise<any> {
-    const accessData: any = await this.getAccessData();
+  async getMultisigData() {
+    const accessData = await this.getAccessData();
     if (accessData.walletType !== WalletType.MULTISIG) {
       throw new WalletError('Wallet is not a multisig wallet.');
     }
@@ -631,9 +628,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Check that this wallet is readonly.
    * This can be shortcircuted if the wallet is meant to be signed externally.
-   * @returns {Promise<boolean>}
    */
-  async isReadonly(): Promise<any> {
+  async isReadonly() {
     if (this.isSignedExternally) {
       return false;
     }
@@ -3169,36 +3165,29 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Check if the pin used to encrypt the main key is valid.
-   * @param {string} pin
-   * @returns {Promise<boolean>}
    */
-  async checkPin(pin: any): Promise<any> {
+  async checkPin(pin: string) {
     return this.storage.checkPin(pin);
   }
 
   /**
    * Check if the password used to encrypt the seed is valid.
-   * @param {string} password
-   * @returns {Promise<boolean>}
    */
-  async checkPassword(password: any): Promise<any> {
+  async checkPassword(password: string) {
     return this.storage.checkPassword(password);
   }
 
   /**
-   * @param {string} pin
-   * @param {string} password
-   * @returns {Promise<boolean>}
+   * Check if both pin and password are valid.
    */
-  async checkPinAndPassword(pin: any, password: any): Promise<any> {
+  async checkPinAndPassword(pin: string, password: string) {
     return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned here
   }
 
   /**
    * Check if the wallet is a hardware wallet.
-   * @returns {Promise<boolean>}
    */
-  async isHardwareWallet(): Promise<any> {
+  async isHardwareWallet() {
     return this.storage.isHardwareWallet();
   }
 
