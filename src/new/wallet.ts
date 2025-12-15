@@ -67,8 +67,7 @@ import {
   ITokenData,
   TokenVersion,
   FullNodeVersionData,
-  IWalletAccessData,
-  IMultisigData,
+  IIndexLimitAddressScanPolicy,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -510,45 +509,43 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the value of the gap limit for this wallet instance.
-   * @param {number} value The new gap limit value
-   * @returns {Promise<void>}
+   * @param value The new gap limit value
    */
-  async setGapLimit(value: any): Promise<any> {
+  async setGapLimit(value: number) {
     return this.storage.setGapLimit(value);
   }
 
   /**
    * Load more addresses if configured to index-limit scanning policy.
-   * @param {number} count Number of addresses to load
-   * @returns {Promise<number>} The index of the last address loaded
+   * @param count Number of addresses to load
+   * @returns The index of the last address loaded
    */
-  async indexLimitLoadMore(count: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitLoadMore(count: number) {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
-    const newEndIndex: any = limits.endIndex + count;
+    const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);
     return newEndIndex;
   }
 
   /**
    * Set the value of the index limit end for this wallet instance.
-   * @param {number} endIndex The new index limit value
-   * @returns {Promise<void>}
+   * @param endIndex The new index limit value
    */
-  async indexLimitSetEndIndex(endIndex: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitSetEndIndex(endIndex: number) {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
@@ -558,7 +555,7 @@ class HathorWallet extends EventEmitter {
       return;
     }
 
-    const newPolicyData: any = {
+    const newPolicyData: IIndexLimitAddressScanPolicy = {
       ...limits,
       endIndex,
       policy: SCANNING_POLICY.INDEX_LIMIT,
@@ -570,9 +567,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the value of the gap limit for this wallet instance.
-   * @returns {Promise<number>}
    */
-  async getGapLimit(): Promise<any> {
+  async getGapLimit() {
     return this.storage.getGapLimit();
   }
 
@@ -1489,11 +1485,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Check if we need to load more addresses and load them if needed.
    * The configured scanning policy will be used to determine the loaded addresses.
-   * @param {boolean} processHistory If we should process the txs found on the loaded addresses.
-   *
-   * @returns {Promise<void>}
+   * @param processHistory If we should process the txs found on the loaded addresses.
    */
-  async scanAddressesToLoad(processHistory = false) {
+  async scanAddressesToLoad(processHistory: boolean = false) {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
