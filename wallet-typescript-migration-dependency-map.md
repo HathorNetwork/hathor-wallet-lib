@@ -512,6 +512,37 @@ Each group should have:
 - Return types that have a description on JSDocs should keep the JSDoc description but remove the type not to conflict with typescript.
 - Variable types inside methods should be left to Typescript to infer them automatically. Only declare them if it breaks the code not to.
 
+### On Docstrings
+The interfaces should have docstrings explaining their purpose and usage. Each method should also have a docstring summarizing its functionality, parameters, and return values.
+
+### ✅ Correct implementation example
+All properties declared at the interface level.
+```ts
+/**
+ * WebSocket message data structure for wallet updates
+ * @property type Type of WebSocket message
+ * @property history Transaction history data for wallet:address_history messages
+ */
+interface WalletWebSocketData {
+  type: string;
+  history?: IHistoryTx;
+}
+```
+
+### ❌ Incorrect implementation example
+Properties declared inline outside the interface declaration.
+```ts
+/**
+ * WebSocket message data structure for wallet updates
+ */
+interface WalletWebSocketData {
+  /** Type of WebSocket message */
+  type: string;
+  /** Transaction history data for wallet:address_history messages */
+  history?: IHistoryTx;
+}
+```
+
 ### Critical points
 
 - No code should be changed, only types and docstrings.
