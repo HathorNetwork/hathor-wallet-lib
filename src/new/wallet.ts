@@ -69,6 +69,7 @@ import {
   FullNodeVersionData,
   IIndexLimitAddressScanPolicy,
   IHistoryTx,
+  OutputValueType,
 } from '../types';
 import { FullNodeTxResponse } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
@@ -236,8 +237,7 @@ interface GetUtxosForAmountOptions {
 
 interface ProposedOutput {
   address: string;
-  // TODO: Type 'value' as OutputValueType once TS4033 is resolved (OutputValueType visibility in exported interface)
-  value: any;
+  value: OutputValueType;
   timelock?: number;
   token: string;
 }
@@ -1594,10 +1594,9 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves when transaction is sent
    */
-  // TODO: Type 'value' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async sendTransactionInstance(
     address: string,
-    value: any,
+    value: OutputValueType,
     options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
   ) {
     if (await this.isReadonly()) {
@@ -1625,10 +1624,9 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves when transaction is sent
    */
-  // TODO: Type 'value' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async sendTransaction(
     address: string,
-    value: any,
+    value: OutputValueType,
     options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
   ) {
     const sendTx = await this.sendTransactionInstance(address, value, options);
@@ -1851,11 +1849,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with transaction object if succeeds or with error message if it fails
    */
-  // TODO: Type 'amount' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async prepareCreateNewToken(
     name: string,
     symbol: string,
-    amount: any,
+    amount: OutputValueType,
     options: CreateTokenOptions = {}
   ) {
     if (await this.isReadonly()) {
@@ -1934,11 +1931,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with SendTransaction instance
    */
-  // TODO: Type 'amount' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async createNewTokenSendTransaction(
     name: string,
     symbol: string,
-    amount: any,
+    amount: OutputValueType,
     options: CreateTokenOptions = {}
   ) {
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
@@ -1955,11 +1951,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with CreateTokenTransaction
    */
-  // TODO: Type 'amount' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async createNewToken(
     name: string,
     symbol: string,
-    amount: any,
+    amount: OutputValueType,
     options: CreateTokenOptions = {}
   ) {
     const sendTx = await this.createNewTokenSendTransaction(name, symbol, amount, options);
@@ -2725,11 +2720,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with SendTransaction instance
    */
-  // TODO: Type 'amount' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async createNFTSendTransaction(
     name: string,
     symbol: string,
-    amount: any,
+    amount: OutputValueType,
     data: string,
     options: CreateNFTOptions = {}
   ) {
@@ -2763,11 +2757,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with CreateTokenTransaction
    */
-  // TODO: Type 'amount' as OutputValueType once TS4073 is resolved (OutputValueType visibility in public API)
   async createNFT(
     name: string,
     symbol: string,
-    amount: any,
+    amount: OutputValueType,
     data: string,
     options: CreateNFTOptions = {}
   ) {
