@@ -172,6 +172,48 @@ export interface HathorWalletConstructorParams {
 }
 
 /**
+ * Utxo filtering options
+ */
+interface UtxoOptions {
+  /** Maximum number of utxos to aggregate. Default to MAX_INPUTS (255). */
+  max_utxos?: number;
+  /** Token to filter the utxos. If not sent, we select only HTR utxos. */
+  token?: string;
+  /** Authorities to filter the utxos. If not sent, we select only non authority utxos. */
+  authorities?: number;
+  /** Address to filter the utxos. */
+  filter_address?: string;
+  /** Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00. */
+  amount_smaller_than?: bigint;
+  /** Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00. */
+  amount_bigger_than?: bigint;
+  /** Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00. */
+  max_amount?: bigint;
+  /** Use only available utxos (not locked) */
+  only_available_utxos?: boolean;
+}
+
+/**
+ * Options for filtering available UTXOs
+ */
+interface GetAvailableUtxosOptions {
+  /** Search for UTXOs of this token UID. */
+  token?: string;
+  /** Address to filter the utxos. */
+  filter_address?: string | null;
+}
+
+/**
+ * Options for getUtxosForAmount
+ */
+interface GetUtxosForAmountOptions {
+  /** Search for UTXOs of this token UID. */
+  token?: string;
+  /** Address to filter the utxos. */
+  filter_address?: string | null;
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -1115,45 +1157,13 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   *
-   * @typedef UtxoOptions
-   * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {number} [authorities] - Authorities to filter the utxos. If not sent, we select only non authority utxos.
-   * @property {string} [filter_address] - Address to filter the utxos.
-   * @property {bigint} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {bigint} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {bigint} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
-   */
-
-  /**
-   * @typedef UtxoInfo
-   * @property {string} address - Address that owns the UTXO.
-   * @property {bigint} amount - Amount of tokens.
-   * @property {string} tx_id - Original transaction id.
-   * @property {boolean} locked - If the output is currently locked.
-   * @property {number} index - Index on the output array of the original tx.
-   */
-
-  /**
-   * @typedef UtxoDetails
-   * @property {bigint} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {bigint} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {bigint} total_amount_locked - Address to filter the utxos.
-   * @property {bigint} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {UtxoInfo[]} utxos - Array of utxos
-   */
-
-  /**
    * Get utxos of the wallet addresses
    *
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param options Utxo filtering options
    *
-   * @return {Promise<UtxoDetails>} Utxos and meta information about it
-   *
+   * @return Utxos and meta information about it
    */
-  async getUtxos(options: any = {}): Promise<any> {
+  async getUtxos(options: UtxoOptions = {}) {
     const newOptions: any = {
       token: options.token,
       authorities: 0,
@@ -1203,31 +1213,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef Utxo
-   * @property {string} txId
-   * @property {number} index
-   * @property {string} tokenId
-   * @property {string} address
-   * @property {string} value
-   * @property {OutputValueType} authorities
-   * @property {number|null} timelock
-   * @property {number|null} heightlock
-   * @property {boolean} locked
-   * @property {string} addressPath
-   */
-
-  /**
    * Generates all available utxos
    *
-   * @param [options] Utxo filtering options
-   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param options Utxo filtering options
    *
    * @async
    * @generator
-   * @yields {Utxo} all available utxos
+   * @yields all available utxos
    */
-  async *getAvailableUtxos(options: any = {}): AsyncGenerator<any> {
+  async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}) {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex: any = await this.getAddressIndex(utxo.address);
@@ -1250,13 +1244,12 @@ class HathorWallet extends EventEmitter {
   /**
    * Get utxos of the wallet addresses to fill the amount specified.
    *
-   * @param {Object} [options] Utxo filtering options
-   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param amount The amount to fill with UTXOs
+   * @param options Utxo filtering options
    *
-   * @return {Promise<{utxos: Utxo[], changeAmount: OutputValueType}>} Utxos and change information.
+   * @return Utxos and change information.
    */
-  async getUtxosForAmount(amount: any, options: any = {}): Promise<any> {
+  async getUtxosForAmount(amount: bigint, options: GetUtxosForAmountOptions = {}) {
     const newOptions: any = {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
@@ -1278,32 +1271,30 @@ class HathorWallet extends EventEmitter {
   /**
    * Mark UTXO selected_as_input.
    *
-   * @param {string} txId Transaction id of the UTXO
-   * @param {number} index Output index of the UTXO
-   * @param {boolean} [value=true] The value to set the utxos.
-   * @param {number?} [ttl=null]
+   * @param txId Transaction id of the UTXO
+   * @param index Output index of the UTXO
+   * @param value The value to set the utxos.
+   * @param ttl Time to live for the selection
    */
-  async markUtxoSelected(txId: any, index: any, value: any = true, ttl: any = null): Promise<any> {
+  async markUtxoSelected(
+    txId: string,
+    index: number,
+    value: boolean = true,
+    ttl: number | null = null
+  ): Promise<void> {
     await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
   /**
    * Prepare all required data to consolidate utxos.
    *
-   * @typedef {Object} PrepareConsolidateUtxosDataResult
-   * @property {{ address: string, value: OutputValueType }[]} outputs - Destiny of the consolidated utxos
-   * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
-   * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
-   * @property {UtxoInfo[]} utxos - Array of utxos that will be consolidated
-   * @property {bigint} total_amount - Amount to be consolidated
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
-   *
-   * @return {Promise<PrepareConsolidateUtxosDataResult>} Required data to consolidate utxos
+   * @return Required data to consolidate utxos
    *
    */
-  async prepareConsolidateUtxosData(destinationAddress: any, options: any = {}): Promise<any> {
+  async prepareConsolidateUtxosData(destinationAddress: string, options: UtxoOptions = {}) {
     const utxoDetails: any = await this.getUtxos({ ...options, only_available_utxos: true });
     const inputs: any = [];
     const utxos: any = [];
@@ -1333,23 +1324,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef ConsolidationResultSendTx
-   * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {bigint} total_amount - Consolidated amount
-   * @property {SendTransaction} sendTx - instance that will send the transaction.
-   * @property {UtxoInfo[]} utxos - Array of consolidated utxos
-   */
-
-  /**
    * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @return {Promise<ConsolidationResultSendTx>}
+   * @return Consolidation result with SendTransaction instance
    *
    */
-  async consolidateUtxosSendTransaction(destinationAddress: any, options: any = {}): Promise<any> {
+  async consolidateUtxosSendTransaction(destinationAddress: string, options: UtxoOptions = {}) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
@@ -1377,23 +1360,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef ConsolidationResult
-   * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {bigint} total_amount - Consolidated amount
-   * @property {string} txId - Consolidated transaction id
-   * @property {UtxoInfo[]} utxos - Array of consolidated utxos
-   */
-
-  /**
    * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @return {Promise<ConsolidationResult>} Indicates that the transaction is sent or not
+   * @return Indicates that the transaction is sent or not
    *
    */
-  async consolidateUtxos(destinationAddress: any, options: any = {}): Promise<any> {
+  async consolidateUtxos(destinationAddress: string, options: UtxoOptions = {}) {
     const { total_utxos_consolidated, total_amount, sendTx, utxos }: any =
       await this.consolidateUtxosSendTransaction(destinationAddress, options);
 

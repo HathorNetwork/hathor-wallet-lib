@@ -510,8 +510,9 @@ Each group should have:
 - Return types that have a description on JSDocs should keep the JSDoc description but remove the type not to conflict with typescript.
 - Variable types inside methods should be left to Typescript to infer them automatically. Only declare them if it breaks the code not to.
 
-### Critical point
+### Critical points
 
 - No code should be changed, only types and docstrings.
 - There will be times when the types won't match without code changes. In those cases, leave the type as `any` and add a `TODO` comment to fix the type later, with a bit of context.
 - Unless you're avoiding one of those critical issues, never use `any` or `unknown`, and always add a comment explaining why if you do.
+- It is possible the ambiguity or confidence level of some tasks can be challenging. In these cases, interrupt the implementation and ask the user.
