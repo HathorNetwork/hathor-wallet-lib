@@ -27,6 +27,7 @@
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
+import { z } from 'zod';
 import {
   NATIVE_TOKEN_UID,
   P2SH_ACCT_PATH,
@@ -396,6 +397,16 @@ interface CreateNanoTokenTxOptions {
  * @property pinCode PIN to decrypt the private key
  */
 interface CreateOnChainBlueprintTxOptions {
+  pinCode?: string | null;
+}
+
+/**
+ * Options for building a transaction template
+ * @property signTx If the transaction should be signed
+ * @property pinCode PIN to decrypt the private key
+ */
+interface BuildTxTemplateOptions {
+  signTx?: boolean;
   pinCode?: string | null;
 }
 
@@ -2014,17 +2025,15 @@ class HathorWallet extends EventEmitter {
    * Create SendTransaction object and run from mining
    * Returns a promise that resolves when the send succeeds
    *
-   * @param {Transaction} transaction Transaction object to be mined and pushed to the network
+   * @param transaction Transaction object to be mined and pushed to the network
    *
-   * @return {Promise<Transaction|CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
+   * @return  Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
-   * @memberof HathorWallet
-   * @inner
    * @deprecated
    */
-  async handleSendPreparedTransaction(transaction: any): Promise<any> {
-    const sendTransaction: any = new SendTransaction({ wallet: this, transaction });
+  async handleSendPreparedTransaction(transaction: Transaction) {
+    const sendTransaction = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
 
@@ -3533,20 +3542,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Build a transaction from a template.
    *
-   * @param {z.input<typeof TransactionTemplate>} template
-   * @param [options]
-   * @param {boolean} [options.signTx] If the transaction should be signed.
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   * @param template The transaction template to build
+   * @param options Options for building the template
    */
-  async buildTxTemplate(template: any, options: any): Promise<any> {
-    const newOptions: any = {
+  async buildTxTemplate(
+    template: z.input<typeof TransactionTemplate>,
+    options: BuildTxTemplateOptions = {}
+  ) {
+    const newOptions = {
       signTx: false,
       pinCode: null,
       ...options,
     };
-    const instructions: any = TransactionTemplate.parse(template);
-    const tx: any = await this.txTemplateInterpreter.build(instructions, this.debug);
+    const instructions = TransactionTemplate.parse(template);
+    const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
       await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
       tx.prepareToSend();
@@ -3557,12 +3566,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Run a transaction template and send the transaction.
    *
-   * @param {z.input<typeof TransactionTemplate>} template
-   * @param {string|undefined} pinCode
-   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   * @param template The transaction template to run
+   * @param pinCode PIN to decrypt the private key
    */
-  async runTxTemplate(template: any, pinCode: any): Promise<any> {
-    const transaction: any = await this.buildTxTemplate(template, {
+  async runTxTemplate(template: z.input<typeof TransactionTemplate>, pinCode?: string) {
+    const transaction = await this.buildTxTemplate(template, {
       signTx: true,
       pinCode,
     });
