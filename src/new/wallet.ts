@@ -411,6 +411,14 @@ interface BuildTxTemplateOptions {
 }
 
 /**
+ * Options for starting wallet in read-only mode
+ * @property skipAddressFetch Skip fetching addresses on startup
+ */
+interface StartReadOnlyOptions {
+  skipAddressFetch?: boolean;
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -2023,13 +2031,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Create SendTransaction object and run from mining
-   * Returns a promise that resolves when the send succeeds
    *
    * @param transaction Transaction object to be mined and pushed to the network
-   *
-   * @return  Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
-   *
+   * @returns Promise that resolves with transaction object if succeeds, or with error message
+   * if it fails
    * @deprecated
    */
   async handleSendPreparedTransaction(transaction: Transaction) {
@@ -3006,11 +3011,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Guard to check if the response is a transaction not found response
    *
-   * @param {Object} data The request response data
-   *
-   * @throws {TxNotFoundError} If the returned error was a transaction not found
+   * @param data The request response data
+   * @throws TxNotFoundError if the returned error was a transaction not found
    */
-  static _txNotFoundGuard(data: any): any {
+  static _txNotFoundGuard(data: unknown) {
     if (get(data, 'message', '') === 'Transaction not found') {
       throw new TxNotFoundError();
     }
@@ -3643,13 +3647,22 @@ class HathorWallet extends EventEmitter {
     return addressInfo.seqnum + 1;
   }
 
+  /**
+   * Start wallet in read-only mode
+   *
+   * @param options Options for starting in read-only mode
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
-  async startReadOnly(
-    options?: { skipAddressFetch?: boolean | undefined } | undefined
-  ): Promise<void> {
+  async startReadOnly(options?: StartReadOnlyOptions): Promise<void> {
     throw new Error('Not Implemented');
   }
 
+  /**
+   * Get authentication token for read-only mode
+   *
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
   async getReadOnlyAuthToken(): Promise<string> {
     throw new Error('Not implemented.');
