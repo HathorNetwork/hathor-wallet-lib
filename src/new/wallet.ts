@@ -70,6 +70,7 @@ import {
   IIndexLimitAddressScanPolicy,
   IHistoryTx,
   OutputValueType,
+  IUtxo,
 } from '../types';
 import { FullNodeTxResponse } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
@@ -212,6 +213,18 @@ interface GetUtxosForAmountOptions {
   /** Search for UTXOs of this token UID. */
   token?: string;
   /** Address to filter the utxos. */
+  filter_address?: string | null;
+}
+
+/**
+ * Options for getting authority UTXOs
+ */
+interface GetAuthorityOptions {
+  /** If should return many utxos or just one (default false) */
+  many?: boolean;
+  /** If we should filter for available utxos (default false) */
+  only_available_utxos?: boolean;
+  /** Address to filter the utxo to get (default null) */
   filter_address?: string | null;
 }
 
@@ -1964,68 +1977,57 @@ class HathorWallet extends EventEmitter {
   /**
    * Get mint authorities
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMintAuthority(tokenUid: any, options: any = {}): Promise<any> {
+  async getMintAuthority(tokenUid: string, options: GetAuthorityOptions = {}) {
     return this.getAuthorityUtxo(tokenUid, 'mint', options);
   }
 
   /**
    * Get melt authorities
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMeltAuthority(tokenUid: any, options: any = {}): Promise<any> {
+  async getMeltAuthority(tokenUid: string, options: GetAuthorityOptions = {}) {
     return this.getAuthorityUtxo(tokenUid, 'melt', options);
   }
 
   /**
    * Get authority utxo
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {string} authority The authority to filter ('mint' or 'melt')
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param authority - The authority to filter ('mint' or 'melt')
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
-   *       Returns an empty array in case there are no tx_outupts for this type.
+   *       Returns an empty array in case there are no tx_outputs for this type.
    * */
-  async getAuthorityUtxo(tokenUid: any, authority: any, options: any = {}): Promise<any> {
-    let authorityValue: any;
+  async getAuthorityUtxo(
+    tokenUid: string,
+    authority: 'mint' | 'melt',
+    options: GetAuthorityOptions = {}
+  ) {
+    let authorityValue: bigint;
     if (authority === 'mint') {
       authorityValue = 1n;
     } else if (authority === 'melt') {
@@ -2034,7 +2036,7 @@ class HathorWallet extends EventEmitter {
       throw new Error('Invalid authority value.');
     }
 
-    const newOptions: any = {
+    const newOptions = {
       token: tokenUid,
       authorities: authorityValue,
       only_available_utxos: options.only_available_utxos ?? false,
@@ -2044,7 +2046,7 @@ class HathorWallet extends EventEmitter {
       // limit number of utxos to select if many is false
       newOptions.max_utxos = 1;
     }
-    const utxos: any = [];
+    const utxos: IUtxo[] = [];
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
       utxos.push(utxo);
     }
@@ -2541,13 +2543,12 @@ class HathorWallet extends EventEmitter {
   /**
    * Get all authorities utxos for specific token
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {{tx_id: string, index: number, address: string, authorities: OutputValueType}[]}
-   *    Array of the authority outputs.
+   * @return Array of the authority outputs.
    * */
-  async getAuthorityUtxos(tokenUid: any, type: any): Promise<any> {
+  async getAuthorityUtxos(tokenUid: string, type: 'mint' | 'melt') {
     if (type === 'mint') {
       return this.getMintAuthority(tokenUid, { many: true });
     }

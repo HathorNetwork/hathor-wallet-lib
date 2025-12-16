@@ -412,11 +412,15 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the authority of the action and create the input
-    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, {
-      many: false,
-      only_available_utxos: true,
-      filter_address: action.address,
-    });
+    const utxos = await this.wallet.getAuthorityUtxo(
+      action.token,
+      action.authority as 'mint' | 'melt',
+      {
+        many: false,
+        only_available_utxos: true,
+        filter_address: action.address,
+      }
+    );
 
     if (!utxos || utxos.length === 0) {
       throw new NanoContractTransactionError(
