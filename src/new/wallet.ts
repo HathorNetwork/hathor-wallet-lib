@@ -178,129 +178,129 @@ export interface HathorWalletConstructorParams {
 
 /**
  * Utxo filtering options
+ * @property max_utxos Maximum number of utxos to aggregate. Default to MAX_INPUTS (255)
+ * @property token Token to filter the utxos. If not sent, we select only HTR utxos
+ * @property authorities Authorities to filter the utxos. If not sent, we select only non authority utxos
+ * @property filter_address Address to filter the utxos
+ * @property amount_smaller_than Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00
+ * @property amount_bigger_than Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00
+ * @property max_amount Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00
+ * @property only_available_utxos Use only available utxos (not locked)
  */
 interface UtxoOptions {
-  /** Maximum number of utxos to aggregate. Default to MAX_INPUTS (255). */
   max_utxos?: number;
-  /** Token to filter the utxos. If not sent, we select only HTR utxos. */
   token?: string;
-  /** Authorities to filter the utxos. If not sent, we select only non authority utxos. */
   authorities?: number;
-  /** Address to filter the utxos. */
   filter_address?: string;
-  /** Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00. */
   amount_smaller_than?: bigint;
-  /** Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00. */
   amount_bigger_than?: bigint;
-  /** Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00. */
   max_amount?: bigint;
-  /** Use only available utxos (not locked) */
   only_available_utxos?: boolean;
 }
 
 /**
  * Options for filtering available UTXOs
+ * @property token Search for UTXOs of this token UID
+ * @property filter_address Address to filter the utxos
  */
 interface GetAvailableUtxosOptions {
-  /** Search for UTXOs of this token UID. */
   token?: string;
-  /** Address to filter the utxos. */
   filter_address?: string | null;
 }
 
 /**
  * Options for getUtxosForAmount
+ * @property token Search for UTXOs of this token UID
+ * @property filter_address Address to filter the utxos
  */
 interface GetUtxosForAmountOptions {
-  /** Search for UTXOs of this token UID. */
   token?: string;
-  /** Address to filter the utxos. */
   filter_address?: string | null;
 }
 
 /**
  * Options for getting authority UTXOs
+ * @property many If should return many utxos or just one (default false)
+ * @property only_available_utxos If we should filter for available utxos (default false)
+ * @property filter_address Address to filter the utxo to get (default null)
  */
 interface GetAuthorityOptions {
-  /** If should return many utxos or just one (default false) */
   many?: boolean;
-  /** If we should filter for available utxos (default false) */
   only_available_utxos?: boolean;
-  /** Address to filter the utxo to get (default null) */
   filter_address?: string | null;
 }
 
 /**
  * Options for minting tokens
+ * @property address Destination address of the minted token (if not sent we choose the next available address to use)
+ * @property changeAddress Address of the change output (if not sent we choose the next available address to use)
+ * @property startMiningTx Boolean to trigger start mining (default true)
+ * @property createAnotherMint Boolean to create another mint authority or not for the wallet (default true)
+ * @property mintAuthorityAddress Address to send the new mint authority created
+ * @property allowExternalMintAuthorityAddress Allow the mint authority address to be from another wallet (default false)
+ * @property unshiftData Whether to unshift the data script output (default false)
+ * @property data List of data strings using utf8 encoding to add each as a data script output (default null)
+ * @property signTx Sign transaction instance (default true)
+ * @property pinCode Pin to decrypt xpriv information
  */
 interface MintTokensOptions {
-  /** Destination address of the minted token (if not sent we choose the next available address to use) */
   address?: string | null;
-  /** Address of the change output (if not sent we choose the next available address to use) */
   changeAddress?: string | null;
-  /** Boolean to trigger start mining (default true) */
   startMiningTx?: boolean;
-  /** Boolean to create another mint authority or not for the wallet (default true) */
   createAnotherMint?: boolean;
-  /** Address to send the new mint authority created */
   mintAuthorityAddress?: string | null;
-  /** Allow the mint authority address to be from another wallet (default false) */
   allowExternalMintAuthorityAddress?: boolean;
-  /** Whether to unshift the data script output (default false) */
   unshiftData?: boolean;
-  /** List of data strings using utf8 encoding to add each as a data script output (default null) */
   data?: string[] | null;
-  /** Sign transaction instance (default true) */
   signTx?: boolean;
-  /** Pin to decrypt xpriv information */
   pinCode?: string | null;
 }
 
 /**
  * Options for melting tokens
+ * @property address Address of the HTR deposit back (if not sent we choose the next available address to use)
+ * @property changeAddress Address of the change output (if not sent we choose the next available address to use)
+ * @property createAnotherMelt Create another melt authority or not (default true)
+ * @property meltAuthorityAddress Where to send the new melt authority created (default null)
+ * @property allowExternalMeltAuthorityAddress Allow the melt authority address to be from another wallet (default false)
+ * @property unshiftData Add the data outputs in the start of the output list (default false)
+ * @property data List of data script output to add, UTF-8 encoded (default null)
+ * @property pinCode Pin to decrypt xpriv information
+ * @property signTx Sign transaction instance (default true)
+ * @property startMiningTx Boolean to trigger start mining (default true)
  */
 interface MeltTokensOptions {
-  /** Address of the HTR deposit back (if not sent we choose the next available address to use) */
   address?: string | null;
-  /** Address of the change output (if not sent we choose the next available address to use) */
   changeAddress?: string | null;
-  /** Create another melt authority or not (default true) */
   createAnotherMelt?: boolean;
-  /** Where to send the new melt authority created (default null) */
   meltAuthorityAddress?: string | null;
-  /** Allow the melt authority address to be from another wallet (default false) */
   allowExternalMeltAuthorityAddress?: boolean;
-  /** Add the data outputs in the start of the output list (default false) */
   unshiftData?: boolean;
-  /** List of data script output to add, UTF-8 encoded (default null) */
   data?: string[] | null;
-  /** Pin to decrypt xpriv information */
   pinCode?: string | null;
-  /** Sign transaction instance (default true) */
   signTx?: boolean;
-  /** Boolean to trigger start mining (default true) */
   startMiningTx?: boolean;
 }
 
 /**
  * Options for delegating authority
+ * @property createAnother Should create another authority for the wallet (default true)
+ * @property startMiningTx Boolean to trigger start mining (default true)
+ * @property pinCode Pin to decrypt xpriv information
  */
 interface DelegateAuthorityOptions {
-  /** Should create another authority for the wallet (default true) */
   createAnother?: boolean;
-  /** Boolean to trigger start mining (default true) */
   startMiningTx?: boolean;
-  /** Pin to decrypt xpriv information */
   pinCode?: string | null;
 }
 
 /**
  * Options for destroying authority
+ * @property startMiningTx Boolean to trigger start mining (default true)
+ * @property pinCode Pin to decrypt xpriv information
  */
 interface DestroyAuthorityOptions {
-  /** Boolean to trigger start mining (default true) */
   startMiningTx?: boolean;
-  /** Pin to decrypt xpriv information */
   pinCode?: string | null;
 }
 
@@ -438,6 +438,13 @@ interface StartReadOnlyOptions {
  *                          one for each request sent to the server.
  */
 
+/**
+ * Proposed output for a transaction
+ * @property address Destination address for the output
+ * @property value Value of the output
+ * @property timelock Optional timelock for the output
+ * @property token Token UID for the output
+ */
 interface ProposedOutput {
   address: string;
   value: OutputValueType;
@@ -445,12 +452,25 @@ interface ProposedOutput {
   token: string;
 }
 
+/**
+ * Proposed input for a transaction
+ * @property txId Transaction ID of the input
+ * @property index Index of the output being spent
+ * @property token Token UID of the input
+ */
 interface ProposedInput {
   txId: string;
   index: number;
   token: string;
 }
 
+/**
+ * Options for sending many outputs transaction
+ * @property inputs Optional array of proposed inputs to use
+ * @property changeAddress Address for change output
+ * @property startMiningTx Boolean to trigger start mining (default true)
+ * @property pinCode Pin to decrypt xpriv information
+ */
 interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
   changeAddress?: string | null;
@@ -458,6 +478,23 @@ interface SendManyOutputsOptions {
   pinCode?: string | null;
 }
 
+/**
+ * Options for creating a token
+ * @property address Destination address for the minted tokens
+ * @property changeAddress Address for change output
+ * @property startMiningTx Boolean to trigger start mining (default true)
+ * @property pinCode Pin to decrypt xpriv information
+ * @property createMint If should create a mint authority output
+ * @property mintAuthorityAddress Address to send the mint authority output to
+ * @property allowExternalMintAuthorityAddress Allow the mint authority address to be from another wallet
+ * @property createMelt If should create a melt authority output
+ * @property meltAuthorityAddress Address to send the melt authority output to
+ * @property allowExternalMeltAuthorityAddress Allow the melt authority address to be from another wallet
+ * @property data List of data strings to create data outputs
+ * @property signTx Sign transaction instance (default true)
+ * @property isCreateNFT If this token is an NFT
+ * @property tokenVersion Version of the token to create
+ */
 interface CreateTokenOptions {
   address?: string | null;
   changeAddress?: string | null;
