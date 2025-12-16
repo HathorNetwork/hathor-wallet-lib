@@ -501,6 +501,8 @@ Each group should have:
 - Some methods have JSDoc typedefs that can guide the TypeScript types
 - The file currently has `@ts-nocheck` which should be removed incrementally per PR
 - Consider creating a `types.ts` file for shared interfaces used across groups
+- A build should be run after each refactoring session to ensure no type errors are introduced
+- Test runs should be executed manually by the user, not the AI agent.
 
 ### Recommendations
 
