@@ -2771,8 +2771,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns List of indexes and their associated address index
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async getWalletInputInfo(tx: any) {
+  async getWalletInputInfo(tx: Transaction) {
     const walletInputs: { inputIndex: number; addressIndex: number; addressPath: string }[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
@@ -2802,8 +2801,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Input and signature information
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async getSignatures(tx: any, { pinCode = null }: { pinCode?: string | null } = {}) {
+  async getSignatures(tx: Transaction, { pinCode = null }: { pinCode?: string | null } = {}) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
@@ -2840,8 +2838,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns The signed transaction
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async signTx(tx: any, options: { pinCode?: string | null } = {}) {
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}) {
     for (const sigInfo of await this.getSignatures(tx, options)) {
       const { signature, pubkey, inputIndex } = sigInfo;
       const inputData = transactionUtils.createInputData(
