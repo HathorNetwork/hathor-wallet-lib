@@ -2206,31 +2206,22 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} DelegateAuthorityOptions
-   * @property {boolean?} [options.createAnother=true] Should create another authority for the wallet.
-   * @property {boolean?} [options.startMiningTx=true] boolean to trigger start mining.
-   * @property {string?} [options.pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare delegate authority transaction before mining
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async prepareDelegateAuthorityData(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
@@ -2274,23 +2265,21 @@ class HathorWallet extends EventEmitter {
    * Delegate authority - Send Transaction
    * Create a SendTransaction instance ready to mine a delegate authority transaction.
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async delegateAuthoritySendTransaction(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
-    const transaction: any = await this.prepareDelegateAuthorityData(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ) {
+    const transaction = await this.prepareDelegateAuthorityData(
       tokenUid,
       type,
       destinationAddress,
@@ -2302,23 +2291,23 @@ class HathorWallet extends EventEmitter {
   /**
    * Delegate authority
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
   async delegateAuthority(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
-    const sendTx: any = await this.delegateAuthoritySendTransaction(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ) {
+    const sendTx = await this.delegateAuthoritySendTransaction(
       tokenUid,
       type,
       destinationAddress,
@@ -2328,30 +2317,22 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} DestroyAuthorityOptions
-   * @param {boolean?} [startMiningTx=true] trigger start mining
-   * @param {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare destroy authority transaction before mining
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async prepareDestroyAuthorityData(
-    tokenUid: any,
-    type: any,
-    count: any,
-    options: any = {}
-  ): Promise<any> {
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ) {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
@@ -2398,41 +2379,44 @@ class HathorWallet extends EventEmitter {
    * Destroy authority - SendTransaction
    * Creates a SendTransaction instance with a prepared destroy transaction.
    *
-   * @param {string} tokenUid UID of the token to destroy the authority
-   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to destroy the authority
+   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async destroyAuthoritySendTransaction(
-    tokenUid: any,
-    type: any,
-    count: any,
-    options: any = {}
-  ): Promise<any> {
-    const transaction: any = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ) {
+    const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Destroy authority
    *
-   * @param {string} tokenUid UID of the token to destroy the authority
-   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to destroy the authority
+   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async destroyAuthority(tokenUid: any, type: any, count: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
+  async destroyAuthority(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ) {
+    const sendTx = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
     return sendTx.runFromMining();
   }
 
