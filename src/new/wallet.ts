@@ -71,6 +71,7 @@ import {
   IHistoryTx,
   OutputValueType,
   IUtxo,
+  EcdsaTxSign,
 } from '../types';
 import { FullNodeTxResponse } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
@@ -300,6 +301,38 @@ interface DestroyAuthorityOptions {
   startMiningTx?: boolean;
   /** Pin to decrypt xpriv information */
   pinCode?: string | null;
+}
+
+/**
+ * Options for starting the wallet
+ * @property pinCode PIN code to decrypt the private key
+ * @property password Password to decrypt the seed
+ */
+interface WalletStartOptions {
+  pinCode?: string | null;
+  password?: string | null;
+}
+
+/**
+ * Options for stopping the wallet
+ * @property cleanStorage Clean storage data (default true)
+ * @property cleanAddresses Clean address data (default false)
+ * @property cleanTokens Clean token data (default false)
+ */
+interface WalletStopOptions {
+  cleanStorage?: boolean;
+  cleanAddresses?: boolean;
+  cleanTokens?: boolean;
+}
+
+/**
+ * WebSocket message data structure for wallet updates
+ * @property type Type of WebSocket message
+ * @property history Transaction history data for wallet:address_history messages
+ */
+interface WalletWebSocketData {
+  type: string;
+  history?: IHistoryTx;
 }
 
 /**
@@ -809,9 +842,9 @@ class HathorWallet extends EventEmitter {
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
-   * @param {Number} newState Enum of new state after change
+   * @param newState The new connection state (0: CLOSED, 1: CONNECTING, 2: CONNECTED)
    */
-  async onConnectionChangedState(newState: any): Promise<any> {
+  async onConnectionChangedState(newState: 0 | 1 | 2) {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
@@ -1019,8 +1052,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Called when a new message arrives from websocket.
+   *
+   * @param wsData WebSocket message data
    */
-  handleWebsocketMsg(wsData: any): any {
+  handleWebsocketMsg(wsData: WalletWebSocketData) {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
         // Cannot process new transactions from ws when the wallet is not ready.
@@ -1550,11 +1585,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Process the transactions on the websocket transaction queue as if they just arrived.
-   *
-   * @memberof HathorWallet
-   * @inner
    */
-  async processTxQueue(): Promise<any> {
+  async processTxQueue() {
     let wsData: any = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
@@ -1575,7 +1607,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Check if we need to load more addresses and load them if needed.
    * The configured scanning policy will be used to determine the loaded addresses.
-   * @param processHistory If we should process the txs found on the loaded addresses.
+   *
+   * @param processHistory If we should process the txs found on the loaded addresses
    */
   async scanAddressesToLoad(processHistory: boolean = false) {
     // check address scanning policy and load more addresses if needed
@@ -1588,10 +1621,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Call the method to process data and resume with the correct state after processing.
    *
-   * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
+   * @returns A promise that resolves when the wallet is done processing the tx queue.
    */
   async onEnterStateProcessing() {
-    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+    // Started processing state now, so we prepare the local data to support using this facade interchangeable with wallet service facade in both wallets
     try {
       await this.processTxQueue();
       this.setState(HathorWallet.READY);
@@ -1614,16 +1647,19 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Enqueue the call for onNewTx with the given data.
-   * @param {{ history: import('../types').IHistoryTx }} wsData
+   *
+   * @param wsData WebSocket message data containing transaction history
    */
-  enqueueOnNewTx(wsData) {
+  enqueueOnNewTx(wsData: { history: IHistoryTx }) {
     this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
   /**
-   * @param {{ history: import('../types').IHistoryTx }} wsData
+   * Process a new transaction received from websocket.
+   *
+   * @param wsData WebSocket message data containing transaction history
    */
-  async onNewTx(wsData) {
+  async onNewTx(wsData: { history: IHistoryTx }) {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
       this.logger.error(parseResult.error);
@@ -1776,14 +1812,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Connect to the server and start emitting events.
    *
-   * @param {Object} optionsParams Options parameters
-   *  {
-   *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
-   *   'password': password to decrypt xpriv information. Required if not set in object.
-   *  }
+   * @param optionsParams Options parameters for starting the wallet
    */
-  async start(optionsParams: any = {}): Promise<any> {
-    const options: any = { pinCode: null, password: null, ...optionsParams };
+  async start(optionsParams: WalletStartOptions = {}) {
+    const options = { pinCode: null, password: null, ...optionsParams };
     const pinCode: any = options.pinCode || this.pinCode;
     const password: any = options.password || this.password;
     if (!this.xpub && !pinCode) {
@@ -1858,8 +1890,14 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Close the connections and stop emitting events.
+   *
+   * @param options Options for stopping the wallet
    */
-  async stop({ cleanStorage = true, cleanAddresses = false, cleanTokens = false } = {}) {
+  async stop({
+    cleanStorage = true,
+    cleanAddresses = false,
+    cleanTokens = false,
+  }: WalletStopOptions = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
@@ -3401,28 +3439,31 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the external tx signing method.
-   * @param {EcdsaTxSign|null} method
+   *
+   * @param method The external transaction signing method, or null to clear
    */
-  setExternalTxSigningMethod(method: any): any {
+  setExternalTxSigningMethod(method: EcdsaTxSign | null) {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
   }
 
   /**
    * Set the history sync mode.
-   * @param {HistorySyncMode} mode
+   *
+   * @param mode The history sync mode to use
    */
-  setHistorySyncMode(mode: any): any {
+  setHistorySyncMode(mode: HistorySyncMode) {
     this.historySyncMode = mode;
   }
 
   /**
-   * @param {number} startIndex
-   * @param {number} count
-   * @param {boolean} [shouldProcessHistory=false]
-   * @returns {Promise<void>}
+   * Sync wallet history starting from a specific address index.
+   *
+   * @param startIndex The index of the first address to sync
+   * @param count The number of addresses to sync
+   * @param shouldProcessHistory If we should process the transaction history found
    */
-  async syncHistory(startIndex: any, count: any, shouldProcessHistory: any = false): Promise<any> {
+  async syncHistory(startIndex: number, count: number, shouldProcessHistory: boolean = false) {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
@@ -3450,9 +3491,9 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Reload all addresses and transactions from the full node
+   * Reload all addresses and transactions from the full node.
    */
-  async reloadStorage(): Promise<any> {
+  async reloadStorage() {
     await this.conn.onReload();
 
     // unsub all addresses
