@@ -98,6 +98,7 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import { TransactionAccWeightResponse } from '../api/schemas/txApi';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -3095,7 +3096,7 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTxConfirmationData(txId: string) {
-    const confirmationData = await new Promise((resolve, reject) => {
+    const confirmationData: TransactionAccWeightResponse = await new Promise((resolve, reject) => {
       txApi
         .getConfirmationData(txId, resolve)
         .then(() => reject(new Error('API client did not use the callback')))

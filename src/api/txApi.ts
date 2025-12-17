@@ -7,7 +7,11 @@
 
 import { createRequestInstance } from './axiosInstance';
 import { transformJsonBigIntResponse } from '../utils/bigint';
-import { FullNodeTxApiResponse, transactionApiSchema } from './schemas/txApi';
+import {
+  FullNodeTxApiResponse,
+  TransactionAccWeightResponse,
+  transactionApiSchema,
+} from './schemas/txApi';
 
 /**
  * Api calls for transaction
@@ -70,14 +74,13 @@ const txApi = {
   /**
    * Call api to get one transaction
    *
-   * @param {string} id Transaction ID to search
-   * @params {function} resolve Method to be called after response arrives
+   * @param id Transaction ID to search
+   * @params resolve Method to be called after response arrives
    *
-   * @return {Promise}
    * @memberof ApiTransaction
    * @inner
    */
-  getTransaction(id: string, resolve: (response: FullNodeTxApiResponse) => void): Promise<void> {
+  getTransaction(id: string, resolve: (response: FullNodeTxApiResponse) => void) {
     const data = { id };
     return this.getTransactionBase(data, resolve, transactionApiSchema);
   },
@@ -85,18 +88,18 @@ const txApi = {
   /**
    * Call api to get confirmation data of a tx
    *
-   * @param {string} id Transaction hash in hex
-   * @param {function} resolve Method to be called after response arrives
+   * @param id Transaction hash in hex
+   * @param resolve Method to be called after response arrives
    *
-   * @return {Promise}
    * @memberof ApiTransaction
    * @inner
    */
-  getConfirmationData(id, resolve) {
-    // FIXME: Add types to the response of this method
+  getConfirmationData(id: string, resolve: (response: TransactionAccWeightResponse) => void) {
+    // TODO: This method uses a callback pattern but also returns a Promise, which is an anti-pattern
+    // NOTE: createRequestInstance has legacy typing (resolve?: null) that doesn't match actual usage.
     const data = { id };
-    return createRequestInstance(resolve)
-      .get(`transaction_acc_weight`, { params: data })
+    return createRequestInstance(resolve as unknown as null)
+      .get<TransactionAccWeightResponse>(`transaction_acc_weight`, { params: data })
       .then(
         res => {
           resolve(res.data);
