@@ -90,7 +90,7 @@ import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
-import { NanoContractVertexType } from '../nano_contracts/types';
+import { NanoContractAction, NanoContractVertexType } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
@@ -354,8 +354,8 @@ interface CreateNanoTxOptions {
 interface CreateNanoTxData {
   blueprintId?: string | null;
   ncId?: string | null;
-  actions?: any[]; // TODO: Type as NanoContractAction[] once NanoContractAction is exported from types
-  args?: any[];
+  actions?: NanoContractAction[];
+  args?: unknown[] | null;
 }
 
 /**
@@ -801,8 +801,8 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData: any = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const versionData = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
     return {
@@ -974,7 +974,7 @@ class HathorWallet extends EventEmitter {
         // before loading the full data again
         if (this.firstConnection) {
           this.firstConnection = false;
-          const addressesToLoad: any = await scanPolicyStartAddresses(this.storage);
+          const addressesToLoad = await scanPolicyStartAddresses(this.storage);
           await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
         } else {
           if (this.beforeReloadCallback) {
@@ -983,7 +983,7 @@ class HathorWallet extends EventEmitter {
           await this.reloadStorage();
         }
         this.setState(HathorWallet.PROCESSING);
-      } catch (error: any) {
+      } catch (error) {
         this.setState(HathorWallet.ERROR);
         this.logger.error('Error loading wallet', { error });
       }
@@ -1374,11 +1374,11 @@ class HathorWallet extends EventEmitter {
     }
 
     // Derivation path index
-    const addressData: any = await this.storage.getAddressInfo(address);
-    const index: any = addressData.bip32AddressIndex;
+    const addressData = await this.storage.getAddressInfo(address);
+    const index = addressData.bip32AddressIndex;
 
     // Address information that will be calculated below
-    const addressInfo: any = {
+    const addressInfo = {
       total_amount_received: 0n,
       total_amount_sent: 0n,
       total_amount_available: 0n,
@@ -1396,24 +1396,20 @@ class HathorWallet extends EventEmitter {
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        const is_address_valid: any = output.decoded && output.decoded.address === address;
-        const is_token_valid: any = token === output.token;
-        const is_authority: any = transactionUtils.isAuthorityOutput(output);
+        const is_address_valid = output.decoded && output.decoded.address === address;
+        const is_token_valid = token === output.token;
+        const is_authority = transactionUtils.isAuthorityOutput(output);
         if (!is_address_valid || !is_token_valid || is_authority) {
           continue;
         }
 
-        const is_spent: any = output.spent_by !== null;
-        const is_time_locked: any = transactionUtils.isOutputLocked(output);
+        const is_spent = output.spent_by !== null;
+        const is_time_locked = transactionUtils.isOutputLocked(output);
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
-        const nowHeight: any = await this.storage.getCurrentHeight();
-        const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked: any = transactionUtils.isHeightLocked(
-          tx.height,
-          nowHeight,
-          rewardLock
-        );
-        const is_locked: any = is_time_locked || is_height_locked;
+        const nowHeight = await this.storage.getCurrentHeight();
+        const rewardLock = this.storage.version?.reward_spend_min_blocks;
+        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
+        const is_locked = is_time_locked || is_height_locked;
 
         addressInfo.total_amount_received += output.value;
 
@@ -1441,7 +1437,7 @@ class HathorWallet extends EventEmitter {
    * @return Utxos and meta information about it
    */
   async getUtxos(options: UtxoOptions = {}) {
-    const newOptions: any = {
+    const newOptions = {
       token: options.token,
       authorities: 0,
       max_utxos: options.max_utxos,
@@ -1452,24 +1448,24 @@ class HathorWallet extends EventEmitter {
       only_available_utxos: options.only_available_utxos,
     };
     /** @type {UtxoDetails} */
-    const utxoDetails: any = {
+    const utxoDetails = {
       total_amount_available: 0n,
       total_utxos_available: 0n,
       total_amount_locked: 0n,
       total_utxos_locked: 0n,
       utxos: [],
     };
-    const nowTs: any = Math.floor(Date.now() / 1000);
-    const isTimeLocked: any = (timestamp: any) => timestamp && nowTs && nowTs < timestamp;
-    const nowHeight: any = await this.storage.getCurrentHeight();
-    const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
+    const nowTs = Math.floor(Date.now() / 1000);
+    const isTimeLocked = (timestamp: number | null) => timestamp && nowTs && nowTs < timestamp;
+    const nowHeight = await this.storage.getCurrentHeight();
+    const rewardLock = this.storage.version?.reward_spend_min_blocks;
 
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      const isLocked: any =
+      const isLocked =
         isTimeLocked(utxo.timelock) ||
         transactionUtils.isHeightLocked(utxo.height, nowHeight, rewardLock);
 
-      const utxoInfo: any = {
+      const utxoInfo = {
         address: utxo.address,
         amount: utxo.value,
         tx_id: utxo.txId,
@@ -1501,8 +1497,8 @@ class HathorWallet extends EventEmitter {
   async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}) {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
-      const addressIndex: any = await this.getAddressIndex(utxo.address);
-      const addressPath: any = await this.getAddressPathForIndex(addressIndex);
+      const addressIndex = await this.getAddressIndex(utxo.address);
+      const addressPath = await this.getAddressPathForIndex(addressIndex);
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1527,14 +1523,14 @@ class HathorWallet extends EventEmitter {
    * @return Utxos and change information.
    */
   async getUtxosForAmount(amount: bigint, options: GetUtxosForAmountOptions = {}) {
-    const newOptions: any = {
+    const newOptions = {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
       order_by_value: 'desc',
     };
 
-    const utxos: any = [];
+    const utxos = [];
     for await (const utxo of this.getAvailableUtxos(newOptions)) {
       utxos.push(utxo);
     }
@@ -1572,16 +1568,16 @@ class HathorWallet extends EventEmitter {
    *
    */
   async prepareConsolidateUtxosData(destinationAddress: string, options: UtxoOptions = {}) {
-    const utxoDetails: any = await this.getUtxos({ ...options, only_available_utxos: true });
-    const inputs: any = [];
-    const utxos: any = [];
-    let total_amount: any = 0n;
+    const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
+    const inputs = [];
+    const utxos = [];
+    let total_amount = 0n;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === this.storage.version.max_number_inputs) {
         // Max number of inputs reached
         break;
       }
-      const utxo: any = utxoDetails.utxos[i];
+      const utxo = utxoDetails.utxos[i];
       inputs.push({
         txId: utxo.tx_id,
         index: utxo.index,
@@ -1589,7 +1585,7 @@ class HathorWallet extends EventEmitter {
       utxos.push(utxo);
       total_amount += utxo.amount;
     }
-    const outputs: any = [
+    const outputs = [
       {
         address: destinationAddress,
         value: total_amount,
@@ -1613,7 +1609,7 @@ class HathorWallet extends EventEmitter {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
-    const { outputs, inputs, utxos, total_amount }: any = await this.prepareConsolidateUtxosData(
+    const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(
       destinationAddress,
       options
     );
@@ -1646,10 +1642,10 @@ class HathorWallet extends EventEmitter {
    *
    */
   async consolidateUtxos(destinationAddress: string, options: UtxoOptions = {}) {
-    const { total_utxos_consolidated, total_amount, sendTx, utxos }: any =
+    const { total_utxos_consolidated, total_amount, sendTx, utxos } =
       await this.consolidateUtxosSendTransaction(destinationAddress, options);
 
-    const tx: any = await sendTx.run();
+    const tx = await sendTx.run();
 
     return {
       total_utxos_consolidated,
@@ -1707,7 +1703,7 @@ class HathorWallet extends EventEmitter {
    * Process the transactions on the websocket transaction queue as if they just arrived.
    */
   async processTxQueue() {
-    let wsData: any = this.wsTxQueue.dequeue();
+    let wsData = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
       // save new txdata
@@ -1936,8 +1932,8 @@ class HathorWallet extends EventEmitter {
    */
   async start(optionsParams: WalletStartOptions = {}) {
     const options = { pinCode: null, password: null, ...optionsParams };
-    const pinCode: any = options.pinCode || this.pinCode;
-    const password: any = options.password || this.password;
+    const pinCode = options.pinCode || this.pinCode;
+    const password = options.password || this.password;
     if (!this.xpub && !pinCode) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
@@ -3331,14 +3327,14 @@ class HathorWallet extends EventEmitter {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     // Get caller pubkey
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -3346,7 +3342,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Build and send transaction
-    const builder: any = new NanoContractTransactionBuilder()
+    const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
@@ -3356,7 +3352,7 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
-    const nc: any = await builder.build();
+    const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }
 
@@ -3536,7 +3532,7 @@ class HathorWallet extends EventEmitter {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
-    let syncMode: any = this.historySyncMode;
+    let syncMode = this.historySyncMode;
     if (
       [HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(
         this.historySyncMode
@@ -3551,7 +3547,7 @@ class HathorWallet extends EventEmitter {
       this.logger.debug('Falling back to http polling API');
       syncMode = HistorySyncMode.POLLING_HTTP_API;
     }
-    const syncMethod: any = getHistorySyncMethod(syncMode);
+    const syncMethod = getHistorySyncMethod(syncMode);
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
     await GLL.add(async () => {
@@ -3569,14 +3565,14 @@ class HathorWallet extends EventEmitter {
     for await (const address of this.storage.getAllAddresses()) {
       this.conn.unsubscribeAddress(address.base58);
     }
-    const accessData: any = await this.storage.getAccessData();
+    const accessData = await this.storage.getAccessData();
     if (accessData != null) {
       // Clean entire storage
       await this.storage.cleanStorage(true, true);
       // Reset access data
       await this.storage.saveAccessData(accessData);
     }
-    const addressesToLoad: any = await scanPolicyStartAddresses(this.storage);
+    const addressesToLoad = await scanPolicyStartAddresses(this.storage);
     await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
   }
 
