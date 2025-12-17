@@ -1307,12 +1307,13 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_address && new Address(tx.nc_address, { network: this.getNetworkObject() }),
-        firstBlock: tx.first_block,
+        ncCaller: (tx.nc_address &&
+          new Address(tx.nc_address, { network: this.getNetworkObject() })) as Address,
+        firstBlock: tx.first_block as string | undefined,
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-        txHistory.ncCaller =
-          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+        txHistory.ncCaller = (tx.nc_pubkey &&
+          getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject())) as Address;
       }
       txs.push(txHistory);
       count--;
@@ -1370,7 +1371,7 @@ class HathorWallet extends EventEmitter {
    * @returns Aggregated information about the given address
    *
    */
-  async getAddressInfo(address: string, options = {}) {
+  async getAddressInfo(address: string, options: { token?: string } = {}) {
     const { token = NATIVE_TOKEN_UID } = options;
 
     // Throws an error if the address does not belong to this wallet
@@ -1380,7 +1381,7 @@ class HathorWallet extends EventEmitter {
 
     // Derivation path index
     const addressData = await this.storage.getAddressInfo(address);
-    const index = addressData.bip32AddressIndex;
+    const index = addressData!.bip32AddressIndex;
 
     // Address information that will be calculated below
     const addressInfo = {
@@ -1535,7 +1536,7 @@ class HathorWallet extends EventEmitter {
       order_by_value: 'desc',
     };
 
-    const utxos = [];
+    const utxos: IUtxo[] = [];
     for await (const utxo of this.getAvailableUtxos(newOptions)) {
       utxos.push(utxo);
     }
@@ -1578,7 +1579,7 @@ class HathorWallet extends EventEmitter {
     const utxos = [];
     let total_amount = 0n;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
-      if (inputs.length === this.storage.version.max_number_inputs) {
+      if (inputs.length === this.storage.version!.max_number_inputs) {
         // Max number of inputs reached
         break;
       }
@@ -1655,7 +1656,7 @@ class HathorWallet extends EventEmitter {
     return {
       total_utxos_consolidated,
       total_amount,
-      txId: tx.hash,
+      txId: tx!.hash,
       utxos,
     };
   }
@@ -1995,16 +1996,18 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise((resolve, reject) => {
+    const info = await new Promise<ApiVersion>((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
     });
-    if (info.network.indexOf(this.conn.network) >= 0) {
+    if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
       this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
-      throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);
+      throw new Error(
+        `Wrong network. server=${info.network} expected=${this.conn.getCurrentNetwork()}`
+      );
     }
     return info;
   }
@@ -3683,7 +3686,7 @@ class HathorWallet extends EventEmitter {
    */
   async getNanoHeaderSeqnum(address: string) {
     const addressInfo = await this.storage.getAddressInfo(address);
-    return addressInfo.seqnum + 1;
+    return addressInfo!.seqnum! + 1;
   }
 
   /**
