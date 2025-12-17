@@ -66,7 +66,6 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
-  FullNodeVersionData,
   IIndexLimitAddressScanPolicy,
   IHistoryTx,
   OutputValueType,
@@ -74,8 +73,9 @@ import {
   EcdsaTxSign,
   IHistoryInput,
   IHistoryOutput,
+  ApiVersion,
 } from '../types';
-import { FullNodeTxResponse } from '../wallet/types';
+import { FullNodeTxResponse, FullNodeVersionData } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -803,7 +803,7 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData = await new Promise((resolve, reject) => {
+    const versionData: ApiVersion = await new Promise((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
