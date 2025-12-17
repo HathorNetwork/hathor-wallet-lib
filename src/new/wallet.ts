@@ -5,10 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
-/* eslint-enable @typescript-eslint/ban-ts-comment */
-
 /**
  * TypeScript Migration In Progress
  *
@@ -683,7 +679,7 @@ class HathorWallet extends EventEmitter {
       throw Error("You can't use xpriv with passphrase.");
     }
 
-    if (connection.state !== ConnectionState.CLOSED) {
+    if (connection.getState() !== ConnectionState.CLOSED) {
       throw Error("You can't share connections.");
     }
 
