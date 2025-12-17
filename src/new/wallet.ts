@@ -1764,7 +1764,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param wsData WebSocket message data containing transaction history
    */
-  enqueueOnNewTx(wsData: { history: IHistoryTx }) {
+  enqueueOnNewTx(wsData: WalletWebSocketData) {
     this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
@@ -1773,7 +1773,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param wsData WebSocket message data containing transaction history
    */
-  async onNewTx(wsData: { history: IHistoryTx }) {
+  async onNewTx(wsData: WalletWebSocketData) {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
       this.logger.error(parseResult.error);
