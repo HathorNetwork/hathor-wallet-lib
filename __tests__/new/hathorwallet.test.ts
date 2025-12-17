@@ -559,6 +559,7 @@ test('getAddressPrivKey', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -596,6 +597,7 @@ test('signMessageWithAddress', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -725,6 +727,7 @@ test('start', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
