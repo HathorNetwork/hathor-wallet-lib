@@ -93,6 +93,7 @@ const txApi = {
    * @inner
    */
   getConfirmationData(id, resolve) {
+    // FIXME: Add types to the response of this method
     const data = { id };
     return createRequestInstance(resolve)
       .get(`transaction_acc_weight`, { params: data })
@@ -215,6 +216,7 @@ const txApi = {
    * @inner
    */
   getGraphvizNeighbors(tx, graphType, maxLevel, resolve) {
+    // FIXME: Add types to the response of this method
     const data = { tx, graph_type: graphType, max_level: maxLevel };
     return createRequestInstance(resolve)
       .get(`graphviz/neighbours.dot`, { params: data })

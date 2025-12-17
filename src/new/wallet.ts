@@ -6,7 +6,6 @@
  */
 
 /* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 // @ts-nocheck
 /* eslint-enable @typescript-eslint/ban-ts-comment */
 
@@ -73,6 +72,8 @@ import {
   OutputValueType,
   IUtxo,
   EcdsaTxSign,
+  IHistoryInput,
+  IHistoryOutput,
 } from '../types';
 import { FullNodeTxResponse } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
@@ -96,6 +97,7 @@ import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
+import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -2294,7 +2296,7 @@ class HathorWallet extends EventEmitter {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
@@ -2307,22 +2309,22 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput: any = await this.getMintAuthority(tokenUid, {
+    const mintInput = await this.getMintAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2331,7 +2333,7 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have mint authority output available.");
     }
 
-    const mintOptions: any = {
+    const mintOptions = {
       token: tokenUid,
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
@@ -2340,7 +2342,7 @@ class HathorWallet extends EventEmitter {
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMintTxData(
+    const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
       amount,
       this.storage,
@@ -2406,7 +2408,7 @@ class HathorWallet extends EventEmitter {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
@@ -2419,20 +2421,20 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const meltInput: any = await this.getMeltAuthority(tokenUid, {
+    const meltInput = await this.getMeltAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2441,14 +2443,14 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have melt authority output available.");
     }
 
-    const meltOptions: any = {
+    const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
       meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMeltTxData(
+    const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
       meltInput[0],
       newOptions.address || (await this.getCurrentAddress()).address,
@@ -2518,13 +2520,13 @@ class HathorWallet extends EventEmitter {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
-    const newOptions: any = { createAnother: true, pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { createAnother: true, pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { createAnother }: any = newOptions;
-    let delegateInput: any;
+    const { createAnother } = newOptions;
+    let delegateInput: IUtxo[];
     if (type === 'mint') {
       delegateInput = await this.getMintAuthority(tokenUid, {
         many: false,
@@ -2543,7 +2545,7 @@ class HathorWallet extends EventEmitter {
       throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE });
     }
 
-    const txData: any = await tokenUtils.prepareDelegateAuthorityTxData(
+    const txData = await tokenUtils.prepareDelegateAuthorityTxData(
       tokenUid,
       delegateInput[0],
       destinationAddress,
@@ -2629,12 +2631,12 @@ class HathorWallet extends EventEmitter {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    let destroyInputs: any;
+    let destroyInputs: IUtxo[];
     if (type === 'mint') {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
@@ -2653,7 +2655,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
     }
 
-    const data: any = [];
+    const data: IUtxo[] = [];
     for (const utxo of destroyInputs) {
       // FIXME: select utxos passing count to the method
       data.push(utxo);
@@ -2664,7 +2666,7 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const txData: any = tokenUtils.prepareDestroyAuthorityTxData(data);
+    const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
     return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
@@ -2755,7 +2757,7 @@ class HathorWallet extends EventEmitter {
       // READY state with token still null.
       // I will keep it like that for now but to protect from this
       // we should change to READY only after both things finish
-      walletApi.getGeneralTokenInfo(this.tokenUid, (response: any) => {
+      walletApi.getGeneralTokenInfo(this.tokenUid, (response: GeneralTokenInfoSchema) => {
         if (response.success) {
           this.token = {
             uid: this.tokenUid,
@@ -2779,8 +2781,8 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId: string) {
-    const result: any = await new Promise((resolve, reject) => {
-      walletApi.getGeneralTokenInfo(tokenId, resolve).catch((error: any) => reject(error));
+    const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
     if (!result.success) {
@@ -2869,7 +2871,7 @@ class HathorWallet extends EventEmitter {
 
     // We need to map balance for backwards compatibility
     for (const [token, tokenBalance] of Object.entries(fullBalance)) {
-      balance[token] = (tokenBalance as any).tokens.locked + (tokenBalance as any).tokens.unlocked;
+      balance[token] = tokenBalance.tokens.locked + tokenBalance.tokens.unlocked;
     }
 
     return balance;
@@ -3068,7 +3070,7 @@ class HathorWallet extends EventEmitter {
         // txApi will call the `resolve` callback and end the promise chain,
         // so if it falls here, we should throw
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
@@ -3088,11 +3090,11 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTxConfirmationData(txId: string) {
-    const confirmationData: any = await new Promise((resolve, reject) => {
+    const confirmationData = await new Promise((resolve, reject) => {
       txApi
         .getConfirmationData(txId, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
 
     if (!confirmationData.success) {
@@ -3116,11 +3118,11 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async graphvizNeighborsQuery(txId: string, graphType: string, maxLevel: number) {
-    const graphvizData: any = await new Promise<string>((resolve, reject) => {
+    const graphvizData = await new Promise<string>((resolve, reject) => {
       txApi
         .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
 
     // The response will either be a string with the graphviz data or an object
@@ -3166,8 +3168,8 @@ class HathorWallet extends EventEmitter {
   async getTxById(txId: string) {
     /**
      * Hydrate input and output with token uid
-     * @param {Transaction.input|Transaction.output} io - Input or output
-     * @param {Array} tokens - Array of token configs
+     * @param  io - Input or output
+     * @param tokens - Array of token configs
      * @example
      * {
      *   ...output,
@@ -3175,8 +3177,11 @@ class HathorWallet extends EventEmitter {
      * }
      * @throws {Error} Token uid not found in tokens list
      */
-    const hydrateWithTokenUid = (io: any, tokens: any): any => {
-      const { token_data }: any = io;
+    const hydrateWithTokenUid = (
+      io: IHistoryInput | IHistoryOutput,
+      tokens: Array<{ uid: string }>
+    ) => {
+      const { token_data } = io;
 
       if (token_data === 0) {
         return {
@@ -3185,8 +3190,8 @@ class HathorWallet extends EventEmitter {
         };
       }
 
-      const tokenIdx: any = tokenUtils.getTokenIndexFromData(token_data);
-      const tokenUid: any = tokens[tokenIdx - 1]?.uid;
+      const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
+      const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
         throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
@@ -3203,12 +3208,10 @@ class HathorWallet extends EventEmitter {
      * @throws {Error} Transaction not found
      */
     const fullTx = await this.getFullTxById(txId);
-    fullTx.tx.outputs = fullTx.tx.outputs.map((output: any) =>
+    fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map((input: any) =>
-      hydrateWithTokenUid(input, fullTx.tx.tokens)
-    );
+    fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
@@ -3219,7 +3222,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const listTokenUid = Object.keys(tokenBalances);
-    const txTokens = listTokenUid.map((uid: any) => {
+    const txTokens = listTokenUid.map(uid => {
       /**
        * Retrieves the token config from the transaction.
        * @param tokenUid
@@ -3230,7 +3233,7 @@ class HathorWallet extends EventEmitter {
           return this.storage.getNativeTokenData();
         }
 
-        const token = fullTx.tx.tokens.find((tokenElem: any) => tokenElem.uid === tokenUid);
+        const token = fullTx.tx.tokens.find(tokenElem => tokenElem.uid === tokenUid);
         if (!token) {
           throw new Error(`Token ${tokenUid} not found in tx`);
         }
