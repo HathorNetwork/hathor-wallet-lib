@@ -1018,7 +1018,7 @@ class HathorWallet extends EventEmitter {
       signatures[inputIndex] = signature;
     }
 
-    const p2shSig = new P2SHSignature(accessData.multisigData.pubkey, signatures);
+    const p2shSig = new P2SHSignature(accessData.multisigData!.pubkey!, signatures);
     return p2shSig.serialize();
   }
 
@@ -1052,7 +1052,7 @@ class HathorWallet extends EventEmitter {
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address);
+      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -1154,7 +1154,7 @@ class HathorWallet extends EventEmitter {
   async getCurrentAddress({ markAsUsed = false } = {}) {
     const address = await this.storage.getCurrentAddress(markAsUsed);
     const index = await this.getAddressIndex(address);
-    const addressPath = await this.getAddressPathForIndex(index);
+    const addressPath = await this.getAddressPathForIndex(index!);
 
     return { address, index, addressPath };
   }
@@ -1201,7 +1201,7 @@ class HathorWallet extends EventEmitter {
     if (token === null) {
       throw new WalletError('Not implemented.');
     }
-    const uid = token || this.token.uid;
+    const uid = token || this.token!.uid; // FIXME: this.token may be null
     // Using clone deep so the balance returned will not be updated in case
     // we change the storage
     let tokenData = cloneDeep(await this.storage.getToken(uid));
@@ -1217,6 +1217,8 @@ class HathorWallet extends EventEmitter {
             melt: { unlocked: 0n, locked: 0n },
           },
         },
+        name: '',
+        symbol: '',
       };
     }
     return [
@@ -1227,17 +1229,17 @@ class HathorWallet extends EventEmitter {
           symbol: tokenData.symbol,
           version: tokenData.version,
         },
-        balance: tokenData.balance.tokens,
+        balance: tokenData.balance!.tokens,
         transactions: tokenData.numTransactions,
         lockExpires: null,
         tokenAuthorities: {
           unlocked: {
-            mint: tokenData.balance.authorities.mint.unlocked,
-            melt: tokenData.balance.authorities.melt.unlocked,
+            mint: tokenData.balance!.authorities.mint.unlocked,
+            melt: tokenData.balance!.authorities.melt.unlocked,
           },
           locked: {
-            mint: tokenData.balance.authorities.mint.locked,
-            melt: tokenData.balance.authorities.melt.locked,
+            mint: tokenData.balance!.authorities.mint.locked,
+            melt: tokenData.balance!.authorities.melt.locked,
           },
         },
       },
@@ -1269,7 +1271,7 @@ class HathorWallet extends EventEmitter {
     };
     const { skip } = newOptions;
     let { count } = newOptions;
-    const uid = newOptions.token_id || this.token.uid;
+    const uid = newOptions.token_id || this.token!.uid; // FIXME: this.token may be null
 
     const txs: {
       txId: string;
