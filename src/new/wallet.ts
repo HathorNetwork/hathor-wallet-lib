@@ -67,8 +67,6 @@ import {
   ITokenData,
   TokenVersion,
   FullNodeVersionData,
-  IWalletAccessData,
-  IMultisigData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -2687,7 +2685,7 @@ class HathorWallet extends EventEmitter {
    * @returns Object with the addresses and whether it belongs or not { address: boolean }
    */
   async checkAddressesMine(addresses: string[]) {
-    const promises: { address: string; mine: boolean }[] = [];
+    const promises: Promise<{ address: string; mine: boolean }>[] = [];
     for (const address of addresses) {
       promises.push(this.storage.isAddressMine(address).then(mine => ({ address, mine })));
     }
