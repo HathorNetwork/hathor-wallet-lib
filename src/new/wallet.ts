@@ -208,7 +208,7 @@ interface UtxoOptions {
  */
 interface GetAvailableUtxosOptions {
   token?: string;
-  filter_address?: string | null;
+  filter_address?: string;
 }
 
 /**
@@ -1504,7 +1504,7 @@ class HathorWallet extends EventEmitter {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
-      const addressPath = await this.getAddressPathForIndex(addressIndex);
+      const addressPath = await this.getAddressPathForIndex(addressIndex!);
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1559,8 +1559,8 @@ class HathorWallet extends EventEmitter {
     txId: string,
     index: number,
     value: boolean = true,
-    ttl: number | null = null
-  ): Promise<void> {
+    ttl: number | undefined = undefined
+  ) {
     await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
