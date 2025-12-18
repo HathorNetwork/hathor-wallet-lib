@@ -91,7 +91,11 @@ import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
-import { NanoContractAction, NanoContractVertexType } from '../nano_contracts/types';
+import {
+  NanoContractAction,
+  NanoContractBuilderCreateTokenOptions,
+  NanoContractVertexType,
+} from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
@@ -379,9 +383,9 @@ interface CreateNanoTxData {
  * @property isCreateNFT If this token is an NFT
  */
 interface CreateNanoTokenTxOptions {
-  name?: string;
-  symbol?: string;
-  amount?: OutputValueType;
+  name: string;
+  symbol: string;
+  amount: OutputValueType;
   contractPaysTokenDeposit?: boolean;
   mintAddress?: string | null;
   changeAddress?: string | null;
@@ -2974,7 +2978,7 @@ class HathorWallet extends EventEmitter {
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address
+        spentTx.outputs[input.index].decoded.address!
       );
       if (addressInfo === null) {
         continue;
@@ -3354,11 +3358,11 @@ class HathorWallet extends EventEmitter {
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
-      .setBlueprintId(data.blueprintId)
-      .setNcId(data.ncId)
+      .setBlueprintId(data.blueprintId!)
+      .setNcId(data.ncId!)
       .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
-      .setArgs(data.args)
+      .setArgs(data.args!)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
     const nc = await builder.build();
@@ -3470,12 +3474,15 @@ class HathorWallet extends EventEmitter {
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
-      .setBlueprintId(data.blueprintId)
-      .setNcId(data.ncId)
+      .setBlueprintId(data.blueprintId!)
+      .setNcId(data.ncId!)
       .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
-      .setArgs(data.args)
-      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, newCreateTokenOptions);
+      .setArgs(data.args!)
+      .setVertexType(
+        NanoContractVertexType.CREATE_TOKEN_TRANSACTION,
+        newCreateTokenOptions as NanoContractBuilderCreateTokenOptions
+      );
 
     const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
@@ -3518,7 +3525,9 @@ class HathorWallet extends EventEmitter {
    */
   setExternalTxSigningMethod(method: EcdsaTxSign | null) {
     this.isSignedExternally = !!method;
-    this.storage.setTxSignatureMethod(method);
+    if (method) {
+      this.storage.setTxSignatureMethod(method);
+    }
   }
 
   /**
@@ -3603,7 +3612,11 @@ class HathorWallet extends EventEmitter {
     const instructions = TransactionTemplate.parse(template);
     const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
-      await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
+      const pin = newOptions.pinCode || this.pinCode;
+      if (!pin) {
+        throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+      }
+      await transactionUtils.signTransaction(tx, this.storage, pin);
       tx.prepareToSend();
     }
     return tx;
