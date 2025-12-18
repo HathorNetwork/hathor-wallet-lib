@@ -841,7 +841,7 @@ class HathorWallet extends EventEmitter {
   async getCurrentAddress({ markAsUsed = false } = {}) {
     const address = await this.storage.getCurrentAddress(markAsUsed);
     const index = await this.getAddressIndex(address);
-    const addressPath = await this.getAddressPathForIndex(index);
+    const addressPath = await this.getAddressPathForIndex(index!);
 
     return { address, index, addressPath };
   }
@@ -1057,7 +1057,7 @@ class HathorWallet extends EventEmitter {
    * @returns Aggregated information about the given address
    *
    */
-  async getAddressInfo(address: string, options = {}) {
+  async getAddressInfo(address: string, options: { token?: string } = {}) {
     const { token = NATIVE_TOKEN_UID } = options;
 
     // Throws an error if the address does not belong to this wallet
@@ -1066,11 +1066,11 @@ class HathorWallet extends EventEmitter {
     }
 
     // Derivation path index
-    const addressData: any = await this.storage.getAddressInfo(address);
-    const index: any = addressData.bip32AddressIndex;
+    const addressData = await this.storage.getAddressInfo(address);
+    const index = addressData!.bip32AddressIndex;
 
     // Address information that will be calculated below
-    const addressInfo: any = {
+    const addressInfo = {
       total_amount_received: 0n,
       total_amount_sent: 0n,
       total_amount_available: 0n,
@@ -1088,24 +1088,20 @@ class HathorWallet extends EventEmitter {
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        const is_address_valid: any = output.decoded && output.decoded.address === address;
-        const is_token_valid: any = token === output.token;
-        const is_authority: any = transactionUtils.isAuthorityOutput(output);
+        const is_address_valid = output.decoded && output.decoded.address === address;
+        const is_token_valid = token === output.token;
+        const is_authority = transactionUtils.isAuthorityOutput(output);
         if (!is_address_valid || !is_token_valid || is_authority) {
           continue;
         }
 
-        const is_spent: any = output.spent_by !== null;
-        const is_time_locked: any = transactionUtils.isOutputLocked(output);
+        const is_spent = output.spent_by !== null;
+        const is_time_locked = transactionUtils.isOutputLocked(output);
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
-        const nowHeight: any = await this.storage.getCurrentHeight();
-        const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked: any = transactionUtils.isHeightLocked(
-          tx.height,
-          nowHeight,
-          rewardLock
-        );
-        const is_locked: any = is_time_locked || is_height_locked;
+        const nowHeight = await this.storage.getCurrentHeight();
+        const rewardLock = this.storage.version?.reward_spend_min_blocks;
+        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
+        const is_locked = is_time_locked || is_height_locked;
 
         addressInfo.total_amount_received += output.value;
 
@@ -2691,7 +2687,7 @@ class HathorWallet extends EventEmitter {
    * @returns Object with the addresses and whether it belongs or not { address: boolean }
    */
   async checkAddressesMine(addresses: string[]) {
-    const promises = [];
+    const promises: { address: string; mine: boolean }[] = [];
     for (const address of addresses) {
       promises.push(this.storage.isAddressMine(address).then(mine => ({ address, mine })));
     }
