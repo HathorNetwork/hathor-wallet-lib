@@ -112,6 +112,8 @@ import { TransactionAccWeightResponse } from '../api/schemas/txApi';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
+const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
+
 /**
  * TODO: This should be removed when this file is migrated to typescript
  * we need this here because the typescript enum from the Connection file is
@@ -1949,14 +1951,14 @@ class HathorWallet extends EventEmitter {
     }
 
     if (this.seed && !password) {
-      throw new Error('Password is required.');
+      throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
     }
 
     // Check database consistency
     await this.storage.store.validate();
     await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
-    this.storage.config.setNetwork(this.conn.network);
+    this.storage.config.setNetwork(this.conn.getCurrentNetwork());
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
@@ -1973,14 +1975,23 @@ class HathorWallet extends EventEmitter {
     let accessData = await this.storage.getAccessData();
     if (!accessData) {
       if (this.seed) {
+        if (!pinCode) {
+          throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+        }
+        if (!password) {
+          throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
+        }
         accessData = walletUtils.generateAccessDataFromSeed(this.seed, {
           multisig: this.multisig,
           passphrase: this.passphrase,
           pin: pinCode,
           password,
-          networkName: this.conn.network,
+          networkName: this.conn.getCurrentNetwork(),
         });
       } else if (this.xpriv) {
+        if (!pinCode) {
+          throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+        }
         accessData = walletUtils.generateAccessDataFromXpriv(this.xpriv, {
           multisig: this.multisig,
           pin: pinCode,
@@ -2773,7 +2784,7 @@ class HathorWallet extends EventEmitter {
             uid: this.tokenUid,
             name: response.name,
             symbol: response.symbol,
-            version: response.version,
+            version: response.version ?? undefined, // Version can't be null
           };
         } else {
           throw Error(response.message);
