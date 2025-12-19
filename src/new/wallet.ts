@@ -224,7 +224,7 @@ interface GetAvailableUtxosOptions {
  */
 interface GetUtxosForAmountOptions {
   token?: string;
-  filter_address?: string | null;
+  filter_address?: string;
 }
 
 /**
@@ -425,6 +425,20 @@ interface BuildTxTemplateOptions {
  */
 interface StartReadOnlyOptions {
   skipAddressFetch?: boolean;
+}
+
+export interface UtxoDetails {
+  total_amount_available: bigint;
+  total_utxos_available: bigint;
+  total_amount_locked: bigint;
+  total_utxos_locked: bigint;
+  utxos: {
+    address: string;
+    amount: bigint;
+    tx_id: string;
+    locked: boolean;
+    index: number;
+  }[];
 }
 
 /**
@@ -1451,7 +1465,7 @@ class HathorWallet extends EventEmitter {
   async getUtxos(options: UtxoOptions = {}) {
     const newOptions = {
       token: options.token,
-      authorities: 0,
+      authorities: 0n,
       max_utxos: options.max_utxos,
       filter_address: options.filter_address,
       amount_smaller_than: options.amount_smaller_than,
@@ -1459,8 +1473,7 @@ class HathorWallet extends EventEmitter {
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
     };
-    /** @type {UtxoDetails} */
-    const utxoDetails = {
+    const utxoDetails: UtxoDetails = {
       total_amount_available: 0n,
       total_utxos_available: 0n,
       total_amount_locked: 0n,
@@ -1511,6 +1524,7 @@ class HathorWallet extends EventEmitter {
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex!);
+      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object. Why?
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1522,7 +1536,10 @@ class HathorWallet extends EventEmitter {
         heightlock: null,
         locked: false,
         addressPath,
-      };
+        token: utxo.token,
+        type: utxo.type,
+        height: utxo.height,
+      } as IUtxo;
     }
   }
 
@@ -1537,7 +1554,7 @@ class HathorWallet extends EventEmitter {
   async getUtxosForAmount(amount: bigint, options: GetUtxosForAmountOptions = {}) {
     const newOptions = {
       token: NATIVE_TOKEN_UID,
-      filter_address: null,
+      filter_address: undefined,
       ...options,
       order_by_value: 'desc',
     };
