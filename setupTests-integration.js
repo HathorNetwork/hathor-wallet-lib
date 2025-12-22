@@ -6,6 +6,9 @@
  */
 
 /* eslint-disable global-require */
+import http from 'http';
+import https from 'https';
+import axios from 'axios';
 import fs from 'fs';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from './src/config';
@@ -18,6 +21,23 @@ import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests_
 import { stopGLLBackgroundTask } from './src/sync/gll';
 
 config.setTxMiningUrl(TX_MINING_URL);
+
+
+/**
+ * Disable HTTP keep-alive for axios to prevent "socket hang up" errors in Jest.
+ *
+ * The issue: Node.js 19+ enables keep-alive by default. When Jest runs tests sequentially,
+ * there are gaps between tests where connections go idle. The serverless-offline server
+ * closes idle connections after 5 seconds (Node.js default). When the next test runs,
+ * axios tries to reuse the closed connection, causing "socket hang up" errors.
+ *
+ * This only affects Jest because:
+ * 1. Tests have natural pauses between them (setup, teardown, Jest processing)
+ * 2. These pauses often exceed the server's 5-second keep-alive timeout
+ * 3. Production traffic typically keeps connections active
+ */
+axios.defaults.httpAgent = new http.Agent({ keepAlive: false });
+axios.defaults.httpsAgent = new https.Agent({ keepAlive: false });
 
 async function createOCBs(sharedState) {
   const { seed } = WALLET_CONSTANTS.ocb;

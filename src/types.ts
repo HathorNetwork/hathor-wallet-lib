@@ -60,6 +60,25 @@ export enum HistorySyncMode {
 }
 
 /**
+ * Wallet state enum
+ * Represents the current state of the HathorWallet instance
+ */
+export enum WalletState {
+  /** Wallet is disconnected from the server */
+  CLOSED = 0,
+  /** Wallet is currently establishing a connection */
+  CONNECTING = 1,
+  /** Wallet is connected and syncing transaction history */
+  SYNCING = 2,
+  /** Wallet is synced and ready to be used */
+  READY = 3,
+  /** Wallet encountered an error */
+  ERROR = 4,
+  /** Wallet is performing an internal processing task */
+  PROCESSING = 5,
+}
+
+/**
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
  */
@@ -300,7 +319,7 @@ export interface IDataInput {
 interface IDataTokenCreationTx {
   name: string;
   symbol: string;
-  tokenVersion: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
+  tokenVersion?: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions

@@ -241,7 +241,6 @@ describe('findInstructionExecution', () => {
 });
 
 const RawInputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     getTx: jest.fn().mockReturnValue(
@@ -256,6 +255,7 @@ const RawInputExecutorTest = async executor => {
       })
     ),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
   await executor(interpreter, ctx, ins);
 
@@ -274,7 +274,6 @@ const RawInputExecutorTest = async executor => {
 };
 
 const UtxoSelectExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
@@ -315,6 +314,7 @@ const UtxoSelectExecutorTest = async executor => {
       ],
     }),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
 
   const insData = { type: 'input/utxo', fill: 30, token };
   const ins = UtxoSelectInstruction.parse(insData);
@@ -349,7 +349,6 @@ const UtxoSelectExecutorTest = async executor => {
 };
 
 const AuthoritySelectExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     getTx: jest.fn().mockResolvedValue({
@@ -372,6 +371,7 @@ const AuthoritySelectExecutorTest = async executor => {
       },
     ]),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const inputIns = { type: 'input/authority', token, authority: 'mint' };
   const ins = AuthoritySelectInstruction.parse(inputIns);
   await executor(interpreter, ctx, ins);
@@ -395,10 +395,10 @@ const AuthoritySelectExecutorTest = async executor => {
 };
 
 const RawOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -423,10 +423,10 @@ const RawOutputExecutorTest = async executor => {
 };
 
 const RawOutputExecutorTestForAuthority = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -452,10 +452,10 @@ const RawOutputExecutorTestForAuthority = async executor => {
 };
 
 const DataOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   }; // interpreter is not used on data output instruction
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = DataOutputInstruction.parse({
     type: 'output/data',
     data: 'foobar',
@@ -486,11 +486,11 @@ const DataOutputExecutorTest = async executor => {
 };
 
 const TokenOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = TokenOutputInstruction.parse({
     type: 'output/token',
     amount: 23,
@@ -523,11 +523,11 @@ const TokenOutputExecutorTest = async executor => {
 };
 
 const AuthorityOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = AuthorityOutputInstruction.parse({
     type: 'output/authority',
     authority: 'melt',
@@ -560,10 +560,10 @@ const AuthorityOutputExecutorTest = async executor => {
 };
 
 const ShuffleExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
   const ins = ShuffleInstruction.parse({
     type: 'action/shuffle',
     target: 'all',
