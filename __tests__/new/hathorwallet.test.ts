@@ -371,12 +371,16 @@ test('processTxQueue', async () => {
 
   // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
   hWallet.wsTxQueue = new Queue();
-  hWallet.wsTxQueue.enqueue(1);
-  hWallet.wsTxQueue.enqueue(2);
-  hWallet.wsTxQueue.enqueue(3);
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType', fakeProperty: 1 });
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType', fakeProperty: 2 });
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType', fakeProperty: 3 });
 
   await hWallet.processTxQueue();
-  expect(processedTxs).toStrictEqual([1, 2, 3]);
+  expect(processedTxs).toStrictEqual([
+    { type: 'fakeType', fakeProperty: 1 },
+    { type: 'fakeType', fakeProperty: 2 },
+    { type: 'fakeType', fakeProperty: 3 },
+  ]);
 });
 
 test('handleWebsocketMsg', async () => {

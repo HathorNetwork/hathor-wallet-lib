@@ -75,7 +75,7 @@ import {
   IHistoryOutput,
   ApiVersion,
 } from '../types';
-import { FullNodeTxResponse, FullNodeVersionData } from '../wallet/types';
+import { FullNodeTxResponse, FullNodeVersionData, Utxo } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -1565,7 +1565,9 @@ class HathorWallet extends EventEmitter {
     }
 
     return transactionUtils.selectUtxos(
-      utxos.filter(utxo => utxo.authorities === 0n),
+      // XXX: Only the `value` property of the UTXO is used in selectUtxos, so the cast is safe
+      // for this stage of the ts refactor.
+      utxos.filter(utxo => utxo.authorities === 0n) as unknown as Utxo[],
       amount
     );
   }
@@ -1598,9 +1600,10 @@ class HathorWallet extends EventEmitter {
    */
   async prepareConsolidateUtxosData(destinationAddress: string, options: UtxoOptions = {}) {
     const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
-    const inputs = [];
-    const utxos = [];
+    const inputs: { txId: string; index: number; token: string }[] = [];
+    const utxos: UtxoDetails['utxos'] = [];
     let total_amount = 0n;
+    const tokenUid = options.token || NATIVE_TOKEN_UID;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === this.storage.version!.max_number_inputs) {
         // Max number of inputs reached
@@ -1610,6 +1613,7 @@ class HathorWallet extends EventEmitter {
       inputs.push({
         txId: utxo.tx_id,
         index: utxo.index,
+        token: tokenUid,
       });
       utxos.push(utxo);
       total_amount += utxo.amount;
@@ -1618,7 +1622,7 @@ class HathorWallet extends EventEmitter {
       {
         address: destinationAddress,
         value: total_amount,
-        token: options.token || NATIVE_TOKEN_UID,
+        token: tokenUid,
       },
     ];
 
@@ -1734,7 +1738,15 @@ class HathorWallet extends EventEmitter {
   async processTxQueue() {
     let wsData = this.wsTxQueue.dequeue();
 
-    while (wsData !== undefined) {
+    // local type guard to narrow to WalletWebSocketData
+    const isWalletWebSocketData = (obj: unknown): obj is WalletWebSocketData =>
+      obj !== undefined &&
+      obj !== null &&
+      typeof obj === 'object' &&
+      'type' in obj &&
+      typeof (obj as { type: unknown }).type === 'string';
+
+    while (isWalletWebSocketData(wsData)) {
       // save new txdata
       await this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
