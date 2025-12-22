@@ -43,7 +43,6 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import Connection from '../connection';
 import {
   AddressError,
   NanoContractTransactionError,
@@ -103,6 +102,7 @@ import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import { TransactionAccWeightResponse } from '../api/schemas/txApi';
+import WalletConnection from './connection';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -142,7 +142,7 @@ const ConnectionState = {
 export interface HathorWalletConstructorParams {
   // Required
   /** Connection to the fullnode server */
-  connection: Connection;
+  connection: WalletConnection;
 
   // Optional - Storage
   /** Storage implementation (defaults to MemoryStore if not provided) */
@@ -543,7 +543,7 @@ class HathorWallet extends EventEmitter {
 
   logger: ILogger;
 
-  conn: Connection;
+  conn: WalletConnection;
 
   // Wallet state
   state: WalletState;
