@@ -2311,11 +2311,17 @@ class HathorWallet extends EventEmitter {
       throw new Error('Invalid authority value.');
     }
 
-    const newOptions = {
+    const newOptions: {
+      token?: string;
+      authorities?: bigint;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+      max_utxos?: number;
+    } = {
       token: tokenUid,
       authorities: authorityValue,
       only_available_utxos: options.only_available_utxos ?? false,
-      filter_address: options.filter_address ?? null,
+      filter_address: options.filter_address || undefined,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
@@ -2592,7 +2598,12 @@ class HathorWallet extends EventEmitter {
     }
 
     if (delegateInput.length === 0) {
-      throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE });
+      // FIXME: This obviously invalid cast is to prevent a breaking change that possibly would only
+      // cause problems at the clients. This fix will need to wait until a major version change.
+      throw new Error({
+        success: false,
+        message: ErrorMessages.NO_UTXOS_AVAILABLE,
+      } as unknown as string);
     }
 
     const txData = await tokenUtils.prepareDelegateAuthorityTxData(
@@ -2879,7 +2890,7 @@ class HathorWallet extends EventEmitter {
    * @returns Object with the addresses and whether it belongs or not { address: boolean }
    */
   async checkAddressesMine(addresses: string[]) {
-    const promises = [];
+    const promises: Promise<{ address: string; mine: boolean }>[] = [];
     for (const address of addresses) {
       promises.push(this.storage.isAddressMine(address).then(mine => ({ address, mine })));
     }
@@ -3100,7 +3111,7 @@ class HathorWallet extends EventEmitter {
    * @throws TxNotFoundError if the returned error was a transaction not found
    */
   static _txNotFoundGuard(data: unknown) {
-    if (get(data, 'message', '') === 'Transaction not found') {
+    if ((get(data, 'message', '') as string) === 'Transaction not found') {
       throw new TxNotFoundError();
     }
   }
@@ -3168,17 +3179,20 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async graphvizNeighborsQuery(txId: string, graphType: string, maxLevel: number) {
-    const graphvizData = await new Promise<string>((resolve, reject) => {
+    const graphvizData = await new Promise<unknown>((resolve, reject) => {
       txApi
         .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
 
+    const isGraphvizError = (d: unknown): d is { success: boolean; message: string } =>
+      typeof d === 'object' && d !== null && 'success' in d && typeof d.success === 'boolean';
+
     // The response will either be a string with the graphviz data or an object
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
-    if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+    if (isGraphvizError(graphvizData) && !graphvizData.success) {
       HathorWallet._txNotFoundGuard(graphvizData);
 
       throw new Error(`Invalid transaction ${txId}`);

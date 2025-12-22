@@ -390,7 +390,7 @@ const tokens = {
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
-      tokenVersion: TokenVersion;
+      tokenVersion?: TokenVersion;
     }
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
