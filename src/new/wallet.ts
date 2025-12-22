@@ -5,10 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
-/* eslint-enable @typescript-eslint/ban-ts-comment */
-
 /**
  * TypeScript Migration In Progress
  *
@@ -70,11 +66,9 @@ import {
   OutputValueType,
   IUtxo,
   EcdsaTxSign,
-  IHistoryInput,
-  IHistoryOutput,
   ApiVersion,
 } from '../types';
-import { FullNodeTxResponse, FullNodeVersionData, Utxo } from '../wallet/types';
+import { FullNodeVersionData, Utxo } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -101,7 +95,7 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
-import { TransactionAccWeightResponse } from '../api/schemas/txApi';
+import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
 import WalletConnection from './connection';
 
 /**
@@ -3124,8 +3118,8 @@ class HathorWallet extends EventEmitter {
    * @returns Transaction data in the fullnode
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getFullTxById(txId: string) {
-    const tx = await new Promise<FullNodeTxResponse>((resolve, reject) => {
+  async getFullTxById(txId: string): Promise<FullNodeTxApiResponse> {
+    const tx = await new Promise<FullNodeTxApiResponse>((resolve, reject) => {
       txApi
         .getTransaction(txId, resolve)
         // txApi will call the `resolve` callback and end the promise chain,
@@ -3222,12 +3216,12 @@ class HathorWallet extends EventEmitter {
    *     },
    *   ],
    * }
-   * @throws Invalid transaction
-   * @throws Client did not use the callback
-   * @throws Transaction not found
-   * @throws Transaction does not have any balance for this wallet
-   * @throws Token uid not found in tokens list
-   * @throws Token uid not found in tx
+   * @throws {Error} Invalid transaction
+   * @throws {Error} Client did not use the callback
+   * @throws {Error} Transaction not found
+   * @throws {Error} Transaction does not have any balance for this wallet
+   * @throws {Error} Token uid not found in tokens list
+   * @throws {Error} Token uid not found in tx
    */
   async getTxById(txId: string) {
     /**
@@ -3241,10 +3235,10 @@ class HathorWallet extends EventEmitter {
      * }
      * @throws {Error} Token uid not found in tokens list
      */
-    const hydrateWithTokenUid = (
-      io: IHistoryInput | IHistoryOutput,
+    const hydrateWithTokenUid = <T extends { token_data: number }>(
+      io: T,
       tokens: Array<{ uid: string }>
-    ) => {
+    ): T & { token: string } => {
       const { token_data } = io;
 
       if (token_data === 0) {
@@ -3266,12 +3260,11 @@ class HathorWallet extends EventEmitter {
       };
     };
 
-    /**
-     * @throws {Error} Invalid transaction
-     * @throws {Error} Client did not use the callback
-     * @throws {Error} Transaction not found
-     */
     const fullTx = await this.getFullTxById(txId);
+    if (!fullTx.success) {
+      throw new Error(`Failed to get transaction ${txId}: ${fullTx.message}`);
+    }
+
     fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
@@ -3279,7 +3272,7 @@ class HathorWallet extends EventEmitter {
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances = await this.getTxBalance(fullTx.tx);
+    const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
     const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);

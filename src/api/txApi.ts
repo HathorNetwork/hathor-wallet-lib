@@ -75,6 +75,7 @@ const txApi = {
    * Call api to get one transaction
    *
    * @param id Transaction ID to search
+   * @param resolve Callback function
    * @params resolve Method to be called after response arrives
    *
    * @memberof ApiTransaction
