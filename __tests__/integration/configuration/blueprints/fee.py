@@ -17,6 +17,7 @@ from typing import Optional, TypeAlias
 from hathor import (
     Address,
     Blueprint,
+    ContractId,
     Context,
     NCAction,
     NCDepositAction,
@@ -34,10 +35,10 @@ from hathor import (
 
 @export
 class FeeBlueprint(Blueprint):
-    
+
     """
     Fee blueprint to create fee tokens and handle operations with them.
-    
+
     The life cycle of contracts using this blueprint is the following:
 
     1. [Owner ] Create a contract (nc1).
@@ -49,13 +50,14 @@ class FeeBlueprint(Blueprint):
     6. [User 1] `deposit fbt` into nc1 from the wallet.
 
     """
-    
-    fbt_uid: TokenUid
-    dbt_uid: TokenUid
+
+    fbt_uid: Optional[TokenUid]
+    dbt_uid: Optional[TokenUid]
     
     @public(allow_deposit=True, allow_grant_authority=True)
     def initialize(self, ctx: Context) -> None:
-        pass
+        self.fbt_uid = None
+        self.dbt_uid = None
 
     @public(allow_deposit=True, allow_grant_authority=True, allow_withdrawal=True)
     def create_fee_token(self, ctx: Context, name: str, symbol: str, amount: int) -> None:
