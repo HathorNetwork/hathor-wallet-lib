@@ -12,6 +12,7 @@ import {
   execCompleteTxInstruction,
   execConfigInstruction,
   execDataOutputInstruction,
+  execFeeInstruction,
   execRawInputInstruction,
   execRawOutputInstruction,
   execSetVarInstruction,
@@ -27,6 +28,7 @@ import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
   DataOutputInstruction,
+  FeeInstruction,
   RawInputInstruction,
   RawOutputInstruction,
   ShuffleInstruction,
@@ -161,6 +163,13 @@ describe('findInstructionExecution', () => {
         value: 'bar',
       })
     ).toBe(execSetVarInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/fee',
+        amount: 100,
+      })
+    ).toBe(execFeeInstruction);
   });
 
   it('should throw with an invalid instruction', () => {
@@ -754,3 +763,206 @@ describe('execute instruction from executor', () => {
   });
 });
 /* eslint-enable jest/expect-expect */
+
+describe('tokenVersion validation in output instructions', () => {
+  it('should throw error in RawOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = RawOutputInstruction.parse({
+      type: 'output/raw',
+      script: 'cafe',
+      amount: 100,
+      useCreatedToken: true,
+    });
+
+    await expect(execRawOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in DataOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = DataOutputInstruction.parse({
+      type: 'output/data',
+      data: 'foobar',
+      useCreatedToken: true,
+    });
+
+    await expect(execDataOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in TokenOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = TokenOutputInstruction.parse({
+      type: 'output/token',
+      amount: 50,
+      address,
+      useCreatedToken: true,
+    });
+
+    await expect(execTokenOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in AuthorityOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = AuthorityOutputInstruction.parse({
+      type: 'output/authority',
+      authority: 'mint',
+      address,
+      useCreatedToken: true,
+    });
+
+    await expect(execAuthorityOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+});
+
+describe('execFeeInstruction', () => {
+  it('should add fee for a new token', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(100n);
+  });
+
+  it('should add fee for HTR token when token is not specified', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      amount: 50,
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has('00')).toBe(true);
+    expect(ctx.fees.get('00')).toBe(50n);
+  });
+
+  it('should sum fees when adding to an existing token', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+
+    // Add first fee
+    const ins1 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+    await execFeeInstruction(interpreter, ctx, ins1);
+
+    // Add second fee for the same token
+    const ins2 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 50,
+    });
+    await execFeeInstruction(interpreter, ctx, ins2);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(150n);
+  });
+
+  it('should use variables for token and amount', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+
+    // Set variables
+    ctx.vars.myToken = token;
+    ctx.vars.myAmount = 200n;
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      token: '{myToken}',
+      amount: '{myAmount}',
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(200n);
+  });
+
+  it('should handle multiple tokens independently', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const token2 = '0000000220eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
+
+    // Add fee for first token
+    const ins1 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+    await execFeeInstruction(interpreter, ctx, ins1);
+
+    // Add fee for second token
+    const ins2 = FeeInstruction.parse({
+      type: 'action/fee',
+      token: token2,
+      amount: 200,
+    });
+    await execFeeInstruction(interpreter, ctx, ins2);
+
+    // Add more to first token
+    const ins3 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 50,
+    });
+    await execFeeInstruction(interpreter, ctx, ins3);
+
+    expect(ctx.fees.get(token)).toBe(150n);
+    expect(ctx.fees.get(token2)).toBe(200n);
+  });
+});
