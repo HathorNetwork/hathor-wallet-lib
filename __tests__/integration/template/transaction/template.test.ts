@@ -11,7 +11,12 @@ import SendTransaction from '../../../../src/new/sendTransaction';
 import transactionUtils from '../../../../src/utils/transaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { NATIVE_TOKEN_UID, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../../src/constants';
 import { TokenVersion } from '../../../../src/types';
 
 const DEBUG = true;
@@ -443,7 +448,6 @@ describe('Template execution', () => {
 describe('Template execution with fee tokens', () => {
   let hWallet: HathorWallet;
   let interpreter: WalletTxTemplateInterpreter;
-  let tokenUid: string;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
@@ -555,7 +559,6 @@ describe('Template execution with fee tokens', () => {
     if (tx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    tokenUid = tx.hash;
     await waitForTxReceived(hWallet, tx.hash, undefined);
 
     const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);

@@ -54,7 +54,6 @@ import {
 } from './setvarcommands';
 import { selectAuthorities, selectTokens } from './utils';
 import { TokenVersion, OutputValueType } from '../../types';
-import { Fee } from '../../utils/fee';
 
 /**
  * Find and run the executor function for the instruction.
@@ -617,8 +616,6 @@ export async function execCompleteTxInstruction(
   // calculate token creation deposit
   if (calculateFee && ctx.isCreateTokenTxContext()) {
     // INFO: Currently fees only make sense for create token transactions.
-    let fee = 0n;
-
     ctx.log(`Calculating token creation fee`);
     let deposit = 0n;
 

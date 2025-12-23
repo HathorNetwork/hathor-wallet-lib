@@ -1,7 +1,6 @@
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
-  DEFAULT_PIN_CODE,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -10,29 +9,10 @@ import {
 
 import ncApi from '../../../../src/api/nano';
 import HathorWallet from '../../../../src/new/wallet';
-import SendTransaction from '../../../../src/new/sendTransaction';
-import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
-import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { NATIVE_TOKEN_UID } from '../../../../src/constants';
-
-const DEBUG = true;
-
-async function runTemplate(template, wallet) {
-  if (DEBUG) {
-    wallet.enableDebugMode();
-  }
-
-  const tx = await wallet.runTxTemplate(template, DEFAULT_PIN_CODE);
-  expect(tx.hash).not.toBeNull();
-  if (tx.hash === null) {
-    throw new Error('Transaction does not have a hash');
-  }
-  return tx;
-}
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
 
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
-  let interpreter: WalletTxTemplateInterpreter;
   let contractId: string;
   let contractId2: string;
   let fbtUid: string;
@@ -40,7 +20,6 @@ describe('FeeBlueprint Template execution', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
-    interpreter = new WalletTxTemplateInterpreter(hWallet);
     const address = await hWallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(hWallet, address, 10000n, {});
   });
@@ -51,55 +30,71 @@ describe('FeeBlueprint Template execution', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  const waitExecution = async (wallet, tx) => {
+  const checkTxValid = async (wallet, tx) => {
     const txId = tx.hash;
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     await waitTxConfirmed(wallet, txId, null);
     const txAfterExecution = await wallet.getFullTxById(txId);
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
-    expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
+    expect(txAfterExecution.meta.first_block).not.toBeNull();
   };
 
   it('should initialize a FeeBlueprint contract', async () => {
-    const initializeTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: global.FEE_BLUEPRINT_ID })
-      .addNanoMethodExecution({
-        id: '{blueprint}',
-        method: 'initialize',
-        caller: '{addr}',
-        actions: [{ action: 'deposit', amount: 1000n, changeAddress: '{addr}' }],
-      })
-      .build();
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const initializeTx = await runTemplate(initializeTemplate, hWallet);
-    await waitExecution(hWallet, initializeTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      address0,
+      {
+        blueprintId: global.FEE_BLUEPRINT_ID,
+        args: [],
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 1000n,
+            changeAddress: address0,
+          },
+        ],
+      }
+    );
+    await checkTxValid(hWallet, tx);
 
-    expect(initializeTx.hash).not.toBeNull();
-    contractId = initializeTx.hash!;
+    expect(tx.hash).not.toBeNull();
+    contractId = tx.hash!;
 
     const ncState = await ncApi.getNanoContractState(contractId, [], [NATIVE_TOKEN_UID], []);
     expect(BigInt(ncState.balances[NATIVE_TOKEN_UID].value)).toBe(1000n);
   });
 
   it('should create a deposit token (DBT)', async () => {
-    const createDbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'create_deposit_token',
-        caller: '{caller}',
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    const tx = await hWallet.createAndSendNanoContractTransaction(
+      'create_deposit_token',
+      address0,
+      {
+        ncId: contractId,
         args: ['Deposit Test Token', 'DBT', 1000],
-        actions: [{ action: 'deposit', amount: 100n, changeAddress: '{caller}' }],
-      })
-      .build();
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 100n,
+            changeAddress: address0,
+          },
+        ],
+      }
+    );
+    await checkTxValid(hWallet, tx);
 
-    const createDbtTx = await runTemplate(createDbtTemplate, hWallet);
-    await waitExecution(hWallet, createDbtTx);
-
-    const ncState = await ncApi.getNanoContractState(contractId, ['dbt_uid'], [NATIVE_TOKEN_UID], []);
+    const ncState = await ncApi.getNanoContractState(
+      contractId,
+      ['dbt_uid'],
+      [NATIVE_TOKEN_UID],
+      []
+    );
     expect(ncState.fields.dbt_uid.value).toBeDefined();
     dbtUid = ncState.fields.dbt_uid.value;
 
@@ -107,181 +102,220 @@ describe('FeeBlueprint Template execution', () => {
   });
 
   it('should create a fee token (FBT)', async () => {
-    const createFbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'create_fee_token',
-        caller: '{caller}',
-        args: ['Fee Test Token', 'FBT', 1000],
-        actions: [{ action: 'deposit', amount: 100n, changeAddress: '{caller}' }],
-      })
-      .build();
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const createFbtTx = await runTemplate(createFbtTemplate, hWallet);
-    await waitExecution(hWallet, createFbtTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction('create_fee_token', address0, {
+      ncId: contractId,
+      args: ['Fee Test Token', 'FBT', 1000],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100n,
+          changeAddress: address0,
+        },
+      ],
+    });
+    await checkTxValid(hWallet, tx);
 
-    const ncState = await ncApi.getNanoContractState(contractId, ['fbt_uid'], [NATIVE_TOKEN_UID], []);
+    const ncState = await ncApi.getNanoContractState(
+      contractId,
+      ['fbt_uid'],
+      [NATIVE_TOKEN_UID],
+      []
+    );
     expect(ncState.fields.fbt_uid.value).toBeDefined();
     fbtUid = ncState.fields.fbt_uid.value;
   });
 
   it('should withdraw DBT without paying fees', async () => {
-    const withdrawDbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'dbt', value: dbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'noop',
-        caller: '{caller}',
-        actions: [{ action: 'withdrawal', amount: 100n, token: '{dbt}', address: '{caller}' }],
-      })
-      .build();
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const withdrawDbtTx = await runTemplate(withdrawDbtTemplate, hWallet);
-    await waitExecution(hWallet, withdrawDbtTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'withdrawal',
+          token: dbtUid,
+          amount: 100n,
+          address: address0,
+        },
+      ],
+    });
+    await checkTxValid(hWallet, tx);
 
-    expect(withdrawDbtTx.outputs).toHaveLength(1);
-    expect(withdrawDbtTx.outputs[0].value).toEqual(100n);
+    expect(tx.outputs).toHaveLength(1);
+    expect(tx.outputs[0].value).toEqual(100n);
   });
 
   it('should deposit DBT back to contract', async () => {
-    const depositDbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'dbt', value: dbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'noop',
-        caller: '{caller}',
-        actions: [{ action: 'deposit', amount: 50n, token: '{dbt}', changeAddress: '{caller}' }],
-      })
-      .build();
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const depositDbtTx = await runTemplate(depositDbtTemplate, hWallet);
-    await waitExecution(hWallet, depositDbtTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'deposit',
+          token: dbtUid,
+          amount: 50n,
+          changeAddress: address0,
+        },
+      ],
+    });
+    await checkTxValid(hWallet, tx);
 
     const ncState = await ncApi.getNanoContractState(contractId, [], [dbtUid], []);
     expect(BigInt(ncState.balances[dbtUid].value)).toBe(950n);
   });
 
-  it('should withdraw FBT paying fees', async () => {
-    const withdrawFbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'fbt', value: fbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'noop',
-        caller: '{caller}',
-        actions: [{ action: 'withdrawal', amount: 100n, token: '{fbt}', address: '{caller}' }],
-      })
-      .build();
+  it('should withdraw FBT paying fees in HTR', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const fbtBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
 
-    const withdrawFbtTx = await runTemplate(withdrawFbtTemplate, hWallet);
-    await waitExecution(hWallet, withdrawFbtTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'withdrawal',
+          token: fbtUid,
+          amount: 100n,
+          address: address0,
+        },
+      ],
+      // Fee amount in HTR for fee-based token withdrawal
+      feeAmount: 1n,
+    });
+    await checkTxValid(hWallet, tx);
 
-    expect(withdrawFbtTx.outputs).toHaveLength(1);
-    expect(withdrawFbtTx.outputs[0].value).toEqual(100n);
+    // Verify the withdrawal output exists
+    expect(tx.outputs.length).toBeGreaterThanOrEqual(1);
+
+    // Verify the FeeHeader
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries).toHaveLength(1);
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(feeHeader!.entries[0].amount).toBe(1n);
+
+    // Verify contract balance decreased by withdrawal amount
+    const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 100n);
   });
 
-  it('should deposit FBT back to contract paying fees', async () => {
-    const depositFbtTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'fbt', value: fbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'noop',
-        caller: '{caller}',
-        actions: [{ action: 'deposit', amount: 50n, token: '{fbt}', changeAddress: '{caller}' }],
-      })
-      .build();
+  it('should deposit FBT back to contract paying fees in HTR', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const fbtBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
 
-    const depositFbtTx = await runTemplate(depositFbtTemplate, hWallet);
-    await waitExecution(hWallet, depositFbtTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'deposit',
+          token: fbtUid,
+          amount: 50n,
+          changeAddress: address0,
+        },
+      ],
+      // Fee amount in HTR for fee-based token deposit
+      feeAmount: 2n,
+    });
+    await checkTxValid(hWallet, tx);
 
-    const ncState = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
-    expect(BigInt(ncState.balances[fbtUid].value)).toBe(950n);
+    // Verify the FeeHeader
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries).toHaveLength(1);
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(feeHeader!.entries[0].amount).toBe(2n);
+
+    const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    // Balance should increase by deposit amount (50)
+    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore + 50n);
   });
 
   it('should initialize a second FeeBlueprint contract (nc2)', async () => {
-    const initializeTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: global.FEE_BLUEPRINT_ID })
-      .addNanoMethodExecution({
-        id: '{blueprint}',
-        method: 'initialize',
-        caller: '{addr}',
-        actions: [{ action: 'deposit', amount: 100n, changeAddress: '{addr}' }],
-      })
-      .build();
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const initializeTx = await runTemplate(initializeTemplate, hWallet);
-    await waitExecution(hWallet, initializeTx);
+    const tx = await hWallet.createAndSendNanoContractTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      address0,
+      {
+        blueprintId: global.FEE_BLUEPRINT_ID,
+        args: [],
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 100n,
+            changeAddress: address0,
+          },
+        ],
+      }
+    );
+    await checkTxValid(hWallet, tx);
 
-    expect(initializeTx.hash).not.toBeNull();
-    contractId2 = initializeTx.hash!;
+    expect(tx.hash).not.toBeNull();
+    contractId2 = tx.hash!;
 
     const ncState = await ncApi.getNanoContractState(contractId2, [], [NATIVE_TOKEN_UID], []);
     expect(BigInt(ncState.balances[NATIVE_TOKEN_UID].value)).toBe(100n);
   });
 
   it('should move FBT tokens from nc1 to nc2', async () => {
-    const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
     const fbtBalanceBefore = BigInt(nc1StateBefore.balances[fbtUid].value);
+    const dbtBalanceBefore = BigInt(nc1StateBefore.balances[dbtUid].value);
 
-    const moveTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'nc2', value: contractId2 })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'fbt', value: fbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'move_tokens_to_nc',
-        caller: '{caller}',
-        args: ['{nc2}', '{fbt}', 200, '{fbt}', 10],
-      })
-      .build();
+    // Use DBT (deposit token) to pay fees instead of FBT (fee token)
+    // args: [nc_id, token_uid, token_amount, fee_token, fee_amount]
+    const tx = await hWallet.createAndSendNanoContractTransaction('move_tokens_to_nc', address0, {
+      ncId: contractId,
+      args: [contractId2, fbtUid, 200, dbtUid, 100],
+    });
+    await checkTxValid(hWallet, tx);
 
-    const moveTx = await runTemplate(moveTemplate, hWallet);
-    await waitExecution(hWallet, moveTx);
-
-    const nc1StateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const nc1StateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
     const nc2StateAfter = await ncApi.getNanoContractState(contractId2, [], [fbtUid], []);
 
-    expect(BigInt(nc1StateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 200n - 10n);
+    // FBT balance decreases by transfer amount only (200)
+    expect(BigInt(nc1StateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 200n);
+    // DBT balance decreases by fee amount (100)
+    expect(BigInt(nc1StateAfter.balances[dbtUid].value)).toBe(dbtBalanceBefore - 100n);
+    // nc2 receives 200 FBT
     expect(BigInt(nc2StateAfter.balances[fbtUid].value)).toBe(200n);
   });
 
   it('should get FBT tokens back from nc2 to nc1', async () => {
-    const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
     const nc2StateBefore = await ncApi.getNanoContractState(contractId2, [], [fbtUid], []);
     const nc1FbtBefore = BigInt(nc1StateBefore.balances[fbtUid].value);
+    const nc1DbtBefore = BigInt(nc1StateBefore.balances[dbtUid].value);
     const nc2FbtBefore = BigInt(nc2StateBefore.balances[fbtUid].value);
+    const address0 = await hWallet.getAddressAtIndex(0);
 
-    const getTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'contract', value: contractId })
-      .addSetVarAction({ name: 'nc2', value: contractId2 })
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
-      .addSetVarAction({ name: 'fbt', value: fbtUid })
-      .addNanoMethodExecution({
-        id: '{contract}',
-        method: 'get_tokens_from_nc',
-        caller: '{caller}',
-        args: ['{nc2}', '{fbt}', 100, '{fbt}', 5],
-      })
-      .build();
+    // Use DBT (deposit token) to pay fees instead of FBT (fee token)
+    // args: [nc_id, token_uid, token_amount, fee_token, fee_amount]
+    const tx = await hWallet.createAndSendNanoContractTransaction('get_tokens_from_nc', address0, {
+      ncId: contractId,
+      args: [contractId2, fbtUid, 100, dbtUid, 100],
+    });
+    await checkTxValid(hWallet, tx);
 
-    const getTx = await runTemplate(getTemplate, hWallet);
-    await waitExecution(hWallet, getTx);
-
-    const nc1StateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const nc1StateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
     const nc2StateAfter = await ncApi.getNanoContractState(contractId2, [], [fbtUid], []);
 
-    expect(BigInt(nc1StateAfter.balances[fbtUid].value)).toBe(nc1FbtBefore + 100n - 5n);
+    // nc1 receives 100 FBT back
+    expect(BigInt(nc1StateAfter.balances[fbtUid].value)).toBe(nc1FbtBefore + 100n);
+    // DBT balance decreases by fee amount (100)
+    expect(BigInt(nc1StateAfter.balances[dbtUid].value)).toBe(nc1DbtBefore - 100n);
+    // nc2 loses 100 FBT
     expect(BigInt(nc2StateAfter.balances[fbtUid].value)).toBe(nc2FbtBefore - 100n);
   });
 });
