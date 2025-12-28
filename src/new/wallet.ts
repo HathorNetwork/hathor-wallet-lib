@@ -61,7 +61,6 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
-  FullNodeVersionData,
   IWalletAccessData,
   IMultisigData,
   IIndexLimitAddressScanPolicy,
@@ -419,8 +418,8 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData: any = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const versionData: ApiVersion = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
     return {
@@ -1721,7 +1720,9 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode: string) {
-    const addressHDPrivKey = await this.getAddressPrivKey(pinCode, index);
+    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      privateKey: unknown;
+    };
     const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
