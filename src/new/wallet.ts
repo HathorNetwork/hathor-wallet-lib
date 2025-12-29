@@ -92,7 +92,14 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
-import { GeneralTokenInfoSchema, HathorWalletConstructorParams } from './types';
+import {
+  GeneralTokenInfoSchema,
+  GetBalanceFullnodeFacadeReturnType,
+  GetTxHistoryFullnodeFacadeReturnType,
+  GetTokenDetailsFullnodeFacadeReturnType,
+  GetTxByIdFullnodeFacadeReturnType,
+  HathorWalletConstructorParams,
+} from './types';
 import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
 
 /**
@@ -829,18 +836,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token: string | null = null): Promise<
-    Array<{
-      token: { id: string; name: string; symbol: string; version?: TokenVersion };
-      balance: { unlocked: bigint; locked: bigint };
-      transactions?: number;
-      lockExpires: null;
-      tokenAuthorities: {
-        unlocked: { mint: bigint; melt: bigint };
-        locked: { mint: bigint; melt: bigint };
-      };
-    }>
-  > {
+  async getBalance(token: string | null = null): Promise<GetBalanceFullnodeFacadeReturnType[]> {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
@@ -907,19 +903,7 @@ class HathorWallet extends EventEmitter {
       count?: number;
       skip?: number;
     } = {}
-  ): Promise<
-    Array<{
-      txId: string;
-      balance: bigint;
-      timestamp: number;
-      voided: boolean;
-      version: number;
-      ncId?: string;
-      ncMethod?: string;
-      ncCaller?: Address;
-      firstBlock?: string;
-    }>
-  > {
+  ): Promise<GetTxHistoryFullnodeFacadeReturnType[]> {
     const newOptions = {
       token_id: NATIVE_TOKEN_UID,
       count: 15,
@@ -930,17 +914,7 @@ class HathorWallet extends EventEmitter {
     let { count } = newOptions;
     const uid = newOptions.token_id || this.token!.uid; // FIXME: this.token may be null
 
-    const txs: {
-      txId: string;
-      balance: bigint;
-      timestamp: number;
-      voided: boolean;
-      version: number;
-      ncId?: string;
-      ncMethod?: string;
-      ncCaller?: Address;
-      firstBlock?: string;
-    }[] = [];
+    const txs: GetTxHistoryFullnodeFacadeReturnType[] = [];
     let it = 0;
     for await (const tx of this.storage.tokenHistory(uid)) {
       if (it < skip) {
@@ -2573,12 +2547,7 @@ class HathorWallet extends EventEmitter {
    * @return token details
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getTokenDetails(tokenId: string): Promise<{
-    totalSupply: bigint;
-    totalTransactions: number;
-    tokenInfo: { id: string; name: string; symbol: string; version?: TokenVersion };
-    authorities: { mint: boolean; melt: boolean };
-  }> {
+  async getTokenDetails(tokenId: string): Promise<GetTokenDetailsFullnodeFacadeReturnType> {
     const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
       walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
@@ -2986,20 +2955,7 @@ class HathorWallet extends EventEmitter {
    * @throws {Error} Token uid not found in tokens list
    * @throws {Error} Token uid not found in tx
    */
-  async getTxById(txId: string): Promise<{
-    success: boolean;
-    txTokens: Array<{
-      txId: string;
-      timestamp: number;
-      version: number;
-      voided: boolean;
-      weight: number;
-      tokenId: string;
-      tokenName: string | null;
-      tokenSymbol: string | null;
-      balance: bigint;
-    }>;
-  }> {
+  async getTxById(txId: string): Promise<GetTxByIdFullnodeFacadeReturnType> {
     /**
      * Hydrate input and output with token uid
      * @param  io - Input or output
