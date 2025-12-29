@@ -19,6 +19,8 @@
  *
  */
 
+/* eslint @typescript-eslint/explicit-function-return-type: "error" */
+
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
@@ -454,7 +456,7 @@ class HathorWallet extends EventEmitter {
    * Set the value of the gap limit for this wallet instance.
    * @param value The new gap limit value
    */
-  async setGapLimit(value: number) {
+  async setGapLimit(value: number): Promise<void> {
     return this.storage.setGapLimit(value);
   }
 
@@ -463,7 +465,7 @@ class HathorWallet extends EventEmitter {
    * @param count Number of addresses to load
    * @returns The index of the last address loaded
    */
-  async indexLimitLoadMore(count: number) {
+  async indexLimitLoadMore(count: number): Promise<number> {
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -482,7 +484,7 @@ class HathorWallet extends EventEmitter {
    * Set the value of the index limit end for this wallet instance.
    * @param endIndex The new index limit value
    */
-  async indexLimitSetEndIndex(endIndex: number) {
+  async indexLimitSetEndIndex(endIndex: number): Promise<void> {
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -511,7 +513,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the value of the gap limit for this wallet instance.
    */
-  async getGapLimit() {
+  async getGapLimit(): Promise<number> {
     return this.storage.getGapLimit();
   }
 
@@ -581,7 +583,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param newState The new connection state (0: CLOSED, 1: CONNECTING, 2: CONNECTED)
    */
-  async onConnectionChangedState(newState: 0 | 1 | 2) {
+  async onConnectionChangedState(newState: 0 | 1 | 2): Promise<void> {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
@@ -620,7 +622,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Serialized P2SHSignature data
    */
-  async getAllSignatures(txHex: string, pin: string) {
+  async getAllSignatures(txHex: string, pin: string): Promise<string> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getAllSignatures');
     }
@@ -651,7 +653,7 @@ class HathorWallet extends EventEmitter {
    *
    * @throws {Error} if there are not enough signatures for an input
    */
-  async assemblePartialTransaction(txHex: string, signatures: string[]) {
+  async assemblePartialTransaction(txHex: string, signatures: string[]): Promise<Transaction> {
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
     const accessData = await this.storage.getAccessData();
     if (accessData === null) {
@@ -800,7 +802,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param wsData WebSocket message data
    */
-  handleWebsocketMsg(wsData: WalletWebSocketData) {
+  handleWebsocketMsg(wsData: WalletWebSocketData): void {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
         // Cannot process new transactions from ws when the wallet is not ready.
@@ -822,7 +824,16 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token: string | null = null) {
+  async getBalance(token: string | null = null): Promise<Array<{
+    token: { id: string; name: string; symbol: string; version?: TokenVersion };
+    balance: { unlocked: bigint; locked: bigint };
+    transactions: number;
+    lockExpires: null;
+    tokenAuthorities: {
+      unlocked: { mint: bigint; melt: bigint };
+      locked: { mint: bigint; melt: bigint };
+    };
+  }>> {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
@@ -889,7 +900,19 @@ class HathorWallet extends EventEmitter {
       count?: number;
       skip?: number;
     } = {}
-  ) {
+  ): Promise<
+    Array<{
+      txId: string;
+      balance: bigint;
+      timestamp: number;
+      voided: boolean;
+      version: number;
+      ncId?: string;
+      ncMethod?: string;
+      ncCaller?: Address;
+      firstBlock?: string;
+    }>
+  > {
     const newOptions = {
       token_id: NATIVE_TOKEN_UID,
       count: 15,
@@ -951,7 +974,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getTokens() {
+  async getTokens(): Promise<string[]> {
     const tokens: string[] = [];
     for await (const token of this.storage.getAllTokens()) {
       tokens.push(token.uid);
@@ -966,7 +989,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return Data from the transaction to get. Can be null if the wallet does not contain the tx.
    */
-  async getTx(id: string) {
+  async getTx(id: string): Promise<IHistoryTx | null> {
     return this.storage.getTx(id);
   }
 
@@ -1074,7 +1097,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return Utxos and meta information about it
    */
-  async getUtxos(options: UtxoOptions = {}) {
+  async getUtxos(options: UtxoOptions = {}): Promise<UtxoDetails> {
     const newOptions = {
       token: options.token,
       authorities: 0n,
@@ -1093,7 +1116,8 @@ class HathorWallet extends EventEmitter {
       utxos: [],
     };
     const nowTs = Math.floor(Date.now() / 1000);
-    const isTimeLocked = (timestamp: number | null) => timestamp && nowTs && nowTs < timestamp;
+    const isTimeLocked = (timestamp: number | null): boolean =>
+      !!timestamp && !!nowTs && nowTs < timestamp;
     const nowHeight = await this.storage.getCurrentHeight();
     const rewardLock = this.storage.version?.reward_spend_min_blocks;
 
@@ -1131,7 +1155,7 @@ class HathorWallet extends EventEmitter {
    * @generator
    * @yields all available utxos
    */
-  async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}) {
+  async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}): AsyncGenerator<IUtxo> {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
@@ -1163,7 +1187,10 @@ class HathorWallet extends EventEmitter {
    *
    * @return Utxos and change information.
    */
-  async getUtxosForAmount(amount: bigint, options: GetUtxosForAmountOptions = {}) {
+  async getUtxosForAmount(
+    amount: bigint,
+    options: GetUtxosForAmountOptions = {}
+  ): Promise<{ utxos: Utxo[]; changeAmount: bigint }> {
     const newOptions = {
       token: NATIVE_TOKEN_UID,
       filter_address: undefined,
@@ -1197,7 +1224,7 @@ class HathorWallet extends EventEmitter {
     index: number,
     value: boolean = true,
     ttl: number | undefined = undefined
-  ) {
+  ): Promise<void> {
     await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
@@ -1210,7 +1237,15 @@ class HathorWallet extends EventEmitter {
    * @return Required data to consolidate utxos
    *
    */
-  async prepareConsolidateUtxosData(destinationAddress: string, options: UtxoOptions = {}) {
+  async prepareConsolidateUtxosData(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    outputs: Array<{ address: string; value: bigint; token: string }>;
+    inputs: Array<{ txId: string; index: number; token: string }>;
+    utxos: UtxoDetails['utxos'];
+    total_amount: bigint;
+  }> {
     const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
     const inputs: { txId: string; index: number; token: string }[] = [];
     const utxos: UtxoDetails['utxos'] = [];
@@ -1250,7 +1285,15 @@ class HathorWallet extends EventEmitter {
    * @return Consolidation result with SendTransaction instance
    *
    */
-  async consolidateUtxosSendTransaction(destinationAddress: string, options: UtxoOptions = {}) {
+  async consolidateUtxosSendTransaction(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    total_utxos_consolidated: number;
+    total_amount: bigint;
+    utxos: UtxoDetails['utxos'];
+    sendTx: SendTransaction;
+  }> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
@@ -1286,7 +1329,15 @@ class HathorWallet extends EventEmitter {
    * @return Indicates that the transaction is sent or not
    *
    */
-  async consolidateUtxos(destinationAddress: string, options: UtxoOptions = {}) {
+  async consolidateUtxos(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    total_utxos_consolidated: number;
+    total_amount: bigint;
+    txId: string;
+    utxos: UtxoDetails['utxos'];
+  }> {
     const { total_utxos_consolidated, total_amount, sendTx, utxos } =
       await this.consolidateUtxosSendTransaction(destinationAddress, options);
 
@@ -1295,7 +1346,7 @@ class HathorWallet extends EventEmitter {
     return {
       total_utxos_consolidated,
       total_amount,
-      txId: tx!.hash,
+      txId: tx!.hash!,
       utxos,
     };
   }
@@ -1336,7 +1387,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async getFullHistory() {
+  async getFullHistory(): Promise<Record<string, IHistoryTx>> {
     const history: Record<string, IHistoryTx> = {};
     for await (const tx of this.storage.txHistory()) {
       history[tx.tx_id] = tx;
@@ -1347,7 +1398,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Process the transactions on the websocket transaction queue as if they just arrived.
    */
-  async processTxQueue() {
+  async processTxQueue(): Promise<void> {
     let wsData = this.wsTxQueue.dequeue();
 
     // local type guard to narrow to WalletWebSocketData
@@ -1379,7 +1430,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param processHistory If we should process the txs found on the loaded addresses
    */
-  async scanAddressesToLoad(processHistory: boolean = false) {
+  async scanAddressesToLoad(processHistory: boolean = false): Promise<void> {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
@@ -1392,7 +1443,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns A promise that resolves when the wallet is done processing the tx queue.
    */
-  async onEnterStateProcessing() {
+  async onEnterStateProcessing(): Promise<void> {
     // Started processing state now, so we prepare the local data to support using this facade interchangeable with wallet service facade in both wallets
     try {
       await this.processTxQueue();
@@ -1419,7 +1470,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param wsData WebSocket message data containing transaction history
    */
-  enqueueOnNewTx(wsData: WalletWebSocketData) {
+  enqueueOnNewTx(wsData: WalletWebSocketData): void {
     this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
@@ -1428,7 +1479,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param wsData WebSocket message data containing transaction history
    */
-  async onNewTx(wsData: WalletWebSocketData) {
+  async onNewTx(wsData: WalletWebSocketData): Promise<void> {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
       this.logger.error(parseResult.error);
@@ -1490,7 +1541,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     value: OutputValueType,
     options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
-  ) {
+  ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
@@ -1520,7 +1571,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     value: OutputValueType,
     options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
-  ) {
+  ): Promise<Transaction | null> {
     const sendTx = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
   }
@@ -1536,7 +1587,7 @@ class HathorWallet extends EventEmitter {
   async sendManyOutputsSendTransaction(
     outputs: ProposedOutput[],
     options: SendManyOutputsOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
@@ -1573,7 +1624,7 @@ class HathorWallet extends EventEmitter {
   async sendManyOutputsTransaction(
     outputs: ProposedOutput[],
     options: SendManyOutputsOptions = {}
-  ) {
+  ): Promise<Transaction | null> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
@@ -1583,7 +1634,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param optionsParams Options parameters for starting the wallet
    */
-  async start(optionsParams: WalletStartOptions = {}) {
+  async start(optionsParams: WalletStartOptions = {}): Promise<ApiVersion> {
     const options = { pinCode: null, password: null, ...optionsParams };
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
