@@ -100,13 +100,13 @@ import {
   GetTxByIdFullnodeFacadeReturnType,
   HathorWalletConstructorParams,
 } from './types';
-import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
-
-/**
- * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
- * @typedef {import('../models/transaction').default} Transaction
- * @typedef {import('../types').TokenVersion} TokenVersion
- */
+import {
+  FullNodeTxApiResponse,
+  GraphvizNeighboursDotResponse,
+  GraphvizNeighboursErrorResponse,
+  GraphvizNeighboursResponse,
+  TransactionAccWeightResponse,
+} from '../api/schemas/txApi';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2897,22 +2897,23 @@ class HathorWallet extends EventEmitter {
    * @param maxLevel Max level to render
    *
    * @returns The graphviz digraph
-   * FIXME: Need to define the response from graphviz request
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async graphvizNeighborsQuery(
     txId: string,
     graphType: string,
     maxLevel: number
-  ): Promise<unknown> {
-    const graphvizData = await new Promise<unknown>((resolve, reject) => {
-      txApi
-        .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
-        .then(() => reject(new Error('API client did not use the callback')))
-        .catch(err => reject(err));
-    });
+  ): Promise<GraphvizNeighboursDotResponse> {
+    const graphvizData: GraphvizNeighboursResponse = await new Promise<unknown>(
+      (resolve, reject) => {
+        txApi
+          .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
+          .then(() => reject(new Error('API client did not use the callback')))
+          .catch(err => reject(err));
+      }
+    );
 
-    const isGraphvizError = (d: unknown): d is { success: boolean; message: string } =>
+    const isGraphvizError = (d: unknown): d is GraphvizNeighboursErrorResponse =>
       typeof d === 'object' && d !== null && 'success' in d && typeof d.success === 'boolean';
 
     // The response will either be a string with the graphviz data or an object
@@ -2924,7 +2925,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(`Invalid transaction ${txId}`);
     }
 
-    return graphvizData;
+    return graphvizData as GraphvizNeighboursDotResponse;
   }
 
   /**

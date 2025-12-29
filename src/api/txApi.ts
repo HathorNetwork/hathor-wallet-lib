@@ -7,7 +7,11 @@
 
 import { createRequestInstance } from './axiosInstance';
 import { transformJsonBigIntResponse } from '../utils/bigint';
-import { FullNodeTxApiResponse, transactionApiSchema } from './schemas/txApi';
+import {
+  FullNodeTxApiResponse,
+  GraphvizNeighboursResponse,
+  transactionApiSchema,
+} from './schemas/txApi';
 
 /**
  * Api calls for transaction
@@ -188,6 +192,7 @@ const txApi = {
    * @return {Promise}
    * @memberof ApiTransaction
    * @inner
+   * @deprecated Not being used anywhere. Will be removed soon.
    */
   getGraphviz(url, resolve) {
     return createRequestInstance(resolve)
@@ -214,10 +219,17 @@ const txApi = {
    * @memberof ApiTransaction
    * @inner
    */
-  getGraphvizNeighbors(tx, graphType, maxLevel, resolve) {
+  getGraphvizNeighbors(
+    tx: string,
+    graphType: string,
+    maxLevel: number,
+    resolve: (response: GraphvizNeighboursResponse) => void
+  ): Promise<void> {
+    // TODO: This method uses a callback pattern but also returns a Promise, which is an anti-pattern
+    // NOTE: createRequestInstance has legacy typing (resolve?: null) that doesn't match actual usage.
     const data = { tx, graph_type: graphType, max_level: maxLevel };
-    return createRequestInstance(resolve)
-      .get(`graphviz/neighbours.dot`, { params: data })
+    return createRequestInstance(resolve as unknown as null)
+      .get<GraphvizNeighboursResponse>(`graphviz/neighbours.dot`, { params: data })
       .then(
         res => {
           resolve(res.data);

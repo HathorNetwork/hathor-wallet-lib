@@ -144,3 +144,24 @@ export interface TransactionAccWeightError {
  * Use `if (res.success)` to narrow to TransactionAccWeightSuccess.
  */
 export type TransactionAccWeightResponse = TransactionAccWeightSuccess | TransactionAccWeightError;
+
+/**
+ * Error response when validation fails
+ */
+export interface GraphvizNeighboursErrorResponse {
+  success: false;
+  message: string;
+}
+
+/**
+ * Success response when format is 'dot'
+ * Returns the DOT graph as a string
+ */
+export type GraphvizNeighboursDotResponse = string;
+
+/**
+ * Union type for all possible responses from the graphviz neighbours endpoint
+ */
+export type GraphvizNeighboursResponse =
+  | GraphvizNeighboursErrorResponse
+  | GraphvizNeighboursDotResponse;
