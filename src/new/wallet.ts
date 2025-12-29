@@ -5,11 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// @ts-nocheck
-/* eslint-enable @typescript-eslint/ban-ts-comment */
-
 /**
  * TypeScript Migration In Progress
  *
@@ -24,9 +19,12 @@
  *
  */
 
+/* eslint @typescript-eslint/explicit-function-return-type: "error" */
+
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
+import { z } from 'zod';
 import {
   NATIVE_TOKEN_UID,
   P2SH_ACCT_PATH,
@@ -43,7 +41,6 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import Connection from '../connection';
 import {
   AddressError,
   NanoContractTransactionError,
@@ -66,11 +63,46 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
-  FullNodeVersionData,
   IWalletAccessData,
   IMultisigData,
+  IIndexLimitAddressScanPolicy,
+  IHistoryTx,
+  OutputValueType,
+  IUtxo,
+  EcdsaTxSign,
+  ApiVersion,
 } from '../types';
+import { FullNodeVersionData, Utxo } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
+import {
+  HathorWalletConstructorParams,
+  UtxoOptions,
+  GetAvailableUtxosOptions,
+  GetUtxosForAmountOptions,
+  GetAuthorityOptions,
+  MintTokensOptions,
+  MeltTokensOptions,
+  DelegateAuthorityOptions,
+  DestroyAuthorityOptions,
+  WalletStartOptions,
+  WalletStopOptions,
+  WalletWebSocketData,
+  CreateNanoTxOptions,
+  CreateNanoTxData,
+  CreateNanoTokenTxOptions,
+  CreateOnChainBlueprintTxOptions,
+  BuildTxTemplateOptions,
+  StartReadOnlyOptions,
+  UtxoDetails,
+  ProposedOutput,
+  SendManyOutputsOptions,
+  CreateTokenOptions,
+  CreateNFTOptions,
+  GetBalanceFullnodeFacadeReturnType,
+  GetTxHistoryFullnodeFacadeReturnType,
+  GetTokenDetailsFullnodeFacadeReturnType,
+  GetTxByIdFullnodeFacadeReturnType,
+} from './types';
 import Queue from '../models/queue';
 import {
   scanPolicyStartAddresses,
@@ -85,24 +117,28 @@ import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
-import { NanoContractVertexType } from '../nano_contracts/types';
+import {
+  NanoContractBuilderCreateTokenOptions,
+  NanoContractVertexType,
+} from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
-
-/**
- * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
- * @typedef {import('../models/transaction').default} Transaction
- * @typedef {import('../types').TokenVersion} TokenVersion
- */
+import Transaction from '../models/transaction';
+import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
+import WalletConnection from './connection';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
+
+const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
 
 /**
  * TODO: This should be removed when this file is migrated to typescript
  * we need this here because the typescript enum from the Connection file is
  * not being correctly transpiled here, returning `undefined` for ConnectionState.CLOSED.
+ * @deprecated
  */
 const ConnectionState = {
   CLOSED: 0,
@@ -110,92 +146,13 @@ const ConnectionState = {
   CONNECTED: 2,
 };
 
-/**
- * Parameters for HathorWallet constructor
- *
- * @remarks
- * TODO: Future enhancement - Use discriminated unions to enforce "must provide
- * one of seed/xpriv/xpub" at compile time instead of runtime validation.
- * Example approach:
- * ```
- * type WalletInit =
- *   | { seed: string; passphrase?: string; xpriv?: never; xpub?: never }
- *   | { xpriv: string; seed?: never; passphrase?: never; xpub?: never }
- *   | { xpub: string; seed?: never; passphrase?: never; xpriv?: never }
- * ```
- */
-export interface HathorWalletConstructorParams {
-  // Required
-  /** Connection to the fullnode server */
-  connection: Connection;
-
-  // Optional - Storage
-  /** Storage implementation (defaults to MemoryStore if not provided) */
-  storage?: IStorage;
-
-  // Wallet initialization (must provide one of: seed, xpriv, or xpub)
-  // Runtime validation enforces this constraint
-
-  /** 24-word mnemonic phrase for wallet initialization */
-  seed?: string;
-  /** Optional passphrase for additional seed encryption (BIP39) */
-  passphrase?: string;
-  /** Extended private key (xpriv) for wallet initialization */
-  xpriv?: string;
-  /** Extended public key (xpub) for read-only wallet */
-  xpub?: string;
-
-  // Token configuration
-  /** UID of the token to track (defaults to HTR) */
-  tokenUid?: string;
-
-  // Security
-  /** Password to encrypt the seed in storage */
-  password?: string | null;
-  /** PIN code to execute wallet actions */
-  pinCode?: string | null;
-
-  // Configuration
-  /** Enable debug mode for detailed logging */
-  debug?: boolean;
-  /** Callback executed before reloading wallet data */
-  beforeReloadCallback?: (() => void) | null;
-  /** Multisig configuration for P2SH wallets */
-  multisig?: { pubkeys: string[]; numSignatures: number } | null;
-  /** Pre-calculated addresses to load into storage */
-  preCalculatedAddresses?: string[] | null;
-  /** Address scanning policy configuration */
-  scanPolicy?: AddressScanPolicyData | null;
-  /** Logger instance for wallet operations */
-  logger?: ILogger | null;
-}
-
-/**
- * This is a Wallet that is supposed to be simple to be used by a third-party app.
- *
- * This class handles all the details of syncing, including receiving the same transaction
- * multiple times from the server. It also keeps the balance of the tokens updated.
- *
- * It has the following states:
- * - CLOSED: When it is disconnected from the server.
- * - CONNECTING: When it is connecting to the server.
- * - SYNCING: When it has connected and is syncing the transaction history.
- * - READY: When it is ready to be used.
- *
- * You can subscribe for the following events:
- * - state: Fired when the state of the Wallet changes.
- * - new-tx: Fired when a new tx arrives.
- * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
- * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
- *                          one for each request sent to the server.
- */
 class HathorWallet extends EventEmitter {
   // Core dependencies
   storage: IStorage;
 
   logger: ILogger;
 
-  conn: Connection;
+  conn: WalletConnection;
 
   // Wallet state
   state: WalletState;
@@ -356,7 +313,7 @@ class HathorWallet extends EventEmitter {
       throw Error("You can't use xpriv with passphrase.");
     }
 
-    if (connection.state !== ConnectionState.CLOSED) {
+    if (connection.getState() !== ConnectionState.CLOSED) {
       throw Error("You can't share connections.");
     }
 
@@ -370,22 +327,13 @@ class HathorWallet extends EventEmitter {
 
     this.logger = logger || getDefaultLogger();
     if (storage) {
-      /**
-       * @type {import('../types').IStorage}
-       */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
-      /**
-       * @type {import('../types').IStorage}
-       */
       this.storage = new Storage(store);
     }
     this.storage.setLogger(this.logger);
-    /**
-     * @type {import('./connection').default}
-     */
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -476,8 +424,8 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData: any = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const versionData: ApiVersion = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
     return {
@@ -510,45 +458,43 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the value of the gap limit for this wallet instance.
-   * @param {number} value The new gap limit value
-   * @returns {Promise<void>}
+   * @param value The new gap limit value
    */
-  async setGapLimit(value: any): Promise<any> {
+  async setGapLimit(value: number): Promise<void> {
     return this.storage.setGapLimit(value);
   }
 
   /**
    * Load more addresses if configured to index-limit scanning policy.
-   * @param {number} count Number of addresses to load
-   * @returns {Promise<number>} The index of the last address loaded
+   * @param count Number of addresses to load
+   * @returns The index of the last address loaded
    */
-  async indexLimitLoadMore(count: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitLoadMore(count: number): Promise<number> {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
-    const newEndIndex: any = limits.endIndex + count;
+    const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);
     return newEndIndex;
   }
 
   /**
    * Set the value of the index limit end for this wallet instance.
-   * @param {number} endIndex The new index limit value
-   * @returns {Promise<void>}
+   * @param endIndex The new index limit value
    */
-  async indexLimitSetEndIndex(endIndex: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitSetEndIndex(endIndex: number): Promise<void> {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
@@ -558,7 +504,7 @@ class HathorWallet extends EventEmitter {
       return;
     }
 
-    const newPolicyData: any = {
+    const newPolicyData: IIndexLimitAddressScanPolicy = {
       ...limits,
       endIndex,
       policy: SCANNING_POLICY.INDEX_LIMIT,
@@ -570,9 +516,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the value of the gap limit for this wallet instance.
-   * @returns {Promise<number>}
    */
-  async getGapLimit(): Promise<any> {
+  async getGapLimit(): Promise<number> {
     return this.storage.getGapLimit();
   }
 
@@ -640,9 +585,9 @@ class HathorWallet extends EventEmitter {
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
-   * @param {Number} newState Enum of new state after change
+   * @param newState The new connection state (0: CLOSED, 1: CONNECTING, 2: CONNECTED)
    */
-  async onConnectionChangedState(newState: any): Promise<any> {
+  async onConnectionChangedState(newState: 0 | 1 | 2): Promise<void> {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
@@ -652,7 +597,7 @@ class HathorWallet extends EventEmitter {
         // before loading the full data again
         if (this.firstConnection) {
           this.firstConnection = false;
-          const addressesToLoad: any = await scanPolicyStartAddresses(this.storage);
+          const addressesToLoad = await scanPolicyStartAddresses(this.storage);
           await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
         } else {
           if (this.beforeReloadCallback) {
@@ -661,7 +606,7 @@ class HathorWallet extends EventEmitter {
           await this.reloadStorage();
         }
         this.setState(HathorWallet.PROCESSING);
-      } catch (error: any) {
+      } catch (error) {
         this.setState(HathorWallet.ERROR);
         this.logger.error('Error loading wallet', { error });
       }
@@ -676,56 +621,49 @@ class HathorWallet extends EventEmitter {
   /**
    * Sign and return all signatures of the inputs belonging to this wallet.
    *
-   * @param {string} txHex hex representation of the transaction.
-   * @param {string} pin PIN to decrypt the private key
+   * @param txHex - Hex representation of the transaction
+   * @param pin - PIN to decrypt the private key
    *
-   * @async
-   * @return {Promise<string>} serialized P2SHSignature data
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @returns Serialized P2SHSignature data
    */
-  async getAllSignatures(txHex: any, pin: any): Promise<any> {
+  async getAllSignatures(txHex: string, pin: string): Promise<string> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getAllSignatures');
     }
-    const tx: any = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const accessData: any = await this.storage.getAccessData();
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const accessData = await this.storage.getAccessData();
     if (accessData === null) {
       throw new Error('Wallet is not initialized');
     }
 
-    const signatures: any = {};
+    const signatures: Record<number, string> = {};
 
     for (const signatureInfo of await this.getSignatures(tx, { pinCode: pin })) {
-      const { inputIndex, signature }: any = signatureInfo;
+      const { inputIndex, signature } = signatureInfo;
       signatures[inputIndex] = signature;
     }
 
-    const p2shSig: any = new P2SHSignature(accessData.multisigData.pubkey, signatures);
+    const p2shSig = new P2SHSignature(accessData.multisigData!.pubkey!, signatures);
     return p2shSig.serialize();
   }
 
   /**
    * Assemble transaction from hex and collected p2sh_signatures.
    *
-   * @param {string} txHex hex representation of the transaction.
-   * @param {Array} signatures Array of serialized p2sh_signatures (string).
+   * @param txHex - Hex representation of the transaction
+   * @param signatures - Array of serialized p2sh_signatures (string)
    *
-   * @return {Promise<Transaction>} with input data created from the signatures.
+   * @returns Transaction with input data created from the signatures
    *
    * @throws {Error} if there are not enough signatures for an input
-   *
-   * @memberof HathorWallet
-   * @inner
    */
-  async assemblePartialTransaction(txHex: any, signatures: any): Promise<any> {
-    const tx: any = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const accessData: any = await this.storage.getAccessData();
+  async assemblePartialTransaction(txHex: string, signatures: string[]): Promise<Transaction> {
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const accessData = await this.storage.getAccessData();
     if (accessData === null) {
       throw new Error('Wallet was not started');
     }
-    const { multisigData }: any = accessData;
+    const { multisigData } = accessData;
     if (!multisigData) {
       throw new Error('Cannot call this method from a p2pkh wallet');
     }
@@ -739,7 +677,7 @@ class HathorWallet extends EventEmitter {
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address);
+      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -750,7 +688,7 @@ class HathorWallet extends EventEmitter {
         multisigData.numSignatures,
         storageAddress.bip32AddressIndex
       );
-      const sigs = [];
+      const sigs: Buffer[] = [];
       for (const p2shSig of p2shSignatures) {
         try {
           sigs.push(hexToBuffer(p2shSig.signatures[index]));
@@ -865,8 +803,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Called when a new message arrives from websocket.
+   *
+   * @param wsData WebSocket message data
    */
-  handleWebsocketMsg(wsData: any): any {
+  handleWebsocketMsg(wsData: WalletWebSocketData): void {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
         // Cannot process new transactions from ws when the wallet is not ready.
@@ -881,26 +821,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Get balance for a token
    *
-   * @param {string|null|undefined} token
+   * @param token
    *
-   * @return {Promise<{
-   *   token: {id:string, name:string, symbol:string, version: TokenVersion},
-   *   balance: {unlocked:bigint, locked:bigint},
-   *   transactions:number,
-   *   lockExpires:number|null,
-   *   tokenAuthorities: {unlocked: {mint:bigint,melt:bigint}, locked: {mint:bigint,melt:bigint}}
-   * }[]>} Array of balance for each token
+   * @return Array of balance for each token
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token: any = null): Promise<any> {
+  async getBalance(token: string | null = null): Promise<GetBalanceFullnodeFacadeReturnType[]> {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
       throw new WalletError('Not implemented.');
     }
-    const uid = token || this.token.uid;
+    const uid = token || this.token!.uid; // FIXME: this.token may be null
     // Using clone deep so the balance returned will not be updated in case
     // we change the storage
     let tokenData = cloneDeep(await this.storage.getToken(uid));
@@ -916,6 +850,8 @@ class HathorWallet extends EventEmitter {
             melt: { unlocked: 0n, locked: 0n },
           },
         },
+        name: '',
+        symbol: '',
       };
     }
     return [
@@ -926,17 +862,17 @@ class HathorWallet extends EventEmitter {
           symbol: tokenData.symbol,
           version: tokenData.version,
         },
-        balance: tokenData.balance.tokens,
+        balance: tokenData.balance!.tokens,
         transactions: tokenData.numTransactions,
         lockExpires: null,
         tokenAuthorities: {
           unlocked: {
-            mint: tokenData.balance.authorities.mint.unlocked,
-            melt: tokenData.balance.authorities.melt.unlocked,
+            mint: tokenData.balance!.authorities.mint.unlocked,
+            melt: tokenData.balance!.authorities.melt.unlocked,
           },
           locked: {
-            mint: tokenData.balance.authorities.mint.locked,
-            melt: tokenData.balance.authorities.melt.locked,
+            mint: tokenData.balance!.authorities.mint.locked,
+            melt: tokenData.balance!.authorities.melt.locked,
           },
         },
       },
@@ -944,46 +880,34 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Summarizes the IHistoryTx that comes from wallet token's history.
-   *
-   * @typedef {Object} SummaryHistoryTx
-   * @property {string} txId - Transaction hash
-   * @property {number} balance
-   * @property {number} timestamp
-   * @property {boolean} voided
-   * @property {number} version
-   * @property {string} [ncId] - Nano Contract transaction hash
-   * @property {string} [ncMethod] - Nano Contract method called
-   * @property {Address} [ncCaller] - Nano Contract transaction's signing address
-   * @property {string} [firstBlock] - Hash of the first block that validates the transaction
-   */
-
-  /**
    * Get transaction history
    *
    * @param options
-   * @param {string} [options.token_id]
-   * @param {number} [options.count]
-   * @param {number} [options.skip]
    *
-   * @return {Promise<SummaryHistoryTx[]>} Array of transactions
+   * @return Array of transactions
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getTxHistory(options: any = {}): Promise<any> {
-    const newOptions: any = {
+  async getTxHistory(
+    options: {
+      token_id?: string;
+      count?: number;
+      skip?: number;
+    } = {}
+  ): Promise<GetTxHistoryFullnodeFacadeReturnType[]> {
+    const newOptions = {
       token_id: NATIVE_TOKEN_UID,
       count: 15,
       skip: 0,
       ...options,
     };
-    const { skip }: any = newOptions;
-    let { count }: any = newOptions;
-    const uid: any = newOptions.token_id || this.token.uid;
+    const { skip } = newOptions;
+    let { count } = newOptions;
+    const uid = newOptions.token_id || this.token!.uid; // FIXME: this.token may be null
 
-    const txs: any = [];
-    let it: any = 0;
+    const txs: GetTxHistoryFullnodeFacadeReturnType[] = [];
+    let it = 0;
     for await (const tx of this.storage.tokenHistory(uid)) {
       if (it < skip) {
         it++;
@@ -992,8 +916,8 @@ class HathorWallet extends EventEmitter {
       if (count <= 0) {
         break;
       }
-      const txbalance: any = await this.getTxBalance(tx);
-      const txHistory: any = {
+      const txbalance = await this.getTxBalance(tx);
+      const txHistory = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
@@ -1001,12 +925,13 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_address && new Address(tx.nc_address, { network: this.getNetworkObject() }),
-        firstBlock: tx.first_block,
+        ncCaller: (tx.nc_address &&
+          new Address(tx.nc_address, { network: this.getNetworkObject() })) as Address,
+        firstBlock: tx.first_block as string | undefined,
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-        txHistory.ncCaller =
-          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+        txHistory.ncCaller = (tx.nc_pubkey &&
+          getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject())) as Address;
       }
       txs.push(txHistory);
       count--;
@@ -1017,13 +942,13 @@ class HathorWallet extends EventEmitter {
   /**
    * Get tokens that this wallet has transactions
    *
-   * @return {Promise<string[]>} Array of strings (token uid)
+   * @return Array of strings (token uid)
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getTokens(): Promise<any> {
-    const tokens: any = [];
+  async getTokens(): Promise<string[]> {
+    const tokens: string[] = [];
     for await (const token of this.storage.getAllTokens()) {
       tokens.push(token.uid);
     }
@@ -1033,12 +958,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Get a transaction data from the wallet
    *
-   * @param {string} id Hash of the transaction to get data from
+   * @param id Hash of the transaction to get data from
    *
-   * @return {Promise<DecodedTx|null>} Data from the transaction to get.
-   *                          Can be null if the wallet does not contain the tx.
+   * @return Data from the transaction to get. Can be null if the wallet does not contain the tx.
    */
-  async getTx(id: any): Promise<any> {
+  async getTx(id: string): Promise<IHistoryTx | null> {
     return this.storage.getTx(id);
   }
 
@@ -1140,48 +1064,16 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   *
-   * @typedef UtxoOptions
-   * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {number} [authorities] - Authorities to filter the utxos. If not sent, we select only non authority utxos.
-   * @property {string} [filter_address] - Address to filter the utxos.
-   * @property {bigint} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {bigint} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {bigint} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
-   */
-
-  /**
-   * @typedef UtxoInfo
-   * @property {string} address - Address that owns the UTXO.
-   * @property {bigint} amount - Amount of tokens.
-   * @property {string} tx_id - Original transaction id.
-   * @property {boolean} locked - If the output is currently locked.
-   * @property {number} index - Index on the output array of the original tx.
-   */
-
-  /**
-   * @typedef UtxoDetails
-   * @property {bigint} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {bigint} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {bigint} total_amount_locked - Address to filter the utxos.
-   * @property {bigint} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {UtxoInfo[]} utxos - Array of utxos
-   */
-
-  /**
    * Get utxos of the wallet addresses
    *
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param options Utxo filtering options
    *
-   * @return {Promise<UtxoDetails>} Utxos and meta information about it
-   *
+   * @return Utxos and meta information about it
    */
-  async getUtxos(options: any = {}): Promise<any> {
-    const newOptions: any = {
+  async getUtxos(options: UtxoOptions = {}): Promise<UtxoDetails> {
+    const newOptions = {
       token: options.token,
-      authorities: 0,
+      authorities: 0n,
       max_utxos: options.max_utxos,
       filter_address: options.filter_address,
       amount_smaller_than: options.amount_smaller_than,
@@ -1189,25 +1081,25 @@ class HathorWallet extends EventEmitter {
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
     };
-    /** @type {UtxoDetails} */
-    const utxoDetails: any = {
+    const utxoDetails: UtxoDetails = {
       total_amount_available: 0n,
       total_utxos_available: 0n,
       total_amount_locked: 0n,
       total_utxos_locked: 0n,
       utxos: [],
     };
-    const nowTs: any = Math.floor(Date.now() / 1000);
-    const isTimeLocked: any = (timestamp: any) => timestamp && nowTs && nowTs < timestamp;
-    const nowHeight: any = await this.storage.getCurrentHeight();
-    const rewardLock: any = this.storage.version?.reward_spend_min_blocks;
+    const nowTs = Math.floor(Date.now() / 1000);
+    const isTimeLocked = (timestamp: number | null): boolean =>
+      !!timestamp && !!nowTs && nowTs < timestamp;
+    const nowHeight = await this.storage.getCurrentHeight();
+    const rewardLock = this.storage.version?.reward_spend_min_blocks;
 
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      const isLocked: any =
+      const isLocked =
         isTimeLocked(utxo.timelock) ||
         transactionUtils.isHeightLocked(utxo.height, nowHeight, rewardLock);
 
-      const utxoInfo: any = {
+      const utxoInfo = {
         address: utxo.address,
         amount: utxo.value,
         tx_id: utxo.txId,
@@ -1228,35 +1120,20 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef Utxo
-   * @property {string} txId
-   * @property {number} index
-   * @property {string} tokenId
-   * @property {string} address
-   * @property {string} value
-   * @property {OutputValueType} authorities
-   * @property {number|null} timelock
-   * @property {number|null} heightlock
-   * @property {boolean} locked
-   * @property {string} addressPath
-   */
-
-  /**
    * Generates all available utxos
    *
-   * @param [options] Utxo filtering options
-   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param options Utxo filtering options
    *
    * @async
    * @generator
-   * @yields {Utxo} all available utxos
+   * @yields all available utxos
    */
-  async *getAvailableUtxos(options: any = {}): AsyncGenerator<any> {
+  async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}): AsyncGenerator<IUtxo> {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
-      const addressIndex: any = await this.getAddressIndex(utxo.address);
-      const addressPath: any = await this.getAddressPathForIndex(addressIndex);
+      const addressIndex = await this.getAddressIndex(utxo.address);
+      const addressPath = await this.getAddressPathForIndex(addressIndex!);
+      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object. Why?
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1268,34 +1145,41 @@ class HathorWallet extends EventEmitter {
         heightlock: null,
         locked: false,
         addressPath,
-      };
+        token: utxo.token,
+        type: utxo.type,
+        height: utxo.height,
+      } as IUtxo;
     }
   }
 
   /**
    * Get utxos of the wallet addresses to fill the amount specified.
    *
-   * @param {Object} [options] Utxo filtering options
-   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param amount The amount to fill with UTXOs
+   * @param options Utxo filtering options
    *
-   * @return {Promise<{utxos: Utxo[], changeAmount: OutputValueType}>} Utxos and change information.
+   * @return Utxos and change information.
    */
-  async getUtxosForAmount(amount: any, options: any = {}): Promise<any> {
-    const newOptions: any = {
+  async getUtxosForAmount(
+    amount: bigint,
+    options: GetUtxosForAmountOptions = {}
+  ): Promise<{ utxos: Utxo[]; changeAmount: bigint }> {
+    const newOptions = {
       token: NATIVE_TOKEN_UID,
-      filter_address: null,
+      filter_address: undefined,
       ...options,
       order_by_value: 'desc',
     };
 
-    const utxos: any = [];
+    const utxos: IUtxo[] = [];
     for await (const utxo of this.getAvailableUtxos(newOptions)) {
       utxos.push(utxo);
     }
 
     return transactionUtils.selectUtxos(
-      utxos.filter(utxo => utxo.authorities === 0n),
+      // XXX: Only the `value` property of the UTXO is used in selectUtxos, so the cast is safe
+      // for this stage of the ts refactor.
+      utxos.filter(utxo => utxo.authorities === 0n) as unknown as Utxo[],
       amount
     );
   }
@@ -1303,54 +1187,62 @@ class HathorWallet extends EventEmitter {
   /**
    * Mark UTXO selected_as_input.
    *
-   * @param {string} txId Transaction id of the UTXO
-   * @param {number} index Output index of the UTXO
-   * @param {boolean} [value=true] The value to set the utxos.
-   * @param {number?} [ttl=null]
+   * @param txId Transaction id of the UTXO
+   * @param index Output index of the UTXO
+   * @param value The value to set the utxos.
+   * @param ttl Time to live for the selection
    */
-  async markUtxoSelected(txId: any, index: any, value: any = true, ttl: any = null): Promise<any> {
+  async markUtxoSelected(
+    txId: string,
+    index: number,
+    value: boolean = true,
+    ttl: number | undefined = undefined
+  ): Promise<void> {
     await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
   /**
    * Prepare all required data to consolidate utxos.
    *
-   * @typedef {Object} PrepareConsolidateUtxosDataResult
-   * @property {{ address: string, value: OutputValueType }[]} outputs - Destiny of the consolidated utxos
-   * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
-   * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
-   * @property {UtxoInfo[]} utxos - Array of utxos that will be consolidated
-   * @property {bigint} total_amount - Amount to be consolidated
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
-   *
-   * @return {Promise<PrepareConsolidateUtxosDataResult>} Required data to consolidate utxos
+   * @return Required data to consolidate utxos
    *
    */
-  async prepareConsolidateUtxosData(destinationAddress: any, options: any = {}): Promise<any> {
-    const utxoDetails: any = await this.getUtxos({ ...options, only_available_utxos: true });
-    const inputs: any = [];
-    const utxos: any = [];
-    let total_amount: any = 0n;
+  async prepareConsolidateUtxosData(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    outputs: Array<{ address: string; value: bigint; token: string }>;
+    inputs: Array<{ txId: string; index: number; token: string }>;
+    utxos: UtxoDetails['utxos'];
+    total_amount: bigint;
+  }> {
+    const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
+    const inputs: { txId: string; index: number; token: string }[] = [];
+    const utxos: UtxoDetails['utxos'] = [];
+    let total_amount = 0n;
+    const tokenUid = options.token || NATIVE_TOKEN_UID;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
-      if (inputs.length === this.storage.version.max_number_inputs) {
+      if (inputs.length === this.storage.version!.max_number_inputs) {
         // Max number of inputs reached
         break;
       }
-      const utxo: any = utxoDetails.utxos[i];
+      const utxo = utxoDetails.utxos[i];
       inputs.push({
         txId: utxo.tx_id,
         index: utxo.index,
+        token: tokenUid,
       });
       utxos.push(utxo);
       total_amount += utxo.amount;
     }
-    const outputs: any = [
+    const outputs = [
       {
         address: destinationAddress,
         value: total_amount,
-        token: options.token || NATIVE_TOKEN_UID,
+        token: tokenUid,
       },
     ];
 
@@ -1358,27 +1250,27 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef ConsolidationResultSendTx
-   * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {bigint} total_amount - Consolidated amount
-   * @property {SendTransaction} sendTx - instance that will send the transaction.
-   * @property {UtxoInfo[]} utxos - Array of consolidated utxos
-   */
-
-  /**
    * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @return {Promise<ConsolidationResultSendTx>}
+   * @return Consolidation result with SendTransaction instance
    *
    */
-  async consolidateUtxosSendTransaction(destinationAddress: any, options: any = {}): Promise<any> {
+  async consolidateUtxosSendTransaction(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    total_utxos_consolidated: number;
+    total_amount: bigint;
+    utxos: UtxoDetails['utxos'];
+    sendTx: SendTransaction;
+  }> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
-    const { outputs, inputs, utxos, total_amount }: any = await this.prepareConsolidateUtxosData(
+    const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(
       destinationAddress,
       options
     );
@@ -1402,32 +1294,32 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef ConsolidationResult
-   * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {bigint} total_amount - Consolidated amount
-   * @property {string} txId - Consolidated transaction id
-   * @property {UtxoInfo[]} utxos - Array of consolidated utxos
-   */
-
-  /**
    * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
-   * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {UtxoOptions} options Utxo filtering options
+   * @param destinationAddress Address of the consolidated utxos
+   * @param options Utxo filtering options
    *
-   * @return {Promise<ConsolidationResult>} Indicates that the transaction is sent or not
+   * @return Indicates that the transaction is sent or not
    *
    */
-  async consolidateUtxos(destinationAddress: any, options: any = {}): Promise<any> {
-    const { total_utxos_consolidated, total_amount, sendTx, utxos }: any =
+  async consolidateUtxos(
+    destinationAddress: string,
+    options: UtxoOptions = {}
+  ): Promise<{
+    total_utxos_consolidated: number;
+    total_amount: bigint;
+    txId: string;
+    utxos: UtxoDetails['utxos'];
+  }> {
+    const { total_utxos_consolidated, total_amount, sendTx, utxos } =
       await this.consolidateUtxosSendTransaction(destinationAddress, options);
 
-    const tx: any = await sendTx.run();
+    const tx = await sendTx.run();
 
     return {
       total_utxos_consolidated,
       total_amount,
-      txId: tx.hash,
+      txId: tx!.hash!,
       utxos,
     };
   }
@@ -1463,13 +1355,13 @@ class HathorWallet extends EventEmitter {
   /**
    * Get full wallet history (same as old method to be used for compatibility)
    *
-   * @return {Promise<Record<string,DecodedTx>>} Object with transaction data { tx_id: { full_transaction_data }}
+   * @return Object with transaction data { tx_id: { full_transaction_data }}
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getFullHistory(): Promise<any> {
-    const history: any = {};
+  async getFullHistory(): Promise<Record<string, IHistoryTx>> {
+    const history: Record<string, IHistoryTx> = {};
     for await (const tx of this.storage.txHistory()) {
       history[tx.tx_id] = tx;
     }
@@ -1478,14 +1370,19 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Process the transactions on the websocket transaction queue as if they just arrived.
-   *
-   * @memberof HathorWallet
-   * @inner
    */
-  async processTxQueue(): Promise<any> {
-    let wsData: any = this.wsTxQueue.dequeue();
+  async processTxQueue(): Promise<void> {
+    let wsData = this.wsTxQueue.dequeue();
 
-    while (wsData !== undefined) {
+    // local type guard to narrow to WalletWebSocketData
+    const isWalletWebSocketData = (obj: unknown): obj is WalletWebSocketData =>
+      obj !== undefined &&
+      obj !== null &&
+      typeof obj === 'object' &&
+      'type' in obj &&
+      typeof (obj as { type: unknown }).type === 'string';
+
+    while (isWalletWebSocketData(wsData)) {
       // save new txdata
       await this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
@@ -1503,11 +1400,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Check if we need to load more addresses and load them if needed.
    * The configured scanning policy will be used to determine the loaded addresses.
-   * @param {boolean} processHistory If we should process the txs found on the loaded addresses.
    *
-   * @returns {Promise<void>}
+   * @param processHistory If we should process the txs found on the loaded addresses
    */
-  async scanAddressesToLoad(processHistory = false) {
+  async scanAddressesToLoad(processHistory: boolean = false): Promise<void> {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
@@ -1518,10 +1414,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Call the method to process data and resume with the correct state after processing.
    *
-   * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
+   * @returns A promise that resolves when the wallet is done processing the tx queue.
    */
-  async onEnterStateProcessing() {
-    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+  async onEnterStateProcessing(): Promise<void> {
+    // Started processing state now, so we prepare the local data to support using this facade interchangeable with wallet service facade in both wallets
     try {
       await this.processTxQueue();
       this.setState(HathorWallet.READY);
@@ -1544,16 +1440,19 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Enqueue the call for onNewTx with the given data.
-   * @param {{ history: import('../types').IHistoryTx }} wsData
+   *
+   * @param wsData WebSocket message data containing transaction history
    */
-  enqueueOnNewTx(wsData) {
+  enqueueOnNewTx(wsData: WalletWebSocketData): void {
     this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
   /**
-   * @param {{ history: import('../types').IHistoryTx }} wsData
+   * Process a new transaction received from websocket.
+   *
+   * @param wsData WebSocket message data containing transaction history
    */
-  async onNewTx(wsData) {
+  async onNewTx(wsData: WalletWebSocketData): Promise<void> {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
       this.logger.error(parseResult.error);
@@ -1602,82 +1501,70 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction with a single output
    *
-   * @param {string} address Output address
-   * @param {bigint} value Output value
-   * @param [options] Options parameters
-   * @param {string} [options.changeAddress] address of the change output
-   * @param {string} [options.token] token uid
-   * @param {string} [options.pinCode] pin to decrypt the private key
+   * @param address - Output address
+   * @param value - Output value
+   * @param options - Options parameters
+   * @param options.changeAddress - Address of the change output
+   * @param options.token - Token uid
+   * @param options.pinCode - PIN to decrypt the private key
    *
-   * @return {Promise<SendTransaction>} Promise that resolves when transaction is sent
+   * @returns Promise that resolves when transaction is sent
    */
-  async sendTransactionInstance(address: any, value: any, options: any = {}): Promise<any> {
+  async sendTransactionInstance(
+    address: string,
+    value: OutputValueType,
+    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+  ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
-    const newOptions: any = {
+    const newOptions = {
       token: '00',
       changeAddress: null,
       ...options,
     };
-    const { token, changeAddress, pinCode }: any = newOptions;
-    const outputs: any = [{ address, value, token }];
+    const { token, changeAddress, pinCode } = newOptions;
+    const outputs = [{ address, value, token }];
     return this.sendManyOutputsSendTransaction(outputs, { inputs: [], changeAddress, pinCode });
   }
 
   /**
    * Send a transaction with a single output
    *
-   * @param {string} address Output address
-   * @param {bigint} value Output value
-   * @param [options] Options parameters
-   * @param {string} [options.changeAddress] address of the change output
-   * @param {string} [options.token] token uid
-   * @param {string} [options.pinCode] pin to decrypt the private key
+   * @param address - Output address
+   * @param value - Output value
+   * @param options - Options parameters
+   * @param options.changeAddress - Address of the change output
+   * @param options.token - Token uid
+   * @param options.pinCode - PIN to decrypt the private key
    *
-   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
+   * @returns Promise that resolves when transaction is sent
    */
-  async sendTransaction(address: any, value: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.sendTransactionInstance(address, value, options);
+  async sendTransaction(
+    address: string,
+    value: OutputValueType,
+    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
   }
 
   /**
-   * @typedef {Object} ProposedOutput
-   * @property {string} address
-   * @property {import('../types').OutputValueType} value
-   * @property {number?} timelock
-   * @property {string} token
-   */
-
-  /**
-   * @typedef {Object} ProposedInput
-   * @property {string} txId
-   * @property {number} index
-   * @property {string} token
-   */
-
-  /**
-   * @typedef {Object} SendManyOutputsOptions
-   * @property {ProposedInput[]?} inputs Array of proposed inputs
-   * @property  {string?} [changeAddress] address of the change output
-   * @property  {boolean?} [startMiningTx=true] to trigger start mining
-   * @property  {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
-   * @param {ProposedOutput[]} outputs Array of proposed outputs
-   * @param {SendManyOutputsOptions?} [options={}]
+   * @param outputs - Array of proposed outputs
+   * @param options - Options parameters
    *
-   * @return {Promise<SendTransaction>}
+   * @returns Promise that resolves with SendTransaction instance
    */
-  async sendManyOutputsSendTransaction(outputs: any, options: any = {}): Promise<any> {
+  async sendManyOutputsSendTransaction(
+    outputs: ProposedOutput[],
+    options: SendManyOutputsOptions = {}
+  ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
-    const newOptions: any = {
+    const newOptions = {
       inputs: [],
       changeAddress: null,
       startMiningTx: true,
@@ -1685,11 +1572,11 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress }: any = newOptions;
+    const { inputs, changeAddress } = newOptions;
     return new SendTransaction({
       wallet: this,
       outputs,
@@ -1702,42 +1589,41 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param {ProposedOutput[]} outputs Array of proposed outputs
-   * @param {SendManyOutputsOptions?} [options={}]
+   * @param outputs - Array of proposed outputs
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
+   * @returns Promise that resolves when transaction is sent
    */
-  async sendManyOutputsTransaction(outputs: any, options: any = {}): Promise<any> {
-    const sendTransaction: any = await this.sendManyOutputsSendTransaction(outputs, options);
+  async sendManyOutputsTransaction(
+    outputs: ProposedOutput[],
+    options: SendManyOutputsOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
 
   /**
    * Connect to the server and start emitting events.
    *
-   * @param {Object} optionsParams Options parameters
-   *  {
-   *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
-   *   'password': password to decrypt xpriv information. Required if not set in object.
-   *  }
+   * @param optionsParams Options parameters for starting the wallet
    */
-  async start(optionsParams: any = {}): Promise<any> {
-    const options: any = { pinCode: null, password: null, ...optionsParams };
-    const pinCode: any = options.pinCode || this.pinCode;
-    const password: any = options.password || this.password;
+  async start(optionsParams: WalletStartOptions = {}): Promise<ApiVersion> {
+    const options = { pinCode: null, password: null, ...optionsParams };
+    const pinCode = options.pinCode || this.pinCode;
+    const password = options.password || this.password;
     if (!this.xpub && !pinCode) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (this.seed && !password) {
-      throw new Error('Password is required.');
+      throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
     }
 
     // Check database consistency
     await this.storage.store.validate();
     await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
-    this.storage.config.setNetwork(this.conn.network);
+    this.storage.config.setNetwork(this.conn.getCurrentNetwork());
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
@@ -1754,14 +1640,23 @@ class HathorWallet extends EventEmitter {
     let accessData = await this.storage.getAccessData();
     if (!accessData) {
       if (this.seed) {
+        if (!pinCode) {
+          throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+        }
+        if (!password) {
+          throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
+        }
         accessData = walletUtils.generateAccessDataFromSeed(this.seed, {
           multisig: this.multisig,
           passphrase: this.passphrase,
           pin: pinCode,
           password,
-          networkName: this.conn.network,
+          networkName: this.conn.getCurrentNetwork(),
         });
       } else if (this.xpriv) {
+        if (!pinCode) {
+          throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+        }
         accessData = walletUtils.generateAccessDataFromXpriv(this.xpriv, {
           multisig: this.multisig,
           pin: pinCode,
@@ -1781,24 +1676,32 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise((resolve, reject) => {
+    const info = await new Promise<ApiVersion>((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
     });
-    if (info.network.indexOf(this.conn.network) >= 0) {
+    if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
       this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
-      throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);
+      throw new Error(
+        `Wrong network. server=${info.network} expected=${this.conn.getCurrentNetwork()}`
+      );
     }
     return info;
   }
 
   /**
    * Close the connections and stop emitting events.
+   *
+   * @param options Options for stopping the wallet
    */
-  async stop({ cleanStorage = true, cleanAddresses = false, cleanTokens = false } = {}) {
+  async stop({
+    cleanStorage = true,
+    cleanAddresses = false,
+    cleanTokens = false,
+  }: WalletStopOptions = {}): Promise<void> {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
@@ -1832,86 +1735,56 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Returns a base64 encoded signed message with an address' private key given an
-   * andress index
+   * address index
    *
-   * @param {string} message - The message to sign
-   * @param {number} index - The address index to sign with
-   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param message - The message to sign
+   * @param index - The address index to sign with
+   * @param pinCode - The PIN used to encrypt data in accessData
    *
-   * @return {Promise} Promise that resolves with the signed message
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: any, index: any, pinCode: any): Promise<any> {
-    const addressHDPrivKey: any = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage: any = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
+    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      privateKey: unknown;
+    };
+    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
   }
 
   /**
    * Create SendTransaction object and run from mining
-   * Returns a promise that resolves when the send succeeds
    *
-   * @param {Transaction} transaction Transaction object to be mined and pushed to the network
-   *
-   * @return {Promise<Transaction|CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @param transaction Transaction object to be mined and pushed to the network
+   * @returns Promise that resolves with transaction object if succeeds, or with error message
+   * if it fails
    * @deprecated
    */
-  async handleSendPreparedTransaction(transaction: any): Promise<any> {
-    const sendTransaction: any = new SendTransaction({ wallet: this, transaction });
+  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction | null> {
+    const sendTransaction = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
 
   /**
-   * @typedef {Object} CreateTokenOptions
-   *
-   * @property {string?} [address] address of the minted token
-   * @property {string?} [changeAddress] address of the change output
-   * @property {boolean?} [startMiningTx=true] trigger start mining
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   * @property {boolean?} [createMint=true] should create mint authority
-   * @property {string?} [mintAuthorityAddress] the address to send the mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [createMelt=true] should create melt authority
-   * @property {string?} [meltAuthorityAddress] the address to send the melt authority created
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address
-   *                                                                    to be from another wallet
-   * @property {string[]?} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {boolean?} [signTx=true] sign transaction instance
-   * @property {boolean?} [isCreateNFT=false] if the create token is an NFT creation call
-   * @property {TokenVersion?} [tokenVersion=TokenVersion.DEPOSIT] version of the token to be created
-   */
-
-  /**
    * Prepare create token transaction data before mining
    *
-   * @param {string} name Name of the token
-   * @param {string} symbol Symbol of the token
-   * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param {CreateTokenOptions} [options] Options parameters
+   * @param name - Name of the token
+   * @param symbol - Symbol of the token
+   * @param amount - Quantity of the token to be minted
+   * @param options - Options parameters
    *
-   * @return {Promise<CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @returns Promise that resolves with transaction object if succeeds or with error message if it fails
    */
   async prepareCreateNewToken(
-    name: any,
-    symbol: any,
-    amount: any,
-    options: any = {}
-  ): Promise<any> {
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    options: CreateTokenOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       startMiningTx: true,
@@ -1929,14 +1802,14 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
@@ -1944,15 +1817,15 @@ class HathorWallet extends EventEmitter {
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const txData: any = await tokenUtils.prepareCreateTokenData(
+    const txData = await tokenUtils.prepareCreateTokenData(
       mintAddress,
       name,
       symbol,
@@ -1977,107 +1850,97 @@ class HathorWallet extends EventEmitter {
   /**
    * Builds a SendTransaction instance that will create a new token for this wallet
    *
-   * @param {string} name Name of the token
-   * @param {string} symbol Symbol of the token
-   * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param {CreateTokenOptions} [options] Options parameters
+   * @param name - Name of the token
+   * @param symbol - Symbol of the token
+   * @param amount - Quantity of the token to be minted
+   * @param options - Options parameters
    *
-   * @return {Promise<SendTransaction>}
-   * @memberof HathorWallet
-   * @inner
-   * */
+   * @returns Promise that resolves with SendTransaction instance
+   */
   async createNewTokenSendTransaction(
-    name: any,
-    symbol: any,
-    amount: any,
-    options: any = {}
-  ): Promise<any> {
-    const transaction: any = await this.prepareCreateNewToken(name, symbol, amount, options);
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    options: CreateTokenOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Create a new token for this wallet
    *
-   * @param {string} name Name of the token
-   * @param {string} symbol Symbol of the token
-   * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param {CreateTokenOptions} [options] Options parameters
+   * @param name - Name of the token
+   * @param symbol - Symbol of the token
+   * @param amount - Quantity of the token to be minted
+   * @param options - Options parameters
    *
-   * @return {Promise<CreateTokenTransaction>}
-   * @memberof HathorWallet
-   * @inner
-   * */
-  async createNewToken(name: any, symbol: any, amount: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.createNewTokenSendTransaction(name, symbol, amount, options);
+   * @returns Promise that resolves with CreateTokenTransaction
+   */
+  async createNewToken(
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    options: CreateTokenOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.createNewTokenSendTransaction(name, symbol, amount, options);
     return sendTx.runFromMining();
   }
 
   /**
    * Get mint authorities
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMintAuthority(tokenUid: any, options: any = {}): Promise<any> {
+  async getMintAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
     return this.getAuthorityUtxo(tokenUid, 'mint', options);
   }
 
   /**
    * Get melt authorities
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
-  async getMeltAuthority(tokenUid: any, options: any = {}): Promise<any> {
+  async getMeltAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
     return this.getAuthorityUtxo(tokenUid, 'melt', options);
   }
 
   /**
    * Get authority utxo
    *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {string} authority The authority to filter ('mint' or 'melt')
-   * @param {Object} [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
-   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   * @param tokenUid - UID of the token to select the authority utxo
+   * @param authority - The authority to filter ('mint' or 'melt')
+   * @param options - Object with custom options.
+   * @param options.many - if should return many utxos or just one (default false)
+   * @param options.only_available_utxos - If we should filter for available utxos.
+   * @param options.filter_address - Address to filter the utxo to get.
    *
-   * @return {Promise<{
-   *   txId: string,
-   *   index: number,
-   *   address: string,
-   *   authorities: OutputValueType
-   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   * @return Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
-   *       Returns an empty array in case there are no tx_outupts for this type.
+   *       Returns an empty array in case there are no tx_outputs for this type.
    * */
-  async getAuthorityUtxo(tokenUid: any, authority: any, options: any = {}): Promise<any> {
-    let authorityValue: any;
+  async getAuthorityUtxo(
+    tokenUid: string,
+    authority: 'mint' | 'melt',
+    options: GetAuthorityOptions = {}
+  ): Promise<IUtxo[]> {
+    let authorityValue: bigint;
     if (authority === 'mint') {
       authorityValue = 1n;
     } else if (authority === 'melt') {
@@ -2086,17 +1949,23 @@ class HathorWallet extends EventEmitter {
       throw new Error('Invalid authority value.');
     }
 
-    const newOptions: any = {
+    const newOptions: {
+      token?: string;
+      authorities?: bigint;
+      only_available_utxos?: boolean;
+      filter_address?: string;
+      max_utxos?: number;
+    } = {
       token: tokenUid,
       authorities: authorityValue,
       only_available_utxos: options.only_available_utxos ?? false,
-      filter_address: options.filter_address ?? null,
+      filter_address: options.filter_address || undefined,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
       newOptions.max_utxos = 1;
     }
-    const utxos: any = [];
+    const utxos: IUtxo[] = [];
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
       utxos.push(utxo);
     }
@@ -2104,38 +1973,24 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} MintTokensOptions
-   * @property {string?} [address] destination address of the minted token
-   *                                   (if not sent we choose the next available address to use)
-   * @property {string?} [changeAddress] address of the change output
-   *                                   (if not sent we choose the next available address to use)
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining (default true)
-   * @property {boolean?} [createAnotherMint] boolean to create another mint authority or not for the wallet
-   * @property {string?} [mintAuthorityAddress] address to send the new mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [unshiftData] whether to unshift the data script output
-   * @property {string[]|null?} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {boolean?} [signTx=true] sign transaction instance
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare mint transaction before mining
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMintTokensData(tokenUid: any, amount: any, options: any = {}): Promise<any> {
+  async prepareMintTokensData(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
@@ -2148,22 +2003,22 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput: any = await this.getMintAuthority(tokenUid, {
+    const mintInput = await this.getMintAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2172,7 +2027,7 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have mint authority output available.");
     }
 
-    const mintOptions: any = {
+    const mintOptions = {
       token: tokenUid,
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
@@ -2181,7 +2036,7 @@ class HathorWallet extends EventEmitter {
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMintTxData(
+    const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
       amount,
       this.storage,
@@ -2196,68 +2051,62 @@ class HathorWallet extends EventEmitter {
    * Mint tokens - SendTransaction
    * Create a SendTransaction instance with a prepared mint tokens transaction.
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions?} [options={}] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokensSendTransaction(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const transaction: any = await this.prepareMintTokensData(tokenUid, amount, options);
+  async mintTokensSendTransaction(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Mint tokens
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions?} [options={}] Options parameters
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>} Promise that resolves with transaction object
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokens(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.mintTokensSendTransaction(tokenUid, amount, options);
+  async mintTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.mintTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
 
   /**
-   * @typedef {Object} MeltTokensOptions
-   * @property {string?} [address] address of the HTR deposit back.
-   * @property {string?} [changeAddress] address of the change output.
-   * @property {boolean?} [createAnotherMelt=true] create another melt authority or not.
-   * @property {string?} [meltAuthorityAddress=null] where to send the new melt authority created.
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address to be from another wallet.
-   * @property {boolean?} [unshiftData=false] Add the data outputs in the start of the output list.
-   * @property {string[]?} [data=null] list of data script output to add, UTF-8 encoded.
-   * @property {string?} [pinCode=null] pin to decrypt xpriv information. Optional but required if not set in this.
-   * @property {boolean?} [signTx=true] Sign transaction instance.
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining
-   */
-
-  /**
    * Prepare melt transaction before mining
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options={}] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMeltTokensData(tokenUid: any, amount: any, options: any = {}): Promise<any> {
+  async prepareMeltTokensData(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
@@ -2270,20 +2119,20 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const meltInput: any = await this.getMeltAuthority(tokenUid, {
+    const meltInput = await this.getMeltAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2292,14 +2141,14 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have melt authority output available.");
     }
 
-    const meltOptions: any = {
+    const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
       meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMeltTxData(
+    const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
       meltInput[0],
       newOptions.address || (await this.getCurrentAddress()).address,
@@ -2316,73 +2165,70 @@ class HathorWallet extends EventEmitter {
    * Melt tokens - SendTransaction
    * Create a SendTransaction instance with a prepared melt tokens transaction.
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokensSendTransaction(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const transaction: any = await this.prepareMeltTokensData(tokenUid, amount, options);
+  async meltTokensSendTransaction(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Melt tokens
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokens(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.meltTokensSendTransaction(tokenUid, amount, options);
+  async meltTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.meltTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
 
   /**
-   * @typedef {Object} DelegateAuthorityOptions
-   * @property {boolean?} [options.createAnother=true] Should create another authority for the wallet.
-   * @property {boolean?} [options.startMiningTx=true] boolean to trigger start mining.
-   * @property {string?} [options.pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare delegate authority transaction before mining
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async prepareDelegateAuthorityData(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
-    const newOptions: any = { createAnother: true, pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { createAnother: true, pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { createAnother }: any = newOptions;
-    let delegateInput: any;
+    const { createAnother } = newOptions;
+    let delegateInput: IUtxo[];
     if (type === 'mint') {
       delegateInput = await this.getMintAuthority(tokenUid, {
         many: false,
@@ -2398,10 +2244,15 @@ class HathorWallet extends EventEmitter {
     }
 
     if (delegateInput.length === 0) {
-      throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE });
+      // FIXME: This obviously invalid cast is to prevent a breaking change that possibly would only
+      // cause problems at the clients. This fix will need to wait until a major version change.
+      throw new Error({
+        success: false,
+        message: ErrorMessages.NO_UTXOS_AVAILABLE,
+      } as unknown as string);
     }
 
-    const txData: any = await tokenUtils.prepareDelegateAuthorityTxData(
+    const txData = await tokenUtils.prepareDelegateAuthorityTxData(
       tokenUid,
       delegateInput[0],
       destinationAddress,
@@ -2416,23 +2267,21 @@ class HathorWallet extends EventEmitter {
    * Delegate authority - Send Transaction
    * Create a SendTransaction instance ready to mine a delegate authority transaction.
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async delegateAuthoritySendTransaction(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
-    const transaction: any = await this.prepareDelegateAuthorityData(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareDelegateAuthorityData(
       tokenUid,
       type,
       destinationAddress,
@@ -2444,23 +2293,23 @@ class HathorWallet extends EventEmitter {
   /**
    * Delegate authority
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {string} destinationAddress Destination address of the delegated authority
-   * @param {DelegateAuthorityOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param destinationAddress - Destination address of the delegated authority
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
   async delegateAuthority(
-    tokenUid: any,
-    type: any,
-    destinationAddress: any,
-    options: any = {}
-  ): Promise<any> {
-    const sendTx: any = await this.delegateAuthoritySendTransaction(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options: DelegateAuthorityOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.delegateAuthoritySendTransaction(
       tokenUid,
       type,
       destinationAddress,
@@ -2470,39 +2319,31 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} DestroyAuthorityOptions
-   * @param {boolean?} [startMiningTx=true] trigger start mining
-   * @param {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare destroy authority transaction before mining
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async prepareDestroyAuthorityData(
-    tokenUid: any,
-    type: any,
-    count: any,
-    options: any = {}
-  ): Promise<any> {
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    let destroyInputs: any;
+    let destroyInputs: IUtxo[];
     if (type === 'mint') {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
@@ -2521,7 +2362,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
     }
 
-    const data: any = [];
+    const data: IUtxo[] = [];
     for (const utxo of destroyInputs) {
       // FIXME: select utxos passing count to the method
       data.push(utxo);
@@ -2532,7 +2373,7 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const txData: any = tokenUtils.prepareDestroyAuthorityTxData(data);
+    const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
     return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
@@ -2540,41 +2381,44 @@ class HathorWallet extends EventEmitter {
    * Destroy authority - SendTransaction
    * Creates a SendTransaction instance with a prepared destroy transaction.
    *
-   * @param {string} tokenUid UID of the token to destroy the authority
-   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to destroy the authority
+   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
   async destroyAuthoritySendTransaction(
-    tokenUid: any,
-    type: any,
-    count: any,
-    options: any = {}
-  ): Promise<any> {
-    const transaction: any = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Destroy authority
    *
-   * @param {string} tokenUid UID of the token to destroy the authority
-   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
-   * @param {number} count How many authority outputs to destroy
-   * @param {DestroyAuthorityOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to destroy the authority
+   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param count - How many authority outputs to destroy
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async destroyAuthority(tokenUid: any, type: any, count: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
+  async destroyAuthority(
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    count: number,
+    options: DestroyAuthorityOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
     return sendTx.runFromMining();
   }
 
@@ -2593,13 +2437,12 @@ class HathorWallet extends EventEmitter {
   /**
    * Get all authorities utxos for specific token
    *
-   * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
+   * @param tokenUid - UID of the token to delegate the authority
+   * @param type - Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {{tx_id: string, index: number, address: string, authorities: OutputValueType}[]}
-   *    Array of the authority outputs.
+   * @return Array of the authority outputs.
    * */
-  async getAuthorityUtxos(tokenUid: any, type: any): Promise<any> {
+  async getAuthorityUtxos(tokenUid: string, type: 'mint' | 'melt'): Promise<IUtxo[]> {
     if (type === 'mint') {
       return this.getMintAuthority(tokenUid, { many: true });
     }
@@ -2609,7 +2452,7 @@ class HathorWallet extends EventEmitter {
     throw new Error('This should never happen.');
   }
 
-  getTokenData(): any {
+  getTokenData(): void {
     if (this.tokenUid === NATIVE_TOKEN_UID) {
       // Hathor token we don't get from the full node
       this.token = this.storage.getNativeTokenData();
@@ -2621,13 +2464,13 @@ class HathorWallet extends EventEmitter {
       // READY state with token still null.
       // I will keep it like that for now but to protect from this
       // we should change to READY only after both things finish
-      walletApi.getGeneralTokenInfo(this.tokenUid, (response: any) => {
+      walletApi.getGeneralTokenInfo(this.tokenUid, (response: GeneralTokenInfoSchema) => {
         if (response.success) {
           this.token = {
             uid: this.tokenUid,
             name: response.name,
             symbol: response.symbol,
-            version: response.version,
+            version: response.version ?? undefined, // Version can't be null
           };
         } else {
           throw Error(response.message);
@@ -2641,24 +2484,12 @@ class HathorWallet extends EventEmitter {
    *
    * @param tokenId Token uid to get the token details
    *
-   * @return {Promise<{
-   *   totalSupply: bigint,
-   *   totalTransactions: number,
-   *   tokenInfo: {
-   *     name: string,
-   *     symbol: string,
-   *     version: TokenVersion,
-   *   },
-   *   authorities: {
-   *     mint: boolean,
-   *     melt: boolean,
-   *   },
-   * }>} token details
+   * @return token details
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getTokenDetails(tokenId: any): Promise<any> {
-    const result: any = await new Promise((resolve, reject) => {
-      walletApi.getGeneralTokenInfo(tokenId, resolve).catch((error: any) => reject(error));
+  async getTokenDetails(tokenId: string): Promise<GetTokenDetailsFullnodeFacadeReturnType> {
+    const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
     if (!result.success) {
@@ -2675,7 +2506,7 @@ class HathorWallet extends EventEmitter {
         id: tokenId,
         name,
         symbol,
-        version,
+        version: version ?? undefined,
       },
       authorities: {
         mint: mint.length > 0,
@@ -2684,7 +2515,7 @@ class HathorWallet extends EventEmitter {
     };
   }
 
-  isReady() {
+  isReady(): boolean {
     return this.state === HathorWallet.READY;
   }
 
@@ -2732,24 +2563,25 @@ class HathorWallet extends EventEmitter {
    * FIXME: does not differentiate between locked and unlocked, also ignores authorities
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
-   * @param {DecodedTx} tx Decoded transaction with populated data from local wallet history
-   * @param [optionsParam]
-   * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
+   * @param tx Decoded transaction with populated data from local wallet history
+   * @param optionsParam
    *
-   * @return {Promise<Record<string,bigint>>} Promise that resolves with an object with each token
-   *                                          and it's balance in this tx for this wallet
+   * @return Promise that resolves with an object with each token and it's balance in this tx for this wallet
    *
    * @example
    * const decodedTx = hathorWalletInstance.getTx(txHash);
    * const txBalance = await hathorWalletInstance.getTxBalance(decodedTx);
    * */
-  async getTxBalance(tx: any, optionsParam: any = {}): Promise<any> {
-    const balance: any = {};
-    const fullBalance: any = await transactionUtils.getTxBalance(tx, this.storage);
+  async getTxBalance(
+    tx: IHistoryTx,
+    optionsParam: { includeAuthorities?: boolean } = {}
+  ): Promise<Record<string, bigint>> {
+    const balance: Record<string, bigint> = {};
+    const fullBalance = await transactionUtils.getTxBalance(tx, this.storage);
 
     // We need to map balance for backwards compatibility
     for (const [token, tokenBalance] of Object.entries(fullBalance)) {
-      balance[token] = (tokenBalance as any).tokens.locked + (tokenBalance as any).tokens.unlocked;
+      balance[token] = tokenBalance.tokens.locked + tokenBalance.tokens.unlocked;
     }
 
     return balance;
@@ -2760,12 +2592,12 @@ class HathorWallet extends EventEmitter {
    * The address might be in the input or output
    * Removes duplicates
    *
-   * @param {DecodedTx} tx Transaction data with array of inputs and outputs
+   * @param tx Transaction data with array of inputs and outputs
    *
-   * @return {Set<string>} Set of strings with addresses
+   * @return Set of strings with addresses
    * */
-  async getTxAddresses(tx: any): Promise<any> {
-    const addresses: any = new Set();
+  async getTxAddresses(tx: IHistoryTx): Promise<Set<string>> {
+    const addresses = new Set<string>();
     for (const io of [...tx.outputs, ...tx.inputs]) {
       if (io.decoded && io.decoded.address && (await this.isAddressMine(io.decoded.address))) {
         addresses.add(io.decoded.address);
@@ -2776,32 +2608,24 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Omit<CreateTokenOptions, 'data'|'isCreateNFT'>} CreateNFTOptions
-   */
-
-  /**
    * Create a SendTransaction instance with a create NFT transaction prepared.
    *
-   * @param {string} name Name of the token
-   * @param {string} symbol Symbol of the token
-   * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param {string} data NFT data string using utf8 encoding
-   * @param {CreateNFTOptions?} [options={}] Options parameters
+   * @param name - Name of the token
+   * @param symbol - Symbol of the token
+   * @param amount - Quantity of the token to be minted
+   * @param data - NFT data string using utf8 encoding
+   * @param options - Options parameters
    *
-   * @return {Promise<SendTransaction>}
-   *
-   * @memberof HathorWallet
-   * @inner
-   * */
+   * @returns Promise that resolves with SendTransaction instance
+   */
   async createNFTSendTransaction(
-    name: any,
-    symbol: any,
-    amount: any,
-    data: any,
-    options: any = {}
-  ): Promise<any> {
-    /** @type {CreateTokenOptions} */
-    const newOptions: any = {
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    data: string,
+    options: CreateNFTOptions = {}
+  ): Promise<SendTransaction> {
+    const newOptions: CreateTokenOptions = {
       address: null,
       changeAddress: null,
       startMiningTx: true,
@@ -2813,54 +2637,55 @@ class HathorWallet extends EventEmitter {
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
       ...options,
+      data: [data],
+      isCreateNFT: true,
     };
-    newOptions.data = [data];
-    newOptions.isCreateNFT = true;
-    const transaction: any = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
+    const transaction = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Create an NFT for this wallet
    *
-   * @param {string} name Name of the token
-   * @param {string} symbol Symbol of the token
-   * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param {string} data NFT data string using utf8 encoding
-   * @param {CreateNFTOptions?} [options={}] Options parameters
+   * @param name - Name of the token
+   * @param symbol - Symbol of the token
+   * @param amount - Quantity of the token to be minted
+   * @param data - NFT data string using utf8 encoding
+   * @param options - Options parameters
    *
-   * @return {Promise<CreateTokenTransaction>}
-   *
-   * @memberof HathorWallet
-   * @inner
-   * */
-  async createNFT(name: any, symbol: any, amount: any, data: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.createNFTSendTransaction(name, symbol, amount, data, options);
+   * @returns Promise that resolves with CreateTokenTransaction
+   */
+  async createNFT(
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    data: string,
+    options: CreateNFTOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.createNFTSendTransaction(name, symbol, amount, data, options);
     return sendTx.runFromMining();
   }
 
   /**
    * Identify all inputs from the loaded wallet
    *
-   * @param {Transaction} tx The transaction
+   * @param tx - The transaction
    *
-   * @returns {Promise<{
-   * inputIndex: number,
-   * addressIndex: number,
-   * addressPath: string,
-   * }[]>} List of indexes and their associated address index
+   * @returns List of indexes and their associated address index
    */
-  async getWalletInputInfo(tx: any): Promise<any> {
-    const walletInputs: any = [];
+  async getWalletInputInfo(
+    tx: Transaction
+  ): Promise<Array<{ inputIndex: number; addressIndex: number; addressPath: string }>> {
+    const walletInputs: { inputIndex: number; addressIndex: number; addressPath: string }[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const addressInfo: any = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address
+      const addressInfo = await this.storage.getAddressInfo(
+        spentTx.outputs[input.index].decoded.address!
       );
       if (addressInfo === null) {
         continue;
       }
-      const addressPath: any = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
+      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
       walletInputs.push({
         inputIndex: index,
         addressIndex: addressInfo.bip32AddressIndex,
@@ -2874,30 +2699,39 @@ class HathorWallet extends EventEmitter {
   /**
    * Get signatures for all inputs of the loaded wallet.
    *
-   * @param {Transaction} tx The transaction to be signed
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
+   * @param tx - The transaction to be signed
+   * @param options - Options for getting signatures
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
    *
-   * @async
-   * @returns {Promise<{
-   * inputIndex: number,
-   * addressIndex: number,
-   * addressPath: string,
-   * signature: string,
-   * pubkey: string,
-   * }>} Input and signature information
+   * @returns Input and signature information
    */
-  async getSignatures(tx: any, { pinCode = null }: any = {}): Promise<any> {
+  async getSignatures(
+    tx: Transaction,
+    { pinCode = null }: { pinCode?: string | null } = {}
+  ): Promise<
+    Array<{
+      inputIndex: number;
+      addressIndex: number;
+      addressPath: string;
+      signature: string;
+      pubkey: string;
+    }>
+  > {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
-    const pin: any = pinCode || this.pinCode;
+    const pin = pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const signatures: any = await this.storage.getTxSignatures(tx, pin);
-    const sigInfoArray: any = [];
+    const signatures = await this.storage.getTxSignatures(tx, pin);
+    const sigInfoArray: {
+      inputIndex: number;
+      addressIndex: number;
+      addressPath: string;
+      signature: string;
+      pubkey: string;
+    }[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
@@ -2911,37 +2745,35 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Sign all inputs of the given transaction.
-   *   OBS: only for P2PKH wallets.
+   * OBS: only for P2PKH wallets.
    *
-   * @param {Transaction} tx The transaction to be signed
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
+   * @param tx - The transaction to be signed
+   * @param options - Options for signing
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
    *
-   * @returns {Promise<Transaction>} The signed transaction
+   * @returns The signed transaction
    */
-  async signTx(tx: any, options: any = {}): Promise<any> {
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
     for (const sigInfo of await this.getSignatures(tx, options)) {
-      const { signature, pubkey, inputIndex }: any = sigInfo;
-      const inputData: any = transactionUtils.createInputData(
+      const { signature, pubkey, inputIndex } = sigInfo;
+      const inputData = transactionUtils.createInputData(
         Buffer.from(signature, 'hex'),
         Buffer.from(pubkey, 'hex')
       );
       tx.inputs[inputIndex].setData(inputData);
     }
 
-    return tx;
+    return tx as unknown as Transaction;
   }
 
   /**
    * Guard to check if the response is a transaction not found response
    *
-   * @param {Object} data The request response data
-   *
-   * @throws {TxNotFoundError} If the returned error was a transaction not found
+   * @param data The request response data
+   * @throws TxNotFoundError if the returned error was a transaction not found
    */
-  static _txNotFoundGuard(data: any): any {
-    if (get(data, 'message', '') === 'Transaction not found') {
+  static _txNotFoundGuard(data: unknown): void {
+    if ((get(data, 'message', '') as string) === 'Transaction not found') {
       throw new TxNotFoundError();
     }
   }
@@ -2949,19 +2781,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a transaction
    *
-   * @param {string} txId The transaction to query
+   * @param txId The transaction to query
    *
-   * @returns {FullNodeTxResponse} Transaction data in the fullnode
+   * @returns Transaction data in the fullnode
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getFullTxById(txId: any): Promise<any> {
-    const tx: any = await new Promise((resolve, reject) => {
+  async getFullTxById(txId: string): Promise<FullNodeTxApiResponse> {
+    const tx = await new Promise<FullNodeTxApiResponse>((resolve, reject) => {
       txApi
         .getTransaction(txId, resolve)
         // txApi will call the `resolve` callback and end the promise chain,
         // so if it falls here, we should throw
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
@@ -2975,17 +2807,17 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a transaction confirmation data
    *
-   * @param {string} txId The transaction to query
+   * @param txId The transaction to query
    *
-   * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
+   * @returns Transaction confirmation data
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getTxConfirmationData(txId: any): Promise<any> {
-    const confirmationData: any = await new Promise((resolve, reject) => {
+  async getTxConfirmationData(txId: string): Promise<TransactionAccWeightResponse> {
+    const confirmationData: TransactionAccWeightResponse = await new Promise((resolve, reject) => {
       txApi
         .getConfirmationData(txId, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
 
     if (!confirmationData.success) {
@@ -3000,25 +2832,33 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a graphviz graph, given a graph type and txId
    *
-   * @param {string} txId The transaction to query
-   * @param {string} graphType The graph type to query
-   * @param {number} maxLevel Max level to render
+   * @param txId The transaction to query
+   * @param graphType The graph type to query
+   * @param maxLevel Max level to render
    *
-   * @returns {Promise<string>} The graphviz digraph
+   * @returns The graphviz digraph
+   * FIXME: Need to define the response from graphviz request
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async graphvizNeighborsQuery(txId: any, graphType: any, maxLevel: any): Promise<any> {
-    const graphvizData: any = await new Promise((resolve, reject) => {
+  async graphvizNeighborsQuery(
+    txId: string,
+    graphType: string,
+    maxLevel: number
+  ): Promise<unknown> {
+    const graphvizData = await new Promise<unknown>((resolve, reject) => {
       txApi
         .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
+
+    const isGraphvizError = (d: unknown): d is { success: boolean; message: string } =>
+      typeof d === 'object' && d !== null && 'success' in d && typeof d.success === 'boolean';
 
     // The response will either be a string with the graphviz data or an object
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
-    if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+    if (isGraphvizError(graphvizData) && !graphvizData.success) {
       HathorWallet._txNotFoundGuard(graphvizData);
 
       throw new Error(`Invalid transaction ${txId}`);
@@ -3029,21 +2869,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * This function is responsible for getting the details of each token in the transaction.
-   * @param {string} txId - Transaction id
-   * @returns {Promise<{
-   *   success: boolean
-   *   txTokens: Array<{
-   *     txId: string,
-   *     timestamp: number,
-   *     version: number,
-   *     voided: boolean,
-   *     weight: number,
-   *     tokenId: string,
-   *     tokenName: string,
-   *     tokenSymbol: string,
-   *     balance: bigint
-   *   }>
-   * }>} Array of token details
+   * @param txId - Transaction id
+   * @returns Array of token details
    * @example
    * {
    *   success: true,
@@ -3061,18 +2888,18 @@ class HathorWallet extends EventEmitter {
    *     },
    *   ],
    * }
-   * @throws {Error} (propagation) Invalid transaction
-   * @throws {Error} (propagation) Client did not use the callback
-   * @throws {Error} (propagation) Transaction not found
+   * @throws {Error} Invalid transaction
+   * @throws {Error} Client did not use the callback
+   * @throws {Error} Transaction not found
    * @throws {Error} Transaction does not have any balance for this wallet
    * @throws {Error} Token uid not found in tokens list
    * @throws {Error} Token uid not found in tx
    */
-  async getTxById(txId: any): Promise<any> {
+  async getTxById(txId: string): Promise<GetTxByIdFullnodeFacadeReturnType> {
     /**
      * Hydrate input and output with token uid
-     * @param {Transaction.input|Transaction.output} io - Input or output
-     * @param {Array} tokens - Array of token configs
+     * @param  io - Input or output
+     * @param tokens - Array of token configs
      * @example
      * {
      *   ...output,
@@ -3080,8 +2907,11 @@ class HathorWallet extends EventEmitter {
      * }
      * @throws {Error} Token uid not found in tokens list
      */
-    const hydrateWithTokenUid = (io: any, tokens: any): any => {
-      const { token_data }: any = io;
+    const hydrateWithTokenUid = <T extends { token_data: number }>(
+      io: T,
+      tokens: Array<{ uid: string }>
+    ): T & { token: string } => {
+      const { token_data } = io;
 
       if (token_data === 0) {
         return {
@@ -3090,8 +2920,8 @@ class HathorWallet extends EventEmitter {
         };
       }
 
-      const tokenIdx: any = tokenUtils.getTokenIndexFromData(token_data);
-      const tokenUid: any = tokens[tokenIdx - 1]?.uid;
+      const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
+      const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
         throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
@@ -3102,40 +2932,39 @@ class HathorWallet extends EventEmitter {
       };
     };
 
-    /**
-     * @throws {Error} Invalid transaction
-     * @throws {Error} Client did not use the callback
-     * @throws {Error} Transaction not found
-     */
-    const fullTx: any = await this.getFullTxById(txId);
-    fullTx.tx.outputs = fullTx.tx.outputs.map((output: any) =>
+    const fullTx = await this.getFullTxById(txId);
+    if (!fullTx.success) {
+      throw new Error(`Failed to get transaction ${txId}: ${fullTx.message}`);
+    }
+
+    fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map((input: any) =>
-      hydrateWithTokenUid(input, fullTx.tx.tokens)
-    );
+    fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances: any = await this.getTxBalance(fullTx.tx);
-    const { length: hasBalance }: any = Object.keys(tokenBalances);
+    const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
+    const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
     }
 
-    const listTokenUid: any = Object.keys(tokenBalances);
-    const txTokens: any = listTokenUid.map((uid: any) => {
+    const listTokenUid = Object.keys(tokenBalances);
+    const txTokens = listTokenUid.map(uid => {
       /**
        * Retrieves the token config from the transaction.
-       * @param {string} tokenUid
-       * @returns {TokenInfo} Token config
+       * @param tokenUid
+       * @returns Token config
        */
-      const getToken = (tokenUid: any): any => {
+      const getToken = (
+        tokenUid: string
+      ): { uid: string; name: string | null; symbol: string | null } => {
         if (tokenUid === NATIVE_TOKEN_UID) {
           return this.storage.getNativeTokenData();
         }
 
-        const token: any = fullTx.tx.tokens.find((tokenElem: any) => tokenElem.uid === tokenUid);
+        const token = fullTx.tx.tokens.find(tokenElem => tokenElem.uid === tokenUid);
         if (!token) {
           throw new Error(`Token ${tokenUid} not found in tx`);
         }
@@ -3143,11 +2972,11 @@ class HathorWallet extends EventEmitter {
         return token;
       };
 
-      const isVoided: any = fullTx.meta.voided_by.length > 0;
-      const token: any = getToken(uid);
-      const tokenBalance: any = tokenBalances[uid];
+      const isVoided = fullTx.meta.voided_by.length > 0;
+      const token = getToken(uid);
+      const tokenBalance = tokenBalances[uid];
 
-      const tokenDetails: any = {
+      const tokenDetails = {
         txId,
         timestamp: fullTx.tx.timestamp,
         version: fullTx.tx.version,
@@ -3193,36 +3022,20 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} CreateNanoTxOptions
-   * @property {string?} [pinCode] PIN to decrypt the private key.
-   */
-
-  /**
-   * @typedef {Object} CreateNanoTxData
-   * @property {string?} [blueprintId=null] ID of the blueprint to create the nano contract. Required if method is initialize.
-   * @property {string?} [ncId=null] ID of the nano contract to execute method. Required if method is not initialize
-   * @property {NanoContractAction[]?} [actions] List of actions to execute in the nano contract transaction
-   * @property {any[]} [args] List of arguments for the method to be executed in the transaction
-   *
-   */
-
-  /**
    * Create and send a Transaction with nano header
    *
-   * @param {string} method Method of nano contract to have the transaction created
-   * @param {string} address Address that will be used to sign the nano contract transaction
-   * @param {CreateNanoTxData} [data]
-   * @param {CreateNanoTxOptions} [options]
-   *
-   * @returns {Promise<Transaction>}
+   * @param method Method of nano contract to have the transaction created
+   * @param address Address that will be used to sign the nano contract transaction
+   * @param data Data for the nano contract transaction
+   * @param options Options for the nano contract transaction
    */
   async createAndSendNanoContractTransaction(
-    method: any,
-    address: any,
-    data: any,
-    options: any = {}
-  ): Promise<any> {
-    const sendTransaction: any = await this.createNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options: CreateNanoTxOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTransaction = await this.createNanoContractTransaction(
       method,
       address,
       data,
@@ -3234,30 +3047,28 @@ class HathorWallet extends EventEmitter {
   /**
    * Create a Transaction with nano header and return the SendTransaction object
    *
-   * @param {string} method Method of nano contract to have the transaction created
-   * @param {string} address Address that will be used to sign the nano contract transaction
-   * @param {CreateNanoTxData} [data]
-   * @param {CreateNanoTxOptions} [options]
-   *
-   * @returns {Promise<SendTransaction>}
+   * @param method Method of nano contract to have the transaction created
+   * @param address Address that will be used to sign the nano contract transaction
+   * @param data Data for the nano contract transaction
+   * @param options Options for the nano contract transaction
    */
   async createNanoContractTransaction(
-    method: any,
-    address: any,
-    data: any,
-    options: any = {}
-  ): Promise<any> {
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options: CreateNanoTxOptions = {}
+  ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     // Get caller pubkey
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -3265,58 +3076,37 @@ class HathorWallet extends EventEmitter {
     }
 
     // Build and send transaction
-    const builder: any = new NanoContractTransactionBuilder()
+    const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
-      .setBlueprintId(data.blueprintId)
-      .setNcId(data.ncId)
+      .setBlueprintId(data.blueprintId!)
+      .setNcId(data.ncId!)
       .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
-      .setArgs(data.args)
+      .setArgs(data.args!)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
-    const nc: any = await builder.build();
+    const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }
 
   /**
-   * @typedef {Object} CreateTokenTxOptions
-   * @property {string} [name] Token name
-   * @property {string} [symbol] Token symbol
-   * @property {OutputValueType} [amount] Token mint amount
-   * @property {boolean} [contractPaysTokenDeposit] If the contract will pay for the token deposit fee
-   * @property {string?} [mintAddress] Address to send the minted tokens
-   * @property {string?} [changeAddress] Change address to send change values
-   * @property {boolean?} [createMint] If should create a mint authority output
-   * @property {string?} [mintAuthorityAddress] The address to send the mint authority output to
-   * @property {boolean?} [allowExternalMintAuthorityAddress] If should accept an external mint authority address
-   * @property {boolean?} [createMelt] If should create a melt authority output
-   * @property {string?} [meltAuthorityAddress] The address to send the melt authority output to
-   * @property {boolean?} [allowExternalMeltAuthorityAddress] If should accept an external melt authority address
-   * @property {string[]?} [data] List of data strings to create data outputs
-   * @property {boolean?} [isCreateNFT] If this token is an NFT
-   */
-
-  /**
    * Create and send a Create Token Transaction with nano header
    *
-   * @param {string} method Method of nano contract to have the transaction created
-   * @param {string} address Address that will be used to sign the nano contract transaction
-   * @param {CreateNanoTxData} [data]
-   * @param {CreateNanoTxData} [data]
-   * @param {CreateTokenTxOptions} [createTokenOptions]
-   * @param {CreateNanoTxOptions} [options]
-   *
-   * @returns {Promise<Transaction>}
+   * @param method Method of nano contract to have the transaction created
+   * @param address Address that will be used to sign the nano contract transaction
+   * @param data Data for the nano contract transaction
+   * @param createTokenOptions Options for the create token transaction
+   * @param options Options for the nano contract transaction
    */
   async createAndSendNanoContractCreateTokenTransaction(
-    method: any,
-    address: any,
-    data: any,
-    createTokenOptions: any,
-    options: any = {}
-  ): Promise<any> {
-    const sendTransaction: any = await this.createNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateNanoTokenTxOptions,
+    options: CreateNanoTxOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
       address,
       data,
@@ -3329,31 +3119,29 @@ class HathorWallet extends EventEmitter {
   /**
    * Create a Create Token Transaction with nano header and return the SendTransaction object
    *
-   * @param {string} method Method of nano contract to have the transaction created
-   * @param {string} address Address that will be used to sign the nano contract transaction
-   * @param {CreateNanoTxData} [data]
-   * @param {CreateTokenTxOptions} [createTokenOptions]
-   * @param {CreateNanoTxOptions} [options]
-   *
-   * @returns {Promise<SendTransaction>}
+   * @param method Method of nano contract to have the transaction created
+   * @param address Address that will be used to sign the nano contract transaction
+   * @param data Data for the nano contract transaction
+   * @param createTokenOptions Options for the create token transaction
+   * @param options Options for the nano contract transaction
    */
   async createNanoContractCreateTokenTransaction(
-    method: any,
-    address: any,
-    data: any,
-    createTokenOptions: any,
-    options: any = {}
-  ): Promise<any> {
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateNanoTokenTxOptions,
+    options: CreateNanoTxOptions = {}
+  ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    const newCreateTokenOptions: any = {
+    const newCreateTokenOptions = {
       mintAddress: null,
       changeAddress: null,
       createMint: true,
@@ -3372,9 +3160,7 @@ class HathorWallet extends EventEmitter {
       !newCreateTokenOptions.allowExternalMintAuthorityAddress
     ) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(
-        newCreateTokenOptions.mintAuthorityAddress
-      );
+      const isAddressMine = await this.isAddressMine(newCreateTokenOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new NanoContractTransactionError(
           'The mint authority address must belong to your wallet.'
@@ -3387,9 +3173,7 @@ class HathorWallet extends EventEmitter {
       !newCreateTokenOptions.allowExternalMeltAuthorityAddress
     ) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(
-        newCreateTokenOptions.meltAuthorityAddress
-      );
+      const isAddressMine = await this.isAddressMine(newCreateTokenOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new NanoContractTransactionError(
           'The melt authority address must belong to your wallet.'
@@ -3401,24 +3185,27 @@ class HathorWallet extends EventEmitter {
       newCreateTokenOptions.mintAddress || (await this.getCurrentAddress()).address;
 
     // Get caller pubkey
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
     // Build and send transaction
-    const builder: any = new NanoContractTransactionBuilder()
+    const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
-      .setBlueprintId(data.blueprintId)
-      .setNcId(data.ncId)
+      .setBlueprintId(data.blueprintId!)
+      .setNcId(data.ncId!)
       .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
-      .setArgs(data.args)
-      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, newCreateTokenOptions);
+      .setArgs(data.args!)
+      .setVertexType(
+        NanoContractVertexType.CREATE_TOKEN_TRANSACTION,
+        newCreateTokenOptions as NanoContractBuilderCreateTokenOptions
+      );
 
-    const nc: any = await builder.build();
+    const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }
 
@@ -3454,32 +3241,41 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the external tx signing method.
-   * @param {EcdsaTxSign|null} method
+   *
+   * @param method The external transaction signing method, or null to clear
    */
-  setExternalTxSigningMethod(method: any): any {
+  setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
-    this.storage.setTxSignatureMethod(method);
+    if (method) {
+      this.storage.setTxSignatureMethod(method);
+    }
   }
 
   /**
    * Set the history sync mode.
-   * @param {HistorySyncMode} mode
+   *
+   * @param mode The history sync mode to use
    */
-  setHistorySyncMode(mode: any): any {
+  setHistorySyncMode(mode: HistorySyncMode): void {
     this.historySyncMode = mode;
   }
 
   /**
-   * @param {number} startIndex
-   * @param {number} count
-   * @param {boolean} [shouldProcessHistory=false]
-   * @returns {Promise<void>}
+   * Sync wallet history starting from a specific address index.
+   *
+   * @param startIndex The index of the first address to sync
+   * @param count The number of addresses to sync
+   * @param shouldProcessHistory If we should process the transaction history found
    */
-  async syncHistory(startIndex: any, count: any, shouldProcessHistory: any = false): Promise<any> {
+  async syncHistory(
+    startIndex: number,
+    count: number,
+    shouldProcessHistory: boolean = false
+  ): Promise<void> {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
-    let syncMode: any = this.historySyncMode;
+    let syncMode = this.historySyncMode;
     if (
       [HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(
         this.historySyncMode
@@ -3494,7 +3290,7 @@ class HathorWallet extends EventEmitter {
       this.logger.debug('Falling back to http polling API');
       syncMode = HistorySyncMode.POLLING_HTTP_API;
     }
-    const syncMethod: any = getHistorySyncMethod(syncMode);
+    const syncMethod = getHistorySyncMethod(syncMode);
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
     await GLL.add(async () => {
@@ -3503,45 +3299,49 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Reload all addresses and transactions from the full node
+   * Reload all addresses and transactions from the full node.
    */
-  async reloadStorage(): Promise<any> {
+  async reloadStorage(): Promise<void> {
     await this.conn.onReload();
 
     // unsub all addresses
     for await (const address of this.storage.getAllAddresses()) {
       this.conn.unsubscribeAddress(address.base58);
     }
-    const accessData: any = await this.storage.getAccessData();
+    const accessData = await this.storage.getAccessData();
     if (accessData != null) {
       // Clean entire storage
       await this.storage.cleanStorage(true, true);
       // Reset access data
       await this.storage.saveAccessData(accessData);
     }
-    const addressesToLoad: any = await scanPolicyStartAddresses(this.storage);
+    const addressesToLoad = await scanPolicyStartAddresses(this.storage);
     await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
   }
 
   /**
    * Build a transaction from a template.
    *
-   * @param {z.input<typeof TransactionTemplate>} template
-   * @param [options]
-   * @param {boolean} [options.signTx] If the transaction should be signed.
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   * @param template The transaction template to build
+   * @param options Options for building the template
    */
-  async buildTxTemplate(template: any, options: any): Promise<any> {
-    const newOptions: any = {
+  async buildTxTemplate(
+    template: z.input<typeof TransactionTemplate>,
+    options: BuildTxTemplateOptions = {}
+  ): Promise<Transaction> {
+    const newOptions = {
       signTx: false,
       pinCode: null,
       ...options,
     };
-    const instructions: any = TransactionTemplate.parse(template);
-    const tx: any = await this.txTemplateInterpreter.build(instructions, this.debug);
+    const instructions = TransactionTemplate.parse(template);
+    const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
-      await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
+      const pin = newOptions.pinCode || this.pinCode;
+      if (!pin) {
+        throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+      }
+      await transactionUtils.signTransaction(tx, this.storage, pin);
       tx.prepareToSend();
     }
     return tx;
@@ -3550,12 +3350,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Run a transaction template and send the transaction.
    *
-   * @param {z.input<typeof TransactionTemplate>} template
-   * @param {string|undefined} pinCode
-   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   * @param template The transaction template to run
+   * @param pinCode PIN to decrypt the private key
    */
-  async runTxTemplate(template: any, pinCode: any): Promise<any> {
-    const transaction: any = await this.buildTxTemplate(template, {
+  async runTxTemplate(
+    template: z.input<typeof TransactionTemplate>,
+    pinCode?: string
+  ): Promise<Transaction | null> {
+    const transaction = await this.buildTxTemplate(template, {
       signTx: true,
       pinCode,
     });
@@ -3563,66 +3365,57 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} CreateOnChainBlueprintTxOptions
-   * @property {string?} [pinCode] PIN to decrypt the private key.
-   */
-
-  /**
    * Create and send an on chain blueprint transaction
    *
-   * @param {string} code Blueprint code in utf-8
-   * @param {string} address Address that will be used to sign the on chain blueprint transaction
-   * @param {CreateOnChainBlueprintTxOptions} [options]
-   *
-   * @returns {Promise<OnChainBlueprint>}
+   * @param code Blueprint code in utf-8
+   * @param address Address that will be used to sign the on chain blueprint transaction
+   * @param options Options for the on chain blueprint transaction
    */
   async createAndSendOnChainBlueprintTransaction(
-    code: any,
-    address: any,
-    options: any = {}
-  ): Promise<any> {
-    const sendTransaction: any = await this.createOnChainBlueprintTransaction(
-      code,
-      address,
-      options
-    );
+    code: string,
+    address: string,
+    options: CreateOnChainBlueprintTxOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTransaction = await this.createOnChainBlueprintTransaction(code, address, options);
     return sendTransaction.runFromMining();
   }
 
   /**
    * Create an on chain blueprint transaction and return the SendTransaction object
    *
-   * @param {string} code Blueprint code in utf-8
-   * @param {string} address Address that will be used to sign the on chain blueprint transaction
-   * @param {CreateOnChainBlueprintTxOptions} [options]
-   *
-   * @returns {Promise<SendTransaction>}
+   * @param code Blueprint code in utf-8
+   * @param address Address that will be used to sign the on chain blueprint transaction
+   * @param options Options for the on chain blueprint transaction
    */
-  async createOnChainBlueprintTransaction(code: any, address: any, options: any): Promise<any> {
+  async createOnChainBlueprintTransaction(
+    code: string,
+    address: string,
+    options: CreateOnChainBlueprintTxOptions = {}
+  ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     // Get caller pubkey
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    const pubkeyStr: any = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
-    const pubkey: any = Buffer.from(pubkeyStr, 'hex');
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+    const pubkey = Buffer.from(pubkeyStr, 'hex');
 
     // Create code object from code data
-    const codeContent: any = Buffer.from(code, 'utf8');
-    const codeObj: any = new Code(CodeKind.PYTHON_ZLIB, codeContent);
+    const codeContent = Buffer.from(code, 'utf8');
+    const codeObj = new Code(CodeKind.PYTHON_ZLIB, codeContent);
 
-    const tx: any = new OnChainBlueprint(codeObj, pubkey);
+    const tx = new OnChainBlueprint(codeObj, pubkey);
 
     return prepareNanoSendTransaction(tx, pin, this.storage);
   }
@@ -3630,22 +3423,29 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the seqnum to be used in a nano header for the address
    *
-   * @param {string} address Address string that will be the nano header caller
-   *
-   * @returns {Promise<number>}
+   * @param address Address string that will be the nano header caller
    */
-  async getNanoHeaderSeqnum(address: any): Promise<any> {
-    const addressInfo: any = await this.storage.getAddressInfo(address);
-    return addressInfo.seqnum + 1;
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
+    const addressInfo = await this.storage.getAddressInfo(address);
+    return addressInfo!.seqnum! + 1;
   }
 
+  /**
+   * Start wallet in read-only mode
+   *
+   * @param options Options for starting in read-only mode
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
-  async startReadOnly(
-    options?: { skipAddressFetch?: boolean | undefined } | undefined
-  ): Promise<void> {
+  async startReadOnly(options?: StartReadOnlyOptions): Promise<void> {
     throw new Error('Not Implemented');
   }
 
+  /**
+   * Get authentication token for read-only mode
+   *
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
   async getReadOnlyAuthToken(): Promise<string> {
     throw new Error('Not implemented.');
