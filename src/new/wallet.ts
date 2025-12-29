@@ -67,6 +67,7 @@ import {
   ITokenData,
   TokenVersion,
   FullNodeVersionData,
+  IIndexLimitAddressScanPolicy,
   IWalletAccessData,
   IMultisigData,
 } from '../types';
@@ -90,6 +91,7 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
+import { HathorWalletConstructorParams } from './types';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -109,66 +111,6 @@ const ConnectionState = {
   CONNECTING: 1,
   CONNECTED: 2,
 };
-
-/**
- * Parameters for HathorWallet constructor
- *
- * @remarks
- * TODO: Future enhancement - Use discriminated unions to enforce "must provide
- * one of seed/xpriv/xpub" at compile time instead of runtime validation.
- * Example approach:
- * ```
- * type WalletInit =
- *   | { seed: string; passphrase?: string; xpriv?: never; xpub?: never }
- *   | { xpriv: string; seed?: never; passphrase?: never; xpub?: never }
- *   | { xpub: string; seed?: never; passphrase?: never; xpriv?: never }
- * ```
- */
-export interface HathorWalletConstructorParams {
-  // Required
-  /** Connection to the fullnode server */
-  connection: Connection;
-
-  // Optional - Storage
-  /** Storage implementation (defaults to MemoryStore if not provided) */
-  storage?: IStorage;
-
-  // Wallet initialization (must provide one of: seed, xpriv, or xpub)
-  // Runtime validation enforces this constraint
-
-  /** 24-word mnemonic phrase for wallet initialization */
-  seed?: string;
-  /** Optional passphrase for additional seed encryption (BIP39) */
-  passphrase?: string;
-  /** Extended private key (xpriv) for wallet initialization */
-  xpriv?: string;
-  /** Extended public key (xpub) for read-only wallet */
-  xpub?: string;
-
-  // Token configuration
-  /** UID of the token to track (defaults to HTR) */
-  tokenUid?: string;
-
-  // Security
-  /** Password to encrypt the seed in storage */
-  password?: string | null;
-  /** PIN code to execute wallet actions */
-  pinCode?: string | null;
-
-  // Configuration
-  /** Enable debug mode for detailed logging */
-  debug?: boolean;
-  /** Callback executed before reloading wallet data */
-  beforeReloadCallback?: (() => void) | null;
-  /** Multisig configuration for P2SH wallets */
-  multisig?: { pubkeys: string[]; numSignatures: number } | null;
-  /** Pre-calculated addresses to load into storage */
-  preCalculatedAddresses?: string[] | null;
-  /** Address scanning policy configuration */
-  scanPolicy?: AddressScanPolicyData | null;
-  /** Logger instance for wallet operations */
-  logger?: ILogger | null;
-}
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -510,45 +452,43 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Set the value of the gap limit for this wallet instance.
-   * @param {number} value The new gap limit value
-   * @returns {Promise<void>}
+   * @param value The new gap limit value
    */
-  async setGapLimit(value: any): Promise<any> {
+  async setGapLimit(value: number): Promise<void> {
     return this.storage.setGapLimit(value);
   }
 
   /**
    * Load more addresses if configured to index-limit scanning policy.
-   * @param {number} count Number of addresses to load
-   * @returns {Promise<number>} The index of the last address loaded
+   * @param count Number of addresses to load
+   * @returns The index of the last address loaded
    */
-  async indexLimitLoadMore(count: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitLoadMore(count: number): Promise<number> {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
-    const newEndIndex: any = limits.endIndex + count;
+    const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);
     return newEndIndex;
   }
 
   /**
    * Set the value of the index limit end for this wallet instance.
-   * @param {number} endIndex The new index limit value
-   * @returns {Promise<void>}
+   * @param endIndex The new index limit value
    */
-  async indexLimitSetEndIndex(endIndex: any): Promise<any> {
-    const scanPolicy: any = await this.storage.getScanningPolicy();
+  async indexLimitSetEndIndex(endIndex: number): Promise<void> {
+    const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
-    const limits: any = await this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
     if (!limits) {
       throw new Error('Index limit scanning policy config error');
     }
@@ -558,7 +498,7 @@ class HathorWallet extends EventEmitter {
       return;
     }
 
-    const newPolicyData: any = {
+    const newPolicyData: IIndexLimitAddressScanPolicy = {
       ...limits,
       endIndex,
       policy: SCANNING_POLICY.INDEX_LIMIT,
@@ -570,9 +510,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the value of the gap limit for this wallet instance.
-   * @returns {Promise<number>}
    */
-  async getGapLimit(): Promise<any> {
+  async getGapLimit(): Promise<number> {
     return this.storage.getGapLimit();
   }
 
@@ -1503,11 +1442,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Check if we need to load more addresses and load them if needed.
    * The configured scanning policy will be used to determine the loaded addresses.
-   * @param {boolean} processHistory If we should process the txs found on the loaded addresses.
    *
-   * @returns {Promise<void>}
+   * @param processHistory If we should process the txs found on the loaded addresses
    */
-  async scanAddressesToLoad(processHistory = false) {
+  async scanAddressesToLoad(processHistory: boolean = false): Promise<void> {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
