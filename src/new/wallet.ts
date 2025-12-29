@@ -68,6 +68,7 @@ import {
   TokenVersion,
   FullNodeVersionData,
   IIndexLimitAddressScanPolicy,
+  IHistoryTx,
   IWalletAccessData,
   IMultisigData,
 } from '../types';
@@ -91,7 +92,8 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
-import { HathorWalletConstructorParams } from './types';
+import { GeneralTokenInfoSchema, HathorWalletConstructorParams } from './types';
+import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -820,26 +822,31 @@ class HathorWallet extends EventEmitter {
   /**
    * Get balance for a token
    *
-   * @param {string|null|undefined} token
+   * @param token
    *
-   * @return {Promise<{
-   *   token: {id:string, name:string, symbol:string, version: TokenVersion},
-   *   balance: {unlocked:bigint, locked:bigint},
-   *   transactions:number,
-   *   lockExpires:number|null,
-   *   tokenAuthorities: {unlocked: {mint:bigint,melt:bigint}, locked: {mint:bigint,melt:bigint}}
-   * }[]>} Array of balance for each token
+   * @return Array of balance for each token
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token: any = null): Promise<any> {
+  async getBalance(token: string | null = null): Promise<
+    Array<{
+      token: { id: string; name: string; symbol: string; version?: TokenVersion };
+      balance: { unlocked: bigint; locked: bigint };
+      transactions?: number;
+      lockExpires: null;
+      tokenAuthorities: {
+        unlocked: { mint: bigint; melt: bigint };
+        locked: { mint: bigint; melt: bigint };
+      };
+    }>
+  > {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
       throw new WalletError('Not implemented.');
     }
-    const uid = token || this.token.uid;
+    const uid = token || this.token!.uid; // FIXME: this.token may be null
     // Using clone deep so the balance returned will not be updated in case
     // we change the storage
     let tokenData = cloneDeep(await this.storage.getToken(uid));
@@ -855,6 +862,8 @@ class HathorWallet extends EventEmitter {
             melt: { unlocked: 0n, locked: 0n },
           },
         },
+        name: '',
+        symbol: '',
       };
     }
     return [
@@ -865,17 +874,17 @@ class HathorWallet extends EventEmitter {
           symbol: tokenData.symbol,
           version: tokenData.version,
         },
-        balance: tokenData.balance.tokens,
+        balance: tokenData.balance!.tokens,
         transactions: tokenData.numTransactions,
         lockExpires: null,
         tokenAuthorities: {
           unlocked: {
-            mint: tokenData.balance.authorities.mint.unlocked,
-            melt: tokenData.balance.authorities.melt.unlocked,
+            mint: tokenData.balance!.authorities.mint.unlocked,
+            melt: tokenData.balance!.authorities.melt.unlocked,
           },
           locked: {
-            mint: tokenData.balance.authorities.mint.locked,
-            melt: tokenData.balance.authorities.melt.locked,
+            mint: tokenData.balance!.authorities.mint.locked,
+            melt: tokenData.balance!.authorities.melt.locked,
           },
         },
       },
@@ -883,46 +892,56 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Summarizes the IHistoryTx that comes from wallet token's history.
-   *
-   * @typedef {Object} SummaryHistoryTx
-   * @property {string} txId - Transaction hash
-   * @property {number} balance
-   * @property {number} timestamp
-   * @property {boolean} voided
-   * @property {number} version
-   * @property {string} [ncId] - Nano Contract transaction hash
-   * @property {string} [ncMethod] - Nano Contract method called
-   * @property {Address} [ncCaller] - Nano Contract transaction's signing address
-   * @property {string} [firstBlock] - Hash of the first block that validates the transaction
-   */
-
-  /**
    * Get transaction history
    *
    * @param options
-   * @param {string} [options.token_id]
-   * @param {number} [options.count]
-   * @param {number} [options.skip]
    *
-   * @return {Promise<SummaryHistoryTx[]>} Array of transactions
+   * @return Array of transactions
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getTxHistory(options: any = {}): Promise<any> {
-    const newOptions: any = {
+  async getTxHistory(
+    options: {
+      token_id?: string;
+      count?: number;
+      skip?: number;
+    } = {}
+  ): Promise<
+    Array<{
+      txId: string;
+      balance: bigint;
+      timestamp: number;
+      voided: boolean;
+      version: number;
+      ncId?: string;
+      ncMethod?: string;
+      ncCaller?: Address;
+      firstBlock?: string;
+    }>
+  > {
+    const newOptions = {
       token_id: NATIVE_TOKEN_UID,
       count: 15,
       skip: 0,
       ...options,
     };
-    const { skip }: any = newOptions;
-    let { count }: any = newOptions;
-    const uid: any = newOptions.token_id || this.token.uid;
+    const { skip } = newOptions;
+    let { count } = newOptions;
+    const uid = newOptions.token_id || this.token!.uid; // FIXME: this.token may be null
 
-    const txs: any = [];
-    let it: any = 0;
+    const txs: {
+      txId: string;
+      balance: bigint;
+      timestamp: number;
+      voided: boolean;
+      version: number;
+      ncId?: string;
+      ncMethod?: string;
+      ncCaller?: Address;
+      firstBlock?: string;
+    }[] = [];
+    let it = 0;
     for await (const tx of this.storage.tokenHistory(uid)) {
       if (it < skip) {
         it++;
@@ -931,8 +950,8 @@ class HathorWallet extends EventEmitter {
       if (count <= 0) {
         break;
       }
-      const txbalance: any = await this.getTxBalance(tx);
-      const txHistory: any = {
+      const txbalance = await this.getTxBalance(tx);
+      const txHistory = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
@@ -940,12 +959,13 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_address && new Address(tx.nc_address, { network: this.getNetworkObject() }),
-        firstBlock: tx.first_block,
+        ncCaller: (tx.nc_address &&
+          new Address(tx.nc_address, { network: this.getNetworkObject() })) as Address,
+        firstBlock: tx.first_block as string | undefined,
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-        txHistory.ncCaller =
-          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+        txHistory.ncCaller = (tx.nc_pubkey &&
+          getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject())) as Address;
       }
       txs.push(txHistory);
       count--;
@@ -956,13 +976,13 @@ class HathorWallet extends EventEmitter {
   /**
    * Get tokens that this wallet has transactions
    *
-   * @return {Promise<string[]>} Array of strings (token uid)
+   * @return Array of strings (token uid)
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getTokens(): Promise<any> {
-    const tokens: any = [];
+  async getTokens(): Promise<string[]> {
+    const tokens: string[] = [];
     for await (const token of this.storage.getAllTokens()) {
       tokens.push(token.uid);
     }
@@ -972,12 +992,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Get a transaction data from the wallet
    *
-   * @param {string} id Hash of the transaction to get data from
+   * @param id Hash of the transaction to get data from
    *
-   * @return {Promise<DecodedTx|null>} Data from the transaction to get.
-   *                          Can be null if the wallet does not contain the tx.
+   * @return Data from the transaction to get. Can be null if the wallet does not contain the tx.
    */
-  async getTx(id: any): Promise<any> {
+  async getTx(id: string): Promise<IHistoryTx | null> {
     return this.storage.getTx(id);
   }
 
@@ -1372,43 +1391,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef DecodedTx
-   * @property {string} tx_id
-   * @property {number} version
-   * @property {number} weight
-   * @property {number} timestamp
-   * @property {boolean} is_voided
-   * @property {{
-   *   value: OutputValueType,
-   *   token_data: number,
-   *   script: string,
-   *   decoded: { type: string, address: string, timelock: number|null },
-   *   token: string,
-   *   tx_id: string,
-   *   index: number
-   * }[]} inputs
-   * @property {{
-   *   value: OutputValueType,
-   *   token_data: number,
-   *   script: string,
-   *   decoded: { type: string, address: string, timelock: number|null },
-   *   token: string,
-   *   spent_by: string|null,
-   *   selected_as_input?: boolean
-   * }[]} outputs
-   * @property {string[]} parents
-   */
-
-  /**
    * Get full wallet history (same as old method to be used for compatibility)
    *
-   * @return {Promise<Record<string,DecodedTx>>} Object with transaction data { tx_id: { full_transaction_data }}
+   * @return Object with transaction data { tx_id: { full_transaction_data }}
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getFullHistory(): Promise<any> {
-    const history: any = {};
+  async getFullHistory(): Promise<Record<string, IHistoryTx>> {
+    const history: Record<string, IHistoryTx> = {};
     for await (const tx of this.storage.txHistory()) {
       history[tx.tx_id] = tx;
     }
@@ -2547,7 +2538,7 @@ class HathorWallet extends EventEmitter {
     throw new Error('This should never happen.');
   }
 
-  getTokenData(): any {
+  getTokenData(): void {
     if (this.tokenUid === NATIVE_TOKEN_UID) {
       // Hathor token we don't get from the full node
       this.token = this.storage.getNativeTokenData();
@@ -2559,13 +2550,13 @@ class HathorWallet extends EventEmitter {
       // READY state with token still null.
       // I will keep it like that for now but to protect from this
       // we should change to READY only after both things finish
-      walletApi.getGeneralTokenInfo(this.tokenUid, (response: any) => {
+      walletApi.getGeneralTokenInfo(this.tokenUid, (response: GeneralTokenInfoSchema) => {
         if (response.success) {
           this.token = {
             uid: this.tokenUid,
             name: response.name,
             symbol: response.symbol,
-            version: response.version,
+            version: response.version ?? undefined, // Version can't be null
           };
         } else {
           throw Error(response.message);
@@ -2579,24 +2570,17 @@ class HathorWallet extends EventEmitter {
    *
    * @param tokenId Token uid to get the token details
    *
-   * @return {Promise<{
-   *   totalSupply: bigint,
-   *   totalTransactions: number,
-   *   tokenInfo: {
-   *     name: string,
-   *     symbol: string,
-   *     version: TokenVersion,
-   *   },
-   *   authorities: {
-   *     mint: boolean,
-   *     melt: boolean,
-   *   },
-   * }>} token details
+   * @return token details
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getTokenDetails(tokenId: any): Promise<any> {
-    const result: any = await new Promise((resolve, reject) => {
-      walletApi.getGeneralTokenInfo(tokenId, resolve).catch((error: any) => reject(error));
+  async getTokenDetails(tokenId: string): Promise<{
+    totalSupply: bigint;
+    totalTransactions: number;
+    tokenInfo: { id: string; name: string; symbol: string; version?: TokenVersion };
+    authorities: { mint: boolean; melt: boolean };
+  }> {
+    const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
     if (!result.success) {
@@ -2613,7 +2597,7 @@ class HathorWallet extends EventEmitter {
         id: tokenId,
         name,
         symbol,
-        version,
+        version: version ?? undefined,
       },
       authorities: {
         mint: mint.length > 0,
@@ -2670,24 +2654,25 @@ class HathorWallet extends EventEmitter {
    * FIXME: does not differentiate between locked and unlocked, also ignores authorities
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
-   * @param {DecodedTx} tx Decoded transaction with populated data from local wallet history
-   * @param [optionsParam]
-   * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
+   * @param tx Decoded transaction with populated data from local wallet history
+   * @param optionsParam
    *
-   * @return {Promise<Record<string,bigint>>} Promise that resolves with an object with each token
-   *                                          and it's balance in this tx for this wallet
+   * @return Promise that resolves with an object with each token and it's balance in this tx for this wallet
    *
    * @example
    * const decodedTx = hathorWalletInstance.getTx(txHash);
    * const txBalance = await hathorWalletInstance.getTxBalance(decodedTx);
    * */
-  async getTxBalance(tx: any, optionsParam: any = {}): Promise<any> {
-    const balance: any = {};
-    const fullBalance: any = await transactionUtils.getTxBalance(tx, this.storage);
+  async getTxBalance(
+    tx: IHistoryTx,
+    optionsParam: { includeAuthorities?: boolean } = {}
+  ): Promise<Record<string, bigint>> {
+    const balance: Record<string, bigint> = {};
+    const fullBalance = await transactionUtils.getTxBalance(tx, this.storage);
 
     // We need to map balance for backwards compatibility
     for (const [token, tokenBalance] of Object.entries(fullBalance)) {
-      balance[token] = (tokenBalance as any).tokens.locked + (tokenBalance as any).tokens.unlocked;
+      balance[token] = tokenBalance.tokens.locked + tokenBalance.tokens.unlocked;
     }
 
     return balance;
@@ -2698,12 +2683,12 @@ class HathorWallet extends EventEmitter {
    * The address might be in the input or output
    * Removes duplicates
    *
-   * @param {DecodedTx} tx Transaction data with array of inputs and outputs
+   * @param tx Transaction data with array of inputs and outputs
    *
-   * @return {Set<string>} Set of strings with addresses
+   * @return Set of strings with addresses
    * */
-  async getTxAddresses(tx: any): Promise<any> {
-    const addresses: any = new Set();
+  async getTxAddresses(tx: IHistoryTx): Promise<Set<string>> {
+    const addresses = new Set<string>();
     for (const io of [...tx.outputs, ...tx.inputs]) {
       if (io.decoded && io.decoded.address && (await this.isAddressMine(io.decoded.address))) {
         addresses.add(io.decoded.address);
@@ -2887,19 +2872,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a transaction
    *
-   * @param {string} txId The transaction to query
+   * @param txId The transaction to query
    *
-   * @returns {FullNodeTxResponse} Transaction data in the fullnode
+   * @returns Transaction data in the fullnode
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getFullTxById(txId: any): Promise<any> {
-    const tx: any = await new Promise((resolve, reject) => {
+  async getFullTxById(txId: string): Promise<FullNodeTxApiResponse> {
+    const tx = await new Promise<FullNodeTxApiResponse>((resolve, reject) => {
       txApi
         .getTransaction(txId, resolve)
         // txApi will call the `resolve` callback and end the promise chain,
         // so if it falls here, we should throw
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
@@ -2913,17 +2898,17 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a transaction confirmation data
    *
-   * @param {string} txId The transaction to query
+   * @param txId The transaction to query
    *
-   * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
+   * @returns Transaction confirmation data
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async getTxConfirmationData(txId: any): Promise<any> {
-    const confirmationData: any = await new Promise((resolve, reject) => {
+  async getTxConfirmationData(txId: string): Promise<TransactionAccWeightResponse> {
+    const confirmationData: TransactionAccWeightResponse = await new Promise((resolve, reject) => {
       txApi
         .getConfirmationData(txId, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
 
     if (!confirmationData.success) {
@@ -2938,25 +2923,33 @@ class HathorWallet extends EventEmitter {
   /**
    * Queries the fullnode for a graphviz graph, given a graph type and txId
    *
-   * @param {string} txId The transaction to query
-   * @param {string} graphType The graph type to query
-   * @param {number} maxLevel Max level to render
+   * @param txId The transaction to query
+   * @param graphType The graph type to query
+   * @param maxLevel Max level to render
    *
-   * @returns {Promise<string>} The graphviz digraph
+   * @returns The graphviz digraph
+   * FIXME: Need to define the response from graphviz request
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
-  async graphvizNeighborsQuery(txId: any, graphType: any, maxLevel: any): Promise<any> {
-    const graphvizData: any = await new Promise((resolve, reject) => {
+  async graphvizNeighborsQuery(
+    txId: string,
+    graphType: string,
+    maxLevel: number
+  ): Promise<unknown> {
+    const graphvizData = await new Promise<unknown>((resolve, reject) => {
       txApi
         .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
-        .catch((err: any) => reject(err));
+        .catch(err => reject(err));
     });
+
+    const isGraphvizError = (d: unknown): d is { success: boolean; message: string } =>
+      typeof d === 'object' && d !== null && 'success' in d && typeof d.success === 'boolean';
 
     // The response will either be a string with the graphviz data or an object
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
-    if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+    if (isGraphvizError(graphvizData) && !graphvizData.success) {
       HathorWallet._txNotFoundGuard(graphvizData);
 
       throw new Error(`Invalid transaction ${txId}`);
@@ -2967,21 +2960,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * This function is responsible for getting the details of each token in the transaction.
-   * @param {string} txId - Transaction id
-   * @returns {Promise<{
-   *   success: boolean
-   *   txTokens: Array<{
-   *     txId: string,
-   *     timestamp: number,
-   *     version: number,
-   *     voided: boolean,
-   *     weight: number,
-   *     tokenId: string,
-   *     tokenName: string,
-   *     tokenSymbol: string,
-   *     balance: bigint
-   *   }>
-   * }>} Array of token details
+   * @param txId - Transaction id
+   * @returns Array of token details
    * @example
    * {
    *   success: true,
@@ -2999,18 +2979,31 @@ class HathorWallet extends EventEmitter {
    *     },
    *   ],
    * }
-   * @throws {Error} (propagation) Invalid transaction
-   * @throws {Error} (propagation) Client did not use the callback
-   * @throws {Error} (propagation) Transaction not found
+   * @throws {Error} Invalid transaction
+   * @throws {Error} Client did not use the callback
+   * @throws {Error} Transaction not found
    * @throws {Error} Transaction does not have any balance for this wallet
    * @throws {Error} Token uid not found in tokens list
    * @throws {Error} Token uid not found in tx
    */
-  async getTxById(txId: any): Promise<any> {
+  async getTxById(txId: string): Promise<{
+    success: boolean;
+    txTokens: Array<{
+      txId: string;
+      timestamp: number;
+      version: number;
+      voided: boolean;
+      weight: number;
+      tokenId: string;
+      tokenName: string | null;
+      tokenSymbol: string | null;
+      balance: bigint;
+    }>;
+  }> {
     /**
      * Hydrate input and output with token uid
-     * @param {Transaction.input|Transaction.output} io - Input or output
-     * @param {Array} tokens - Array of token configs
+     * @param  io - Input or output
+     * @param tokens - Array of token configs
      * @example
      * {
      *   ...output,
@@ -3018,8 +3011,11 @@ class HathorWallet extends EventEmitter {
      * }
      * @throws {Error} Token uid not found in tokens list
      */
-    const hydrateWithTokenUid = (io: any, tokens: any): any => {
-      const { token_data }: any = io;
+    const hydrateWithTokenUid = <T extends { token_data: number }>(
+      io: T,
+      tokens: Array<{ uid: string }>
+    ): T & { token: string } => {
+      const { token_data } = io;
 
       if (token_data === 0) {
         return {
@@ -3028,8 +3024,8 @@ class HathorWallet extends EventEmitter {
         };
       }
 
-      const tokenIdx: any = tokenUtils.getTokenIndexFromData(token_data);
-      const tokenUid: any = tokens[tokenIdx - 1]?.uid;
+      const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
+      const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
         throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
@@ -3040,40 +3036,39 @@ class HathorWallet extends EventEmitter {
       };
     };
 
-    /**
-     * @throws {Error} Invalid transaction
-     * @throws {Error} Client did not use the callback
-     * @throws {Error} Transaction not found
-     */
-    const fullTx: any = await this.getFullTxById(txId);
-    fullTx.tx.outputs = fullTx.tx.outputs.map((output: any) =>
+    const fullTx = await this.getFullTxById(txId);
+    if (!fullTx.success) {
+      throw new Error(`Failed to get transaction ${txId}: ${fullTx.message}`);
+    }
+
+    fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map((input: any) =>
-      hydrateWithTokenUid(input, fullTx.tx.tokens)
-    );
+    fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances: any = await this.getTxBalance(fullTx.tx);
-    const { length: hasBalance }: any = Object.keys(tokenBalances);
+    const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
+    const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
     }
 
-    const listTokenUid: any = Object.keys(tokenBalances);
-    const txTokens: any = listTokenUid.map((uid: any) => {
+    const listTokenUid = Object.keys(tokenBalances);
+    const txTokens = listTokenUid.map(uid => {
       /**
        * Retrieves the token config from the transaction.
-       * @param {string} tokenUid
-       * @returns {TokenInfo} Token config
+       * @param tokenUid
+       * @returns Token config
        */
-      const getToken = (tokenUid: any): any => {
+      const getToken = (
+        tokenUid: string
+      ): { uid: string; name: string | null; symbol: string | null } => {
         if (tokenUid === NATIVE_TOKEN_UID) {
           return this.storage.getNativeTokenData();
         }
 
-        const token: any = fullTx.tx.tokens.find((tokenElem: any) => tokenElem.uid === tokenUid);
+        const token = fullTx.tx.tokens.find(tokenElem => tokenElem.uid === tokenUid);
         if (!token) {
           throw new Error(`Token ${tokenUid} not found in tx`);
         }
@@ -3081,11 +3076,11 @@ class HathorWallet extends EventEmitter {
         return token;
       };
 
-      const isVoided: any = fullTx.meta.voided_by.length > 0;
-      const token: any = getToken(uid);
-      const tokenBalance: any = tokenBalances[uid];
+      const isVoided = fullTx.meta.voided_by.length > 0;
+      const token = getToken(uid);
+      const tokenBalance = tokenBalances[uid];
 
-      const tokenDetails: any = {
+      const tokenDetails = {
         txId,
         timestamp: fullTx.tx.timestamp,
         version: fullTx.tx.version,

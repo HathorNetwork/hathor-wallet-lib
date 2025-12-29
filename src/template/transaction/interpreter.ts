@@ -217,7 +217,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   async getBalance(token: string): Promise<IWalletBalanceData> {
     const balance = await this.wallet.getBalance(token);
-    return balance[0];
+    return balance[0] as unknown as IWalletBalanceData; // FIXME: Temporary forced conversion during types consolidation
   }
 
   /**
@@ -270,7 +270,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   }
 
   getWallet(): IHathorWallet {
-    return this.wallet;
+    return this.wallet as unknown as IHathorWallet; // FIXME: Temporary forced conversion during types consolidation
   }
 
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType {
