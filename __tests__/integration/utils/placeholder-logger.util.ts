@@ -44,6 +44,9 @@ export default class PlaceholderLoggerUtil {
       error(message, metadata) {
         console.error(getStringifiedLogObject(message, metadata));
       },
+      debug(message, metadata) {
+        console.debug(getStringifiedLogObject(message, metadata));
+      },
     };
   }
 }
