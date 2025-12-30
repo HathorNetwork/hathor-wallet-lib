@@ -142,6 +142,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         });
 
         expect(tx).toBeDefined();
+        if (!tx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(tx.hash).toBeTruthy();
         await helper.waitForTx(wallet, tx.hash!);
       });
@@ -159,6 +162,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         });
 
         expect(tx).toBeDefined();
+        if (!tx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(tx.hash).toBeTruthy();
       });
 
@@ -178,6 +184,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         );
 
         expect(tx).toBeDefined();
+        if (!tx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(tx.hash).toBeTruthy();
         await helper.waitForTx(wallet, tx.hash!);
       });
@@ -217,6 +226,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         });
 
         expect(tx).toBeDefined();
+        if (!tx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(tx.hash).toBeTruthy();
         await helper.waitForTx(wallet, tx.hash!);
 
@@ -241,6 +253,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         });
 
         expect(mintTx).toBeDefined();
+        if (!mintTx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(mintTx.hash).toBeTruthy();
         await helper.waitForTx(wallet, mintTx.hash!);
       });
@@ -261,6 +276,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         });
 
         expect(meltTx).toBeDefined();
+        if (!meltTx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(meltTx.hash).toBeTruthy();
         await helper.waitForTx(wallet, meltTx.hash!);
       });
@@ -272,10 +290,13 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         const createTx = await wallet.createNewToken('Details Test', 'DT', 100n, {
           pinCode: DEFAULT_PIN_CODE,
         });
-        await helper.waitForTx(wallet, createTx.hash!);
+        await helper.waitForTx(wallet, createTx!.hash!);
 
-        const tokenDetails = await wallet.getTokenDetails(createTx.hash!);
+        const tokenDetails = await wallet.getTokenDetails(createTx!.hash!);
         expect(tokenDetails).toBeDefined();
+        if (!tokenDetails) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
         expect(tokenDetails.name).toBe('Details Test');
         expect(tokenDetails.symbol).toBe('DT');
       });
