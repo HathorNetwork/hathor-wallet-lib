@@ -10,6 +10,7 @@ import { transformJsonBigIntResponse } from '../utils/bigint';
 import {
   FullNodeTxApiResponse,
   GraphvizNeighboursResponse,
+  TransactionAccWeightResponse,
   transactionApiSchema,
 } from './schemas/txApi';
 
@@ -89,17 +90,15 @@ const txApi = {
   /**
    * Call api to get confirmation data of a tx
    *
-   * @param {string} id Transaction hash in hex
-   * @param {function} resolve Method to be called after response arrives
-   *
-   * @return {Promise}
-   * @memberof ApiTransaction
-   * @inner
+   * @param id Transaction hash in hex
+   * @param resolve Method to be called after response arrives
    */
-  getConfirmationData(id, resolve) {
+  getConfirmationData(id: string, resolve: (response: TransactionAccWeightResponse) => void) {
+    // TODO: This method uses a callback pattern but also returns a Promise, which is an anti-pattern
+    // NOTE: createRequestInstance has legacy typing (resolve?: null) that doesn't match actual usage.
     const data = { id };
-    return createRequestInstance(resolve)
-      .get(`transaction_acc_weight`, { params: data })
+    return createRequestInstance(resolve as unknown as null)
+      .get<TransactionAccWeightResponse>(`transaction_acc_weight`, { params: data })
       .then(
         res => {
           resolve(res.data);
