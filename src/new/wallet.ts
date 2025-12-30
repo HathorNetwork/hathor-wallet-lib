@@ -102,6 +102,7 @@ import {
   GetTxHistoryFullnodeFacadeReturnType,
   GetTokenDetailsFullnodeFacadeReturnType,
   GetTxByIdFullnodeFacadeReturnType,
+  GetCurrentAddressFullnodeFacadeReturnType,
 } from './types';
 import Queue from '../models/queue';
 import {
@@ -780,11 +781,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getCurrentAddress({ markAsUsed = false } = {}): Promise<{
-    address: string;
-    index: number | null;
-    addressPath: string;
-  }> {
+  async getCurrentAddress({
+    markAsUsed = false,
+  } = {}): Promise<GetCurrentAddressFullnodeFacadeReturnType> {
     const address = await this.storage.getCurrentAddress(markAsUsed);
     const index = await this.getAddressIndex(address);
     const addressPath = await this.getAddressPathForIndex(index!);
@@ -795,7 +794,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the next address after the current available
    */
-  async getNextAddress(): Promise<{ address: string; index: number | null; addressPath: string }> {
+  async getNextAddress(): Promise<GetCurrentAddressFullnodeFacadeReturnType> {
     // First we mark the current address as used, then return the next
     await this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();

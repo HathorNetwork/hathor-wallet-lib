@@ -256,3 +256,10 @@ __tests__/integration/
 3. **`sendTransaction()`** - Core use case, high value
 4. **`sendManyOutputsTransaction()`** - Core use case, high value
 5. **`getUtxos()`** - Same return structure, needed by many tests
+
+---
+
+## Interacting with the user
+
+1. Run `npm run format && npm run lint && npm run build` to validate broader code changes
+2. Leave the test executions for the user to run manually.

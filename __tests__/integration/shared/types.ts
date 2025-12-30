@@ -1,0 +1,173 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import HathorWallet from '../../../src/new/wallet';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+
+/**
+ * Configuration options that define the capabilities of a wallet facade.
+ * These flags control which tests should run for a particular facade implementation.
+ */
+export interface WalletFacadeCapabilities {
+  /**
+   * Whether the facade has async address methods (HathorWallet)
+   * or sync address methods (WalletServiceWallet)
+   */
+  hasAsyncAddressMethods: boolean;
+
+  /**
+   * Whether the facade supports UTXO consolidation
+   */
+  supportsConsolidateUtxos: boolean;
+
+  /**
+   * Whether the facade supports nano contract transactions
+   */
+  supportsNanoContracts: boolean;
+
+  /**
+   * Whether the facade supports getAddressInfo()
+   */
+  supportsGetAddressInfo: boolean;
+
+  /**
+   * Whether the facade supports getTx()
+   */
+  supportsGetTx: boolean;
+
+  /**
+   * Whether the facade supports getFullHistory()
+   */
+  supportsGetFullHistory: boolean;
+
+  /**
+   * Whether the facade supports template-based transactions
+   */
+  supportsTemplateTransactions: boolean;
+
+  /**
+   * Whether the facade supports checkAddressesMine() (batch address check)
+   */
+  supportsCheckAddressesMine: boolean;
+
+  /**
+   * Whether the facade requires special configuration for initialization
+   * (e.g., WalletService needs requestPassword mock)
+   */
+  requiresSpecialInit: boolean;
+}
+
+/**
+ * Union type for all supported wallet facades
+ */
+export type SupportedWallet = HathorWallet | HathorWalletServiceWallet;
+
+/**
+ * Factory function that creates and initializes a wallet instance.
+ * Returns the wallet instance along with any additional resources that may need cleanup.
+ */
+export interface WalletFactory<T extends SupportedWallet = SupportedWallet> {
+  /**
+   * Creates and starts a wallet with the provided options
+   * @param options Configuration options for wallet creation
+   * @returns Object containing the wallet and optional cleanup resources
+   */
+  create(options?: WalletCreationOptions): Promise<WalletFactoryResult<T>>;
+}
+
+/**
+ * Options for creating a wallet instance
+ */
+export interface WalletCreationOptions {
+  /**
+   * Seed words for the wallet (24 words separated by space)
+   */
+  seed?: string;
+
+  /**
+   * Pre-calculated addresses to speed up wallet initialization
+   */
+  preCalculatedAddresses?: string[];
+
+  /**
+   * Password to encrypt the seed
+   */
+  password?: string;
+
+  /**
+   * PIN code to execute wallet actions
+   */
+  pinCode?: string;
+
+  /**
+   * xpub for read-only wallets
+   */
+  xpub?: string;
+
+  /**
+   * Multisig configuration
+   */
+  multisig?: {
+    pubkeys: string[];
+    numSignatures: number;
+  };
+
+  /**
+   * Whether to enable WebSocket connection (WalletService only)
+   */
+  enableWs?: boolean;
+
+  /**
+   * Password for requests (WalletService only)
+   */
+  passwordForRequests?: string;
+}
+
+/**
+ * Result of wallet factory creation
+ */
+export interface WalletFactoryResult<T extends SupportedWallet = SupportedWallet> {
+  /**
+   * The created wallet instance
+   */
+  wallet: T;
+
+  /**
+   * Optional cleanup function to be called after tests
+   */
+  cleanup?: () => Promise<void>;
+}
+
+/**
+ * Helper functions that adapt facade-specific behavior
+ */
+export interface WalletHelperAdapter<T extends SupportedWallet = SupportedWallet> {
+  /**
+   * Injects funds into a wallet address and waits for confirmation
+   */
+  injectFunds(wallet: T, address: string, amount: bigint): Promise<void>;
+
+  /**
+   * Waits for a transaction to be received and processed by the wallet
+   */
+  waitForTx(wallet: T, txId: string, timeout?: number): Promise<void>;
+
+  /**
+   * Gets an address at a specific index, handling both async and sync methods
+   */
+  getAddressAtIndex(wallet: T, index: number): Promise<string>;
+
+  /**
+   * Checks if an address belongs to the wallet, handling both async and sync methods
+   */
+  isAddressMine(wallet: T, address: string): Promise<boolean>;
+
+  /**
+   * Gets all addresses from the wallet, handling both async and sync methods
+   */
+  getAllAddresses(wallet: T): Promise<string[]>;
+}

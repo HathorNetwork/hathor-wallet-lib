@@ -470,3 +470,9 @@ export interface GetTxByIdFullnodeFacadeReturnType {
   success: boolean;
   txTokens: GetTxByIdTokenDetails[];
 }
+
+export interface GetCurrentAddressFullnodeFacadeReturnType {
+  address: string;
+  index: number | null;
+  addressPath: string;
+}
