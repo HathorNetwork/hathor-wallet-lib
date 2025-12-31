@@ -20,7 +20,10 @@ import {
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import {
+  PrecalculatedWalletData,
+  precalculationHelpers,
+} from '../helpers/wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { TxNotFoundError } from '../../../src/errors';
 import { loggers } from '../utils/logger.util';
@@ -81,6 +84,8 @@ export class HathorWalletFactory implements WalletFactory<HathorWallet> {
 
     return {
       wallet,
+      words: walletData.words ?? undefined,
+      preCalculatedAddresses: walletData.addresses ?? undefined,
       cleanup: async () => {
         await this.stopAll();
       },
@@ -120,8 +125,9 @@ export class WalletServiceWalletFactory implements WalletFactory<HathorWalletSer
     // Use provided seed or fetch a precalculated one
     const { seed: providedSeed } = options;
     let seed = providedSeed;
+    let precalculated: PrecalculatedWalletData | undefined;
     if (!seed && !options.xpub) {
-      const precalculated = precalculationHelpers.test!.getPrecalculatedWallet();
+      precalculated = precalculationHelpers.test!.getPrecalculatedWallet();
       seed = precalculated.words;
     }
 
@@ -143,6 +149,8 @@ export class WalletServiceWalletFactory implements WalletFactory<HathorWalletSer
 
     return {
       wallet,
+      words: precalculated?.words ?? undefined,
+      preCalculatedAddresses: precalculated?.addresses ?? undefined,
       cleanup: async () => {
         await this.stopAll();
       },
@@ -235,7 +243,7 @@ export class WalletServiceHelperAdapter implements WalletHelperAdapter<HathorWal
       try {
         const tx = await wallet.getTxById(txId);
         if (tx) {
-          loggers.test.log(`Polling for ${txId} took ${attempts + 1} attempts`);
+          loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
           return;
         }
       } catch (error) {

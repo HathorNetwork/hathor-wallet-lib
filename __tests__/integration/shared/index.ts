@@ -18,4 +18,4 @@ export {
 } from './test_helpers';
 
 // Export the test factory
-export { createWalletFacadeTests } from './wallet_facade_tests';
+export { createWalletFacadeTests } from './shared_facades_factory';

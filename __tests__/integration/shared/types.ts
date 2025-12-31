@@ -137,6 +137,16 @@ export interface WalletFactoryResult<T extends SupportedWallet = SupportedWallet
   wallet: T;
 
   /**
+   * Seed words used for this wallet, if it was initialized by words
+   */
+  words?: string;
+
+  /**
+   * Precalculated addresses used for this wallet, if it had any
+   */
+  preCalculatedAddresses?: string[];
+
+  /**
    * Optional cleanup function to be called after tests
    */
   cleanup?: () => Promise<void>;

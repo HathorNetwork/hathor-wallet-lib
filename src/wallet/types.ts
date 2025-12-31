@@ -252,7 +252,7 @@ export interface AuthTokenResponseData {
 export interface OutputRequestObj {
   address: string; // output address
   value: OutputValueType; // output value
-  token: string; // output token
+  token?: string; // output token, defaults to native if not informed
   timelock?: number | null; // output timelock
 }
 

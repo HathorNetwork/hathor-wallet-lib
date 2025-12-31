@@ -338,25 +338,25 @@ export interface UtxoDetails {
  * @property address Destination address for the output
  * @property value Value of the output
  * @property timelock Optional timelock for the output
- * @property token Token UID for the output
+ * @property token Token UID for the output. Defaults to native token
  */
 export interface ProposedOutput {
   address: string;
   value: OutputValueType;
   timelock?: number;
-  token: string;
+  token?: string;
 }
 
 /**
  * Proposed input for a transaction
  * @property txId Transaction ID of the input
  * @property index Index of the output being spent
- * @property token Token UID of the input
+ * @property token Token UID of the input. Defaults to native token
  */
 export interface ProposedInput {
   txId: string;
   index: number;
-  token: string;
+  token?: string;
 }
 
 /**

@@ -105,7 +105,7 @@ These methods throw "Not implemented" errors:
 Create a factory function that generates test suites for any wallet facade:
 
 ```typescript
-// __tests__/integration/shared/wallet_facade_tests.ts
+// __tests__/integration/shared/shared_facades_factory.ts
 
 export function createWalletFacadeTests(
   facadeName: string,
@@ -126,7 +126,7 @@ export function createWalletFacadeTests(
 ### 3.2 Implementation Steps
 
 1. **Create shared test infrastructure**
-   - New file: `__tests__/integration/shared/wallet_facade_tests.ts`
+   - New file: `__tests__/integration/shared/shared_facades_factory.ts`
    - New file: `__tests__/integration/shared/test_helpers.ts`
    - Unified wallet factory interface
 
@@ -208,7 +208,7 @@ Skip or handle specially:
 ```
 __tests__/integration/
 ├── shared/
-│   ├── wallet_facade_tests.ts      # Parameterized test factory
+│   ├── shared_facades_factory.ts      # Parameterized test factory
 │   ├── test_helpers.ts             # Unified helpers
 │   └── types.ts                    # Test-specific types
 ├── hathorwallet/
