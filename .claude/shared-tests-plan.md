@@ -211,10 +211,10 @@ __tests__/integration/
 │   ├── shared_facades_factory.ts      # Parameterized test factory
 │   ├── test_helpers.ts             # Unified helpers
 │   └── types.ts                    # Test-specific types
-├── hathorwallet/
+├── hathorwallet_facade/
 │   ├── facade.test.ts              # Imports shared + HW-specific
 │   └── specific.test.ts            # Template/NC tests only
-├── walletservice/
+├── walletservice_facade/
 │   ├── facade.test.ts              # Imports shared + WS-specific
 │   └── specific.test.ts            # Mobile-specific tests only
 └── legacy/                         # Move old files here during migration
