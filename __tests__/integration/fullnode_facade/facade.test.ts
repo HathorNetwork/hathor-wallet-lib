@@ -8,7 +8,6 @@
 import { createWalletFacadeTests } from '../shared/shared_facades_factory';
 import { HathorWalletFactory, HathorWalletHelperAdapter } from '../shared/test_helpers';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { initializeServiceGlobalConfigs } from '../helpers/service-facade.helper';
 
 /**
  * Shared test suite for HathorWallet (Fullnode Facade)
