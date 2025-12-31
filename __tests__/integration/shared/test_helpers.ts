@@ -9,8 +9,6 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
-import Network from '../../../src/models/network';
-import { MemoryStore, Storage } from '../../../src/storage';
 import Connection from '../../../src/new/connection';
 import {
   generateConnection,
@@ -20,20 +18,18 @@ import {
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import {
-  PrecalculatedWalletData,
-  precalculationHelpers,
-} from '../helpers/wallet-precalculation.helper';
+import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import { buildWalletInstance } from '../helpers/service-facade.helper';
 import { delay } from '../utils/core.util';
 import { TxNotFoundError } from '../../../src/errors';
 import { loggers } from '../utils/logger.util';
-import { NETWORK_NAME } from '../configuration/test-constants';
 import {
   SupportedWallet,
   WalletFactory,
   WalletCreationOptions,
   WalletFactoryResult,
   WalletHelperAdapter,
+  WalletStartOptions,
 } from './types';
 
 /**
@@ -78,9 +74,6 @@ export class HathorWalletFactory implements WalletFactory<HathorWallet> {
     }
 
     const wallet = new HathorWallet(walletConfig);
-    await wallet.start();
-    await waitForWalletReady(wallet);
-    this.startedWallets.push(wallet);
 
     return {
       wallet,
@@ -90,6 +83,12 @@ export class HathorWalletFactory implements WalletFactory<HathorWallet> {
         await this.stopAll();
       },
     };
+  }
+
+  async start(options: WalletStartOptions) {
+    await options.wallet.start();
+    await waitForWalletReady(options.wallet);
+    this.startedWallets.push(options.wallet as HathorWallet);
   }
 
   async stopAll(): Promise<void> {
@@ -115,46 +114,30 @@ export class WalletServiceWalletFactory implements WalletFactory<HathorWalletSer
   async create(
     options: WalletCreationOptions = {}
   ): Promise<WalletFactoryResult<HathorWalletServiceWallet>> {
-    const network = new Network(NETWORK_NAME);
-    const passwordForRequests = options.passwordForRequests || 'test-password';
-    const requestPassword = jest.fn().mockResolvedValue(passwordForRequests);
-
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-
-    // Use provided seed or fetch a precalculated one
-    const { seed: providedSeed } = options;
-    let seed = providedSeed;
-    let precalculated: PrecalculatedWalletData | undefined;
-    if (!seed && !options.xpub) {
-      precalculated = precalculationHelpers.test!.getPrecalculatedWallet();
-      seed = precalculated.words;
-    }
-
-    const wallet = new HathorWalletServiceWallet({
-      requestPassword,
-      seed,
-      xpub: options.xpub,
-      network,
-      storage,
-      enableWs: options.enableWs || false,
-    });
-
-    await wallet.start({
-      pinCode: options.pinCode || DEFAULT_PIN_CODE,
-      password: options.password || DEFAULT_PASSWORD,
+    const { wallet, words, addresses } = buildWalletInstance({
+      words: options.seed,
+      passwordForRequests: options.password,
     });
 
     this.startedWallets.push(wallet);
 
     return {
       wallet,
-      words: precalculated?.words ?? undefined,
-      preCalculatedAddresses: precalculated?.addresses ?? undefined,
+      words,
+      preCalculatedAddresses: addresses,
       cleanup: async () => {
         await this.stopAll();
       },
     };
+  }
+
+  async start(options: WalletStartOptions) {
+    await options.wallet.start({
+      pinCode: options.pinCode || DEFAULT_PIN_CODE,
+      password: options.password || DEFAULT_PASSWORD,
+    });
+
+    this.startedWallets.push(options.wallet as HathorWalletServiceWallet);
   }
 
   async stopAll(): Promise<void> {
@@ -315,12 +298,12 @@ export class UnifiedWalletHelper implements WalletHelperAdapter<SupportedWallet>
     return this.walletServiceHelper.waitForTx(wallet, txId, timeout);
   }
 
-  async getCurrentAddress(wallet: SupportedWallet): Promise<string> {
-    if (this.isHathorWallet(wallet)) {
-      return this.hathorWalletHelper.getCurrentAddress(wallet);
-    }
-    return this.walletServiceHelper.getCurrentAddress(wallet);
-  }
+  // async getCurrentAddress(wallet: SupportedWallet): Promise<string> {
+  //   if (this.isHathorWallet(wallet)) {
+  //     return this.hathorWalletHelper.getCurrentAddress(wallet);
+  //   }
+  //   return this.walletServiceHelper.getCurrentAddress(wallet);
+  // }
 
   async getAddressAtIndex(wallet: SupportedWallet, index: number): Promise<string> {
     if (this.isHathorWallet(wallet)) {

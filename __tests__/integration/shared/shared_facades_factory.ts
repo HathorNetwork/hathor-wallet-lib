@@ -63,17 +63,24 @@ function createWalletFacadeTests<T extends SupportedWallet>(
 
     describe('Lifecycle Management', () => {
       it('should start and reach ready state', async () => {
-        // Wallet is already started in beforeEach
+        await walletFactory.start({ wallet });
         expect(wallet.isReady()).toBe(true);
       });
 
       it('should stop cleanly', async () => {
+        await walletFactory.start({ wallet });
+        expect(wallet.isReady()).toBe(true);
+
         await wallet.stop({ cleanStorage: true });
         expect(wallet.isReady()).toBe(false);
       });
     });
 
     describe('Balance Operations', () => {
+      beforeEach(async () => {
+        await walletFactory.start({ wallet });
+      });
+
       it('should return empty balance for new wallet', async () => {
         const balance = await wallet.getBalance(NATIVE_TOKEN_UID);
         expect(Array.isArray(balance)).toBe(true);
@@ -94,6 +101,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
     });
 
     describe('Address Operations', () => {
+      beforeEach(async () => {
+        await walletFactory.start({ wallet });
+      });
+
       it('should get current address', async () => {
         const address = await helper.getAddressAtIndex(wallet, 0);
         expect(typeof address).toBe('string');
@@ -130,6 +141,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
     });
 
     describe('Transaction Operations', () => {
+      beforeEach(async () => {
+        await walletFactory.start({ wallet });
+      });
+
       it('should send a simple transaction', async () => {
         // Fund the wallet first
         const sourceAddress = await helper.getAddressAtIndex(wallet, 0);
@@ -177,8 +192,8 @@ function createWalletFacadeTests<T extends SupportedWallet>(
 
         const tx = await wallet.sendManyOutputsTransaction(
           [
-            { address: dest1, value: 10n },
-            { address: dest2, value: 20n },
+            { address: dest1, value: 10n, token: '00' },
+            { address: dest2, value: 20n, token: '00' },
           ],
           { pinCode: DEFAULT_PIN_CODE }
         );
@@ -193,6 +208,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
     });
 
     describe('UTXO Operations', () => {
+      beforeEach(async () => {
+        await walletFactory.start({ wallet });
+      });
+
       it('should return empty UTXOs for new wallet', async () => {
         const result = await wallet.getUtxos();
         expect(result).toHaveProperty('utxos');
@@ -211,6 +230,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
     });
 
     describe('Token Operations', () => {
+      beforeEach(async () => {
+        await walletFactory.start({ wallet });
+      });
+
       it('should create a new token', async () => {
         // Fund the wallet
         const address = await helper.getAddressAtIndex(wallet, 0);
@@ -311,6 +334,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
     // Conditional tests based on capabilities
     if (capabilities.supportsConsolidateUtxos) {
       describe('UTXO Consolidation', () => {
+        beforeEach(async () => {
+          await walletFactory.start({ wallet });
+        });
+
         it('should consolidate UTXOs', async () => {
           // This test only runs for facades that support UTXO consolidation
           const address = await helper.getAddressAtIndex(wallet, 0);
@@ -339,6 +366,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
 
     if (capabilities.supportsGetAddressInfo) {
       describe('Address Info', () => {
+        beforeEach(async () => {
+          await walletFactory.start({ wallet });
+        });
         it('should get address info', async () => {
           const address = await helper.getAddressAtIndex(wallet, 0);
 
@@ -354,12 +384,19 @@ function createWalletFacadeTests<T extends SupportedWallet>(
 
     if (capabilities.supportsGetTx) {
       describe('Transaction Retrieval', () => {
+        beforeEach(async () => {
+          await walletFactory.start({ wallet });
+        });
         it.todo('should get transaction by ID');
       });
     }
 
     if (capabilities.supportsNanoContracts) {
       describe('Nano Contracts', () => {
+        beforeEach(async () => {
+          await walletFactory.start({ wallet });
+        });
+
         it.todo('should create nano contract transaction');
         it.todo('should create nano contract token');
       });
@@ -367,6 +404,10 @@ function createWalletFacadeTests<T extends SupportedWallet>(
 
     if (capabilities.supportsTemplateTransactions) {
       describe('Template Transactions', () => {
+        beforeEach(async () => {
+          await walletFactory.start({ wallet });
+        });
+
         it.todo('should build transaction from template');
         it.todo('should send transaction from template');
       });

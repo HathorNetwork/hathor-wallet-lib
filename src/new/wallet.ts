@@ -39,7 +39,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction from './sendTransaction';
+import SendTransaction, { ISendOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -94,7 +94,6 @@ import {
   BuildTxTemplateOptions,
   StartReadOnlyOptions,
   UtxoDetails,
-  ProposedOutput,
   SendManyOutputsOptions,
   CreateTokenOptions,
   CreateNFTOptions,
@@ -1557,7 +1556,7 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with SendTransaction instance
    */
   async sendManyOutputsSendTransaction(
-    outputs: ProposedOutput[],
+    outputs: ISendOutput[],
     options: SendManyOutputsOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
@@ -1594,7 +1593,7 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(
-    outputs: ProposedOutput[],
+    outputs: ISendOutput[],
     options: SendManyOutputsOptions = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);

@@ -77,6 +77,8 @@ export interface WalletFactory<T extends SupportedWallet = SupportedWallet> {
    * @returns Object containing the wallet and optional cleanup resources
    */
   create(options?: WalletCreationOptions): Promise<WalletFactoryResult<T>>;
+
+  start(options: WalletStartOptions): Promise<void>;
 }
 
 /**
@@ -125,6 +127,12 @@ export interface WalletCreationOptions {
    * Password for requests (WalletService only)
    */
   passwordForRequests?: string;
+}
+
+export interface WalletStartOptions {
+  wallet: SupportedWallet;
+  pinCode?: string;
+  password?: string;
 }
 
 /**

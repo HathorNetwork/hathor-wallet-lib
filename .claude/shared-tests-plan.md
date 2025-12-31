@@ -259,7 +259,18 @@ __tests__/integration/
 
 ---
 
-## Interacting with the user
+## Code Validation Commands
 
-1. Run `npm run format && npm run lint && npm run build` to validate broader code changes
-2. Leave the test executions for the user to run manually.
+When validating code changes, run these commands in sequence:
+```bash
+# Format code (only show errors)
+prettier --write . --log-level=error
+
+# Fix linting issues (only show errors)
+eslint --fix . --quiet --format=unix
+
+# Build (standard output for real errors)
+npm run build
+```
+
+All actual tests will be executed manually by the user.
