@@ -17,7 +17,7 @@ import {
   waitForTxReceived,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { GenesisWalletHelper, GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { buildWalletInstance } from '../helpers/service-facade.helper';
 import { delay } from '../utils/core.util';
@@ -31,6 +31,7 @@ import {
   WalletHelperAdapter,
   WalletStartOptions,
 } from './types';
+import Transaction from '../../../src/models/transaction';
 
 /**
  * Unified wallet factory for HathorWallet (Fullnode facade)
@@ -158,8 +159,8 @@ export class WalletServiceWalletFactory implements WalletFactory<HathorWalletSer
  */
 export class HathorWalletHelperAdapter implements WalletHelperAdapter<HathorWallet> {
   // eslint-disable-next-line class-methods-use-this
-  async injectFunds(wallet: HathorWallet, address: string, amount: bigint): Promise<void> {
-    await GenesisWalletHelper.injectFunds(wallet, address, amount);
+  async injectFunds(wallet: HathorWallet, address: string, amount: bigint) {
+    return GenesisWalletHelper.injectFunds(wallet, address, amount);
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -192,24 +193,10 @@ export class HathorWalletHelperAdapter implements WalletHelperAdapter<HathorWall
  */
 export class WalletServiceHelperAdapter implements WalletHelperAdapter<HathorWalletServiceWallet> {
   // eslint-disable-next-line class-methods-use-this
-  async injectFunds(
-    wallet: HathorWalletServiceWallet,
-    address: string,
-    amount: bigint
-  ): Promise<void> {
+  async injectFunds(wallet: HathorWalletServiceWallet, address: string, amount: bigint) {
     // We need to get the genesis wallet in WalletService format
     // For now, we'll use a polling approach similar to the existing tests
-    const genesisWallet = await GenesisWalletHelper.getSingleton();
-
-    // Send funds from genesis wallet
-    const tx = await genesisWallet.hWallet.sendTransaction(address, amount, {
-      pinCode: DEFAULT_PIN_CODE,
-    });
-
-    // Wait for the transaction to be received by both wallets
-    await waitForTxReceived(genesisWallet.hWallet, tx.hash);
-    const helper = new WalletServiceHelperAdapter();
-    await helper.waitForTx(wallet, tx.hash);
+    return GenesisWalletServiceHelper.injectFunds(address, amount, wallet);
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -284,7 +271,11 @@ export class UnifiedWalletHelper implements WalletHelperAdapter<SupportedWallet>
     return wallet instanceof HathorWallet;
   }
 
-  async injectFunds(wallet: SupportedWallet, address: string, amount: bigint): Promise<void> {
+  async injectFunds(
+    wallet: SupportedWallet,
+    address: string,
+    amount: bigint
+  ): Promise<Transaction> {
     if (this.isHathorWallet(wallet)) {
       return this.hathorWalletHelper.injectFunds(wallet, address, amount);
     }

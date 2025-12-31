@@ -7,6 +7,7 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+import Transaction from '../../../src/models/transaction';
 
 /**
  * Configuration options that define the capabilities of a wallet facade.
@@ -167,7 +168,7 @@ export interface WalletHelperAdapter<T extends SupportedWallet = SupportedWallet
   /**
    * Injects funds into a wallet address and waits for confirmation
    */
-  injectFunds(wallet: T, address: string, amount: bigint): Promise<void>;
+  injectFunds(wallet: T, address: string, amount: bigint): Promise<Transaction>;
 
   /**
    * Waits for a transaction to be received and processed by the wallet

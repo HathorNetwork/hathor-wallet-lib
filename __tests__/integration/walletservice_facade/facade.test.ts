@@ -7,7 +7,7 @@
 
 import { createWalletFacadeTests } from '../shared/shared_facades_factory';
 import { WalletServiceWalletFactory, WalletServiceHelperAdapter } from '../shared/test_helpers';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { GenesisWalletHelper, GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { initializeServiceGlobalConfigs } from '../helpers/service-facade.helper';
 
 /**
@@ -24,6 +24,7 @@ import { initializeServiceGlobalConfigs } from '../helpers/service-facade.helper
 // Test setup
 beforeAll(async () => {
   initializeServiceGlobalConfigs();
+  await GenesisWalletServiceHelper.start();
 });
 
 afterAll(async () => {
