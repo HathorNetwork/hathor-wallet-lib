@@ -5,12 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  SupportedWallet,
-  WalletFactory,
-  WalletFacadeCapabilities,
-  WalletHelperAdapter,
-} from './types';
+import { SupportedWallet, WalletFactory, WalletHelperAdapter } from './types';
 import { DEFAULT_PIN_CODE } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 
@@ -260,32 +255,6 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         expect(tokens).toContain(tx.hash);
       });
 
-      it('should mint additional tokens', async () => {
-        // Fund and create token first
-        const address = await helper.getAddressAtIndex(wallet, 0);
-        await helper.injectFunds(wallet, address, 100n);
-
-        const createTx = await wallet.createNewToken('Mint Test', 'MT', 100n, {
-          pinCode: DEFAULT_PIN_CODE,
-        });
-        if (!createTx) {
-          throw new Error(`Typescript guard for tx not being empty`);
-        }
-        await helper.waitForTx(wallet, createTx.hash!);
-
-        // Mint more tokens
-        const mintTx = await wallet.mintTokens(createTx.hash!, 50n, {
-          pinCode: DEFAULT_PIN_CODE,
-        });
-
-        expect(mintTx).toBeDefined();
-        if (!mintTx) {
-          throw new Error(`Typescript guard for tx not being empty`);
-        }
-        expect(mintTx.hash).toBeTruthy();
-        await helper.waitForTx(wallet, mintTx.hash!);
-      });
-
       it('should get token details', async () => {
         const address = await helper.getAddressAtIndex(wallet, 0);
         await helper.injectFunds(wallet, address, 100n);
@@ -302,6 +271,42 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         }
         expect(tokenDetails.tokenInfo.name).toBe('Details Test');
         expect(tokenDetails.tokenInfo.symbol).toBe('DT');
+      });
+
+      it('should mint additional tokens', async () => {
+        // Fund and create token first
+        const address = await helper.getAddressAtIndex(wallet, 0);
+        await helper.injectFunds(wallet, address, 100n);
+
+        const createTx = await wallet.createNewToken('Mint Test', 'MT', 100n, {
+          pinCode: DEFAULT_PIN_CODE,
+        });
+        if (!createTx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
+        const tokenUid = createTx.hash!;
+        await helper.waitForTx(wallet, tokenUid);
+
+        // Fetching token details to confirm the creation worked well
+        const tokenDetails = await wallet.getTokenDetails(tokenUid);
+        expect(tokenDetails).toBeDefined();
+        expect(tokenDetails).toHaveProperty('id', tokenUid);
+
+        // Mint more tokens
+        const mintTx = await wallet.mintTokens(tokenUid, 50n, {
+          pinCode: DEFAULT_PIN_CODE,
+        });
+
+        expect(mintTx).toBeDefined();
+        if (!mintTx) {
+          throw new Error(`Typescript guard for tx not being empty`);
+        }
+        expect(mintTx.hash).toBeTruthy();
+        await helper.waitForTx(wallet, mintTx.hash!);
+
+        // Check for the updated total supply
+        const updatedTokenDetails = await wallet.getTokenDetails(tokenUid);
+        expect(updatedTokenDetails.totalSupply).toBe(150n);
       });
 
       it('should melt tokens', async () => {
