@@ -10,59 +10,6 @@ import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import Transaction from '../../../src/models/transaction';
 
 /**
- * Configuration options that define the capabilities of a wallet facade.
- * These flags control which tests should run for a particular facade implementation.
- */
-export interface WalletFacadeCapabilities {
-  /**
-   * Whether the facade has async address methods (HathorWallet)
-   * or sync address methods (WalletServiceWallet)
-   */
-  hasAsyncAddressMethods: boolean;
-
-  /**
-   * Whether the facade supports UTXO consolidation
-   */
-  supportsConsolidateUtxos: boolean;
-
-  /**
-   * Whether the facade supports nano contract transactions
-   */
-  supportsNanoContracts: boolean;
-
-  /**
-   * Whether the facade supports getAddressInfo()
-   */
-  supportsGetAddressInfo: boolean;
-
-  /**
-   * Whether the facade supports getTx()
-   */
-  supportsGetTx: boolean;
-
-  /**
-   * Whether the facade supports getFullHistory()
-   */
-  supportsGetFullHistory: boolean;
-
-  /**
-   * Whether the facade supports template-based transactions
-   */
-  supportsTemplateTransactions: boolean;
-
-  /**
-   * Whether the facade supports checkAddressesMine() (batch address check)
-   */
-  supportsCheckAddressesMine: boolean;
-
-  /**
-   * Whether the facade requires special configuration for initialization
-   * (e.g., WalletService needs requestPassword mock)
-   */
-  requiresSpecialInit: boolean;
-}
-
-/**
  * Union type for all supported wallet facades
  */
 export type SupportedWallet = HathorWallet | HathorWalletServiceWallet;

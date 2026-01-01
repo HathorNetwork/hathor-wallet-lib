@@ -43,7 +43,6 @@ function createWalletFacadeTests<T extends SupportedWallet>(
   facadeName: string,
   walletFactory: WalletFactory<T>,
   helper: WalletHelperAdapter<T>,
-  capabilities: WalletFacadeCapabilities
 ): void {
   describe(`${facadeName} - Wallet Facade Contract`, () => {
     let wallet: T;

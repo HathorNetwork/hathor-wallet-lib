@@ -27,21 +27,5 @@ afterAll(async () => {
 createWalletFacadeTests(
   'HathorWallet (Fullnode)',
   new HathorWalletFactory(),
-  new HathorWalletHelperAdapter(),
-  {
-    // HathorWallet has async address methods
-    hasAsyncAddressMethods: true,
-
-    // Feature support flags based on implementation
-    supportsConsolidateUtxos: true,
-    supportsNanoContracts: true,
-    supportsGetAddressInfo: true,
-    supportsGetTx: true,
-    supportsGetFullHistory: true,
-    supportsTemplateTransactions: true,
-    supportsCheckAddressesMine: true,
-
-    // No special initialization required
-    requiresSpecialInit: false,
-  }
+  new HathorWalletHelperAdapter()
 );

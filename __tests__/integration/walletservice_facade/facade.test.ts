@@ -35,22 +35,5 @@ afterAll(async () => {
 createWalletFacadeTests(
   'HathorWalletServiceWallet',
   new WalletServiceWalletFactory(),
-  new WalletServiceHelperAdapter(),
-  {
-    // WalletServiceWallet has sync address methods (not async)
-    hasAsyncAddressMethods: false,
-
-    // Feature support flags based on implementation
-    // Most advanced features are not implemented in WalletServiceWallet
-    supportsConsolidateUtxos: false,
-    supportsNanoContracts: false,
-    supportsGetAddressInfo: false,
-    supportsGetTx: false,
-    supportsGetFullHistory: false,
-    supportsTemplateTransactions: false,
-    supportsCheckAddressesMine: false,
-
-    // WalletService requires special initialization (requestPassword mock)
-    requiresSpecialInit: true,
-  }
+  new WalletServiceHelperAdapter()
 );
