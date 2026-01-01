@@ -42,7 +42,7 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 function createWalletFacadeTests<T extends SupportedWallet>(
   facadeName: string,
   walletFactory: WalletFactory<T>,
-  helper: WalletHelperAdapter<T>,
+  helper: WalletHelperAdapter<T>
 ): void {
   describe(`${facadeName} - Wallet Facade Contract`, () => {
     let wallet: T;
