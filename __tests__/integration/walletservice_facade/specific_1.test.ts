@@ -1,27 +1,27 @@
 import axios from 'axios';
 import Mnemonic from 'bitcore-mnemonic';
-import config from '../../src/config';
-import { loggers } from './utils/logger.util';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import Network from '../../src/models/network';
-import { CreateTokenTransaction, MemoryStore, Output, Storage } from '../../src';
+import config from '../../../src/config';
+import { loggers } from '../utils/logger.util';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+import Network from '../../../src/models/network';
+import { CreateTokenTransaction, MemoryStore, Output, Storage } from '../../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
   NETWORK_NAME,
   WALLET_CONSTANTS,
-} from './configuration/test-constants';
+} from '../configuration/test-constants';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
-} from '../../src/constants';
-import { decryptData } from '../../src/utils/crypto';
-import walletUtils from '../../src/utils/wallet';
-import { delay } from './utils/core.util';
-import { TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
-import { GetAddressesObject } from '../../src/wallet/types';
+} from '../../../src/constants';
+import { decryptData } from '../../../src/utils/crypto';
+import walletUtils from '../../../src/utils/wallet';
+import { delay } from '../utils/core.util';
+import { TxNotFoundError, UtxoError, WalletRequestError } from '../../../src/errors';
+import { GetAddressesObject } from '../../../src/wallet/types';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setServerUrl(FULLNODE_URL);

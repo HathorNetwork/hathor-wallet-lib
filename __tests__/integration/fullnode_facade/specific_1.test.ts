@@ -1,7 +1,10 @@
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
-import { multisigWalletsData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay, getRandomInt } from './utils/core.util';
+import {
+  multisigWalletsData,
+  precalculationHelpers,
+} from '../helpers/wallet-precalculation.helper';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { delay, getRandomInt } from '../utils/core.util';
 import {
   createTokenHelper,
   DEFAULT_PASSWORD,
@@ -14,31 +17,31 @@ import {
   waitForTxReceived,
   waitForWalletReady,
   waitUntilNextTimestamp,
-} from './helpers/wallet.helper';
-import HathorWallet from '../../src/new/wallet';
+} from '../helpers/wallet.helper';
+import HathorWallet from '../../../src/new/wallet';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   P2PKH_ACCT_PATH,
   TOKEN_AUTHORITY_MASK,
-} from '../../src/constants';
-import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
-import dateFormatter from '../../src/utils/date';
-import { verifyMessage } from '../../src/utils/crypto';
-import { loggers } from './utils/logger.util';
-import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
-import SendTransaction from '../../src/new/sendTransaction';
-import { ConnectionState } from '../../src/wallet/types';
-import transaction from '../../src/utils/transaction';
-import Network from '../../src/models/network';
-import { WalletType, TokenVersion } from '../../src/types';
-import { parseScriptData } from '../../src/utils/scripts';
-import { MemoryStore, Storage } from '../../src/storage';
-import { TransactionTemplateBuilder } from '../../src/template/transaction';
-import FeeHeader from '../../src/headers/fee';
-import Header from '../../src/headers/base';
-import CreateTokenTransaction from '../../src/models/create_token_transaction';
+} from '../../../src/constants';
+import { TOKEN_DATA, WALLET_CONSTANTS } from '../configuration/test-constants';
+import dateFormatter from '../../../src/utils/date';
+import { verifyMessage } from '../../../src/utils/crypto';
+import { loggers } from '../utils/logger.util';
+import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../../src/errors';
+import SendTransaction from '../../../src/new/sendTransaction';
+import { ConnectionState } from '../../../src/wallet/types';
+import transaction from '../../../src/utils/transaction';
+import Network from '../../../src/models/network';
+import { WalletType, TokenVersion } from '../../../src/types';
+import { parseScriptData } from '../../../src/utils/scripts';
+import { MemoryStore, Storage } from '../../../src/storage';
+import { TransactionTemplateBuilder } from '../../../src/template/transaction';
+import FeeHeader from '../../../src/headers/fee';
+import Header from '../../../src/headers/base';
+import CreateTokenTransaction from '../../../src/models/create_token_transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -311,7 +314,7 @@ describe('getTxById', () => {
 
 describe('start', () => {
   it('should reject with invalid parameters', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const connection = generateConnection();
 
     /*
@@ -362,7 +365,12 @@ describe('start', () => {
       () =>
         new HathorWallet({
           seed: walletData.words,
-          connection: { state: ConnectionState.CONNECTED },
+          connection: {
+            state: ConnectionState.CONNECTED,
+            getState(): ConnectionState {
+              return ConnectionState.CONNECTED;
+            },
+          },
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
         })
