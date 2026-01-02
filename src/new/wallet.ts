@@ -105,6 +105,7 @@ import {
   UtxoDetails,
   UtxoOptions,
 } from './types';
+import { Utxo } from '../wallet/types';
 import {
   FullNodeTxApiResponse,
   GraphvizNeighboursDotResponse,
