@@ -170,7 +170,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     instructions: z.infer<typeof TransactionTemplate>,
     debug: boolean = false
   ): Promise<TxInstance> {
-    const context = new TxTemplateContext(this, this.wallet.logger, debug);
+    const context = new TxTemplateContext(this.wallet.logger, debug);
 
     for (const ins of TransactionTemplate.parse(instructions)) {
       await runInstruction(this, context, ins);

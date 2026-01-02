@@ -6,7 +6,6 @@
  */
 /* eslint max-classes-per-file: ["error", 3] */
 
-// eslint-disable-next-line max-classes-per-file
 import { z } from 'zod';
 import { TokenVersion, IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
@@ -22,76 +21,72 @@ import {
 import { NanoAction } from './instructions';
 import { ITxTemplateInterpreter } from './types';
 
-export class TokenBalance {
+export interface TokenBalance {
   tokens: OutputValueType;
-
   tokenVersion?: TokenVersion;
-
   mint_authorities: number;
-
   melt_authorities: number;
-
   /**
    * Count of non-authority outputs that is used to calculate the fee
    */
   chargeableOutputs: number;
-
   /**
    * Count of non-authority inputs that is used to calculate the fee
    */
   chargeableInputs: number;
-
-  constructor(tokenVersion?: TokenVersion) {
-    this.tokens = 0n;
-    this.mint_authorities = 0;
-    this.melt_authorities = 0;
-    this.chargeableOutputs = 0;
-    this.chargeableInputs = 0;
-    this.tokenVersion = tokenVersion;
-  }
-
-  needsToAddInputs() {
-    return this.tokens > 0;
-  }
-
-  needsToAddOutputs() {
-    return this.tokens < 0;
-  }
-
-  calculateFee(): bigint {
-    let fee = 0n;
-    if (this.chargeableOutputs > 0) {
-      fee += BigInt(this.chargeableOutputs) * FEE_PER_OUTPUT;
-    } else if (this.chargeableInputs > 0) {
-      fee += FEE_PER_OUTPUT;
-    }
-    return BigInt(fee);
-  }
 }
+
+/**
+ * Create a new TokenBalance with default values.
+ */
+function createTokenBalance(tokenVersion?: TokenVersion): TokenBalance {
+  return {
+    tokens: 0n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+    chargeableOutputs: 0,
+    chargeableInputs: 0,
+    tokenVersion,
+  };
+}
+
+/**
+ * Calculate the fee for a single token balance.
+ */
+function calculateTokenFee(balance: TokenBalance): bigint {
+  let fee = 0n;
+  if (balance.chargeableOutputs > 0) {
+    fee += BigInt(balance.chargeableOutputs) * FEE_PER_OUTPUT;
+  } else if (balance.chargeableInputs > 0) {
+    fee += FEE_PER_OUTPUT;
+  }
+  return fee;
+}
+
+type TokenVersionGetter = (token: string) => TokenVersion;
 
 export class TxBalance {
   balance: Record<string, TokenBalance>;
 
   createdTokenBalance: null | TokenBalance;
 
-  private _interpreter: ITxTemplateInterpreter;
+  private _getTokenVersion: TokenVersionGetter;
 
-  constructor(interpreter: ITxTemplateInterpreter) {
+  constructor(getTokenVersion: TokenVersionGetter) {
     this.balance = {};
     this.createdTokenBalance = null;
-    this._interpreter = interpreter;
+    this._getTokenVersion = getTokenVersion;
   }
 
   /**
    * Get the current balance of the given token.
+   * @param token - The token UID
    */
-  async getTokenBalance(token: string): Promise<TokenBalance> {
-    const balance = this.balance[token] || new TokenBalance();
-
-    if (!balance.tokenVersion) {
-      balance.tokenVersion = await this.getTokenVersion(token);
+  getTokenBalance(token: string): TokenBalance {
+    if (!this.balance[token]) {
+      const tokenVersion = this._getTokenVersion(token);
+      this.balance[token] = createTokenBalance(tokenVersion);
     }
-    this.setTokenBalance(token, balance);
     return this.balance[token];
   }
 
@@ -101,7 +96,7 @@ export class TxBalance {
    */
   getCreatedTokenBalance(tokenVersion: TokenVersion): TokenBalance {
     if (!this.createdTokenBalance) {
-      this.createdTokenBalance = new TokenBalance(tokenVersion);
+      this.createdTokenBalance = createTokenBalance(tokenVersion);
     }
     return this.createdTokenBalance;
   }
@@ -122,14 +117,16 @@ export class TxBalance {
 
   /**
    * Add balance from utxo of the given transaction.
+   * @param tx - The transaction containing the UTXO
+   * @param index - The output index
    */
-  async addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+  addBalanceFromUtxo(tx: IHistoryTx, index: number) {
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }
     const output = tx.outputs[index];
     const { token } = output;
-    const balance = await this.getTokenBalance(token);
+    const balance = this.getTokenBalance(token);
 
     if (transactionUtils.isAuthorityOutput(output)) {
       if (transactionUtils.isMint(output)) {
@@ -152,9 +149,11 @@ export class TxBalance {
 
   /**
    * Remove the balance given from the token balance.
+   * @param amount - The amount to subtract
+   * @param token - The token UID
    */
-  async addOutput(amount: OutputValueType, token: string) {
-    const balance = await this.getTokenBalance(token);
+  addOutput(amount: OutputValueType, token: string) {
+    const balance = this.getTokenBalance(token);
     balance.tokens -= amount;
 
     if (balance.tokenVersion === TokenVersion.FEE) {
@@ -178,9 +177,12 @@ export class TxBalance {
 
   /**
    * Remove the specified authority from the balance of the given token.
+   * @param count - Number of authorities to remove
+   * @param token - The token UID
+   * @param authority - The authority type ('mint' or 'melt')
    */
-  async addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
-    const balance = await this.getTokenBalance(token);
+  addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
+    const balance = this.getTokenBalance(token);
     if (authority === 'mint') {
       balance.mint_authorities -= count;
     }
@@ -222,21 +224,13 @@ export class TxBalance {
     let fee = 0n;
 
     if (this.createdTokenBalance) {
-      fee += this.createdTokenBalance.calculateFee();
+      fee += calculateTokenFee(this.createdTokenBalance);
     }
 
     for (const token of Object.keys(this.balance)) {
-      fee += this.balance[token].calculateFee();
+      fee += calculateTokenFee(this.balance[token]);
     }
     return fee;
-  }
-
-  private async getTokenVersion(token: string): Promise<TokenVersion> {
-    if (token === NATIVE_TOKEN_UID) {
-      return TokenVersion.NATIVE;
-    }
-    const tokenDetails = await this._interpreter.getTokenDetails(token);
-    return tokenDetails.tokenInfo.version;
   }
 }
 
@@ -289,6 +283,8 @@ export class TxTemplateContext {
 
   private _fees: Map<string, bigint>;
 
+  private _tokenVersions: Map<string, TokenVersion>;
+
   vars: Record<string, unknown>;
 
   _logs: string[];
@@ -297,18 +293,19 @@ export class TxTemplateContext {
 
   debug: boolean;
 
-  constructor(interpreter: ITxTemplateInterpreter, logger?: ILogger, debug: boolean = false) {
+  constructor(logger?: ILogger, debug: boolean = false) {
     this.inputs = [];
     this.outputs = [];
     this.tokens = [];
     this.version = DEFAULT_TX_VERSION;
     this.signalBits = 0;
-    this.balance = new TxBalance(interpreter);
+    this._fees = new Map();
+    this._tokenVersions = new Map();
+    this.balance = new TxBalance(this.getTokenVersion.bind(this));
     this.vars = {};
     this._logs = [];
     this._logger = logger ?? getDefaultLogger();
     this.debug = debug;
-    this._fees = new Map();
   }
 
   /**
@@ -366,14 +363,28 @@ export class TxTemplateContext {
   /**
    * Add a token to the transaction and return its token_data.
    * The token array order will be preserved so the token_data is final.
+   * Also fetches and caches the token version for later use.
    *
    * If the transaction is a CREATE_TOKEN_TX it does not have a token array,
    * only HTR (token_data=0) and the created token(token_data=1)
    *
+   * @param interpreter The interpreter to fetch token details from.
    * @param token Token UID.
    * @returns token_data for the requested token.
    */
-  addToken(token: string): number {
+  async addToken(interpreter: ITxTemplateInterpreter, token: string): Promise<number> {
+    // Fetch and cache the token version if not already cached
+    if (!this._tokenVersions.has(token)) {
+      let tokenVersion: TokenVersion;
+      if (token === NATIVE_TOKEN_UID) {
+        tokenVersion = TokenVersion.NATIVE;
+      } else {
+        const tokenDetails = await interpreter.getTokenDetails(token);
+        tokenVersion = tokenDetails.tokenInfo.version;
+      }
+      this._tokenVersions.set(token, tokenVersion);
+    }
+
     if (token === NATIVE_TOKEN_UID) {
       return 0;
     }
@@ -388,6 +399,21 @@ export class TxTemplateContext {
     // Token is not on the list, adding now
     this.tokens.push(token);
     return this.tokens.length;
+  }
+
+  /**
+   * Get the cached token version for a token.
+   * The token version must have been previously fetched via addToken.
+   * @param token Token UID.
+   * @returns The token version.
+   * @throws Error if the token version is not cached (addToken was not called).
+   */
+  getTokenVersion(token: string): TokenVersion {
+    const version = this._tokenVersions.get(token);
+    if (version === undefined) {
+      throw new Error(`Token version not found for token ${token}. Call addToken first.`);
+    }
+    return version;
   }
 
   /**

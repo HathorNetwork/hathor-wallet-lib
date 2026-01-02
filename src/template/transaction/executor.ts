@@ -146,8 +146,11 @@ export async function execRawInputInstruction(
 
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
+  // Cache the tokenVersion via addToken
+  const { token } = origTx.outputs[index];
+  await ctx.addToken(interpreter, token);
   // Add balance to the ctx.balance
-  await ctx.balance.addBalanceFromUtxo(origTx, index);
+  ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
   ctx.addInputs(position, input);
@@ -233,7 +236,7 @@ export async function execAuthoritySelectInstruction(
  * Execution for RawOutputInstruction
  */
 export async function execRawOutputInstruction(
-  _interpreter: ITxTemplateInterpreter,
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof RawOutputInstruction>
 ) {
@@ -280,14 +283,14 @@ export async function execRawOutputInstruction(
     }
   } else {
     // Add token to tokens array
-    tokenData = ctx.addToken(token);
+    tokenData = await ctx.addToken(interpreter, token);
     if (authority) {
       ctx.log(`Creating authority output`);
-      await ctx.balance.addOutputAuthority(1, token, authority);
+      ctx.balance.addOutputAuthority(1, token, authority);
     } else {
       ctx.log(`Creating token output`);
       if (amount) {
-        await ctx.balance.addOutput(amount, token);
+        ctx.balance.addOutput(amount, token);
       }
     }
   }
@@ -316,7 +319,7 @@ export async function execRawOutputInstruction(
  * Execution for DataOutputInstruction
  */
 export async function execDataOutputInstruction(
-  _interpreter: ITxTemplateInterpreter,
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof DataOutputInstruction>
 ) {
@@ -342,8 +345,8 @@ export async function execDataOutputInstruction(
   } else {
     ctx.log(`Using token(${token})`);
     // Add token to tokens array
-    tokenData = ctx.addToken(token);
-    await ctx.balance.addOutput(1n, token);
+    tokenData = await ctx.addToken(interpreter, token);
+    ctx.balance.addOutput(1n, token);
   }
 
   const dataScript = new ScriptData(data);
@@ -388,8 +391,8 @@ export async function execTokenOutputInstruction(
   } else {
     ctx.log(`Using token(${token})`);
     // Add token to tokens array
-    tokenData = ctx.addToken(token);
-    await ctx.balance.addOutput(amount, token);
+    tokenData = await ctx.addToken(interpreter, token);
+    ctx.balance.addOutput(amount, token);
   }
 
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
@@ -446,9 +449,9 @@ export async function execAuthorityOutputInstruction(
     }
     ctx.log(`Using token(${token})`);
     // Add token to tokens array
-    tokenData = ctx.addToken(token);
+    tokenData = await ctx.addToken(interpreter, token);
     // Add balance to the ctx.balance
-    await ctx.balance.addOutputAuthority(count, token, authority);
+    ctx.balance.addOutputAuthority(count, token, authority);
   }
 
   let amount: OutputValueType | undefined = 0n;
@@ -519,9 +522,10 @@ async function completeTokenInputAndOutputs(params: ICompleteTokenInputAndOutput
     address,
   } = params;
   ctx.log(`Completing tx for token ${tokenUid}`);
+  // Add token to cache version and get tokenData
+  const tokenData = await ctx.addToken(interpreter, tokenUid);
   // Check balances for token.
-  const balance = await ctx.balance.getTokenBalance(tokenUid);
-  const tokenData = ctx.addToken(tokenUid);
+  const balance = ctx.balance.getTokenBalance(tokenUid);
   if (balance.tokens > 0 && !skipChange) {
     const value = balance.tokens;
     // Surplus of token on the inputs, need to add a change output
@@ -624,7 +628,8 @@ export async function execCompleteTxInstruction(
     }
 
     // Add the required HTR to create the tokens
-    const balance = await ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
+    await ctx.addToken(interpreter, NATIVE_TOKEN_UID);
+    const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
     balance.tokens += deposit;
     ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
 
@@ -665,7 +670,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} mint outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
+      ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, changeScript, {
@@ -692,7 +697,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -704,7 +709,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} melt outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
+      ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, changeScript, {
@@ -731,7 +736,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -744,6 +749,7 @@ export async function execCompleteTxInstruction(
   if (calculateFee) {
     fee = ctx.balance.calculateFee();
     if (fee > 0n) {
+      await ctx.addToken(interpreter, NATIVE_TOKEN_UID);
       ctx.balance.addOutput(fee, NATIVE_TOKEN_UID);
       ctx.addFee(NATIVE_TOKEN_UID, fee);
     }
@@ -894,7 +900,7 @@ async function validateDepositNanoAction(
   action: z.infer<typeof NanoDepositAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoDepositAction.shape.token);
-  ctx.addToken(token);
+  await ctx.addToken(interpreter, token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
@@ -946,7 +952,7 @@ async function validateWithdrawalNanoAction(
   action: z.infer<typeof NanoWithdrawalAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoWithdrawalAction.shape.token);
-  ctx.addToken(token);
+  await ctx.addToken(interpreter, token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
@@ -965,7 +971,7 @@ async function validateWithdrawalNanoAction(
   };
 
   if (!action.skipOutputs) {
-    const tokenData = ctx.addToken(token);
+    const tokenData = await ctx.addToken(interpreter, token);
     const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
     const output = new Output(amount, script, { tokenData });
     ctx.addOutputs(-1, output);
@@ -983,7 +989,7 @@ async function validateGrantAuthorityNanoAction(
   action: z.infer<typeof NanoGrantAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoGrantAuthorityAction.shape.token);
-  ctx.addToken(token);
+  await ctx.addToken(interpreter, token);
   const { authority } = action;
   const address = getVariable<string | undefined>(
     action.address,
@@ -1033,7 +1039,7 @@ async function validateAcquireAuthorityNanoAction(
   action: z.infer<typeof NanoAcquireAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoAcquireAuthorityAction.shape.token);
-  ctx.addToken(token);
+  await ctx.addToken(interpreter, token);
   const address =
     getVariable<string | undefined>(
       action.address,
@@ -1050,7 +1056,7 @@ async function validateAcquireAuthorityNanoAction(
   };
 
   if (!action.skipOutputs) {
-    const tokenData = TOKEN_AUTHORITY_MASK | ctx.addToken(token);
+    const tokenData = TOKEN_AUTHORITY_MASK | (await ctx.addToken(interpreter, token));
     let amount: OutputValueType;
     if (action.authority === 'mint') {
       amount = TOKEN_MINT_MASK;

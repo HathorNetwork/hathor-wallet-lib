@@ -264,7 +264,7 @@ const RawInputExecutorTest = async executor => {
       })
     ),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
   await executor(interpreter, ctx, ins);
 
@@ -323,7 +323,7 @@ const UtxoSelectExecutorTest = async executor => {
       ],
     }),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
   const insData = { type: 'input/utxo', fill: 30, token };
   const ins = UtxoSelectInstruction.parse(insData);
@@ -380,7 +380,7 @@ const AuthoritySelectExecutorTest = async executor => {
       },
     ]),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const inputIns = { type: 'input/authority', token, authority: 'mint' };
   const ins = AuthoritySelectInstruction.parse(inputIns);
   await executor(interpreter, ctx, ins);
@@ -393,7 +393,9 @@ const AuthoritySelectExecutorTest = async executor => {
   expect(ctx.inputs[0].index).toStrictEqual(0);
 
   expect(ctx.outputs).toHaveLength(0);
-  expect(ctx.tokens).toHaveLength(0);
+  // Token is now added to the list when addToken is called (to cache tokenVersion)
+  expect(ctx.tokens).toHaveLength(1);
+  expect(ctx.tokens[0]).toStrictEqual(token);
 
   expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
   expect(ctx.balance.balance[token]).toMatchObject({
@@ -407,7 +409,7 @@ const RawOutputExecutorTest = async executor => {
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -435,7 +437,7 @@ const RawOutputExecutorTestForAuthority = async executor => {
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -464,7 +466,7 @@ const DataOutputExecutorTest = async executor => {
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   }; // interpreter is not used on data output instruction
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = DataOutputInstruction.parse({
     type: 'output/data',
     data: 'foobar',
@@ -499,7 +501,7 @@ const TokenOutputExecutorTest = async executor => {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = TokenOutputInstruction.parse({
     type: 'output/token',
     amount: 23,
@@ -536,7 +538,7 @@ const AuthorityOutputExecutorTest = async executor => {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = AuthorityOutputInstruction.parse({
     type: 'output/authority',
     authority: 'melt',
@@ -572,7 +574,7 @@ const ShuffleExecutorTest = async executor => {
   const interpreter = {
     getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = ShuffleInstruction.parse({
     type: 'action/shuffle',
     target: 'all',
@@ -621,7 +623,7 @@ const ChargeableInputsTest = async executor => {
       })
     ),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
   // Add two non-authority inputs from the same transaction
   const ins1 = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
@@ -646,7 +648,7 @@ const ChargeableOutputsTest = async executor => {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
     getTokenDetails: jest.fn().mockResolvedValue(mockFeeTokenDetails),
   };
-  const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
   // Add three token outputs
   const ins1 = TokenOutputInstruction.parse({
@@ -769,7 +771,7 @@ describe('tokenVersion validation in output instructions', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
     // Enable createTokenTxContext but don't set tokenVersion
     ctx.useCreateTokenTxContext();
 
@@ -789,7 +791,7 @@ describe('tokenVersion validation in output instructions', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
     // Enable createTokenTxContext but don't set tokenVersion
     ctx.useCreateTokenTxContext();
 
@@ -809,7 +811,7 @@ describe('tokenVersion validation in output instructions', () => {
       getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
     // Enable createTokenTxContext but don't set tokenVersion
     ctx.useCreateTokenTxContext();
 
@@ -830,7 +832,7 @@ describe('tokenVersion validation in output instructions', () => {
       getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
     // Enable createTokenTxContext but don't set tokenVersion
     ctx.useCreateTokenTxContext();
 
@@ -852,7 +854,7 @@ describe('execFeeInstruction', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
     const ins = FeeInstruction.parse({
       type: 'action/fee',
@@ -870,7 +872,7 @@ describe('execFeeInstruction', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
     const ins = FeeInstruction.parse({
       type: 'action/fee',
@@ -887,7 +889,7 @@ describe('execFeeInstruction', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
     // Add first fee
     const ins1 = FeeInstruction.parse({
@@ -913,7 +915,7 @@ describe('execFeeInstruction', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
     // Set variables
     ctx.vars.myToken = token;
@@ -935,7 +937,7 @@ describe('execFeeInstruction', () => {
     const interpreter = {
       getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     };
-    const ctx = new TxTemplateContext(interpreter, getDefaultLogger(), DEBUG);
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
     const token2 = '0000000220eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
 
     // Add fee for first token
