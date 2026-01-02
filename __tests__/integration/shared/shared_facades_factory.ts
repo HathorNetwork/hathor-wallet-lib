@@ -294,7 +294,7 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         expect(tokenDetails).toHaveProperty('tokenInfo');
         expect(tokenDetails.tokenInfo).toHaveProperty('id', tokenUid);
 
-        // FIXME: The Wallet Service recognizes there is a token detail, but cannot mint the tokens yet
+        // FIXME: The Wallet Service recognizes there is a token detail, but cannot fetch UTXOs for mint yet
         // We need to come up with some form of waiting until its internal workings finish creating
         // the token
 
@@ -336,7 +336,7 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         expect(tokenDetails.tokenInfo).toHaveProperty('id', tokenUid);
         expect(tokenDetails.totalSupply).toBe(100n);
 
-        // FIXME: The Wallet Service recognizes there is a token detail, but cannot melt the tokens yet
+        // FIXME: The Wallet Service recognizes there is a token detail, but cannot fetch UTXOs for the melt yet
         // We need to come up with some form of waiting until its internal workings finish creating
         // the token
 
