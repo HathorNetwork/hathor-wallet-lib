@@ -290,7 +290,9 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         // Fetching token details to confirm the creation worked well
         const tokenDetails = await wallet.getTokenDetails(tokenUid);
         expect(tokenDetails).toBeDefined();
-        expect(tokenDetails).toHaveProperty('id', tokenUid);
+        expect(tokenDetails).toHaveProperty('totalSupply', 150n);
+        expect(tokenDetails).toHaveProperty('tokenInfo');
+        expect(tokenDetails.tokenInfo).toHaveProperty('id', tokenUid);
 
         // Mint more tokens
         const mintTx = await wallet.mintTokens(tokenUid, 50n, {
@@ -326,6 +328,8 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         // Ensure the token exists in the internal indexes, whether Fullnode or Wallet Service
         const tokenDetails = await wallet.getTokenDetails(tokenUid);
         expect(tokenDetails).toBeDefined();
+        expect(tokenDetails).toHaveProperty('tokenInfo');
+        expect(tokenDetails.tokenInfo).toHaveProperty('id', tokenUid);
         expect(tokenDetails.totalSupply).toBe(100n);
 
         // FIXME: The Wallet Service recognizes there is a token detail, but cannot melt the tokens yet
