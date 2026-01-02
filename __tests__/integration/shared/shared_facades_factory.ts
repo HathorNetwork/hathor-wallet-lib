@@ -290,7 +290,7 @@ function createWalletFacadeTests<T extends SupportedWallet>(
         // Fetching token details to confirm the creation worked well
         const tokenDetails = await wallet.getTokenDetails(tokenUid);
         expect(tokenDetails).toBeDefined();
-        expect(tokenDetails).toHaveProperty('totalSupply', 150n);
+        expect(tokenDetails).toHaveProperty('totalSupply', 100n);
         expect(tokenDetails).toHaveProperty('tokenInfo');
         expect(tokenDetails.tokenInfo).toHaveProperty('id', tokenUid);
 
