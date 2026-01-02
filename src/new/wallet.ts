@@ -2821,7 +2821,7 @@ class HathorWallet extends EventEmitter {
       tx.inputs[inputIndex].setData(inputData);
     }
 
-    return tx as unknown as Transaction;
+    return tx;
   }
 
   /**
