@@ -630,7 +630,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Serialized P2SHSignature data
    */
-  async getAllSignatures(txHex: string, pin: string) {
+  async getAllSignatures(txHex: string, pin: string): Promise<string> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getAllSignatures');
     }
@@ -647,7 +647,7 @@ class HathorWallet extends EventEmitter {
       signatures[inputIndex] = signature;
     }
 
-    const p2shSig = new P2SHSignature(accessData.multisigData.pubkey, signatures);
+    const p2shSig = new P2SHSignature(accessData.multisigData!.pubkey!, signatures);
     return p2shSig.serialize();
   }
 
@@ -661,7 +661,7 @@ class HathorWallet extends EventEmitter {
    *
    * @throws {Error} if there are not enough signatures for an input
    */
-  async assemblePartialTransaction(txHex: string, signatures: string[]) {
+  async assemblePartialTransaction(txHex: string, signatures: string[]): Promise<Transaction> {
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
     const accessData = await this.storage.getAccessData();
     if (accessData === null) {
@@ -681,7 +681,7 @@ class HathorWallet extends EventEmitter {
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address);
+      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -1737,8 +1737,10 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: string, index: number, pinCode: string) {
-    const addressHDPrivKey = await this.getAddressPrivKey(pinCode, index);
+  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
+    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      privateKey: unknown;
+    };
     const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
@@ -2729,13 +2731,14 @@ class HathorWallet extends EventEmitter {
    *
    * @returns List of indexes and their associated address index
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async getWalletInputInfo(tx: any) {
+  async getWalletInputInfo(
+    tx: Transaction
+  ): Promise<Array<{ inputIndex: number; addressIndex: number; addressPath: string }>> {
     const walletInputs: { inputIndex: number; addressIndex: number; addressPath: string }[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address
+        spentTx.outputs[input.index].decoded.address!
       );
       if (addressInfo === null) {
         continue;
@@ -2760,8 +2763,18 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Input and signature information
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async getSignatures(tx: any, { pinCode = null }: { pinCode?: string | null } = {}) {
+  async getSignatures(
+    tx: Transaction,
+    { pinCode = null }: { pinCode?: string | null } = {}
+  ): Promise<
+    Array<{
+      inputIndex: number;
+      addressIndex: number;
+      addressPath: string;
+      signature: string;
+      pubkey: string;
+    }>
+  > {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
@@ -2798,8 +2811,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns The signed transaction
    */
-  // TODO: Type 'tx' as Transaction once TS4073 is resolved (Transaction type visibility in public API)
-  async signTx(tx: any, options: { pinCode?: string | null } = {}) {
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
     for (const sigInfo of await this.getSignatures(tx, options)) {
       const { signature, pubkey, inputIndex } = sigInfo;
       const inputData = transactionUtils.createInputData(
