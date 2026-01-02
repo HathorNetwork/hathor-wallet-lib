@@ -115,3 +115,53 @@ export const transactionApiSchema = z.discriminatedUnion('success', [
 ]);
 
 export type FullNodeTxApiResponse = z.infer<typeof transactionApiSchema>;
+
+/**
+ * Success response for GET /transaction_acc_weight
+ * - `stop_value` is present only when the transaction has a "first_block"
+ *   (i.e., when a stop_value was computed).
+ * - `accumulated_weight_raw` is provided as a string (raw/internal big value).
+ */
+export interface TransactionAccWeightSuccess {
+  success: true;
+  accumulated_weight: number; // human-friendly float weight (e.g. 15.4)
+  accumulated_weight_raw: string; // raw internal work/weight value as string (big int-like)
+  confirmation_level: number; // 0..1 (clamped), proportion of stop_value reached
+  accumulated_bigger: boolean; // whether accumulated_weight > stop_value (if stop_value present)
+  stop_value?: number; // optional: present only when applicable
+}
+
+/**
+ * Error response for GET /transaction_acc_weight
+ */
+export interface TransactionAccWeightError {
+  success: false;
+  message: string;
+}
+
+/**
+ * Union type for the endpoint response.
+ * Use `if (res.success)` to narrow to TransactionAccWeightSuccess.
+ */
+export type TransactionAccWeightResponse = TransactionAccWeightSuccess | TransactionAccWeightError;
+
+/**
+ * Error response when validation fails
+ */
+export interface GraphvizNeighboursErrorResponse {
+  success: false;
+  message: string;
+}
+
+/**
+ * Success response when format is 'dot'
+ * Returns the DOT graph as a string
+ */
+export type GraphvizNeighboursDotResponse = string;
+
+/**
+ * Union type for all possible responses from the graphviz neighbours endpoint
+ */
+export type GraphvizNeighboursResponse =
+  | GraphvizNeighboursErrorResponse
+  | GraphvizNeighboursDotResponse;

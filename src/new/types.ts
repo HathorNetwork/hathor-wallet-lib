@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
+import Address from '../models/address';
 
 /**
  * Parameters for HathorWallet constructor
@@ -407,3 +408,65 @@ export interface CreateTokenOptions {
 }
 
 export type CreateNFTOptions = Omit<CreateTokenOptions, 'data' | 'isCreateNFT'>;
+
+/**
+ * Return type for getBalance method
+ */
+export interface GetBalanceFullnodeFacadeReturnType {
+  token: { id: string; name: string; symbol: string; version?: TokenVersion };
+  balance: { unlocked: bigint; locked: bigint };
+  transactions?: number;
+  lockExpires: null;
+  tokenAuthorities: {
+    unlocked: { mint: bigint; melt: bigint };
+    locked: { mint: bigint; melt: bigint };
+  };
+}
+
+/**
+ * Return type for getTxHistory method - individual transaction summary
+ */
+export interface GetTxHistoryFullnodeFacadeReturnType {
+  txId: string;
+  balance: bigint;
+  timestamp: number;
+  voided: boolean;
+  version: number;
+  ncId?: string;
+  ncMethod?: string;
+  ncCaller?: Address; // Address type
+  firstBlock?: string;
+}
+
+/**
+ * Return type for getTokenDetails method
+ */
+export interface GetTokenDetailsFullnodeFacadeReturnType {
+  totalSupply: bigint;
+  totalTransactions: number;
+  tokenInfo: { id: string; name: string; symbol: string; version?: TokenVersion };
+  authorities: { mint: boolean; melt: boolean };
+}
+
+/**
+ * Return type for getTxById method - individual token details in transaction
+ */
+export interface GetTxByIdTokenDetails {
+  txId: string;
+  timestamp: number;
+  version: number;
+  voided: boolean;
+  weight: number;
+  tokenId: string;
+  tokenName: string | null;
+  tokenSymbol: string | null;
+  balance: bigint;
+}
+
+/**
+ * Return type for getTxById method
+ */
+export interface GetTxByIdFullnodeFacadeReturnType {
+  success: boolean;
+  txTokens: GetTxByIdTokenDetails[];
+}
