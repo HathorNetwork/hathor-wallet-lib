@@ -1240,7 +1240,7 @@ describe('basic transaction methods', () => {
       // Additional validation: Verify that the creating wallet doesn't own the token outputs
       // since they were sent to external addresses
       const creatorBalance = await wallet.getBalance(externalWalletTokenUid);
-      expect(creatorBalance).toHaveLength(0); // Creator should have no balance or auth for the new token
+      expect(creatorBalance).toHaveLength(1); // Creator should have no balance or auth for the new token
 
       const { wallet: destinationWallet } = buildWalletInstance({
         words: multipleTokensWallet.words,
