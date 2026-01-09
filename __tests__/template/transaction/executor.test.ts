@@ -12,6 +12,7 @@ import {
   execCompleteTxInstruction,
   execConfigInstruction,
   execDataOutputInstruction,
+  execFeeInstruction,
   execRawInputInstruction,
   execRawOutputInstruction,
   execSetVarInstruction,
@@ -27,6 +28,7 @@ import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
   DataOutputInstruction,
+  FeeInstruction,
   RawInputInstruction,
   RawOutputInstruction,
   ShuffleInstruction,
@@ -46,6 +48,34 @@ const DEBUG = false;
 const address = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
 const token = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
 const txId = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
+
+const mockTokenDetails = {
+  totalSupply: 1000n,
+  totalTransactions: 1,
+  tokenInfo: {
+    name: 'DBT',
+    symbol: 'DBT',
+    version: 1, // TokenVersion.DEPOSIT
+  },
+  authorities: {
+    mint: true,
+    melt: true,
+  },
+};
+
+const mockFeeTokenDetails = {
+  totalSupply: 1000n,
+  totalTransactions: 1,
+  tokenInfo: {
+    name: 'FeeBasedToken',
+    symbol: 'FBT',
+    version: 2, // TokenVersion.FEE
+  },
+  authorities: {
+    mint: true,
+    melt: true,
+  },
+};
 
 describe('findInstructionExecution', () => {
   it('should find the correct executor', () => {
@@ -133,6 +163,13 @@ describe('findInstructionExecution', () => {
         value: 'bar',
       })
     ).toBe(execSetVarInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/fee',
+        amount: 100,
+      })
+    ).toBe(execFeeInstruction);
   });
 
   it('should throw with an invalid instruction', () => {
@@ -213,8 +250,8 @@ describe('findInstructionExecution', () => {
 });
 
 const RawInputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     getTx: jest.fn().mockReturnValue(
       Promise.resolve({
         outputs: [
@@ -227,6 +264,7 @@ const RawInputExecutorTest = async executor => {
       })
     ),
   };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
   await executor(interpreter, ctx, ins);
 
@@ -239,13 +277,15 @@ const RawInputExecutorTest = async executor => {
     tokens: 123n,
     mint_authorities: 0,
     melt_authorities: 0,
+    chargeableOutputs: 0,
+    chargeableInputs: 0,
   });
 };
 
 const UtxoSelectExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     getChangeAddress: jest.fn().mockResolvedValue(address),
     getTx: jest.fn().mockResolvedValue({
       outputs: [
@@ -283,6 +323,7 @@ const UtxoSelectExecutorTest = async executor => {
       ],
     }),
   };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
 
   const insData = { type: 'input/utxo', fill: 30, token };
   const ins = UtxoSelectInstruction.parse(insData);
@@ -317,8 +358,8 @@ const UtxoSelectExecutorTest = async executor => {
 };
 
 const AuthoritySelectExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
     getTx: jest.fn().mockResolvedValue({
       outputs: [
         {
@@ -339,6 +380,7 @@ const AuthoritySelectExecutorTest = async executor => {
       },
     ]),
   };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const inputIns = { type: 'input/authority', token, authority: 'mint' };
   const ins = AuthoritySelectInstruction.parse(inputIns);
   await executor(interpreter, ctx, ins);
@@ -351,7 +393,6 @@ const AuthoritySelectExecutorTest = async executor => {
   expect(ctx.inputs[0].index).toStrictEqual(0);
 
   expect(ctx.outputs).toHaveLength(0);
-  expect(ctx.tokens).toHaveLength(0);
 
   expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
   expect(ctx.balance.balance[token]).toMatchObject({
@@ -362,8 +403,10 @@ const AuthoritySelectExecutorTest = async executor => {
 };
 
 const RawOutputExecutorTest = async executor => {
+  const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+  };
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-  const interpreter = {}; // interpreter is not used on raw output instruction
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -388,8 +431,10 @@ const RawOutputExecutorTest = async executor => {
 };
 
 const RawOutputExecutorTestForAuthority = async executor => {
+  const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+  };
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-  const interpreter = {}; // interpreter is not used on raw output instruction
   const ins = RawOutputInstruction.parse({
     type: 'output/raw',
     script: 'cafe',
@@ -415,8 +460,10 @@ const RawOutputExecutorTestForAuthority = async executor => {
 };
 
 const DataOutputExecutorTest = async executor => {
+  const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+  }; // interpreter is not used on data output instruction
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-  const interpreter = {}; // interpreter is not used on data output instruction
   const ins = DataOutputInstruction.parse({
     type: 'output/data',
     data: 'foobar',
@@ -447,10 +494,11 @@ const DataOutputExecutorTest = async executor => {
 };
 
 const TokenOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = TokenOutputInstruction.parse({
     type: 'output/token',
     amount: 23,
@@ -483,10 +531,11 @@ const TokenOutputExecutorTest = async executor => {
 };
 
 const AuthorityOutputExecutorTest = async executor => {
-  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
   };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const ins = AuthorityOutputInstruction.parse({
     type: 'output/authority',
     authority: 'melt',
@@ -519,8 +568,10 @@ const AuthorityOutputExecutorTest = async executor => {
 };
 
 const ShuffleExecutorTest = async executor => {
+  const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+  };
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-  const interpreter = {};
   const ins = ShuffleInstruction.parse({
     type: 'action/shuffle',
     target: 'all',
@@ -547,6 +598,88 @@ const ShuffleExecutorTest = async executor => {
   // Check that the inputs are the same, ignoring order
   expect(ctx.inputs).toEqual(expect.arrayContaining(inputsBefore));
   expect(ctx.inputs.length).toEqual(inputsBefore.length);
+};
+
+const ChargeableInputsTest = async executor => {
+  const interpreter = {
+    getTokenDetails: jest.fn().mockResolvedValue(mockFeeTokenDetails),
+    getTx: jest.fn().mockReturnValue(
+      Promise.resolve({
+        outputs: [
+          {
+            value: 100n,
+            token,
+            token_data: 1,
+          },
+          {
+            value: 50n,
+            token,
+            token_data: 1,
+          },
+        ],
+      })
+    ),
+  };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+  // Add two non-authority inputs from the same transaction
+  const ins1 = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
+  await executor(interpreter, ctx, ins1);
+
+  const ins2 = RawInputInstruction.parse({ type: 'input/raw', index: 1, txId });
+  await executor(interpreter, ctx, ins2);
+
+  expect(interpreter.getTx).toHaveBeenCalledTimes(2);
+  expect(ctx.inputs).toHaveLength(2);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 150n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+    chargeableInputs: 2,
+    chargeableOutputs: 0,
+  });
+};
+
+const ChargeableOutputsTest = async executor => {
+  const interpreter = {
+    getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+    getTokenDetails: jest.fn().mockResolvedValue(mockFeeTokenDetails),
+  };
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+  // Add three token outputs
+  const ins1 = TokenOutputInstruction.parse({
+    type: 'output/token',
+    amount: 30,
+    address,
+    token,
+  });
+  await executor(interpreter, ctx, ins1);
+
+  const ins2 = TokenOutputInstruction.parse({
+    type: 'output/token',
+    amount: 20,
+    address,
+    token,
+  });
+  await executor(interpreter, ctx, ins2);
+
+  const ins3 = TokenOutputInstruction.parse({
+    type: 'output/token',
+    amount: 10,
+    address,
+    token,
+  });
+  await executor(interpreter, ctx, ins3);
+
+  expect(ctx.outputs).toHaveLength(3);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: -60n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+    chargeableInputs: 0,
+    chargeableOutputs: 3,
+  });
 };
 
 /* eslint-disable jest/expect-expect */
@@ -613,5 +746,222 @@ describe('execute instruction from executor', () => {
     // Using runInstruction
     await ShuffleExecutorTest(runInstruction);
   });
+
+  it('should track chargeable inputs when using addBalanceFromUtxo with fee tokens', async () => {
+    // Using the executor
+    await ChargeableInputsTest(execRawInputInstruction);
+    // Using runInstruction
+    await ChargeableInputsTest(runInstruction);
+  });
+
+  it('should track chargeable outputs when using addOutput with fee tokens', async () => {
+    // Using the executor
+    await ChargeableOutputsTest(execTokenOutputInstruction);
+    // Using runInstruction
+    await ChargeableOutputsTest(runInstruction);
+  });
 });
 /* eslint-enable jest/expect-expect */
+
+describe('tokenVersion validation in output instructions', () => {
+  it('should throw error in RawOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = RawOutputInstruction.parse({
+      type: 'output/raw',
+      script: 'cafe',
+      amount: 100,
+      useCreatedToken: true,
+    });
+
+    await expect(execRawOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in DataOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = DataOutputInstruction.parse({
+      type: 'output/data',
+      data: 'foobar',
+      useCreatedToken: true,
+    });
+
+    await expect(execDataOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in TokenOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = TokenOutputInstruction.parse({
+      type: 'output/token',
+      amount: 50,
+      address,
+      useCreatedToken: true,
+    });
+
+    await expect(execTokenOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+
+  it('should throw error in AuthorityOutputInstruction when useCreatedToken is true but tokenVersion is not set', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    // Enable createTokenTxContext but don't set tokenVersion
+    ctx.useCreateTokenTxContext();
+
+    const ins = AuthorityOutputInstruction.parse({
+      type: 'output/authority',
+      authority: 'mint',
+      address,
+      useCreatedToken: true,
+    });
+
+    await expect(execAuthorityOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Current transaction does not have a token version'
+    );
+  });
+});
+
+describe('execFeeInstruction', () => {
+  it('should add fee for a new token', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(100n);
+  });
+
+  it('should add fee for HTR token when token is not specified', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      amount: 50,
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has('00')).toBe(true);
+    expect(ctx.fees.get('00')).toBe(50n);
+  });
+
+  it('should sum fees when adding to an existing token', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    // Add first fee
+    const ins1 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+    await execFeeInstruction(interpreter, ctx, ins1);
+
+    // Add second fee for the same token
+    const ins2 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 50,
+    });
+    await execFeeInstruction(interpreter, ctx, ins2);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(150n);
+  });
+
+  it('should use variables for token and amount', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    // Set variables
+    ctx.vars.myToken = token;
+    ctx.vars.myAmount = 200n;
+
+    const ins = FeeInstruction.parse({
+      type: 'action/fee',
+      token: '{myToken}',
+      amount: '{myAmount}',
+    });
+
+    await execFeeInstruction(interpreter, ctx, ins);
+
+    expect(ctx.fees.has(token)).toBe(true);
+    expect(ctx.fees.get(token)).toBe(200n);
+  });
+
+  it('should handle multiple tokens independently', async () => {
+    const interpreter = {
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const token2 = '0000000220eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
+
+    // Add fee for first token
+    const ins1 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 100,
+    });
+    await execFeeInstruction(interpreter, ctx, ins1);
+
+    // Add fee for second token
+    const ins2 = FeeInstruction.parse({
+      type: 'action/fee',
+      token: token2,
+      amount: 200,
+    });
+    await execFeeInstruction(interpreter, ctx, ins2);
+
+    // Add more to first token
+    const ins3 = FeeInstruction.parse({
+      type: 'action/fee',
+      token,
+      amount: 50,
+    });
+    await execFeeInstruction(interpreter, ctx, ins3);
+
+    expect(ctx.fees.get(token)).toBe(150n);
+    expect(ctx.fees.get(token2)).toBe(200n);
+  });
+});
