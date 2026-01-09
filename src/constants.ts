@@ -296,6 +296,11 @@ export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLIC
 export const FEE_PER_OUTPUT: bigint = 1n;
 
 /**
+ * Fee divisor
+ */
+export const FEE_DIVISOR: number = 1 / TOKEN_DEPOSIT_PERCENTAGE;
+
+/**
  * Max argument length in bytes (64Kib)
  */
 export const NC_ARGS_MAX_BYTES_LENGTH = 2n ** 16n;
