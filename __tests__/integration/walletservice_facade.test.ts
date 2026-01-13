@@ -1241,10 +1241,27 @@ describe('basic transaction methods', () => {
       // since they were sent to external addresses
       const creatorBalance = await wallet.getBalance(externalWalletTokenUid);
       expect(creatorBalance).toHaveLength(1);
-      expect(creatorBalance[0].balance.unlocked).toBe(0n);
-      expect(creatorBalance[0].balance.locked).toBe(0n);
-      expect(creatorBalance[0].tokenAuthorities.unlocked.mint).toBe(false);
-      expect(creatorBalance[0].tokenAuthorities.unlocked.melt).toBe(false);
+
+      expect(creatorBalance[0]).toEqual(
+        expect.objectContaining({
+          balance: expect.objectContaining({
+            unlocked: 0n,
+            locked: 0n,
+          }),
+          tokenAuthorities: expect.objectContaining({
+            unlocked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+            locked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+          }),
+          transactions: 0,
+          lockExpires: null,
+        })
+      );
 
       const { wallet: destinationWallet } = buildWalletInstance({
         words: multipleTokensWallet.words,
