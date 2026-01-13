@@ -653,9 +653,7 @@ describe('basic transaction methods', () => {
       expect(fullTx.success).toBe(true);
 
       // Find the output with the P2SH address
-      const p2shOutput = fullTx.tx.outputs.find(
-        output => output.decoded?.address === p2shAddress
-      );
+      const p2shOutput = fullTx.tx.outputs.find(output => output.decoded?.address === p2shAddress);
 
       expect(p2shOutput).toBeDefined();
       expect(p2shOutput!.value).toBe(5n);
