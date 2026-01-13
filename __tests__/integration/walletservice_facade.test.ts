@@ -1240,7 +1240,28 @@ describe('basic transaction methods', () => {
       // Additional validation: Verify that the creating wallet doesn't own the token outputs
       // since they were sent to external addresses
       const creatorBalance = await wallet.getBalance(externalWalletTokenUid);
-      expect(creatorBalance).toHaveLength(1); // Creator should have no balance or auth for the new token
+      expect(creatorBalance).toHaveLength(1);
+
+      expect(creatorBalance[0]).toEqual(
+        expect.objectContaining({
+          balance: expect.objectContaining({
+            unlocked: 0n,
+            locked: 0n,
+          }),
+          tokenAuthorities: expect.objectContaining({
+            unlocked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+            locked: expect.objectContaining({
+              mint: false,
+              melt: false,
+            }),
+          }),
+          transactions: 0,
+          lockExpires: null,
+        })
+      );
 
       const { wallet: destinationWallet } = buildWalletInstance({
         words: multipleTokensWallet.words,
