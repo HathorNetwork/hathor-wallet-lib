@@ -5,6 +5,7 @@ import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import { CreateTokenTransaction, MemoryStore, Output, Storage } from '../../src';
+import { TokenVersion } from '../../src/types';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
@@ -1251,6 +1252,115 @@ describe('basic transaction methods', () => {
       expect(destBalance[0].balance.unlocked).toBe(tokenAmount);
       expect(destBalance[0].tokenAuthorities.unlocked.mint).toBe(true);
       expect(destBalance[0].tokenAuthorities.unlocked.melt).toBe(true);
+    });
+  });
+
+  describe('fee token creation', () => {
+    const feeTokenWallet = {
+      words:
+        'orbit polar arrive habit transfer result census twelve script pause silent twelve spot logic twenty keen quarter sand bean blame resist horn shift liberty',
+      addresses: [
+        'WVQ4AQZvj1X92b2diKLZeSLLXKPvykHj6j',
+        'WUKLQ8YYSMoH4pis4yGxFRJtz6AvfRpiov',
+        'WcjgpxkF4M8nyUpmLbrtkK42jXnGK43YeG',
+        'Wgeq5nosnYxQPzG27cmEiwZ9uwj4ijj8DF',
+        'WgcxxJbRmJ9BTShSUY7Z8BszTyDuLByNkk',
+        'Wi97Wa7Z3AyZuJKcDBwjBKnjWATjP6m1BD',
+        'Wjmz2fKFz5W87DhUuDsLKM4pWtqpjhHbrd',
+        'WQw2nRn7GDf3aRTQ817g74rX4QD8Ue9mDu',
+        'Wg5v5vLwMTMFQxNf541R3EzhciaaZSbc36',
+        'Wf5RBKw13nir1gcTQNqCGwhLh4b5Bh84Yx',
+      ],
+    };
+
+    it('should create a fee token with tokenVersion FEE', async () => {
+      // Fund wallet
+      const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], 20n, {
+        pinCode,
+      });
+      expect(fundTx.hash).toBeDefined();
+
+      ({ wallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+      await wallet.start({ pinCode, password });
+      await pollForTx(wallet, fundTx.hash!);
+
+      // Create fee token
+      const createTokenTx = (await wallet.createNewToken('FeeToken', 'FTK', 100n, {
+        pinCode,
+        tokenVersion: TokenVersion.FEE,
+      })) as CreateTokenTransaction;
+
+      expect(createTokenTx).toBeDefined();
+      expect(createTokenTx.hash).toBeDefined();
+
+      const tokenUid = createTokenTx.hash!;
+      await pollForTx(wallet, tokenUid);
+
+      // Verify token details include version
+      const tokenDetails = await wallet.getTokenDetails(tokenUid);
+      expect(tokenDetails.tokenInfo).toEqual(
+        expect.objectContaining({
+          id: tokenUid,
+          name: 'FeeToken',
+          symbol: 'FTK',
+          version: TokenVersion.FEE,
+        })
+      );
+      expect(tokenDetails.totalSupply).toBe(100n);
+    });
+
+    it('should send fee token and charge HTR fee', async () => {
+      // This test validates that when sending a fee token, the HTR balance decreases
+      // due to the fee being charged
+
+      // First, create a fee token (reusing wallet from previous test or creating new)
+      const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], 20n, {
+        pinCode,
+      });
+      expect(fundTx.hash).toBeDefined();
+
+      ({ wallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+      await wallet.start({ pinCode, password });
+      await pollForTx(wallet, fundTx.hash!);
+
+      // Get initial HTR balance
+      const initialBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      const initialHtrUnlocked = initialBalance[0]?.balance.unlocked || 0n;
+
+      // Create fee token
+      const createTokenTx = (await wallet.createNewToken('FeeToken2', 'FT2', 50n, {
+        pinCode,
+        tokenVersion: TokenVersion.FEE,
+      })) as CreateTokenTransaction;
+
+      const tokenUid = createTokenTx.hash!;
+      await pollForTx(wallet, tokenUid);
+
+      // Get balance after token creation
+      const afterCreateBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      const afterCreateHtr = afterCreateBalance[0]?.balance.unlocked || 0n;
+
+      // Send fee token to another address
+      const recipientAddress = feeTokenWallet.addresses[1];
+      const sendTx = await wallet.sendTransaction(recipientAddress, 10n, {
+        pinCode,
+        token: tokenUid,
+      });
+
+      expect(sendTx.hash).toBeDefined();
+      await pollForTx(wallet, sendTx.hash!);
+
+      // Get final HTR balance
+      const finalBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      const finalHtrUnlocked = finalBalance[0]?.balance.unlocked || 0n;
+
+      // Verify that HTR was consumed (fee was charged)
+      // The exact fee amount depends on the number of outputs
+      expect(finalHtrUnlocked).toBeLessThan(afterCreateHtr);
+
+      // Verify the fee token was sent successfully
+      const tokenBalance = await wallet.getBalance(tokenUid);
+      expect(tokenBalance[0]?.balance.unlocked).toBe(40n); // 50 - 10 = 40
     });
   });
 });

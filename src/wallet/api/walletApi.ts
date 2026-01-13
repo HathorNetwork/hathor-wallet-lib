@@ -244,7 +244,9 @@ const walletApi = {
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
     }
-    throw new WalletRequestError('Error creating tx proposal.');
+    // Include error details in the exception
+    const errorDetail = `status=${response.status} body=${JSON.stringify(response.data)}`;
+    throw new WalletRequestError(`Error creating tx proposal: ${errorDetail}`);
   },
 
   async updateTxProposal(
@@ -258,7 +260,9 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    throw new WalletRequestError('Error sending tx proposal.');
+    // Include error details in the exception
+    const errorDetail = `status=${response.status} body=${JSON.stringify(response.data)}`;
+    throw new WalletRequestError(`Error sending tx proposal: ${errorDetail}`);
   },
 
   async deleteTxProposal(
