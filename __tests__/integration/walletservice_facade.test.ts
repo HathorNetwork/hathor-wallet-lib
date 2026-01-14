@@ -626,6 +626,8 @@ describe('basic transaction methods', () => {
           tokenData: 0,
         })
       );
+
+      await pollForTx(gWallet, sendTransaction.hash!);
     });
 
     it('should send a transaction to a P2SH (multisig) address', async () => {
