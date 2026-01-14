@@ -6,12 +6,12 @@
  */
 
 import bitcore from 'bitcore-lib';
+import { TokenVersion, IStorage, OutputValueType, IHistoryTx } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { IStorage, OutputValueType, IHistoryTx } from '../types';
 import { CreateNanoTxData } from '../nano_contracts/types';
 
 // Type used in create token methods so we can have defaults for required params
@@ -52,6 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
+  version?: TokenVersion; // Token version
 }
 
 export interface Balance {

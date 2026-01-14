@@ -181,12 +181,15 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       if (!context.tokenName || !context.tokenSymbol) {
         throw new Error('Cannot create a token without a name or symbol');
       }
+      if (!context.tokenVersion) {
+        throw new Error('Cannot create a token without a token version');
+      }
       return new CreateTokenTransaction(
         context.tokenName,
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        { signalBits: context.signalBits, headers }
+        { signalBits: context.signalBits, headers, tokenVersion: context.tokenVersion }
       );
     }
     throw new Error('Unsupported Version byte provided');
@@ -214,7 +217,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   async getBalance(token: string): Promise<IWalletBalanceData> {
     const balance = await this.wallet.getBalance(token);
-    return balance[0];
+    return balance[0] as unknown as IWalletBalanceData; // FIXME: Temporary forced conversion during types consolidation
   }
 
   /**
@@ -239,7 +242,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     const utxos: Utxo[] = [];
     // XXX: This may throw, but maybe we should let it.
     for await (const utxo of this.wallet.storage.selectUtxos(newOptions)) {
-      utxos.push(utxo);
+      utxos.push(utxo as unknown as Utxo); // Forcing conversion until we consolidate types
     }
     return utxos;
   }
@@ -267,7 +270,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   }
 
   getWallet(): IHathorWallet {
-    return this.wallet;
+    return this.wallet as unknown as IHathorWallet; // FIXME: Temporary forced conversion during types consolidation
   }
 
   getHTRDeposit(mintAmount: OutputValueType): OutputValueType {

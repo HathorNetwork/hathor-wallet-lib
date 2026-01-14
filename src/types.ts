@@ -9,6 +9,18 @@ import { Config } from './config';
 import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
+import Header from './headers/base';
+
+/**
+ * Token version used to identify the type of token during the token creation process.
+ */
+export enum TokenVersion {
+  NATIVE = 0,
+
+  DEPOSIT = 1,
+
+  FEE = 2,
+}
 
 /**
  * Logger interface where each method is a leveled log method.
@@ -45,6 +57,25 @@ export enum HistorySyncMode {
   POLLING_HTTP_API = 'polling-http-api',
   MANUAL_STREAM_WS = 'manual-stream-ws',
   XPUB_STREAM_WS = 'xpub-stream-ws',
+}
+
+/**
+ * Wallet state enum
+ * Represents the current state of the HathorWallet instance
+ */
+export enum WalletState {
+  /** Wallet is disconnected from the server */
+  CLOSED = 0,
+  /** Wallet is currently establishing a connection */
+  CONNECTING = 1,
+  /** Wallet is connected and syncing transaction history */
+  SYNCING = 2,
+  /** Wallet is synced and ready to be used */
+  READY = 3,
+  /** Wallet encountered an error */
+  ERROR = 4,
+  /** Wallet is performing an internal processing task */
+  PROCESSING = 5,
 }
 
 /**
@@ -86,6 +117,7 @@ export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
+  version?: TokenVersion;
 }
 
 export interface ITokenMetadata {
@@ -179,6 +211,7 @@ export interface IHistoryTx {
   parents: string[];
   token_name?: string; // For create token transaction
   token_symbol?: string; // For create token transaction
+  token_version?: TokenVersion; // For create token transaction
   tokens?: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
@@ -271,6 +304,8 @@ export interface IDataOutputOptionals {
 export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) &
   IDataOutputOptionals;
 
+export type IDataOutputWithToken = IDataOutput & { token: string };
+
 export interface IDataInput {
   txId: string;
   index: number;
@@ -281,9 +316,15 @@ export interface IDataInput {
   data?: string;
 }
 
+interface IDataTokenCreationTx {
+  name: string;
+  symbol: string;
+  tokenVersion?: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
+}
+
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
-export interface IDataTx {
+export interface IDataTx extends Partial<IDataTokenCreationTx> {
   signalBits?: number;
   version?: number;
   inputs: IDataInput[];
@@ -293,8 +334,7 @@ export interface IDataTx {
   nonce?: number;
   timestamp?: number;
   parents?: string[];
-  name?: string; // For create token transaction
-  symbol?: string; // For create token transaction
+  headers?: Header[];
 }
 
 export interface IUtxoId {
