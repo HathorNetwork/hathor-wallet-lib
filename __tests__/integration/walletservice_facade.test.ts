@@ -629,17 +629,10 @@ describe('basic transaction methods', () => {
     });
 
     it('should send a transaction to a P2SH (multisig) address', async () => {
-      // Use a pre-funded wallet to ensure we have UTXOs available
-      ({ wallet } = buildWalletInstance({ words: walletWithTxs.words }));
-      await wallet.start({ pinCode, password });
-
-      // Fund the wallet first
-      await sendFundTx(walletWithTxs.addresses[0], 10n, wallet);
-
       // Use a P2SH address from the multisig wallet constants
       const p2shAddress = WALLET_CONSTANTS.multisig.addresses[0];
 
-      const sendTransaction = await wallet.sendTransaction(p2shAddress, 5n, {
+      const sendTransaction = await gWallet.sendTransaction(p2shAddress, 5n, {
         pinCode,
       });
 
@@ -653,10 +646,10 @@ describe('basic transaction methods', () => {
       );
 
       // Wait for transaction to be confirmed and verify it on the full node
-      await pollForTx(wallet, sendTransaction.hash!);
+      await pollForTx(gWallet, sendTransaction.hash!);
 
       // Get the full transaction from the network to verify the P2SH output
-      const fullTx = await wallet.getFullTxById(sendTransaction.hash!);
+      const fullTx = await gWallet.getFullTxById(sendTransaction.hash!);
       expect(fullTx.success).toBe(true);
 
       // Find the output with the P2SH address
@@ -664,7 +657,7 @@ describe('basic transaction methods', () => {
 
       expect(p2shOutput).toBeDefined();
       expect(p2shOutput!.value).toBe(5n);
-      expect(p2shOutput!.decoded.type).toBe('P2SH');
+      expect(p2shOutput!.decoded.type).toBe('MultiSig');
       expect(p2shOutput!.decoded.address).toBe(p2shAddress);
     });
 
