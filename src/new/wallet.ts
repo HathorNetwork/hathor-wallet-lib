@@ -1147,7 +1147,7 @@ class HathorWallet extends EventEmitter {
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex!);
-      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object. Why?
+      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object.
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1192,7 +1192,6 @@ class HathorWallet extends EventEmitter {
 
     return transactionUtils.selectUtxos(
       // XXX: Only the `value` property of the UTXO is used in selectUtxos, so the cast is safe
-      // for this stage of the ts refactor.
       utxos.filter(utxo => utxo.authorities === 0n) as unknown as Utxo[],
       amount
     );
