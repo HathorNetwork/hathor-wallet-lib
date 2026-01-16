@@ -1409,6 +1409,12 @@ test('prepareMeltTokens', async () => {
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
   jest.spyOn(wallet.storage, 'getToken').mockImplementation(mockGetToken);
+  jest.spyOn(wallet, 'getTokenDetails').mockImplementation(async token => {
+    const { uid, ...mockData } = await mockGetToken(token);
+    return {
+      tokenInfo: { id: uid, ...mockData },
+    };
+  });
 
   // error because of wrong authority output address
   await expect(
