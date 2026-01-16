@@ -626,6 +626,41 @@ describe('basic transaction methods', () => {
           tokenData: 0,
         })
       );
+
+      await pollForTx(gWallet, sendTransaction.hash!);
+    });
+
+    it('should send a transaction to a P2SH (multisig) address', async () => {
+      // Use a P2SH address from the multisig wallet constants
+      const p2shAddress = WALLET_CONSTANTS.multisig.addresses[0];
+
+      const sendTransaction = await gWallet.sendTransaction(p2shAddress, 5n, {
+        pinCode,
+      });
+
+      // Validate the transaction was created successfully
+      expect(sendTransaction).toEqual(
+        expect.objectContaining({
+          hash: expect.any(String),
+          inputs: expect.any(Array),
+          outputs: expect.any(Array),
+        })
+      );
+
+      // Wait for transaction to be confirmed and verify it on the full node
+      await pollForTx(gWallet, sendTransaction.hash!);
+
+      // Get the full transaction from the network to verify the P2SH output
+      const fullTx = await gWallet.getFullTxById(sendTransaction.hash!);
+      expect(fullTx.success).toBe(true);
+
+      // Find the output with the P2SH address
+      const p2shOutput = fullTx.tx.outputs.find(output => output.decoded?.address === p2shAddress);
+
+      expect(p2shOutput).toBeDefined();
+      expect(p2shOutput!.value).toBe(5n);
+      expect(p2shOutput!.decoded.type).toBe('MultiSig');
+      expect(p2shOutput!.decoded.address).toBe(p2shAddress);
     });
 
     it('should send a transaction with a set changeAddress', async () => {
