@@ -94,6 +94,8 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import {
+  IWalletInputInfo,
+  ISignature,
   GeneralTokenInfoSchema,
   GetBalanceFullnodeFacadeReturnType,
   GetTxHistoryFullnodeFacadeReturnType,
@@ -2731,10 +2733,8 @@ class HathorWallet extends EventEmitter {
    *
    * @returns List of indexes and their associated address index
    */
-  async getWalletInputInfo(
-    tx: Transaction
-  ): Promise<Array<{ inputIndex: number; addressIndex: number; addressPath: string }>> {
-    const walletInputs: { inputIndex: number; addressIndex: number; addressPath: string }[] = [];
+  async getWalletInputInfo(tx: Transaction): Promise<Array<IWalletInputInfo>> {
+    const walletInputs: IWalletInputInfo[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(
@@ -2766,15 +2766,7 @@ class HathorWallet extends EventEmitter {
   async getSignatures(
     tx: Transaction,
     { pinCode = null }: { pinCode?: string | null } = {}
-  ): Promise<
-    Array<{
-      inputIndex: number;
-      addressIndex: number;
-      addressPath: string;
-      signature: string;
-      pubkey: string;
-    }>
-  > {
+  ): Promise<Array<ISignature>> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
@@ -2783,13 +2775,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const signatures = await this.storage.getTxSignatures(tx, pin);
-    const sigInfoArray: {
-      inputIndex: number;
-      addressIndex: number;
-      addressPath: string;
-      signature: string;
-      pubkey: string;
-    }[] = [];
+    const sigInfoArray: ISignature[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
