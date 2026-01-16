@@ -2248,14 +2248,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Get token info
-    const tokenData = await this.storage.getToken(token);
-    if (!tokenData) {
-      throw new SendTxError(`Token ${token} not found.`);
+    const { tokenInfo } = await this.getTokenDetails(token);
+    if (!tokenInfo) {
+      throw new TokenNotFoundError(token);
     }
 
     // 1. Calculate HTR withdraw
     let withdraw = 0n;
-    if (tokenData?.version === TokenVersion.DEPOSIT) {
+    if (tokenInfo?.version === TokenVersion.DEPOSIT) {
       const depositPercent = this.storage.getTokenDepositPercentage();
       withdraw = tokens.getWithdrawAmount(amount, depositPercent);
     }
@@ -2282,6 +2282,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Then add a single melt authority utxo (it's safe to assume that we have an utxo in the array)
     inputsObj.push(helpers.parseToInput(meltUtxo));
+    const meltAuthorityInputIndex = inputsObj.length - 1;
 
     // Create outputs
     const outputsObj: Output[] = [];
@@ -2309,8 +2310,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const headers: Header[] = [];
-    if (tokenData?.version === TokenVersion.FEE) {
+    let htrUtxos: typeof tokenUtxos = [];
+    let htrInputStartIndex = -1;
+
+    if (tokenInfo?.version === TokenVersion.FEE) {
       const mappedOutputs = outputsObj.map(output => this.mapToDataOutput(output, token));
+      const tokenData = {
+        uid: tokenInfo.id,
+        name: tokenInfo.name,
+        symbol: tokenInfo.symbol,
+        version: tokenInfo.version,
+      } satisfies ITokenData;
       const fee = await Fee.calculate(
         tokenUtxos, // we are using the token utxos instead of the inputs we need to check if this utxo is an authority utxo
         mappedOutputs,
@@ -2322,15 +2332,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
 
       // Get utxos for HTR
-      const { utxos: htrUtxos, changeAmount: htrChangeAmount } = await this.getUtxosForAmount(fee, {
+      const { utxos, changeAmount: htrChangeAmount } = await this.getUtxosForAmount(fee, {
         token: NATIVE_TOKEN_UID,
       });
+      htrUtxos = utxos;
 
       if (htrUtxos.length === 0) {
         throw new UtxoError(`No utxos available to fill the request. Token: HTR - Amount: ${fee}.`);
       }
 
       // Add HTR inputs
+      htrInputStartIndex = inputsObj.length;
       for (const utxo of htrUtxos) {
         inputsObj.push(helpers.parseToInput(utxo));
       }
@@ -2356,9 +2368,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
-        // We have an array of utxos and the last input is the one with the authority
+        // Determine which type of input this is and get its address index
         let addressIndex: number;
-        if (idx === tx.inputs.length - 1) {
+        if (idx === meltAuthorityInputIndex) {
           // This is the melt authority input
           const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
           if (meltUtxoAddressIndex === null) {
@@ -2366,10 +2378,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           }
           addressIndex = meltUtxoAddressIndex;
         } else {
-          // This is a regular token input
-          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
-            tokenUtxos[idx].addressPath
-          );
+          const hasFeeInputs = htrInputStartIndex >= 0;
+          const isInFeeInputRange = idx >= htrInputStartIndex;
+          const isHtrInputForFeePayment = hasFeeInputs && isInFeeInputRange;
+
+          if (isHtrInputForFeePayment) {
+            // HTR input for fee payment
+            const htrUtxoIdx = idx - htrInputStartIndex;
+            addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
+              htrUtxos[htrUtxoIdx].addressPath
+            );
+          } else {
+            // Regular token input
+            addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
+              tokenUtxos[idx].addressPath
+            );
+          }
         }
         const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
         inputObj.setData(inputData);

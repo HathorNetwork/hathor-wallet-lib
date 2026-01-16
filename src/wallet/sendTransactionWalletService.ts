@@ -29,7 +29,10 @@ import {
   OutputType,
   Utxo,
 } from './types';
-import { IDataInput, IDataOutput, IDataTx } from '../types';
+import { IDataInput, IDataOutputWithToken, IDataTx, ITokenData } from '../types';
+import { FeeHeader, Header } from '../headers';
+import { Fee } from '../utils/fee';
+import { getAddressType } from '../utils/address';
 
 type optionsType = {
   outputs?: OutputSendTransaction[];
@@ -269,7 +272,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       });
     }
 
-    const dataOutputs: IDataOutput[] = [];
+    const dataOutputs: IDataOutputWithToken[] = [];
     for (const output of this.outputs) {
       if (output.type === OutputType.DATA) {
         dataOutputs.push({
@@ -305,10 +308,100 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       tokens.splice(htrIndex, 1);
     }
 
+    // Get token data for fee calculation
+    const tokenDataMap = new Map<string, ITokenData>();
+    for (const tokenUid of tokens) {
+      const { tokenInfo } = await this.wallet.getTokenDetails(tokenUid);
+      if (tokenInfo) {
+        tokenDataMap.set(tokenUid, {
+          uid: tokenInfo.id,
+          name: tokenInfo.name,
+          symbol: tokenInfo.symbol,
+          version: tokenInfo.version,
+        });
+      }
+    }
+
+    const fee = await Fee.calculate(dataInputs, dataOutputs, tokenDataMap);
+    const headers: Header[] = [];
+
+    if (fee > 0n) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
+
+      let htrInputAmount = 0n;
+      for (const input of dataInputs) {
+        if (input.token === NATIVE_TOKEN_UID) {
+          htrInputAmount += input.value;
+        }
+      }
+
+      let htrOutputAmount = 0n;
+      for (const output of dataOutputs) {
+        if (output.token === NATIVE_TOKEN_UID) {
+          htrOutputAmount += output.value;
+        }
+      }
+
+      const htrNeeded = htrOutputAmount + fee;
+      if (htrInputAmount < htrNeeded) {
+        const additionalHtrNeeded = htrNeeded - htrInputAmount;
+        let htrUtxos: Utxo[] = [];
+        let htrChange: bigint | undefined;
+
+        try {
+          const result = await this.wallet.getUtxosForAmount(additionalHtrNeeded, {
+            token: NATIVE_TOKEN_UID,
+          });
+          htrUtxos = result.utxos;
+          htrChange = result.changeAmount;
+        } catch (err) {
+          if (err instanceof Error) {
+            throw new SendTxError(err.message);
+          }
+          throw err;
+        }
+
+        if (htrUtxos.length === 0) {
+          throw new SendTxError('Insufficient amount of HTR to fill the amount.');
+        }
+
+        for (const utxo of htrUtxos) {
+          dataInputs.push({
+            txId: utxo.txId,
+            index: utxo.index,
+            value: utxo.value,
+            token: utxo.tokenId,
+            address: utxo.address,
+            authorities: utxo.authorities,
+          });
+          utxosAddressPath.push(utxo.addressPath);
+
+          // Also add to the inputs array for the transaction
+          this.inputs.push({ txId: utxo.txId, index: utxo.index });
+        }
+
+        // Add change output if needed
+        if (htrChange && htrChange > 0n) {
+          const changeAddress =
+            this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+          dataOutputs.push({
+            type: getAddressType(changeAddress, this.wallet.network),
+            value: htrChange,
+            token: NATIVE_TOKEN_UID,
+            address: changeAddress,
+            timelock: null,
+            authorities: 0n,
+            isChange: true,
+          });
+        }
+      }
+    }
+
     const txData: IDataTx = {
       inputs: dataInputs,
       outputs: dataOutputs,
       tokens,
+      headers,
     };
 
     this._utxosAddressPath = utxosAddressPath;
@@ -360,6 +453,123 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       tokens.splice(htrIndex, 1);
     }
 
+    // Get token data for fee calculation
+    const tokenDataMap = new Map<string, ITokenData>();
+    for (const tokenUid of tokens) {
+      const { tokenInfo } = await this.wallet.getTokenDetails(tokenUid);
+      if (tokenInfo) {
+        tokenDataMap.set(tokenUid, {
+          uid: tokenInfo.id,
+          name: tokenInfo.name,
+          symbol: tokenInfo.symbol,
+          version: tokenInfo.version,
+        });
+      }
+    }
+
+    // Build data inputs/outputs for fee calculation
+    const dataInputs: IDataInput[] = [];
+    for (const input of this.inputs) {
+      const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
+      if (utxo) {
+        dataInputs.push({
+          txId: input.txId,
+          index: input.index,
+          value: utxo.value,
+          token: utxo.tokenId,
+          address: utxo.address,
+          authorities: utxo.authorities,
+        });
+      }
+    }
+
+    const dataOutputs: IDataOutputWithToken[] = [];
+    for (const output of this.outputs) {
+      if (output.type === OutputType.DATA) {
+        dataOutputs.push({
+          type: 'data',
+          data: Buffer.from(output.data!).toString('hex'),
+          value: tokensUtils.getDataScriptOutputFee(),
+          authorities: 0n,
+          token: NATIVE_TOKEN_UID,
+        });
+      } else {
+        const outputType = helpers.getOutputTypeFromAddress(
+          output.address!,
+          this.wallet.network
+        ) as 'p2pkh' | 'p2sh';
+        dataOutputs.push({
+          type: outputType,
+          value: output.value,
+          token: output.token || NATIVE_TOKEN_UID,
+          address: output.address!,
+          timelock: output.timelock || null,
+          authorities: 0n,
+        });
+      }
+    }
+
+    const fee = await Fee.calculate(dataInputs, dataOutputs, tokenDataMap);
+    const headers: Header[] = [];
+
+    if (fee > 0n) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
+
+      let htrInputAmount = 0n;
+      for (const input of dataInputs) {
+        if (input.token === NATIVE_TOKEN_UID) {
+          htrInputAmount += input.value;
+        }
+      }
+
+      // Check how much HTR we need for outputs
+      const htrOutputAmount = tokenAmountMap[NATIVE_TOKEN_UID] ?? 0n;
+
+      const htrNeeded = htrOutputAmount + fee;
+      if (htrInputAmount < htrNeeded) {
+        // Need additional HTR inputs for fee
+        const additionalHtrNeeded = htrNeeded - htrInputAmount;
+        let htrUtxos: Utxo[] = [];
+        let htrChange: bigint | undefined;
+
+        try {
+          const result = await this.wallet.getUtxosForAmount(additionalHtrNeeded, {
+            token: NATIVE_TOKEN_UID,
+          });
+          htrUtxos = result.utxos;
+          htrChange = result.changeAmount;
+        } catch (err) {
+          if (err instanceof Error) {
+            throw new SendTxError(err.message);
+          }
+          throw err;
+        }
+
+        if (htrUtxos.length === 0) {
+          throw new SendTxError('Insufficient amount of HTR to fill the amount.');
+        }
+
+        for (const utxo of htrUtxos) {
+          this.inputs.push({ txId: utxo.txId, index: utxo.index });
+          utxosAddressPath.push(utxo.addressPath);
+        }
+
+        // Add change output if needed
+        if (htrChange && htrChange > 0n) {
+          const changeAddress =
+            this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+          this.outputs.push({
+            address: changeAddress,
+            value: htrChange,
+            token: NATIVE_TOKEN_UID,
+            type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+          });
+          // Shuffle outputs after adding change
+          this.outputs = shuffle(this.outputs);
+        }
+      }
+    }
+
     // Transform input data in Input model object
     const inputsObj: Input[] = [];
     for (const i of this.inputs) {
@@ -375,6 +585,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // Create the transaction object, add weight and timestamp
     this.transaction = new Transaction(inputsObj, outputsObj);
     this.transaction.tokens = tokens;
+    this.transaction.headers = headers;
 
     this.emit('prepare-tx-end', this.transaction);
     return { transaction: this.transaction, utxosAddressPath };
