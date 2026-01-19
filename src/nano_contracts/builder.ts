@@ -264,7 +264,7 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
+    const utxoOptions: { token: string; filter_address?: string } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
