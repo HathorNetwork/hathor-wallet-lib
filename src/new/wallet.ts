@@ -93,7 +93,10 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 import Address from '../models/address';
+import Transaction from '../models/transaction';
 import {
+  IWalletInputInfo,
+  ISignature,
   GeneralTokenInfoSchema,
   GetAvailableUtxosOptions,
   GetBalanceFullnodeFacadeReturnType,
@@ -630,56 +633,49 @@ class HathorWallet extends EventEmitter {
   /**
    * Sign and return all signatures of the inputs belonging to this wallet.
    *
-   * @param {string} txHex hex representation of the transaction.
-   * @param {string} pin PIN to decrypt the private key
+   * @param txHex - Hex representation of the transaction
+   * @param pin - PIN to decrypt the private key
    *
-   * @async
-   * @return {Promise<string>} serialized P2SHSignature data
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @returns Serialized P2SHSignature data
    */
-  async getAllSignatures(txHex: any, pin: any): Promise<any> {
+  async getAllSignatures(txHex: string, pin: string): Promise<string> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getAllSignatures');
     }
-    const tx: any = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const accessData: any = await this.storage.getAccessData();
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const accessData = await this.storage.getAccessData();
     if (accessData === null) {
       throw new Error('Wallet is not initialized');
     }
 
-    const signatures: any = {};
+    const signatures: Record<number, string> = {};
 
     for (const signatureInfo of await this.getSignatures(tx, { pinCode: pin })) {
-      const { inputIndex, signature }: any = signatureInfo;
+      const { inputIndex, signature } = signatureInfo;
       signatures[inputIndex] = signature;
     }
 
-    const p2shSig: any = new P2SHSignature(accessData.multisigData.pubkey, signatures);
+    const p2shSig = new P2SHSignature(accessData.multisigData!.pubkey!, signatures);
     return p2shSig.serialize();
   }
 
   /**
    * Assemble transaction from hex and collected p2sh_signatures.
    *
-   * @param {string} txHex hex representation of the transaction.
-   * @param {Array} signatures Array of serialized p2sh_signatures (string).
+   * @param txHex - Hex representation of the transaction
+   * @param signatures - Array of serialized p2sh_signatures (string)
    *
-   * @return {Promise<Transaction>} with input data created from the signatures.
+   * @returns Transaction with input data created from the signatures
    *
    * @throws {Error} if there are not enough signatures for an input
-   *
-   * @memberof HathorWallet
-   * @inner
    */
-  async assemblePartialTransaction(txHex: any, signatures: any): Promise<any> {
-    const tx: any = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const accessData: any = await this.storage.getAccessData();
+  async assemblePartialTransaction(txHex: string, signatures: string[]): Promise<Transaction> {
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const accessData = await this.storage.getAccessData();
     if (accessData === null) {
       throw new Error('Wallet was not started');
     }
-    const { multisigData }: any = accessData;
+    const { multisigData } = accessData;
     if (!multisigData) {
       throw new Error('Cannot call this method from a p2pkh wallet');
     }
@@ -693,7 +689,7 @@ class HathorWallet extends EventEmitter {
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address);
+      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -704,7 +700,7 @@ class HathorWallet extends EventEmitter {
         multisigData.numSignatures,
         storageAddress.bip32AddressIndex
       );
-      const sigs = [];
+      const sigs: Buffer[] = [];
       for (const p2shSig of p2shSignatures) {
         try {
           sigs.push(hexToBuffer(p2shSig.signatures[index]));
@@ -1708,20 +1704,19 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Returns a base64 encoded signed message with an address' private key given an
-   * andress index
+   * address index
    *
-   * @param {string} message - The message to sign
-   * @param {number} index - The address index to sign with
-   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param message - The message to sign
+   * @param index - The address index to sign with
+   * @param pinCode - The PIN used to encrypt data in accessData
    *
-   * @return {Promise} Promise that resolves with the signed message
-   *
-   * @memberof HathorWallet
-   * @inner
+   * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: any, index: any, pinCode: any): Promise<any> {
-    const addressHDPrivKey: any = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage: any = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
+    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      privateKey: unknown;
+    };
+    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
   }
@@ -2707,25 +2702,21 @@ class HathorWallet extends EventEmitter {
   /**
    * Identify all inputs from the loaded wallet
    *
-   * @param {Transaction} tx The transaction
+   * @param tx - The transaction
    *
-   * @returns {Promise<{
-   * inputIndex: number,
-   * addressIndex: number,
-   * addressPath: string,
-   * }[]>} List of indexes and their associated address index
+   * @returns List of indexes and their associated address index
    */
-  async getWalletInputInfo(tx: any): Promise<any> {
-    const walletInputs: any = [];
+  async getWalletInputInfo(tx: Transaction): Promise<Array<IWalletInputInfo>> {
+    const walletInputs: IWalletInputInfo[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const addressInfo: any = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address
+      const addressInfo = await this.storage.getAddressInfo(
+        spentTx.outputs[input.index].decoded.address!
       );
       if (addressInfo === null) {
         continue;
       }
-      const addressPath: any = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
+      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
       walletInputs.push({
         inputIndex: index,
         addressIndex: addressInfo.bip32AddressIndex,
@@ -2739,30 +2730,25 @@ class HathorWallet extends EventEmitter {
   /**
    * Get signatures for all inputs of the loaded wallet.
    *
-   * @param {Transaction} tx The transaction to be signed
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
+   * @param tx - The transaction to be signed
+   * @param options - Options for getting signatures
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
    *
-   * @async
-   * @returns {Promise<{
-   * inputIndex: number,
-   * addressIndex: number,
-   * addressPath: string,
-   * signature: string,
-   * pubkey: string,
-   * }>} Input and signature information
+   * @returns Input and signature information
    */
-  async getSignatures(tx: any, { pinCode = null }: any = {}): Promise<any> {
+  async getSignatures(
+    tx: Transaction,
+    { pinCode = null }: { pinCode?: string | null } = {}
+  ): Promise<Array<ISignature>> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
-    const pin: any = pinCode || this.pinCode;
+    const pin = pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const signatures: any = await this.storage.getTxSignatures(tx, pin);
-    const sigInfoArray: any = [];
+    const signatures = await this.storage.getTxSignatures(tx, pin);
+    const sigInfoArray: ISignature[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
@@ -2776,19 +2762,18 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Sign all inputs of the given transaction.
-   *   OBS: only for P2PKH wallets.
+   * OBS: only for P2PKH wallets.
    *
-   * @param {Transaction} tx The transaction to be signed
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
+   * @param tx - The transaction to be signed
+   * @param options - Options for signing
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
    *
-   * @returns {Promise<Transaction>} The signed transaction
+   * @returns The signed transaction
    */
-  async signTx(tx: any, options: any = {}): Promise<any> {
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
     for (const sigInfo of await this.getSignatures(tx, options)) {
-      const { signature, pubkey, inputIndex }: any = sigInfo;
-      const inputData: any = transactionUtils.createInputData(
+      const { signature, pubkey, inputIndex } = sigInfo;
+      const inputData = transactionUtils.createInputData(
         Buffer.from(signature, 'hex'),
         Buffer.from(pubkey, 'hex')
       );
