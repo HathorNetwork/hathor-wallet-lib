@@ -47,6 +47,58 @@ const address = await Promise.resolve(wallet.getCurrentAddress());
 | `getFullHistory()` | `Record<string, IHistoryTx>` | N/A (throws) | `TransactionFullObject[]` |
 | `getAddressPrivKey()` | `Promise<unknown>` | `Promise<bitcore.HDPrivateKey>` | `Promise<bitcore.PrivateKey>` |
 
+#### 1.2.1 Detailed Type Property Comparison
+
+**Address Return Types:**
+
+| Property | `GetCurrentAddressFullnodeFacadeReturnType` (HathorWallet) | `AddressInfoObject` (WalletServiceWallet) |
+|----------|-----------------------------------------------------------|-------------------------------------------|
+| `address` | `string` | `string` |
+| `index` | `number \| null` | `number` |
+| `addressPath` | `string` | `string` |
+| `info` | ❌ Not present | `string \| undefined` (optional) |
+
+**Authority UTXO Return Types:**
+
+| Property | `IUtxo` (HathorWallet) | `AuthorityTxOutput` (WalletServiceWallet) |
+|----------|------------------------|-------------------------------------------|
+| `txId` | ✅ `string` | ✅ `string` |
+| `index` | ✅ `number` | ✅ `number` |
+| `address` | ✅ `string` | ✅ `string` |
+| `authorities` | ✅ `OutputValueType` | ✅ `OutputValueType` |
+| `token` | ✅ `string` | ❌ Not present |
+| `value` | ✅ `OutputValueType` | ❌ Not present |
+| `timelock` | ✅ `number \| null` | ❌ Not present |
+| `type` | ✅ `number` (tx version byte) | ❌ Not present |
+| `height` | ✅ `number \| null` (block outputs) | ❌ Not present |
+
+**History Return Types:**
+
+| Property | `IHistoryTx` (HathorWallet) | `TransactionFullObject` (Interface declares) |
+|----------|-----------------------------|--------------------------------------------|
+| `tx_id` | ✅ `string` | ✅ `string` |
+| `version` | ✅ `number` | ✅ `number` |
+| `timestamp` | ✅ `number` | ✅ `number` |
+| `is_voided` | ✅ `boolean` | ✅ `boolean` |
+| `inputs` | ✅ `IHistoryInput[]` | ✅ `Input[]` |
+| `outputs` | ✅ `IHistoryOutput[]` | ✅ `Output[]` |
+| `parents` | ✅ `string[]` | ✅ `string[]` |
+| `weight` | ✅ `number` | ❌ Not present |
+| `signalBits` | ✅ `number` (optional) | ❌ Not present |
+| `nonce` | ✅ `number` (optional) | ❌ Not present |
+| `token_name` | ✅ `string` (optional, create token) | ❌ Not present |
+| `token_symbol` | ✅ `string` (optional, create token) | ❌ Not present |
+| `token_version` | ✅ `TokenVersion` (optional) | ❌ Not present |
+| `tokens` | ✅ `string[]` (optional) | ❌ Not present |
+| `height` | ✅ `number` (optional) | ❌ Not present |
+| `processingStatus` | ✅ `TxHistoryProcessingStatus` (optional) | ❌ Not present |
+| `nc_id` | ✅ `string` (optional, nano contract) | ❌ Not present |
+| `nc_blueprint_id` | ✅ `string` (optional, nano contract) | ❌ Not present |
+| `nc_method` | ✅ `string` (optional, nano contract) | ❌ Not present |
+| `nc_args` | ✅ `string` (optional, nano contract) | ❌ Not present |
+
+**Note:** HathorWallet's `getFullHistory()` returns `Record<string, IHistoryTx>` (keyed by tx_id), not an array. The interface declares `TransactionFullObject[]` which is neither format.
+
 ---
 
 ## Part 2: Methods Not Implemented
