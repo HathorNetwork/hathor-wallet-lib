@@ -2997,6 +2997,23 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
+
+  /**
+   * Check if the wallet has transactions outside the first address
+   *
+   * This is useful to determine if single-address mode can be enabled for the wallet.
+   * Returns true if there are transactions on addresses with index > 0.
+   *
+   * @returns {Promise<boolean>} True if wallet has transactions on non-first addresses
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async hasTxOutsideFirstAddress(): Promise<boolean> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.getHasTxOutsideFirstAddress(this);
+    return data.hasTransactions;
+  }
 }
 
 export default HathorWalletServiceWallet;

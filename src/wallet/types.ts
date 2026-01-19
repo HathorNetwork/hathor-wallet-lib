@@ -476,6 +476,7 @@ export interface IHathorWallet {
   }>;
   getNetworkObject();
   getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
+  hasTxOutsideFirstAddress(): Promise<boolean>;
   pinCode?: string | null;
   storage: IStorage;
 }
@@ -777,4 +778,9 @@ export interface FullNodeTxConfirmationDataResponse {
   accumulated_bigger: boolean;
   stop_value: number;
   confirmation_level: number;
+}
+
+export interface HasTxOutsideFirstAddressResponseData {
+  success: boolean;
+  hasTransactions: boolean;
 }
