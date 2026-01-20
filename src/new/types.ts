@@ -476,3 +476,14 @@ export interface GetCurrentAddressFullnodeFacadeReturnType {
   index: number | null;
   addressPath: string;
 }
+
+export interface IWalletInputInfo {
+  inputIndex: number;
+  addressIndex: number;
+  addressPath: string;
+}
+
+export interface ISignature extends IWalletInputInfo {
+  signature: string;
+  pubkey: string;
+}

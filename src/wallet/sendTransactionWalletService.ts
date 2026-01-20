@@ -13,6 +13,7 @@ import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
 import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
 import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
@@ -407,9 +408,19 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
     const tokenData = tokens.indexOf(output.token) > -1 ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData };
-    const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
-    const p2pkhScript = p2pkh.createScript();
-    return new Output(output.value, p2pkhScript, outputOptions);
+
+    // Create the appropriate script based on address type (P2PKH or P2SH)
+    const addressType = address.getType();
+    let script: Buffer;
+    if (addressType === 'p2pkh') {
+      const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
+      script = p2pkh.createScript();
+    } else {
+      const p2sh = new P2SH(address, { timelock: output.timelock || null });
+      script = p2sh.createScript();
+    }
+
+    return new Output(output.value, script, outputOptions);
   }
 
   /**

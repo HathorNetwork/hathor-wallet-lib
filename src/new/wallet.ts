@@ -63,10 +63,10 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
-  IWalletAccessData,
-  IMultisigData,
   IIndexLimitAddressScanPolicy,
   IHistoryTx,
+  IWalletAccessData,
+  IMultisigData,
   OutputValueType,
   IUtxo,
   EcdsaTxSign,
@@ -102,6 +102,8 @@ import {
   GetTokenDetailsFullnodeFacadeReturnType,
   GetTxByIdFullnodeFacadeReturnType,
   GetCurrentAddressFullnodeFacadeReturnType,
+  IWalletInputInfo,
+  ISignature,
 } from './types';
 import Queue from '../models/queue';
 import {
@@ -127,7 +129,13 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
-import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
+import {
+  FullNodeTxApiResponse,
+  TransactionAccWeightResponse,
+  GraphvizNeighboursDotResponse,
+  GraphvizNeighboursErrorResponse,
+  GraphvizNeighboursResponse,
+} from '../api/schemas/txApi';
 import WalletConnection from './connection';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -146,6 +154,25 @@ const ConnectionState = {
   CONNECTED: 2,
 };
 
+/**
+ * This is a Wallet that is supposed to be simple to be used by a third-party app.
+ *
+ * This class handles all the details of syncing, including receiving the same transaction
+ * multiple times from the server. It also keeps the balance of the tokens updated.
+ *
+ * It has the following states:
+ * - CLOSED: When it is disconnected from the server.
+ * - CONNECTING: When it is connecting to the server.
+ * - SYNCING: When it has connected and is syncing the transaction history.
+ * - READY: When it is ready to be used.
+ *
+ * You can subscribe for the following events:
+ * - state: Fired when the state of the Wallet changes.
+ * - new-tx: Fired when a new tx arrives.
+ * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
+ * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
+ *                          one for each request sent to the server.
+ */
 class HathorWallet extends EventEmitter {
   // Core dependencies
   storage: IStorage;
@@ -1131,7 +1158,7 @@ class HathorWallet extends EventEmitter {
     for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex!);
-      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object. Why?
+      // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object.
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -1176,7 +1203,6 @@ class HathorWallet extends EventEmitter {
 
     return transactionUtils.selectUtxos(
       // XXX: Only the `value` property of the UTXO is used in selectUtxos, so the cast is safe
-      // for this stage of the ts refactor.
       utxos.filter(utxo => utxo.authorities === 0n) as unknown as Utxo[],
       amount
     );
@@ -1321,34 +1347,6 @@ class HathorWallet extends EventEmitter {
       utxos,
     };
   }
-
-  /**
-   * @typedef DecodedTx
-   * @property {string} tx_id
-   * @property {number} version
-   * @property {number} weight
-   * @property {number} timestamp
-   * @property {boolean} is_voided
-   * @property {{
-   *   value: OutputValueType,
-   *   token_data: number,
-   *   script: string,
-   *   decoded: { type: string, address: string, timelock: number|null },
-   *   token: string,
-   *   tx_id: string,
-   *   index: number
-   * }[]} inputs
-   * @property {{
-   *   value: OutputValueType,
-   *   token_data: number,
-   *   script: string,
-   *   decoded: { type: string, address: string, timelock: number|null },
-   *   token: string,
-   *   spent_by: string|null,
-   *   selected_as_input?: boolean
-   * }[]} outputs
-   * @property {string[]} parents
-   */
 
   /**
    * Get full wallet history (same as old method to be used for compatibility)
@@ -2671,10 +2669,8 @@ class HathorWallet extends EventEmitter {
    *
    * @returns List of indexes and their associated address index
    */
-  async getWalletInputInfo(
-    tx: Transaction
-  ): Promise<Array<{ inputIndex: number; addressIndex: number; addressPath: string }>> {
-    const walletInputs: { inputIndex: number; addressIndex: number; addressPath: string }[] = [];
+  async getWalletInputInfo(tx: Transaction): Promise<Array<IWalletInputInfo>> {
+    const walletInputs: IWalletInputInfo[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(
@@ -2706,15 +2702,7 @@ class HathorWallet extends EventEmitter {
   async getSignatures(
     tx: Transaction,
     { pinCode = null }: { pinCode?: string | null } = {}
-  ): Promise<
-    Array<{
-      inputIndex: number;
-      addressIndex: number;
-      addressPath: string;
-      signature: string;
-      pubkey: string;
-    }>
-  > {
+  ): Promise<Array<ISignature>> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
@@ -2723,13 +2711,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const signatures = await this.storage.getTxSignatures(tx, pin);
-    const sigInfoArray: {
-      inputIndex: number;
-      addressIndex: number;
-      addressPath: string;
-      signature: string;
-      pubkey: string;
-    }[] = [];
+    const sigInfoArray: ISignature[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
@@ -2835,22 +2817,23 @@ class HathorWallet extends EventEmitter {
    * @param maxLevel Max level to render
    *
    * @returns The graphviz digraph
-   * FIXME: Need to define the response from graphviz request
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async graphvizNeighborsQuery(
     txId: string,
     graphType: string,
     maxLevel: number
-  ): Promise<unknown> {
-    const graphvizData = await new Promise<unknown>((resolve, reject) => {
-      txApi
-        .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
-        .then(() => reject(new Error('API client did not use the callback')))
-        .catch(err => reject(err));
-    });
+  ): Promise<GraphvizNeighboursDotResponse> {
+    const graphvizData: GraphvizNeighboursResponse = await new Promise<GraphvizNeighboursResponse>(
+      (resolve, reject) => {
+        txApi
+          .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
+          .then(() => reject(new Error('API client did not use the callback')))
+          .catch(err => reject(err));
+      }
+    );
 
-    const isGraphvizError = (d: unknown): d is { success: boolean; message: string } =>
+    const isGraphvizError = (d: unknown): d is GraphvizNeighboursErrorResponse =>
       typeof d === 'object' && d !== null && 'success' in d && typeof d.success === 'boolean';
 
     // The response will either be a string with the graphviz data or an object
@@ -2862,7 +2845,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(`Invalid transaction ${txId}`);
     }
 
-    return graphvizData;
+    return graphvizData as GraphvizNeighboursDotResponse;
   }
 
   /**
