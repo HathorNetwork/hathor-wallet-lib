@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { NATIVE_TOKEN_UID } from '../../constants';
-import { TokenVersion } from '../../types';
+import { AuthorityType, TokenVersion } from '../../types';
 
 const TEMPLATE_REFERENCE_NAME_RE = /[\w\d]+/;
 const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
@@ -111,7 +111,7 @@ export const UtxoSelectInstruction = z.object({
 export const AuthoritySelectInstruction = z.object({
   type: z.literal('input/authority'),
   position: z.number().default(-1),
-  authority: z.enum(['mint', 'melt']),
+  authority: z.nativeEnum(AuthorityType),
   token: TemplateRef.or(CustomTokenSchema),
   count: TemplateRef.or(CountSchema.default(1)),
   address: TemplateRef.or(AddressSchema.optional()),
@@ -124,7 +124,7 @@ export const RawOutputInstruction = z.object({
   script: TemplateRef.or(z.string().regex(/^([a-fA-F0-9]{2})+$/)),
   token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
-  authority: z.enum(['mint', 'melt']).optional(),
+  authority: TemplateRef.or(z.nativeEnum(AuthorityType).optional()),
   useCreatedToken: z.boolean().default(false),
 });
 
@@ -144,7 +144,7 @@ export const AuthorityOutputInstruction = z.object({
   position: z.number().default(-1),
   count: TemplateRef.or(CountSchema.default(1)),
   token: TemplateRef.or(CustomTokenSchema.optional()),
-  authority: z.enum(['mint', 'melt']),
+  authority: z.nativeEnum(AuthorityType),
   address: TemplateRef.or(AddressSchema),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
   checkAddress: z.boolean().optional(),
@@ -207,7 +207,7 @@ export const SetVarGetOracleSignedDataOpts = z.object({
 export const SetVarGetWalletBalanceOpts = z.object({
   method: z.literal('get_wallet_balance'),
   token: TemplateRef.or(TokenSchema.default('00')),
-  authority: z.enum(['mint', 'melt']).optional(),
+  authority: z.nativeEnum(AuthorityType).optional(),
 });
 
 export const SetVarCallArgs = z.discriminatedUnion('method', [
@@ -247,7 +247,7 @@ export const NanoGrantAuthorityAction = z.object({
   action: z.literal('grant_authority'),
   token: TemplateRef.or(CustomTokenSchema),
   useCreatedToken: z.boolean().default(false),
-  authority: z.enum(['mint', 'melt']),
+  authority: z.nativeEnum(AuthorityType),
   address: TemplateRef.or(AddressSchema.optional()),
   createAnotherTo: TemplateRef.or(AddressSchema.optional()),
   skipSelection: z.boolean().default(false),
@@ -256,7 +256,7 @@ export const NanoGrantAuthorityAction = z.object({
 export const NanoAcquireAuthorityAction = z.object({
   action: z.literal('acquire_authority'),
   token: TemplateRef.or(CustomTokenSchema),
-  authority: z.enum(['mint', 'melt']),
+  authority: z.nativeEnum(AuthorityType),
   address: TemplateRef.or(AddressSchema.optional()),
   skipOutputs: z.boolean().default(false),
 });
