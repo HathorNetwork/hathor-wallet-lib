@@ -63,19 +63,16 @@ import {
   AddressScanPolicyData,
   ITokenData,
   TokenVersion,
-  FullNodeVersionData,
   IIndexLimitAddressScanPolicy,
   IHistoryTx,
   IWalletAccessData,
   IMultisigData,
-  IIndexLimitAddressScanPolicy,
-  IHistoryTx,
   OutputValueType,
   IUtxo,
   EcdsaTxSign,
   ApiVersion,
 } from '../types';
-import { Utxo } from '../wallet/types';
+import { FullNodeVersionData, Utxo } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
 import {
   HathorWalletConstructorParams,
@@ -105,6 +102,8 @@ import {
   GetTxHistoryFullnodeFacadeReturnType,
   GetTokenDetailsFullnodeFacadeReturnType,
   GetTxByIdFullnodeFacadeReturnType,
+  IWalletInputInfo,
+  ISignature,
 } from './types';
 import Queue from '../models/queue';
 import {
@@ -130,31 +129,14 @@ import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/tr
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
-import { FullNodeTxApiResponse, TransactionAccWeightResponse } from '../api/schemas/txApi';
-import WalletConnection from './connection';
-import Transaction from '../models/transaction';
-import {
-  IWalletInputInfo,
-  ISignature,
-  GeneralTokenInfoSchema,
-  GetAvailableUtxosOptions,
-  GetBalanceFullnodeFacadeReturnType,
-  GetTxHistoryFullnodeFacadeReturnType,
-  GetTokenDetailsFullnodeFacadeReturnType,
-  GetTxByIdFullnodeFacadeReturnType,
-  GetUtxosForAmountOptions,
-  HathorWalletConstructorParams,
-  UtxoDetails,
-  UtxoOptions,
-} from './types';
-import { Utxo } from '../wallet/types';
 import {
   FullNodeTxApiResponse,
+  TransactionAccWeightResponse,
   GraphvizNeighboursDotResponse,
   GraphvizNeighboursErrorResponse,
   GraphvizNeighboursResponse,
-  TransactionAccWeightResponse,
 } from '../api/schemas/txApi';
+import WalletConnection from './connection';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2844,7 +2826,7 @@ class HathorWallet extends EventEmitter {
     graphType: string,
     maxLevel: number
   ): Promise<GraphvizNeighboursDotResponse> {
-    const graphvizData: GraphvizNeighboursResponse = await new Promise<unknown>(
+    const graphvizData: GraphvizNeighboursResponse = await new Promise<GraphvizNeighboursResponse>(
       (resolve, reject) => {
         txApi
           .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
