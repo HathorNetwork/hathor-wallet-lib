@@ -136,6 +136,25 @@ const ConnectionState = {
   CONNECTED: 2,
 };
 
+/**
+ * This is a Wallet that is supposed to be simple to be used by a third-party app.
+ *
+ * This class handles all the details of syncing, including receiving the same transaction
+ * multiple times from the server. It also keeps the balance of the tokens updated.
+ *
+ * It has the following states:
+ * - CLOSED: When it is disconnected from the server.
+ * - CONNECTING: When it is connecting to the server.
+ * - SYNCING: When it has connected and is syncing the transaction history.
+ * - READY: When it is ready to be used.
+ *
+ * You can subscribe for the following events:
+ * - state: Fired when the state of the Wallet changes.
+ * - new-tx: Fired when a new tx arrives.
+ * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
+ * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
+ *                          one for each request sent to the server.
+ */
 class HathorWallet extends EventEmitter {
   // Core dependencies
   storage: IStorage;
