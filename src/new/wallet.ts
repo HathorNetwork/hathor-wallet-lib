@@ -742,6 +742,22 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Check if the wallet has any transactions on addresses with index > 0.
+   * This is used to determine if a wallet can use single-address mode.
+   *
+   * @returns true if there are transactions on addresses other than the first one
+   * @memberof HathorWallet
+   */
+  async hasTxOutsideFirstAddress(): Promise<boolean> {
+    for await (const address of this.storage.getAllAddresses()) {
+      if (address.bip32AddressIndex > 0 && address.numTransactions > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Get address from specific derivation index
    *
    * @returns Address
