@@ -106,9 +106,13 @@ import {
   GetTxByIdFullnodeFacadeReturnType,
   GetUtxosForAmountOptions,
   HathorWalletConstructorParams,
+  GetAuthorityOptions,
+  SendManyOutputsOptions,
+  ProposedOutput,
+  CreateTokenOptions,
+  CreateNFTOptions,
   UtxoDetails,
   UtxoOptions,
-  GetAuthorityOptions,
 } from './types';
 import { Utxo } from '../wallet/types';
 import {
@@ -131,65 +135,6 @@ const ConnectionState = {
   CONNECTING: 1,
   CONNECTED: 2,
 };
-
-/**
- * This is a Wallet that is supposed to be simple to be used by a third-party app.
- *
- * This class handles all the details of syncing, including receiving the same transaction
- * multiple times from the server. It also keeps the balance of the tokens updated.
- *
- * It has the following states:
- * - CLOSED: When it is disconnected from the server.
- * - CONNECTING: When it is connecting to the server.
- * - SYNCING: When it has connected and is syncing the transaction history.
- * - READY: When it is ready to be used.
- *
- * You can subscribe for the following events:
- * - state: Fired when the state of the Wallet changes.
- * - new-tx: Fired when a new tx arrives.
- * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
- * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
- *                          one for each request sent to the server.
- */
-
-interface ProposedOutput {
-  address: string;
-  value: OutputValueType;
-  timelock?: number;
-  token: string;
-}
-
-interface ProposedInput {
-  txId: string;
-  index: number;
-  token: string;
-}
-
-interface SendManyOutputsOptions {
-  inputs?: ProposedInput[];
-  changeAddress?: string | null;
-  startMiningTx?: boolean;
-  pinCode?: string | null;
-}
-
-interface CreateTokenOptions {
-  address?: string | null;
-  changeAddress?: string | null;
-  startMiningTx?: boolean;
-  pinCode?: string | null;
-  createMint?: boolean;
-  mintAuthorityAddress?: string | null;
-  allowExternalMintAuthorityAddress?: boolean;
-  createMelt?: boolean;
-  meltAuthorityAddress?: string | null;
-  allowExternalMeltAuthorityAddress?: boolean;
-  data?: string[] | null;
-  signTx?: boolean;
-  isCreateNFT?: boolean;
-  tokenVersion?: TokenVersion;
-}
-
-type CreateNFTOptions = Omit<CreateTokenOptions, 'data' | 'isCreateNFT'>;
 
 class HathorWallet extends EventEmitter {
   // Core dependencies
