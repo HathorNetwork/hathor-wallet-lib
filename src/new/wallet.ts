@@ -113,6 +113,7 @@ import {
   CreateNFTOptions,
   UtxoDetails,
   UtxoOptions,
+  SendTransactionFullnodeOptions,
 } from './types';
 import { Utxo } from '../wallet/types';
 import {
@@ -1508,7 +1509,7 @@ class HathorWallet extends EventEmitter {
   async sendTransactionInstance(
     address: string,
     value: OutputValueType,
-    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+    options: SendTransactionFullnodeOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
@@ -1538,7 +1539,7 @@ class HathorWallet extends EventEmitter {
   async sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+    options: SendTransactionFullnodeOptions = {}
   ): Promise<Transaction | null> {
     const sendTx = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
