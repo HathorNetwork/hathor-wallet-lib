@@ -13,6 +13,7 @@ from hathor import (
     Address,
     Amount,
     BlueprintId,
+    CallerId,
     ContractId,
     NCDepositAction,
     NCFail,
@@ -45,6 +46,8 @@ class FullBlueprint(Blueprint):
     contract_id: ContractId
 
     blueprint_id: BlueprintId
+
+    caller_id: CallerId
 
     attr_str: str
 
@@ -86,7 +89,7 @@ class FullBlueprint(Blueprint):
     def initialize(self, ctx: Context, vertex: VertexId, amount: Amount,
                    address: Address, tx_output_script: TxOutputScript,
                    token_uid: TokenUid, timestamp: Timestamp, contract_id: ContractId,
-                   blueprint_id: BlueprintId, attr_str: str,
+                   blueprint_id: BlueprintId, caller_id: CallerId, attr_str: str,
                    attr_int: int, attr_bytes: bytes, attr_bool: bool, attr_set: set[str],
                    attr_tuple: tuple[int, str, int], attr_list: list[bytes]) -> None:
 
@@ -98,6 +101,7 @@ class FullBlueprint(Blueprint):
         self.timestamp = timestamp
         self.contract_id = contract_id
         self.blueprint_id = blueprint_id
+        self.caller_id = caller_id
         self.attr_str = attr_str
         self.attr_int = attr_int
         self.attr_bytes = attr_bytes
@@ -126,6 +130,10 @@ class FullBlueprint(Blueprint):
     @public
     def set_amount(self, ctx: Context, value: Amount) -> None:
         self.amount = value
+
+    @public
+    def set_caller_id(self, ctx: Context, value: CallerId) -> None:
+        self.caller_id = value
 
     @public
     def set_dict_address(self, ctx: Context, key: Address, value: Amount) -> None:
