@@ -126,8 +126,8 @@ export interface NanoContractBlueprintInformationAPIResponse {
   attributes: Map<string, string>;
   // Public methods available
   public_methods: Map<string, MethodInfo>;
-  // Private methods available
-  private_methods: Map<string, MethodInfo>;
+  // View methods available
+  view_methods: Map<string, MethodInfo>;
 }
 
 export interface NanoContractHistoryAPIResponse {
