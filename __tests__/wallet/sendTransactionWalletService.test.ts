@@ -1721,4 +1721,98 @@ describe('prepareTxData - Fee Tokens', () => {
     // FeeHeader should be present
     expect(txData.headers).toHaveLength(1);
   });
+
+  it('should throw SendTxError when no HTR UTXOs available for fee payment', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // Return empty UTXOs when trying to get HTR for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        return { utxos: [], changeAmount: 0n };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Verify that the error is thrown when no HTR UTXOs are available for fee payment
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+      'Insufficient amount of HTR to fill the amount.'
+    );
+  });
+
+  it('should throw SendTxError when getUtxosForAmount throws during fee payment HTR selection', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // Throw an error when trying to get HTR UTXOs for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        throw new Error('Connection timeout');
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Verify that the error is caught and re-thrown as SendTxError with the original message
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow('Connection timeout');
+  });
 });
