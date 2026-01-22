@@ -38,6 +38,7 @@ import {
   OutputValueType,
   ILogger,
   getDefaultLogger,
+  AuthorityType,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import {
@@ -622,7 +623,7 @@ export class Storage implements IStorage {
    */
   async matchTokenBalance(
     token: string,
-    balance: Record<'funds' | 'mint' | 'melt', OutputValueType>,
+    balance: Record<'funds' | AuthorityType, OutputValueType>,
     { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());

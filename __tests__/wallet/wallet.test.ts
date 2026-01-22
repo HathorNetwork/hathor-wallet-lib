@@ -41,7 +41,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { IHistoryTx, IWalletAccessData, TokenVersion } from '../../src/types';
+import { AuthorityType, IHistoryTx, IWalletAccessData, TokenVersion } from '../../src/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 import { Fee } from '../../src/utils/fee';
 
@@ -168,7 +168,7 @@ const setupFeeTokenMocks = {
     seed: string,
     network: Network,
     tokenId: string,
-    authorityType: 'mint' | 'melt',
+    authorityType: AuthorityType,
     addresses: string[],
     tokenName = 'Fee Token',
     tokenSymbol = 'FBT'
@@ -231,7 +231,7 @@ const setupFeeTokenMocks = {
     seed: string,
     network: Network,
     tokenId: string,
-    authorityType: 'mint' | 'melt',
+    authorityType: AuthorityType,
     addresses: string[]
   ) => {
     const authorityMask = authorityType === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;

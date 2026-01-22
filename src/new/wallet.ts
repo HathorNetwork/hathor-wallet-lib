@@ -29,9 +29,9 @@ import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import {
   NATIVE_TOKEN_UID,
-  P2SH_ACCT_PATH,
-  P2PKH_ACCT_PATH,
   ON_CHAIN_BLUEPRINTS_VERSION,
+  P2PKH_ACCT_PATH,
+  P2SH_ACCT_PATH,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
@@ -55,33 +55,34 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import {
-  SCANNING_POLICY,
-  TxHistoryProcessingStatus,
-  WalletType,
-  HistorySyncMode,
-  WalletState,
-  getDefaultLogger,
-  IStorage,
-  ILogger,
   AddressScanPolicyData,
-  ITokenData,
-  TokenVersion,
+  AuthorityType,
   FullNodeVersionData,
-  IIndexLimitAddressScanPolicy,
+  getDefaultLogger,
+  HistorySyncMode,
   IHistoryTx,
-  IWalletAccessData,
+  IIndexLimitAddressScanPolicy,
+  ILogger,
   IMultisigData,
+  IStorage,
+  ITokenData,
   IUtxo,
+  IWalletAccessData,
   OutputValueType,
+  SCANNING_POLICY,
+  TokenVersion,
+  TxHistoryProcessingStatus,
+  WalletState,
+  WalletType,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
-  scanPolicyStartAddresses,
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
   processMetadataChanged,
+  scanPolicyStartAddresses,
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -92,25 +93,25 @@ import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blu
 import { NanoContractVertexType } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
-import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
 import {
-  IWalletInputInfo,
-  ISignature,
+  CreateNFTOptions,
+  CreateTokenOptions,
   GeneralTokenInfoSchema,
+  GetAuthorityOptions,
   GetAvailableUtxosOptions,
   GetBalanceFullnodeFacadeReturnType,
-  GetTxHistoryFullnodeFacadeReturnType,
   GetTokenDetailsFullnodeFacadeReturnType,
   GetTxByIdFullnodeFacadeReturnType,
+  GetTxHistoryFullnodeFacadeReturnType,
   GetUtxosForAmountOptions,
   HathorWalletConstructorParams,
-  GetAuthorityOptions,
-  SendManyOutputsOptions,
+  ISignature,
+  IWalletInputInfo,
   ProposedOutput,
-  CreateTokenOptions,
-  CreateNFTOptions,
+  SendManyOutputsOptions,
   UtxoDetails,
   UtxoOptions,
   SendTransactionFullnodeOptions,
@@ -1889,7 +1890,7 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMintAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
-    return this.getAuthorityUtxo(tokenUid, 'mint', options);
+    return this.getAuthorityUtxo(tokenUid, AuthorityType.MINT, options);
   }
 
   /**
@@ -1906,7 +1907,7 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMeltAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
-    return this.getAuthorityUtxo(tokenUid, 'melt', options);
+    return this.getAuthorityUtxo(tokenUid, AuthorityType.MELT, options);
   }
 
   /**
@@ -1925,13 +1926,13 @@ class HathorWallet extends EventEmitter {
    * */
   async getAuthorityUtxo(
     tokenUid: string,
-    authority: 'mint' | 'melt',
+    authority: AuthorityType,
     options: GetAuthorityOptions = {}
   ): Promise<IUtxo[]> {
     let authorityValue: bigint;
-    if (authority === 'mint') {
+    if (authority === AuthorityType.MINT) {
       authorityValue = 1n;
-    } else if (authority === 'melt') {
+    } else if (authority === AuthorityType.MELT) {
       authorityValue = 2n;
     } else {
       throw new Error('Invalid authority value.');
@@ -2455,11 +2456,11 @@ class HathorWallet extends EventEmitter {
    *
    * @return Array of the authority outputs.
    * */
-  async getAuthorityUtxos(tokenUid: string, type: 'mint' | 'melt'): Promise<IUtxo[]> {
-    if (type === 'mint') {
+  async getAuthorityUtxos(tokenUid: string, type: AuthorityType): Promise<IUtxo[]> {
+    if (type === AuthorityType.MINT) {
       return this.getMintAuthority(tokenUid, { many: true });
     }
-    if (type === 'melt') {
+    if (type === AuthorityType.MELT) {
       return this.getMeltAuthority(tokenUid, { many: true });
     }
     throw new Error('This should never happen.');

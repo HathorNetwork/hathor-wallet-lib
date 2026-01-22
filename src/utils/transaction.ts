@@ -42,6 +42,7 @@ import {
   ITxSignatureData,
   OutputValueType,
   IHistoryInput,
+  AuthorityType,
 } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
@@ -471,7 +472,7 @@ const transaction = {
   async calculateTxBalanceToFillTx(
     token: string,
     tx: IDataTx
-  ): Promise<Record<'funds' | 'mint' | 'melt', OutputValueType>> {
+  ): Promise<Record<'funds' | AuthorityType, OutputValueType>> {
     const balance = { funds: 0n, mint: 0n, melt: 0n };
     for (const output of tx.outputs) {
       if (isDataOutputCreateToken(output)) {
