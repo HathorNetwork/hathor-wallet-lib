@@ -568,7 +568,9 @@ describe('CallerId', () => {
       expect(field).toBeInstanceOf(ncFields.CallerIdField);
       field.fromUser(testAddress);
       // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-      expect(field.toBuffer()).toMatchBuffer(Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf]));
+      expect(field.toBuffer()).toMatchBuffer(
+        Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf])
+      );
     });
 
     it('should serialize contract ID from user input', () => {
@@ -604,7 +606,9 @@ describe('CallerId', () => {
     it('should throw error for empty buffer', () => {
       const field = getFieldParser('CallerId', network);
       expect(field).toBeInstanceOf(ncFields.CallerIdField);
-      expect(() => field.fromBuffer(Buffer.alloc(0))).toThrow('Not enough bytes to read CallerId tag');
+      expect(() => field.fromBuffer(Buffer.alloc(0))).toThrow(
+        'Not enough bytes to read CallerId tag'
+      );
     });
 
     it('should throw error for invalid tag', () => {
