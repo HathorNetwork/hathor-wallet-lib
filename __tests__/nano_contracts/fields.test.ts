@@ -533,6 +533,155 @@ describe('List', () => {
   });
 });
 
+describe('CallerId', () => {
+  // Valid testnet address and its buffer representation (from AddressField example)
+  const testAddress = 'WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT';
+  const addressBuf = Buffer.from('4969ffb1549f2e00f30bfc0cf0b9207ed96f7f33ba578d4852', 'hex');
+
+  // Valid contract ID (64-char hex string)
+  const testContractId = 'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe';
+  const contractIdBuf = Buffer.from(testContractId, 'hex');
+
+  // Tags
+  const ADDRESS_TAG = 0x00;
+  const CONTRACT_TAG = 0x01;
+
+  describe('basic methods', () => {
+    it('should return correct type from getType()', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      expect(field.getType()).toBe('CallerId');
+    });
+
+    it('should create new instance with createNew()', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      const newField = field.createNew();
+      expect(newField).toBeInstanceOf(ncFields.CallerIdField);
+      expect(newField).not.toBe(field);
+    });
+  });
+
+  describe('fromUser', () => {
+    it('should serialize address from user input', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      field.fromUser(testAddress);
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+      expect(field.toBuffer()).toMatchBuffer(
+        Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf])
+      );
+    });
+
+    it('should serialize contract ID from user input', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      field.fromUser(testContractId);
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+      expect(field.toBuffer()).toMatchBuffer(
+        Buffer.concat([Buffer.from([CONTRACT_TAG]), contractIdBuf])
+      );
+    });
+  });
+
+  describe('fromBuffer', () => {
+    it('should deserialize address from buffer', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      const buf = Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf]);
+      const result = field.fromBuffer(buf);
+      expect(result.bytesRead).toBe(26); // 1 tag + 25 address bytes
+      expect(field.toUser()).toBe(testAddress);
+    });
+
+    it('should deserialize contract ID from buffer', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      const buf = Buffer.concat([Buffer.from([CONTRACT_TAG]), contractIdBuf]);
+      const result = field.fromBuffer(buf);
+      expect(result.bytesRead).toBe(33); // 1 tag + 32 contract ID bytes
+      expect(field.toUser()).toBe(testContractId);
+    });
+
+    it('should throw error for empty buffer', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      expect(() => field.fromBuffer(Buffer.alloc(0))).toThrow(
+        'Not enough bytes to read CallerId tag'
+      );
+    });
+
+    it('should throw error for invalid tag', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      const invalidTagBuf = Buffer.concat([Buffer.from([0x99]), contractIdBuf]);
+      expect(() => field.fromBuffer(invalidTagBuf)).toThrow('Invalid CallerId tag: 153');
+    });
+  });
+
+  describe('toBuffer and toUser errors', () => {
+    it('should throw error when calling toBuffer with null value', () => {
+      const field = ncFields.CallerIdField.new(network);
+      expect(() => field.toBuffer()).toThrow('No value to encode');
+    });
+
+    it('should throw error when calling toUser with null value', () => {
+      const field = ncFields.CallerIdField.new(network);
+      expect(() => field.toUser()).toThrow('No value to encode');
+    });
+  });
+
+  describe('helper methods', () => {
+    it('should correctly identify address with isAddress()', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      field.fromUser(testAddress);
+      // @ts-expect-error: isAddress is defined on CallerIdField
+      expect(field.isAddress()).toBe(true);
+      // @ts-expect-error: isContractId is defined on CallerIdField
+      expect(field.isContractId()).toBe(false);
+    });
+
+    it('should correctly identify contract ID with isContractId()', () => {
+      const field = getFieldParser('CallerId', network);
+      expect(field).toBeInstanceOf(ncFields.CallerIdField);
+      field.fromUser(testContractId);
+      // @ts-expect-error: isAddress is defined on CallerIdField
+      expect(field.isAddress()).toBe(false);
+      // @ts-expect-error: isContractId is defined on CallerIdField
+      expect(field.isContractId()).toBe(true);
+    });
+
+    it('should return false for isAddress() and isContractId() when value is null', () => {
+      const field = ncFields.CallerIdField.new(network);
+      expect(field.isAddress()).toBe(false);
+      expect(field.isContractId()).toBe(false);
+    });
+  });
+
+  describe('round-trip', () => {
+    it('should round-trip address through buffer', () => {
+      const field1 = getFieldParser('CallerId', network);
+      field1.fromUser(testAddress);
+      const buf = field1.toBuffer();
+
+      const field2 = getFieldParser('CallerId', network);
+      field2.fromBuffer(buf);
+      expect(field2.toUser()).toBe(testAddress);
+    });
+
+    it('should round-trip contract ID through buffer', () => {
+      const field1 = getFieldParser('CallerId', network);
+      field1.fromUser(testContractId);
+      const buf = field1.toBuffer();
+
+      const field2 = getFieldParser('CallerId', network);
+      field2.fromBuffer(buf);
+      expect(field2.toUser()).toBe(testContractId);
+    });
+  });
+});
+
 describe('Dict', () => {
   it('should serialize from user input using simple types', () => {
     const field = getFieldParser('Dict[str, int]', network);
