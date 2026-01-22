@@ -12,3 +12,4 @@ tsconfig.tsbuildinfo
 // Generated test database files
 *.leveldb*
 tmp/
+.claude/settings.local.json
