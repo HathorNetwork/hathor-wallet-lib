@@ -259,7 +259,7 @@ export async function execRawOutputInstruction(
   if (!(authority || amount)) {
     throw new Error('Raw token output missing amount');
   }
-  if (!isAuthorityType(authority)) {
+  if (authority !== undefined && !isAuthorityType(authority)) {
     throw new Error('Invalid authority type');
   }
 
