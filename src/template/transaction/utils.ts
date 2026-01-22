@@ -26,6 +26,7 @@ export async function selectTokens(
   position: number = -1
 ) {
   const token = options.token ?? NATIVE_TOKEN_UID;
+  await ctx.cacheTokenDetails(interpreter, token);
   const { changeAmount, utxos } = await interpreter.getUtxos(amount, options);
 
   // Add utxos as inputs on the transaction
@@ -47,7 +48,7 @@ export async function selectTokens(
   if (autoChange && changeAmount) {
     ctx.log(`Creating change for address: ${changeAddress}`);
     // Token should only be on the array if present on the outputs
-    const tokenData = ctx.addToken(token);
+    const tokenData = await ctx.addToken(interpreter, token);
     const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
     const output = new Output(changeAmount, script, { tokenData });
     ctx.balance.addOutput(changeAmount, token);
@@ -66,6 +67,8 @@ export async function selectAuthorities(
   position: number = -1
 ) {
   const token = options.token ?? NATIVE_TOKEN_UID;
+  // Only cache the token version (no outputs created here)
+  await ctx.cacheTokenDetails(interpreter, token);
   const utxos = await interpreter.getAuthorities(count, options);
 
   // Add utxos as inputs on the transaction

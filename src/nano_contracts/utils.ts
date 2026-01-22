@@ -32,7 +32,7 @@ import {
   IArgumentField,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
-import { getFieldParser } from './ncTypes/parser';
+import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
 import { isSignedDataField } from './fields';
 import HathorWallet from '../new/wallet';
 
@@ -232,10 +232,13 @@ export const validateAndParseBlueprintMethodArgs = async (
   try {
     const parsedArgs: IArgumentField[] = [];
     for (const [index, arg] of methodArgs.entries()) {
-      const field = getFieldParser(arg.type, network);
+      // Normalize type string (e.g., union[Address, ContractId] -> CallerId)
+      const normalizedType = normalizeTypeString(arg.type);
+      const field = getFieldParser(normalizedType, network);
       field.fromUser(args[index]);
       parsedArgs.push({
         ...arg,
+        type: normalizedType,
         field,
       });
     }
