@@ -109,4 +109,6 @@ gh pr edit <PR_NUMBER> --add-project "Hathor Network"
 
 After release PR is merged:
 - Bump the version using the `bump` command
+
+After bump PR is merged and the release is published:
 - Communicate the release version on Slack
