@@ -11,6 +11,8 @@ import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
 import { sizedBytes } from './encoding';
 
+export const Bytes32Schema = z.string().regex(/^[a-fA-F0-9]{64}$/);
+
 export class Bytes32Field extends NCFieldBase<string, Buffer> {
   value: Buffer;
 
@@ -42,10 +44,7 @@ export class Bytes32Field extends NCFieldBase<string, Buffer> {
   }
 
   fromUser(data: unknown): Bytes32Field {
-    const value = z
-      .string()
-      .regex(/^[a-fA-F0-9]{64}$/)
-      .parse(data);
+    const value = Bytes32Schema.parse(data);
     this.value = Buffer.from(value, 'hex');
     return this;
   }
