@@ -11,6 +11,7 @@ import { BytesField } from './bytes';
 import { Bytes32Field } from './bytes32';
 import { BoolField } from './bool';
 import { AddressField } from './address';
+import { CallerIdField } from './callerId';
 import { TimestampField } from './timestamp';
 import { AmountField } from './amount';
 import { TokenUidField } from './token';
@@ -32,6 +33,7 @@ export default {
   IntField,
   BoolField,
   AddressField,
+  CallerIdField,
   TimestampField,
   AmountField,
   TokenUidField,
