@@ -77,6 +77,7 @@ describe('Full blueprint basic tests', () => {
           timestamp,
           contractId,
           blueprintId,
+          address,
           // varint,
           attrStr,
           attrInt,
@@ -155,6 +156,57 @@ describe('Full blueprint basic tests', () => {
     const ncStateAmount2 = await ncApi.getNanoContractState(txInitialize.hash, ['amount']);
 
     expect(ncStateAmount2.fields.amount.value).toBe(amount);
+
+    // Set caller_id with address
+    const txCallerIdAddress = await wallet.createAndSendNanoContractTransaction(
+      'set_caller_id',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [address],
+      }
+    );
+    await checkTxValid(wallet, txCallerIdAddress);
+
+    const ncStateCallerIdAddress = await ncApi.getNanoContractState(txInitialize.hash, [
+      'caller_id',
+    ]);
+    expect(ncStateCallerIdAddress.fields.caller_id.value).toBe(address);
+
+    // Set caller_id with contract ID
+    const txCallerIdContract = await wallet.createAndSendNanoContractTransaction(
+      'set_caller_id',
+      address0,
+      {
+        ncId: txInitialize.hash,
+        args: [contractId],
+      }
+    );
+    await checkTxValid(wallet, txCallerIdContract);
+
+    const ncStateCallerIdContract = await ncApi.getNanoContractState(txInitialize.hash, [
+      'caller_id',
+    ]);
+    expect(ncStateCallerIdContract.fields.caller_id.value).toBe(contractId);
+
+    // Test NanoContractTransactionParser for CallerId
+    const txCallerIdContractData = await wallet.getFullTxById(txCallerIdContract.hash);
+    const txCallerIdParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_caller_id',
+      txCallerIdContractData.tx.nc_address,
+      network,
+      txCallerIdContractData.tx.nc_args
+    );
+    await txCallerIdParser.parseArguments();
+    expect(txCallerIdParser.address?.base58).toBe(address0);
+    expect(txCallerIdParser.parsedArgs).not.toBeNull();
+    expect(txCallerIdParser.parsedArgs).toHaveLength(1);
+    expect(txCallerIdParser.parsedArgs[0]).toMatchObject({
+      name: 'value',
+      type: 'CallerId',
+      value: contractId,
+    });
 
     // Set optional
     const attrOptional = 'test';

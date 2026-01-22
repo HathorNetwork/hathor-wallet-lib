@@ -15,6 +15,7 @@ const simpleTypes = z.enum([
   'int',
   'bool',
   'Address',
+  'CallerId',
   'Timestamp',
   'Amount',
   'TokenUid',
@@ -27,6 +28,22 @@ const simpleTypes = z.enum([
   'ContractId',
   'VertexId',
 ]);
+
+/**
+ * Map API type strings to their canonical form.
+ * The fullnode API returns union types like `union[Address, ContractId]` instead of `CallerId`.
+ */
+const typeAliases: Record<string, string> = {
+  'union[Address, ContractId]': 'CallerId',
+};
+
+/**
+ * Normalize a type string from the API to its canonical form.
+ * For example, `union[Address, ContractId]` becomes `CallerId`.
+ */
+export function normalizeTypeString(typeStr: string): string {
+  return typeAliases[typeStr] ?? typeStr;
+}
 
 type TypeNode =
   | { kind: 'simple'; name: string } // e.g., str, int, bytes
@@ -41,7 +58,9 @@ type TypeNode =
   | { kind: 'frozenset'; element: TypeNode }; // e.g., frozenset[int];
 
 export function getFieldParser(typeStr: string, network: Network, logger?: ILogger) {
-  const type = parseTypeString(typeStr);
+  // Normalize type string using aliases (e.g., union[Address, ContractId] -> CallerId)
+  const normalizedTypeStr = normalizeTypeString(typeStr);
+  const type = parseTypeString(normalizedTypeStr);
   logger?.debug(`[nc type] type parsed: ${JSON.stringify(type)}`);
   return fieldFromTypeNode(type, network);
 }
@@ -62,6 +81,8 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
           return ncFields.BoolField.new();
         case 'Address':
           return ncFields.AddressField.new(network);
+        case 'CallerId':
+          return ncFields.CallerIdField.new(network);
         case 'Timestamp':
           return ncFields.TimestampField.new();
         case 'Amount':
