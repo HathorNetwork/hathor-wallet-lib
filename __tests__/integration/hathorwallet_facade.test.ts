@@ -362,7 +362,12 @@ describe('start', () => {
       () =>
         new HathorWallet({
           seed: walletData.words,
-          connection: { state: ConnectionState.CONNECTED },
+          connection: {
+            state: ConnectionState.CONNECTED,
+            getState(): ConnectionState {
+              return ConnectionState.CONNECTED;
+            },
+          },
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
         })
