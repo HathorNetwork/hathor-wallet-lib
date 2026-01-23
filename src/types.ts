@@ -286,7 +286,7 @@ export function isDataOutputAddress(output: IDataOutput): output is IDataOutputA
 
 // This is for create token transactions, where we dont have a token uid yet
 export interface IDataOutputCreateToken {
-  type: 'mint' | 'melt';
+  type: AuthorityType;
   value: OutputValueType;
   address: string;
   timelock: number | null;
@@ -294,7 +294,7 @@ export interface IDataOutputCreateToken {
 }
 
 export function isDataOutputCreateToken(output: IDataOutput): output is IDataOutputCreateToken {
-  return ['mint', 'melt'].includes(output.type);
+  return output.type === AuthorityType.MINT || output.type === AuthorityType.MELT;
 }
 
 export interface IDataOutputOptionals {
@@ -688,4 +688,13 @@ export interface INcData {
   address: string;
   blueprintId: string;
   blueprintName: string;
+}
+
+export enum AuthorityType {
+  MINT = 'mint',
+  MELT = 'melt',
+}
+
+export function isAuthorityType(value?: string): value is AuthorityType {
+  return Object.values(AuthorityType).includes(value as AuthorityType);
 }
