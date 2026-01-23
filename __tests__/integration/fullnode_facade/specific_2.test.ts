@@ -1,27 +1,27 @@
 import { cloneDeep, reverse } from 'lodash';
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay } from './utils/core.util';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { delay } from '../utils/core.util';
 import {
   createTokenHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
   waitUntilNextTimestamp,
-} from './helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+} from '../helpers/wallet.helper';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
   NETWORK_NAME,
   WALLET_CONSTANTS,
-} from './configuration/test-constants';
-import dateFormatter from '../../src/utils/date';
-import { AddressError } from '../../src/errors';
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
-import { ConnectionState } from '../../src/wallet/types';
-import HathorWallet from '../../src/new/wallet';
-import { MemoryStore } from '../../src/storage';
-import { IHistoryTx } from '../../src/types';
+} from '../configuration/test-constants';
+import dateFormatter from '../../../src/utils/date';
+import { AddressError } from '../../../src/errors';
+import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import { ConnectionState } from '../../../src/wallet/types';
+import HathorWallet from '../../../src/new/wallet';
+import { MemoryStore } from '../../../src/storage';
+import { IHistoryTx } from '../../../src/types';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 

@@ -1,0 +1,21 @@
+GET http://localhost:3000/dev/version
+Accept: application/json
+
+###
+GET http://localhost:3000/dev/health
+Accept: application/json
+
+###
+POST http://localhost:3000/dev/wallet/init
+Content-Type: application/json
+
+{
+  "xpubkey": "xpub6DDtxVidUegtQiQMKQdpw1W7MqHo6kZn7Pt3zFPUJ4YtA8u8oLTa5bwDgwdhNMoZE94F39c5itAoaUJ4eD4H9ks61D3L75qCrHXaQnpVBSA",
+  "xpubkeySignature": "H46GHWQ2oE3rEVjQWKmzC8uFHxDN1YT7jFMOwuAuKUCbHBwy0jYb7Y6jSkxO/28g7YJU3/vyggjxpa9oW444LvA=",
+  "authXpubkey": "xpub6Aa8Exxxr7J6cWxN9x9ttH5VXvhJuK5a7q3oTkRMUVJXd2Ly43AZyXSUcpdZkRueoNuQ2nJsr32V6qHD1PmAREeQ1yLPZ39N2av6Ur3jtAL",
+  "authXpubkeySignature": "IIKK53aqbuoJhCH72PqXf8A/xX9nmwcGVeG6V09kW0khGQ7XRgis+ZLGP/LG93gVJbdpyl/T+r4YkTJKhFNRCkQ=",
+  "timestamp": 1756136401,
+  "firstAddress": "WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f"
+}
+
+
