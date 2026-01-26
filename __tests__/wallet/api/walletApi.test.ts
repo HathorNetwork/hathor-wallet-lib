@@ -753,4 +753,68 @@ describe('walletApi', () => {
 
     await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow();
   });
+
+  test('getHasTxOutsideFirstAddress', async () => {
+    // Test successful response with hasTransactions: true
+    const mockResponseTrue = {
+      success: true,
+      hasTransactions: true,
+    };
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponseTrue,
+    } as AxiosResponse);
+
+    const resultTrue = await walletApi.getHasTxOutsideFirstAddress(wallet);
+    expect(resultTrue).toEqual(mockResponseTrue);
+    expect(mockAxiosInstance.get).toHaveBeenCalledWith(
+      'wallet/addresses/has-transactions-outside-first-address'
+    );
+
+    // Test successful response with hasTransactions: false
+    const mockResponseFalse = {
+      success: true,
+      hasTransactions: false,
+    };
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponseFalse,
+    } as AxiosResponse);
+
+    const resultFalse = await walletApi.getHasTxOutsideFirstAddress(wallet);
+    expect(resultFalse).toEqual(mockResponseFalse);
+
+    // Should throw on invalid response status
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow(
+      'Error checking if wallet has transactions outside first address.'
+    );
+
+    // Should throw on success: false
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow(
+      'Error checking if wallet has transactions outside first address.'
+    );
+
+    // Should throw on invalid schema (missing hasTransactions)
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        success: true,
+        // Missing hasTransactions field
+      },
+    } as AxiosResponse);
+
+    await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow();
+  });
 });

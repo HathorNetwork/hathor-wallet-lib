@@ -34,7 +34,7 @@ import {
   mapActionToActionHeader,
   validateAndParseBlueprintMethodArgs,
 } from './utils';
-import { IDataInput, IDataOutput } from '../types';
+import { AuthorityType, IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
@@ -282,7 +282,7 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
+    const utxoOptions: { token: string; filter_address?: string } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
@@ -430,11 +430,15 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the authority of the action and create the input
-    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, {
-      many: false,
-      only_available_utxos: true,
-      filter_address: action.address,
-    });
+    const utxos = await this.wallet.getAuthorityUtxo(
+      action.token,
+      action.authority as AuthorityType,
+      {
+        many: false,
+        only_available_utxos: true,
+        filter_address: action.address,
+      }
+    );
 
     if (!utxos || utxos.length === 0) {
       throw new NanoContractTransactionError(

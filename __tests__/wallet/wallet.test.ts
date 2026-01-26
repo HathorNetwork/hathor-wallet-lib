@@ -41,7 +41,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { IHistoryTx, IWalletAccessData, TokenVersion } from '../../src/types';
+import { AuthorityType, IHistoryTx, IWalletAccessData, TokenVersion } from '../../src/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 import { Fee } from '../../src/utils/fee';
 
@@ -168,7 +168,7 @@ const setupFeeTokenMocks = {
     seed: string,
     network: Network,
     tokenId: string,
-    authorityType: 'mint' | 'melt',
+    authorityType: AuthorityType,
     addresses: string[],
     tokenName = 'Fee Token',
     tokenSymbol = 'FBT'
@@ -231,7 +231,7 @@ const setupFeeTokenMocks = {
     seed: string,
     network: Network,
     tokenId: string,
-    authorityType: 'mint' | 'melt',
+    authorityType: AuthorityType,
     addresses: string[]
   ) => {
     const authorityMask = authorityType === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
@@ -4402,6 +4402,50 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       await expect(
         wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
       ).rejects.toThrow('createNanoContractTransaction');
+    });
+  });
+
+  describe('hasTxOutsideFirstAddress', () => {
+    it('should return true when wallet has transactions outside first address', async () => {
+      jest.spyOn(walletApi, 'getHasTxOutsideFirstAddress').mockResolvedValue({
+        success: true,
+        hasTransactions: true,
+      });
+
+      const result = await wallet.hasTxOutsideFirstAddress();
+
+      expect(result).toBe(true);
+      expect(walletApi.getHasTxOutsideFirstAddress).toHaveBeenCalledWith(wallet);
+    });
+
+    it('should return false when wallet has no transactions outside first address', async () => {
+      jest.spyOn(walletApi, 'getHasTxOutsideFirstAddress').mockResolvedValue({
+        success: true,
+        hasTransactions: false,
+      });
+
+      const result = await wallet.hasTxOutsideFirstAddress();
+
+      expect(result).toBe(false);
+      expect(walletApi.getHasTxOutsideFirstAddress).toHaveBeenCalledWith(wallet);
+    });
+
+    it('should throw error if wallet is not ready', async () => {
+      jest.spyOn(wallet, 'isReady').mockReturnValue(false);
+
+      await expect(wallet.hasTxOutsideFirstAddress()).rejects.toThrow('Wallet not ready');
+    });
+
+    it('should propagate API errors', async () => {
+      jest
+        .spyOn(walletApi, 'getHasTxOutsideFirstAddress')
+        .mockRejectedValue(
+          new WalletRequestError('Error checking if wallet has transactions outside first address.')
+        );
+
+      await expect(wallet.hasTxOutsideFirstAddress()).rejects.toThrow(
+        'Error checking if wallet has transactions outside first address.'
+      );
     });
   });
 });

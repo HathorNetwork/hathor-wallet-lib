@@ -818,6 +818,74 @@ describe('prepareTxData', () => {
     expect(txData.outputs[0].address).toBe('wcUZ7SrNrG3peJ8729k7Mvy2SrkJhQGLEC');
   });
 
+  it('should create correct P2SH script in outputDataToModel for P2SH addresses', async () => {
+    // This test verifies the actual script creation for P2SH addresses
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2sh');
+
+    const outputs = [
+      {
+        type: OutputType.P2SH,
+        address: 'wcUZ7SrNrG3peJ8729k7Mvy2SrkJhQGLEC',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Call outputDataToModel directly to verify script creation
+    const outputModel = sendTransaction.outputDataToModel(outputs[0], ['01']);
+
+    // Verify the output was created with the correct value
+    expect(outputModel.value).toBe(10n);
+
+    // P2SH script should start with OP_HASH160 (0xa9), not OP_DUP (0x76)
+    // The script format is: OP_HASH160 <20 bytes hash> OP_EQUAL
+    const scriptHex = outputModel.script.toString('hex');
+    expect(scriptHex.startsWith('a9')).toBe(true); // OP_HASH160
+    expect(scriptHex.endsWith('87')).toBe(true); // OP_EQUAL
+    // Should NOT start with OP_DUP (0x76) which would be P2PKH
+    expect(scriptHex.startsWith('76')).toBe(false);
+  });
+
+  it('should create correct P2PKH script in outputDataToModel for P2PKH addresses', async () => {
+    // This test verifies the actual script creation for P2PKH addresses
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Call outputDataToModel directly to verify script creation
+    const outputModel = sendTransaction.outputDataToModel(outputs[0], ['01']);
+
+    // Verify the output was created with the correct value
+    expect(outputModel.value).toBe(10n);
+
+    // P2PKH script should start with OP_DUP (0x76)
+    // The script format is: OP_DUP OP_HASH160 <20 bytes hash> OP_EQUALVERIFY OP_CHECKSIG
+    const scriptHex = outputModel.script.toString('hex');
+    expect(scriptHex.startsWith('76')).toBe(true); // OP_DUP
+    expect(scriptHex.endsWith('ac')).toBe(true); // OP_CHECKSIG
+    // Should NOT end with OP_EQUAL (0x87) which would be P2SH
+    expect(scriptHex.endsWith('87')).toBe(false);
+  });
+
   it('should handle multiple tokens including HTR in single transaction', async () => {
     const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
     mockIsValid.mockReturnValue(true);

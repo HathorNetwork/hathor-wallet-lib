@@ -14,6 +14,7 @@ import {
   ConfigInstruction,
   DataOutputInstruction,
   FeeInstruction,
+  getVariable,
   NanoAcquireAuthorityAction,
   NanoAction,
   NanoDepositAction,
@@ -31,10 +32,9 @@ import {
   TokenOutputInstruction,
   TxTemplateInstruction,
   UtxoSelectInstruction,
-  getVariable,
 } from './instructions';
 import { TxTemplateContext } from './context';
-import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
+import { IGetUtxosOptions, ITxTemplateInterpreter } from './types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import {
@@ -53,7 +53,7 @@ import {
   getWalletBalance,
 } from './setvarcommands';
 import { selectAuthorities, selectTokens } from './utils';
-import { TokenVersion, OutputValueType } from '../../types';
+import { AuthorityType, isAuthorityType, OutputValueType, TokenVersion } from '../../types';
 
 /**
  * Find and run the executor function for the instruction.
@@ -258,6 +258,9 @@ export async function execRawOutputInstruction(
   ctx.log(`amount(${amount}) timelock(${timelock}) script(${script}) token(${token})`);
   if (!(authority || amount)) {
     throw new Error('Raw token output missing amount');
+  }
+  if (authority !== undefined && !isAuthorityType(authority)) {
+    throw new Error('Invalid authority type');
   }
 
   // get tokenData and update token balance on the context
@@ -619,6 +622,7 @@ export async function execCompleteTxInstruction(
 
   // calculate token creation deposit
   if (calculateFee && ctx.isCreateTokenTxContext()) {
+    ctx.log(`Calculating token creation fee`);
     let deposit = 0n;
 
     if (ctx.tokenVersion === TokenVersion.DEPOSIT) {
@@ -669,7 +673,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} mint outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
+      ctx.balance.addOutputAuthority(count, tokenUid, AuthorityType.MINT);
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, changeScript, {
@@ -708,7 +712,7 @@ export async function execCompleteTxInstruction(
       ctx.log(`Creating ${count} melt outputs / ${tokenUid}`);
       // Need to create a token output
       // Add balance to the ctx.balance
-      await ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
+      ctx.balance.addOutputAuthority(count, tokenUid, AuthorityType.MELT);
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, changeScript, {
