@@ -1,6 +1,7 @@
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
+  DEFAULT_PIN_CODE,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -11,6 +12,7 @@ import ncApi from '../../../../src/api/nano';
 import HathorWallet from '../../../../src/new/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
 import { TokenVersion } from '../../../../src/types';
+import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
@@ -241,6 +243,85 @@ describe('FeeBlueprint Template execution', () => {
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
     // Balance should increase by deposit amount (50)
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore + 50n);
+  });
+
+  it('should deposit FBT with contract paying fee via HTR withdrawal', async () => {
+    const ncStateBefore = await ncApi.getNanoContractState(
+      contractId,
+      [],
+      [fbtUid, NATIVE_TOKEN_UID],
+      []
+    );
+    const fbtBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
+    const htrBalanceBefore = BigInt(ncStateBefore.balances[NATIVE_TOKEN_UID].value);
+
+    // Build transaction using template builder for granular control
+    // The contract will withdraw HTR from its balance to pay the fee
+    const feeAmount = 1n;
+    const depositAmount = 10n;
+
+    const template = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addSetVarAction({ name: 'fbt', value: fbtUid })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'noop',
+        caller: '{caller}',
+        actions: [
+          // Deposit FBT from wallet into contract
+          { action: 'deposit', token: '{fbt}', amount: depositAmount, changeAddress: '{caller}' },
+          // Withdraw HTR from contract to pay the fee (skipOutputs: true means no output is created)
+          {
+            action: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: feeAmount,
+            address: '{caller}',
+            skipOutputs: true,
+          },
+        ],
+      })
+      // Add fee header indicating the fee payment in HTR
+      .addFee({ token: NATIVE_TOKEN_UID, amount: feeAmount })
+      .build();
+
+    const tx = await hWallet.runTxTemplate(template, DEFAULT_PIN_CODE);
+    await checkTxValid(hWallet, tx);
+
+    // Verify that inputs only contain FBT (no HTR inputs from wallet)
+    // Since contract withdrew HTR to pay the fee, there should be no HTR inputs
+    // All inputs should be for the FBT deposit from the wallet
+    for (const input of tx.inputs) {
+      const spentTxResponse = await hWallet.getFullTxById(input.hash);
+      expect(spentTxResponse.success).toBe(true);
+      if (!spentTxResponse.success) {
+        throw new Error('Failed to get spent transaction');
+      }
+      const spentOutput = spentTxResponse.tx.outputs[input.index];
+      // token_data 0 means HTR, any other value means custom token
+      expect(spentOutput.token_data).not.toBe(0);
+    }
+
+    // Verify the FeeHeader exists
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries).toHaveLength(1);
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(feeHeader!.entries[0].amount).toBe(feeAmount);
+
+    // Verify contract state
+    const ncStateAfter = await ncApi.getNanoContractState(
+      contractId,
+      [],
+      [fbtUid, NATIVE_TOKEN_UID],
+      []
+    );
+    // FBT balance should increase by deposit amount
+    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore + depositAmount);
+    // HTR balance should decrease by fee amount (withdrawn to pay fee)
+    expect(BigInt(ncStateAfter.balances[NATIVE_TOKEN_UID].value)).toBe(
+      htrBalanceBefore - feeAmount
+    );
   });
 
   it('should initialize a second FeeBlueprint contract (nc2)', async () => {
