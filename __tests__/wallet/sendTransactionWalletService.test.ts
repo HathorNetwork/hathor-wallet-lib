@@ -13,6 +13,7 @@ import Network from '../../src/models/network';
 import Address from '../../src/models/address';
 import { TokenVersion } from '../../src/types';
 import FeeHeader from '../../src/headers/fee';
+import { SendTxError } from '../../src/errors';
 
 describe('prepareTxData', () => {
   let wallet;
@@ -2255,5 +2256,62 @@ describe('prepareTx - Fee Tokens', () => {
     // Line 722 (selectUtxosToUse): increments for change output
     const feeHeader = transaction.headers[0] as FeeHeader;
     expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+  });
+
+  it('should throw SendTxError when no HTR UTXOs available to pay the fee', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Fee token UTXOs are available
+    // HTR UTXOs are NOT available (throws UtxoError)
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // HTR selection fails - no UTXOs available
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [],
+          changeAmount: 0n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Should throw SendTxError (not UtxoError) with specific message about HTR
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(SendTxError);
+
+    // Create new instance to test the message (prepareTx mutates internal state)
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(
+      `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
+    );
   });
 });
