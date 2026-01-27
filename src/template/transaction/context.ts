@@ -306,7 +306,7 @@ export class TxTemplateContext {
 
   debug: boolean;
 
-  constructor(interpreter: ITxTemplateInterpreter, logger?: ILogger, debug: boolean = false) {
+  constructor(logger?: ILogger, debug: boolean = false) {
     this.inputs = [];
     this.outputs = [];
     this.tokens = [];
