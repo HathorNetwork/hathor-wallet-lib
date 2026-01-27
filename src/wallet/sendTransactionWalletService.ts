@@ -18,7 +18,7 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import { FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
+import { DEFAULT_NATIVE_TOKEN_CONFIG, FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,
@@ -45,6 +45,28 @@ type optionsType = {
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
   private wallet: HathorWalletServiceWallet;
+
+  /**
+   * Get token details from the wallet and throw an error if the token is not found.
+   * For the native token (HTR), returns static token info without making an API call.
+   *
+   * @param token - The token UID to get details for
+   * @returns The token info object
+   * @throws {SendTxError} If the token is not found
+   */
+  private async getTokenDetails(token: string) {
+    if (token === NATIVE_TOKEN_UID) {
+      return {
+        id: NATIVE_TOKEN_UID,
+        ...DEFAULT_NATIVE_TOKEN_CONFIG,
+      };
+    }
+    const { tokenInfo } = await this.wallet.getTokenDetails(token);
+    if (!tokenInfo) {
+      throw new SendTxError(`Token ${token} not found.`);
+    }
+    return tokenInfo;
+  }
 
   // Outputs to prepare the transaction
   private outputs: OutputSendTransaction[];
@@ -128,10 +150,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (token in tokenAmountMap) {
         tokenAmountMap[token].amount += value;
       } else {
-        const { tokenInfo } = await this.wallet.getTokenDetails(token);
-        if (!tokenInfo) {
-          throw new SendTxError(`Token ${token} not found.`);
-        }
+        const tokenInfo = await this.getTokenDetails(token);
         tokenAmountMap[token] = {
           version: tokenInfo.version,
           amount: value,
@@ -146,10 +165,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (entry.token in tokenAmountMap) {
         tokenAmountMap[entry.token].amount += entry.amount;
       } else {
-        const { tokenInfo } = await this.wallet.getTokenDetails(entry.token);
-        if (!tokenInfo) {
-          throw new SendTxError(`Token ${entry.token} not found.`);
-        }
+        const tokenInfo = await this.getTokenDetails(entry.token);
         tokenAmountMap[entry.token] = {
           version: tokenInfo.version,
           amount: entry.amount,
@@ -384,10 +400,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (output.token in tokenAmountMap) {
         tokenAmountMap[output.token].amount += output.value;
       } else {
-        const { tokenInfo } = await this.wallet.getTokenDetails(output.token);
-        if (!tokenInfo) {
-          throw new SendTxError(`Token ${output.token} not found.`);
-        }
+        const tokenInfo = await this.getTokenDetails(output.token);
         tokenAmountMap[output.token] = {
           version: tokenInfo.version,
           amount: output.value,
@@ -402,10 +415,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (entry.token in tokenAmountMap) {
         tokenAmountMap[entry.token].amount += entry.amount;
       } else {
-        const { tokenInfo } = await this.wallet.getTokenDetails(entry.token);
-        if (!tokenInfo) {
-          throw new SendTxError(`Token ${entry.token} not found.`);
-        }
+        const tokenInfo = await this.getTokenDetails(entry.token);
         if (tokenInfo.version === TokenVersion.FEE) {
           throw new SendTxError(
             `Token ${entry.token} is a fee token, and is not allowed to be used in the fee header.`
