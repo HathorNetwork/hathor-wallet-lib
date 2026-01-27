@@ -52,7 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
-  version?: TokenVersion; // Token version
+  version: TokenVersion; // Token version
 }
 
 export interface Balance {
@@ -271,6 +271,15 @@ export interface OutputSendTransaction {
   data?: string; // data to store in the output script. required for data script.
 }
 
+export interface FeeHeaderSendTransaction {
+  entries: FeeEntrySendTransaction[];
+}
+
+export interface FeeEntrySendTransaction {
+  token: string;
+  amount: OutputValueType;
+}
+
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
@@ -295,8 +304,11 @@ export interface WalletAddressMap {
   [address: string]: boolean;
 }
 
-export interface TokenAmountMap {
-  [token: string]: OutputValueType; // For each token we have the amount
+export interface TokenMap {
+  [token: string]: {
+    version: TokenVersion;
+    amount: OutputValueType;
+  }; // For each token we have the version and amount
 }
 
 export interface TransactionFullObject {
