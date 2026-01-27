@@ -439,14 +439,26 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       delete tokensWithoutHtr[NATIVE_TOKEN_UID];
       utxosAddressPath = await this.selectUtxosToUse(tokensWithoutHtr);
 
-      const htrTokenAmount = {
-        [NATIVE_TOKEN_UID]: {
-          version: TokenVersion.NATIVE,
-          amount: (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount,
-        },
-      };
-      const htrAddressPath = await this.selectUtxosToUse(htrTokenAmount);
-      utxosAddressPath.push(...htrAddressPath);
+      // Only select HTR UTXOs if we actually need HTR (for outputs or fees)
+      const htrAmount = (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount;
+      if (htrAmount > 0n) {
+        const htrTokenAmount = {
+          [NATIVE_TOKEN_UID]: {
+            version: TokenVersion.NATIVE,
+            amount: htrAmount,
+          },
+        };
+        try {
+          const htrAddressPath = await this.selectUtxosToUse(htrTokenAmount);
+          utxosAddressPath.push(...htrAddressPath);
+        } catch (err) {
+          // Convert UtxoError to SendTxError for better error messaging
+          if (err instanceof UtxoError) {
+            throw new SendTxError(`No UTXOs available for the token ${NATIVE_TOKEN_UID}.`);
+          }
+          throw err;
+        }
+      }
     } else {
       // If the user selected the inputs, we must validate that
       // all utxos are valid and the sum is enought to fill the outputs
