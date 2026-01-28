@@ -112,7 +112,7 @@ export function findInstructionExecution(
  * Execution for FeeInstruction
  */
 export async function execFeeInstruction(
-  interpreter: ITxTemplateInterpreter,
+  _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof FeeInstruction>
 ) {
@@ -150,7 +150,7 @@ export async function execRawInputInstruction(
   const { token } = origTx.outputs[index];
   await ctx.cacheTokenDetails(interpreter, token);
   // Add balance to the ctx.balance
-  await ctx.balance.addBalanceFromUtxo(origTx, index);
+  ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
   ctx.addInputs(position, input);
@@ -289,11 +289,11 @@ export async function execRawOutputInstruction(
     tokenData = await ctx.addToken(interpreter, token);
     if (authority) {
       ctx.log(`Creating authority output`);
-      await ctx.balance.addOutputAuthority(1, token, authority);
+      ctx.balance.addOutputAuthority(1, token, authority);
     } else {
       ctx.log(`Creating token output`);
       if (amount) {
-        await ctx.balance.addOutput(amount, token);
+        ctx.balance.addOutput(amount, token);
       }
     }
   }
@@ -454,7 +454,7 @@ export async function execAuthorityOutputInstruction(
     // Add token to tokens array
     tokenData = await ctx.addToken(interpreter, token);
     // Add balance to the ctx.balance
-    await ctx.balance.addOutputAuthority(count, token, authority);
+    ctx.balance.addOutputAuthority(count, token, authority);
   }
 
   let amount: OutputValueType | undefined = 0n;
@@ -700,7 +700,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -739,7 +739,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -1081,7 +1081,7 @@ async function validateAcquireAuthorityNanoAction(
  * Execution for NanoMethodInstruction
  */
 export async function execNanoMethodInstruction(
-  _interpreter: ITxTemplateInterpreter,
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof NanoMethodInstruction>
 ) {
@@ -1103,16 +1103,16 @@ export async function execNanoMethodInstruction(
   for (const action of ins.actions || []) {
     switch (action.action) {
       case 'deposit':
-        actions.push(await validateDepositNanoAction(_interpreter, ctx, action));
+        actions.push(await validateDepositNanoAction(interpreter, ctx, action));
         break;
       case 'withdrawal':
-        actions.push(await validateWithdrawalNanoAction(_interpreter, ctx, action));
+        actions.push(await validateWithdrawalNanoAction(interpreter, ctx, action));
         break;
       case 'grant_authority':
-        actions.push(await validateGrantAuthorityNanoAction(_interpreter, ctx, action));
+        actions.push(await validateGrantAuthorityNanoAction(interpreter, ctx, action));
         break;
       case 'acquire_authority':
-        actions.push(await validateAcquireAuthorityNanoAction(_interpreter, ctx, action));
+        actions.push(await validateAcquireAuthorityNanoAction(interpreter, ctx, action));
         break;
       default:
         ctx.log(`Called nano method execute with action ${JSON.stringify(action)}`);

@@ -128,13 +128,13 @@ export class TxBalance {
    * @param tx - The transaction containing the UTXO
    * @param index - The output index
    */
-  async addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+  addBalanceFromUtxo(tx: IHistoryTx, index: number) {
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }
     const output = tx.outputs[index];
     const { token } = output;
-    const balance = await this.getTokenBalance(token);
+    const balance = this.getTokenBalance(token);
 
     if (transactionUtils.isAuthorityOutput(output)) {
       if (transactionUtils.isMint(output)) {
@@ -160,8 +160,8 @@ export class TxBalance {
    * @param amount - The amount to subtract
    * @param token - The token UID
    */
-  async addOutput(amount: OutputValueType, token: string) {
-    const balance = await this.getTokenBalance(token);
+  addOutput(amount: OutputValueType, token: string) {
+    const balance = this.getTokenBalance(token);
     balance.tokens -= amount;
 
     if (balance.tokenVersion === TokenVersion.FEE) {
