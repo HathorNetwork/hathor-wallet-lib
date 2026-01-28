@@ -3104,6 +3104,11 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
+    // Set fee amount if declared
+    if (data.feeAmount) {
+      builder.setFeeAmount(BigInt(data.feeAmount));
+    }
+
     const nc: any = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }

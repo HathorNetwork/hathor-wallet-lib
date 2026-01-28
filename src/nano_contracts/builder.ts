@@ -38,6 +38,7 @@ import { AuthorityType, IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
+import FeeHeader from '../headers/fee';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -71,6 +72,9 @@ class NanoContractTransactionBuilder {
   // in the action deposit phase
   tokenFeeAddedInDeposit: boolean;
 
+  // Fee amount in HTR to be paid for fee-based token operations
+  feeAmount: bigint | null;
+
   constructor() {
     this.blueprintId = null;
     this.ncId = null;
@@ -84,6 +88,7 @@ class NanoContractTransactionBuilder {
     this.vertexType = null;
     this.createTokenOptions = null;
     this.tokenFeeAddedInDeposit = false;
+    this.feeAmount = null;
   }
 
   /**
@@ -184,6 +189,19 @@ class NanoContractTransactionBuilder {
    */
   setWallet(wallet: HathorWallet) {
     this.wallet = wallet;
+    return this;
+  }
+
+  /**
+   * Set the fee amount in HTR for fee-based token operations
+   *
+   * @param amount Fee amount in HTR
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  setFeeAmount(amount: bigint) {
+    this.feeAmount = amount;
     return this;
   }
 
@@ -623,7 +641,72 @@ class NanoContractTransactionBuilder {
       }
     }
 
+    // Select HTR inputs to pay fees if feeAmount is set
+    if (this.feeAmount && this.feeAmount > 0n) {
+      const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(this.feeAmount);
+      inputs = concat(inputs, feeInputs);
+      outputs = concat(outputs, feeOutputs);
+    }
+
     return { inputs, outputs, tokens };
+  }
+
+  /**
+   * Select HTR inputs to pay the fee amount
+   * Creates change output if necessary
+   *
+   * @param {bigint} feeAmount Amount of HTR needed to pay fees
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  async selectFeeInputs(feeAmount: bigint): Promise<{
+    inputs: IDataInput[];
+    outputs: IDataOutput[];
+  }> {
+    this.assertWallet();
+
+    let utxosData;
+    try {
+      utxosData = await this.wallet.getUtxosForAmount(feeAmount, {
+        token: NATIVE_TOKEN_UID,
+      });
+    } catch (e) {
+      if (e instanceof UtxoError) {
+        throw new NanoContractTransactionError('Not enough HTR utxos to pay the fee.');
+      }
+      throw e;
+    }
+
+    const inputs: IDataInput[] = [];
+    for (const utxo of utxosData.utxos) {
+      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+      inputs.push({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        authorities: utxo.authorities,
+        token: utxo.tokenId,
+        address: utxo.address,
+      });
+    }
+
+    const outputs: IDataOutput[] = [];
+    // Create change output if there's change amount
+    if (utxosData.changeAmount && utxosData.changeAmount > 0n) {
+      const changeAddress = await this.wallet.getCurrentAddress();
+      outputs.push({
+        type: getAddressType(changeAddress.address, this.wallet.getNetworkObject()),
+        address: changeAddress.address,
+        value: utxosData.changeAmount,
+        timelock: null,
+        token: NATIVE_TOKEN_UID,
+        authorities: 0n,
+        isChange: true,
+      });
+    }
+
+    return { inputs, outputs };
   }
 
   /**
@@ -744,6 +827,13 @@ class NanoContractTransactionBuilder {
       );
 
       tx.headers.push(nanoHeader);
+
+      // Add FeeHeader if feeAmount is set (fee is always in HTR, tokenIndex 0)
+      if (this.feeAmount && this.feeAmount > 0n) {
+        const feeHeader = new FeeHeader([{ tokenIndex: 0, amount: this.feeAmount }]);
+        feeHeader.validate();
+        tx.headers.push(feeHeader);
+      }
 
       return tx;
     } catch (e) {

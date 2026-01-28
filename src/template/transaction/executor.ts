@@ -150,7 +150,7 @@ export async function execRawInputInstruction(
   const { token } = origTx.outputs[index];
   await ctx.cacheTokenDetails(interpreter, token);
   // Add balance to the ctx.balance
-  ctx.balance.addBalanceFromUtxo(origTx, index);
+  await ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
   ctx.addInputs(position, input);
@@ -289,11 +289,11 @@ export async function execRawOutputInstruction(
     tokenData = await ctx.addToken(interpreter, token);
     if (authority) {
       ctx.log(`Creating authority output`);
-      ctx.balance.addOutputAuthority(1, token, authority);
+      await ctx.balance.addOutputAuthority(1, token, authority);
     } else {
       ctx.log(`Creating token output`);
       if (amount) {
-        ctx.balance.addOutput(amount, token);
+        await ctx.balance.addOutput(amount, token);
       }
     }
   }
@@ -454,7 +454,7 @@ export async function execAuthorityOutputInstruction(
     // Add token to tokens array
     tokenData = await ctx.addToken(interpreter, token);
     // Add balance to the ctx.balance
-    ctx.balance.addOutputAuthority(count, token, authority);
+    await ctx.balance.addOutputAuthority(count, token, authority);
   }
 
   let amount: OutputValueType | undefined = 0n;
@@ -700,7 +700,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
@@ -739,7 +739,7 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        await ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
