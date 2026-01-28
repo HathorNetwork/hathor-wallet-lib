@@ -206,16 +206,16 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       tokenNeedsInputs.set(token, false);
     }
 
-    // 3. Select UTXOs for non-HTR tokens first
-    // This must happen BEFORE selecting HTR UTXOs because:
+    // 3. Select UTXOs for custom (non-native) tokens first
+    // This must happen BEFORE selecting NATIVE TOKEN UTXOs because:
     // - Selecting UTXOs may create change outputs for fee-based tokens
     // - Each fee-based token change output increments _feeAmount
-    // - We need the final _feeAmount to know how much HTR is needed
-    const nonHtrTokens = Array.from(tokenNeedsInputs.keys()).filter(
+    // - We need the final _feeAmount to know how much NATIVE TOKEN is needed
+    const customTokens = Array.from(tokenNeedsInputs.keys()).filter(
       token => token !== NATIVE_TOKEN_UID
     );
     await this.selectUtxosForTokens(
-      nonHtrTokens,
+      customTokens,
       tokenAmountMap,
       tokenNeedsInputs,
       finalInputs,
