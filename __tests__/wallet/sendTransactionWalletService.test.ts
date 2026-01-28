@@ -1872,34 +1872,30 @@ describe('prepareTxData - Fee Tokens', () => {
     await expect(sendTransaction.prepareTxData()).rejects.toThrow('Connection timeout');
   });
 
-  it('should process user-provided feeHeader with token already in outputs', async () => {
+  it('should throw error when pre-selected HTR input is insufficient to cover fee from change output', async () => {
     const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
     mockIsValid.mockReturnValue(true);
 
     const mockGetType = jest.spyOn(Address.prototype, 'getType');
     mockGetType.mockReturnValue('p2pkh');
 
-    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => {
-      if (tokenUid === NATIVE_TOKEN_UID) {
+    // Mock to return the pre-selected HTR input
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'htr-insufficient-tx' && index === 0) {
         return {
-          tokenInfo: {
-            id: NATIVE_TOKEN_UID,
-            name: 'Hathor',
-            symbol: 'HTR',
-            version: TokenVersion.NATIVE,
-          },
+          txId: 'htr-insufficient-tx',
+          index: 0,
+          value: 2n, // 2 HTR: covers the 1n output, but not enough for output + 2n fee
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
         };
       }
-      return {
-        tokenInfo: {
-          id: tokenUid,
-          name: 'FeeToken',
-          symbol: 'FBT',
-          version: TokenVersion.FEE,
-        },
-      };
+      return null;
     });
 
+    // System auto-selects fee token: returns 100n, generating 50n change
     wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
       if (token === FEE_TOKEN_UID) {
         return {
@@ -1907,37 +1903,29 @@ describe('prepareTxData - Fee Tokens', () => {
             {
               txId: 'fee-token-tx',
               index: 0,
-              value: 100n,
+              value: 100n, // Returns 100n for 50n output = 50n change
               tokenId: FEE_TOKEN_UID,
               address: 'fee-token-address',
-              authorities: 0,
-              addressPath: "m/44'/280'/0'/0/1",
-            },
-          ],
-          changeAmount: 50n,
-        };
-      }
-      // HTR for output (5n) + feeHeader entry (3n) = 8n total needed
-      if (token === NATIVE_TOKEN_UID) {
-        return {
-          utxos: [
-            {
-              txId: 'htr-tx',
-              index: 0,
-              value: 10n,
-              tokenId: NATIVE_TOKEN_UID,
-              address: 'htr-address',
               authorities: 0,
               addressPath: "m/44'/280'/0'/0/2",
             },
           ],
-          changeAmount: 2n, // 10 - 8 (5 output + 3 feeHeader) = 2
+          changeAmount: 50n, // Change generates additional 1 HTR fee
         };
       }
       return { utxos: [], changeAmount: 0n };
     });
 
-    // Output includes HTR, so feeHeader entry for HTR will be added to existing tokenAmountMap entry
+    // User pre-selects only HTR input
+    const inputs = [{ txId: 'htr-insufficient-tx', index: 0 }];
+
+    // Outputs:
+    // - 50n fee token (generates 1 HTR fee) + auto-selected 100n creates 50n change (generates +1 HTR fee)
+    // - 1n HTR (necessary to accept the pre-selected HTR input)
+    // Total fee: 2n HTR (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR available: 2n (pre-selected input)
+    // Result: Insufficient (2n < 3n)
     const outputs = [
       {
         type: OutputType.P2PKH,
@@ -1948,167 +1936,16 @@ describe('prepareTxData - Fee Tokens', () => {
       {
         type: OutputType.P2PKH,
         address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
-        value: 5n,
-        token: NATIVE_TOKEN_UID, // HTR output - feeHeader will ADD to this
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
       },
     ];
 
-    // User provides feeHeader with HTR (same token as output) - this tests line 146-147
-    // The feeHeader amount should be ADDED to the existing HTR amount in tokenAmountMap
-    const feeHeader = {
-      entries: [{ token: NATIVE_TOKEN_UID, amount: 3n }],
-    };
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
-    sendTransaction = new SendTransactionWalletService(wallet, { outputs, feeHeader });
-    const txData = await sendTransaction.prepareTxData();
-
-    // Verify inputs: 1 fee token + 1 HTR
-    expect(txData.inputs).toHaveLength(2);
-
-    // Verify the HTR input was selected
-    const htrInput = txData.inputs.find(i => i.token === NATIVE_TOKEN_UID);
-    expect(htrInput).toBeDefined();
-    expect(htrInput!.value).toBe(10n);
-
-    // The feeHeader entry (3n) is added to the HTR output amount (5n)
-    // So total HTR needed = 5 + 3 + (2 * FEE_PER_OUTPUT for fee token outputs) = 8 + fee
-    // Verify fee token and HTR outputs exist
-    expect(txData.outputs.some(o => o.token === FEE_TOKEN_UID)).toBe(true);
-    expect(txData.outputs.some(o => o.token === NATIVE_TOKEN_UID)).toBe(true);
-  });
-
-  it('should process user-provided feeHeader with token NOT in outputs', async () => {
-    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
-    mockIsValid.mockReturnValue(true);
-
-    const mockGetType = jest.spyOn(Address.prototype, 'getType');
-    mockGetType.mockReturnValue('p2pkh');
-
-    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => {
-      if (tokenUid === NATIVE_TOKEN_UID) {
-        return {
-          tokenInfo: {
-            id: NATIVE_TOKEN_UID,
-            name: 'Hathor',
-            symbol: 'HTR',
-            version: TokenVersion.NATIVE,
-          },
-        };
-      }
-      return {
-        tokenInfo: {
-          id: tokenUid,
-          name: 'FeeToken',
-          symbol: 'FBT',
-          version: TokenVersion.FEE,
-        },
-      };
-    });
-
-    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
-      if (token === FEE_TOKEN_UID) {
-        return {
-          utxos: [
-            {
-              txId: 'fee-token-tx',
-              index: 0,
-              value: 100n,
-              tokenId: FEE_TOKEN_UID,
-              address: 'fee-token-address',
-              authorities: 0,
-              addressPath: "m/44'/280'/0'/0/1",
-            },
-          ],
-          changeAmount: 50n,
-        };
-      }
-      // HTR for feeHeader entry only (no HTR in outputs)
-      if (token === NATIVE_TOKEN_UID) {
-        return {
-          utxos: [
-            {
-              txId: 'htr-tx',
-              index: 0,
-              value: 10n,
-              tokenId: NATIVE_TOKEN_UID,
-              address: 'htr-address',
-              authorities: 0,
-              addressPath: "m/44'/280'/0'/0/2",
-            },
-          ],
-          changeAmount: 5n,
-        };
-      }
-      return { utxos: [], changeAmount: 0n };
-    });
-
-    // Output does NOT include HTR - only fee token
-    const outputs = [
-      {
-        type: OutputType.P2PKH,
-        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
-        value: 50n,
-        token: FEE_TOKEN_UID,
-      },
-    ];
-
-    // User provides feeHeader with HTR (token NOT in outputs) - this tests lines 149-157
-    // A new entry should be created in tokenAmountMap for HTR
-    const feeHeader = {
-      entries: [{ token: NATIVE_TOKEN_UID, amount: 5n }],
-    };
-
-    sendTransaction = new SendTransactionWalletService(wallet, { outputs, feeHeader });
-    const txData = await sendTransaction.prepareTxData();
-
-    // Verify inputs: 1 fee token + 1 HTR (for feeHeader)
-    expect(txData.inputs).toHaveLength(2);
-
-    // Verify the HTR input was selected for feeHeader payment
-    const htrInput = txData.inputs.find(i => i.token === NATIVE_TOKEN_UID);
-    expect(htrInput).toBeDefined();
-
-    // Verify HTR was added to tokenAmountMap from feeHeader (creates HTR outputs/change)
-    const htrOutputs = txData.outputs.filter(o => o.token === NATIVE_TOKEN_UID);
-    expect(htrOutputs.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('should throw error when feeHeader token is not found', async () => {
-    const UNKNOWN_TOKEN_UID = 'unknown-token-123';
-
-    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => {
-      if (tokenUid === FEE_TOKEN_UID) {
-        return {
-          tokenInfo: {
-            id: FEE_TOKEN_UID,
-            name: 'FeeToken',
-            symbol: 'FBT',
-            version: TokenVersion.FEE,
-          },
-        };
-      }
-      // Return null for unknown token - this triggers line 151
-      return { tokenInfo: null };
-    });
-
-    const outputs = [
-      {
-        type: OutputType.P2PKH,
-        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
-        value: 50n,
-        token: FEE_TOKEN_UID,
-      },
-    ];
-
-    // feeHeader with a token that doesn't exist
-    const feeHeader = {
-      entries: [{ token: UNKNOWN_TOKEN_UID, amount: 5n }],
-    };
-
-    sendTransaction = new SendTransactionWalletService(wallet, { outputs, feeHeader });
-
+    // Should fail: HTR input (2n) < HTR needed (3n = 1n output + 2n fee)
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      `Token ${UNKNOWN_TOKEN_UID} not found.`
+      `Invalid input selection. Sum of inputs for token ${NATIVE_TOKEN_UID} is smaller than the sum of outputs.`
     );
   });
 });
@@ -2156,28 +1993,6 @@ describe('prepareTx - Fee Tokens', () => {
       }
       return { tokenInfo: null };
     });
-  });
-
-  it('should throw error when feeHeader contains fee token', async () => {
-    const outputs = [
-      {
-        type: OutputType.P2PKH,
-        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
-        value: 50n,
-        token: NATIVE_TOKEN_UID,
-      },
-    ];
-
-    // User tries to pay fee with a fee token in feeHeader - this should fail (lines 409-412)
-    const feeHeader = {
-      entries: [{ token: FEE_TOKEN_UID, amount: 5n }],
-    };
-
-    sendTransaction = new SendTransactionWalletService(wallet, { outputs, feeHeader });
-
-    await expect(sendTransaction.prepareTx()).rejects.toThrow(
-      `Token ${FEE_TOKEN_UID} is a fee token, and is not allowed to be used in the fee header.`
-    );
   });
 
   it('should prepare fee token transaction with automatic FeeHeader', async () => {

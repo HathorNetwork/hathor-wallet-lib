@@ -28,15 +28,13 @@ import {
   MineTxSuccessData,
   OutputType,
   Utxo,
-  FeeHeaderSendTransaction,
 } from './types';
-import { IDataInput, IDataOutputWithToken, IDataTx, IFeeEntry, TokenVersion } from '../types';
+import { IDataInput, IDataOutputWithToken, IDataTx, TokenVersion } from '../types';
 import { FeeHeader, Header } from '../headers';
 
 type optionsType = {
   outputs?: OutputSendTransaction[];
   inputs?: InputRequestObj[];
-  feeHeader?: FeeHeaderSendTransaction;
   changeAddress?: string | null;
   transaction?: Transaction | null;
   pin?: string | null;
@@ -74,9 +72,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // Optional inputs to prepare the transaction
   private inputs: InputRequestObj[];
 
-  // Optional fee header to prepare the transaction
-  private feeHeader: FeeHeaderSendTransaction;
-
   // Optional change address to prepare the transaction
   private changeAddress: string | null;
 
@@ -104,7 +99,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const newOptions: optionsType = {
       outputs: [],
       inputs: [],
-      feeHeader: { entries: [] },
       changeAddress: null,
       transaction: null,
       ...options,
@@ -113,7 +107,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.wallet = wallet;
     this.outputs = newOptions.outputs!;
     this.inputs = newOptions.inputs!;
-    this.feeHeader = newOptions.feeHeader!;
     this.changeAddress = newOptions.changeAddress!;
     this.transaction = newOptions.transaction!;
     this.mineTransaction = null;
@@ -158,18 +151,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
       if (tokenAmountMap[token].version === TokenVersion.FEE) {
         this._feeAmount += FEE_PER_OUTPUT;
-      }
-    }
-    // deal with the fee header entries same as the outputs
-    for (const entry of this.feeHeader.entries) {
-      if (entry.token in tokenAmountMap) {
-        tokenAmountMap[entry.token].amount += entry.amount;
-      } else {
-        const tokenInfo = await this.getTokenDetails(entry.token);
-        tokenAmountMap[entry.token] = {
-          version: tokenInfo.version,
-          amount: entry.amount,
-        };
       }
     }
 
@@ -243,8 +224,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       finalOutputs
     );
 
-    // 3.5. If user didn't provide a fee header, add the calculated fee to HTR requirements
-    if (this.feeHeader.entries.length === 0 && this._feeAmount > 0n) {
+    // 3.5. Add the calculated fee to HTR requirements
+    if (this._feeAmount > 0n) {
       if (NATIVE_TOKEN_UID in tokenAmountMap) {
         tokenAmountMap[NATIVE_TOKEN_UID].amount += this._feeAmount;
       } else {
@@ -410,23 +391,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         this._feeAmount += FEE_PER_OUTPUT;
       }
     }
-    // deal with the fee header entries same as the outputs
-    for (const entry of this.feeHeader.entries) {
-      if (entry.token in tokenAmountMap) {
-        tokenAmountMap[entry.token].amount += entry.amount;
-      } else {
-        const tokenInfo = await this.getTokenDetails(entry.token);
-        if (tokenInfo.version === TokenVersion.FEE) {
-          throw new SendTxError(
-            `Token ${entry.token} is a fee token, and is not allowed to be used in the fee header.`
-          );
-        }
-        tokenAmountMap[entry.token] = {
-          version: tokenInfo.version,
-          amount: entry.amount,
-        };
-      }
-    }
 
     // We need this array to get the addressPath for each input used and be able to sign the input data
     let utxosAddressPath: string[];
@@ -487,13 +451,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.transaction.tokens = tokens;
 
     // Add fee header if needed
-    // it means the user provided a fee header, so we will use it instead of the calculated fee
-    if (this.feeHeader?.entries && this.feeHeader.entries.length > 0) {
-      this.transaction.headers.push(
-        SendTransactionWalletService.feeHeaderToModel(this.feeHeader, tokens)
-      );
-      // it means the user didn't provide a fee header, so we will use the calculated fee if needed
-    } else if (this._feeAmount > 0n) {
+    if (this._feeAmount > 0n) {
       this.transaction.headers.push(new FeeHeader([{ tokenIndex: 0, amount: this._feeAmount }]));
     }
 
@@ -510,32 +468,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   inputDataToModel(input: InputRequestObj): Input {
     return new Input(input.txId, input.index);
-  }
-
-  /**
-   * Map fee header data to a fee header object
-   *
-   * @memberof SendTransactionWalletService
-   * @inner
-   */
-  static feeHeaderToModel(feeHeader: FeeHeaderSendTransaction, tokens: string[]): FeeHeader {
-    const entries: IFeeEntry[] = [];
-    for (const entry of feeHeader.entries) {
-      if (entry.token === NATIVE_TOKEN_UID) {
-        entries.push({
-          tokenIndex: 0,
-          amount: entry.amount,
-        });
-      } else if (tokens.indexOf(entry.token) > -1) {
-        entries.push({
-          tokenIndex: tokens.indexOf(entry.token) + 1,
-          amount: entry.amount,
-        });
-      } else {
-        throw new SendTxError(`Token ${entry.token} not found in the tokens array.`);
-      }
-    }
-    return new FeeHeader(entries);
   }
 
   /**

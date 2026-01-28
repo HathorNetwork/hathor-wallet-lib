@@ -271,15 +271,6 @@ export interface OutputSendTransaction {
   data?: string; // data to store in the output script. required for data script.
 }
 
-export interface FeeHeaderSendTransaction {
-  entries: FeeEntrySendTransaction[];
-}
-
-export interface FeeEntrySendTransaction {
-  token: string;
-  amount: OutputValueType;
-}
-
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
