@@ -4455,3 +4455,477 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
     });
   });
 });
+
+/**
+ * Regression tests for signing logic in prepareMintTokensData and prepareMeltTokensData.
+ * These tests verify that the correct addressIndex is used for each input type during signing.
+ *
+ * Input structure for fee tokens:
+ * - prepareMintTokensData: [HTR inputs...] + [mint authority input]
+ * - prepareMeltTokensData: [token inputs...] + [melt authority input] + [HTR inputs...]
+ */
+describe('Input signing addressIndex tests', () => {
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const network = new Network('testnet');
+  const addresses = [
+    'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+    'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+    'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+  ];
+
+  describe('prepareMintTokensData - addressIndex order', () => {
+    it('should use correct addressIndexes for HTR inputs and mint authority input', async () => {
+      const tokenId = '0000000000000000000000000000000000000000000000000000000000000001';
+
+      mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+        success: true,
+        addresses: { [addresses[2]]: true },
+      });
+
+      jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+        data: { index: 2, address: addresses[2], transactions: 0, seqnum: 0 },
+      });
+
+      jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+        success: true,
+        txOutputs: [
+          {
+            txId: '000000000000000000000000000000000000000000000000000000000000aa01',
+            index: 0,
+            tokenId,
+            address: addresses[2],
+            value: TOKEN_MINT_MASK,
+            authorities: TOKEN_MINT_MASK,
+            timelock: null,
+            heightlock: null,
+            locked: false,
+            addressPath: "m/280'/280'/0/1/2",
+          },
+        ],
+      });
+
+      jest.spyOn(walletApi, 'getTokenDetails').mockResolvedValue({
+        success: true,
+        name: 'Fee Token',
+        symbol: 'FBT',
+        version: TokenVersion.FEE,
+      });
+
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword: jest.fn(),
+        seed,
+        network,
+      });
+      wallet.setState('Ready');
+
+      const code = new Mnemonic(seed);
+      const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+      jest.spyOn(wallet.storage, 'getMainXPrivKey').mockResolvedValue(xpriv.xprivkey);
+      jest.spyOn(wallet.storage, 'getToken').mockImplementation(mockGetToken);
+      jest.spyOn(wallet, 'getCurrentAddress').mockReturnValue({ address: addresses[0] });
+
+      // Mock getTokenDetails for token version
+      jest.spyOn(wallet, 'getTokenDetails').mockResolvedValue({
+        tokenInfo: {
+          id: tokenId,
+          name: 'Fee Token',
+          symbol: 'FBT',
+          version: TokenVersion.FEE,
+        },
+        totalSupply: 1000n,
+        totalTransactions: 1,
+        authorities: { mint: true, melt: false },
+      });
+
+      // Mock mint authority
+      jest.spyOn(wallet, 'getMintAuthority').mockResolvedValue([
+        {
+          txId: '000000000000000000000000000000000000000000000000000000000000aa01',
+          index: 0,
+          address: addresses[2], // authority address
+          authorities: TOKEN_MINT_MASK,
+        },
+      ]);
+
+      // Mock getAddressIndex for authority address (returns index 5)
+      const authorityAddressIndex = 5;
+      jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(authorityAddressIndex);
+
+      // HTR UTXOs with different address indexes
+      const htrUtxo1AddressIndex = 10;
+      const htrUtxo2AddressIndex = 15;
+
+      jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(async (amount, params) => {
+        if (params?.token === NATIVE_TOKEN_UID) {
+          return {
+            utxos: [
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000bb01',
+                index: 0,
+                tokenId: NATIVE_TOKEN_UID,
+                address: addresses[0],
+                value: 5n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${htrUtxo1AddressIndex}`,
+              },
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000bb02',
+                index: 0,
+                tokenId: NATIVE_TOKEN_UID,
+                address: addresses[1],
+                value: 5n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${htrUtxo2AddressIndex}`,
+              },
+            ],
+            changeAmount: 9n,
+          };
+        }
+        return { utxos: [], changeAmount: 0n };
+      });
+
+      // Capture addressIndexes passed to getInputData
+      const capturedAddressIndexes: number[] = [];
+      jest.spyOn(wallet, 'getInputData').mockImplementation((xp, dtsh, addressIndex) => {
+        capturedAddressIndexes.push(addressIndex);
+        return Buffer.alloc(0);
+      });
+
+      await wallet.prepareMintTokensData(tokenId, 100n, {
+        mintAuthorityAddress: addresses[2],
+        pinCode: '123456',
+        signTx: true,
+      });
+
+      // Expected order: [HTR input 1, HTR input 2, mint authority]
+      // addressIndexes: [10, 15, 5]
+      expect(capturedAddressIndexes).toHaveLength(3);
+      expect(capturedAddressIndexes[0]).toBe(htrUtxo1AddressIndex); // First HTR input
+      expect(capturedAddressIndexes[1]).toBe(htrUtxo2AddressIndex); // Second HTR input
+      expect(capturedAddressIndexes[2]).toBe(authorityAddressIndex); // Mint authority (last)
+    });
+  });
+
+  describe('prepareMeltTokensData - addressIndex order', () => {
+    it('should use correct addressIndexes for token inputs, melt authority, and HTR inputs', async () => {
+      const tokenId = '0000000000000000000000000000000000000000000000000000000000000002';
+
+      mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+        success: true,
+        addresses: { [addresses[2]]: true },
+      });
+
+      jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+        data: { index: 2, address: addresses[2], transactions: 0, seqnum: 0 },
+      });
+
+      jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+        success: true,
+        txOutputs: [
+          {
+            txId: '000000000000000000000000000000000000000000000000000000000000ee01',
+            index: 0,
+            tokenId,
+            address: addresses[2],
+            value: TOKEN_MELT_MASK,
+            authorities: TOKEN_MELT_MASK,
+            timelock: null,
+            heightlock: null,
+            locked: false,
+            addressPath: "m/280'/280'/0/1/2",
+          },
+        ],
+      });
+
+      jest.spyOn(walletApi, 'getTokenDetails').mockResolvedValue({
+        success: true,
+        name: 'Fee Token',
+        symbol: 'FBT',
+        version: TokenVersion.FEE,
+      });
+
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword: jest.fn(),
+        seed,
+        network,
+      });
+      wallet.setState('Ready');
+
+      const code = new Mnemonic(seed);
+      const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+      jest.spyOn(wallet.storage, 'getMainXPrivKey').mockResolvedValue(xpriv.xprivkey);
+      // Mock storage.getToken to return fee token version
+      jest.spyOn(wallet.storage, 'getToken').mockResolvedValue({
+        uid: tokenId,
+        name: 'Fee Token',
+        symbol: 'FBT',
+        version: TokenVersion.FEE,
+      });
+      jest.spyOn(wallet, 'getCurrentAddress').mockReturnValue({ address: addresses[0] });
+
+      // Mock getTokenDetails for token version
+      jest.spyOn(wallet, 'getTokenDetails').mockResolvedValue({
+        tokenInfo: {
+          id: tokenId,
+          name: 'Fee Token',
+          symbol: 'FBT',
+          version: TokenVersion.FEE,
+        },
+        totalSupply: 1000n,
+        totalTransactions: 1,
+        authorities: { mint: false, melt: true },
+      });
+
+      // Token inputs with different address indexes
+      const tokenUtxo1AddressIndex = 20;
+      const tokenUtxo2AddressIndex = 25;
+
+      // Authority address index
+      const authorityAddressIndex = 30;
+
+      // HTR inputs
+      const htrUtxo1AddressIndex = 40;
+      const htrUtxo2AddressIndex = 45;
+
+      jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(async (amount, params) => {
+        if (params?.token === tokenId) {
+          return {
+            utxos: [
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000cc01',
+                index: 0,
+                tokenId,
+                address: addresses[0],
+                value: 500n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${tokenUtxo1AddressIndex}`,
+              },
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000cc02',
+                index: 0,
+                tokenId,
+                address: addresses[1],
+                value: 600n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${tokenUtxo2AddressIndex}`,
+              },
+            ],
+            changeAmount: 100n,
+          };
+        }
+        if (params?.token === NATIVE_TOKEN_UID) {
+          return {
+            utxos: [
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000dd01',
+                index: 0,
+                tokenId: NATIVE_TOKEN_UID,
+                address: addresses[0],
+                value: 5n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${htrUtxo1AddressIndex}`,
+              },
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000dd02',
+                index: 0,
+                tokenId: NATIVE_TOKEN_UID,
+                address: addresses[1],
+                value: 5n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${htrUtxo2AddressIndex}`,
+              },
+            ],
+            changeAmount: 9n,
+          };
+        }
+        return { utxos: [], changeAmount: 0n };
+      });
+
+      // Mock melt authority
+      jest.spyOn(wallet, 'getMeltAuthority').mockResolvedValue([
+        {
+          txId: '000000000000000000000000000000000000000000000000000000000000ee01',
+          index: 0,
+          address: addresses[2],
+          authorities: TOKEN_MELT_MASK,
+        },
+      ]);
+
+      // Mock getAddressIndex for authority address
+      jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(authorityAddressIndex);
+
+      // Capture addressIndexes passed to getInputData
+      const capturedAddressIndexes: number[] = [];
+      jest.spyOn(wallet, 'getInputData').mockImplementation((xp, dtsh, addressIndex) => {
+        capturedAddressIndexes.push(addressIndex);
+        return Buffer.alloc(0);
+      });
+
+      await wallet.prepareMeltTokensData(tokenId, 1000n, {
+        meltAuthorityAddress: addresses[2],
+        changeAddress: addresses[2],
+        pinCode: '123456',
+        signTx: true,
+      });
+
+      // Expected input order for fee tokens:
+      // [token input 1, token input 2, melt authority, HTR input 1, HTR input 2]
+      // Expected addressIndexes: [20, 25, 30, 40, 45]
+      expect(capturedAddressIndexes).toHaveLength(5);
+      expect(capturedAddressIndexes[0]).toBe(tokenUtxo1AddressIndex); // First token input
+      expect(capturedAddressIndexes[1]).toBe(tokenUtxo2AddressIndex); // Second token input
+      expect(capturedAddressIndexes[2]).toBe(authorityAddressIndex); // Melt authority
+      expect(capturedAddressIndexes[3]).toBe(htrUtxo1AddressIndex); // First HTR input
+      expect(capturedAddressIndexes[4]).toBe(htrUtxo2AddressIndex); // Second HTR input
+    });
+
+    it('should use correct addressIndexes for deposit token (no HTR inputs)', async () => {
+      const tokenId = '0000000000000000000000000000000000000000000000000000000000000003';
+
+      mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+        success: true,
+        addresses: { [addresses[2]]: true },
+      });
+
+      jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+        data: { index: 2, address: addresses[2], transactions: 0, seqnum: 0 },
+      });
+
+      jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+        success: true,
+        txOutputs: [
+          {
+            txId: '000000000000000000000000000000000000000000000000000000000000ee02',
+            index: 0,
+            tokenId,
+            address: addresses[2],
+            value: TOKEN_MELT_MASK,
+            authorities: TOKEN_MELT_MASK,
+            timelock: null,
+            heightlock: null,
+            locked: false,
+            addressPath: "m/280'/280'/0/1/2",
+          },
+        ],
+      });
+
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword: jest.fn(),
+        seed,
+        network,
+      });
+      wallet.setState('Ready');
+
+      const code = new Mnemonic(seed);
+      const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+      jest.spyOn(wallet.storage, 'getMainXPrivKey').mockResolvedValue(xpriv.xprivkey);
+      jest.spyOn(wallet, 'getCurrentAddress').mockReturnValue({ address: addresses[0] });
+
+      // Mock storage.getToken to return DEPOSIT version
+      jest.spyOn(wallet.storage, 'getToken').mockResolvedValue({
+        uid: tokenId,
+        name: 'Deposit Token',
+        symbol: 'DBT',
+        version: TokenVersion.DEPOSIT,
+      });
+
+      // Mock getTokenDetails for token version
+      jest.spyOn(wallet, 'getTokenDetails').mockResolvedValue({
+        tokenInfo: {
+          id: tokenId,
+          name: 'Deposit Token',
+          symbol: 'DBT',
+          version: TokenVersion.DEPOSIT,
+        },
+        totalSupply: 1000n,
+        totalTransactions: 1,
+        authorities: { mint: false, melt: true },
+      });
+
+      // Token inputs with different address indexes
+      const tokenUtxoAddressIndex = 12;
+
+      // Authority address index
+      const authorityAddressIndex = 18;
+
+      jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(async (amount, params) => {
+        if (params?.token === tokenId) {
+          return {
+            utxos: [
+              {
+                txId: '000000000000000000000000000000000000000000000000000000000000ff01',
+                index: 0,
+                tokenId,
+                address: addresses[0],
+                value: 200n,
+                authorities: 0n,
+                timelock: null,
+                heightlock: null,
+                locked: false,
+                addressPath: `m/280'/280'/0/1/${tokenUtxoAddressIndex}`,
+              },
+            ],
+            changeAmount: 100n,
+          };
+        }
+        return { utxos: [], changeAmount: 0n };
+      });
+
+      // Mock melt authority
+      jest.spyOn(wallet, 'getMeltAuthority').mockResolvedValue([
+        {
+          txId: '000000000000000000000000000000000000000000000000000000000000ee02',
+          index: 0,
+          address: addresses[2],
+          authorities: TOKEN_MELT_MASK,
+        },
+      ]);
+
+      // Mock getAddressIndex for authority address
+      jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(authorityAddressIndex);
+
+      // Capture addressIndexes passed to getInputData
+      const capturedAddressIndexes: number[] = [];
+      jest.spyOn(wallet, 'getInputData').mockImplementation((xp, dtsh, addressIndex) => {
+        capturedAddressIndexes.push(addressIndex);
+        return Buffer.alloc(0);
+      });
+
+      await wallet.prepareMeltTokensData(tokenId, 100n, {
+        meltAuthorityAddress: addresses[2],
+        changeAddress: addresses[2],
+        pinCode: '123456',
+        signTx: true,
+      });
+
+      // Expected input order for deposit tokens (no HTR inputs):
+      // [token input, melt authority]
+      // Expected addressIndexes: [12, 18]
+      expect(capturedAddressIndexes).toHaveLength(2);
+      expect(capturedAddressIndexes[0]).toBe(tokenUtxoAddressIndex); // Token input
+      expect(capturedAddressIndexes[1]).toBe(authorityAddressIndex); // Melt authority (last)
+    });
+  });
+});
