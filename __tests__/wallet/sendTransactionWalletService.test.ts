@@ -1307,7 +1307,7 @@ describe('selectUtxosToUse', () => {
 
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
 
-    // Fee token with change - should increment _feeAmount (lines 721-722)
+    // Fee token with change
     const tokenAmountMap = {
       [FEE_TOKEN_UID]: { version: TokenVersion.FEE, amount: 100n },
     };
@@ -2019,7 +2019,7 @@ describe('prepareTx - Fee Tokens', () => {
           changeAmount: 50n,
         };
       }
-      // HTR for fee payment (line 435: tokenAmountMap[HTR].amount + this._feeAmount)
+      // HTR for fee payment
       if (token === NATIVE_TOKEN_UID) {
         return {
           utxos: [
@@ -2044,7 +2044,7 @@ describe('prepareTx - Fee Tokens', () => {
         type: OutputType.P2PKH,
         address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
         value: 50n,
-        token: FEE_TOKEN_UID, // Fee token output (line 397: increments _feeAmount)
+        token: FEE_TOKEN_UID, // Fee token output
       },
       {
         type: OutputType.P2PKH,
@@ -2061,14 +2061,12 @@ describe('prepareTx - Fee Tokens', () => {
     expect(transaction).toBeDefined();
     expect(transaction.inputs.length).toBeGreaterThanOrEqual(2);
 
-    // Verify FeeHeader was automatically added (lines 474-475)
+    // Verify FeeHeader was automatically added
     expect(transaction.headers).toBeDefined();
     expect(transaction.headers.length).toBe(1);
     expect(transaction.headers[0]).toBeInstanceOf(FeeHeader);
 
     // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
-    // Line 397: increments for user output
-    // Line 722 (selectUtxosToUse): increments for change output
     const feeHeader = transaction.headers[0] as FeeHeader;
     expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
   });
