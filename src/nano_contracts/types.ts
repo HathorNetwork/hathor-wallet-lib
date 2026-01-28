@@ -223,6 +223,8 @@ export type CreateNanoTxData = {
   ncId?: string | null;
   actions?: NanoContractAction[];
   args?: unknown[];
+  /** Fee amount in HTR to be paid for fee-based token operations */
+  feeAmount?: OutputValueType;
 };
 
 export interface NanoContractBlueprintSourceCodeAPIResponse {
