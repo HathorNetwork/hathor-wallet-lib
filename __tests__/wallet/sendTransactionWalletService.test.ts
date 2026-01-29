@@ -1948,6 +1948,90 @@ describe('prepareTxData - Fee Tokens', () => {
       `Invalid input selection. Sum of inputs for token ${NATIVE_TOKEN_UID} is smaller than the sum of outputs.`
     );
   });
+
+  it('should create change output when pre-selected fee token input exceeds output value', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Pre-selected fee token UTXO with value 200n
+    // Pre-selected HTR UTXO with value 10n (to cover fee and HTR output)
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'fee-token-preselected-tx' && index === 0) {
+        return {
+          txId: 'fee-token-preselected-tx',
+          index: 0,
+          value: 200n, // Input value > output value (50n), so change = 150n
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'htr-preselected-tx' && index === 0) {
+        return {
+          txId: 'htr-preselected-tx',
+          index: 0,
+          value: 10n, // Enough to cover fee (2n) and HTR output (1n)
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Pre-selected inputs: fee token + HTR
+    const inputs = [
+      { txId: 'fee-token-preselected-tx', index: 0 },
+      { txId: 'htr-preselected-tx', index: 0 },
+    ];
+
+    // Outputs:
+    // - 50n fee token (generates 1n fee) -> will have change of 150n (generates +1n fee)
+    // - 1n HTR (to require the HTR input)
+    // Total fee: 2n (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR input: 10n, HTR change: 7n
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
+    expect(txData.inputs).toHaveLength(2);
+
+    // Verify outputs: 2 user outputs + 1 fee token change + 1 HTR change = 4 outputs
+    expect(txData.outputs).toHaveLength(4);
+
+    // Verify tokens array (HTR is not included)
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+
+    // Verify FeeHeader is present with correct fee amount
+    // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
+    expect(txData.headers).toBeDefined();
+    expect(txData.headers).toHaveLength(1);
+    expect(txData.headers![0]).toBeInstanceOf(FeeHeader);
+
+    const feeHeader = txData.headers![0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+  });
 });
 
 describe('prepareTx - Fee Tokens', () => {
@@ -1993,6 +2077,87 @@ describe('prepareTx - Fee Tokens', () => {
       }
       return { tokenInfo: null };
     });
+  });
+
+  it('should create change output when pre-selected fee token input exceeds output value', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Pre-selected fee token UTXO with value 200n
+    // Pre-selected HTR UTXO with value 10n (to cover fee and HTR output)
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'fee-token-preselected-tx' && index === 0) {
+        return {
+          txId: 'fee-token-preselected-tx',
+          index: 0,
+          value: 200n, // Input value > output value (50n), so change = 150n
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'htr-preselected-tx' && index === 0) {
+        return {
+          txId: 'htr-preselected-tx',
+          index: 0,
+          value: 10n, // Enough to cover fee (2n) and HTR output (1n)
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Pre-selected inputs: fee token + HTR
+    const inputs = [
+      { txId: 'fee-token-preselected-tx', index: 0 },
+      { txId: 'htr-preselected-tx', index: 0 },
+    ];
+
+    // Outputs:
+    // - 50n fee token (generates 1n fee) -> will have change of 150n (generates +1n fee)
+    // - 1n HTR (to require the HTR input)
+    // Total fee: 2n (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR input: 10n, HTR change: 7n
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    const { transaction } = await sendTransaction.prepareTx();
+
+    // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
+    expect(transaction.inputs).toHaveLength(2);
+
+    // Verify outputs: 2 user outputs + 1 fee token change + 1 HTR change = 4 outputs
+    expect(transaction.outputs).toHaveLength(4);
+
+    // Verify FeeHeader is present with correct fee amount
+    // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
+    expect(transaction.headers).toBeDefined();
+    expect(transaction.headers.length).toBe(1);
+    expect(transaction.headers[0]).toBeInstanceOf(FeeHeader);
+
+    const feeHeader = transaction.headers[0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
   });
 
   it('should prepare fee token transaction with automatic FeeHeader', async () => {

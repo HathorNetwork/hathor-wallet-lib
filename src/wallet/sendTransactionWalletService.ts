@@ -275,6 +275,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           token,
           type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
         });
+
+        // If this is a fee-based token, the change output also incurs a fee
+        if (tokenAmountMap[token].version === TokenVersion.FEE) {
+          this._feeAmount += FEE_PER_OUTPUT;
+        }
       }
     }
 
@@ -559,6 +564,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           token: t,
           type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
         });
+
+        if (tokenAmountMap[t].version === TokenVersion.FEE) {
+          this._feeAmount += FEE_PER_OUTPUT;
+        }
         // If we add a change output, then we must shuffle it
         this.outputs = shuffle(this.outputs);
       }
