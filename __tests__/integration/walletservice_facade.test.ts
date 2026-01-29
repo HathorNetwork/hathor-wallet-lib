@@ -2149,6 +2149,8 @@ describe('Fee-based tokens', () => {
         { pinCode }
       );
       await pollForTx(feeWallet, drainTx.hash!);
+      // Also sync gWallet since the drain goes to its address
+      await pollForTx(gWallet, drainTx.hash!);
     }
 
     // Verify no HTR available
