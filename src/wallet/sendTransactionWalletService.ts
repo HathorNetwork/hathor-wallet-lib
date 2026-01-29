@@ -88,7 +88,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   public fullTxData: IDataTx | null;
 
   // Address paths for the inputs, to be used when signing
-  private _utxosAddressPath: string[];
+  public utxosAddressPath: string[];
 
   // Fee amount to prepare the transaction
   private _feeAmount: bigint;
@@ -112,7 +112,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.mineTransaction = null;
     this.pin = newOptions.pin!;
     this.fullTxData = null;
-    this._utxosAddressPath = [];
+    this.utxosAddressPath = [];
     this._feeAmount = 0n;
   }
 
@@ -206,6 +206,24 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       tokenNeedsInputs.set(token, false);
     }
 
+    // 2.6. Validate pre-selected inputs for CUSTOM TOKENS and create change outputs
+    // This must happen BEFORE calculating HTR requirements because fee-based token
+    // change outputs increment _feeAmount
+    for (const [token, userInputData] of Object.entries(userInputAmountMap)) {
+      // Skip native token - it will be validated after we know the final fee
+      if (token === NATIVE_TOKEN_UID) {
+        continue;
+      }
+
+      this.validatePreSelectedInputs(
+        token,
+        userInputData.amount,
+        tokenAmountMap[token].amount,
+        tokenAmountMap[token].version,
+        finalOutputs
+      );
+    }
+
     // 3. Select UTXOs for custom (non-native) tokens first
     // This must happen BEFORE selecting NATIVE TOKEN UTXOs because:
     // - Selecting UTXOs may create change outputs for fee-based tokens
@@ -237,53 +255,35 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
     }
 
-    // 3.6. Now select UTXOs for HTR (if needed)
-    // At this point we know the final fee amount
-    await this.selectUtxosForTokens(
-      [NATIVE_TOKEN_UID],
-      tokenAmountMap,
-      tokenNeedsInputs,
-      finalInputs,
-      utxosAddressPath,
-      utxoDataMap,
-      finalOutputs
-    );
+    // 3.6. Handle HTR: either validate pre-selected inputs OR auto-select UTXOs
+    // These are mutually exclusive - if user provided HTR inputs, we validate them;
+    // otherwise, we auto-select UTXOs to cover outputs + fees
+    if (NATIVE_TOKEN_UID in userInputAmountMap) {
+      // User provided HTR inputs - validate they cover outputs + fees
+      const userHtrData = userInputAmountMap[NATIVE_TOKEN_UID];
+      const requiredHtr = tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n;
 
-    // 4. Validate pre-selected inputs and create change outputs
-    // Now that we know the final fee amount, we can properly validate if user inputs are sufficient
-    for (const [token, userInputData] of Object.entries(userInputAmountMap)) {
-      if (!(token in tokenAmountMap)) {
-        // This case should not happen if we processed inputs correctly, but for safety:
-        throw new SendTxError(
-          `Invalid input selection. Token ${token} is in the inputs but there are no outputs for it.`
-        );
-      }
-
-      if (userInputData.amount < tokenAmountMap[token].amount) {
-        throw new SendTxError(
-          `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`
-        );
-      }
-
-      if (userInputData.amount > tokenAmountMap[token].amount) {
-        const changeAmount = userInputData.amount - tokenAmountMap[token].amount;
-        const changeAddress =
-          this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
-        finalOutputs.push({
-          address: changeAddress,
-          value: changeAmount,
-          token,
-          type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
-        });
-
-        // If this is a fee-based token, the change output also incurs a fee
-        if (tokenAmountMap[token].version === TokenVersion.FEE) {
-          this._feeAmount += FEE_PER_OUTPUT;
-        }
-      }
+      this.validatePreSelectedInputs(
+        NATIVE_TOKEN_UID,
+        userHtrData.amount,
+        requiredHtr,
+        TokenVersion.NATIVE,
+        finalOutputs
+      );
+    } else {
+      // No HTR inputs provided - auto-select UTXOs if needed
+      await this.selectUtxosForTokens(
+        [NATIVE_TOKEN_UID],
+        tokenAmountMap,
+        tokenNeedsInputs,
+        finalInputs,
+        utxosAddressPath,
+        utxoDataMap,
+        finalOutputs
+      );
     }
 
-    // 4. Update instance properties and shuffle outputs if change was added.
+    // 5. Update instance properties and shuffle outputs if change was added.
     this.inputs = finalInputs;
     // Check if outputs changed to decide on shuffling.
     if (finalOutputs.length > this.outputs.length) {
@@ -292,7 +292,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.outputs = finalOutputs;
     }
 
-    // 5. Create transaction data object
+    // 6. Create transaction data object
     const dataInputs: IDataInput[] = [];
     for (const input of this.inputs) {
       const utxoKey = `${input.txId}:${input.index}`;
@@ -362,7 +362,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       headers,
     };
 
-    this._utxosAddressPath = utxosAddressPath;
+    this.utxosAddressPath = utxosAddressPath;
     this.fullTxData = txData;
 
     return txData;
@@ -399,13 +399,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
     // We need this array to get the addressPath for each input used and be able to sign the input data
     let utxosAddressPath: string[];
+    const tokensWithoutHtr = { ...tokenAmountMap };
+    delete tokensWithoutHtr[NATIVE_TOKEN_UID];
     if (this.inputs.length === 0) {
       // Need to get utxos
       // We already know the full amount for each token, except for HTR
       // to know the HTR amount we need to calculate the fee and then select the UTXOS for HTR
       // Now we can get the utxos and (if needed) change amount for each token
-      const tokensWithoutHtr = { ...tokenAmountMap };
-      delete tokensWithoutHtr[NATIVE_TOKEN_UID];
       utxosAddressPath = await this.selectUtxosToUse(tokensWithoutHtr);
 
       // Only select HTR UTXOs if we actually need HTR (for outputs or fees)
@@ -431,7 +431,21 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     } else {
       // If the user selected the inputs, we must validate that
       // all utxos are valid and the sum is enought to fill the outputs
-      utxosAddressPath = await this.validateUtxos(tokenAmountMap);
+      // ignoreNative=true: HTR inputs will be validated separately below
+      utxosAddressPath = await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true });
+
+      // here we should know the fee amount (in case of any fee-based token change output was added)
+      const htrAmount = (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount;
+      if (htrAmount > 0n) {
+        const htrTokenAmount = {
+          [NATIVE_TOKEN_UID]: {
+            version: TokenVersion.NATIVE,
+            amount: htrAmount,
+          },
+        };
+        const htrAddressPath = await this.validateUtxos(htrTokenAmount, { onlyNative: true });
+        utxosAddressPath.push(...htrAddressPath);
+      }
     }
     const tokens = Object.keys(tokenAmountMap);
     const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
@@ -514,7 +528,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async validateUtxos(tokenAmountMap: TokenMap): Promise<string[]> {
+  async validateUtxos(
+    tokenAmountMap: TokenMap,
+    options: { ignoreNative?: boolean; onlyNative?: boolean } = {}
+  ): Promise<string[]> {
+    const { ignoreNative = false, onlyNative = false } = options;
     const amountInputMap = {};
     const utxosAddressPath: string[] = [];
     for (const input of this.inputs) {
@@ -523,6 +541,18 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         throw new UtxoError(
           `Invalid input selection. Input ${input.txId} at index ${input.index}.`
         );
+      }
+
+      // Skip native token (HTR) inputs when ignoreNative is true
+      // They will be validated in a separate call
+      if (ignoreNative && utxo.tokenId === NATIVE_TOKEN_UID) {
+        continue;
+      }
+
+      // Skip non-native token inputs when onlyNative is true
+      // Custom tokens were already validated in a previous call
+      if (onlyNative && utxo.tokenId !== NATIVE_TOKEN_UID) {
+        continue;
       }
 
       if (!(utxo.tokenId in tokenAmountMap)) {
@@ -640,6 +670,49 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
 
       tokenNeedsInputs.set(token, false);
+    }
+  }
+
+  /**
+   * Validates pre-selected inputs for a specific token and creates change output if needed.
+   * This method checks if the pre-selected input amount is sufficient to cover the required
+   * amount and creates a change output for any excess.
+   *
+   * @param token - The token UID to validate
+   * @param userInputAmount - The total amount of pre-selected inputs for this token
+   * @param requiredAmount - The total amount required (outputs + fees if applicable)
+   * @param tokenVersion - The version of the token (used to determine if fee applies to change)
+   * @param finalOutputs - Array to push change outputs into
+   * @throws {SendTxError} If pre-selected inputs are insufficient
+   */
+  private validatePreSelectedInputs(
+    token: string,
+    userInputAmount: bigint,
+    requiredAmount: bigint,
+    tokenVersion: TokenVersion,
+    finalOutputs: OutputSendTransaction[]
+  ): void {
+    if (userInputAmount < requiredAmount) {
+      throw new SendTxError(
+        `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`
+      );
+    }
+
+    if (userInputAmount > requiredAmount) {
+      const changeAmount = userInputAmount - requiredAmount;
+      const changeAddress =
+        this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+      finalOutputs.push({
+        address: changeAddress,
+        value: changeAmount,
+        token,
+        type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+      });
+
+      // If this is a fee-based token, the change output also incurs a fee
+      if (tokenVersion === TokenVersion.FEE) {
+        this._feeAmount += FEE_PER_OUTPUT;
+      }
     }
   }
 

@@ -4,7 +4,14 @@ import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import { CreateTokenTransaction, FeeHeader, MemoryStore, Output, Storage } from '../../src';
+import {
+  CreateTokenTransaction,
+  FeeHeader,
+  MemoryStore,
+  Output,
+  Storage,
+  transactionUtils,
+} from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
@@ -145,6 +152,23 @@ const feeTokenWallet = {
     'WSgR5fExGsKPtFv4uFyEzojTjhtSdPiZyc',
     'WUBJyFdhWEfwmJFcH59Acwp5LjVp2y5bDX',
     'WPzdPxrUcatvMprWBLDnao6CXWxks59AkE',
+  ],
+};
+/** Dedicated wallet for tests that require an empty wallet (never funded) */
+const emptyFeeWallet = {
+  words:
+    'feel video weapon cradle taste liar produce category balance knife crunch still discover door awful decorate divorce eager empty link word ride call slogan',
+  addresses: [
+    'WmnBf7FqCh8UvD81Wyxo7pJmJeGKpHXE8f',
+    'WbQ6See4d84zKEbf4jBsgDgYnQwYUe4yq3',
+    'WYbqDqmcSVvqoCkxUht5LWxeduHN8vVv5p',
+    'WPM3GUmLN8ksaxxdN2hEG5kUqsL3q4jzUv',
+    'WQsgazdmWioqqRT8nFuUKj8B7FgPRqZxJ3',
+    'Wbva7MG1CQp83WtVFGxkKDYZ3BTpfZoKJC',
+    'WeU2mUfHVNkNKQq6wU42a39D2hWqcmps5W',
+    'WX85ehjqnv9rwRYqS8dKoXdGJhCtNKkmQd',
+    'WQZysm8wLjZqy3j39RwShNFFFGfy17D9xw',
+    'Wfh8oHVEJcUqLeyX9k8YCF6Lnq8Q5wT3in',
   ],
 };
 
@@ -2135,31 +2159,18 @@ describe('Fee-based tokens', () => {
   });
 
   it('should fail to create fee token when wallet has no HTR to pay the fee', async () => {
-    // Setup wallet (may have accumulated HTR from previous tests)
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
-    await feeWallet.start({ pinCode, password });
+    // Use dedicated empty wallet that was never funded
+    // This avoids race conditions from draining HTR to other wallets
+    const { wallet: emptyWalletInstance } = buildWalletInstance({ words: emptyFeeWallet.words });
+    await emptyWalletInstance.start({ pinCode, password });
 
-    // Drain any accumulated HTR by sending it all to gWallet
-    const htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    const currentHtr = htrBalance[0]?.balance.unlocked ?? 0n;
-    if (currentHtr > 0n) {
-      const drainTx = await feeWallet.sendTransaction(
-        WALLET_CONSTANTS.genesis.addresses[0],
-        currentHtr,
-        { pinCode }
-      );
-      await pollForTx(feeWallet, drainTx.hash!);
-      // Also sync gWallet since the drain goes to its address
-      await pollForTx(gWallet, drainTx.hash!);
-    }
-
-    // Verify no HTR available
-    const finalBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(finalBalance[0]?.balance.unlocked ?? 0n).toBe(0n);
+    // Verify no HTR available (wallet was never funded)
+    const balance = await emptyWalletInstance.getBalance(NATIVE_TOKEN_UID);
+    expect(balance[0]?.balance.unlocked ?? 0n).toBe(0n);
 
     // Try to create fee token without HTR to pay the fee
     await expect(
-      feeWallet.createNewToken('NoFundsFeeToken', 'NFFT', 1000n, {
+      emptyWalletInstance.createNewToken('NoFundsFeeToken', 'NFFT', 1000n, {
         pinCode,
         tokenVersion: TokenVersion.FEE,
       })
@@ -2214,5 +2225,226 @@ describe('Fee-based tokens', () => {
         pinCode,
       })
     ).rejects.toThrow(SendTxError);
+  });
+
+  it('should calculate correct HTR change when pre-selected inputs generate fee token change', async () => {
+    // This test verifies that when:
+    // 1. User pre-selects inputs (fee token + HTR)
+    // 2. Fee token input exceeds output (generates change)
+    // 3. Fee token change increments the fee
+    // The HTR change is correctly calculated considering the updated fee
+
+    // Setup wallet and fund it with enough HTR
+    const initialFunding = 20n;
+    const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], initialFunding, {
+      pinCode,
+    });
+    await pollForTx(gWallet, fundTx.hash!);
+
+    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    await feeWallet.start({ pinCode, password });
+    await pollForTx(feeWallet, fundTx.hash!);
+
+    // Create fee token
+    const tokenAmount = 200n;
+    const createTokenTx = (await feeWallet.createNewToken(
+      'PreSelectFeeToken',
+      'PSFT',
+      tokenAmount,
+      {
+        pinCode,
+        tokenVersion: TokenVersion.FEE,
+      }
+    )) as CreateTokenTransaction;
+    await pollForTx(feeWallet, createTokenTx.hash!);
+    const tokenUid = createTokenTx.hash!;
+
+    // Verify token was created
+    const tokenBalance = await feeWallet.getBalance(tokenUid);
+    expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+
+    // Get current HTR balance (after token creation fee of 1n)
+    const htrBalanceBefore = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrBefore = htrBalanceBefore[0].balance.unlocked;
+
+    // Get the UTXOs we'll use as pre-selected inputs
+    const feeTokenUtxos = await feeWallet.getUtxos({ token: tokenUid });
+    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+
+    expect(feeTokenUtxos.utxos.length).toBeGreaterThan(0);
+    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
+
+    const feeTokenUtxo = feeTokenUtxos.utxos[0];
+    const htrUtxo = htrUtxos.utxos[0];
+
+    // Pre-select inputs
+    const inputs = [
+      { txId: feeTokenUtxo.tx_id, index: feeTokenUtxo.index },
+      { txId: htrUtxo.tx_id, index: htrUtxo.index },
+    ];
+
+    // Outputs:
+    // - 50n fee token to external address (generates 1n fee) -> will have change (generates +1n fee)
+    // - 1n HTR output to external address
+    // Total fee: 2n (1 for fee token output + 1 for fee token change)
+    // HTR needed: 1n (output) + 2n (fee) = 3n
+    const outputs = [
+      {
+        // Send to external address so it actually leaves the wallet
+        address: emptyWallet.addresses[1],
+        value: 50n,
+        token: tokenUid,
+      },
+      {
+        // Send to external address so it actually leaves the wallet
+        address: emptyWallet.addresses[0],
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    // Send transaction with pre-selected inputs
+    const sendTx = await feeWallet.sendManyOutputsTransaction(outputs, {
+      inputs,
+      pinCode,
+    });
+    await pollForTx(feeWallet, sendTx.hash!);
+
+    // Verify fee header has correct amount (2n = 2 fee token outputs)
+    expect(sendTx.headers).toHaveLength(1);
+    expect((sendTx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
+
+    // Verify HTR balance after transaction
+    // HTR spent: 1n (output) + 2n (fee) = 3n
+    const htrBalanceAfter = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrAfter = htrBalanceAfter[0].balance.unlocked;
+    expect(htrBefore - htrAfter).toBe(3n);
+
+    // Verify fee token balance (should stay the same, just moved internally + sent 50n)
+    const tokenBalanceAfter = await feeWallet.getBalance(tokenUid);
+    // 200n - 50n sent = 150n remaining
+    expect(tokenBalanceAfter[0].balance.unlocked).toBe(150n);
+  });
+
+  it('should calculate correct HTR change with prepareTxData when pre-selected inputs generate fee token change', async () => {
+    // This test verifies that prepareTxData correctly handles the same scenario:
+    // 1. User pre-selects inputs (fee token + HTR)
+    // 2. Fee token input exceeds output (generates change)
+    // 3. Fee token change increments the fee
+    // The fee header is correctly calculated considering all fee token outputs
+
+    // Setup wallet (may have accumulated HTR from previous tests)
+    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    await feeWallet.start({ pinCode, password });
+
+    // Drain any accumulated HTR by sending it all to gWallet
+    const htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const currentHtr = htrBalance[0]?.balance.unlocked ?? 0n;
+    if (currentHtr > 0n) {
+      const drainTx = await feeWallet.sendTransaction(
+        WALLET_CONSTANTS.genesis.addresses[0],
+        currentHtr,
+        { pinCode }
+      );
+      await pollForTx(feeWallet, drainTx.hash!);
+      await pollForTx(gWallet, drainTx.hash!);
+    }
+
+    // Fund wallet with exact amount needed
+    const initialFunding = 20n;
+    const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], initialFunding, {
+      pinCode,
+    });
+    await pollForTx(gWallet, fundTx.hash!);
+    await pollForTx(feeWallet, fundTx.hash!);
+
+    // Create fee token
+    const tokenAmount = 200n;
+    const createTokenTx = (await feeWallet.createNewToken('FeeBasedToken', 'FBT', tokenAmount, {
+      pinCode,
+      tokenVersion: TokenVersion.FEE,
+    })) as CreateTokenTransaction;
+    await pollForTx(feeWallet, createTokenTx.hash!);
+    const tokenUid = createTokenTx.hash!;
+
+    // Verify token was created
+    const tokenBalance = await feeWallet.getBalance(tokenUid);
+    expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+
+    // Get current HTR balance (after token creation fee of 1n)
+    const htrBalanceBefore = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrBefore = htrBalanceBefore[0].balance.unlocked;
+
+    // Get the UTXOs we'll use as pre-selected inputs
+    const feeTokenUtxos = await feeWallet.getUtxos({ token: tokenUid });
+    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+
+    expect(feeTokenUtxos.utxos.length).toBeGreaterThan(0);
+    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
+
+    const feeTokenUtxo = feeTokenUtxos.utxos[0];
+    expect(feeTokenUtxo.amount).toBe(200n);
+    const htrUtxo = htrUtxos.utxos[0];
+    expect(htrUtxo.amount).toBe(19n); // 20n - 1n from fee token creation output
+
+    // Pre-select inputs
+    const inputs = [
+      { txId: feeTokenUtxo.tx_id, index: feeTokenUtxo.index },
+      { txId: htrUtxo.tx_id, index: htrUtxo.index },
+    ];
+
+    // Outputs:
+    // - 50n fee token to external address (generates 1n fee) -> will have change (generates +1n fee)
+    // - 1n HTR output to external address
+    // Total fee: 2n (1 for fee token output + 1 for fee token change)
+    const outputs = [
+      {
+        // Send to external address so it actually leaves the wallet
+        address: emptyWallet.addresses[1],
+        value: 50n,
+        token: tokenUid,
+      },
+      {
+        // Send to external address so it actually leaves the wallet
+        address: emptyWallet.addresses[0],
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    // Use sendManyOutputsSendTransaction to get the SendTransaction object
+    const sendTx = await feeWallet.sendManyOutputsSendTransaction(outputs, {
+      inputs,
+      pinCode,
+    });
+
+    // Call prepareTxData directly to verify the transaction data
+    // prepareTxData also creates the Transaction object from fullTxData
+    const txData = await sendTx.prepareTxData();
+    sendTx.transaction = transactionUtils.createTransactionFromData(txData, feeWallet.network);
+
+    // Verify fee header has correct amount (2n = 2 fee token outputs: 1 external + 1 change)
+    expect(txData.headers).toHaveLength(1);
+    expect((txData.headers![0] as FeeHeader).entries[0].amount).toBe(2n);
+
+    // Sign the transaction and run from mining
+    await sendTx.signTx(sendTx.utxosAddressPath);
+    const tx = await sendTx.runFromMining();
+    await pollForTx(feeWallet, tx.hash!);
+
+    // Verify fee header on the final transaction
+    expect(tx.headers).toHaveLength(1);
+    expect((tx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
+
+    // Verify HTR balance after transaction
+    // HTR spent: 1n (output) + 2n (fee) = 3n
+    const htrBalanceAfter = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrAfter = htrBalanceAfter[0].balance.unlocked;
+    expect(htrBefore - htrAfter).toBe(3n);
+
+    // Verify fee token balance (should stay the same, just moved internally + sent 50n)
+    const tokenBalanceAfter = await feeWallet.getBalance(tokenUid);
+    // 200n - 50n sent = 150n remaining
+    expect(tokenBalanceAfter[0].balance.unlocked).toBe(150n);
   });
 });

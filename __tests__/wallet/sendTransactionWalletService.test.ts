@@ -1034,7 +1034,7 @@ describe('prepareTxData', () => {
 
     // Check that the instance properties are set
     expect(sendTransaction.fullTxData).toBe(txData);
-    expect(sendTransaction._utxosAddressPath).toEqual(["m/44'/280'/0'/0/1"]);
+    expect(sendTransaction.utxosAddressPath).toEqual(["m/44'/280'/0'/0/1"]);
   });
 
   it('should use changeAddress if provided instead of generating new one', async () => {
@@ -2031,6 +2031,22 @@ describe('prepareTxData - Fee Tokens', () => {
 
     const feeHeader = txData.headers![0] as FeeHeader;
     expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+
+    const feeTokenOutputs = txData.outputs.filter(o => o.token === FEE_TOKEN_UID);
+    const htrOutputs = txData.outputs.filter(o => o.token === NATIVE_TOKEN_UID);
+
+    expect(feeTokenOutputs).toHaveLength(2);
+    expect(htrOutputs).toHaveLength(2);
+
+    // Verify fee token values: user output (50n) + change (150n)
+    const feeTokenValues = feeTokenOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(feeTokenValues[0]).toBe(50);
+    expect(feeTokenValues[1]).toBe(150);
+
+    // Verify HTR values: user output (1n) + change (10n - 1n - 2n fee = 7n)
+    const htrValues = htrOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(htrValues[0]).toBe(1);
+    expect(htrValues[1]).toBe(7);
   });
 });
 
@@ -2158,6 +2174,24 @@ describe('prepareTx - Fee Tokens', () => {
 
     const feeHeader = transaction.headers[0] as FeeHeader;
     expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+
+    const htrOutputs = transaction.outputs.filter(o => o.tokenData === 0);
+    const feeTokenOutputs = transaction.outputs.filter(
+      o => o.tokenData > 0 && transaction.tokens[o.tokenData - 1] === FEE_TOKEN_UID
+    );
+
+    expect(feeTokenOutputs).toHaveLength(2);
+    expect(htrOutputs).toHaveLength(2);
+
+    // Verify fee token values: user output (50n) + change (150n)
+    const feeTokenValues = feeTokenOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(feeTokenValues[0]).toBe(50);
+    expect(feeTokenValues[1]).toBe(150);
+
+    // Verify HTR values: user output (1n) + change (10n - 1n - 2n fee = 7n)
+    const htrValues = htrOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(htrValues[0]).toBe(1);
+    expect(htrValues[1]).toBe(7);
   });
 
   it('should prepare fee token transaction with automatic FeeHeader', async () => {
