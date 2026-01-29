@@ -99,6 +99,8 @@ import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
   CreateTokenOptions,
+  DelegateAuthorityOptions,
+  DestroyAuthorityOptions,
   GeneralTokenInfoSchema,
   GetAuthorityOptions,
   GetAvailableUtxosOptions,
@@ -2221,17 +2223,17 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
-  ) {
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
-    const newOptions: any = { createAnother: true, pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { createAnother: true, pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { createAnother }: any = newOptions;
-    let delegateInput: any;
+    const { createAnother } = newOptions;
+    let delegateInput: IUtxo[];
     if (type === 'mint') {
       delegateInput = await this.getMintAuthority(tokenUid, {
         many: false,
@@ -2247,10 +2249,15 @@ class HathorWallet extends EventEmitter {
     }
 
     if (delegateInput.length === 0) {
-      throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE });
+      // FIXME: This obviously invalid cast is to prevent a breaking change that possibly would only
+      // cause problems at the clients. This fix will need to wait until a major version change.
+      throw new Error({
+        success: false,
+        message: ErrorMessages.NO_UTXOS_AVAILABLE,
+      } as unknown as string);
     }
 
-    const txData: any = await tokenUtils.prepareDelegateAuthorityTxData(
+    const txData = await tokenUtils.prepareDelegateAuthorityTxData(
       tokenUid,
       delegateInput[0],
       destinationAddress,
@@ -2278,7 +2285,7 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     const transaction = await this.prepareDelegateAuthorityData(
       tokenUid,
       type,
@@ -2306,7 +2313,7 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
-  ) {
+  ): Promise<Transaction | null> {
     const sendTx = await this.delegateAuthoritySendTransaction(
       tokenUid,
       type,
@@ -2332,16 +2339,16 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     count: number,
     options: DestroyAuthorityOptions = {}
-  ) {
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
-    const newOptions: any = { pinCode: null, ...options };
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    let destroyInputs: any;
+    let destroyInputs: IUtxo[];
     if (type === 'mint') {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
@@ -2360,7 +2367,7 @@ class HathorWallet extends EventEmitter {
       throw new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
     }
 
-    const data: any = [];
+    const data: IUtxo[] = [];
     for (const utxo of destroyInputs) {
       // FIXME: select utxos passing count to the method
       data.push(utxo);
@@ -2371,7 +2378,7 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const txData: any = tokenUtils.prepareDestroyAuthorityTxData(data);
+    const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
     return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
@@ -2392,7 +2399,7 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     count: number,
     options: DestroyAuthorityOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2415,7 +2422,7 @@ class HathorWallet extends EventEmitter {
     type: 'mint' | 'melt',
     count: number,
     options: DestroyAuthorityOptions = {}
-  ) {
+  ): Promise<Transaction | null> {
     const sendTx = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
     return sendTx.runFromMining();
   }
