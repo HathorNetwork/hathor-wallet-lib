@@ -107,6 +107,8 @@ import {
   GetTxByIdFullnodeFacadeReturnType,
   GetTxHistoryFullnodeFacadeReturnType,
   GetUtxosForAmountOptions,
+  MintTokensOptions,
+  MeltTokensOptions,
   HathorWalletConstructorParams,
   ISignature,
   IWalletInputInfo,
@@ -1975,11 +1977,11 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     amount: OutputValueType,
     options: MintTokensOptions = {}
-  ) {
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
@@ -1992,22 +1994,22 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput: any = await this.getMintAuthority(tokenUid, {
+    const mintInput = await this.getMintAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2016,7 +2018,7 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have mint authority output available.");
     }
 
-    const mintOptions: any = {
+    const mintOptions = {
       token: tokenUid,
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
@@ -2025,7 +2027,7 @@ class HathorWallet extends EventEmitter {
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMintTxData(
+    const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
       amount,
       this.storage,
@@ -2051,7 +2053,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     amount: OutputValueType,
     options: MintTokensOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2068,7 +2070,11 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokens(tokenUid: string, amount: OutputValueType, options: MintTokensOptions = {}) {
+  async mintTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<Transaction | null> {
     const sendTx = await this.mintTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
@@ -2087,11 +2093,11 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     amount: OutputValueType,
     options: MeltTokensOptions = {}
-  ) {
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
@@ -2104,20 +2110,20 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const meltInput: any = await this.getMeltAuthority(tokenUid, {
+    const meltInput = await this.getMeltAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2126,14 +2132,14 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have melt authority output available.");
     }
 
-    const meltOptions: any = {
+    const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
       meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMeltTxData(
+    const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
       meltInput[0],
       newOptions.address || (await this.getCurrentAddress()).address,
@@ -2161,7 +2167,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     amount: OutputValueType,
     options: MeltTokensOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
@@ -2178,7 +2184,11 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokens(tokenUid: string, amount: OutputValueType, options: MeltTokensOptions = {}) {
+  async meltTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<Transaction | null> {
     const sendTx = await this.meltTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
