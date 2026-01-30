@@ -134,6 +134,38 @@ describe('FeeBlueprint Template execution', () => {
     expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
   });
 
+  it('should throw error when calculated fee exceeds maxFee in createNanoContractCreateTokenTransaction', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    // Create fee token with maxFee=0 should fail since token creation has outputs
+    await expect(
+      hWallet.createAndSendNanoContractCreateTokenTransaction(
+        'create_fee_token',
+        address0,
+        {
+          ncId: contractId,
+          args: ['Fee Token Fail', 'FTF', 100],
+          actions: [
+            {
+              type: 'deposit',
+              token: NATIVE_TOKEN_UID,
+              amount: 100n,
+              changeAddress: address0,
+            },
+          ],
+        },
+        {
+          name: 'Fee Token Fail',
+          symbol: 'FTF',
+          amount: 100n,
+          mintAddress: address0,
+          contractPaysTokenDeposit: true,
+        },
+        { maxFee: 0n }
+      )
+    ).rejects.toThrow(/exceeds maximum fee/);
+  });
+
   it('should withdraw DBT without paying fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -164,19 +196,23 @@ describe('FeeBlueprint Template execution', () => {
 
     // FBT withdrawal requires 1n fee per output, but maxFee is 0n
     await expect(
-      hWallet.createAndSendNanoContractTransaction('noop', address0, {
-        ncId: contractId,
-        args: [],
-        actions: [
-          {
-            type: 'withdrawal',
-            token: fbtUid,
-            amount: 10n,
-            address: address0,
-          },
-        ],
-        maxFee: 0n, // Calculated fee (1n) exceeds this
-      })
+      hWallet.createAndSendNanoContractTransaction(
+        'noop',
+        address0,
+        {
+          ncId: contractId,
+          args: [],
+          actions: [
+            {
+              type: 'withdrawal',
+              token: fbtUid,
+              amount: 10n,
+              address: address0,
+            },
+          ],
+        },
+        { maxFee: 0n } // Calculated fee (1n) exceeds this
+      )
     ).rejects.toThrow('Calculated fee (1) exceeds maximum fee (0)');
   });
 
@@ -235,6 +271,29 @@ describe('FeeBlueprint Template execution', () => {
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 100n);
   });
 
+  it('should get an error when trying to pay fees without enough HTR', async () => {
+    /** Dedicated wallet for tests that require an empty wallet (never funded) */
+    const emptyWallet = await generateWalletHelper(null);
+    const address0 = await emptyWallet.getAddressAtIndex(0);
+
+    // Use emptyWallet (which has no HTR) to create a transaction that requires fees
+    // The FBT withdrawal triggers a fee that requires HTR to pay
+    await expect(
+      emptyWallet.createAndSendNanoContractTransaction('noop', address0, {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: fbtUid,
+            amount: 10n,
+            address: address0,
+          },
+        ],
+      })
+    ).rejects.toThrow('Not enough HTR utxos to pay the fee.');
+  });
+
   it('should deposit FBT back to contract paying fees in HTR', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
@@ -259,7 +318,7 @@ describe('FeeBlueprint Template execution', () => {
     expect(feeHeader).not.toBeNull();
     expect(feeHeader!.entries).toHaveLength(1);
     expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
-    expect(feeHeader!.entries[0].amount).toBe(2n);
+    expect(feeHeader!.entries[0].amount).toBe(2n); // 1 FBT change output + 1 FBT deposit
 
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
     // Balance should increase by deposit amount (50)
@@ -278,7 +337,7 @@ describe('FeeBlueprint Template execution', () => {
 
     // Build transaction using template builder for granular control
     // The contract will withdraw HTR from its balance to pay the fee
-    // Fee is 2n because: 1n for FBT change output + 1n for FBT deposit action
+    // Fee is 2n: 1n for FBT change output + 1n for FBT deposit action
     const feeAmount = 2n;
     const depositAmount = 10n;
 

@@ -243,6 +243,8 @@ export interface WalletWebSocketData {
  */
 export interface CreateNanoTxOptions {
   pinCode?: string | null;
+  /** Optional maximum fee in HTR. If not set, fee is auto-calculated without limit. */
+  maxFee?: OutputValueType;
 }
 
 /**

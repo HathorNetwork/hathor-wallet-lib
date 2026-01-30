@@ -223,7 +223,11 @@ export type CreateNanoTxData = {
   ncId?: string | null;
   actions?: NanoContractAction[];
   args?: unknown[];
-  /** Optional maximum fee in HTR. If not set, fee is auto-calculated without limit. */
+};
+
+export type CreateNanoTxOptions = {
+  pinCode?: string | null;
+  /** Optional maximum fee in NATIVE_TOKEN_UID. If not set, fee is auto-calculated without limit. */
   maxFee?: OutputValueType;
 };
 

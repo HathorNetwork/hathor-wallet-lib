@@ -265,18 +265,15 @@ class NanoContractTransactionBuilder {
     // Calculate fee from transaction outputs
     let fee = await Fee.calculate(inputs, outputs as IDataOutputWithToken[], tokensMap);
 
-    // Add fee for deposit actions of fee-based tokens
-    // Deposit actions create "virtual outputs" to contracts that also require fees
-    if (this.actions) {
-      for (const action of this.actions) {
-        if (action.type === NanoContractActionType.DEPOSIT && action.token) {
-          const tokenData = tokensMap.get(action.token);
-          if (tokenData && tokenData.version === TokenVersion.FEE) {
-            fee += FEE_PER_OUTPUT;
-          }
+    // Add fee for deposit actions (tokens going into contracts count as outputs)
+    this.actions?.forEach(action => {
+      if (action.type === NanoContractActionType.DEPOSIT && action.token) {
+        const tokenData = tokensMap.get(action.token);
+        if (tokenData && tokenData.version === TokenVersion.FEE) {
+          fee += FEE_PER_OUTPUT;
         }
       }
-    }
+    });
 
     return fee;
   }

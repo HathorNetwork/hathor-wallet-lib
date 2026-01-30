@@ -84,6 +84,7 @@ import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
+  CreateNanoTxOptions,
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
@@ -2794,7 +2795,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
 
@@ -2828,6 +2829,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setArgs(args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
+
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
@@ -2847,7 +2853,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractTransaction(
       method,
@@ -2878,7 +2884,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
@@ -2948,7 +2954,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
@@ -2992,6 +2998,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setActions(actions)
       .setArgs(args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
+
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
 
     const tx = await builder.build();
 
