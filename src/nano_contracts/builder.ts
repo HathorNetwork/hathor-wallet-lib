@@ -275,6 +275,15 @@ class NanoContractTransactionBuilder {
       }
     });
 
+    // Add fee for token creation outputs when creating a fee-based token
+    // The mint output counts as 1 fee (authority outputs are excluded)
+    if (
+      this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION &&
+      this.createTokenOptions?.tokenVersion === TokenVersion.FEE
+    ) {
+      fee += FEE_PER_OUTPUT;
+    }
+
     return fee;
   }
 
@@ -335,11 +344,19 @@ class NanoContractTransactionBuilder {
       // won't pay for the deposit fee, so we also add in this utxo query
       // the token deposit fee and data output fee
       const dataArray = this.createTokenOptions!.data ?? [];
-      const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
-        this.createTokenOptions!.amount,
-        dataArray.length,
-        this.wallet.storage
-      );
+      let htrToCreateToken: bigint;
+
+      if (this.createTokenOptions!.tokenVersion === TokenVersion.FEE) {
+        // For fee tokens: 1 HTR per non-authority output (mint output) + data fee
+        htrToCreateToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
+      } else {
+        // For deposit tokens: deposit percentage + data fee
+        htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+          this.createTokenOptions!.amount,
+          dataArray.length,
+          this.wallet.storage
+        );
+      }
       amount += htrToCreateToken;
       this.tokenFeeAddedInDeposit = true;
     }
@@ -428,14 +445,22 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      // We pay the deposit in native token uid
+      // We pay the deposit/fee in native token uid
       if (this.createTokenOptions.contractPaysTokenDeposit && action.token === NATIVE_TOKEN_UID) {
         const dataArray = this.createTokenOptions!.data ?? [];
-        const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
-          this.createTokenOptions!.amount,
-          dataArray.length,
-          this.wallet.storage
-        );
+        let htrToCreateToken: bigint;
+
+        if (this.createTokenOptions.tokenVersion === TokenVersion.FEE) {
+          // For fee tokens: 1 HTR per non-authority output (mint output) + data fee
+          htrToCreateToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
+        } else {
+          // For deposit tokens: deposit percentage + data fee
+          htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+            this.createTokenOptions!.amount,
+            dataArray.length,
+            this.wallet.storage
+          );
+        }
         withdrawalAmount -= htrToCreateToken;
       }
     }
@@ -820,6 +845,7 @@ class NanoContractTransactionBuilder {
           isCreateNFT: this.createTokenOptions.isCreateNFT,
           skipDepositFee:
             this.createTokenOptions.contractPaysTokenDeposit || this.tokenFeeAddedInDeposit,
+          tokenVersion: this.createTokenOptions.tokenVersion,
         }
       );
 

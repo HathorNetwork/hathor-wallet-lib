@@ -160,6 +160,7 @@ describe('FeeBlueprint Template execution', () => {
           amount: 100n,
           mintAddress: address0,
           contractPaysTokenDeposit: true,
+          tokenVersion: TokenVersion.FEE,
         },
         { maxFee: 0n }
       )

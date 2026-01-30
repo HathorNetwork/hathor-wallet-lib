@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 import { z } from 'zod';
-import { IHistoryTx, OutputValueType } from '../types';
+import { IHistoryTx, OutputValueType, TokenVersion } from '../types';
 import { bigIntCoercibleSchema } from '../utils/bigint';
 import { NCFieldBase } from './fields';
 
@@ -213,6 +213,8 @@ export interface NanoContractBuilderCreateTokenOptions {
   data: string[] | null;
   // If this token is an NFT
   isCreateNFT: boolean;
+  // Version of the token being created (DEPOSIT or FEE)
+  tokenVersion: TokenVersion;
 }
 
 /**

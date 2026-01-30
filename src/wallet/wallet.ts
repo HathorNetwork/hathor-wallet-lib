@@ -2986,6 +2986,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: false,
       data: null,
       isCreateNFT: false,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
 

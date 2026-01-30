@@ -3198,6 +3198,7 @@ class HathorWallet extends EventEmitter {
       allowExternalMeltAuthorityAddress: false,
       data: null,
       isCreateNFT: false,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...createTokenOptions,
     };
 
