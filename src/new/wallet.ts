@@ -3104,9 +3104,9 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
-    // Set fee amount if declared
-    if (data.feeAmount) {
-      builder.setFeeAmount(BigInt(data.feeAmount));
+    // Set max fee if declared
+    if (data.maxFee !== undefined) {
+      builder.setMaxFee(BigInt(data.maxFee));
     }
 
     const nc: any = await builder.build();

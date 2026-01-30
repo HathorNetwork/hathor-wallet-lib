@@ -13,6 +13,7 @@ import tokensUtils from '../utils/tokens';
 import transactionUtils from '../utils/transaction';
 import {
   DEFAULT_TX_VERSION,
+  FEE_PER_OUTPUT,
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
   TOKEN_MINT_MASK,
@@ -34,11 +35,20 @@ import {
   mapActionToActionHeader,
   validateAndParseBlueprintMethodArgs,
 } from './utils';
-import { AuthorityType, IDataInput, IDataOutput } from '../types';
+import {
+  AuthorityType,
+  IDataInput,
+  IDataOutput,
+  IDataOutputWithToken,
+  ITokenData,
+  TokenVersion,
+} from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
 import FeeHeader from '../headers/fee';
+import { Fee } from '../utils/fee';
+import { Utxo } from '../wallet/types';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -72,8 +82,8 @@ class NanoContractTransactionBuilder {
   // in the action deposit phase
   tokenFeeAddedInDeposit: boolean;
 
-  // Fee amount in HTR to be paid for fee-based token operations
-  feeAmount: bigint | null;
+  // Optional maximum fee in HTR
+  maxFee: bigint | null;
 
   constructor() {
     this.blueprintId = null;
@@ -88,7 +98,7 @@ class NanoContractTransactionBuilder {
     this.vertexType = null;
     this.createTokenOptions = null;
     this.tokenFeeAddedInDeposit = false;
-    this.feeAmount = null;
+    this.maxFee = null;
   }
 
   /**
@@ -193,15 +203,16 @@ class NanoContractTransactionBuilder {
   }
 
   /**
-   * Set the fee amount in HTR for fee-based token operations
+   * Set optional maximum fee limit. If calculated fee exceeds this, build() throws.
+   * If not set, fee is auto-calculated without limit.
    *
-   * @param amount Fee amount in HTR
+   * @param amount Maximum fee amount in HTR
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setFeeAmount(amount: bigint) {
-    this.feeAmount = amount;
+  setMaxFee(amount: bigint) {
+    this.maxFee = amount;
     return this;
   }
 
@@ -213,6 +224,61 @@ class NanoContractTransactionBuilder {
     if (!this.wallet) {
       throw new TypeError('Wallet is required to build nano contract transactions.');
     }
+  }
+
+  /**
+   * Calculate fee for fee-based token operations.
+   *
+   * Fee is calculated from:
+   * 1. Transaction outputs of fee-based tokens (via Fee.calculate)
+   * 2. Deposit actions of fee-based tokens (tokens going into contracts)
+   *
+   * @param inputs Transaction inputs
+   * @param outputs Transaction outputs
+   * @param tokens Token UIDs involved in the transaction
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  async calculateFee(
+    inputs: IDataInput[],
+    outputs: IDataOutput[],
+    tokens: string[]
+  ): Promise<bigint> {
+    this.assertWallet();
+
+    const tokensMap = new Map<string, ITokenData>();
+    for (const uid of tokens) {
+      let tokenData = await this.wallet.storage.getToken(uid);
+      if (!tokenData || tokenData.version === undefined) {
+        const { tokenInfo } = await this.wallet.getTokenDetails(uid);
+        tokenData = {
+          uid,
+          name: tokenInfo.name,
+          symbol: tokenInfo.symbol,
+          version: tokenInfo.version,
+        };
+      }
+      tokensMap.set(uid, tokenData);
+    }
+
+    // Calculate fee from transaction outputs
+    let fee = await Fee.calculate(inputs, outputs as IDataOutputWithToken[], tokensMap);
+
+    // Add fee for deposit actions of fee-based tokens
+    // Deposit actions create "virtual outputs" to contracts that also require fees
+    if (this.actions) {
+      for (const action of this.actions) {
+        if (action.type === NanoContractActionType.DEPOSIT && action.token) {
+          const tokenData = tokensMap.get(action.token);
+          if (tokenData && tokenData.version === TokenVersion.FEE) {
+            fee += FEE_PER_OUTPUT;
+          }
+        }
+      }
+    }
+
+    return fee;
   }
 
   /**
@@ -641,13 +707,6 @@ class NanoContractTransactionBuilder {
       }
     }
 
-    // Select HTR inputs to pay fees if feeAmount is set
-    if (this.feeAmount && this.feeAmount > 0n) {
-      const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(this.feeAmount);
-      inputs = concat(inputs, feeInputs);
-      outputs = concat(outputs, feeOutputs);
-    }
-
     return { inputs, outputs, tokens };
   }
 
@@ -666,7 +725,8 @@ class NanoContractTransactionBuilder {
   }> {
     this.assertWallet();
 
-    let utxosData;
+    let utxosData: { utxos: Utxo[]; changeAmount: bigint };
+
     try {
       utxosData = await this.wallet.getUtxosForAmount(feeAmount, {
         token: NATIVE_TOKEN_UID,
@@ -786,14 +846,31 @@ class NanoContractTransactionBuilder {
    */
   async build(): Promise<Transaction> {
     this.assertWallet();
-    let inputs;
-    let outputs;
-    let tokens;
+    let inputs: IDataInput[] = [];
+    let outputs: IDataOutput[] = [];
+    let tokens: string[] = [];
     try {
       await this.verify();
 
       // Transform actions into inputs and outputs
       ({ inputs, outputs, tokens } = await this.buildInputsOutputs());
+
+      // Calculate fee from resulting outputs (before adding fee inputs)
+      const fee = await this.calculateFee(inputs, outputs, tokens);
+
+      // Validate against maxFee if set
+      if (this.maxFee !== null && fee > this.maxFee) {
+        throw new NanoContractTransactionError(
+          `Calculated fee (${fee}) exceeds maximum fee (${this.maxFee}).`
+        );
+      }
+
+      // Select native token inputs to pay calculated fee (if any)
+      if (fee > 0n) {
+        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
+        inputs = concat(inputs, feeInputs);
+        outputs = concat(outputs, feeOutputs);
+      }
 
       // Serialize the method arguments
       await this.serializeArgs();
@@ -828,9 +905,9 @@ class NanoContractTransactionBuilder {
 
       tx.headers.push(nanoHeader);
 
-      // Add FeeHeader if feeAmount is set (fee is always in HTR, tokenIndex 0)
-      if (this.feeAmount && this.feeAmount > 0n) {
-        const feeHeader = new FeeHeader([{ tokenIndex: 0, amount: this.feeAmount }]);
+      // Add FeeHeader with fee
+      if (fee > 0n) {
+        const feeHeader = new FeeHeader([{ tokenIndex: 0, amount: fee }]);
         feeHeader.validate();
         tx.headers.push(feeHeader);
       }

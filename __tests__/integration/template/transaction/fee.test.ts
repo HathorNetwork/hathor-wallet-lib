@@ -153,6 +153,31 @@ describe('FeeBlueprint Template execution', () => {
 
     expect(tx.outputs).toHaveLength(1);
     expect(tx.outputs[0].value).toEqual(100n);
+
+    // Verify no FeeHeader for DBT (deposit-based token)
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).toBeNull();
+  });
+
+  it('should throw error when calculated fee exceeds maxFee', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    // FBT withdrawal requires 1n fee per output, but maxFee is 0n
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('noop', address0, {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: fbtUid,
+            amount: 10n,
+            address: address0,
+          },
+        ],
+        maxFee: 0n, // Calculated fee (1n) exceeds this
+      })
+    ).rejects.toThrow('Calculated fee (1) exceeds maximum fee (0)');
   });
 
   it('should deposit DBT back to contract', async () => {
@@ -192,8 +217,6 @@ describe('FeeBlueprint Template execution', () => {
           address: address0,
         },
       ],
-      // Fee amount in HTR for fee-based token withdrawal
-      feeAmount: 1n,
     });
     await checkTxValid(hWallet, tx);
 
@@ -205,7 +228,7 @@ describe('FeeBlueprint Template execution', () => {
     expect(feeHeader).not.toBeNull();
     expect(feeHeader!.entries).toHaveLength(1);
     expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
-    expect(feeHeader!.entries[0].amount).toBe(1n);
+    expect(feeHeader!.entries[0].amount).toBe(1n); // 1 FBT output = 1n fee
 
     // Verify contract balance decreased by withdrawal amount
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
@@ -228,8 +251,6 @@ describe('FeeBlueprint Template execution', () => {
           changeAddress: address0,
         },
       ],
-      // Fee amount in HTR for fee-based token deposit
-      feeAmount: 2n,
     });
     await checkTxValid(hWallet, tx);
 
