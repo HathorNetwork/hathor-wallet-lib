@@ -107,6 +107,8 @@ import {
   GetTxByIdFullnodeFacadeReturnType,
   GetTxHistoryFullnodeFacadeReturnType,
   GetUtxosForAmountOptions,
+  MintTokensOptions,
+  MeltTokensOptions,
   HathorWalletConstructorParams,
   ISignature,
   IWalletInputInfo,
@@ -1962,38 +1964,24 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} MintTokensOptions
-   * @property {string?} [address] destination address of the minted token
-   *                                   (if not sent we choose the next available address to use)
-   * @property {string?} [changeAddress] address of the change output
-   *                                   (if not sent we choose the next available address to use)
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining (default true)
-   * @property {boolean?} [createAnotherMint] boolean to create another mint authority or not for the wallet
-   * @property {string?} [mintAuthorityAddress] address to send the new mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [unshiftData] whether to unshift the data script output
-   * @property {string[]|null?} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {boolean?} [signTx=true] sign transaction instance
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   */
-
-  /**
    * Prepare mint transaction before mining
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions} [options] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMintTokensData(tokenUid: any, amount: any, options: any = {}): Promise<any> {
+  async prepareMintTokensData(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
@@ -2006,22 +1994,22 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The mint authority address must belong to your wallet.');
       }
     }
 
-    const mintAddress: any = newOptions.address || (await this.getCurrentAddress()).address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput: any = await this.getMintAuthority(tokenUid, {
+    const mintInput = await this.getMintAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2030,7 +2018,7 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have mint authority output available.");
     }
 
-    const mintOptions: any = {
+    const mintOptions = {
       token: tokenUid,
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
@@ -2039,7 +2027,7 @@ class HathorWallet extends EventEmitter {
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMintTxData(
+    const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
       amount,
       this.storage,
@@ -2054,68 +2042,62 @@ class HathorWallet extends EventEmitter {
    * Mint tokens - SendTransaction
    * Create a SendTransaction instance with a prepared mint tokens transaction.
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions?} [options={}] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokensSendTransaction(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const transaction: any = await this.prepareMintTokensData(tokenUid, amount, options);
+  async mintTokensSendTransaction(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Mint tokens
    *
-   * @param {string} tokenUid UID of the token to mint
-   * @param {OutputValueType} amount Quantity to mint
-   * @param {MintTokensOptions?} [options={}] Options parameters
+   * @param tokenUid - UID of the token to mint
+   * @param amount - Quantity to mint
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>} Promise that resolves with transaction object
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async mintTokens(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.mintTokensSendTransaction(tokenUid, amount, options);
+  async mintTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MintTokensOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.mintTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
 
   /**
-   * @typedef {Object} MeltTokensOptions
-   * @property {string?} [address] address of the HTR deposit back.
-   * @property {string?} [changeAddress] address of the change output.
-   * @property {boolean?} [createAnotherMelt=true] create another melt authority or not.
-   * @property {string?} [meltAuthorityAddress=null] where to send the new melt authority created.
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address to be from another wallet.
-   * @property {boolean?} [unshiftData=false] Add the data outputs in the start of the output list.
-   * @property {string[]?} [data=null] list of data script output to add, UTF-8 encoded.
-   * @property {string?} [pinCode=null] pin to decrypt xpriv information. Optional but required if not set in this.
-   * @property {boolean?} [signTx=true] Sign transaction instance.
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining
-   */
-
-  /**
    * Prepare melt transaction before mining
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options={}] Options parameters
-   *
-   * @return {Promise<Transaction>}
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async prepareMeltTokensData(tokenUid: any, amount: any, options: any = {}): Promise<any> {
+  async prepareMeltTokensData(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
-    const newOptions: any = {
+    const newOptions = {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
@@ -2128,20 +2110,20 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
 
-    const pin: any = newOptions.pinCode || this.pinCode;
+    const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
-      const isAddressMine: any = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
       if (!isAddressMine) {
         throw new Error('The melt authority address must belong to your wallet.');
       }
     }
 
-    const meltInput: any = await this.getMeltAuthority(tokenUid, {
+    const meltInput = await this.getMeltAuthority(tokenUid, {
       many: false,
       only_available_utxos: true,
     });
@@ -2150,14 +2132,14 @@ class HathorWallet extends EventEmitter {
       throw new Error("Don't have melt authority output available.");
     }
 
-    const meltOptions: any = {
+    const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
       meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
       unshiftData: newOptions.unshiftData,
       data: newOptions.data,
     };
-    const txData: any = await tokenUtils.prepareMeltTxData(
+    const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
       meltInput[0],
       newOptions.address || (await this.getCurrentAddress()).address,
@@ -2174,34 +2156,40 @@ class HathorWallet extends EventEmitter {
    * Melt tokens - SendTransaction
    * Create a SendTransaction instance with a prepared melt tokens transaction.
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options] Options parameters
-   *
-   * @return {Promise<SendTransaction>}
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokensSendTransaction(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const transaction: any = await this.prepareMeltTokensData(tokenUid, amount, options);
+  async meltTokensSendTransaction(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<SendTransaction> {
+    const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
     return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
    * Melt tokens
    *
-   * @param {string} tokenUid UID of the token to melt
-   * @param {OutputValueType} amount Quantity to melt
-   * @param {MeltTokensOptions} [options] Options parameters
+   * @param tokenUid - UID of the token to melt
+   * @param amount - Quantity to melt
+   * @param options - Options parameters
    *
-   * @return {Promise<Transaction>}
+   * @return Promise that resolves with transaction object
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async meltTokens(tokenUid: any, amount: any, options: any = {}): Promise<any> {
-    const sendTx: any = await this.meltTokensSendTransaction(tokenUid, amount, options);
+  async meltTokens(
+    tokenUid: string,
+    amount: OutputValueType,
+    options: MeltTokensOptions = {}
+  ): Promise<Transaction | null> {
+    const sendTx = await this.meltTokensSendTransaction(tokenUid, amount, options);
     return sendTx.runFromMining();
   }
 
