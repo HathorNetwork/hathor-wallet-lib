@@ -13,6 +13,8 @@ import HathorWallet from '../../../../src/new/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
 import { TokenVersion } from '../../../../src/types';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
+import CreateTokenTransaction from '../../../../src/models/create_token_transaction';
+import { NanoContractHeaderActionType } from '../../../../src/nano_contracts/types';
 
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
@@ -159,12 +161,80 @@ describe('FeeBlueprint Template execution', () => {
           symbol: 'FTF',
           amount: 100n,
           mintAddress: address0,
-          contractPaysTokenDeposit: true,
           tokenVersion: TokenVersion.FEE,
         },
         { maxFee: 0n }
       )
     ).rejects.toThrow(/exceeds maximum fee/);
+  });
+
+  it('should create fee token with withdrawal and contract pays fees', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const address1 = await hWallet.getAddressAtIndex(1);
+
+    const withdrawalAmount = 10n;
+    const tokenAmount = 1000n;
+    const expectedFee = 1n;
+
+    const tx = await hWallet.createAndSendNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: withdrawalAmount,
+            address: address1,
+          },
+        ],
+      },
+      {
+        name: 'FBT',
+        symbol: 'FTCP',
+        amount: tokenAmount,
+        mintAddress: address0,
+        contractPaysFees: true,
+        tokenVersion: TokenVersion.FEE,
+      }
+    );
+    await checkTxValid(hWallet, tx);
+
+    // Verify the withdrawal output has the REDUCED amount (same as deposit tokens)
+    // withdrawal(10n) - fee(1n) = output(9n)
+    const createTokenTx = tx as CreateTokenTransaction;
+
+    // token output
+    expect(createTokenTx.outputs.length).toBe(4);
+    expect(createTokenTx.outputs[0].value).toBe(1000n);
+    // authorities outputs
+    expect(createTokenTx.outputs[1].value).toBe(1n);
+    expect(createTokenTx.outputs[1].tokenData).toBe(129);
+    expect(createTokenTx.outputs[2].value).toBe(2n);
+    expect(createTokenTx.outputs[2].tokenData).toBe(129);
+    // change output in native token
+    expect(createTokenTx.outputs[3].value).toBe(9n);
+    expect(createTokenTx.outputs[3].tokenData).toBe(0);
+
+    // Verify FeeHeader exists and has correct fee
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].amount).toBe(expectedFee);
+
+    // Verify token was created with FEE version
+    const tokenDetails = await hWallet.getTokenDetails(tx.hash!);
+    expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
+
+    const nanoHeader = createTokenTx.getNanoHeaders();
+    expect(nanoHeader.length).toBe(1);
+    expect(nanoHeader[0].actions.length).toBe(1);
+    expect(nanoHeader[0].actions[0].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+
+    // Withdrawal header shows original amount (10n)
+    // Validation: withdrawal(10n) = output(9n) + FeeHeader(1n)
+    expect(nanoHeader[0].actions[0].amount).toBe(withdrawalAmount);
   });
 
   it('should withdraw DBT without paying fees', async () => {
@@ -186,6 +256,11 @@ describe('FeeBlueprint Template execution', () => {
 
     expect(tx.outputs).toHaveLength(1);
     expect(tx.outputs[0].value).toEqual(100n);
+
+    expect(tx.headers.length).toBe(1);
+    expect(tx.getNanoHeaders()[0].actions.length).toBe(1);
+    expect(tx.getNanoHeaders()[0].actions[0].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+    expect(tx.getNanoHeaders()[0].actions[0].amount).toBe(100n);
 
     // Verify no FeeHeader for DBT (deposit-based token)
     const feeHeader = tx.getFeeHeader();
@@ -257,8 +332,12 @@ describe('FeeBlueprint Template execution', () => {
     });
     await checkTxValid(hWallet, tx);
 
-    // Verify the withdrawal output exists
-    expect(tx.outputs.length).toBeGreaterThanOrEqual(1);
+    // Verify the withdrawal output
+    expect(tx.outputs.length).toBe(2);
+    expect(tx.outputs[0].value).toBe(100n);
+    expect(tx.outputs[0].tokenData).toBe(1);
+
+    expect(tx.inputs.length).toBe(1);
 
     // Verify the FeeHeader
     const feeHeader = tx.getFeeHeader();

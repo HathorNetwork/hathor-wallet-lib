@@ -215,6 +215,8 @@ export interface NanoContractBuilderCreateTokenOptions {
   isCreateNFT: boolean;
   // Version of the token being created (DEPOSIT or FEE)
   tokenVersion: TokenVersion;
+  // If the contract will pay the transaction fees (for FEE tokens)
+  contractPaysFees?: boolean;
 }
 
 /**

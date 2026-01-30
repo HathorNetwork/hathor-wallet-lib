@@ -49,6 +49,7 @@ import leb128 from '../utils/leb128';
 import FeeHeader from '../headers/fee';
 import { Fee } from '../utils/fee';
 import { Utxo } from '../wallet/types';
+import { Header } from '../headers';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -84,6 +85,16 @@ class NanoContractTransactionBuilder {
 
   // Optional maximum fee in HTR
   maxFee: bigint | null;
+
+  get isCreateTokenTransaction(): boolean {
+    return this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION;
+  }
+
+  get isCreatingFeeToken(): boolean {
+    return (
+      this.isCreateTokenTransaction && this.createTokenOptions?.tokenVersion === TokenVersion.FEE
+    );
+  }
 
   constructor() {
     this.blueprintId = null;
@@ -265,6 +276,10 @@ class NanoContractTransactionBuilder {
     // Calculate fee from transaction outputs
     let fee = await Fee.calculate(inputs, outputs as IDataOutputWithToken[], tokensMap);
 
+    if (this.isCreatingFeeToken) {
+      fee += FEE_PER_OUTPUT;
+    }
+
     // Add fee for deposit actions (tokens going into contracts count as outputs)
     this.actions?.forEach(action => {
       if (action.type === NanoContractActionType.DEPOSIT && action.token) {
@@ -274,15 +289,6 @@ class NanoContractTransactionBuilder {
         }
       }
     });
-
-    // Add fee for token creation outputs when creating a fee-based token
-    // The mint output counts as 1 fee (authority outputs are excluded)
-    if (
-      this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION &&
-      this.createTokenOptions?.tokenVersion === TokenVersion.FEE
-    ) {
-      fee += FEE_PER_OUTPUT;
-    }
 
     return fee;
   }
@@ -336,8 +342,9 @@ class NanoContractTransactionBuilder {
     let { amount } = action;
     if (
       action.token === NATIVE_TOKEN_UID &&
-      this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION &&
-      !this.createTokenOptions!.contractPaysTokenDeposit
+      this.isCreateTokenTransaction &&
+      !this.createTokenOptions!.contractPaysTokenDeposit &&
+      !this.createTokenOptions!.contractPaysFees
     ) {
       // We will query for HTR utxos to fill the deposit action
       // and this is a transaction that creates a token and the contract
@@ -345,12 +352,9 @@ class NanoContractTransactionBuilder {
       // the token deposit fee and data output fee
       const dataArray = this.createTokenOptions!.data ?? [];
       let htrToCreateToken: bigint;
-
       if (this.createTokenOptions!.tokenVersion === TokenVersion.FEE) {
-        // For fee tokens: 1 HTR per non-authority output (mint output) + data fee
         htrToCreateToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
       } else {
-        // For deposit tokens: deposit percentage + data fee
         htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
           this.createTokenOptions!.amount,
           dataArray.length,
@@ -438,7 +442,7 @@ class NanoContractTransactionBuilder {
     // If it's a token creation creation tx and the contract is paying the deposit fee, then
     // we must reduce the amount created for the output from the total action amount
     let withdrawalAmount = action.amount;
-    if (this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION) {
+    if (this.isCreateTokenTransaction) {
       if (this.createTokenOptions === null) {
         throw new NanoContractTransactionError(
           'For a token creation transaction we must have the options defined.'
@@ -446,22 +450,25 @@ class NanoContractTransactionBuilder {
       }
 
       // We pay the deposit/fee in native token uid
-      if (this.createTokenOptions.contractPaysTokenDeposit && action.token === NATIVE_TOKEN_UID) {
+      if (action.token === NATIVE_TOKEN_UID) {
         const dataArray = this.createTokenOptions!.data ?? [];
-        let htrToCreateToken: bigint;
 
-        if (this.createTokenOptions.tokenVersion === TokenVersion.FEE) {
-          // For fee tokens: 1 HTR per non-authority output (mint output) + data fee
-          htrToCreateToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
-        } else {
-          // For deposit tokens: deposit percentage + data fee
-          htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+        if (
+          this.createTokenOptions.tokenVersion === TokenVersion.FEE &&
+          this.createTokenOptions.contractPaysFees
+        ) {
+          // FEE tokens: contract pays fee via deduction from withdrawal
+          const feeForToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
+          withdrawalAmount -= feeForToken;
+        } else if (this.createTokenOptions.contractPaysTokenDeposit) {
+          // DEPOSIT tokens: contract pays deposit via deduction
+          const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
             this.createTokenOptions!.amount,
             dataArray.length,
             this.wallet.storage
           );
+          withdrawalAmount -= htrToCreateToken;
         }
-        withdrawalAmount -= htrToCreateToken;
       }
     }
 
@@ -804,7 +811,8 @@ class NanoContractTransactionBuilder {
   async buildTransaction(
     inputs: IDataInput[],
     outputs: IDataOutput[],
-    tokens: string[]
+    tokens: string[],
+    headers: Header[] = []
   ): Promise<Transaction | CreateTokenTransaction> {
     this.assertWallet();
     if (this.vertexType === NanoContractVertexType.TRANSACTION) {
@@ -819,7 +827,7 @@ class NanoContractTransactionBuilder {
       );
     }
 
-    if (this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION) {
+    if (this.isCreateTokenTransaction) {
       if (this.createTokenOptions === null) {
         throw new NanoContractTransactionError(
           'Create token options cannot be null when creating a create token transaction.'
@@ -844,7 +852,9 @@ class NanoContractTransactionBuilder {
           data: this.createTokenOptions.data,
           isCreateNFT: this.createTokenOptions.isCreateNFT,
           skipDepositFee:
-            this.createTokenOptions.contractPaysTokenDeposit || this.tokenFeeAddedInDeposit,
+            this.createTokenOptions.contractPaysTokenDeposit ||
+            this.tokenFeeAddedInDeposit ||
+            this.createTokenOptions.contractPaysFees,
           tokenVersion: this.createTokenOptions.tokenVersion,
         }
       );
@@ -852,6 +862,7 @@ class NanoContractTransactionBuilder {
       data.inputs = concat(data.inputs, inputs);
       data.outputs = concat(data.outputs, outputs);
       data.tokens = uniq(concat(data.tokens, tokens));
+      data.headers = concat(data.headers ?? [], headers);
 
       return transactionUtils.createTransactionFromData(data, this.wallet.getNetworkObject());
     }
@@ -878,23 +889,6 @@ class NanoContractTransactionBuilder {
       // Transform actions into inputs and outputs
       ({ inputs, outputs, tokens } = await this.buildInputsOutputs());
 
-      // Calculate fee from resulting outputs (before adding fee inputs)
-      const fee = await this.calculateFee(inputs, outputs, tokens);
-
-      // Validate against maxFee if set
-      if (this.maxFee !== null && fee > this.maxFee) {
-        throw new NanoContractTransactionError(
-          `Calculated fee (${fee}) exceeds maximum fee (${this.maxFee}).`
-        );
-      }
-
-      // Select native token inputs to pay calculated fee (if any)
-      if (fee > 0n) {
-        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
-        inputs = concat(inputs, feeInputs);
-        outputs = concat(outputs, feeOutputs);
-      }
-
       // Serialize the method arguments
       await this.serializeArgs();
 
@@ -905,7 +899,25 @@ class NanoContractTransactionBuilder {
         throw new Error('This should never happen.');
       }
 
+      // the prepareMintTxData used by create token transactions already calculates the fee and adds it to the header
+      // since it's auto generated we can rely on the native token index
+      const fee = await this.calculateFee(inputs, outputs, tokens);
+
+      // Validate against maxFee if set
+      if (this.maxFee !== null && fee > this.maxFee) {
+        throw new NanoContractTransactionError(
+          `Calculated fee (${fee}) exceeds maximum fee (${this.maxFee}).`
+        );
+      }
+
+      if (fee > 0n && !this.createTokenOptions?.contractPaysFees) {
+        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
+        inputs = concat(inputs, feeInputs);
+        outputs = concat(outputs, feeOutputs);
+      }
+
       const tx = await this.buildTransaction(inputs, outputs, tokens);
+
       const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
