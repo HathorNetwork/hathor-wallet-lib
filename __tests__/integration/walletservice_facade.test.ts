@@ -2333,24 +2333,11 @@ describe('Fee-based tokens', () => {
     // 3. Fee token change increments the fee
     // The fee header is correctly calculated considering all fee token outputs
 
-    // Setup wallet (may have accumulated HTR from previous tests)
+    // Setup wallet
     ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
 
-    // Drain any accumulated HTR by sending it all to gWallet
-    const htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    const currentHtr = htrBalance[0]?.balance.unlocked ?? 0n;
-    if (currentHtr > 0n) {
-      const drainTx = await feeWallet.sendTransaction(
-        WALLET_CONSTANTS.genesis.addresses[0],
-        currentHtr,
-        { pinCode }
-      );
-      await pollForTx(feeWallet, drainTx.hash!);
-      await pollForTx(gWallet, drainTx.hash!);
-    }
-
-    // Fund wallet with exact amount needed
+    // Fund wallet with HTR for token creation and transaction fees
     const initialFunding = 20n;
     const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], initialFunding, {
       pinCode,
@@ -2358,7 +2345,11 @@ describe('Fee-based tokens', () => {
     await pollForTx(gWallet, fundTx.hash!);
     await pollForTx(feeWallet, fundTx.hash!);
 
-    // Create fee token
+    // Get HTR balance before token creation
+    const htrBalanceBeforeTokenCreation = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrBeforeTokenCreation = htrBalanceBeforeTokenCreation[0].balance.unlocked;
+
+    // Create fee token (costs 1n fee)
     const tokenAmount = 200n;
     const createTokenTx = (await feeWallet.createNewToken('FeeBasedToken', 'FBT', tokenAmount, {
       pinCode,
@@ -2375,22 +2366,28 @@ describe('Fee-based tokens', () => {
     const htrBalanceBefore = await feeWallet.getBalance(NATIVE_TOKEN_UID);
     const htrBefore = htrBalanceBefore[0].balance.unlocked;
 
-    // Get the UTXOs we'll use as pre-selected inputs
+    // Verify token creation cost 1n fee
+    expect(htrBeforeTokenCreation - htrBefore).toBe(1n);
+
+    // Get the fee token UTXO (should have full amount)
     const feeTokenUtxos = await feeWallet.getUtxos({ token: tokenUid });
-    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
-
     expect(feeTokenUtxos.utxos.length).toBeGreaterThan(0);
-    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
-
     const feeTokenUtxo = feeTokenUtxos.utxos[0];
     expect(feeTokenUtxo.amount).toBe(200n);
-    const htrUtxo = htrUtxos.utxos[0];
-    expect(htrUtxo.amount).toBe(19n); // 20n - 1n from fee token creation output
+
+    // Get a single HTR UTXO to use as pre-selected input
+    // We need one that has enough for output (1n) + fee (2n) = 3n minimum
+    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
+
+    // Find a UTXO with at least 3n (1n output + 2n fee)
+    const htrUtxo = htrUtxos.utxos.find(utxo => utxo.amount >= 3n);
+    expect(htrUtxo).toBeDefined();
 
     // Pre-select inputs
     const inputs = [
       { txId: feeTokenUtxo.tx_id, index: feeTokenUtxo.index },
-      { txId: htrUtxo.tx_id, index: htrUtxo.index },
+      { txId: htrUtxo!.tx_id, index: htrUtxo!.index },
     ];
 
     // Outputs:
@@ -2436,10 +2433,13 @@ describe('Fee-based tokens', () => {
     expect(tx.headers).toHaveLength(1);
     expect((tx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
 
-    // Verify HTR balance after transaction
-    // HTR spent: 1n (output) + 2n (fee) = 3n
+    // Verify HTR balance change
+    // From the pre-selected UTXO: spent 1n (output) + 2n (fee) = 3n
+    // Change returned: htrUtxoAmount - 3n
     const htrBalanceAfter = await feeWallet.getBalance(NATIVE_TOKEN_UID);
     const htrAfter = htrBalanceAfter[0].balance.unlocked;
+
+    // The total balance change should be 3n (1n sent + 2n fee)
     expect(htrBefore - htrAfter).toBe(3n);
 
     // Verify fee token balance (should stay the same, just moved internally + sent 50n)
