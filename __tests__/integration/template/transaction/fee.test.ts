@@ -295,6 +295,33 @@ describe('FeeBlueprint Template execution', () => {
     expect(nanoHeaders[0].actions[1].amount).toBe(htrWithdrawalAmount);
   });
 
+  it('should throw error when contractPaysFees is used without HTR withdrawal', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    // Try to withdraw FBT with contractPaysFees but without HTR withdrawal
+    // This should fail because there's no HTR output to deduct the fee from
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(
+        'noop',
+        address0,
+        {
+          ncId: contractId,
+          args: [],
+          actions: [
+            {
+              type: 'withdrawal',
+              token: fbtUid,
+              amount: 10n,
+              address: address0,
+            },
+            // No HTR withdrawal - fee cannot be deducted
+          ],
+        },
+        { contractPaysFees: true }
+      )
+    ).rejects.toThrow('No available HTR output to deduct fee from.');
+  });
+
   it('should throw error when HTR withdrawal is insufficient to cover fee with contractPaysFees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 

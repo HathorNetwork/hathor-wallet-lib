@@ -933,17 +933,19 @@ class NanoContractTransactionBuilder {
         const htrOutputIndex = outputs.findIndex(
           output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
         );
-        if (htrOutputIndex !== -1) {
-          const htrOutput = outputs[htrOutputIndex];
-          htrOutput.value -= fee;
-          if (htrOutput.value === 0n) {
-            // Remove output if value becomes zero
-            outputs.splice(htrOutputIndex, 1);
-          } else if (htrOutput.value < 0n) {
-            throw new NanoContractTransactionError(
-              `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value + fee}, Fee: ${fee}`
-            );
-          }
+        if (htrOutputIndex === -1) {
+          throw new NanoContractTransactionError('No available HTR output to deduct fee from.');
+        }
+        const htrOutput = outputs[htrOutputIndex];
+        htrOutput.value -= fee;
+        if (htrOutput.value < 0n) {
+          throw new NanoContractTransactionError(
+            `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${fee}`
+          );
+        }
+        if (htrOutput.value === 0n) {
+          // Remove output if value becomes zero
+          outputs.splice(htrOutputIndex, 1);
         }
       }
 
