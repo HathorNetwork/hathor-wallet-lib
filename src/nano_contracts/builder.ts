@@ -40,7 +40,6 @@ import {
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
-  ITokenData,
   TokenVersion,
 } from '../types';
 import NanoContractHeader from './header';
@@ -275,23 +274,14 @@ class NanoContractTransactionBuilder {
   ): Promise<bigint> {
     this.assertWallet();
 
-    const tokensMap = new Map<string, ITokenData>();
-    for (const uid of tokens) {
-      let tokenData = await this.wallet.storage.getToken(uid);
-      if (!tokenData || tokenData.version === undefined) {
-        const { tokenInfo } = await this.wallet.getTokenDetails(uid);
-        tokenData = {
-          uid,
-          name: tokenInfo.name,
-          symbol: tokenInfo.symbol,
-          version: tokenInfo.version,
-        };
-      }
-      tokensMap.set(uid, tokenData);
-    }
-
-    // Calculate fee from transaction outputs
-    let fee = await Fee.calculate(inputs, outputs as IDataOutputWithToken[], tokensMap);
+    let fee = 0n;
+    const { fee: calculatedFee, tokensMap } = await Fee.fetchTokensAndCalculateFee(
+      this.wallet,
+      inputs,
+      outputs as IDataOutputWithToken[],
+      tokens
+    );
+    fee += calculatedFee;
 
     if (this.isCreatingFeeToken) {
       fee += FEE_PER_OUTPUT;
