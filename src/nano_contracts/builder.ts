@@ -477,6 +477,12 @@ class NanoContractTransactionBuilder {
       return null;
     }
 
+    if (withdrawalAmount < 0n) {
+      throw new NanoContractTransactionError(
+        `Withdrawal amount ${withdrawalAmount} for token ${action.token} is less than 0.`
+      );
+    }
+
     if (!action.address) {
       throw new NanoContractTransactionError(
         'Address is required for withdrawal action that creates outputs.'

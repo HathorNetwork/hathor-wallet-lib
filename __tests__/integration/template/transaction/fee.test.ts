@@ -237,6 +237,37 @@ describe('FeeBlueprint Template execution', () => {
     expect(nanoHeader[0].actions[0].amount).toBe(withdrawalAmount);
   });
 
+  it('should throw error when withdrawal amount is insufficient to cover token deposit', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    await expect(
+      hWallet.createAndSendNanoContractCreateTokenTransaction(
+        'noop',
+        address0,
+        {
+          ncId: contractId,
+          args: [],
+          actions: [
+            {
+              type: 'withdrawal',
+              token: NATIVE_TOKEN_UID,
+              amount: 100n,
+              address: address0,
+            },
+          ],
+        },
+        {
+          name: 'Deposit Test Token Fail',
+          symbol: 'DTTF',
+          amount: 20000n, // Requires 200n deposit
+          mintAddress: address0,
+          contractPaysTokenDeposit: true,
+          tokenVersion: TokenVersion.DEPOSIT,
+        }
+      )
+    ).rejects.toThrow('Withdrawal amount -100 for token 00 is less than 0.');
+  });
+
   it('should withdraw DBT without paying fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
