@@ -4,8 +4,8 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+/* eslint max-classes-per-file: ["error", 3] */
 
-// eslint-disable-next-line max-classes-per-file
 import { z } from 'zod';
 import {
   TokenVersion,
@@ -318,7 +318,6 @@ export class TxTemplateContext {
     this._logs = [];
     this._logger = logger ?? getDefaultLogger();
     this.debug = debug;
-    this._fees = new Map();
   }
 
   /**

@@ -112,7 +112,7 @@ export function findInstructionExecution(
  * Execution for FeeInstruction
  */
 export async function execFeeInstruction(
-  _interpreter: ITxTemplateInterpreter,
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof FeeInstruction>
 ) {
@@ -1081,7 +1081,7 @@ async function validateAcquireAuthorityNanoAction(
  * Execution for NanoMethodInstruction
  */
 export async function execNanoMethodInstruction(
-  interpreter: ITxTemplateInterpreter,
+  _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: z.infer<typeof NanoMethodInstruction>
 ) {
@@ -1103,16 +1103,16 @@ export async function execNanoMethodInstruction(
   for (const action of ins.actions || []) {
     switch (action.action) {
       case 'deposit':
-        actions.push(await validateDepositNanoAction(interpreter, ctx, action));
+        actions.push(await validateDepositNanoAction(_interpreter, ctx, action));
         break;
       case 'withdrawal':
-        actions.push(await validateWithdrawalNanoAction(interpreter, ctx, action));
+        actions.push(await validateWithdrawalNanoAction(_interpreter, ctx, action));
         break;
       case 'grant_authority':
-        actions.push(await validateGrantAuthorityNanoAction(interpreter, ctx, action));
+        actions.push(await validateGrantAuthorityNanoAction(_interpreter, ctx, action));
         break;
       case 'acquire_authority':
-        actions.push(await validateAcquireAuthorityNanoAction(interpreter, ctx, action));
+        actions.push(await validateAcquireAuthorityNanoAction(_interpreter, ctx, action));
         break;
       default:
         ctx.log(`Called nano method execute with action ${JSON.stringify(action)}`);
