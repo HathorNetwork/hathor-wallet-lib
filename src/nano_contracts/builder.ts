@@ -86,6 +86,9 @@ class NanoContractTransactionBuilder {
   // Optional maximum fee in HTR
   maxFee: bigint | null;
 
+  // If the contract will pay the transaction fees
+  contractPaysFees: boolean;
+
   get isCreateTokenTransaction(): boolean {
     return this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION;
   }
@@ -110,6 +113,7 @@ class NanoContractTransactionBuilder {
     this.createTokenOptions = null;
     this.tokenFeeAddedInDeposit = false;
     this.maxFee = null;
+    this.contractPaysFees = false;
   }
 
   /**
@@ -224,6 +228,19 @@ class NanoContractTransactionBuilder {
    */
   setMaxFee(amount: bigint) {
     this.maxFee = amount;
+    return this;
+  }
+
+  /**
+   * Set whether the contract pays the transaction fees (for FEE tokens)
+   *
+   * @param pays If true, the contract will pay the fees from withdrawal
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  setContractPaysFees(pays: boolean): this {
+    this.contractPaysFees = pays;
     return this;
   }
 
@@ -344,7 +361,7 @@ class NanoContractTransactionBuilder {
       action.token === NATIVE_TOKEN_UID &&
       this.isCreateTokenTransaction &&
       !this.createTokenOptions!.contractPaysTokenDeposit &&
-      !this.createTokenOptions!.contractPaysFees
+      !this.contractPaysFees
     ) {
       // We will query for HTR utxos to fill the deposit action
       // and this is a transaction that creates a token and the contract
@@ -453,10 +470,7 @@ class NanoContractTransactionBuilder {
       if (action.token === NATIVE_TOKEN_UID) {
         const dataArray = this.createTokenOptions!.data ?? [];
 
-        if (
-          this.createTokenOptions.tokenVersion === TokenVersion.FEE &&
-          this.createTokenOptions.contractPaysFees
-        ) {
+        if (this.createTokenOptions.tokenVersion === TokenVersion.FEE && this.contractPaysFees) {
           // FEE tokens: contract pays fee via deduction from withdrawal
           const feeForToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
           withdrawalAmount -= feeForToken;
@@ -860,8 +874,8 @@ class NanoContractTransactionBuilder {
           skipDepositFee:
             this.createTokenOptions.contractPaysTokenDeposit ||
             this.tokenFeeAddedInDeposit ||
-            this.createTokenOptions.contractPaysFees,
-          skipFeeCalculation: this.isCreatingFeeToken || this.createTokenOptions.contractPaysFees,
+            this.contractPaysFees,
+          skipFeeCalculation: this.isCreatingFeeToken || this.contractPaysFees,
           tokenVersion: this.createTokenOptions.tokenVersion,
         }
       );
@@ -917,10 +931,30 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      if (fee > 0n && !this.createTokenOptions?.contractPaysFees) {
+      if (fee > 0n && !this.contractPaysFees) {
         const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
         inputs = concat(inputs, feeInputs);
         outputs = concat(outputs, feeOutputs);
+      }
+
+      // For regular nano contract transactions with contractPaysFees,
+      // deduct fee from HTR withdrawal output
+      if (fee > 0n && this.contractPaysFees && !this.isCreateTokenTransaction) {
+        const htrOutputIndex = outputs.findIndex(
+          output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
+        );
+        if (htrOutputIndex !== -1) {
+          const htrOutput = outputs[htrOutputIndex];
+          htrOutput.value -= fee;
+          if (htrOutput.value === 0n) {
+            // Remove output if value becomes zero
+            outputs.splice(htrOutputIndex, 1);
+          } else if (htrOutput.value < 0n) {
+            throw new NanoContractTransactionError(
+              `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value + fee}, Fee: ${fee}`
+            );
+          }
+        }
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);

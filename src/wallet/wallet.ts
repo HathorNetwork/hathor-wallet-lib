@@ -2832,6 +2832,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       builder.setMaxFee(newOptions.maxFee);
     }
 
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
+
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
@@ -3001,6 +3006,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Set max fee if declared
     if (newOptions.maxFee !== undefined) {
       builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
     const tx = await builder.build();

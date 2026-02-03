@@ -196,9 +196,9 @@ describe('FeeBlueprint Template execution', () => {
         symbol: 'FTCP',
         amount: tokenAmount,
         mintAddress: address0,
-        contractPaysFees: true,
         tokenVersion: TokenVersion.FEE,
-      }
+      },
+      { contractPaysFees: true }
     );
     await checkTxValid(hWallet, tx);
 
@@ -235,6 +235,131 @@ describe('FeeBlueprint Template execution', () => {
     // Withdrawal header shows original amount (10n)
     // Validation: withdrawal(10n) = output(9n) + FeeHeader(1n)
     expect(nanoHeader[0].actions[0].amount).toBe(withdrawalAmount);
+  });
+
+  it('should withdraw FBT with contract paying fees via HTR withdrawal', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    const fbtWithdrawalAmount = 100n;
+    const htrWithdrawalAmount = 1n; // Exact fee amount, no output created
+    const expectedFee = 1n; // 1 FBT output = 1n fee
+
+    const tx = await hWallet.createAndSendNanoContractTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: fbtUid,
+            amount: fbtWithdrawalAmount,
+            address: address0,
+          },
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: htrWithdrawalAmount,
+            address: address0,
+          },
+        ],
+      },
+      { contractPaysFees: true }
+    );
+    await checkTxValid(hWallet, tx);
+
+    // Verify no inputs from wallet (contract pays fees)
+    expect(tx.inputs.length).toBe(0);
+
+    // Verify outputs:
+    // - FBT withdrawal output (100n)
+    // - No HTR output because withdrawal(1n) - fee(1n) = 0n
+    expect(tx.outputs.length).toBe(1);
+    expect(tx.outputs[0].value).toBe(fbtWithdrawalAmount);
+    expect(tx.outputs[0].tokenData).toBe(1); // FBT token index
+
+    // Verify FeeHeader exists with correct fee
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(feeHeader!.entries[0].amount).toBe(expectedFee);
+
+    // Verify nano header has both withdrawal actions
+    const nanoHeaders = tx.getNanoHeaders();
+    expect(nanoHeaders.length).toBe(1);
+    expect(nanoHeaders[0].actions.length).toBe(2);
+    expect(nanoHeaders[0].actions[0].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+    expect(nanoHeaders[0].actions[0].amount).toBe(fbtWithdrawalAmount);
+    expect(nanoHeaders[0].actions[1].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+    expect(nanoHeaders[0].actions[1].amount).toBe(htrWithdrawalAmount);
+  });
+
+  it('should throw error when HTR withdrawal is insufficient to cover fee with contractPaysFees', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    // Create a second fee token to have 2 different FBT outputs
+    const createTx = await hWallet.createAndSendNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: 1n,
+            address: address0,
+          },
+        ],
+      },
+      {
+        name: 'Fee Token 2',
+        symbol: 'FT2',
+        amount: 100n,
+        mintAddress: address0,
+        tokenVersion: TokenVersion.FEE,
+      },
+      { contractPaysFees: true }
+    );
+    await checkTxValid(hWallet, createTx);
+    const fbt2Uid = createTx.hash!;
+
+    // Now try to withdraw both fee tokens with insufficient HTR
+    // 2 different FBT outputs = 2n fee required
+    // But only 1n HTR withdrawal = insufficient
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(
+        'noop',
+        address0,
+        {
+          ncId: contractId,
+          args: [],
+          actions: [
+            {
+              type: 'withdrawal',
+              token: fbtUid,
+              amount: 50n,
+              address: address0,
+            },
+            {
+              type: 'withdrawal',
+              token: fbt2Uid,
+              amount: 50n,
+              address: address0,
+            },
+            {
+              type: 'withdrawal',
+              token: NATIVE_TOKEN_UID,
+              amount: 1n, // Only 1n, but fee is 2n (2 different FBT outputs)
+              address: address0,
+            },
+          ],
+        },
+        { contractPaysFees: true }
+      )
+    ).rejects.toThrow(/HTR withdrawal amount insufficient to cover fee/);
   });
 
   it('should throw error when withdrawal amount is insufficient to cover token deposit', async () => {

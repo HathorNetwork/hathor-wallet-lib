@@ -3109,6 +3109,11 @@ class HathorWallet extends EventEmitter {
       builder.setMaxFee(newOptions.maxFee);
     }
 
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
+
     const nc: any = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }
@@ -3256,6 +3261,11 @@ class HathorWallet extends EventEmitter {
     // Set max fee if declared
     if (newOptions.maxFee !== undefined) {
       builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
     const nc: any = await builder.build();

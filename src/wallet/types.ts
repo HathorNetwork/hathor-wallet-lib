@@ -34,8 +34,6 @@ export type CreateTokenOptionsInput = {
   isCreateNFT?: boolean;
   // Token version (DEPOSIT or FEE) - defaults to DEPOSIT
   tokenVersion?: TokenVersion;
-  // If the contract will pay the transaction fees (for FEE tokens)
-  contractPaysFees?: boolean;
 };
 
 export interface GetAddressesObject {
