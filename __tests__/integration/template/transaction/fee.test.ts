@@ -564,4 +564,126 @@ describe('FeeBlueprint Template execution', () => {
     // nc2 loses 100 FBT
     expect(BigInt(nc2StateAfter.balances[fbtUid].value)).toBe(nc2FbtBefore - 100n);
   });
+  it('should grant authority of fee token to contract without paying fees', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    const createTokenTx = await hWallet.createAndSendNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: 1n,
+            address: address0,
+          },
+        ],
+      },
+      {
+        name: 'Fee Authority Token',
+        symbol: 'FAT',
+        amount: 8582n,
+        mintAddress: address0,
+        createMint: true,
+        createMelt: true,
+        tokenVersion: TokenVersion.FEE,
+      }
+    );
+    await checkTxValid(hWallet, createTokenTx);
+
+    // Verify outputs structure
+    expect(createTokenTx.outputs.length).toBe(5);
+
+    // Output 0: Fee token amount (8582n)
+    expect(createTokenTx.outputs[0].value).toBe(8582n);
+    expect(createTokenTx.outputs[0].tokenData).toBe(1); // token index 1
+
+    // Output 1: Mint authority
+    expect(createTokenTx.outputs[1].value).toBe(1n);
+    expect(createTokenTx.outputs[1].tokenData).toBe(129); // 128 (authority mask) + 1 (token index)
+
+    // Output 2: Melt authority
+    expect(createTokenTx.outputs[2].value).toBe(2n);
+    expect(createTokenTx.outputs[2].tokenData).toBe(129); // 128 (authority mask) + 1 (token index)
+
+    // Output 3: HTR withdrawal from contract (1n)
+    expect(createTokenTx.outputs[3].value).toBe(1n);
+    expect(createTokenTx.outputs[3].tokenData).toBe(0); // HTR
+
+    // Output 4: HTR change (from fee payment UTXO selection)
+    expect(createTokenTx.outputs[4].tokenData).toBe(0); // HTR
+
+    // Verify FeeHeader exists with correct fee (1n for the fee token output)
+    const createTokenFeeHeader = createTokenTx.getFeeHeader();
+    expect(createTokenFeeHeader).not.toBeNull();
+    expect(createTokenFeeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(createTokenFeeHeader!.entries[0].amount).toBe(1n); // 1 fee token output = 1n fee
+
+    const feeTokenUid = createTokenTx.hash!;
+    const tokenDetails = await hWallet.getTokenDetails(feeTokenUid);
+    expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
+
+    // // Verify authorities exist in the wallet
+    expect(tokenDetails.authorities.mint).toBe(true);
+    expect(tokenDetails.authorities.melt).toBe(true);
+
+    // // Get contract state before grant
+    const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [feeTokenUid], []);
+    expect(ncStateBefore.balances[feeTokenUid].can_mint).toBe(false);
+
+    // // Grant mint authority to the contract
+    // // According to fee calculation rules: Authority tokens are EXCLUDED from fee calculation
+    // // Therefore, the grant_authority action itself should NOT require a fee
+    const grantTx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'grant_authority',
+          token: feeTokenUid,
+          authority: 'mint',
+        },
+      ],
+    });
+    await checkTxValid(hWallet, grantTx);
+
+    // // Verify transaction structure
+    // // Input: 1 mint authority UTXO from wallet
+    expect(grantTx.inputs.length).toBe(1);
+    const inputTxData = await hWallet.getFullTxById(grantTx.inputs[0].hash);
+    expect(inputTxData.success).toBe(true);
+    if (!inputTxData.success) {
+      throw new Error('Failed to get input transaction');
+    }
+    const inputOutput = inputTxData.tx.outputs[grantTx.inputs[0].index];
+    // // Authority outputs have value 1 (mint) or 2 (melt) and token_data with authority mask (129)
+    expect(inputOutput.value).toBe(1n); // Mint authority
+    expect(inputOutput.token_data).toBe(129); // Authority mask | token index 1
+
+    // // Verify NO outputs (authority goes entirely to contract)
+    expect(grantTx.outputs.length).toBe(0);
+
+    // // Verify NO FeeHeader (authority actions are excluded from fee calculation)
+    // // This is the key assertion: grant_authority of fee token should NOT require fee
+    const feeHeader = grantTx.getFeeHeader();
+    expect(feeHeader).toBeNull();
+
+    // // Verify nano contract header has the grant_authority action
+    const nanoHeaders = grantTx.getNanoHeaders();
+    expect(nanoHeaders.length).toBe(1);
+    expect(nanoHeaders[0].actions.length).toBe(1);
+    expect(nanoHeaders[0].actions[0].type).toBe(NanoContractHeaderActionType.GRANT_AUTHORITY);
+
+    // // Verify contract now has mint authority for the fee token
+    const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [feeTokenUid], []);
+    expect(ncStateAfter.balances[feeTokenUid].can_mint).toBe(true);
+
+    // // Wallet should no longer have mint authority (granted to contract)
+    const tokenDetailsAfter = await hWallet.getTokenDetails(feeTokenUid);
+    expect(tokenDetailsAfter.authorities.mint).toBe(false);
+    expect(tokenDetailsAfter.authorities.melt).toBe(true); // Melt still in wallet
+  });
 });

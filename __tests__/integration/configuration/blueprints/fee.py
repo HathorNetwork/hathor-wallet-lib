@@ -73,7 +73,7 @@ class FeeBlueprint(Blueprint):
     def create_deposit_token(self, ctx: Context, name: str, symbol: str, amount: int) -> None:
         self.dbt_uid = self.syscall.create_deposit_token(token_name=name, token_symbol=symbol, amount=amount)
 
-    @public(allow_deposit=True, allow_withdrawal=True)
+    @public(allow_deposit=True, allow_withdrawal=True, allow_grant_authority=True)
     def noop(self, ctx: Context) -> None:
         pass
 

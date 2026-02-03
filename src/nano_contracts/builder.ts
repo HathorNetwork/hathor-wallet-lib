@@ -855,6 +855,7 @@ class NanoContractTransactionBuilder {
             this.createTokenOptions.contractPaysTokenDeposit ||
             this.tokenFeeAddedInDeposit ||
             this.createTokenOptions.contractPaysFees,
+          skipFeeCalculation: this.isCreatingFeeToken || this.createTokenOptions.contractPaysFees,
           tokenVersion: this.createTokenOptions.tokenVersion,
         }
       );
