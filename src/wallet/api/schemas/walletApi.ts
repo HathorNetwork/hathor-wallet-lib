@@ -111,7 +111,7 @@ export const tokenInfoSchema = z.object({
   id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
-  version: z.nativeEnum(TokenVersion).optional(),
+  version: z.nativeEnum(TokenVersion),
 });
 
 /**
@@ -585,6 +585,14 @@ export const wsTransactionSchema = z.object({
 });
 
 /**
+ * Response schema for checking if wallet has transactions outside first address.
+ * Used to determine if single-address mode can be enabled.
+ */
+export const hasTxOutsideFirstAddressResponseSchema = baseResponseSchema.extend({
+  hasTransactions: z.boolean(),
+});
+
+/**
  * Collection of all wallet API schemas.
  * Used for type validation and documentation of the wallet API.
  */
@@ -607,4 +615,5 @@ export const walletApiSchemas = {
   authTokenResponse: authTokenResponseSchema,
   txByIdResponse: txByIdResponseSchema,
   wsTransaction: wsTransactionSchema,
+  hasTxOutsideFirstAddressResponse: hasTxOutsideFirstAddressResponseSchema,
 };

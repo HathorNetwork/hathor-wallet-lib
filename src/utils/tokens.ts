@@ -12,12 +12,13 @@ import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
-  TOKEN_INDEX_MASK,
 } from '../constants';
 import helpers from './helpers';
 import {
+  AuthorityType,
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
@@ -25,8 +26,8 @@ import {
   IStorage,
   ITokenData,
   OutputValueType,
-  UtxoSelectionAlgorithm,
   TokenVersion,
+  UtxoSelectionAlgorithm,
 } from '../types';
 import { getAddressType } from './address';
 import {
@@ -423,7 +424,7 @@ const tokens = {
 
     // Add output to mint tokens
     outputs.push({
-      type: 'mint',
+      type: AuthorityType.MINT,
       address,
       value: amount,
       timelock: null,
@@ -433,7 +434,7 @@ const tokens = {
     if (createAnotherMint) {
       const newAddress = mintAuthorityAddress || (await storage.getCurrentAddress());
       outputs.push({
-        type: 'mint',
+        type: AuthorityType.MELT,
         address: newAddress,
         value: TOKEN_MINT_MASK,
         timelock: null,

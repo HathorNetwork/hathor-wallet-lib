@@ -14,7 +14,7 @@ import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
-import { buildWalletInstance, poolForTx } from './service-facade.helper';
+import { buildWalletInstance, pollForTx } from './service-facade.helper';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -218,11 +218,11 @@ export class GenesisWalletServiceHelper {
     });
 
     // Ensure the transaction was sent from the Genesis perspective
-    await poolForTx(gWallet, fundTx.hash!);
+    await pollForTx(gWallet, fundTx.hash!);
 
     // Ensure the destination wallet is also aware of the transaction
     if (destinationWallet) {
-      await poolForTx(destinationWallet, fundTx.hash!);
+      await pollForTx(destinationWallet, fundTx.hash!);
     }
 
     return fundTx;

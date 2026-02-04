@@ -5,12 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { NATIVE_TOKEN_UID, FEE_PER_OUTPUT } from '../../src/constants';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { OutputType } from '../../src/wallet/types';
 import Network from '../../src/models/network';
 import Address from '../../src/models/address';
+import { TokenVersion } from '../../src/types';
+import FeeHeader from '../../src/headers/fee';
+import { SendTxError } from '../../src/errors';
 
 describe('prepareTxData', () => {
   let wallet;
@@ -31,6 +34,14 @@ describe('prepareTxData', () => {
     wallet.getCurrentAddress = jest
       .fn()
       .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => ({
+      tokenInfo: {
+        id: tokenUid,
+        name: 'DepositToken',
+        symbol: 'DBT',
+        version: TokenVersion.DEPOSIT,
+      },
+    }));
   });
 
   it('should prepare transaction data with mixed inputs and a data output', async () => {
@@ -1023,7 +1034,7 @@ describe('prepareTxData', () => {
 
     // Check that the instance properties are set
     expect(sendTransaction.fullTxData).toBe(txData);
-    expect(sendTransaction._utxosAddressPath).toEqual(["m/44'/280'/0'/0/1"]);
+    expect(sendTransaction.utxosAddressPath).toEqual(["m/44'/280'/0'/0/1"]);
   });
 
   it('should use changeAddress if provided instead of generating new one', async () => {
@@ -1145,8 +1156,8 @@ describe('selectUtxosToUse', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
 
     const tokenAmountMap = {
-      [NATIVE_TOKEN_UID]: 50n,
-      '01': 100n,
+      [NATIVE_TOKEN_UID]: { version: TokenVersion.NATIVE, amount: 50n },
+      '01': { version: TokenVersion.DEPOSIT, amount: 100n },
     };
 
     const addressPaths = await sendTransaction.selectUtxosToUse(tokenAmountMap);
@@ -1177,7 +1188,9 @@ describe('selectUtxosToUse', () => {
 
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
 
-    const tokenAmountMap = { '01': 100n };
+    const tokenAmountMap = {
+      '01': { version: TokenVersion.DEPOSIT, amount: 100n },
+    };
 
     await expect(sendTransaction.selectUtxosToUse(tokenAmountMap)).rejects.toThrow(
       'No utxos available to fill the request. Token: 01 - Amount: 100.'
@@ -1258,5 +1271,1059 @@ describe('selectUtxosToUse', () => {
     const changeOutput = sendTransaction.outputs.find(o => o.value === 50n);
     expect(changeOutput).toBeDefined();
     expect(changeOutput.address).toBe(customChangeAddress);
+  });
+
+  it('should increment _feeAmount when fee token has change output', async () => {
+    const FEE_TOKEN_UID = 'fbt';
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-utxo',
+              index: 0,
+              value: 200n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 100n, // 200 - 100 = 100 change
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Fee token with change
+    const tokenAmountMap = {
+      [FEE_TOKEN_UID]: { version: TokenVersion.FEE, amount: 100n },
+    };
+
+    // _feeAmount starts at 0
+    expect(sendTransaction._feeAmount).toBe(0n);
+
+    await sendTransaction.selectUtxosToUse(tokenAmountMap);
+
+    // _feeAmount should be incremented by FEE_PER_OUTPUT for the change output
+    expect(sendTransaction._feeAmount).toBe(FEE_PER_OUTPUT);
+
+    // Verify change output was created
+    const changeOutput = sendTransaction.outputs.find(o => o.value === 100n);
+    expect(changeOutput).toBeDefined();
+    expect(changeOutput.token).toBe(FEE_TOKEN_UID);
+  });
+});
+
+describe('prepareTxData - Fee Tokens', () => {
+  let wallet;
+  let sendTransaction;
+
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  const FEE_TOKEN_UID = 'fbt';
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+    // Mocking wallet methods
+    wallet.getUtxoFromId = jest.fn();
+    wallet.getUtxosForAmount = jest.fn();
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => ({
+      tokenInfo: {
+        id: tokenUid,
+        name: 'FeeToken',
+        symbol: 'FBT',
+        version: TokenVersion.FEE,
+      },
+    }));
+  });
+
+  it('should prepare fee token transaction with single output and charge 1 HTR fee', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Mock fee token UTXO
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'fee-token-tx' && index === 0) {
+        return {
+          txId: 'fee-token-tx',
+          index: 0,
+          value: 100n,
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      return null;
+    });
+
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n, // 100 - 50 = 50
+        };
+      }
+      // HTR needed for fee payment (1 HTR per non-authority output)
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-fee-tx',
+              index: 0,
+              value: 2n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-fee-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 1n, // 2 - 1 (fee) = 1
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // 1 fee token input + 1 HTR input for fee
+    expect(txData.inputs).toHaveLength(2);
+    // 1 output + 1 fee token change + 1 HTR change
+    expect(txData.outputs).toHaveLength(3);
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+
+    // Verify FeeHeader is present
+    expect(txData.headers).toBeDefined();
+    expect(txData.headers).toHaveLength(1);
+    expect(txData.headers![0]).toBeInstanceOf(FeeHeader);
+
+    // Verify the fee amount (1 HTR per non-authority fee token output)
+    // 1 user output + 1 change output = 2 fee token outputs = 2 HTR fee
+    const feeHeader = txData.headers![0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+  });
+
+  it('should charge fee for each fee token output', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 300n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 0n,
+        };
+      }
+      // HTR needed for fee payment (3 HTR for 3 outputs)
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-fee-tx',
+              index: 0,
+              value: 5n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-fee-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 2n, // 5 - 3 (fee) = 2
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    // 3 fee token outputs = 3 HTR fee expected
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP3rVhxzT3YTWg8VbBKkacLqLU2LrouWDz',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // 1 fee token input + 1 HTR input for fee
+    expect(txData.inputs).toHaveLength(2);
+    // 3 outputs + 1 HTR change
+    expect(txData.outputs).toHaveLength(4);
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+
+    // All 3 outputs should be for the fee token
+    const feeTokenOutputs = txData.outputs.filter(o => o.token === FEE_TOKEN_UID);
+    expect(feeTokenOutputs).toHaveLength(3);
+
+    // Verify FeeHeader with correct fee (3 HTR for 3 outputs)
+    expect(txData.headers).toHaveLength(1);
+    const feeHeader = txData.headers![0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(3n * FEE_PER_OUTPUT);
+  });
+
+  it('should auto-select HTR to pay fee when not enough HTR in inputs', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    let htrCallCount = 0;
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 0n,
+        };
+      }
+      if (token === NATIVE_TOKEN_UID) {
+        htrCallCount++;
+        // First call: for user output (1 HTR)
+        // Second call: for fee payment (1 HTR)
+        return {
+          utxos: [
+            {
+              txId: `htr-tx-${htrCallCount}`,
+              index: 0,
+              value: 10n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-address',
+              authorities: 0,
+              addressPath: `m/44'/280'/0'/0/${htrCallCount + 1}`,
+            },
+          ],
+          changeAmount: htrCallCount === 1 ? 9n : 9n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    // Fee token output + HTR output
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Fee token input + HTR inputs (for output and for fee)
+    expect(txData.inputs.length).toBeGreaterThanOrEqual(2);
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]); // HTR is not in tokens array
+
+    // HTR inputs should be auto-selected
+    const htrInputs = txData.inputs.filter(i => i.token === NATIVE_TOKEN_UID);
+    expect(htrInputs.length).toBeGreaterThanOrEqual(1);
+
+    // FeeHeader should be present
+    expect(txData.headers).toHaveLength(1);
+  });
+
+  it('should include FeeHeader in transaction when fee > 0', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // HTR for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-fee-tx',
+              index: 0,
+              value: 2n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-fee-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 1n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Verify we have the expected structure for fee token transaction
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+    expect(txData.outputs.some(o => o.token === FEE_TOKEN_UID)).toBe(true);
+
+    // FeeHeader should be automatically added by prepareTxData
+    expect(txData.headers).toBeDefined();
+    expect(txData.headers).toHaveLength(1);
+    expect(txData.headers![0]).toBeInstanceOf(FeeHeader);
+
+    // 1 user output + 1 change output = 2 fee token outputs = 2 HTR fee
+    const feeHeader = txData.headers![0] as FeeHeader;
+    expect(feeHeader.entries).toHaveLength(1);
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+  });
+
+  it('should handle fee token with change output correctly', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    let htrCallCount = 0;
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 200n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 100n, // 200 - 100 = 100
+        };
+      }
+      if (token === NATIVE_TOKEN_UID) {
+        htrCallCount++;
+        if (htrCallCount === 1) {
+          // First call: for HTR output (2 HTR)
+          return {
+            utxos: [
+              {
+                txId: 'htr-tx',
+                index: 0,
+                value: 5n,
+                tokenId: NATIVE_TOKEN_UID,
+                address: 'htr-address',
+                authorities: 0,
+                addressPath: "m/44'/280'/0'/0/2",
+              },
+            ],
+            changeAmount: 3n, // 5 - 2 (output) = 3
+          };
+        }
+        // Second call: for fee payment (1 HTR for fee token output)
+        // But we have 3 HTR change from first call, so need additional if fee > change
+        return {
+          utxos: [
+            {
+              txId: 'htr-fee-tx',
+              index: 0,
+              value: 2n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-fee-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/3",
+            },
+          ],
+          changeAmount: 1n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 2n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Fee token input + HTR inputs
+    expect(txData.inputs.length).toBeGreaterThanOrEqual(2);
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+
+    // Verify change outputs exist for fee token
+    const feeTokenChange = txData.outputs.find(
+      o => o.token === FEE_TOKEN_UID && o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc'
+    );
+    expect(feeTokenChange).toBeDefined();
+    expect(feeTokenChange!.value).toBe(100n);
+
+    // FeeHeader should be present
+    expect(txData.headers).toHaveLength(1);
+  });
+
+  it('should throw SendTxError when no HTR UTXOs available for fee payment', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // Return empty UTXOs when trying to get HTR for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        return { utxos: [], changeAmount: 0n };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Verify that the error is thrown when no HTR UTXOs are available for fee payment
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+      'No utxos available to fill the request. Token: 00'
+    );
+  });
+
+  it('should throw SendTxError when getUtxosForAmount throws during fee payment HTR selection', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // Throw an error when trying to get HTR UTXOs for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        throw new Error('Connection timeout');
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Verify that the error is caught and re-thrown as SendTxError with the original message
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow('Connection timeout');
+  });
+
+  it('should throw error when pre-selected HTR input is insufficient to cover fee from change output', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Mock to return the pre-selected HTR input
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'htr-insufficient-tx' && index === 0) {
+        return {
+          txId: 'htr-insufficient-tx',
+          index: 0,
+          value: 2n, // 2 HTR: covers the 1n output, but not enough for output + 2n fee
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      return null;
+    });
+
+    // System auto-selects fee token: returns 100n, generating 50n change
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n, // Returns 100n for 50n output = 50n change
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 50n, // Change generates additional 1 HTR fee
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    // User pre-selects only HTR input
+    const inputs = [{ txId: 'htr-insufficient-tx', index: 0 }];
+
+    // Outputs:
+    // - 50n fee token (generates 1 HTR fee) + auto-selected 100n creates 50n change (generates +1 HTR fee)
+    // - 1n HTR (necessary to accept the pre-selected HTR input)
+    // Total fee: 2n HTR (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR available: 2n (pre-selected input)
+    // Result: Insufficient (2n < 3n)
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    // Should fail: HTR input (2n) < HTR needed (3n = 1n output + 2n fee)
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+      `Invalid input selection. Sum of inputs for token ${NATIVE_TOKEN_UID} is smaller than the sum of outputs.`
+    );
+  });
+
+  it('should create change output when pre-selected fee token input exceeds output value', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Pre-selected fee token UTXO with value 200n
+    // Pre-selected HTR UTXO with value 10n (to cover fee and HTR output)
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'fee-token-preselected-tx' && index === 0) {
+        return {
+          txId: 'fee-token-preselected-tx',
+          index: 0,
+          value: 200n, // Input value > output value (50n), so change = 150n
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'htr-preselected-tx' && index === 0) {
+        return {
+          txId: 'htr-preselected-tx',
+          index: 0,
+          value: 10n, // Enough to cover fee (2n) and HTR output (1n)
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Pre-selected inputs: fee token + HTR
+    const inputs = [
+      { txId: 'fee-token-preselected-tx', index: 0 },
+      { txId: 'htr-preselected-tx', index: 0 },
+    ];
+
+    // Outputs:
+    // - 50n fee token (generates 1n fee) -> will have change of 150n (generates +1n fee)
+    // - 1n HTR (to require the HTR input)
+    // Total fee: 2n (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR input: 10n, HTR change: 7n
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
+    expect(txData.inputs).toHaveLength(2);
+
+    // Verify outputs: 2 user outputs + 1 fee token change + 1 HTR change = 4 outputs
+    expect(txData.outputs).toHaveLength(4);
+
+    // Verify tokens array (HTR is not included)
+    expect(txData.tokens).toEqual([FEE_TOKEN_UID]);
+
+    // Verify FeeHeader is present with correct fee amount
+    // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
+    expect(txData.headers).toBeDefined();
+    expect(txData.headers).toHaveLength(1);
+    expect(txData.headers![0]).toBeInstanceOf(FeeHeader);
+
+    const feeHeader = txData.headers![0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+
+    const feeTokenOutputs = txData.outputs.filter(o => o.token === FEE_TOKEN_UID);
+    const htrOutputs = txData.outputs.filter(o => o.token === NATIVE_TOKEN_UID);
+
+    expect(feeTokenOutputs).toHaveLength(2);
+    expect(htrOutputs).toHaveLength(2);
+
+    // Verify fee token values: user output (50n) + change (150n)
+    const feeTokenValues = feeTokenOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(feeTokenValues[0]).toBe(50);
+    expect(feeTokenValues[1]).toBe(150);
+
+    // Verify HTR values: user output (1n) + change (10n - 1n - 2n fee = 7n)
+    const htrValues = htrOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(htrValues[0]).toBe(1);
+    expect(htrValues[1]).toBe(7);
+  });
+});
+
+describe('prepareTx - Fee Tokens', () => {
+  let wallet;
+  let sendTransaction;
+
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  const FEE_TOKEN_UID = 'fbt';
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+    wallet.getUtxoFromId = jest.fn();
+    wallet.getUtxosForAmount = jest.fn();
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+    wallet.getTokenDetails = jest.fn().mockImplementation(async tokenUid => {
+      if (tokenUid === NATIVE_TOKEN_UID) {
+        return {
+          tokenInfo: {
+            id: NATIVE_TOKEN_UID,
+            name: 'Hathor',
+            symbol: 'HTR',
+            version: TokenVersion.NATIVE,
+          },
+        };
+      }
+      if (tokenUid === FEE_TOKEN_UID) {
+        return {
+          tokenInfo: {
+            id: FEE_TOKEN_UID,
+            name: 'FeeToken',
+            symbol: 'FBT',
+            version: TokenVersion.FEE,
+          },
+        };
+      }
+      return { tokenInfo: null };
+    });
+  });
+
+  it('should create change output when pre-selected fee token input exceeds output value', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Pre-selected fee token UTXO with value 200n
+    // Pre-selected HTR UTXO with value 10n (to cover fee and HTR output)
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'fee-token-preselected-tx' && index === 0) {
+        return {
+          txId: 'fee-token-preselected-tx',
+          index: 0,
+          value: 200n, // Input value > output value (50n), so change = 150n
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'htr-preselected-tx' && index === 0) {
+        return {
+          txId: 'htr-preselected-tx',
+          index: 0,
+          value: 10n, // Enough to cover fee (2n) and HTR output (1n)
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Pre-selected inputs: fee token + HTR
+    const inputs = [
+      { txId: 'fee-token-preselected-tx', index: 0 },
+      { txId: 'htr-preselected-tx', index: 0 },
+    ];
+
+    // Outputs:
+    // - 50n fee token (generates 1n fee) -> will have change of 150n (generates +1n fee)
+    // - 1n HTR (to require the HTR input)
+    // Total fee: 2n (1n for fee token output + 1n for fee token change)
+    // Total HTR needed: 1n (output) + 2n (fee) = 3n
+    // HTR input: 10n, HTR change: 7n
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 1n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    const { transaction } = await sendTransaction.prepareTx();
+
+    // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
+    expect(transaction.inputs).toHaveLength(2);
+
+    // Verify outputs: 2 user outputs + 1 fee token change + 1 HTR change = 4 outputs
+    expect(transaction.outputs).toHaveLength(4);
+
+    // Verify FeeHeader is present with correct fee amount
+    // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
+    expect(transaction.headers).toBeDefined();
+    expect(transaction.headers.length).toBe(1);
+    expect(transaction.headers[0]).toBeInstanceOf(FeeHeader);
+
+    const feeHeader = transaction.headers[0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+
+    const htrOutputs = transaction.outputs.filter(o => o.tokenData === 0);
+    const feeTokenOutputs = transaction.outputs.filter(
+      o => o.tokenData > 0 && transaction.tokens[o.tokenData - 1] === FEE_TOKEN_UID
+    );
+
+    expect(feeTokenOutputs).toHaveLength(2);
+    expect(htrOutputs).toHaveLength(2);
+
+    // Verify fee token values: user output (50n) + change (150n)
+    const feeTokenValues = feeTokenOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(feeTokenValues[0]).toBe(50);
+    expect(feeTokenValues[1]).toBe(150);
+
+    // Verify HTR values: user output (1n) + change (10n - 1n - 2n fee = 7n)
+    const htrValues = htrOutputs.map(o => Number(o.value)).sort((a, b) => a - b);
+    expect(htrValues[0]).toBe(1);
+    expect(htrValues[1]).toBe(7);
+  });
+
+  it('should prepare fee token transaction with automatic FeeHeader', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // HTR for fee payment
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-tx',
+              index: 0,
+              value: 10n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 6n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID, // Fee token output
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 2n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const { transaction } = await sendTransaction.prepareTx();
+
+    // Verify transaction was created
+    expect(transaction).toBeDefined();
+    expect(transaction.inputs.length).toBeGreaterThanOrEqual(2);
+
+    // Verify FeeHeader was automatically added
+    expect(transaction.headers).toBeDefined();
+    expect(transaction.headers.length).toBe(1);
+    expect(transaction.headers[0]).toBeInstanceOf(FeeHeader);
+
+    // Fee should be 2 * FEE_PER_OUTPUT (1 user output + 1 change output for fee token)
+    const feeHeader = transaction.headers[0] as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(2n * FEE_PER_OUTPUT);
+  });
+
+  it('should throw SendTxError when no HTR UTXOs available to pay the fee', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // Fee token UTXOs are available
+    // HTR UTXOs are NOT available (throws UtxoError)
+    wallet.getUtxosForAmount.mockImplementation(async (_totalAmount, { token }) => {
+      if (token === FEE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'fee-token-tx',
+              index: 0,
+              value: 100n,
+              tokenId: FEE_TOKEN_UID,
+              address: 'fee-token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n,
+        };
+      }
+      // HTR selection fails - no UTXOs available
+      if (token === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [],
+          changeAmount: 0n,
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    // Should throw SendTxError (not UtxoError) with specific message about HTR
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(SendTxError);
+
+    // Create new instance to test the message (prepareTx mutates internal state)
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(
+      `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
+    );
   });
 });

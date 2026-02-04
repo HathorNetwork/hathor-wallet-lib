@@ -87,7 +87,7 @@ export function buildWalletInstance({
  * @returns The transaction object if found
  * @throws Error if the transaction is not found after max attempts
  */
-export async function poolForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
+export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
   const maxAttempts = 10;
   const delayMs = 1000; // 1 second
   let attempts = 0;
@@ -96,7 +96,7 @@ export async function poolForTx(walletForPolling: HathorWalletServiceWallet, txI
     try {
       const tx = await walletForPolling.getTxById(txId);
       if (tx) {
-        loggers.test!.log(`Pooling for ${txId} took ${attempts + 1} attempts`);
+        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
         return tx;
       }
     } catch (error) {

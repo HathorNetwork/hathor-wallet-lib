@@ -7,7 +7,14 @@
 /* eslint max-classes-per-file: ["error", 3] */
 
 import { z } from 'zod';
-import { TokenVersion, IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
+import {
+  TokenVersion,
+  IHistoryTx,
+  ILogger,
+  OutputValueType,
+  getDefaultLogger,
+  AuthorityType,
+} from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
@@ -181,12 +188,12 @@ export class TxBalance {
    * @param token - The token UID
    * @param authority - The authority type ('mint' or 'melt')
    */
-  addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
+  addOutputAuthority(count: number, token: string, authority: AuthorityType) {
     const balance = this.getTokenBalance(token);
-    if (authority === 'mint') {
+    if (authority === AuthorityType.MINT) {
       balance.mint_authorities -= count;
     }
-    if (authority === 'melt') {
+    if (authority === AuthorityType.MELT) {
       balance.melt_authorities -= count;
     }
     this.setTokenBalance(token, balance);
@@ -197,14 +204,14 @@ export class TxBalance {
    */
   addCreatedTokenOutputAuthority(
     count: number,
-    authority: 'mint' | 'melt',
+    authority: AuthorityType,
     tokenVersion: TokenVersion
   ) {
     const balance = this.getCreatedTokenBalance(tokenVersion);
-    if (authority === 'mint') {
+    if (authority === AuthorityType.MINT) {
       balance.mint_authorities -= count;
     }
-    if (authority === 'melt') {
+    if (authority === AuthorityType.MELT) {
       balance.melt_authorities -= count;
     }
     this.setCreatedTokenBalance(balance);

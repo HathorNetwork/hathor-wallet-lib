@@ -52,7 +52,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
-  version?: TokenVersion; // Token version
+  version: TokenVersion; // Token version
 }
 
 export interface Balance {
@@ -295,8 +295,11 @@ export interface WalletAddressMap {
   [address: string]: boolean;
 }
 
-export interface TokenAmountMap {
-  [token: string]: OutputValueType; // For each token we have the amount
+export interface TokenMap {
+  [token: string]: {
+    version: TokenVersion;
+    amount: OutputValueType;
+  }; // For each token we have the version and amount
 }
 
 export interface TransactionFullObject {
@@ -476,6 +479,7 @@ export interface IHathorWallet {
   }>;
   getNetworkObject();
   getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
+  hasTxOutsideFirstAddress(): Promise<boolean>;
   pinCode?: string | null;
   storage: IStorage;
 }
@@ -777,4 +781,9 @@ export interface FullNodeTxConfirmationDataResponse {
   accumulated_bigger: boolean;
   stop_value: number;
   confirmation_level: number;
+}
+
+export interface HasTxOutsideFirstAddressResponseData {
+  success: boolean;
+  hasTransactions: boolean;
 }
