@@ -156,14 +156,14 @@ export class GenesisWalletServiceHelper {
 
   static password: string = 'genesispass';
 
-  static async poolForServerlessAvailable() {
+  static async pollForServerlessAvailable() {
     let isServerlessReady = false;
     const startTime = Date.now();
 
-    // Pool for the serverless app to be ready.
+    // Poll for the serverless app to be ready.
     const delayBetweenRequests = 3000;
     const lambdaTimeout = 30000;
-    while (isServerlessReady) {
+    while (!isServerlessReady) {
       try {
         // Executing a method that does not depend on the wallet being started,
         // but that ensures the Wallet Service Lambdas are receiving requests
@@ -174,11 +174,13 @@ export class GenesisWalletServiceHelper {
         loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
       }
 
-      // Timeout after 2 minutes
+      // Timeout after 30 seconds
       if (Date.now() - startTime > lambdaTimeout) {
         throw new Error('Ws-Serverless did not become ready in time');
       }
-      await delay(delayBetweenRequests);
+      if (!isServerlessReady) {
+        await delay(delayBetweenRequests);
+      }
     }
     loggers.test!.log(`Ws-Serverless became ready in ${(Date.now() - startTime) / 1000} seconds`);
   }
@@ -200,6 +202,9 @@ export class GenesisWalletServiceHelper {
     if (enableWs) {
       throw new Error(`Not implemented!`);
     }
+    // Wait for serverless to be available before starting the wallet
+    await GenesisWalletServiceHelper.pollForServerlessAvailable();
+
     const gWallet = GenesisWalletServiceHelper.getSingleton();
     await gWallet.start({
       pinCode: GenesisWalletServiceHelper.pinCode,
