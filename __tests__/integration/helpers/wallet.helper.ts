@@ -6,7 +6,7 @@
  */
 
 import { get, includes } from 'lodash';
-import Connection from '../../../src/new/connection';
+import Connection, { WalletConnection } from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
   FULLNODE_URL,
@@ -16,7 +16,11 @@ import {
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
-import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
+import {
+  multisigWalletsData,
+  precalculationHelpers,
+  PrecalculatedWalletData,
+} from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
@@ -38,20 +42,20 @@ import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
 
 /**
  * Generates a connection object for starting wallets.
- * @returns {WalletConnection}
  */
-export function generateConnection() {
+export function generateConnection(): WalletConnection {
   return new Connection({
     network: NETWORK_NAME,
     servers: [FULLNODE_URL],
     connectionTimeout: 30000,
+    logger: loggers.test!,
   });
 }
 
 export const DEFAULT_PASSWORD = 'password';
 export const DEFAULT_PIN_CODE = '000000';
 
-const startedWallets = [];
+const startedWallets: HathorWallet[] = [];
 
 /**
  * Simplifies the generation of a Wallet for the integration tests.
@@ -82,16 +86,30 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
-export async function generateWalletHelper(param) {
-  /** @type PrecalculatedWalletData */
-  let walletData = {};
+export async function generateWalletHelper(param?: {
+  seed?: string;
+  passphrase?: string;
+  xpriv?: string;
+  xpub?: string;
+  tokenUid?: string;
+  password?: string | null;
+  pinCode?: string | null;
+  debug?: boolean;
+  multisig?: { pubkeys: string[]; numSignatures: number };
+  preCalculatedAddresses?: string[];
+}) {
+  let walletData: PrecalculatedWalletData = {
+    isUsed: false,
+    words: '',
+    addresses: [],
+  } as PrecalculatedWalletData;
 
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!param) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = precalculationHelpers.test!.getPrecalculatedWallet();
   } else {
-    walletData.words = param.seed;
-    walletData.addresses = param.preCalculatedAddresses;
+    walletData.words = param.seed!;
+    walletData.addresses = param.preCalculatedAddresses!;
   }
 
   // Start the wallet
@@ -128,17 +146,26 @@ export async function generateWalletHelper(param) {
  * @example
  * const hWalletAuto = await generateWalletHelperRO();
  */
-export async function generateWalletHelperRO(options) {
-  /** @type PrecalculatedWalletData */
-  let walletData = {};
+export async function generateWalletHelperRO(options: {
+  xpub?: string;
+  pinCode?: string | null;
+  preCalculatedAddresses?: string[];
+  hardware?: boolean;
+  multisig?: { pubkeys: string[]; numSignatures: number };
+}) {
+  let walletData: PrecalculatedWalletData = {
+    isUsed: false,
+    words: '',
+    addresses: [],
+  } as PrecalculatedWalletData;
   /** @type string */
   let xpub;
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
   } else {
-    walletData.addresses = options.preCalculatedAddresses;
+    walletData.addresses = options.preCalculatedAddresses!;
     xpub = options.xpub;
   }
 
@@ -213,7 +240,7 @@ export async function stopAllWallets() {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
-      loggers.test.error(e.stack);
+      loggers.test!.error((e as Error).stack);
     }
     hWallet = startedWallets.pop();
   }
@@ -253,7 +280,7 @@ export function waitForWalletReady(hWallet) {
   return new Promise((resolve, reject) => {
     const handleState = newState => {
       if (newState === HathorWallet.READY) {
-        resolve();
+        resolve(undefined);
       } else if (newState === HathorWallet.ERROR) {
         reject(new Error('Wallet failed to start.'));
       }
@@ -318,7 +345,7 @@ export async function waitForTxReceived(
 
   const timeDiff = Date.now().valueOf() - startTime;
   if (DEBUG_LOGGING) {
-    loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
+    loggers.test!.log(`Wait for ${txId} took ${timeDiff}ms.`);
   }
 
   if (storageTx.is_voided === false) {
@@ -390,7 +417,7 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...
   const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
-  loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+  loggers.test!.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
 }
 

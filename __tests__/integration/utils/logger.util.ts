@@ -135,4 +135,26 @@ export class LoggerUtil {
   error(input, metadata?) {
     this.#logger.error(input, metadata);
   }
+
+  /**
+   * For registering debug data
+   *
+   * @param {string} input Log Message
+   * @param {Record<string,unknown>} [metadata] Additional data for winston logs
+   * @returns {void}
+   */
+  debug(input, metadata?) {
+    this.#logger.debug(input, metadata);
+  }
+
+  /**
+   * For registering informational data
+   *
+   * @param {string} input Log Message
+   * @param {Record<string,unknown>} [metadata] Additional data for winston logs
+   * @returns {void}
+   */
+  info(input, metadata?) {
+    this.#logger.info(input, metadata);
+  }
 }

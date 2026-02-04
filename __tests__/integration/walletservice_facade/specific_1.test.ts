@@ -1,9 +1,9 @@
 import axios from 'axios';
 import Mnemonic from 'bitcore-mnemonic';
-import config from '../../src/config';
-import { loggers } from './utils/logger.util';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import Network from '../../src/models/network';
+import config from '../../../src/config';
+import { loggers } from '../utils/logger.util';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+import Network from '../../../src/models/network';
 import {
   CreateTokenTransaction,
   FeeHeader,
@@ -11,25 +11,26 @@ import {
   Output,
   Storage,
   transactionUtils,
-} from '../../src';
+} from '../../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
   NETWORK_NAME,
   WALLET_CONSTANTS,
-} from './configuration/test-constants';
+} from '../configuration/test-constants';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
-} from '../../src/constants';
-import { decryptData } from '../../src/utils/crypto';
-import walletUtils from '../../src/utils/wallet';
-import { delay } from './utils/core.util';
-import { SendTxError, TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
-import { GetAddressesObject } from '../../src/wallet/types';
-import { TokenVersion } from '../../src/types';
+} from '../../../src/constants';
+import { decryptData } from '../../../src/utils/crypto';
+import walletUtils from '../../../src/utils/wallet';
+import { delay } from '../utils/core.util';
+import { SendTxError, UtxoError, WalletRequestError } from '../../../src/errors';
+import { GetAddressesObject } from '../../../src/wallet/types';
+import { TokenVersion } from '../../../src/types';
+import { pollForTx } from '../helpers/service-facade.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setServerUrl(FULLNODE_URL);
@@ -204,37 +205,6 @@ function buildWalletInstance({
   });
 
   return { wallet: newWallet, store, storage };
-}
-
-/**
- * Polls the wallet for a transaction by its ID until found or max attempts reached
- * @param walletForPolling - The wallet instance to poll
- * @param txId - The transaction ID to look for
- * @returns The transaction object if found
- * @throws Error if the transaction is not found after max attempts
- */
-async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
-  const maxAttempts = 10;
-  const delayMs = 1000; // 1 second
-  let attempts = 0;
-
-  while (attempts < maxAttempts) {
-    try {
-      const tx = await walletForPolling.getTxById(txId);
-      if (tx) {
-        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
-        return tx;
-      }
-    } catch (error) {
-      // If the error is of type TxNotFoundError, we continue polling
-      if (!(error instanceof TxNotFoundError)) {
-        throw error; // Re-throw unexpected errors
-      }
-    }
-    attempts++;
-    await delay(delayMs);
-  }
-  throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
 }
 
 async function sendFundTx(

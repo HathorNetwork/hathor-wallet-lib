@@ -106,6 +106,7 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  seqnum?: number; // TODO: Confirm if it is really optional for v3
 }
 
 export interface IAddressMetadataAsRecord {
@@ -481,7 +482,8 @@ export interface IFillTxOptions {
 export interface ApiVersion {
   version: string;
   network: string;
-  // min_weight: number; // DEPRECATED
+  /** @deprecated */
+  min_weight: number;
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;
@@ -656,6 +658,7 @@ export interface IStorage {
     connection?: FullNodeConnection;
     cleanStorage?: boolean;
     cleanAddresses?: boolean;
+    cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;
