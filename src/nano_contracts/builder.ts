@@ -285,6 +285,8 @@ class NanoContractTransactionBuilder {
 
     if (this.isCreatingFeeToken) {
       fee += FEE_PER_OUTPUT;
+      const dataArray = this.createTokenOptions?.data ?? [];
+      fee += tokensUtils.getDataFee(dataArray.length);
     }
 
     // Add fee for deposit actions (tokens going into contracts count as outputs)
@@ -456,23 +458,15 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      // We pay the deposit/fee in native token uid
-      if (action.token === NATIVE_TOKEN_UID) {
+      // For DEPOSIT tokens: contract pays deposit via deduction from withdrawal
+      if (action.token === NATIVE_TOKEN_UID && this.createTokenOptions.contractPaysTokenDeposit) {
         const dataArray = this.createTokenOptions!.data ?? [];
-
-        if (this.createTokenOptions.tokenVersion === TokenVersion.FEE && this.contractPaysFees) {
-          // FEE tokens: contract pays fee via deduction from withdrawal
-          const feeForToken = FEE_PER_OUTPUT + tokensUtils.getDataFee(dataArray.length);
-          withdrawalAmount -= feeForToken;
-        } else if (this.createTokenOptions.contractPaysTokenDeposit) {
-          // DEPOSIT tokens: contract pays deposit via deduction
-          const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
-            this.createTokenOptions!.amount,
-            dataArray.length,
-            this.wallet.storage
-          );
-          withdrawalAmount -= htrToCreateToken;
-        }
+        const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+          this.createTokenOptions!.amount,
+          dataArray.length,
+          this.wallet.storage
+        );
+        withdrawalAmount -= htrToCreateToken;
       }
     }
 
@@ -927,9 +921,8 @@ class NanoContractTransactionBuilder {
         outputs = concat(outputs, feeOutputs);
       }
 
-      // For regular nano contract transactions with contractPaysFees,
-      // deduct fee from HTR withdrawal output
-      if (fee > 0n && this.contractPaysFees && !this.isCreateTokenTransaction) {
+      // When contractPaysFees is true, deduct fee from HTR withdrawal output
+      if (fee > 0n && this.contractPaysFees) {
         const htrOutputIndex = outputs.findIndex(
           output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
         );
