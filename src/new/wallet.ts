@@ -1918,7 +1918,7 @@ class HathorWallet extends EventEmitter {
    * Get authority utxo
    *
    * @param tokenUid - UID of the token to select the authority utxo
-   * @param authority - The authority to filter ('mint' or 'melt')
+   * @param authority - The authority to filter (AuthorityType.MINT or AuthorityType.MELT)
    * @param options - Object with custom options.
    * @param options.many - if should return many utxos or just one (default false)
    * @param options.only_available_utxos - If we should filter for available utxos.
@@ -2199,7 +2199,7 @@ class HathorWallet extends EventEmitter {
    * Prepare delegate authority transaction before mining
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2208,7 +2208,7 @@ class HathorWallet extends EventEmitter {
    * */
   async prepareDelegateAuthorityData(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<Transaction> {
@@ -2222,12 +2222,12 @@ class HathorWallet extends EventEmitter {
     }
     const { createAnother } = newOptions;
     let delegateInput: IUtxo[];
-    if (type === 'mint') {
+    if (type === AuthorityType.MINT) {
       delegateInput = await this.getMintAuthority(tokenUid, {
         many: false,
         only_available_utxos: true,
       });
-    } else if (type === 'melt') {
+    } else if (type === AuthorityType.MELT) {
       delegateInput = await this.getMeltAuthority(tokenUid, {
         many: false,
         only_available_utxos: true,
@@ -2261,7 +2261,7 @@ class HathorWallet extends EventEmitter {
    * Create a SendTransaction instance ready to mine a delegate authority transaction.
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2270,7 +2270,7 @@ class HathorWallet extends EventEmitter {
    * */
   async delegateAuthoritySendTransaction(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<SendTransaction> {
@@ -2287,7 +2287,7 @@ class HathorWallet extends EventEmitter {
    * Delegate authority
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2298,7 +2298,7 @@ class HathorWallet extends EventEmitter {
    * */
   async delegateAuthority(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<Transaction | null> {
@@ -2315,7 +2315,7 @@ class HathorWallet extends EventEmitter {
    * Prepare destroy authority transaction before mining
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2324,7 +2324,7 @@ class HathorWallet extends EventEmitter {
    * */
   async prepareDestroyAuthorityData(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<Transaction> {
@@ -2337,12 +2337,12 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs: IUtxo[];
-    if (type === 'mint') {
+    if (type === AuthorityType.MINT) {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
         only_available_utxos: true,
       });
-    } else if (type === 'melt') {
+    } else if (type === AuthorityType.MELT) {
       destroyInputs = await this.getMeltAuthority(tokenUid, {
         many: true,
         only_available_utxos: true,
@@ -2375,7 +2375,7 @@ class HathorWallet extends EventEmitter {
    * Creates a SendTransaction instance with a prepared destroy transaction.
    *
    * @param tokenUid - UID of the token to destroy the authority
-   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2384,7 +2384,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthoritySendTransaction(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<SendTransaction> {
@@ -2396,7 +2396,7 @@ class HathorWallet extends EventEmitter {
    * Destroy authority
    *
    * @param tokenUid - UID of the token to destroy the authority
-   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2407,7 +2407,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthority(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<Transaction | null> {
@@ -2431,7 +2431,7 @@ class HathorWallet extends EventEmitter {
    * Get all authorities utxos for specific token
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to search for: 'mint' or 'melt'
+   * @param type - Type of the authority to search for (AuthorityType.MINT or AuthorityType.MELT)
    *
    * @return Array of the authority outputs.
    * */
