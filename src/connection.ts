@@ -113,6 +113,13 @@ abstract class Connection extends EventEmitter {
   }
 
   /**
+   * Get current connection state
+   */
+  getState(): ConnectionState {
+    return this.state;
+  }
+
+  /**
    * Connect to the server and start emitting events.
    * */
   abstract start(): void;
