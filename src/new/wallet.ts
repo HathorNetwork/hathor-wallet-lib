@@ -27,9 +27,9 @@ import EventEmitter from 'events';
 import { z } from 'zod';
 import {
   NATIVE_TOKEN_UID,
-  P2SH_ACCT_PATH,
-  P2PKH_ACCT_PATH,
   ON_CHAIN_BLUEPRINTS_VERSION,
+  P2PKH_ACCT_PATH,
+  P2SH_ACCT_PATH,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
@@ -52,25 +52,25 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import {
-  SCANNING_POLICY,
-  TxHistoryProcessingStatus,
-  WalletType,
-  HistorySyncMode,
-  WalletState,
-  getDefaultLogger,
-  IStorage,
-  ILogger,
   AddressScanPolicyData,
-  ITokenData,
-  TokenVersion,
-  IIndexLimitAddressScanPolicy,
+  AuthorityType,
+  FullNodeVersionData,
+  getDefaultLogger,
+  HistorySyncMode,
   IHistoryTx,
-  IWalletAccessData,
+  IIndexLimitAddressScanPolicy,
+  ILogger,
   IMultisigData,
-  OutputValueType,
+  IStorage,
+  ITokenData,
   IUtxo,
-  EcdsaTxSign,
-  ApiVersion,
+  IWalletAccessData,
+  OutputValueType,
+  SCANNING_POLICY,
+  TokenVersion,
+  TxHistoryProcessingStatus,
+  WalletState,
+  WalletType,
 } from '../types';
 import { FullNodeVersionData, Utxo } from '../wallet/types';
 import transactionUtils from '../utils/transaction';
@@ -107,11 +107,11 @@ import {
 } from './types';
 import Queue from '../models/queue';
 import {
-  scanPolicyStartAddresses,
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
   processMetadataChanged,
+  scanPolicyStartAddresses,
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -125,10 +125,34 @@ import {
 } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
-import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
-import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import {
+  CreateNFTOptions,
+  CreateTokenOptions,
+  DelegateAuthorityOptions,
+  DestroyAuthorityOptions,
+  GeneralTokenInfoSchema,
+  GetAuthorityOptions,
+  GetAvailableUtxosOptions,
+  GetBalanceFullnodeFacadeReturnType,
+  GetTokenDetailsFullnodeFacadeReturnType,
+  GetTxByIdFullnodeFacadeReturnType,
+  GetTxHistoryFullnodeFacadeReturnType,
+  GetUtxosForAmountOptions,
+  MintTokensOptions,
+  MeltTokensOptions,
+  HathorWalletConstructorParams,
+  ISignature,
+  IWalletInputInfo,
+  ProposedOutput,
+  SendManyOutputsOptions,
+  UtxoDetails,
+  UtxoOptions,
+  SendTransactionFullnodeOptions,
+} from './types';
+import { Utxo } from '../wallet/types';
 import {
   FullNodeTxApiResponse,
   TransactionAccWeightResponse,
@@ -754,6 +778,22 @@ class HathorWallet extends EventEmitter {
         transactions: address.numTransactions,
       };
     }
+  }
+
+  /**
+   * Check if the wallet has any transactions on addresses with index > 0.
+   * This is used to determine if a wallet can use single-address mode.
+   *
+   * @returns true if there are transactions on addresses other than the first one
+   * @memberof HathorWallet
+   */
+  async hasTxOutsideFirstAddress(): Promise<boolean> {
+    for await (const address of this.storage.getAllAddresses()) {
+      if (address.bip32AddressIndex > 0 && address.numTransactions > 0) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -1511,7 +1551,7 @@ class HathorWallet extends EventEmitter {
   async sendTransactionInstance(
     address: string,
     value: OutputValueType,
-    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+    options: SendTransactionFullnodeOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
@@ -1541,7 +1581,7 @@ class HathorWallet extends EventEmitter {
   async sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { changeAddress?: string | null; token?: string; pinCode?: string | null } = {}
+    options: SendTransactionFullnodeOptions = {}
   ): Promise<Transaction | null> {
     const sendTx = await this.sendTransactionInstance(address, value, options);
     return sendTx.run();
@@ -1899,7 +1939,7 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMintAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
-    return this.getAuthorityUtxo(tokenUid, 'mint', options);
+    return this.getAuthorityUtxo(tokenUid, AuthorityType.MINT, options);
   }
 
   /**
@@ -1916,14 +1956,14 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMeltAuthority(tokenUid: string, options: GetAuthorityOptions = {}): Promise<IUtxo[]> {
-    return this.getAuthorityUtxo(tokenUid, 'melt', options);
+    return this.getAuthorityUtxo(tokenUid, AuthorityType.MELT, options);
   }
 
   /**
    * Get authority utxo
    *
    * @param tokenUid - UID of the token to select the authority utxo
-   * @param authority - The authority to filter ('mint' or 'melt')
+   * @param authority - The authority to filter (AuthorityType.MINT or AuthorityType.MELT)
    * @param options - Object with custom options.
    * @param options.many - if should return many utxos or just one (default false)
    * @param options.only_available_utxos - If we should filter for available utxos.
@@ -1935,13 +1975,13 @@ class HathorWallet extends EventEmitter {
    * */
   async getAuthorityUtxo(
     tokenUid: string,
-    authority: 'mint' | 'melt',
+    authority: AuthorityType,
     options: GetAuthorityOptions = {}
   ): Promise<IUtxo[]> {
     let authorityValue: bigint;
-    if (authority === 'mint') {
+    if (authority === AuthorityType.MINT) {
       authorityValue = 1n;
-    } else if (authority === 'melt') {
+    } else if (authority === AuthorityType.MELT) {
       authorityValue = 2n;
     } else {
       throw new Error('Invalid authority value.');
@@ -2204,7 +2244,7 @@ class HathorWallet extends EventEmitter {
    * Prepare delegate authority transaction before mining
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2213,7 +2253,7 @@ class HathorWallet extends EventEmitter {
    * */
   async prepareDelegateAuthorityData(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<Transaction> {
@@ -2227,12 +2267,12 @@ class HathorWallet extends EventEmitter {
     }
     const { createAnother } = newOptions;
     let delegateInput: IUtxo[];
-    if (type === 'mint') {
+    if (type === AuthorityType.MINT) {
       delegateInput = await this.getMintAuthority(tokenUid, {
         many: false,
         only_available_utxos: true,
       });
-    } else if (type === 'melt') {
+    } else if (type === AuthorityType.MELT) {
       delegateInput = await this.getMeltAuthority(tokenUid, {
         many: false,
         only_available_utxos: true,
@@ -2266,7 +2306,7 @@ class HathorWallet extends EventEmitter {
    * Create a SendTransaction instance ready to mine a delegate authority transaction.
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2275,7 +2315,7 @@ class HathorWallet extends EventEmitter {
    * */
   async delegateAuthoritySendTransaction(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<SendTransaction> {
@@ -2292,7 +2332,7 @@ class HathorWallet extends EventEmitter {
    * Delegate authority
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to delegate (AuthorityType.MINT or AuthorityType.MELT)
    * @param destinationAddress - Destination address of the delegated authority
    * @param options - Options parameters
    *
@@ -2303,7 +2343,7 @@ class HathorWallet extends EventEmitter {
    * */
   async delegateAuthority(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options: DelegateAuthorityOptions = {}
   ): Promise<Transaction | null> {
@@ -2320,7 +2360,7 @@ class HathorWallet extends EventEmitter {
    * Prepare destroy authority transaction before mining
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to delegate 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2329,7 +2369,7 @@ class HathorWallet extends EventEmitter {
    * */
   async prepareDestroyAuthorityData(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<Transaction> {
@@ -2342,12 +2382,12 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs: IUtxo[];
-    if (type === 'mint') {
+    if (type === AuthorityType.MINT) {
       destroyInputs = await this.getMintAuthority(tokenUid, {
         many: true,
         only_available_utxos: true,
       });
-    } else if (type === 'melt') {
+    } else if (type === AuthorityType.MELT) {
       destroyInputs = await this.getMeltAuthority(tokenUid, {
         many: true,
         only_available_utxos: true,
@@ -2380,7 +2420,7 @@ class HathorWallet extends EventEmitter {
    * Creates a SendTransaction instance with a prepared destroy transaction.
    *
    * @param tokenUid - UID of the token to destroy the authority
-   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2389,7 +2429,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthoritySendTransaction(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<SendTransaction> {
@@ -2401,7 +2441,7 @@ class HathorWallet extends EventEmitter {
    * Destroy authority
    *
    * @param tokenUid - UID of the token to destroy the authority
-   * @param type - Type of the authority to destroy: 'mint' or 'melt'
+   * @param type - Type of the authority to destroy (AuthorityType.MINT or AuthorityType.MELT)
    * @param count - How many authority outputs to destroy
    * @param options - Options parameters
    *
@@ -2412,7 +2452,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthority(
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     count: number,
     options: DestroyAuthorityOptions = {}
   ): Promise<Transaction | null> {
@@ -2436,15 +2476,15 @@ class HathorWallet extends EventEmitter {
    * Get all authorities utxos for specific token
    *
    * @param tokenUid - UID of the token to delegate the authority
-   * @param type - Type of the authority to search for: 'mint' or 'melt'
+   * @param type - Type of the authority to search for (AuthorityType.MINT or AuthorityType.MELT)
    *
    * @return Array of the authority outputs.
    * */
-  async getAuthorityUtxos(tokenUid: string, type: 'mint' | 'melt'): Promise<IUtxo[]> {
-    if (type === 'mint') {
+  async getAuthorityUtxos(tokenUid: string, type: AuthorityType): Promise<IUtxo[]> {
+    if (type === AuthorityType.MINT) {
       return this.getMintAuthority(tokenUid, { many: true });
     }
-    if (type === 'melt') {
+    if (type === AuthorityType.MELT) {
       return this.getMeltAuthority(tokenUid, { many: true });
     }
     throw new Error('This should never happen.');

@@ -27,6 +27,7 @@ import {
   FullNodeTxConfirmationDataResponse,
   AddressDetailsResponseData,
   TxProposalDeleteResponseData,
+  HasTxOutsideFirstAddressResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
@@ -50,6 +51,7 @@ import {
   txByIdResponseSchema,
   addressDetailsResponseSchema,
   txProposalDeleteResponseSchema,
+  hasTxOutsideFirstAddressResponseSchema,
 } from './schemas/walletApi';
 
 /**
@@ -423,6 +425,19 @@ const walletApi = {
       {
         cause: response.data,
       }
+    );
+  },
+
+  async getHasTxOutsideFirstAddress(
+    wallet: HathorWalletServiceWallet
+  ): Promise<HasTxOutsideFirstAddressResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get('wallet/addresses/has-transactions-outside-first-address');
+    if (response.status === 200 && response.data.success === true) {
+      return parseSchema(response.data, hasTxOutsideFirstAddressResponseSchema);
+    }
+    throw new WalletRequestError(
+      'Error checking if wallet has transactions outside first address.'
     );
   },
 };

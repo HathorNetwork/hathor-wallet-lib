@@ -12,7 +12,7 @@ import ncApi from '../api/nano';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, IParsedArgument } from './types';
 import leb128 from '../utils/leb128';
-import { getFieldParser } from './ncTypes/parser';
+import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -84,15 +84,19 @@ class NanoContractTransactionParser {
     }
 
     for (const arg of methodArgs) {
+      // Normalize type string (e.g., union[Address, ContractId] -> CallerId)
+      const normalizedType = normalizeTypeString(arg.type);
       let parsed: IParsedArgument;
       let size: number;
       try {
-        const field = getFieldParser(arg.type, this.network);
+        const field = getFieldParser(normalizedType, this.network);
         const result = field.fromBuffer(argsBuffer);
-        parsed = { ...arg, value: field.toUser() };
+        parsed = { ...arg, type: normalizedType, value: field.toUser() };
         size = result.bytesRead;
       } catch (err: unknown) {
-        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
+        throw new NanoContractTransactionParseError(
+          `Failed to deserialize argument ${normalizedType}.`
+        );
       }
       parsedArgs.push(parsed);
       argsBuffer = argsBuffer.subarray(size);

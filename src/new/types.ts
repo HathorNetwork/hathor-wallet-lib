@@ -359,6 +359,12 @@ export interface ProposedInput {
   token: string;
 }
 
+export interface SendTransactionFullnodeOptions {
+  changeAddress?: string | null;
+  token?: string;
+  pinCode?: string | null;
+}
+
 /**
  * Options for sending many outputs transaction
  * @property inputs Optional array of proposed inputs to use
