@@ -54,7 +54,7 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 }
 
 export interface ISendTokenOutput {
-  type: OutputType.P2PKH | OutputType.P2SH;
+  type: OutputType.P2PKH | OutputType.P2SH; // XXX: This type is ignored in the only place it is used
   address: string;
   value: OutputValueType;
   token: string;
