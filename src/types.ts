@@ -106,6 +106,7 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  seqnum?: number; // TODO: Confirm if it is really optional for v3
 }
 
 export interface IAddressMetadataAsRecord {
