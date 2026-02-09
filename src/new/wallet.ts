@@ -53,8 +53,9 @@ import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import {
   AddressScanPolicyData,
+  ApiVersion,
   AuthorityType,
-  FullNodeVersionData,
+  EcdsaTxSign,
   getDefaultLogger,
   HistorySyncMode,
   IHistoryTx,
@@ -104,6 +105,7 @@ import {
   GetTxByIdFullnodeFacadeReturnType,
   IWalletInputInfo,
   ISignature,
+  SendTransactionFullnodeOptions,
 } from './types';
 import Queue from '../models/queue';
 import {
@@ -128,31 +130,7 @@ import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import Transaction from '../models/transaction';
-import {
-  CreateNFTOptions,
-  CreateTokenOptions,
-  DelegateAuthorityOptions,
-  DestroyAuthorityOptions,
-  GeneralTokenInfoSchema,
-  GetAuthorityOptions,
-  GetAvailableUtxosOptions,
-  GetBalanceFullnodeFacadeReturnType,
-  GetTokenDetailsFullnodeFacadeReturnType,
-  GetTxByIdFullnodeFacadeReturnType,
-  GetTxHistoryFullnodeFacadeReturnType,
-  GetUtxosForAmountOptions,
-  MintTokensOptions,
-  MeltTokensOptions,
-  HathorWalletConstructorParams,
-  ISignature,
-  IWalletInputInfo,
-  ProposedOutput,
-  SendManyOutputsOptions,
-  UtxoDetails,
-  UtxoOptions,
-  SendTransactionFullnodeOptions,
-} from './types';
-import { Utxo } from '../wallet/types';
+import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import {
   FullNodeTxApiResponse,
   TransactionAccWeightResponse,
