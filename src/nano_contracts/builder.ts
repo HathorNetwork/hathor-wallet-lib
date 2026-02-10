@@ -459,7 +459,11 @@ class NanoContractTransactionBuilder {
       }
 
       // For DEPOSIT tokens: contract pays deposit via deduction from withdrawal
-      if (action.token === NATIVE_TOKEN_UID && this.createTokenOptions.contractPaysTokenDeposit) {
+      if (
+        action.token === NATIVE_TOKEN_UID &&
+        this.createTokenOptions.contractPaysTokenDeposit &&
+        this.createTokenOptions.tokenVersion === TokenVersion.DEPOSIT
+      ) {
         const dataArray = this.createTokenOptions!.data ?? [];
         const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
           this.createTokenOptions!.amount,
