@@ -1613,7 +1613,7 @@ class HathorWallet extends EventEmitter {
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
    */
-  async start(optionsParams: any = {}): Promise<any> {
+  async start(optionsParams: any = {}): Promise<ApiVersion> {
     const options: any = { pinCode: null, password: null, ...optionsParams };
     const pinCode: any = options.pinCode || this.pinCode;
     const password: any = options.password || this.password;
@@ -1673,7 +1673,7 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise((resolve, reject) => {
+    const info = await new Promise<ApiVersion>((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
