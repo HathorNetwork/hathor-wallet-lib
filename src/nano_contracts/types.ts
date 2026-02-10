@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 import { z } from 'zod';
-import { IHistoryTx, OutputValueType } from '../types';
+import { IHistoryTx, OutputValueType, TokenVersion } from '../types';
 import { bigIntCoercibleSchema } from '../utils/bigint';
 import { NCFieldBase } from './fields';
 
@@ -213,6 +213,8 @@ export interface NanoContractBuilderCreateTokenOptions {
   data: string[] | null;
   // If this token is an NFT
   isCreateNFT: boolean;
+  // Version of the token being created (DEPOSIT or FEE)
+  tokenVersion: TokenVersion;
 }
 
 /**
@@ -223,6 +225,14 @@ export type CreateNanoTxData = {
   ncId?: string | null;
   actions?: NanoContractAction[];
   args?: unknown[];
+};
+
+export type CreateNanoTxOptions = {
+  pinCode?: string | null;
+  /** Optional maximum fee in NATIVE_TOKEN_UID. If not set, fee is auto-calculated without limit. */
+  maxFee?: OutputValueType;
+  /** If the contract will pay the transaction fees (for FEE tokens) */
+  contractPaysFees?: boolean;
 };
 
 export interface NanoContractBlueprintSourceCodeAPIResponse {

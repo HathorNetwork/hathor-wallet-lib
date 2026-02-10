@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TokenInfo, Utxo } from '../wallet/types';
+import { IHathorWallet, TokenInfo, Utxo } from '../wallet/types';
 import { FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
 import { IDataInput, IDataOutputWithToken, ITokenData, IUtxo, TokenVersion } from '../types';
 import Output from '../models/output';
+import HathorWallet from '../new/wallet';
 
 type TokenElement = IDataInput | Utxo | IUtxo | IDataInput | IDataOutputWithToken | Output;
 
@@ -57,6 +58,41 @@ export class Fee {
     }
 
     return fee;
+  }
+
+  /**
+   * Fetch the tokens from the wallet and calculate the fee.
+   * @param wallet the wallet to fetch the tokens from
+   * @param inputs the inputs of the transaction
+   * @param outputs the outputs of the transaction
+   * @param tokens the tokens to calculate the fee for
+   * @returns fee amount in HTR
+   */
+  static async fetchTokensAndCalculateFee(
+    wallet: IHathorWallet | HathorWallet,
+    inputs: (IDataInput | Utxo | IUtxo)[],
+    outputs: (IDataOutputWithToken | Output)[],
+    tokens: string[]
+  ): Promise<{ fee: bigint; tokensMap: Map<string, ITokenData> }> {
+    const tokensMap = new Map<string, ITokenData>();
+    for (const uid of tokens) {
+      let tokenData = await wallet.storage.getToken(uid);
+      if (!tokenData || tokenData.version === undefined) {
+        const { tokenInfo } = await wallet.getTokenDetails(uid);
+        tokenData = {
+          uid,
+          name: tokenInfo.name,
+          symbol: tokenInfo.symbol,
+          version: tokenInfo.version,
+        };
+      }
+      tokensMap.set(uid, tokenData);
+    }
+
+    return {
+      fee: await Fee.calculate(inputs, outputs as IDataOutputWithToken[], tokensMap),
+      tokensMap,
+    };
   }
 
   /**

@@ -79,6 +79,14 @@ async function createOCBs(sharedState) {
   );
   await waitTxConfirmed(ocbWallet, txChildren.hash);
   sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID = txChildren.hash;
+
+  const codeFee = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/fee.py',
+    'utf8'
+  );
+  const txFee = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFee, address0);
+  await waitTxConfirmed(ocbWallet, txFee.hash, null);
+  sharedState.blueprintIds.FEE_BLUEPRINT_ID = txFee.hash;
 }
 
 // This function will run before each test file is executed
@@ -123,6 +131,7 @@ beforeAll(async () => {
   global.FULL_BLUEPRINT_ID = sharedState.blueprintIds.FULL_BLUEPRINT_ID;
   global.PARENT_BLUEPRINT_ID = sharedState.blueprintIds.PARENT_BLUEPRINT_ID;
   global.CHILDREN_BLUEPRINT_ID = sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID;
+  global.FEE_BLUEPRINT_ID = sharedState.blueprintIds.FEE_BLUEPRINT_ID;
 });
 
 afterAll(async () => {

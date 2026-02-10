@@ -3083,6 +3083,16 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
+
     const nc: any = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
   }
@@ -3172,6 +3182,7 @@ class HathorWallet extends EventEmitter {
       allowExternalMeltAuthorityAddress: false,
       data: null,
       isCreateNFT: false,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...createTokenOptions,
     };
 
@@ -3225,6 +3236,16 @@ class HathorWallet extends EventEmitter {
       .setActions(data.actions)
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, newCreateTokenOptions);
+
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
 
     const nc: any = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);

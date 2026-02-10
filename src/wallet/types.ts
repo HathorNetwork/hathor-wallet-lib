@@ -32,6 +32,8 @@ export type CreateTokenOptionsInput = {
   allowExternalMeltAuthorityAddress?: boolean;
   data?: string[] | null;
   isCreateNFT?: boolean;
+  // Token version (DEPOSIT or FEE) - defaults to DEPOSIT
+  tokenVersion?: TokenVersion;
 };
 
 export interface GetAddressesObject {
