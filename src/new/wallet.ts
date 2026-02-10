@@ -97,6 +97,7 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
+import { ConnectionState, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -125,7 +126,6 @@ import {
   WalletStartOptions,
   WalletStopOptions,
 } from './types';
-import { Utxo } from '../wallet/types';
 import {
   FullNodeTxApiResponse,
   GraphvizNeighboursDotResponse,
@@ -137,17 +137,6 @@ import {
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
 const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
-
-/**
- * TODO: This should be removed when this file is migrated to typescript
- * we need this here because the typescript enum from the Connection file is
- * not being correctly transpiled here, returning `undefined` for ConnectionState.CLOSED.
- */
-const ConnectionState = {
-  CLOSED: 0,
-  CONNECTING: 1,
-  CONNECTED: 2,
-};
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -618,7 +607,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param newState The new connection state (0: CLOSED, 1: CONNECTING, 2: CONNECTED)
    */
-  async onConnectionChangedState(newState: 0 | 1 | 2): Promise<void> {
+  async onConnectionChangedState(newState: ConnectionState): Promise<void> {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
