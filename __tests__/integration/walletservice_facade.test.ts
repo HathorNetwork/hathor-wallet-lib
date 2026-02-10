@@ -4,14 +4,7 @@ import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import {
-  CreateTokenTransaction,
-  FeeHeader,
-  MemoryStore,
-  Output,
-  Storage,
-  transactionUtils,
-} from '../../src';
+import { CreateTokenTransaction, FeeHeader, Output, Storage, transactionUtils } from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
