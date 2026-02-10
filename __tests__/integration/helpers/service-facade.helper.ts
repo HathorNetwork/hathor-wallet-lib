@@ -111,6 +111,10 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
   throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
 }
 
+/**
+ * [Debugging Method] Generates a new wallet with random words and retrieves the first 10 addresses.
+ * @returns An object containing the generated words and the corresponding addresses.
+ */
 export async function generateNewWalletAddress() {
   const newWords = walletUtils.generateWalletWords();
   const { wallet: newWallet } = buildWalletInstance({ words: newWords });
