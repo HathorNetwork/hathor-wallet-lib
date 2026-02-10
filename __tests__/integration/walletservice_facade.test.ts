@@ -173,7 +173,7 @@ afterAll(async () => {
 describe('start', () => {
   describe('mandatory parameters validation', () => {
     beforeEach(() => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     });
 
     afterEach(async () => {
@@ -200,7 +200,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -234,7 +234,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -317,7 +317,7 @@ describe('start', () => {
 
 describe('wallet public methods', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -390,7 +390,7 @@ describe('empty wallet address methods', () => {
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -635,7 +635,7 @@ describe('basic transaction methods', () => {
     let tokenUid: string;
 
     it('should not create a new token on a wallet without funds', async () => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
       await wallet.start({ pinCode, password });
 
       await expect(
@@ -1238,7 +1238,7 @@ describe.skip('websocket events', () => {});
 
 describe('balances', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -1315,7 +1315,7 @@ describe('balances', () => {
     });
 
     it('should throw error when wallet is not ready', async () => {
-      const { wallet: notReadyWallet } = buildWalletInstance();
+      const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
       // Don't start the wallet, so it's not ready
 
       await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
