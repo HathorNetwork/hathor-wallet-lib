@@ -56,6 +56,7 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import {
+  ApiVersion,
   AddressScanPolicyData,
   AuthorityType,
   FullNodeVersionData,
@@ -450,8 +451,8 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData: any = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const versionData: ApiVersion = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
     return {
@@ -1614,7 +1615,7 @@ class HathorWallet extends EventEmitter {
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
    */
-  async start(optionsParams: any = {}): Promise<any> {
+  async start(optionsParams: any = {}): Promise<ApiVersion> {
     const options: any = { pinCode: null, password: null, ...optionsParams };
     const pinCode: any = options.pinCode || this.pinCode;
     const password: any = options.password || this.password;
@@ -1674,7 +1675,7 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise((resolve, reject) => {
+    const info = await new Promise<ApiVersion>((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
