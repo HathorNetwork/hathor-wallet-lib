@@ -481,7 +481,8 @@ export interface IFillTxOptions {
 export interface ApiVersion {
   version: string;
   network: string;
-  // min_weight: number; // DEPRECATED
+  /** @deprecated */
+  min_weight: number;
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;

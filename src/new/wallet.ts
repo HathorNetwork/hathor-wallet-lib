@@ -55,6 +55,7 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import {
+  ApiVersion,
   AddressScanPolicyData,
   ApiVersion,
   AuthorityType,
@@ -444,8 +445,8 @@ class HathorWallet extends EventEmitter {
    * */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData(): Promise<FullNodeVersionData> {
-    const versionData: any = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve).catch((error: any) => reject(error));
+    const versionData: ApiVersion = await new Promise((resolve, reject) => {
+      versionApi.getVersion(resolve).catch(error => reject(error));
     });
 
     return {
