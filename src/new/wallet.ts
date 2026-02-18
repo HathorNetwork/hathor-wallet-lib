@@ -57,7 +57,6 @@ import P2SHSignature from '../models/p2sh_signature';
 import {
   ApiVersion,
   AddressScanPolicyData,
-  ApiVersion,
   AuthorityType,
   EcdsaTxSign,
   FullNodeVersionData,
