@@ -204,7 +204,7 @@ class HathorWallet extends EventEmitter {
   multisig?: { pubkeys: string[]; numSignatures: number };
 
   // Transaction queue
-  wsTxQueue: Queue;
+  wsTxQueue: Queue<WalletWebSocketData>;
 
   newTxPromise: Promise<void>;
 
@@ -401,7 +401,7 @@ class HathorWallet extends EventEmitter {
       };
     }
 
-    this.wsTxQueue = new Queue();
+    this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
 
     this.scanPolicy = scanPolicy;
@@ -1382,15 +1382,7 @@ class HathorWallet extends EventEmitter {
   async processTxQueue(): Promise<void> {
     let wsData = this.wsTxQueue.dequeue();
 
-    // local type guard to narrow to WalletWebSocketData
-    const isWalletWebSocketData = (obj: unknown): obj is WalletWebSocketData =>
-      obj !== undefined &&
-      obj !== null &&
-      typeof obj === 'object' &&
-      'type' in obj &&
-      typeof (obj as { type: unknown }).type === 'string';
-
-    while (isWalletWebSocketData(wsData)) {
+    while (wsData !== undefined) {
       // save new txdata
       await this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
