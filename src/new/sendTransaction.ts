@@ -506,7 +506,7 @@ export default class SendTransaction extends EventEmitter {
                 // This just returns if the transaction is not a CREATE_TOKEN_TX
                 await addCreatedTokenFromTx(transaction as CreateTokenTransaction, storage);
                 // Add new transaction to the wallet's storage.
-                wallet.enqueueOnNewTx({ history: historyTx });
+                wallet.enqueueOnNewTx({ type: '', history: historyTx }); // FIXME: Add a type here
               })(this.wallet, this.storage, this.transaction);
             }
             this.emit('send-tx-success', this.transaction);
