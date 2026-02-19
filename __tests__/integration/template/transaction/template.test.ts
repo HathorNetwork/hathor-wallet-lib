@@ -508,7 +508,7 @@ describe('Template execution with fee tokens', () => {
 
     // Expecting the transaction to fail validation with negative HTR balance
     await expect(sendTx.runFromMining()).rejects.toThrow(
-      'full validation failed: HTR balance is different than expected. (amount=-5, expected=0)'
+      'full validation failed: Fee amount is different than expected. (amount=0, expected=4)'
     );
 
     // Check the wallet balance to verify nothing was spent from the wallet

@@ -668,6 +668,46 @@ describe('FeeBlueprint Template execution', () => {
     );
   });
 
+  it('should deposit FBT without change outputs', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    const fbtNcBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
+
+    // Get the entire FBT balance in the wallet to deposit it all (no change output)
+    const fbtWalletBalance = await hWallet.getBalance(fbtUid);
+    const depositAmount = BigInt(fbtWalletBalance[0].balance.unlocked);
+
+    const tx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'deposit',
+          token: fbtUid,
+          amount: depositAmount,
+          changeAddress: address0,
+        },
+      ],
+    });
+    await checkTxValid(hWallet, tx);
+
+    // Only HTR change output, no FBT change since we deposited the entire balance
+    expect(tx.outputs).toHaveLength(1);
+    // The only output is the HTR change
+    expect(tx.outputs[0].tokenData).toBe(0);
+
+    // Verify the FeeHeader
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries).toHaveLength(1);
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0); // HTR
+    expect(feeHeader!.entries[0].amount).toBe(1n); // Only 1 FBT deposit action, no change output
+
+    const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
+    // Balance should increase by deposit amount
+    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtNcBalanceBefore + depositAmount);
+  });
+
   it('should initialize a second FeeBlueprint contract (nc2)', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 

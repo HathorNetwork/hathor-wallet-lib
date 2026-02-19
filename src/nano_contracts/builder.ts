@@ -256,9 +256,8 @@ class NanoContractTransactionBuilder {
   /**
    * Calculate fee for fee-based token operations.
    *
-   * Fee is calculated from:
-   * 1. Transaction outputs of fee-based tokens (via Fee.calculate)
-   * 2. Deposit actions of fee-based tokens (tokens going into contracts)
+   * Fee is calculated from transaction outputs and nano contract actions of fee-based tokens.
+   * Deposit actions are counted as outputs (tokens going into contracts) by Fee.calculate().
    *
    * @param inputs Transaction inputs
    * @param outputs Transaction outputs
@@ -275,11 +274,12 @@ class NanoContractTransactionBuilder {
     this.assertWallet();
 
     let fee = 0n;
-    const { fee: calculatedFee, tokensMap } = await Fee.fetchTokensAndCalculateFee(
+    const { fee: calculatedFee } = await Fee.fetchTokensAndCalculateFee(
       this.wallet,
       inputs,
       outputs as IDataOutputWithToken[],
-      tokens
+      tokens,
+      this.actions ?? undefined
     );
     fee += calculatedFee;
 
@@ -288,16 +288,6 @@ class NanoContractTransactionBuilder {
       const dataArray = this.createTokenOptions?.data ?? [];
       fee += tokensUtils.getDataFee(dataArray.length);
     }
-
-    // Add fee for deposit actions (tokens going into contracts count as outputs)
-    this.actions?.forEach(action => {
-      if (action.type === NanoContractActionType.DEPOSIT && action.token) {
-        const tokenData = tokensMap.get(action.token);
-        if (tokenData && tokenData.version === TokenVersion.FEE) {
-          fee += FEE_PER_OUTPUT;
-        }
-      }
-    });
 
     return fee;
   }
