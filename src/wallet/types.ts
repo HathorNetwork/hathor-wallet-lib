@@ -32,6 +32,8 @@ export type CreateTokenOptionsInput = {
   allowExternalMeltAuthorityAddress?: boolean;
   data?: string[] | null;
   isCreateNFT?: boolean;
+  // Token version (DEPOSIT or FEE) - defaults to DEPOSIT
+  tokenVersion?: TokenVersion;
 };
 
 export interface GetAddressesObject {
@@ -52,7 +54,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
-  version?: TokenVersion; // Token version
+  version: TokenVersion; // Token version
 }
 
 export interface Balance {
@@ -295,8 +297,11 @@ export interface WalletAddressMap {
   [address: string]: boolean;
 }
 
-export interface TokenAmountMap {
-  [token: string]: OutputValueType; // For each token we have the amount
+export interface TokenMap {
+  [token: string]: {
+    version: TokenVersion;
+    amount: OutputValueType;
+  }; // For each token we have the version and amount
 }
 
 export interface TransactionFullObject {

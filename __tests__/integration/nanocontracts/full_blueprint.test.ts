@@ -610,7 +610,7 @@ describe('Full blueprint basic tests', () => {
 
     const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
     expect(onChainBlueprintList.success).toBe(true);
-    expect(onChainBlueprintList.blueprints.length).toBe(5);
+    expect(onChainBlueprintList.blueprints.length).toBe(6);
 
     const nanoList = await ncApi.getNanoContractCreationList();
     // The correct length depends on the execution order, so I

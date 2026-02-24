@@ -111,7 +111,7 @@ export const tokenInfoSchema = z.object({
   id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
-  version: z.nativeEnum(TokenVersion).optional(),
+  version: z.nativeEnum(TokenVersion),
 });
 
 /**

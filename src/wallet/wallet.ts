@@ -84,6 +84,7 @@ import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
+  CreateNanoTxOptions,
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
@@ -2127,15 +2128,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // 3. Create inputs from utxos
+    // 3. Create inputs from utxos and track address indexes for signing
     const inputsObj: Input[] = [];
+    const addressIndexes: number[] = [];
+
+    // Add HTR inputs
     for (const utxo of utxos) {
-      // First add HTR utxos
       inputsObj.push(helpers.parseToInput(utxo));
+      const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
+      addressIndexes.push(addrIndex);
     }
 
-    // Then add a single mint authority utxo
+    // Add mint authority input and resolve its address index
     inputsObj.push(helpers.parseToInput(mintUtxo));
+    const mintUtxoAddressIndex = await this.getAddressIndex(mintUtxo.address);
+    if (mintUtxoAddressIndex === null) {
+      throw new Error(`Authority address ${mintUtxo.address} not found in wallet`);
+    }
+    addressIndexes.push(mintUtxoAddressIndex);
 
     if (changeAmount) {
       // c. HTR change output
@@ -2156,22 +2166,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
-        // We have an array of utxos and the last input is the one with the authority
-        let addressIndex: number;
-        if (idx === tx.inputs.length - 1) {
-          // This is the mint authority input
-          const mintUtxoAddressIndex = await this.getAddressIndex(mintUtxo.address);
-          if (mintUtxoAddressIndex === null) {
-            throw new Error(`Authority address ${mintUtxo.address} not found in wallet`);
-          }
-          addressIndex = mintUtxoAddressIndex;
-        } else {
-          // This is a regular HTR input
-          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
-            utxos[idx].addressPath
-          );
-        }
-        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
+        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
         inputObj.setData(inputData);
       }
     }
@@ -2248,14 +2243,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Get token info
-    const tokenData = await this.storage.getToken(token);
-    if (!tokenData) {
-      throw new SendTxError(`Token ${token} not found.`);
+    const { tokenInfo } = await this.getTokenDetails(token);
+    if (!tokenInfo) {
+      throw new TokenNotFoundError(token);
     }
 
     // 1. Calculate HTR withdraw
     let withdraw = 0n;
-    if (tokenData?.version === TokenVersion.DEPOSIT) {
+    if (tokenInfo?.version === TokenVersion.DEPOSIT) {
       const depositPercent = this.storage.getTokenDepositPercentage();
       withdraw = tokens.getWithdrawAmount(amount, depositPercent);
     }
@@ -2274,14 +2269,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // it's safe to assume that we have an utxo in the array
     const meltUtxo = meltAuthorities[0];
 
-    // 4. Create inputs from utxos
+    // 4. Create inputs from utxos and track address indexes for signing
     const inputsObj: Input[] = [];
+    const addressIndexes: number[] = [];
+
+    // Add token inputs
     for (const utxo of tokenUtxos) {
       inputsObj.push(helpers.parseToInput(utxo));
+      const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
+      addressIndexes.push(addrIndex);
     }
 
-    // Then add a single melt authority utxo (it's safe to assume that we have an utxo in the array)
+    // Add melt authority input and resolve its address index
     inputsObj.push(helpers.parseToInput(meltUtxo));
+    const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
+    if (meltUtxoAddressIndex === null) {
+      throw new Error(`Authority address ${meltUtxo.address} not found in wallet`);
+    }
+    addressIndexes.push(meltUtxoAddressIndex);
 
     // Create outputs
     const outputsObj: Output[] = [];
@@ -2309,8 +2314,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const headers: Header[] = [];
-    if (tokenData?.version === TokenVersion.FEE) {
+
+    if (tokenInfo?.version === TokenVersion.FEE) {
       const mappedOutputs = outputsObj.map(output => this.mapToDataOutput(output, token));
+      const tokenData = {
+        uid: tokenInfo.id,
+        name: tokenInfo.name,
+        symbol: tokenInfo.symbol,
+        version: tokenInfo.version,
+      } satisfies ITokenData;
       const fee = await Fee.calculate(
         tokenUtxos, // we are using the token utxos instead of the inputs we need to check if this utxo is an authority utxo
         mappedOutputs,
@@ -2333,6 +2345,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // Add HTR inputs
       for (const utxo of htrUtxos) {
         inputsObj.push(helpers.parseToInput(utxo));
+        const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
+        addressIndexes.push(addrIndex);
       }
 
       // Htr isn't billable, so we can append it here after calculating the fee
@@ -2356,22 +2370,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
-        // We have an array of utxos and the last input is the one with the authority
-        let addressIndex: number;
-        if (idx === tx.inputs.length - 1) {
-          // This is the melt authority input
-          const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
-          if (meltUtxoAddressIndex === null) {
-            throw new Error(`Authority address ${meltUtxo.address} not found in wallet`);
-          }
-          addressIndex = meltUtxoAddressIndex;
-        } else {
-          // This is a regular token input
-          addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(
-            tokenUtxos[idx].addressPath
-          );
-        }
-        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
+        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
         inputObj.setData(inputData);
       }
     }
@@ -2794,7 +2793,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
 
@@ -2828,6 +2827,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setArgs(args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
+
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
@@ -2847,7 +2856,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractTransaction(
       method,
@@ -2878,7 +2887,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
@@ -2948,7 +2957,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: { pinCode?: string } = {}
+    options: CreateNanoTxOptions = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
@@ -2980,6 +2989,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: false,
       data: null,
       isCreateNFT: false,
+      tokenVersion: TokenVersion.DEPOSIT,
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
 
@@ -2992,6 +3002,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setActions(actions)
       .setArgs(args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
+
+    // Set max fee if declared
+    if (newOptions.maxFee !== undefined) {
+      builder.setMaxFee(newOptions.maxFee);
+    }
+
+    // Set contract pays fees if declared
+    if (newOptions.contractPaysFees !== undefined) {
+      builder.setContractPaysFees(newOptions.contractPaysFees);
+    }
 
     const tx = await builder.build();
 

@@ -12,12 +12,13 @@ import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
-  TOKEN_INDEX_MASK,
 } from '../constants';
 import helpers from './helpers';
 import {
+  AuthorityType,
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
@@ -25,8 +26,8 @@ import {
   IStorage,
   ITokenData,
   OutputValueType,
-  UtxoSelectionAlgorithm,
   TokenVersion,
+  UtxoSelectionAlgorithm,
 } from '../types';
 import { getAddressType } from './address';
 import {
@@ -379,6 +380,7 @@ const tokens = {
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
       skipDepositFee = false,
+      skipFeeCalculation = false,
       tokenVersion = TokenVersion.DEPOSIT,
     }: {
       token?: string | null;
@@ -390,6 +392,7 @@ const tokens = {
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
+      skipFeeCalculation?: boolean;
       tokenVersion: TokenVersion;
     }
   ): Promise<IDataTx> {
@@ -423,7 +426,7 @@ const tokens = {
 
     // Add output to mint tokens
     outputs.push({
-      type: 'mint',
+      type: AuthorityType.MINT,
       address,
       value: amount,
       timelock: null,
@@ -433,7 +436,7 @@ const tokens = {
     if (createAnotherMint) {
       const newAddress = mintAuthorityAddress || (await storage.getCurrentAddress());
       outputs.push({
-        type: 'mint',
+        type: AuthorityType.MELT,
         address: newAddress,
         value: TOKEN_MINT_MASK,
         timelock: null,
@@ -454,8 +457,8 @@ const tokens = {
         }
         break;
       case TokenVersion.FEE:
-        // is creating a new token
-        if (skipDepositFee) {
+        // skipFeeCalculation: fee is managed externally (e.g., by NanoContractTransactionBuilder)
+        if (skipFeeCalculation) {
           feeAmount = 0n;
         } else if (!isMintingToken) {
           feeAmount = Fee.calculateTokenCreationTxFee(outputs);
@@ -789,6 +792,7 @@ const tokens = {
       data = null,
       isCreateNFT = false,
       skipDepositFee = false,
+      skipFeeCalculation = false,
       tokenVersion = TokenVersion.DEPOSIT,
     }: {
       changeAddress?: string | null;
@@ -799,6 +803,7 @@ const tokens = {
       data?: string[] | null;
       isCreateNFT?: boolean;
       skipDepositFee?: boolean;
+      skipFeeCalculation?: boolean;
       tokenVersion?: TokenVersion;
     } = {}
   ): Promise<IDataTx> {
@@ -809,6 +814,7 @@ const tokens = {
       unshiftData: isCreateNFT,
       data,
       skipDepositFee,
+      skipFeeCalculation,
       tokenVersion,
     };
 
