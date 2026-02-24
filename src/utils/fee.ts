@@ -26,6 +26,7 @@ export class Fee {
    * For nano contract actions:
    * - Deposit actions behave like outputs (tokens going INTO contract)
    * - Withdraw actions behave like inputs (tokens coming FROM contract)
+   * - Grant/Acquire authority actions behave like authority outputs/inputs (mint/melt authorities), and have no fee impact
    *
    * @param inputs the inputs of the transaction
    * @param outputs the outputs of the transaction

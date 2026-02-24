@@ -916,6 +916,8 @@ class NanoContractTransactionBuilder {
       }
 
       // When contractPaysFees is true, deduct fee from HTR withdrawal output
+      // We assume that we have only one HTR output when contractPaysFees, otherwise the user must use the tx template
+      // to build a more complex tx.
       if (fee > 0n && this.contractPaysFees) {
         const htrOutputIndex = outputs.findIndex(
           output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
