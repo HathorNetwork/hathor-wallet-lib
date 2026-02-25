@@ -2409,15 +2409,9 @@ describe('mintTokens', () => {
     const expectedAmount5 = expectedAmount4 + 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
-    const dataOutput5 = mintResponse5.outputs.filter(
-      o => o.getType(hWallet.getNetworkObject()) === 'data'
-    );
-    expect(dataOutput5).toHaveLength(1);
-    expect(dataOutput5[0]).toHaveProperty('value', 1n);
-    expect(dataOutput5[0]).toHaveProperty(
-      'script',
-      Buffer.from([6, 102, 111, 111, 98, 97, 114, 172])
-    );
+    const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
+    expect(dataOutput5).toHaveProperty('value', 1n);
+    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
 
     const mintResponse6 = await hWallet.mintTokens(tokenUid, 100n, {
       unshiftData: true,

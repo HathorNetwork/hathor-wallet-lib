@@ -238,14 +238,6 @@ export interface WalletWebSocketData {
 }
 
 /**
- * Options for creating nano contract transactions
- * @property pinCode PIN to decrypt the private key
- */
-export interface CreateNanoTxOptions {
-  pinCode?: string | null;
-}
-
-/**
  * Data for creating nano contract transactions
  * @property blueprintId ID of the blueprint to create the nano contract. Required if method is 'initialize'
  * @property ncId ID of the nano contract to execute method. Required if method is not initialize

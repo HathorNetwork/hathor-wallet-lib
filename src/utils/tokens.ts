@@ -380,6 +380,7 @@ const tokens = {
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
       skipDepositFee = false,
+      skipFeeCalculation = false,
       tokenVersion = TokenVersion.DEPOSIT,
     }: {
       token?: string | null;
@@ -391,6 +392,7 @@ const tokens = {
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
+      skipFeeCalculation?: boolean;
       tokenVersion: TokenVersion;
     }
   ): Promise<IDataTx> {
@@ -455,8 +457,8 @@ const tokens = {
         }
         break;
       case TokenVersion.FEE:
-        // is creating a new token
-        if (skipDepositFee) {
+        // skipFeeCalculation: fee is managed externally (e.g., by NanoContractTransactionBuilder)
+        if (skipFeeCalculation) {
           feeAmount = 0n;
         } else if (!isMintingToken) {
           feeAmount = Fee.calculateTokenCreationTxFee(outputs);
@@ -790,6 +792,7 @@ const tokens = {
       data = null,
       isCreateNFT = false,
       skipDepositFee = false,
+      skipFeeCalculation = false,
       tokenVersion = TokenVersion.DEPOSIT,
     }: {
       changeAddress?: string | null;
@@ -800,6 +803,7 @@ const tokens = {
       data?: string[] | null;
       isCreateNFT?: boolean;
       skipDepositFee?: boolean;
+      skipFeeCalculation?: boolean;
       tokenVersion?: TokenVersion;
     } = {}
   ): Promise<IDataTx> {
@@ -810,6 +814,7 @@ const tokens = {
       unshiftData: isCreateNFT,
       data,
       skipDepositFee,
+      skipFeeCalculation,
       tokenVersion,
     };
 
