@@ -324,7 +324,7 @@ class HathorWallet extends EventEmitter {
       throw Error("You can't use xpriv with passphrase.");
     }
 
-    if (connection.state !== ConnectionState.CLOSED) {
+    if (connection.getState() !== ConnectionState.CLOSED) {
       throw Error("You can't share connections.");
     }
 
