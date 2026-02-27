@@ -783,8 +783,8 @@ const transaction = {
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
       await this.signTransaction(tx, storage, pinCode);
+      tx.prepareToSend();
     }
-    tx.prepareToSend();
 
     return tx;
   },

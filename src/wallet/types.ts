@@ -6,7 +6,7 @@
  */
 
 import bitcore from 'bitcore-lib';
-import { TokenVersion, IStorage, OutputValueType, IHistoryTx } from '../types';
+import { TokenVersion, IStorage, OutputValueType, IHistoryTx, IDataTx } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -487,8 +487,12 @@ export interface IHathorWallet {
 }
 
 export interface ISendTransaction {
-  run(until: string | null): Promise<Transaction>;
+  run(until: string | null, pin?: string | null): Promise<Transaction>;
   runFromMining(until: string | null): Promise<Transaction>;
+  prepareTx(pin?: string | null): Promise<Transaction>;
+  signTx(pin?: string | null): Promise<Transaction>;
+  readonly transaction: Transaction | null;
+  readonly fullTxData: IDataTx | null;
 }
 
 export interface MineTxSuccessData {
