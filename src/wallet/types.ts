@@ -12,7 +12,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { CreateNanoTxData } from '../nano_contracts/types';
+import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -427,7 +427,7 @@ export interface IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractTransaction(
     method: string,

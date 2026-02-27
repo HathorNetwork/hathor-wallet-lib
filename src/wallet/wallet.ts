@@ -2801,9 +2801,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
 
-    const newOptions = { pinCode: null, ...options };
+    const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode;
-    if (!pin) {
+
+    // Only require PIN if we're actually signing
+    if (newOptions.signTx === true && !pin) {
       throw new PinRequiredError('Pin is required.');
     }
 
@@ -2811,7 +2813,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const addressIndex = await this.getAddressIndexIfOwned(address);
 
     // Get the caller address
-    const callerAddress = await this.getCallerAddressFromIndex(pin, addressIndex);
+    let callerAddress: Address;
+    if (!pin && newOptions.signTx === false) {
+      callerAddress = new Address(address, { network: this.getNetworkObject() });
+    } else {
+      callerAddress = await this.getCallerAddressFromIndex(pin!, addressIndex);
+    }
 
     // Build and send transaction
     const actions = data.actions || [];
@@ -2839,7 +2846,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin!, {
+      signTx: newOptions.signTx,
+    });
   }
 
   /**
@@ -2848,7 +2857,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
    * @param {CreateNanoTxData} [data]
-   * @param {CreateNanoTxOptions} [options]
+   * @param {Omit<CreateNanoTxOptions, 'signTx'>} [options]
    *
    * @returns {Promise<Transaction>} Transaction object returned from execution
    */
@@ -2856,14 +2865,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction> {
-    const sendTransaction = await this.createNanoContractTransaction(
-      method,
-      address,
-      data,
-      options
-    );
+    const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
+      ...options,
+      signTx: true,
+    });
+
     const result = await sendTransaction.runFromMining();
     if (!result) {
       throw new Error('Failed to send nano contract transaction');
@@ -2915,7 +2923,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareNanoSendTransactionWalletService(
     tx: Transaction,
     address: string,
-    pinCode: string
+    pinCode: string,
+    options: { signTx?: boolean } = { signTx: true }
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
     const addressDetails = await this.getAddressDetails(address);
@@ -2929,7 +2938,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const storageProxy = new WalletServiceStorageProxy(this, this.storage);
 
-    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+    if (options.signTx) {
+      await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+    }
 
     // Finalize the transaction
     tx.prepareToSend();
