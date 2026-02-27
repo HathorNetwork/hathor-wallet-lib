@@ -3296,9 +3296,7 @@ class HathorWallet extends EventEmitter {
    */
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
-    if (method) {
-      this.storage.setTxSignatureMethod(method);
-    }
+    this.storage.setTxSignatureMethod(method);
   }
 
   /**
