@@ -93,6 +93,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // Fee amount to prepare the transaction
   private _feeAmount: bigint;
 
+  private _currentStep: 'idle' | 'prepared' | 'signed' = 'idle';
+
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
 
@@ -375,7 +377,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
+  async prepareTx(pin?: string | null): Promise<Transaction> {
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
@@ -474,8 +476,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.transaction.headers.push(new FeeHeader([{ tokenIndex: 0, amount: this._feeAmount }]));
     }
 
+    this.utxosAddressPath = utxosAddressPath;
     this.emit('prepare-tx-end', this.transaction);
-    return { transaction: this.transaction, utxosAddressPath };
+    return this.transaction;
   }
 
   /**
@@ -771,7 +774,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async signTx(utxosAddressPath: string[], pin: string | null = null) {
+  async signTx(pin?: string | null): Promise<Transaction> {
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
     }
@@ -785,7 +788,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         xprivkey,
         dataToSignHash,
         // the wallet service returns the full BIP44 path, but we only need the address path:
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(this.utxosAddressPath[idx])
       );
       inputObj.setData(inputData);
     }
@@ -795,6 +798,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.transaction.prepareToSend();
 
     this.emit('sign-tx-end', this.transaction);
+    return this.transaction;
   }
 
   /**
@@ -935,14 +939,20 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
     try {
-      const preparedData = await this.prepareTx();
-      if (until === 'prepare-tx') {
-        return this.transaction!;
+      if (this._currentStep === 'idle') {
+        await this.prepareTx(pin);
+        this._currentStep = 'prepared';
+        if (until === 'prepare-tx') {
+          return this.transaction!;
+        }
       }
 
-      await this.signTx(preparedData.utxosAddressPath, pin);
-      if (until === 'sign-tx') {
-        return this.transaction!;
+      if (this._currentStep === 'prepared') {
+        await this.signTx(pin);
+        this._currentStep = 'signed';
+        if (until === 'sign-tx') {
+          return this.transaction!;
+        }
       }
 
       const tx = await this.runFromMining(until);

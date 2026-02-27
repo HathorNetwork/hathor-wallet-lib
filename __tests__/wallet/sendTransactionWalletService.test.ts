@@ -2158,7 +2158,7 @@ describe('prepareTx - Fee Tokens', () => {
     ];
 
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
-    const { transaction } = await sendTransaction.prepareTx();
+    const transaction = await sendTransaction.prepareTx();
 
     // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
     expect(transaction.inputs).toHaveLength(2);
@@ -2254,7 +2254,7 @@ describe('prepareTx - Fee Tokens', () => {
     ];
 
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
-    const { transaction } = await sendTransaction.prepareTx();
+    const transaction = await sendTransaction.prepareTx();
 
     // Verify transaction was created
     expect(transaction).toBeDefined();
