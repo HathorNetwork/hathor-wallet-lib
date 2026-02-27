@@ -3056,9 +3056,11 @@ class HathorWallet extends EventEmitter {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
-    const newOptions: any = { pinCode: null, ...options };
+    const newOptions: any = { pinCode: null, signTx: true, ...options };
     const pin: any = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+
+    // Only require PIN if we're actually signing
+    if (newOptions.signTx !== false && !pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3071,7 +3073,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Build and send transaction
-    const builder: any = new NanoContractTransactionBuilder()
+    const builder: NanoContractTransactionBuilder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
@@ -3091,8 +3093,17 @@ class HathorWallet extends EventEmitter {
       builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
-    const nc: any = await builder.build();
-    return prepareNanoSendTransaction(nc, pin, this.storage);
+    const nc = await builder.build();
+    if (newOptions.signTx !== false) {
+      return prepareNanoSendTransaction(nc, pin, this.storage);
+    }
+
+    nc.prepareToSend();
+    return new SendTransaction({
+      storage: this.storage,
+      transaction: nc,
+      pin,
+    });
   }
 
   /**

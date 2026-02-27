@@ -14,7 +14,9 @@ import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../
 import { TokenVersion } from '../../../../src/types';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import CreateTokenTransaction from '../../../../src/models/create_token_transaction';
+import Address from '../../../../src/models/address';
 import { NanoContractHeaderActionType } from '../../../../src/nano_contracts/types';
+import transactionUtils from '../../../../src/utils/transaction';
 
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
@@ -908,5 +910,99 @@ describe('FeeBlueprint Template execution', () => {
     const tokenDetailsAfter = await hWallet.getTokenDetails(feeTokenUid);
     expect(tokenDetailsAfter.authorities.mint).toBe(false);
     expect(tokenDetailsAfter.authorities.melt).toBe(true); // Melt still in wallet
+  });
+
+  it('should build tx without signing, edit caller, sign, and send', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const address1 = await hWallet.getAddressAtIndex(1);
+
+    // First, withdraw some FBT from the contract to have tokens to deposit
+    const withdrawTx = await hWallet.createAndSendNanoContractTransaction('noop', address0, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'withdrawal',
+          token: fbtUid,
+          amount: 10n,
+          address: address0,
+        },
+      ],
+    });
+    await checkTxValid(hWallet, withdrawTx);
+
+    const fbtDepositAmount = 5n;
+    const expectedFee = 2n;
+
+    // 1. Build unsigned transaction with address0 as caller
+    const sendTransaction = await hWallet.createNanoContractTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'deposit',
+            token: fbtUid,
+            amount: fbtDepositAmount,
+            changeAddress: address0,
+          },
+        ],
+      },
+      { signTx: false }
+    );
+
+    const tx = sendTransaction.transaction;
+
+    // 2. Assert tx is built but NOT signed
+    // Inputs: FBT (for deposit) + HTR (for fee)
+    expect(tx.inputs.length).toBeGreaterThan(0);
+    for (const input of tx.inputs) {
+      expect(input.data).toBeNull();
+    }
+
+    const nanoHeaders = tx.getNanoHeaders();
+    expect(nanoHeaders).toHaveLength(1);
+    expect(nanoHeaders[0].script).toBeNull();
+    expect(nanoHeaders[0].address.base58).toBe(address0);
+
+    // Outputs: FBT change + HTR change
+    expect(tx.outputs).toHaveLength(2);
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 1,
+        }),
+        expect.objectContaining({
+          tokenData: 0,
+        }),
+      ])
+    );
+
+    // 3. Edit caller: change address AND seqnum for the new caller
+    const newCallerSeqnum = await hWallet.getNanoHeaderSeqnum(address1);
+    nanoHeaders[0].address = new Address(address1, { network: hWallet.getNetworkObject() });
+    nanoHeaders[0].seqnum = newCallerSeqnum;
+
+    // 4. Sign the transaction (signs both inputs AND nano header with new caller)
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+
+    // 5. Assert tx IS now signed
+    for (const input of tx.inputs) {
+      expect(input.data).not.toBeNull();
+    }
+    expect(nanoHeaders[0].script).not.toBeNull();
+    // Verify the caller was changed
+    expect(nanoHeaders[0].address.base58).toBe(address1);
+
+    // 6. Verify FeeHeader
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].amount).toBe(expectedFee);
+
+    // 7. Send and verify not voided
+    const result = await sendTransaction.runFromMining();
+    await checkTxValid(hWallet, result);
   });
 });
