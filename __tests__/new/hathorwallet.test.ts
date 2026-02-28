@@ -20,7 +20,8 @@ import {
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
-import { WalletType } from '../../src/types';
+import { IHistoryTx, WalletType } from '../../src/types';
+import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
 import walletUtils from '../../src/utils/wallet';
@@ -370,13 +371,17 @@ test('processTxQueue', async () => {
   };
 
   // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
-  hWallet.wsTxQueue = new Queue();
-  hWallet.wsTxQueue.enqueue(1);
-  hWallet.wsTxQueue.enqueue(2);
-  hWallet.wsTxQueue.enqueue(3);
+  hWallet.wsTxQueue = new Queue<WalletWebSocketData>();
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType' });
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType' });
+  hWallet.wsTxQueue.enqueue({ type: 'fakeType' });
 
   await hWallet.processTxQueue();
-  expect(processedTxs).toStrictEqual([1, 2, 3]);
+  expect(processedTxs).toStrictEqual([
+    { type: 'fakeType' },
+    { type: 'fakeType' },
+    { type: 'fakeType' },
+  ]);
 });
 
 test('handleWebsocketMsg', async () => {
@@ -389,8 +394,11 @@ test('handleWebsocketMsg', async () => {
   });
 
   // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
-  hWallet.wsTxQueue = new Queue();
-  hWallet.wsTxQueue.enqueue({ type: 'wallet:address_history', history: [1] });
+  hWallet.wsTxQueue = new Queue<WalletWebSocketData>();
+  hWallet.wsTxQueue.enqueue({
+    type: 'wallet:address_history',
+    history: [1] as unknown as IHistoryTx,
+  });
   hWallet.newTxPromise = Promise.resolve();
 
   hWallet.state = HathorWallet.PROCESSING;
@@ -559,6 +567,7 @@ test('getAddressPrivKey', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -596,6 +605,7 @@ test('signMessageWithAddress', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -725,6 +735,7 @@ test('start', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {

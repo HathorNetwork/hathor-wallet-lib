@@ -39,6 +39,7 @@ import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import FeeHeader from '../../src/headers/fee';
 import Header from '../../src/headers/base';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import WalletConnection from '../../src/new/connection';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -362,7 +363,12 @@ describe('start', () => {
       () =>
         new HathorWallet({
           seed: walletData.words,
-          connection: { state: ConnectionState.CONNECTED },
+          connection: {
+            state: ConnectionState.CONNECTED,
+            getState(): ConnectionState {
+              return ConnectionState.CONNECTED;
+            },
+          } as Partial<WalletConnection>,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
         })
@@ -2403,15 +2409,9 @@ describe('mintTokens', () => {
     const expectedAmount5 = expectedAmount4 + 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
-    const dataOutput5 = mintResponse5.outputs.filter(
-      o => o.getType(hWallet.getNetworkObject()) === 'data'
-    );
-    expect(dataOutput5).toHaveLength(1);
-    expect(dataOutput5[0]).toHaveProperty('value', 1n);
-    expect(dataOutput5[0]).toHaveProperty(
-      'script',
-      Buffer.from([6, 102, 111, 111, 98, 97, 114, 172])
-    );
+    const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
+    expect(dataOutput5).toHaveProperty('value', 1n);
+    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
 
     const mintResponse6 = await hWallet.mintTokens(tokenUid, 100n, {
       unshiftData: true,

@@ -4,14 +4,7 @@ import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import {
-  CreateTokenTransaction,
-  FeeHeader,
-  MemoryStore,
-  Output,
-  Storage,
-  transactionUtils,
-} from '../../src';
+import { CreateTokenTransaction, FeeHeader, Output, Storage, transactionUtils } from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
@@ -26,38 +19,24 @@ import {
 } from '../../src/constants';
 import { decryptData } from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
-import { delay } from './utils/core.util';
-import { SendTxError, TxNotFoundError, UtxoError, WalletRequestError } from '../../src/errors';
+import {
+  buildWalletInstance,
+  emptyWallet,
+  initializeServiceGlobalConfigs,
+  pollForTx,
+} from './helpers/service-facade.helper';
+import { SendTxError, UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
 import { TokenVersion } from '../../src/types';
+import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
-config.setServerUrl(FULLNODE_URL);
-config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
-config.setWalletServiceBaseWsUrl('ws://localhost:3001/');
+initializeServiceGlobalConfigs();
 
 /** Genesis Wallet, used to fund all tests */
-const gWallet: HathorWalletServiceWallet = buildWalletInstance({
-  words: WALLET_CONSTANTS.genesis.words,
-}).wallet;
+const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const emptyWallet = {
-  words:
-    'buddy kingdom scorpion device uncover donate sense false few leaf oval illegal assume talent express glide above brain end believe abstract will marine crunch',
-  addresses: [
-    'WkHNZyrKNusTtu3EHfvozEqcBdK7RoEMR7',
-    'WivGyxDjWxijcns3hpGvEJKhjR9HMgFzZ5',
-    'WXQSeMcNt67hVpmgwYqmYLsddgXeGYP4mq',
-    'WTMH3NQs8YXyNguqwLyqoTKDFTfkJLxMzX',
-    'WTUiHeiajtt1MXd1Jb3TEeWUysfNJfig35',
-    'WgzZ4MNcuX3sBgLC5Fa6dTTQaoy4ccLdv5',
-    'WU6UQCnknGLh1WP392Gq6S69JmheS5kzZ2',
-    'WX7cKt38FfgKFWFxSa2YzCWeCPgMbRR98h',
-    'WZ1ABXsuwHHfLzeAWMX7RYs5919LPBaYpp',
-    'WUJjQGb4SGSLh44m2JdgAR4kui8mTPb8bK',
-  ],
-};
 const walletWithTxs = {
   words:
     'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
@@ -178,120 +157,23 @@ const pinCode = '123456';
 const password = 'testpass';
 
 /**
- * Builds a HathorWalletServiceWallet instance with a wallet seed words
- * @param enableWs - Whether to enable websocket connection (default: false)
- * @param words - The 24 words to use for the wallet (default: empty wallet)
- * @param passwordForRequests - The password that will be returned by the mocked requestPassword function (default: 'test-password')
- * @returns The wallet instance along with its store and storage for eventual mocking/spying
+ * Obsolete function, use GenesisWalletServiceHelper.injectFunds instead.
+ * @deprecated
  */
-function buildWalletInstance({
-  enableWs = false,
-  words = emptyWallet.words,
-  passwordForRequests = 'test-password',
-} = {}) {
-  const walletData = { words };
-  const network = new Network(NETWORK_NAME);
-  const requestPassword = jest.fn().mockResolvedValue(passwordForRequests);
-
-  const store = new MemoryStore();
-  const storage = new Storage(store);
-  const newWallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed: walletData.words,
-    network,
-    storage,
-    enableWs, // Disable websocket for integration tests
-  });
-
-  return { wallet: newWallet, store, storage };
-}
-
-/**
- * Polls the wallet for a transaction by its ID until found or max attempts reached
- * @param walletForPolling - The wallet instance to poll
- * @param txId - The transaction ID to look for
- * @returns The transaction object if found
- * @throws Error if the transaction is not found after max attempts
- */
-async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
-  const maxAttempts = 10;
-  const delayMs = 1000; // 1 second
-  let attempts = 0;
-
-  while (attempts < maxAttempts) {
-    try {
-      const tx = await walletForPolling.getTxById(txId);
-      if (tx) {
-        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
-        return tx;
-      }
-    } catch (error) {
-      // If the error is of type TxNotFoundError, we continue polling
-      if (!(error instanceof TxNotFoundError)) {
-        throw error; // Re-throw unexpected errors
-      }
-    }
-    attempts++;
-    await delay(delayMs);
-  }
-  throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
-}
-
-async function sendFundTx(
-  address: string,
-  amount: bigint,
-  destinationWallet?: HathorWalletServiceWallet
-) {
-  const fundTx = await gWallet.sendTransaction(address, amount, {
-    pinCode,
-  });
-
-  // Ensure the transaction was sent from the Genesis perspective
-  await pollForTx(gWallet, fundTx.hash!);
-
-  // Ensure the destination wallet is also aware of the transaction
-  if (destinationWallet) {
-    await pollForTx(destinationWallet, fundTx.hash!);
-  }
-
-  return fundTx;
-}
+const sendFundTx = GenesisWalletServiceHelper.injectFunds;
 
 beforeAll(async () => {
-  let isServerlessReady = false;
-  const startTime = Date.now();
-
-  // Poll for the serverless app to be ready.
-  const delayBetweenRequests = 3000;
-  const lambdaTimeout = 30000;
-  while (!isServerlessReady) {
-    try {
-      // Executing a method that does not depend on the wallet being started,
-      // but that ensures the Wallet Service Lambdas are receiving requests
-      await gWallet.getVersionData();
-      isServerlessReady = true;
-    } catch (e) {
-      // Ignore errors, serverless app is probably not ready yet
-      loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
-    }
-
-    // Timeout after 2 minutes
-    if (Date.now() - startTime > lambdaTimeout) {
-      throw new Error('Ws-Serverless did not become ready in time');
-    }
-    await delay(delayBetweenRequests);
-  }
-  await gWallet.start({ pinCode, password });
+  await GenesisWalletServiceHelper.start();
 });
 
 afterAll(async () => {
-  await gWallet.stop({ cleanStorage: true });
+  await GenesisWalletServiceHelper.stop();
 });
 
 describe('start', () => {
   describe('mandatory parameters validation', () => {
     beforeEach(() => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     });
 
     afterEach(async () => {
@@ -318,7 +200,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -352,7 +234,7 @@ describe('start', () => {
     let storage: Storage;
 
     beforeEach(() => {
-      ({ wallet, storage } = buildWalletInstance());
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
 
       // Clear events array
       events.length = 0;
@@ -435,7 +317,7 @@ describe('start', () => {
 
 describe('wallet public methods', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -508,7 +390,7 @@ describe('empty wallet address methods', () => {
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -753,7 +635,7 @@ describe('basic transaction methods', () => {
     let tokenUid: string;
 
     it('should not create a new token on a wallet without funds', async () => {
-      ({ wallet } = buildWalletInstance());
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
       await wallet.start({ pinCode, password });
 
       await expect(
@@ -1356,7 +1238,7 @@ describe.skip('websocket events', () => {});
 
 describe('balances', () => {
   beforeEach(async () => {
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
   });
 
@@ -1433,7 +1315,7 @@ describe('balances', () => {
     });
 
     it('should throw error when wallet is not ready', async () => {
-      const { wallet: notReadyWallet } = buildWalletInstance();
+      const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
       // Don't start the wallet, so it's not ready
 
       await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
@@ -2333,24 +2215,11 @@ describe('Fee-based tokens', () => {
     // 3. Fee token change increments the fee
     // The fee header is correctly calculated considering all fee token outputs
 
-    // Setup wallet (may have accumulated HTR from previous tests)
+    // Setup wallet
     ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
 
-    // Drain any accumulated HTR by sending it all to gWallet
-    const htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    const currentHtr = htrBalance[0]?.balance.unlocked ?? 0n;
-    if (currentHtr > 0n) {
-      const drainTx = await feeWallet.sendTransaction(
-        WALLET_CONSTANTS.genesis.addresses[0],
-        currentHtr,
-        { pinCode }
-      );
-      await pollForTx(feeWallet, drainTx.hash!);
-      await pollForTx(gWallet, drainTx.hash!);
-    }
-
-    // Fund wallet with exact amount needed
+    // Fund wallet with HTR for token creation and transaction fees
     const initialFunding = 20n;
     const fundTx = await gWallet.sendTransaction(feeTokenWallet.addresses[0], initialFunding, {
       pinCode,
@@ -2358,7 +2227,11 @@ describe('Fee-based tokens', () => {
     await pollForTx(gWallet, fundTx.hash!);
     await pollForTx(feeWallet, fundTx.hash!);
 
-    // Create fee token
+    // Get HTR balance before token creation
+    const htrBalanceBeforeTokenCreation = await feeWallet.getBalance(NATIVE_TOKEN_UID);
+    const htrBeforeTokenCreation = htrBalanceBeforeTokenCreation[0].balance.unlocked;
+
+    // Create fee token (costs 1n fee)
     const tokenAmount = 200n;
     const createTokenTx = (await feeWallet.createNewToken('FeeBasedToken', 'FBT', tokenAmount, {
       pinCode,
@@ -2375,22 +2248,28 @@ describe('Fee-based tokens', () => {
     const htrBalanceBefore = await feeWallet.getBalance(NATIVE_TOKEN_UID);
     const htrBefore = htrBalanceBefore[0].balance.unlocked;
 
-    // Get the UTXOs we'll use as pre-selected inputs
+    // Verify token creation cost 1n fee
+    expect(htrBeforeTokenCreation - htrBefore).toBe(1n);
+
+    // Get the fee token UTXO (should have full amount)
     const feeTokenUtxos = await feeWallet.getUtxos({ token: tokenUid });
-    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
-
     expect(feeTokenUtxos.utxos.length).toBeGreaterThan(0);
-    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
-
     const feeTokenUtxo = feeTokenUtxos.utxos[0];
     expect(feeTokenUtxo.amount).toBe(200n);
-    const htrUtxo = htrUtxos.utxos[0];
-    expect(htrUtxo.amount).toBe(19n); // 20n - 1n from fee token creation output
+
+    // Get a single HTR UTXO to use as pre-selected input
+    // We need one that has enough for output (1n) + fee (2n) = 3n minimum
+    const htrUtxos = await feeWallet.getUtxos({ token: NATIVE_TOKEN_UID });
+    expect(htrUtxos.utxos.length).toBeGreaterThan(0);
+
+    // Find a UTXO with at least 3n (1n output + 2n fee)
+    const htrUtxo = htrUtxos.utxos.find(utxo => utxo.amount >= 3n);
+    expect(htrUtxo).toBeDefined();
 
     // Pre-select inputs
     const inputs = [
       { txId: feeTokenUtxo.tx_id, index: feeTokenUtxo.index },
-      { txId: htrUtxo.tx_id, index: htrUtxo.index },
+      { txId: htrUtxo!.tx_id, index: htrUtxo!.index },
     ];
 
     // Outputs:
@@ -2436,10 +2315,13 @@ describe('Fee-based tokens', () => {
     expect(tx.headers).toHaveLength(1);
     expect((tx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
 
-    // Verify HTR balance after transaction
-    // HTR spent: 1n (output) + 2n (fee) = 3n
+    // Verify HTR balance change
+    // From the pre-selected UTXO: spent 1n (output) + 2n (fee) = 3n
+    // Change returned: htrUtxoAmount - 3n
     const htrBalanceAfter = await feeWallet.getBalance(NATIVE_TOKEN_UID);
     const htrAfter = htrBalanceAfter[0].balance.unlocked;
+
+    // The total balance change should be 3n (1n sent + 2n fee)
     expect(htrBefore - htrAfter).toBe(3n);
 
     // Verify fee token balance (should stay the same, just moved internally + sent 50n)
