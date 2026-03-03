@@ -56,15 +56,17 @@ jest.mock('../../src/wallet/sendTransactionWalletService', () => {
     const instance = new ActualSendTransactionWalletService(...args);
 
     // Mock all methods except run with appropriate return values
-    instance.prepareTx = jest.fn().mockResolvedValue({
-      utxosAddressPath: [], // Mock utxos address path array
-    });
-    // Set up the transaction mock for signTx to use
-    instance.transaction = {
+    const mockTransaction = {
       getDataToSignHash: jest.fn().mockReturnValue(Buffer.from('mock-hash')),
       inputs: [], // Mock empty inputs so the for loop doesn't execute
       prepareToSend: jest.fn(),
     };
+    instance.prepareTx = jest.fn().mockImplementation(() => {
+      instance.transaction = mockTransaction;
+      instance.utxosAddressPath = [];
+      instance._currentStep = 'prepared';
+      return Promise.resolve(mockTransaction);
+    });
     instance.runFromMining = jest.fn().mockResolvedValue({});
 
     return instance;
