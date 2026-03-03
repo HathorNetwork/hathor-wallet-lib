@@ -487,8 +487,11 @@ export interface IHathorWallet {
 }
 
 export interface ISendTransaction {
-  run(until?: string | null, pin?: string | null): Promise<Transaction>;
-  runFromMining(until?: string | null): Promise<Transaction>;
+  run(
+    until?: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null,
+    pin?: string | null
+  ): Promise<Transaction>;
+  runFromMining(until?: 'mine-tx' | null): Promise<Transaction>;
   prepareTx(): Promise<Transaction>;
   signTx(pin?: string | null): Promise<Transaction>;
   readonly transaction: Transaction | null;

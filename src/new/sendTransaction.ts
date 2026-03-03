@@ -572,7 +572,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @memberof SendTransaction
    * @inner
    */
-  async runFromMining(until: string | null = null): Promise<Transaction> {
+  async runFromMining(until: 'mine-tx' | null = null): Promise<Transaction> {
     try {
       if (this.transaction === null) {
         throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
@@ -625,7 +625,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @memberof SendTransaction
    * @inner
    */
-  async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
+  async run(
+    until: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null = null,
+    pin: string | null = null
+  ): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {
         await this.prepareTx();

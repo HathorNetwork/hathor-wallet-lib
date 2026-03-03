@@ -913,7 +913,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async runFromMining(until: string | null = null): Promise<Transaction> {
+  async runFromMining(until: 'mine-tx' | null = null): Promise<Transaction> {
     try {
       // This will await until mine tx is fully completed
       // mineTx method returns a promise that resolves when
@@ -947,7 +947,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
+  async run(
+    until: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null = null,
+    pin: string | null = null
+  ): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {
         await this.prepareTx();
