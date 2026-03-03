@@ -9,7 +9,7 @@ import {
   waitForWalletReady,
   waitForTxReceived,
 } from '../helpers/wallet.helper';
-import { InvalidPasswdError } from '../../../src/errors';
+import { InvalidPasswdError, SendTxError } from '../../../src/errors';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
 import SendTransaction from '../../../src/new/sendTransaction';
@@ -106,6 +106,134 @@ describe('locked utxos', () => {
     const storeMem = new MemoryStore();
     const storageMem = new Storage(storeMem);
     await testUnlockWhenSpent(storageMem, walletDataMem);
+  });
+
+  it('should wrap prepareTx errors into SendTxError', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hwallet = await startWallet(storage, walletData);
+    const address = await hwallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 1n);
+
+    const sendTx = new SendTransaction({
+      storage: hwallet.storage,
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: await hwallet.getAddressAtIndex(1),
+          // Sending more than available should cause prepareTx to fail
+          value: 9999n,
+          token: NATIVE_TOKEN_UID,
+        },
+      ],
+    });
+
+    await expect(sendTx.prepareTx()).rejects.toThrow(SendTxError);
+  });
+});
+
+describe('run(until) state machine', () => {
+  afterEach(async () => {
+    await stopWallets();
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should stop at prepare-tx and resume to completion', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hwallet = await startWallet(storage, walletData);
+    const address = await hwallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+
+    const sendTx = new SendTransaction({
+      storage: hwallet.storage,
+      pin: DEFAULT_PIN_CODE,
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: await hwallet.getAddressAtIndex(1),
+          value: 1n,
+          token: NATIVE_TOKEN_UID,
+        },
+      ],
+    });
+
+    // Stop after prepare — transaction should exist but be unsigned (no input data)
+    const preparedTx = await sendTx.run('prepare-tx');
+    expect(preparedTx).toBeDefined();
+    expect(preparedTx.inputs.length).toBeGreaterThan(0);
+    for (const input of preparedTx.inputs) {
+      expect(input.data).toBeNull();
+    }
+
+    // Resume from where we left off — should sign, mine and push
+    const finalTx = await sendTx.run(null);
+    expect(finalTx.hash).toBeDefined();
+    await waitForTxReceived(hwallet, finalTx.hash);
+  });
+
+  it('should stop at sign-tx and resume to completion', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hwallet = await startWallet(storage, walletData);
+    const address = await hwallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+
+    const sendTx = new SendTransaction({
+      storage: hwallet.storage,
+      pin: DEFAULT_PIN_CODE,
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: await hwallet.getAddressAtIndex(1),
+          value: 1n,
+          token: NATIVE_TOKEN_UID,
+        },
+      ],
+    });
+
+    // Stop after sign — transaction should be signed (input data populated)
+    const signedTx = await sendTx.run('sign-tx');
+    expect(signedTx).toBeDefined();
+    for (const input of signedTx.inputs) {
+      expect(input.data).not.toBeNull();
+    }
+
+    // Resume — should mine and push
+    const finalTx = await sendTx.run(null);
+    expect(finalTx.hash).toBeDefined();
+    await waitForTxReceived(hwallet, finalTx.hash);
+  });
+
+  it('should complete the full flow with run(null)', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hwallet = await startWallet(storage, walletData);
+    const address = await hwallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+
+    const sendTx = new SendTransaction({
+      storage: hwallet.storage,
+      pin: DEFAULT_PIN_CODE,
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: await hwallet.getAddressAtIndex(1),
+          value: 1n,
+          token: NATIVE_TOKEN_UID,
+        },
+      ],
+    });
+
+    // Full flow in one call
+    const tx = await sendTx.run(null);
+    expect(tx.hash).toBeDefined();
+    await waitForTxReceived(hwallet, tx.hash);
   });
 });
 
