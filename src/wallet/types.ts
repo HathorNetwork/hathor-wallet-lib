@@ -433,22 +433,23 @@ export interface IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<Transaction>;
   createNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<Transaction>;
+  getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;
   getUtxosForAmount(
     amount: OutputValueType,
