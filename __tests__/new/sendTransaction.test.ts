@@ -169,9 +169,12 @@ test('prepareTxData', async () => {
     tokens: ['01'],
   });
 
-  await expect(sendTransaction.prepareTx()).rejects.toThrow('Pin is not set.');
-  sendTransaction.pin = '000000';
+  // prepareTx does not require a PIN (creates unsigned transaction)
   await expect(sendTransaction.prepareTx()).resolves.toBe(preparedTx);
+
+  // signTx requires a PIN
+  await expect(sendTransaction.signTx()).rejects.toThrow('Pin is not set.');
+  sendTransaction.pin = '000000';
 
   prepareSpy.mockRestore();
   spyGetToken.mockRestore();
