@@ -13,6 +13,7 @@ import HathorWallet from '../../src/new/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
 import Address from '../../src/models/address';
 import transactionUtils from '../../src/utils/transaction';
+import { TokenVersion } from '../../src/types';
 
 describe('HathorWallet prepare transaction without signing', () => {
   let hWallet: HathorWallet;
@@ -183,5 +184,87 @@ describe('HathorWallet prepare transaction without signing', () => {
     // 7. Send and verify not voided
     const result = await sendTransaction.runFromMining();
     await checkTxValid(hWallet, result);
+  });
+
+  it('should build token creation tx without signing, edit caller, sign, and send', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const address1 = await hWallet.getAddressAtIndex(1);
+
+    // Inject more funds since previous test consumed some
+    await GenesisWalletHelper.injectFunds(hWallet, address0, 1000n, {});
+
+    // 1. Build unsigned token creation transaction with address0 as caller
+    const sendTransaction = await hWallet.createNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [],
+      },
+      {
+        name: 'Test Token Unsigned',
+        symbol: 'TTU',
+        amount: 500n,
+        mintAddress: address0,
+        tokenVersion: TokenVersion.FEE,
+      },
+      { signTx: false }
+    );
+
+    const tx = sendTransaction.transaction;
+
+    // 2. Assert tx is built but NOT signed
+    // Inputs should exist (for HTR deposit)
+    expect(tx.inputs.length).toBeGreaterThan(0);
+    for (const input of tx.inputs) {
+      expect(input.data).toBeNull();
+    }
+
+    const nanoHeaders = tx.getNanoHeaders();
+    expect(nanoHeaders).toHaveLength(1);
+    expect(nanoHeaders[0].script).toBeNull();
+    expect(nanoHeaders[0].address.base58).toBe(address0);
+
+    // Outputs should include token mint outputs and HTR change
+    expect(tx.outputs.length).toBeGreaterThan(0);
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 0, // HTR change
+        }),
+      ])
+    );
+
+    // 3. Edit caller: change address AND seqnum for the new caller
+    const newCallerSeqnum = await hWallet.getNanoHeaderSeqnum(address1);
+    nanoHeaders[0].address = new Address(address1, { network: hWallet.getNetworkObject() });
+    nanoHeaders[0].seqnum = newCallerSeqnum;
+
+    // 4. Sign the transaction (signs both inputs AND nano header with new caller)
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+
+    // 4.1. Prepare to send (sets timestamp and calculates weight - must be done after signing)
+    tx.prepareToSend();
+
+    // 5. Assert tx IS now signed
+    for (const input of tx.inputs) {
+      expect(input.data).not.toBeNull();
+    }
+    expect(nanoHeaders[0].script).not.toBeNull();
+    // Verify the caller was changed
+    expect(nanoHeaders[0].address.base58).toBe(address1);
+
+    // 6. Verify FeeHeader exists for token creation
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+
+    // 7. Send and verify not voided
+    const result = await sendTransaction.runFromMining();
+    await checkTxValid(hWallet, result);
+
+    // 8. Verify token was created
+    const newTokenUid = result.hash;
+    expect(newTokenUid).toBeDefined();
   });
 });

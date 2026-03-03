@@ -167,6 +167,69 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow(/exceeds maximum fee/);
   });
+  it('should create a fee token and deposit htr into the contract', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    const htrBalanceBefore = await hWallet.getBalance(NATIVE_TOKEN_UID);
+
+    const tx = await hWallet.createAndSendNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 10n,
+            changeAddress: address0,
+          },
+        ],
+      },
+      {
+        name: 'FeeTokenWithDeposit',
+        symbol: 'FBTWD',
+        amount: 1000n,
+        mintAddress: address0,
+        tokenVersion: TokenVersion.FEE,
+      }
+    );
+    await checkTxValid(hWallet, tx);
+
+    // Verify the deposit output has the REDUCED amount (same as deposit tokens)
+    // deposit(10n) - fee(1n) = output(9n)
+    const createTokenTx = tx as CreateTokenTransaction;
+
+    // token output
+    expect(createTokenTx.outputs.length).toBe(4);
+    expect(createTokenTx.outputs[0].value).toBe(1000n);
+    // authorities outputs
+    expect(createTokenTx.outputs[1].value).toBe(1n);
+    expect(createTokenTx.outputs[1].tokenData).toBe(129);
+    expect(createTokenTx.outputs[2].value).toBe(2n);
+    expect(createTokenTx.outputs[2].tokenData).toBe(129);
+
+    // deposit + fee = 10n + 1n = 11n
+    const expectedHtrBalance = htrBalanceBefore[0].balance.unlocked - 10n - 1n;
+    // change output in native token
+    expect(createTokenTx.outputs[3].value).toBe(expectedHtrBalance);
+    expect(createTokenTx.outputs[3].tokenData).toBe(0);
+
+    // Verify FeeHeader exists and has correct fee
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].amount).toBe(1n);
+
+    // Verify token was created with FEE version
+    const tokenDetails = await hWallet.getTokenDetails(tx.hash!);
+    expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
+
+    const nanoHeader = createTokenTx.getNanoHeaders();
+    expect(nanoHeader.length).toBe(1);
+    expect(nanoHeader[0].actions.length).toBe(1);
+    expect(nanoHeader[0].actions[0].type).toBe(NanoContractHeaderActionType.DEPOSIT);
+  });
 
   it('should create fee token with withdrawal and contract pays fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
