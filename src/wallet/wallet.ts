@@ -2805,20 +2805,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const pin = newOptions.pinCode;
 
     // Only require PIN if we're actually signing
-    if (newOptions.signTx === true && !pin) {
+    if (newOptions.signTx !== false && !pin) {
       throw new PinRequiredError('Pin is required.');
     }
 
-    // Verify address belongs to wallet and get its index
-    const addressIndex = await this.getAddressIndexIfOwned(address);
+    // Verify address belongs to wallet
+    await this.getAddressIndexIfOwned(address);
 
     // Get the caller address
-    let callerAddress: Address;
-    if (!pin && newOptions.signTx === false) {
-      callerAddress = new Address(address, { network: this.getNetworkObject() });
-    } else {
-      callerAddress = await this.getCallerAddressFromIndex(pin!, addressIndex);
-    }
+    const callerAddress = new Address(address, { network: this.getNetworkObject() });
 
     // Build and send transaction
     const actions = data.actions || [];

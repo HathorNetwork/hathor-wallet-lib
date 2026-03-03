@@ -3101,7 +3101,6 @@ class HathorWallet extends EventEmitter {
     return new SendTransaction({
       storage: this.storage,
       transaction: nc,
-      pin,
     });
   }
 
