@@ -83,12 +83,15 @@ describe('locked utxos', () => {
       ],
       pin: 'xxx', // instance with wrong pin to validate pin as parameter
     });
-    await expect(sendTx.prepareTx()).rejects.toThrow(InvalidPasswdError);
+    // prepareTx creates an unsigned transaction (pin is not validated here)
+    await sendTx.prepareTx();
+    // signTx with the wrong pin should fail
+    await expect(sendTx.signTx()).rejects.toThrow(InvalidPasswdError);
     // Will work with the correct PIN as parameter
-    await sendTx.prepareTx(DEFAULT_PIN_CODE);
+    await sendTx.signTx(DEFAULT_PIN_CODE);
     await sendTx.updateOutputSelected(true);
     // This shouldn't fail since if we did not have tokens the prepareTx should have failed
-    const input = sendTx.transaction.inputs[0];
+    const input = sendTx.transaction!.inputs[0];
     const utxoId = { txId: input.hash, index: input.index };
     await expect(hwallet.storage.isUtxoSelectedAsInput(utxoId)).resolves.toBe(true);
     // Send a transaction spending the only utxo on the wallet.
