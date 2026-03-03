@@ -377,7 +377,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async prepareTx(pin?: string | null): Promise<Transaction> {
+  async prepareTx(): Promise<Transaction> {
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
@@ -477,6 +477,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
 
     this.utxosAddressPath = utxosAddressPath;
+    this._currentStep = 'prepared';
     this.emit('prepare-tx-end', this.transaction);
     return this.transaction;
   }
@@ -797,6 +798,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // we can add the timestamp and calculate the weight
     this.transaction.prepareToSend();
 
+    this._currentStep = 'signed';
     this.emit('sign-tx-end', this.transaction);
     return this.transaction;
   }
@@ -940,19 +942,19 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {
-        await this.prepareTx(pin);
-        this._currentStep = 'prepared';
-        if (until === 'prepare-tx') {
-          return this.transaction!;
-        }
+        await this.prepareTx();
+      }
+
+      if (until === 'prepare-tx') {
+        return this.transaction!;
       }
 
       if (this._currentStep === 'prepared') {
         await this.signTx(pin);
-        this._currentStep = 'signed';
-        if (until === 'sign-tx') {
-          return this.transaction!;
-        }
+      }
+
+      if (until === 'sign-tx') {
+        return this.transaction!;
       }
 
       const tx = await this.runFromMining(until);

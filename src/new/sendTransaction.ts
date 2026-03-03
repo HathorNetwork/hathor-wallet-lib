@@ -328,22 +328,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @memberof SendTransaction
    * @inner
    */
-  async prepareTx(pin: string | null = null): Promise<Transaction> {
+  async prepareTx(): Promise<Transaction> {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
 
-    const pinToUse = pin ?? this.pin ?? '';
     const txData = this.fullTxData || (await this.prepareTxData());
     try {
-      if (!pinToUse) {
-        throw new Error('Pin is not set.');
-      }
-      this.transaction = await transactionUtils.prepareTransaction(txData, pinToUse, this.storage, {
+      this.transaction = await transactionUtils.prepareTransaction(txData, '', this.storage, {
         signTx: false,
       });
       // This will validate if the transaction has more than the max number of inputs and outputs.
       this.transaction.validate();
+      this._currentStep = 'prepared';
       return this.transaction;
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
@@ -380,6 +377,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
       await transactionUtils.signTransaction(this.transaction, this.storage, pinToUse);
       this.transaction.prepareToSend();
+      this._currentStep = 'signed';
       return this.transaction;
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
@@ -632,19 +630,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {
-        await this.prepareTx(pin);
-        this._currentStep = 'prepared';
-        if (until === 'prepare-tx') {
-          return this.transaction!;
-        }
+        await this.prepareTx();
+      }
+
+      if (until === 'prepare-tx') {
+        return this.transaction!;
       }
 
       if (this._currentStep === 'prepared') {
         await this.signTx(pin);
-        this._currentStep = 'signed';
-        if (until === 'sign-tx') {
-          return this.transaction!;
-        }
+      }
+
+      if (until === 'sign-tx') {
+        return this.transaction!;
       }
 
       const tx = await this.runFromMining(until);
