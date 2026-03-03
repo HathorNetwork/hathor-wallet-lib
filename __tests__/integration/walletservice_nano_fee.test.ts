@@ -32,7 +32,7 @@ async function pollForNcState(
   requiredField?: string,
   maxAttempts = 10,
   delayMs = 1000
-): Promise<any> {
+): Promise<unknown> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const state = await ncApi.getNanoContractState(ncId, fields, [], []);
@@ -54,6 +54,7 @@ async function pollForNcState(
       await delay(delayMs);
     }
   }
+  throw new Error(`Failed to get nano contract state after ${maxAttempts} attempts`);
 }
 
 /**
@@ -81,10 +82,7 @@ async function pollForTokenDetails(
  * Check that a transaction is valid (not voided).
  * Uses the wallet-service proxy API via getFullTxById.
  */
-async function checkTxNotVoided(
-  wallet: HathorWalletServiceWallet,
-  txId: string
-): Promise<void> {
+async function checkTxNotVoided(wallet: HathorWalletServiceWallet, txId: string): Promise<void> {
   const txData = await wallet.getFullTxById(txId);
   expect(txData.success).toBe(true);
   expect(isEmpty(txData.meta.voided_by)).toBe(true);
@@ -156,9 +154,9 @@ describe('WalletService Nano Contract Fee Tests', () => {
     await pollForTx(wsWallet, createFbtTx.hash!);
 
     // 6. Get fbtUid from contract state (with retry for fullnode indexing)
-    const ncState = await pollForNcState(contractId, ['fbt_uid'], 'fbt_uid');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    fbtUid = (ncState.fields as any).fbt_uid.value;
+    const ncState = (await pollForNcState(contractId, ['fbt_uid'], 'fbt_uid')) as any;
+    fbtUid = ncState.fields.fbt_uid.value;
 
     // 7. Wait for wallet-service to sync the token details
     // The token was just created, and getTokenDetails needs it to be indexed
