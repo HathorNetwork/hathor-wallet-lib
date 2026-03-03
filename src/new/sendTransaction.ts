@@ -319,8 +319,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * Prepare transaction without signing it.
    * Fill the inputs if needed, create output change if needed.
    *
-   * @param {string | null} pin Pin to use (accepted for interface compatibility, not used during preparation)
-   *
    * @throws SendTxError
    *
    * @return {Transaction} Transaction object prepared to be signed

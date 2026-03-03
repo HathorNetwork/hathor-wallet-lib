@@ -779,9 +779,17 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
     }
+    const pinToUse = pin ?? this.pin ?? '';
+    if (!pinToUse) {
+      throw new SendTxError('Pin is not set.');
+    }
+    if (this.utxosAddressPath.length !== this.transaction.inputs.length) {
+      throw new SendTxError(
+        'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
+      );
+    }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const pinToUse = pin ?? this.pin ?? '';
     const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
