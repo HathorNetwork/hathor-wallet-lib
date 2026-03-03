@@ -3098,7 +3098,6 @@ class HathorWallet extends EventEmitter {
       return prepareNanoSendTransaction(nc, pin, this.storage);
     }
 
-    nc.prepareToSend();
     return new SendTransaction({
       storage: this.storage,
       transaction: nc,

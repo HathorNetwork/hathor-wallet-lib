@@ -2940,10 +2940,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (options.signTx) {
       await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+      // Finalize the transaction
+      tx.prepareToSend();
     }
-
-    // Finalize the transaction
-    tx.prepareToSend();
 
     const sendTransaction = new SendTransactionWalletService(this, {
       transaction: tx,
