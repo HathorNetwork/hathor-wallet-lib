@@ -13,6 +13,7 @@ import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
+import NanoContractHeader from '../nano_contracts/header';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -485,6 +486,8 @@ export interface IHathorWallet {
   hasTxOutsideFirstAddress(): Promise<boolean>;
   pinCode?: string | null;
   storage: IStorage;
+  signTx(tx: Transaction, options: { pinCode?: string | null }): Promise<Transaction>;
+  setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void>;
 }
 
 export interface ISendTransaction {

@@ -9,10 +9,7 @@ import { delay } from './utils/core.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
 import { TokenVersion } from '../../src/types';
-import Address from '../../src/models/address';
-import transactionUtils from '../../src/utils/transaction';
 import ncApi from '../../src/api/nano';
-import { WalletServiceStorageProxy } from '../../src/wallet/walletServiceStorageProxy';
 
 const pinCode = '123456';
 const password = 'testpass';
@@ -217,23 +214,23 @@ describe('WalletService Nano Contract Fee Tests', () => {
       { signTx: false }
     );
 
-    const tx = sendTransaction.transaction!;
-    expect(tx).not.toBeNull();
+    const txBeforeChangeCaller = sendTransaction.transaction!;
+    expect(txBeforeChangeCaller).not.toBeNull();
 
     // 3. Assert tx is built but NOT signed
-    expect(tx.inputs.length).toBeGreaterThan(0);
-    for (const input of tx.inputs) {
+    expect(txBeforeChangeCaller.inputs.length).toBeGreaterThan(0);
+    for (const input of txBeforeChangeCaller.inputs) {
       expect(input.data).toBeNull();
     }
 
-    const nanoHeaders = tx.getNanoHeaders();
-    expect(nanoHeaders).toHaveLength(1);
-    expect(nanoHeaders[0].script).toBeNull();
-    expect(nanoHeaders[0].address.base58).toBe(address0);
+    const nanoHeadersBeforeChangeCaller = txBeforeChangeCaller.getNanoHeaders();
+    expect(nanoHeadersBeforeChangeCaller).toHaveLength(1);
+    expect(nanoHeadersBeforeChangeCaller[0].script).toBeNull();
+    expect(nanoHeadersBeforeChangeCaller[0].address.base58).toBe(address0);
 
     // Outputs: FBT change + HTR change
-    expect(tx.outputs).toHaveLength(2);
-    expect(tx.outputs).toEqual(
+    expect(txBeforeChangeCaller.outputs).toHaveLength(2);
+    expect(txBeforeChangeCaller.outputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ tokenData: 1 }), // FBT
         expect.objectContaining({ tokenData: 0 }), // HTR
@@ -241,27 +238,22 @@ describe('WalletService Nano Contract Fee Tests', () => {
     );
 
     // 4. Edit caller: change address AND seqnum for the new caller
-    const newCallerSeqnum = await wsWallet.getNanoHeaderSeqnum(address1);
-    nanoHeaders[0].address = new Address(address1, { network: wsWallet.getNetworkObject() });
-    nanoHeaders[0].seqnum = newCallerSeqnum;
+    await wsWallet.setNanoHeaderCaller(nanoHeadersBeforeChangeCaller[0], address1);
 
     // 5. Sign the transaction (signs both inputs AND nano header with new caller)
-    const storageProxy = new WalletServiceStorageProxy(wsWallet, wsWallet.storage);
-    await transactionUtils.signTransaction(tx, storageProxy.createProxy(), pinCode);
-
-    // 5.1. Prepare to send (sets timestamp and calculates weight - must be done after signing)
-    tx.prepareToSend();
+    const txAfterSign = await wsWallet.signTx(txBeforeChangeCaller, { pinCode });
+    const nanoHeadersAfterSign = txAfterSign.getNanoHeaders();
 
     // 6. Assert tx IS now signed
-    for (const input of tx.inputs) {
+    for (const input of txAfterSign.inputs) {
       expect(input.data).not.toBeNull();
     }
-    expect(nanoHeaders[0].script).not.toBeNull();
+    expect(nanoHeadersAfterSign[0].script).not.toBeNull();
     // Verify the caller was changed
-    expect(nanoHeaders[0].address.base58).toBe(address1);
+    expect(nanoHeadersAfterSign[0].address.base58).toBe(address1);
 
     // 7. Verify FeeHeader
-    const feeHeader = tx.getFeeHeader();
+    const feeHeader = txAfterSign.getFeeHeader();
     expect(feeHeader).not.toBeNull();
     expect(feeHeader!.entries[0].amount).toBe(expectedFee);
 
@@ -300,24 +292,24 @@ describe('WalletService Nano Contract Fee Tests', () => {
       { signTx: false }
     );
 
-    const tx = sendTransaction.transaction!;
-    expect(tx).not.toBeNull();
+    const txBeforeChangeCaller = sendTransaction.transaction!;
+    expect(txBeforeChangeCaller).not.toBeNull();
 
     // 2. Assert tx is built but NOT signed
     // Inputs should exist (for HTR deposit)
-    expect(tx.inputs.length).toBeGreaterThan(0);
-    for (const input of tx.inputs) {
+    expect(txBeforeChangeCaller.inputs.length).toBeGreaterThan(0);
+    for (const input of txBeforeChangeCaller.inputs) {
       expect(input.data).toBeNull();
     }
 
-    const nanoHeaders = tx.getNanoHeaders();
-    expect(nanoHeaders).toHaveLength(1);
-    expect(nanoHeaders[0].script).toBeNull();
-    expect(nanoHeaders[0].address.base58).toBe(address0);
+    const nanoHeadersBeforeChangeCaller = txBeforeChangeCaller.getNanoHeaders();
+    expect(nanoHeadersBeforeChangeCaller).toHaveLength(1);
+    expect(nanoHeadersBeforeChangeCaller[0].script).toBeNull();
+    expect(nanoHeadersBeforeChangeCaller[0].address.base58).toBe(address0);
 
     // Outputs should include token mint outputs and HTR change
-    expect(tx.outputs.length).toBeGreaterThan(0);
-    expect(tx.outputs).toEqual(
+    expect(txBeforeChangeCaller.outputs.length).toBeGreaterThan(0);
+    expect(txBeforeChangeCaller.outputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           tokenData: 0, // HTR change
@@ -326,27 +318,22 @@ describe('WalletService Nano Contract Fee Tests', () => {
     );
 
     // 3. Edit caller: change address AND seqnum for the new caller
-    const newCallerSeqnum = await wsWallet.getNanoHeaderSeqnum(address1);
-    nanoHeaders[0].address = new Address(address1, { network: wsWallet.getNetworkObject() });
-    nanoHeaders[0].seqnum = newCallerSeqnum;
+    await wsWallet.setNanoHeaderCaller(nanoHeadersBeforeChangeCaller[0], address1);
 
     // 4. Sign the transaction (signs both inputs AND nano header with new caller)
-    const storageProxy = new WalletServiceStorageProxy(wsWallet, wsWallet.storage);
-    await transactionUtils.signTransaction(tx, storageProxy.createProxy(), pinCode);
-
-    // 4.1. Prepare to send (sets timestamp and calculates weight - must be done after signing)
-    tx.prepareToSend();
+    const txAfterSign = await wsWallet.signTx(txBeforeChangeCaller, { pinCode });
+    const nanoHeadersAfterSign = txAfterSign.getNanoHeaders();
 
     // 5. Assert tx IS now signed
-    for (const input of tx.inputs) {
+    for (const input of txAfterSign.inputs) {
       expect(input.data).not.toBeNull();
     }
-    expect(nanoHeaders[0].script).not.toBeNull();
+    expect(nanoHeadersAfterSign[0].script).not.toBeNull();
     // Verify the caller was changed
-    expect(nanoHeaders[0].address.base58).toBe(address1);
+    expect(nanoHeadersAfterSign[0].address.base58).toBe(address1);
 
     // 6. Verify FeeHeader exists for token creation
-    const feeHeader = tx.getFeeHeader();
+    const feeHeader = txAfterSign.getFeeHeader();
     expect(feeHeader).not.toBeNull();
 
     // 7. Send and verify confirmed and not voided

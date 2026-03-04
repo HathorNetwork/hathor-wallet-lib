@@ -80,6 +80,7 @@ import {
   TokenNotFoundError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
+import NanoContractHeader from '../nano_contracts/header';
 import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
@@ -1611,6 +1612,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Set the caller address and seqnum on a nano contract header
+   *
+   * @param nanoHeader The nano contract header to modify
+   * @param address The new caller address
+   */
+  async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
+    const newAddress = new Address(address, { network: this.network });
+
+    newAddress.validateAddress();
+
+    const newCallerSeqnum = await this.getNanoHeaderSeqnum(address);
+    // eslint-disable-next-line no-param-reassign
+    nanoHeader.address = newAddress;
+    // eslint-disable-next-line no-param-reassign
+    nanoHeader.seqnum = newCallerSeqnum;
+  }
+
+  /**
    * Get detailed information about a specific address from the wallet service
    *
    * @param address The address to get details for
@@ -3040,6 +3059,33 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     const data = await walletApi.getHasTxOutsideFirstAddress(this);
     return data.hasTransactions;
+  }
+
+  /**
+   * Sign all inputs of the given transaction.
+   *
+   * @param tx - The transaction to be signed
+   * @param options - Options for signing
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
+   *
+   * @returns The signed transaction
+   */
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('signTx');
+    }
+    if (!options.pinCode) {
+      throw new Error('Pin code is required to sign a transaction');
+    }
+
+    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
+    const signedTx = await transaction.signTransaction(
+      tx,
+      storageProxy.createProxy(),
+      options.pinCode
+    );
+    signedTx.prepareToSend();
+    return signedTx;
   }
 }
 

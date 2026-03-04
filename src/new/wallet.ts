@@ -135,6 +135,7 @@ import {
   GraphvizNeighboursResponse,
   TransactionAccWeightResponse,
 } from '../api/schemas/txApi';
+import NanoContractHeader from '../nano_contracts/header';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2730,25 +2731,24 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Sign all inputs of the given transaction.
-   * OBS: only for P2PKH wallets.
    *
    * @param tx - The transaction to be signed
-   * @param options - Options for signing
-   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
+   * @param pinCode - PIN to decrypt the private key.
    *
    * @returns The signed transaction
    */
   async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
-    for (const sigInfo of await this.getSignatures(tx, options)) {
-      const { signature, pubkey, inputIndex } = sigInfo;
-      const inputData = transactionUtils.createInputData(
-        Buffer.from(signature, 'hex'),
-        Buffer.from(pubkey, 'hex')
-      );
-      tx.inputs[inputIndex].setData(inputData);
+    if (await this.isReadonly()) {
+      throw new WalletFromXPubGuard('signTx');
+    }
+    const pinCode = options.pinCode ?? this.pinCode;
+    if (!pinCode) {
+      throw new Error('Pin code is required to sign a transaction');
     }
 
-    return tx;
+    const signedTx = await transactionUtils.signTransaction(tx, this.storage, pinCode);
+    signedTx.prepareToSend();
+    return signedTx;
   }
 
   /**
@@ -3502,6 +3502,25 @@ class HathorWallet extends EventEmitter {
   async getNanoHeaderSeqnum(address: any): Promise<any> {
     const addressInfo: any = await this.storage.getAddressInfo(address);
     return addressInfo.seqnum + 1;
+  }
+
+  async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
+    const newAddress = new Address(address, { network: this.getNetworkObject() });
+
+    newAddress.validateAddress();
+
+    const addressInfo: any = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+
+    const newCallerSeqnum = await this.getNanoHeaderSeqnum(address);
+    // eslint-disable-next-line no-param-reassign
+    nanoHeader.address = newAddress;
+    // eslint-disable-next-line no-param-reassign
+    nanoHeader.seqnum = newCallerSeqnum;
   }
 
   // eslint-disable-next-line class-methods-use-this
