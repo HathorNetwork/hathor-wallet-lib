@@ -91,7 +91,7 @@ import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
-import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import {
   NanoContractBuilderCreateTokenOptions,
@@ -2740,7 +2740,8 @@ class HathorWallet extends EventEmitter {
    * Sign all inputs of the given transaction.
    *
    * @param tx - The transaction to be signed
-   * @param pinCode - PIN to decrypt the private key.
+   * @param options - Options for signing
+   * @param options.pinCode - PIN to decrypt the private key
    *
    * @returns The signed transaction
    */
@@ -3027,14 +3028,12 @@ class HathorWallet extends EventEmitter {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction | null> {
-    const sendTransaction = await this.createNanoContractTransaction(
-      method,
-      address,
-      data,
-      options
-    );
+    const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
+      ...options,
+      signTx: true,
+    });
     return sendTransaction.runFromMining();
   }
 
@@ -3458,23 +3457,21 @@ class HathorWallet extends EventEmitter {
     return addressInfo.seqnum + 1;
   }
 
+  /**
+   * Set the caller address and seqnum on a nano contract header
+   *
+   * @param nanoHeader The nano contract header to modify
+   * @param address The new caller address
+   */
   async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
-    const newAddress = new Address(address, { network: this.getNetworkObject() });
-
-    newAddress.validateAddress();
-
-    const addressInfo: any = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
 
-    const newCallerSeqnum = await this.getNanoHeaderSeqnum(address);
-    // eslint-disable-next-line no-param-reassign
-    nanoHeader.address = newAddress;
-    // eslint-disable-next-line no-param-reassign
-    nanoHeader.seqnum = newCallerSeqnum;
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
   }
 
   // eslint-disable-next-line class-methods-use-this

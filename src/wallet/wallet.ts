@@ -87,6 +87,7 @@ import {
   CreateNanoTxData,
   CreateNanoTxOptions,
 } from '../nano_contracts/types';
+import { setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
@@ -1618,15 +1619,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param address The new caller address
    */
   async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
-    const newAddress = new Address(address, { network: this.network });
-
-    newAddress.validateAddress();
-
-    const newCallerSeqnum = await this.getNanoHeaderSeqnum(address);
-    // eslint-disable-next-line no-param-reassign
-    nanoHeader.address = newAddress;
-    // eslint-disable-next-line no-param-reassign
-    nanoHeader.seqnum = newCallerSeqnum;
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
   }
 
   /**
@@ -2950,12 +2943,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
-
     if (options.signTx !== false && pinCode) {
-      await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
-      // Finalize the transaction
-      tx.prepareToSend();
+      await this.signTx(tx, { pinCode });
     }
 
     const sendTransaction = new SendTransactionWalletService(this, {
