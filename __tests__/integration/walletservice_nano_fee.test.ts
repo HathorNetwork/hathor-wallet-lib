@@ -1,89 +1,18 @@
-import { isEmpty } from 'lodash';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 import {
   buildWalletInstance,
+  checkTxNotVoided,
   initializeServiceGlobalConfigs,
+  pollForNcState,
+  pollForTokenDetails,
   pollForTx,
 } from './helpers/service-facade.helper';
-import { delay } from './utils/core.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
 import { TokenVersion } from '../../src/types';
-import ncApi from '../../src/api/nano';
 
 const pinCode = '123456';
 const password = 'testpass';
-
-/**
- * Poll for nano contract state with retries.
- * The fullnode may not have indexed the contract immediately after wallet-service confirms the tx.
- * @param ncId - Nano contract ID
- * @param fields - Fields to retrieve
- * @param requiredField - Optional field that must have a non-null value
- * @param maxAttempts - Maximum polling attempts
- * @param delayMs - Delay between attempts
- */
-async function pollForNcState(
-  ncId: string,
-  fields: string[],
-  requiredField?: string,
-  maxAttempts = 10,
-  delayMs = 1000
-): Promise<unknown> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const state = await ncApi.getNanoContractState(ncId, fields, [], []);
-      // If a required field is specified, check that it has a value
-      if (requiredField) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fieldValue = (state.fields as any)[requiredField]?.value;
-        if (fieldValue == null) {
-          if (attempt === maxAttempts - 1) {
-            throw new Error(`Required field ${requiredField} not found in contract state`);
-          }
-          await delay(delayMs);
-          continue;
-        }
-      }
-      return state;
-    } catch (error) {
-      if (attempt === maxAttempts - 1) throw error;
-      await delay(delayMs);
-    }
-  }
-  throw new Error(`Failed to get nano contract state after ${maxAttempts} attempts`);
-}
-
-/**
- * Poll for token details with retries.
- * The wallet-service may not have indexed the token immediately after creation.
- */
-async function pollForTokenDetails(
-  wallet: HathorWalletServiceWallet,
-  tokenId: string,
-  maxAttempts = 20,
-  delayMs = 2000
-): Promise<void> {
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      await wallet.getTokenDetails(tokenId);
-      return;
-    } catch (error) {
-      if (attempt === maxAttempts - 1) throw error;
-      await delay(delayMs);
-    }
-  }
-}
-
-/**
- * Check that a transaction is valid (not voided).
- * Uses the wallet-service proxy API via getFullTxById.
- */
-async function checkTxNotVoided(wallet: HathorWalletServiceWallet, txId: string): Promise<void> {
-  const txData = await wallet.getFullTxById(txId);
-  expect(txData.success).toBe(true);
-  expect(isEmpty(txData.meta.voided_by)).toBe(true);
-}
 
 initializeServiceGlobalConfigs();
 

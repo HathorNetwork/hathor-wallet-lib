@@ -325,6 +325,32 @@ test('signTx', async () => {
   expect(tx.inputs[2].data.toString('hex')).toEqual('01ba01be');
 });
 
+test('signTx throws when pinCode is not provided', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  // Ensure wallet has no pinCode set
+  hWallet.pinCode = null;
+
+  const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
+  const tx = new Transaction([new Input(txId, 0)], [], {
+    version: DEFAULT_TX_VERSION,
+    tokens: [],
+  });
+
+  // Should throw when no pinCode is provided in options and wallet.pinCode is null
+  await expect(hWallet.signTx(tx)).rejects.toThrow('Pin code is required to sign a transaction');
+  await expect(hWallet.signTx(tx, {})).rejects.toThrow(
+    'Pin code is required to sign a transaction'
+  );
+  await expect(hWallet.signTx(tx, { pinCode: null })).rejects.toThrow(
+    'Pin code is required to sign a transaction'
+  );
+});
+
 test('getWalletInputInfo', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
