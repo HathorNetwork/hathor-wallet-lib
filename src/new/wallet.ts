@@ -97,7 +97,7 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
-import { ConnectionState, FullNodeVersionData, Utxo } from '../wallet/types';
+import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -3080,7 +3080,7 @@ class HathorWallet extends EventEmitter {
 
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
-      return prepareNanoSendTransaction(nc, pin, this.storage);
+      return prepareNanoSendTransaction(nc, pin!, this.storage);
     }
 
     return new SendTransaction({
@@ -3458,7 +3458,7 @@ class HathorWallet extends EventEmitter {
       );
     }
 
-    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this as unknown as IHathorWallet);
   }
 
   /**
