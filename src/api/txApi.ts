@@ -75,10 +75,10 @@ const txApi = {
   /**
    * Call api to get one transaction
    *
-   * @param {string} id Transaction ID to search
-   * @params {function} resolve Method to be called after response arrives
+   * @param id Transaction ID to search
+   * @param resolve Callback function
+   * @params resolve Method to be called after response arrives
    *
-   * @return {Promise}
    * @memberof ApiTransaction
    * @inner
    */

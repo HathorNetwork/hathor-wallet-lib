@@ -54,7 +54,11 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 }
 
 export interface ISendTokenOutput {
-  type: OutputType.P2PKH | OutputType.P2SH; // XXX: This type is ignored in the only place it is used
+  // XXX: This type is ignored in the only place it is used
+  // It was made optional because the ultimately the type is derived from the address at runtime,
+  // see prepareTxData().
+  // Making it optional allows ProposedOutput to be passed directly as ISendOutput.
+  type?: OutputType.P2PKH | OutputType.P2SH;
   address: string;
   value: OutputValueType;
   token: string;
