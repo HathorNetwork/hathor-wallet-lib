@@ -6,13 +6,14 @@
  */
 
 import bitcore from 'bitcore-lib';
-import { TokenVersion, IStorage, OutputValueType, IHistoryTx } from '../types';
+import { TokenVersion, IStorage, OutputValueType, IHistoryTx, IDataTx } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { CreateNanoTxData } from '../nano_contracts/types';
+import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
+import NanoContractHeader from '../nano_contracts/header';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -427,28 +428,29 @@ export interface IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<Transaction>;
   createNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: { pinCode?: string }
+    options?: CreateNanoTxOptions
   ): Promise<Transaction>;
+  getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;
   getUtxosForAmount(
     amount: OutputValueType,
@@ -484,11 +486,20 @@ export interface IHathorWallet {
   hasTxOutsideFirstAddress(): Promise<boolean>;
   pinCode?: string | null;
   storage: IStorage;
+  signTx(tx: Transaction, options: { pinCode?: string | null }): Promise<Transaction>;
+  setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void>;
 }
 
 export interface ISendTransaction {
-  run(until: string | null): Promise<Transaction>;
-  runFromMining(until: string | null): Promise<Transaction>;
+  run(
+    until?: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null,
+    pin?: string | null
+  ): Promise<Transaction>;
+  runFromMining(until?: 'mine-tx' | null): Promise<Transaction>;
+  prepareTx(): Promise<Transaction>;
+  signTx(pin?: string | null): Promise<Transaction>;
+  readonly transaction: Transaction | null;
+  readonly fullTxData: IDataTx | null;
 }
 
 export interface MineTxSuccessData {

@@ -39,6 +39,7 @@ import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import FeeHeader from '../../src/headers/fee';
 import Header from '../../src/headers/base';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import WalletConnection from '../../src/new/connection';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -362,7 +363,12 @@ describe('start', () => {
       () =>
         new HathorWallet({
           seed: walletData.words,
-          connection: { state: ConnectionState.CONNECTED },
+          connection: {
+            state: ConnectionState.CONNECTED,
+            getState(): ConnectionState {
+              return ConnectionState.CONNECTED;
+            },
+          } as Partial<WalletConnection>,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
         })

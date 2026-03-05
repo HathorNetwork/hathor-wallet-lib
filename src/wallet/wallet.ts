@@ -80,12 +80,14 @@ import {
   TokenNotFoundError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
+import NanoContractHeader from '../nano_contracts/header';
 import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
   CreateNanoTxOptions,
 } from '../nano_contracts/types';
+import { setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
@@ -1611,6 +1613,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Set the caller address and seqnum on a nano contract header
+   *
+   * @param nanoHeader The nano contract header to modify
+   * @param address The new caller address
+   */
+  async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
+  }
+
+  /**
    * Get detailed information about a specific address from the wallet service
    *
    * @param address The address to get details for
@@ -2801,17 +2813,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
 
-    const newOptions = { pinCode: null, ...options };
+    const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode;
-    if (!pin) {
+
+    // Only require PIN if we're actually signing
+    if (newOptions.signTx !== false && !pin) {
       throw new PinRequiredError('Pin is required.');
     }
 
-    // Verify address belongs to wallet and get its index
-    const addressIndex = await this.getAddressIndexIfOwned(address);
+    // Verify address belongs to wallet
+    await this.getAddressIndexIfOwned(address);
 
     // Get the caller address
-    const callerAddress = await this.getCallerAddressFromIndex(pin, addressIndex);
+    const callerAddress = new Address(address, { network: this.getNetworkObject() });
 
     // Build and send transaction
     const actions = data.actions || [];
@@ -2839,7 +2853,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin!, {
+      signTx: newOptions.signTx,
+    });
   }
 
   /**
@@ -2848,7 +2864,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
    * @param {CreateNanoTxData} [data]
-   * @param {CreateNanoTxOptions} [options]
+   * @param {Omit<CreateNanoTxOptions, 'signTx'>} [options]
    *
    * @returns {Promise<Transaction>} Transaction object returned from execution
    */
@@ -2856,14 +2872,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction> {
-    const sendTransaction = await this.createNanoContractTransaction(
-      method,
-      address,
-      data,
-      options
-    );
+    const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
+      ...options,
+      signTx: true,
+    });
+
     const result = await sendTransaction.runFromMining();
     if (!result) {
       throw new Error('Failed to send nano contract transaction');
@@ -2915,7 +2930,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareNanoSendTransactionWalletService(
     tx: Transaction,
     address: string,
-    pinCode: string
+    pinCode: string | null,
+    options: { signTx?: boolean } = { signTx: true }
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
     const addressDetails = await this.getAddressDetails(address);
@@ -2927,12 +2943,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
-
-    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
-
-    // Finalize the transaction
-    tx.prepareToSend();
+    if (options.signTx !== false && pinCode) {
+      await this.signTx(tx, { pinCode });
+    }
 
     const sendTransaction = new SendTransactionWalletService(this, {
       transaction: tx,
@@ -2963,17 +2976,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
     }
-    const newOptions = { pinCode: null, ...options };
+    const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode;
-    if (!pin) {
+
+    // Only require PIN if we're actually signing
+    if (newOptions.signTx !== false && !pin) {
       throw new PinRequiredError('Pin is required.');
     }
 
-    // Verify address belongs to wallet and get its index
-    const addressIndex = await this.getAddressIndexIfOwned(address);
+    // // Verify address belongs to wallet
+    await this.getAddressIndexIfOwned(address);
 
     // Get the caller address
-    const callerAddress = await this.getCallerAddressFromIndex(pin, addressIndex);
+    const callerAddress = new Address(address, { network: this.getNetworkObject() });
 
     // Build and send transaction
     const actions = data.actions || [];
@@ -3033,6 +3048,33 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     const data = await walletApi.getHasTxOutsideFirstAddress(this);
     return data.hasTransactions;
+  }
+
+  /**
+   * Sign all inputs of the given transaction.
+   *
+   * @param tx - The transaction to be signed
+   * @param options - Options for signing
+   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
+   *
+   * @returns The signed transaction
+   */
+  async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('signTx');
+    }
+    if (!options.pinCode) {
+      throw new Error('Pin code is required to sign a transaction');
+    }
+
+    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
+    const signedTx = await transaction.signTransaction(
+      tx,
+      storageProxy.createProxy(),
+      options.pinCode
+    );
+    signedTx.prepareToSend();
+    return signedTx;
   }
 }
 

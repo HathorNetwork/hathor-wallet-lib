@@ -106,6 +106,7 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  seqnum?: number; // TODO: Confirm if it is really optional for v3
 }
 
 export interface IAddressMetadataAsRecord {
@@ -587,7 +588,7 @@ export interface IStorage {
   setLogger(logger: ILogger): void;
 
   hasTxSignatureMethod(): boolean;
-  setTxSignatureMethod(txSign: EcdsaTxSign): void;
+  setTxSignatureMethod(txSign: EcdsaTxSign | null): void;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   // Address methods
