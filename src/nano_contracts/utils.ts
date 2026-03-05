@@ -35,6 +35,30 @@ import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } fr
 import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
 import { isSignedDataField } from './fields';
 import HathorWallet from '../new/wallet';
+import NanoContractHeader from './header';
+
+/**
+ * Set the caller address and seqnum on a nano contract header.
+ * This is a shared utility used by both HathorWallet and HathorWalletServiceWallet.
+ *
+ * @param nanoHeader The nano contract header to modify
+ * @param address The new caller address string
+ * @param wallet The wallet instance to get network and seqnum from
+ */
+export const setNanoHeaderCallerFromWallet = async (
+  nanoHeader: NanoContractHeader,
+  address: string,
+  wallet: IHathorWallet
+): Promise<void> => {
+  const newAddress = new Address(address, { network: wallet.getNetworkObject() });
+  newAddress.validateAddress();
+
+  const newCallerSeqnum = await wallet.getNanoHeaderSeqnum(address);
+  // eslint-disable-next-line no-param-reassign
+  nanoHeader.address = newAddress;
+  // eslint-disable-next-line no-param-reassign
+  nanoHeader.seqnum = newCallerSeqnum;
+};
 
 /**
  * Sign a transaction and create a send transaction object

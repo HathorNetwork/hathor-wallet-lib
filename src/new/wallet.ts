@@ -91,7 +91,7 @@ import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
-import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import {
   NanoContractBuilderCreateTokenOptions,
@@ -142,6 +142,7 @@ import {
   GraphvizNeighboursResponse,
   TransactionAccWeightResponse,
 } from '../api/schemas/txApi';
+import NanoContractHeader from '../nano_contracts/header';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2737,25 +2738,25 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Sign all inputs of the given transaction.
-   * OBS: only for P2PKH wallets.
    *
    * @param tx - The transaction to be signed
    * @param options - Options for signing
-   * @param options.pinCode - PIN to decrypt the private key. Optional but required if not set in this
+   * @param options.pinCode - PIN to decrypt the private key
    *
    * @returns The signed transaction
    */
   async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
-    for (const sigInfo of await this.getSignatures(tx, options)) {
-      const { signature, pubkey, inputIndex } = sigInfo;
-      const inputData = transactionUtils.createInputData(
-        Buffer.from(signature, 'hex'),
-        Buffer.from(pubkey, 'hex')
-      );
-      tx.inputs[inputIndex].setData(inputData);
+    if (await this.isReadonly()) {
+      throw new WalletFromXPubGuard('signTx');
+    }
+    const pinCode = options.pinCode ?? this.pinCode;
+    if (!pinCode) {
+      throw new Error('Pin code is required to sign a transaction');
     }
 
-    return tx;
+    const signedTx = await transactionUtils.signTransaction(tx, this.storage, pinCode);
+    signedTx.prepareToSend();
+    return signedTx;
   }
 
   /**
@@ -3027,14 +3028,12 @@ class HathorWallet extends EventEmitter {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction | null> {
-    const sendTransaction = await this.createNanoContractTransaction(
-      method,
-      address,
-      data,
-      options
-    );
+    const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
+      ...options,
+      signTx: true,
+    });
     return sendTransaction.runFromMining();
   }
 
@@ -3055,9 +3054,11 @@ class HathorWallet extends EventEmitter {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
-    const newOptions = { pinCode: null, ...options };
+    const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+
+    // Only require PIN if we're actually signing
+    if (newOptions.signTx !== false && !pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3091,7 +3092,14 @@ class HathorWallet extends EventEmitter {
     }
 
     const nc = await builder.build();
-    return prepareNanoSendTransaction(nc, pin, this.storage);
+    if (newOptions.signTx !== false) {
+      return prepareNanoSendTransaction(nc, pin, this.storage);
+    }
+
+    return new SendTransaction({
+      storage: this.storage,
+      transaction: nc,
+    });
   }
 
   /**
@@ -3139,7 +3147,7 @@ class HathorWallet extends EventEmitter {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
     }
-    const newOptions = { pinCode: null, ...options };
+    const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
@@ -3221,7 +3229,13 @@ class HathorWallet extends EventEmitter {
     }
 
     const nc = await builder.build();
-    return prepareNanoSendTransaction(nc, pin, this.storage);
+    if (newOptions.signTx !== false) {
+      return prepareNanoSendTransaction(nc, pin, this.storage);
+    }
+    return new SendTransaction({
+      storage: this.storage,
+      transaction: nc,
+    });
   }
 
   /**
@@ -3441,6 +3455,23 @@ class HathorWallet extends EventEmitter {
   async getNanoHeaderSeqnum(address: string) {
     const addressInfo = await this.storage.getAddressInfo(address);
     return addressInfo.seqnum + 1;
+  }
+
+  /**
+   * Set the caller address and seqnum on a nano contract header
+   *
+   * @param nanoHeader The nano contract header to modify
+   * @param address The new caller address
+   */
+  async setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void> {
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
   }
 
   // eslint-disable-next-line class-methods-use-this

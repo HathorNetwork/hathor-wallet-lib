@@ -285,21 +285,31 @@ test('getSignatures', async () => {
 });
 
 test('signTx', async () => {
-  const hWallet = new FakeHathorWallet();
-  hWallet.getSignatures.mockImplementation(() =>
-    Promise.resolve([
-      {
-        inputIndex: 0,
-        signature: 'ca',
-        pubkey: 'fe',
-      },
-      {
-        inputIndex: 2,
-        signature: 'ba',
-        pubkey: 'be',
-      },
-    ])
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(
+    Promise.resolve({
+      ncCallerSignature: null,
+      inputSignatures: [
+        {
+          signature: Buffer.from('ca', 'hex'),
+          pubkey: Buffer.from('fe', 'hex'),
+          inputIndex: 0,
+          addressIndex: 0,
+        },
+        {
+          signature: Buffer.from('ba', 'hex'),
+          pubkey: Buffer.from('be', 'hex'),
+          inputIndex: 2,
+          addressIndex: 1,
+        },
+      ],
+    })
   );
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
 
   const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
   const tx = new Transaction([new Input(txId, 0), new Input(txId, 1), new Input(txId, 2)], [], {
@@ -309,10 +319,36 @@ test('signTx', async () => {
 
   const returnedTx = await hWallet.signTx(tx, { pinCode: '123' });
   expect(returnedTx).toBe(tx);
-  expect(hWallet.getSignatures).toHaveBeenCalledWith(tx, { pinCode: '123' });
+  expect(storage.getTxSignatures).toHaveBeenCalledWith(tx, '123');
   expect(tx.inputs[0].data.toString('hex')).toEqual('01ca01fe');
   expect(tx.inputs[1].data).toEqual(null);
   expect(tx.inputs[2].data.toString('hex')).toEqual('01ba01be');
+});
+
+test('signTx throws when pinCode is not provided', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  // Ensure wallet has no pinCode set
+  hWallet.pinCode = null;
+
+  const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
+  const tx = new Transaction([new Input(txId, 0)], [], {
+    version: DEFAULT_TX_VERSION,
+    tokens: [],
+  });
+
+  // Should throw when no pinCode is provided in options and wallet.pinCode is null
+  await expect(hWallet.signTx(tx)).rejects.toThrow('Pin code is required to sign a transaction');
+  await expect(hWallet.signTx(tx, {})).rejects.toThrow(
+    'Pin code is required to sign a transaction'
+  );
+  await expect(hWallet.signTx(tx, { pinCode: null })).rejects.toThrow(
+    'Pin code is required to sign a transaction'
+  );
 });
 
 test('getWalletInputInfo', async () => {
