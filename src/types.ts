@@ -658,6 +658,7 @@ export interface IStorage {
     connection?: FullNodeConnection;
     cleanStorage?: boolean;
     cleanAddresses?: boolean;
+    cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;

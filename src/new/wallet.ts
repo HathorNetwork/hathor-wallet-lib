@@ -5,11 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-// @ts-nocheck
-/* eslint-enable @typescript-eslint/ban-ts-comment */
-
 /**
  * TypeScript Migration In Progress
  *
@@ -23,6 +18,8 @@
  * Note: @ts-nocheck is enabled to allow gradual migration without breaking the build
  *
  */
+
+/* eslint @typescript-eslint/explicit-function-return-type: "error" */
 
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
@@ -44,7 +41,6 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import Connection from '../connection';
 import {
   AddressError,
   NanoContractTransactionError,
@@ -60,7 +56,6 @@ import {
   AddressScanPolicyData,
   AuthorityType,
   EcdsaTxSign,
-  FullNodeVersionData,
   getDefaultLogger,
   HistorySyncMode,
   IHistoryTx,
@@ -94,6 +89,7 @@ import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import {
+  CreateNanoTxOptions,
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
 } from '../nano_contracts/types';
@@ -101,18 +97,16 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
-import { ConnectionState, Utxo } from '../wallet/types';
+import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
   CreateTokenOptions,
-  CreateNanoTxOptions,
   CreateNanoTxData,
   CreateNanoTokenTxOptions,
   CreateOnChainBlueprintTxOptions,
   DelegateAuthorityOptions,
   DestroyAuthorityOptions,
-  GeneralTokenInfoSchema,
   GetAuthorityOptions,
   GetAvailableUtxosOptions,
   GetBalanceFullnodeFacadeReturnType,
@@ -134,6 +128,7 @@ import {
   WalletStartOptions,
   WalletStopOptions,
   BuildTxTemplateOptions,
+  StartReadOnlyOptions,
 } from './types';
 import {
   FullNodeTxApiResponse,
@@ -142,6 +137,8 @@ import {
   GraphvizNeighboursResponse,
   TransactionAccWeightResponse,
 } from '../api/schemas/txApi';
+import { GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import WalletConnection from './connection';
 import NanoContractHeader from '../nano_contracts/header';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -173,7 +170,7 @@ class HathorWallet extends EventEmitter {
 
   logger: ILogger;
 
-  conn: Connection;
+  conn: WalletConnection;
 
   // Wallet state
   state: WalletState;
@@ -348,22 +345,13 @@ class HathorWallet extends EventEmitter {
 
     this.logger = logger || getDefaultLogger();
     if (storage) {
-      /**
-       * @type {import('../types').IStorage}
-       */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
-      /**
-       * @type {import('../types').IStorage}
-       */
       this.storage = new Storage(store);
     }
     this.storage.setLogger(this.logger);
-    /**
-     * @type {import('./connection').default}
-     */
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -2524,7 +2512,7 @@ class HathorWallet extends EventEmitter {
     };
   }
 
-  isReady() {
+  isReady(): boolean {
     return this.state === HathorWallet.READY;
   }
 
@@ -2762,12 +2750,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Guard to check if the response is a transaction not found response
    *
-   * @param {Object} data The request response data
-   *
-   * @throws {TxNotFoundError} If the returned error was a transaction not found
+   * @param data The request response data
+   * @throws TxNotFoundError if the returned error was a transaction not found
    */
-  static _txNotFoundGuard(data: any): any {
-    if (get(data, 'message', '') === 'Transaction not found') {
+  static _txNotFoundGuard(data: unknown): void {
+    if ((get(data, 'message', '') as string) === 'Transaction not found') {
       throw new TxNotFoundError();
     }
   }
@@ -2838,7 +2825,7 @@ class HathorWallet extends EventEmitter {
     graphType: string,
     maxLevel: number
   ): Promise<GraphvizNeighboursDotResponse> {
-    const graphvizData: GraphvizNeighboursResponse = await new Promise<unknown>(
+    const graphvizData: GraphvizNeighboursResponse = await new Promise<GraphvizNeighboursResponse>(
       (resolve, reject) => {
         txApi
           .getGraphvizNeighbors(txId, graphType, maxLevel, resolve)
@@ -3093,7 +3080,7 @@ class HathorWallet extends EventEmitter {
 
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
-      return prepareNanoSendTransaction(nc, pin, this.storage);
+      return prepareNanoSendTransaction(nc, pin!, this.storage);
     }
 
     return new SendTransaction({
@@ -3402,7 +3389,7 @@ class HathorWallet extends EventEmitter {
     code: string,
     address: string,
     options: CreateOnChainBlueprintTxOptions = {}
-  ) {
+  ): Promise<Transaction | null> {
     const sendTransaction = await this.createOnChainBlueprintTransaction(code, address, options);
     return sendTransaction.runFromMining();
   }
@@ -3418,7 +3405,7 @@ class HathorWallet extends EventEmitter {
     code: string,
     address: string,
     options: CreateOnChainBlueprintTxOptions = {}
-  ) {
+  ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
     }
@@ -3452,9 +3439,9 @@ class HathorWallet extends EventEmitter {
    *
    * @param address Address string that will be the nano header caller
    */
-  async getNanoHeaderSeqnum(address: string) {
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
     const addressInfo = await this.storage.getAddressInfo(address);
-    return addressInfo.seqnum + 1;
+    return addressInfo!.seqnum! + 1;
   }
 
   /**
@@ -3471,16 +3458,25 @@ class HathorWallet extends EventEmitter {
       );
     }
 
-    await setNanoHeaderCallerFromWallet(nanoHeader, address, this);
+    await setNanoHeaderCallerFromWallet(nanoHeader, address, this as unknown as IHathorWallet);
   }
 
+  /**
+   * Start wallet in read-only mode
+   *
+   * @param options Options for starting in read-only mode
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
-  async startReadOnly(
-    options?: { skipAddressFetch?: boolean | undefined } | undefined
-  ): Promise<void> {
+  async startReadOnly(options?: StartReadOnlyOptions): Promise<void> {
     throw new Error('Not Implemented');
   }
 
+  /**
+   * Get authentication token for read-only mode
+   *
+   * @throws Error - This method is not implemented
+   */
   // eslint-disable-next-line class-methods-use-this
   async getReadOnlyAuthToken(): Promise<string> {
     throw new Error('Not implemented.');
