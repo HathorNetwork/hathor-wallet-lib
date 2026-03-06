@@ -13,7 +13,7 @@ import Network from '../../src/models/network';
 import Address from '../../src/models/address';
 import { TokenVersion } from '../../src/types';
 import FeeHeader from '../../src/headers/fee';
-import { SendTxError } from '../../src/errors';
+import { SendTxError, WalletError } from '../../src/errors';
 
 describe('prepareTxData', () => {
   let wallet;
@@ -2158,7 +2158,7 @@ describe('prepareTx - Fee Tokens', () => {
     ];
 
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
-    const { transaction } = await sendTransaction.prepareTx();
+    const transaction = await sendTransaction.prepareTx();
 
     // Verify inputs: 1 pre-selected fee token + 1 pre-selected HTR
     expect(transaction.inputs).toHaveLength(2);
@@ -2254,7 +2254,7 @@ describe('prepareTx - Fee Tokens', () => {
     ];
 
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
-    const { transaction } = await sendTransaction.prepareTx();
+    const transaction = await sendTransaction.prepareTx();
 
     // Verify transaction was created
     expect(transaction).toBeDefined();
@@ -2324,6 +2324,55 @@ describe('prepareTx - Fee Tokens', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
     await expect(sendTransaction.prepareTx()).rejects.toThrow(
       `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
+    );
+  });
+});
+
+describe('signTx preconditions', () => {
+  let wallet;
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+  });
+
+  it('should throw when transaction is null', async () => {
+    const sendTransaction = new SendTransactionWalletService(wallet);
+    await expect(sendTransaction.signTx('1234')).rejects.toThrow(WalletError);
+    await expect(sendTransaction.signTx('1234')).rejects.toThrow(
+      "Can't sign transaction if it's null."
+    );
+  });
+
+  it('should throw when pin is not set', async () => {
+    const sendTransaction = new SendTransactionWalletService(wallet);
+    // Manually set transaction to bypass the null check
+    sendTransaction.transaction = {
+      inputs: [],
+      getDataToSignHash: jest.fn(),
+      prepareToSend: jest.fn(),
+    };
+    await expect(sendTransaction.signTx()).rejects.toThrow(SendTxError);
+    await expect(sendTransaction.signTx()).rejects.toThrow('Pin is not set.');
+  });
+
+  it('should throw when utxosAddressPath does not match inputs', async () => {
+    const sendTransaction = new SendTransactionWalletService(wallet);
+    // Set transaction with inputs but leave utxosAddressPath empty
+    sendTransaction.transaction = {
+      inputs: [{ hash: 'tx1', index: 0 }],
+      getDataToSignHash: jest.fn(),
+      prepareToSend: jest.fn(),
+    };
+    sendTransaction.utxosAddressPath = []; // mismatch: 0 paths vs 1 input
+    await expect(sendTransaction.signTx('1234')).rejects.toThrow(SendTxError);
+    await expect(sendTransaction.signTx('1234')).rejects.toThrow(
+      'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
     );
   });
 });

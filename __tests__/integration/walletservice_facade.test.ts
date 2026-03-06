@@ -2307,7 +2307,7 @@ describe('Fee-based tokens', () => {
     expect((txData.headers![0] as FeeHeader).entries[0].amount).toBe(2n);
 
     // Sign the transaction and run from mining
-    await sendTx.signTx(sendTx.utxosAddressPath);
+    await sendTx.signTx();
     const tx = await sendTx.runFromMining();
     await pollForTx(feeWallet, tx.hash!);
 

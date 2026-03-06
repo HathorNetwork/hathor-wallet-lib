@@ -41,6 +41,7 @@ import * as bufferUtils from './utils/buffer';
 import HathorWalletServiceWallet from './wallet/wallet';
 import walletServiceApi from './wallet/api/walletApi';
 import SendTransactionWalletService from './wallet/sendTransactionWalletService';
+import { WalletServiceStorageProxy } from './wallet/walletServiceStorageProxy';
 import config from './config';
 import * as PushNotification from './pushNotification';
 import { WalletType, HistorySyncMode } from './types';
@@ -112,6 +113,7 @@ export {
   HathorWalletServiceWallet,
   walletServiceApi,
   SendTransactionWalletService,
+  WalletServiceStorageProxy,
   config,
   PushNotification,
   swapService,
