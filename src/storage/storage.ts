@@ -161,9 +161,9 @@ export class Storage implements IStorage {
 
   /**
    * Set the tx signing function
-   * @param {EcdsaTxSign} txSign The signing function
+   * @param txSign The signing function, or a null value to clear it
    */
-  setTxSignatureMethod(txSign: EcdsaTxSign): void {
+  setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
   }
 

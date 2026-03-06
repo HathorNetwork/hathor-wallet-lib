@@ -909,7 +909,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      if (fee > 0n && !this.contractPaysFees) {
+      if (fee > 0n && !this.contractPaysFees && !this.tokenFeeAddedInDeposit) {
         const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
         inputs = concat(inputs, feeInputs);
         outputs = concat(outputs, feeOutputs);

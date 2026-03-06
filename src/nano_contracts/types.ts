@@ -233,6 +233,8 @@ export type CreateNanoTxOptions = {
   maxFee?: OutputValueType;
   /** If the contract will pay the transaction fees (for FEE tokens) */
   contractPaysFees?: boolean;
+  /** If the transaction should be signed */
+  signTx?: boolean;
 };
 
 export interface NanoContractBlueprintSourceCodeAPIResponse {

@@ -93,6 +93,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // Fee amount to prepare the transaction
   private _feeAmount: bigint;
 
+  private _currentStep: 'idle' | 'prepared' | 'signed' = 'idle';
+
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
 
@@ -375,7 +377,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
+  async prepareTx(): Promise<Transaction> {
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
@@ -474,8 +476,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.transaction.headers.push(new FeeHeader([{ tokenIndex: 0, amount: this._feeAmount }]));
     }
 
+    this.utxosAddressPath = utxosAddressPath;
+    this._currentStep = 'prepared';
     this.emit('prepare-tx-end', this.transaction);
-    return { transaction: this.transaction, utxosAddressPath };
+    return this.transaction;
   }
 
   /**
@@ -771,13 +775,21 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async signTx(utxosAddressPath: string[], pin: string | null = null) {
+  async signTx(pin?: string | null): Promise<Transaction> {
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
     }
+    const pinToUse = pin ?? this.pin ?? '';
+    if (!pinToUse) {
+      throw new SendTxError('Pin is not set.');
+    }
+    if (this.utxosAddressPath.length !== this.transaction.inputs.length) {
+      throw new SendTxError(
+        'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
+      );
+    }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const pinToUse = pin ?? this.pin ?? '';
     const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
@@ -785,7 +797,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         xprivkey,
         dataToSignHash,
         // the wallet service returns the full BIP44 path, but we only need the address path:
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(this.utxosAddressPath[idx])
       );
       inputObj.setData(inputData);
     }
@@ -794,7 +806,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // we can add the timestamp and calculate the weight
     this.transaction.prepareToSend();
 
+    this._currentStep = 'signed';
     this.emit('sign-tx-end', this.transaction);
+    return this.transaction;
   }
 
   /**
@@ -899,7 +913,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async runFromMining(until: string | null = null): Promise<Transaction> {
+  async runFromMining(until: 'mine-tx' | null = null): Promise<Transaction> {
     try {
       // This will await until mine tx is fully completed
       // mineTx method returns a promise that resolves when
@@ -933,14 +947,23 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
+  async run(
+    until: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null = null,
+    pin: string | null = null
+  ): Promise<Transaction> {
     try {
-      const preparedData = await this.prepareTx();
+      if (this._currentStep === 'idle') {
+        await this.prepareTx();
+      }
+
       if (until === 'prepare-tx') {
         return this.transaction!;
       }
 
-      await this.signTx(preparedData.utxosAddressPath, pin);
+      if (this._currentStep === 'prepared') {
+        await this.signTx(pin);
+      }
+
       if (until === 'sign-tx') {
         return this.transaction!;
       }
