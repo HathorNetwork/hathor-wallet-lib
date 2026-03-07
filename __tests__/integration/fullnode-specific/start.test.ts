@@ -158,6 +158,26 @@ describe('[Fullnode-specific] start', () => {
     ).toThrow('configuration invalid');
   });
 
+  it('should resolve precalculated addresses via getAddressAtIndex', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    const hWallet = new HathorWallet({
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+    });
+    await hWallet.start();
+    await waitForWalletReady(hWallet);
+
+    for (const [index, precalcAddress] of walletData.addresses.entries()) {
+      const addressAtIndex = await hWallet.getAddressAtIndex(index);
+      expect(addressAtIndex).toEqual(precalcAddress);
+    }
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
   it("should calculate the wallet's addresses on start (no precalculated)", async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 

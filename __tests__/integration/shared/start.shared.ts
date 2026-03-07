@@ -108,12 +108,6 @@ export function registerSharedStartTests(adapter: IWalletTestAdapter) {
           // Verify empty history
           const txHistory = await wallet.getTxHistory({});
           expect(txHistory).toHaveLength(0);
-
-          // Verify addresses match the precalculated set
-          for (const [index, precalcAddress] of walletData.addresses.entries()) {
-            const addressAtIndex = await wallet.getAddressAtIndex(index);
-            expect(addressAtIndex).toEqual(precalcAddress);
-          }
         } finally {
           await adapter.stopWallet(wallet);
         }
