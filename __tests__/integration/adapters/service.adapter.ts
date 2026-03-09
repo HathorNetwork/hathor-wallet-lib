@@ -154,7 +154,10 @@ export class ServiceTestAdapter implements IWalletTestAdapter {
 
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
     const fundTx = await GenesisWalletServiceHelper.injectFunds(address, amount);
-    return fundTx.hash!;
+    if (!fundTx?.hash) {
+      throw new Error('injectFundsBeforeStart: transaction had no hash');
+    }
+    return fundTx.hash;
   }
 
   async waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void> {

@@ -37,7 +37,6 @@ import {
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { delay } from '../utils/core.util';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeTestAdapter } from '../adapters/fullnode.adapter';
 import { registerSharedStartTests } from '../shared/start.shared';
@@ -193,9 +192,8 @@ describe('[Fullnode-specific] start', () => {
     await hWallet.start();
     await waitForWalletReady(hWallet);
 
-    for (const addressIndex in walletData.addresses) {
-      const precalcAddress = walletData.addresses[+addressIndex];
-      const addressAtIndex = await hWallet.getAddressAtIndex(+addressIndex);
+    for (const [index, precalcAddress] of walletData.addresses.entries()) {
+      const addressAtIndex = await hWallet.getAddressAtIndex(index);
       expect(precalcAddress).toEqual(addressAtIndex);
     }
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
@@ -243,7 +241,6 @@ describe('[Fullnode-specific] start', () => {
       100n
     );
 
-    await delay(1000);
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
 
     // Re-start with tokenUid scope
@@ -346,7 +343,7 @@ describe('[Fullnode-specific] start', () => {
   it('should start an externally signed wallet', async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
     const xpub = xpriv.xpubkey;
 
@@ -366,7 +363,7 @@ describe('[Fullnode-specific] start', () => {
   it('should start an externally signed wallet from storage', async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
     const xpub = xpriv.xpubkey;
 

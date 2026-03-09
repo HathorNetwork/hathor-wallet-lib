@@ -98,10 +98,9 @@ export function registerSharedStartTests(adapter: IWalletTestAdapter) {
           // Verify correct network
           expect(wallet.getNetwork()).toBe(adapter.networkName);
 
-          // Cast needed: IHathorWallet.getCurrentAddress() returns
-          // AddressInfoObject | Promise<unknown>; both concrete classes
-          // return AddressInfoObject synchronously.
-          const currentAddress = wallet.getCurrentAddress() as AddressInfoObject;
+          // Fullnode's getCurrentAddress() is async, service's is sync.
+          // Awaiting works for both (await on a non-Promise is a no-op).
+          const currentAddress = (await wallet.getCurrentAddress()) as AddressInfoObject;
           expect(currentAddress.index).toBeDefined();
           expect(currentAddress.address).toEqual(walletData.addresses[currentAddress.index]);
 

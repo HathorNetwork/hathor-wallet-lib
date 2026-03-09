@@ -97,6 +97,9 @@ describe('[Service-specific] start', () => {
     const code = new Mnemonic(seed);
     const xpriv = code.toHDPrivateKey('', new Network('testnet'));
     const authxpriv = xpriv.deriveChild(WALLET_SERVICE_AUTH_DERIVATION_PATH).xprivkey;
+    // '1234' is the pin/password used to encrypt the access data above (generateAccessDataFromSeed),
+    // not the wallet start credentials (pinCode/password defined in outer scope).
+    expect(accessData.acctPathKey).toBeDefined();
     const acctKey = decryptData(accessData.acctPathKey!, '1234');
 
     const network = new Network(NETWORK_NAME);

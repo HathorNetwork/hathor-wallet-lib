@@ -60,7 +60,7 @@ export class FullnodeTestAdapter implements IWalletTestAdapter {
     },
   };
 
-  private startedWallets: HathorWallet[] = [];
+  private trackedWallets: HathorWallet[] = [];
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWallet}.
@@ -90,7 +90,7 @@ export class FullnodeTestAdapter implements IWalletTestAdapter {
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
     await waitForWalletReady(hWallet);
-    this.startedWallets.push(hWallet);
+    this.trackedWallets.push(hWallet);
 
     return {
       wallet: hWallet as FuzzyWalletType,
@@ -105,7 +105,7 @@ export class FullnodeTestAdapter implements IWalletTestAdapter {
     const walletConfig = this.buildConfig(walletData, options);
 
     const hWallet = new HathorWallet(walletConfig);
-    this.startedWallets.push(hWallet);
+    this.trackedWallets.push(hWallet);
 
     return {
       wallet: hWallet as FuzzyWalletType,
@@ -132,18 +132,18 @@ export class FullnodeTestAdapter implements IWalletTestAdapter {
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
     const hWallet = this.concrete(wallet);
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-    this.startedWallets = this.startedWallets.filter(w => w !== hWallet);
+    this.trackedWallets = this.trackedWallets.filter(w => w !== hWallet);
   }
 
   async stopAllWallets(): Promise<void> {
-    let hWallet = this.startedWallets.pop();
+    let hWallet = this.trackedWallets.pop();
     while (hWallet) {
       try {
         await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
       } catch {
         // Ignore stop errors during cleanup
       }
-      hWallet = this.startedWallets.pop();
+      hWallet = this.trackedWallets.pop();
     }
   }
 
