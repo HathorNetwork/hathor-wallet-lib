@@ -2,18 +2,15 @@ import axios from 'axios';
 import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import { CreateTokenTransaction, FeeHeader, Output, Storage, transactionUtils } from '../../src';
+import { CreateTokenTransaction, FeeHeader, Output, transactionUtils } from '../../src';
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
   NETWORK_NAME,
   WALLET_CONSTANTS,
 } from './configuration/test-constants';
-import {
-  NATIVE_TOKEN_UID,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../src/constants';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import Network from '../../src/models/network';
 import {
   buildWalletInstance,
   emptyWallet,
