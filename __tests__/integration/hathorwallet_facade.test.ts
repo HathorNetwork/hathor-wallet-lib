@@ -2,18 +2,14 @@ import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
-  DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection,
   generateMultisigWalletHelper,
   generateWalletHelper,
   generateWalletHelperRO,
   stopAllWallets,
   waitForTxReceived,
-  waitForWalletReady,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import HathorWallet from '../../src/new/wallet';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
