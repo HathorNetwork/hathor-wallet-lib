@@ -393,7 +393,7 @@ const tokens = {
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
       skipFeeCalculation?: boolean;
-      tokenVersion: TokenVersion;
+      tokenVersion?: TokenVersion;
     }
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
