@@ -8,12 +8,11 @@
 /**
  * Service-facade start() tests.
  *
- * This file does two things:
- * 1. Registers shared tests via {@link registerSharedStartTests} — these run
- *    identically against both facades and cover common start behavior.
- * 2. Defines service-specific tests that rely on {@link HathorWalletServiceWallet}-only
- *    APIs (e.g. `isWsEnabled()`) or use mocks that don't belong in integration-level
- *    shared tests.
+ * Defines service-specific tests that rely on {@link HathorWalletServiceWallet}-only
+ * APIs (e.g. `isWsEnabled()`) or use mocks that don't belong in integration-level
+ * shared tests.
+ *
+ * Shared start() tests live in `shared/start.test.ts` and run via `describe.each`.
  */
 
 import Mnemonic from 'bitcore-mnemonic';
@@ -25,15 +24,11 @@ import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceTestAdapter } from '../adapters/service.adapter';
-import { registerSharedStartTests } from '../shared/start.shared';
 
 const pinCode = '123456';
 const password = 'testpass';
 
 const adapter = new ServiceTestAdapter();
-
-// --- Shared tests ---
-registerSharedStartTests(adapter);
 
 // --- Suite lifecycle ---
 beforeAll(async () => {

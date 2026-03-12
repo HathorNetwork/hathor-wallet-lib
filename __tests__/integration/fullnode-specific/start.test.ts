@@ -8,11 +8,10 @@
 /**
  * Fullnode-facade start() tests.
  *
- * This file does two things:
- * 1. Registers shared tests via {@link registerSharedStartTests} — these run
- *    identically against both facades and cover common start behavior.
- * 2. Defines fullnode-specific tests that rely on {@link HathorWallet}-only features
- *    (multisig, xpub-readonly, token scoping, external signing, constructor validation).
+ * Defines fullnode-specific tests that rely on {@link HathorWallet}-only features
+ * (multisig, xpub-readonly, token scoping, external signing, constructor validation).
+ *
+ * Shared start() tests live in `shared/start.test.ts` and run via `describe.each`.
  */
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
@@ -39,14 +38,10 @@ import {
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeTestAdapter } from '../adapters/fullnode.adapter';
-import { registerSharedStartTests } from '../shared/start.shared';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
 const adapter = new FullnodeTestAdapter();
-
-// --- Shared tests ---
-registerSharedStartTests(adapter);
 
 // --- Suite lifecycle ---
 beforeAll(async () => {
