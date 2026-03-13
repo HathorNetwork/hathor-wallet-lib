@@ -14,7 +14,10 @@ import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
-const adapters: IWalletTestAdapter[] = [new FullnodeWalletTestAdapter(), new ServiceWalletTestAdapter()];
+const adapters: IWalletTestAdapter[] = [
+  new FullnodeWalletTestAdapter(),
+  new ServiceWalletTestAdapter(),
+];
 
 describe.each(adapters)('[Shared] start — $name', adapter => {
   beforeAll(async () => {
