@@ -10,10 +10,10 @@ import type { EventEmitter } from 'events';
 import type { AddressInfoObject } from '../../../src/wallet/types';
 import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { getRandomInt } from '../utils/core.util';
-import { FullnodeTestAdapter } from '../adapters/fullnode.adapter';
-import { ServiceTestAdapter } from '../adapters/service.adapter';
+import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
+import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
-const adapters: IWalletTestAdapter[] = [new FullnodeTestAdapter(), new ServiceTestAdapter()];
+const adapters: IWalletTestAdapter[] = [new FullnodeWalletTestAdapter(), new ServiceWalletTestAdapter()];
 
 describe.each(adapters)('[Shared] start — $name', adapter => {
   beforeAll(async () => {

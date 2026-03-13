@@ -37,7 +37,7 @@ import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.h
  * - Supports multisig, xpub-readonly, token scoping, and external signing.
  * - Uses the fullnode P2P helpers ({@link GenesisWalletHelper}) for fund injection.
  */
-export class FullnodeTestAdapter implements IWalletTestAdapter {
+export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   name = 'Fullnode';
 
   networkName = NETWORK_NAME;

@@ -36,7 +36,7 @@ const SERVICE_PASSWORD = 'testpass';
  * - Does not support multisig, xpub-readonly, token scoping, or external signing.
  * - Uses the wallet-service helpers ({@link GenesisWalletServiceHelper}) for fund injection.
  */
-export class ServiceTestAdapter implements IWalletTestAdapter {
+export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   name = 'Wallet Service';
 
   networkName = NETWORK_NAME;

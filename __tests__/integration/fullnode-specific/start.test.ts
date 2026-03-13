@@ -37,11 +37,11 @@ import {
 } from '../helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
-import { FullnodeTestAdapter } from '../adapters/fullnode.adapter';
+import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
-const adapter = new FullnodeTestAdapter();
+const adapter = new FullnodeWalletTestAdapter();
 
 // --- Suite lifecycle ---
 beforeAll(async () => {

@@ -23,12 +23,12 @@ import walletUtils from '../../../src/utils/wallet';
 import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
-import { ServiceTestAdapter } from '../adapters/service.adapter';
+import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
 const pinCode = '123456';
 const password = 'testpass';
 
-const adapter = new ServiceTestAdapter();
+const adapter = new ServiceWalletTestAdapter();
 
 // --- Suite lifecycle ---
 beforeAll(async () => {
