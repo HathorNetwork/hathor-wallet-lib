@@ -7,7 +7,7 @@
  */
 
 import HathorWallet from '../../../src/new/wallet';
-import { loggers } from '../utils/logger.util';
+import { WalletTracker } from '../utils/wallet-tracker.util';
 import { WalletState } from '../../../src/types';
 import type Transaction from '../../../src/models/transaction';
 import {
@@ -61,7 +61,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     },
   };
 
-  private trackedWallets: HathorWallet[] = [];
+  private readonly tracker = new WalletTracker<HathorWallet>({
+    cleanStorage: true,
+    cleanAddresses: true,
+  });
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWallet}.
@@ -89,9 +92,9 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     const walletConfig = this.buildConfig(walletData, options, { fillDefaults: true });
 
     const hWallet = new HathorWallet(walletConfig);
+    this.tracker.track(hWallet);
     await hWallet.start();
     await waitForWalletReady(hWallet);
-    this.trackedWallets.push(hWallet);
 
     return {
       wallet: hWallet as FuzzyWalletType,
@@ -106,7 +109,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     const walletConfig = this.buildConfig(walletData, options);
 
     const hWallet = new HathorWallet(walletConfig);
-    this.trackedWallets.push(hWallet);
+    this.tracker.track(hWallet);
 
     return {
       wallet: hWallet as FuzzyWalletType,
@@ -133,21 +136,11 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
     const hWallet = this.concrete(wallet);
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-    this.trackedWallets = this.trackedWallets.filter(w => w !== hWallet);
+    this.tracker.untrack(hWallet);
   }
 
   async stopAllWallets(): Promise<void> {
-    let hWallet = this.trackedWallets.pop();
-    while (hWallet) {
-      try {
-        await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-      } catch (e) {
-        loggers.test!.warn('Failed to stop wallet during cleanup', {
-          error: (e as Error).message,
-        });
-      }
-      hWallet = this.trackedWallets.pop();
-    }
+    await this.tracker.stopAll();
   }
 
   async injectFunds(

@@ -22,6 +22,7 @@ import { WalletFromXPubGuard } from '../../../src/errors';
 import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
+import { WalletTracker } from '../utils/wallet-tracker.util';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import {
   createTokenHelper,
@@ -42,6 +43,10 @@ import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
 const adapter = new FullnodeWalletTestAdapter();
+const tracker = new WalletTracker<HathorWallet>({
+  cleanStorage: true,
+  cleanAddresses: true,
+});
 
 // --- Suite lifecycle ---
 beforeAll(async () => {
@@ -55,6 +60,7 @@ afterAll(async () => {
 // --- Fullnode-specific tests ---
 describe('[Fullnode-specific] start', () => {
   afterEach(async () => {
+    await tracker.stopAll();
     await adapter.stopAllWallets();
   });
 
@@ -162,6 +168,7 @@ describe('[Fullnode-specific] start', () => {
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
     });
+    tracker.track(hWallet);
     await hWallet.start();
     await waitForWalletReady(hWallet);
 
@@ -169,7 +176,6 @@ describe('[Fullnode-specific] start', () => {
       const addressAtIndex = await hWallet.getAddressAtIndex(index);
       expect(addressAtIndex).toEqual(precalcAddress);
     }
-    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
   it("should calculate the wallet's addresses on start (no precalculated)", async () => {
@@ -183,6 +189,7 @@ describe('[Fullnode-specific] start', () => {
       // No preCalculatedAddresses — all calculated at runtime
     };
     const hWallet = new HathorWallet(walletConfig);
+    tracker.track(hWallet);
     await hWallet.storage.setGapLimit(100);
     await hWallet.start();
     await waitForWalletReady(hWallet);
@@ -191,7 +198,6 @@ describe('[Fullnode-specific] start', () => {
       const addressAtIndex = await hWallet.getAddressAtIndex(index);
       expect(precalcAddress).toEqual(addressAtIndex);
     }
-    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
   it('should start a multisig wallet', async () => {
@@ -207,6 +213,7 @@ describe('[Fullnode-specific] start', () => {
     };
 
     const hWallet = new HathorWallet(walletConfig);
+    tracker.track(hWallet);
     await hWallet.storage.setGapLimit(5);
     await hWallet.start();
     await waitForWalletReady(hWallet);
@@ -216,8 +223,6 @@ describe('[Fullnode-specific] start', () => {
       const addressAtIndex = await hWallet.getAddressAtIndex(i);
       expect(precalcAddress).toStrictEqual(addressAtIndex);
     }
-
-    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
   it('should start a wallet to manage a specific token', async () => {

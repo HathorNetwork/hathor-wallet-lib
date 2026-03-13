@@ -7,7 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
-import { loggers } from '../utils/logger.util';
+import { WalletTracker } from '../utils/wallet-tracker.util';
 import type Transaction from '../../../src/models/transaction';
 import {
   buildWalletInstance,
@@ -60,7 +60,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     },
   };
 
-  private startedWallets: HathorWalletServiceWallet[] = [];
+  private readonly tracker = new WalletTracker<HathorWalletServiceWallet>({
+    cleanStorage: true,
+  });
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWalletServiceWallet}.
@@ -100,7 +102,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       enableWs: false,
     });
 
-    this.startedWallets.push(result.wallet);
+    this.tracker.track(result.wallet);
 
     return {
       wallet: result.wallet as FuzzyWalletType,
@@ -130,21 +132,11 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
     const sw = this.concrete(wallet);
     await sw.stop({ cleanStorage: true });
-    this.startedWallets = this.startedWallets.filter(w => w !== sw);
+    this.tracker.untrack(sw);
   }
 
   async stopAllWallets(): Promise<void> {
-    let wallet = this.startedWallets.pop();
-    while (wallet) {
-      try {
-        await wallet.stop({ cleanStorage: true });
-      } catch (e) {
-        loggers.test!.warn('Failed to stop wallet during cleanup', {
-          error: (e as Error).message,
-        });
-      }
-      wallet = this.startedWallets.pop();
-    }
+    await this.tracker.stopAll();
   }
 
   async injectFunds(
