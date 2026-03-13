@@ -7,6 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
+import { loggers } from '../utils/logger.util';
 import type Transaction from '../../../src/models/transaction';
 import {
   buildWalletInstance,
@@ -137,8 +138,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     while (wallet) {
       try {
         await wallet.stop({ cleanStorage: true });
-      } catch {
-        // Ignore stop errors during cleanup
+      } catch (e) {
+        loggers.test!.warn('Failed to stop wallet during cleanup', {
+          error: (e as Error).message,
+        });
       }
       wallet = this.startedWallets.pop();
     }

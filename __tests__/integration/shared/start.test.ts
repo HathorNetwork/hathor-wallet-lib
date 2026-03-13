@@ -10,6 +10,7 @@ import type { EventEmitter } from 'events';
 import type { AddressInfoObject } from '../../../src/wallet/types';
 import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { getRandomInt } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
@@ -33,8 +34,10 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
       if (wallet) {
         try {
           await adapter.stopWallet(wallet);
-        } catch {
-          // wallet might not have started
+        } catch (e) {
+          loggers.test!.warn('Failed to stop wallet during cleanup', {
+            error: (e as Error).message,
+          });
         }
       }
     });

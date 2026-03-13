@@ -7,6 +7,7 @@
  */
 
 import HathorWallet from '../../../src/new/wallet';
+import { loggers } from '../utils/logger.util';
 import { WalletState } from '../../../src/types';
 import type Transaction from '../../../src/models/transaction';
 import {
@@ -140,8 +141,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     while (hWallet) {
       try {
         await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-      } catch {
-        // Ignore stop errors during cleanup
+      } catch (e) {
+        loggers.test!.warn('Failed to stop wallet during cleanup', {
+          error: (e as Error).message,
+        });
       }
       hWallet = this.trackedWallets.pop();
     }

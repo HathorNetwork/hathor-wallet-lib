@@ -24,6 +24,7 @@ import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { loggers } from '../utils/logger.util';
 
 const pinCode = '123456';
 const password = 'testpass';
@@ -47,8 +48,10 @@ describe('[Service-specific] start', () => {
     if (wallet) {
       try {
         await wallet.stop({ cleanStorage: true });
-      } catch {
-        // Ignore
+      } catch (e) {
+        loggers.test!.warn('Failed to stop wallet during cleanup', {
+          error: (e as Error).message,
+        });
       }
     }
   });
