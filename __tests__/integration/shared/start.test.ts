@@ -49,7 +49,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
           pinCode: undefined,
           password: adapter.defaultPassword,
         })
-      ).rejects.toThrow(/[Pp]in/);
+      ).rejects.toThrow(/pin/i);
     });
 
     it('should reject when password is not provided for seed wallet', async () => {
@@ -62,7 +62,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
           pinCode: adapter.defaultPinCode,
           password: undefined,
         })
-      ).rejects.toThrow(/[Pp]assword/);
+      ).rejects.toThrow(/password/i);
     });
   });
 
