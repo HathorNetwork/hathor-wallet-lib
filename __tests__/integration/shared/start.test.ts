@@ -187,4 +187,27 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
       }
     });
   });
+
+  // --- Stop lifecycle tests ---
+
+  describe('stop', () => {
+    it('should not be ready after stop', async () => {
+      const { wallet } = await adapter.createWallet();
+      expect((wallet as ConcreteWalletType).isReady()).toBe(true);
+
+      await adapter.stopWallet(wallet);
+      expect((wallet as ConcreteWalletType).isReady()).toBe(false);
+    });
+
+    it('should tolerate stopping a wallet that was never started', async () => {
+      const { wallet } = adapter.buildWalletInstance();
+      await expect(adapter.stopWallet(wallet)).resolves.not.toThrow();
+    });
+
+    it('should tolerate being stopped twice', async () => {
+      const { wallet } = await adapter.createWallet();
+      await adapter.stopWallet(wallet);
+      await expect(adapter.stopWallet(wallet)).resolves.not.toThrow();
+    });
+  });
 });
