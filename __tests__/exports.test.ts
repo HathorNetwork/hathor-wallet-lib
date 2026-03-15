@@ -14,6 +14,7 @@
  * the import will fail.
  */
 
+/* eslint-disable @typescript-eslint/no-unused-vars -- Imports are intentionally exhaustive to validate the public API surface at compile time. */
 import {
   // ============================================================
   // Core types from src/types.ts
@@ -274,6 +275,7 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from '../src/lib';
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ============================================================
 // Test: Enums have correct values
