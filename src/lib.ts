@@ -127,10 +127,6 @@ export {
 };
 
 // Re-export all types from modules without naming conflicts.
-// Note: WalletType, HistorySyncMode, and IFeeEntry were previously exported individually
-// but are now covered by this wildcard re-export from './types'.
-// TokenInfo, IHathorWallet, OutputRequestObj, and DataScriptOutputRequestObj were previously
-// exported individually but are now covered by the explicit wallet/types re-exports below.
 export * from './types';
 export * from './nano_contracts/types';
 export * from './models/types';
