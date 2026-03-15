@@ -189,7 +189,7 @@ export interface MeltTokensOptions {
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
  */
-export interface FullnodeDelegateAuthorityOptions {
+export interface DelegateAuthorityOptions {
   createAnother?: boolean;
   startMiningTx?: boolean;
   pinCode?: string | null;
@@ -200,7 +200,7 @@ export interface FullnodeDelegateAuthorityOptions {
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
  */
-export interface FullnodeDestroyAuthorityOptions {
+export interface DestroyAuthorityOptions {
   startMiningTx?: boolean;
   pinCode?: string | null;
 }
@@ -244,7 +244,7 @@ export interface WalletWebSocketData {
  * @property actions List of actions to execute in the nano contract transaction
  * @property args List of arguments for the method to be executed in the transaction
  */
-export interface FullnodeCreateNanoTxData {
+export interface CreateNanoTxData {
   blueprintId?: string | null;
   ncId?: string | null;
   actions?: NanoContractAction[];

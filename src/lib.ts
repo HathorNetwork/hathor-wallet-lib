@@ -126,11 +126,133 @@ export {
   enums,
 };
 
+// Re-export all types from modules without naming conflicts.
 export * from './types';
 export * from './nano_contracts/types';
 export * from './models/types';
-export * from './wallet/types';
-export * from './new/types';
 export * from './template/transaction/types';
 export * from './headers/types';
 export * from './models/enum';
+
+// Re-export wallet/types.ts explicitly because it has naming conflicts:
+//   - Balance / Authority clash with models/types.ts
+//   - DelegateAuthorityOptions / DestroyAuthorityOptions clash with new/types.ts
+// Conflicting names are re-exported with descriptive aliases.
+export type { Balance as WalletBalance, Authority as WalletAuthority } from './wallet/types';
+export {
+  ConnectionState,
+  OutputType,
+  type CreateTokenOptionsInput,
+  type GetAddressesObject,
+  type GetBalanceObject,
+  type TokenInfo,
+  type AuthoritiesBalance,
+  type GetHistoryObject,
+  type AddressInfoObject,
+  type GetAddressDetailsObject,
+  type WalletStatusResponseData,
+  type WalletStatus,
+  type AddressesResponseData,
+  type AddressDetailsResponseData,
+  type CheckAddressesMineResponseData,
+  type NewAddressesResponseData,
+  type BalanceResponseData,
+  type TokenDetailsResponseData,
+  type TokenDetailsAuthoritiesObject,
+  type TokenDetailsObject,
+  type HistoryResponseData,
+  type TxProposalCreateResponseData,
+  type TxProposalInputs,
+  type TxProposalOutputs,
+  type TxProposalUpdateResponseData,
+  type TxProposalDeleteResponseData,
+  type RequestError,
+  type InputRequestObject,
+  type SendManyTxOptionsParam,
+  type SendTxOptionsParam,
+  type GetTxOutputsOptions,
+  type TxOutputResponseData,
+  type Utxo,
+  type AuthorityTxOutput,
+  type AuthTokenResponseData,
+  type OutputRequestObj,
+  type DataScriptOutputRequestObj,
+  type OutputSendTransaction,
+  type InputRequestObj,
+  type TokensResponseData,
+  type SendTransactionEvents,
+  type SendTransactionResponse,
+  type WalletAddressMap,
+  type TokenMap,
+  type TransactionFullObject,
+  type IStopWalletParams,
+  type DelegateAuthorityOptions,
+  type DestroyAuthorityOptions,
+  type IHathorWallet,
+  type ISendTransaction,
+  type MineTxSuccessData,
+  type DecodedOutput,
+  type TxOutput,
+  type TxInput,
+  type WsBufferScript,
+  type WsTxInputDecoded,
+  type WsTxInput,
+  type WsTxOutputDecoded,
+  type WsTxOutput,
+  type WsTransaction,
+  type CreateWalletAuthData,
+  type FullNodeVersionData,
+  type TxByIdTokenData,
+  type TxByIdTokensResponseData,
+  type WalletServiceServerUrls,
+  type FullNodeToken,
+  type FullNodeDecodedInput,
+  type FullNodeDecodedOutput,
+  type FullNodeInput,
+  type FullNodeOutput,
+  type FullNodeTx,
+  type FullNodeMeta,
+  type FullNodeTxResponse,
+  type FullNodeTxConfirmationDataResponse,
+  type HasTxOutsideFirstAddressResponseData,
+} from './wallet/types';
+
+// Re-export new/types.ts explicitly because it has naming conflicts:
+//   - DelegateAuthorityOptions / DestroyAuthorityOptions clash with wallet/types.ts
+//   - CreateNanoTxData clashes with nano_contracts/types.ts
+// Conflicting names are re-exported with descriptive aliases.
+export type {
+  DelegateAuthorityOptions as FullnodeDelegateAuthorityOptions,
+  DestroyAuthorityOptions as FullnodeDestroyAuthorityOptions,
+  CreateNanoTxData as FullnodeCreateNanoTxData,
+} from './new/types';
+export {
+  type HathorWalletConstructorParams,
+  type UtxoOptions,
+  type GetAvailableUtxosOptions,
+  type GetUtxosForAmountOptions,
+  type GetAuthorityOptions,
+  type MintTokensOptions,
+  type MeltTokensOptions,
+  type WalletStartOptions,
+  type WalletStopOptions,
+  type WalletWebSocketData,
+  type CreateNanoTokenTxOptions,
+  type CreateOnChainBlueprintTxOptions,
+  type BuildTxTemplateOptions,
+  type StartReadOnlyOptions,
+  type UtxoDetails,
+  type ProposedOutput,
+  type ProposedInput,
+  type SendTransactionFullnodeOptions,
+  type SendManyOutputsOptions,
+  type CreateTokenOptions,
+  type CreateNFTOptions,
+  type GetBalanceFullnodeFacadeReturnType,
+  type GetTxHistoryFullnodeFacadeReturnType,
+  type GetTokenDetailsFullnodeFacadeReturnType,
+  type GetTxByIdTokenDetails,
+  type GetTxByIdFullnodeFacadeReturnType,
+  type IWalletInputInfo,
+  type ISignature,
+} from './new/types';
