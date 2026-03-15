@@ -45,7 +45,7 @@ export interface GetAddressesObject {
 
 export interface GetBalanceObject {
   token: TokenInfo; // Information about the token
-  balance: Balance; // Balance information
+  balance: WalletBalance; // Balance information
   tokenAuthorities: AuthoritiesBalance; // Authorities mint/melt availability
   transactions: number; // quantity of transactions
   lockExpires: number | null; // When next lock expires, if has a timelock
@@ -58,17 +58,17 @@ export interface TokenInfo {
   version: TokenVersion; // Token version
 }
 
-export interface Balance {
+export interface WalletBalance {
   unlocked: OutputValueType; // Available amount
   locked: OutputValueType; // Locked amount
 }
 
 export interface AuthoritiesBalance {
-  unlocked: Authority; // unlocked mint/melt
-  locked: Authority; // locked mint/melt
+  unlocked: WalletAuthority; // unlocked mint/melt
+  locked: WalletAuthority; // locked mint/melt
 }
 
-export interface Authority {
+export interface WalletAuthority {
   mint: boolean; // if has mint authority
   melt: boolean; // if has melt authority
 }

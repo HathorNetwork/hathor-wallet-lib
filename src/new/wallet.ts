@@ -102,11 +102,11 @@ import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
   CreateTokenOptions,
-  CreateNanoTxData,
+  FullnodeCreateNanoTxData,
   CreateNanoTokenTxOptions,
   CreateOnChainBlueprintTxOptions,
-  DelegateAuthorityOptions,
-  DestroyAuthorityOptions,
+  FullnodeDelegateAuthorityOptions,
+  FullnodeDestroyAuthorityOptions,
   GetAuthorityOptions,
   GetAvailableUtxosOptions,
   GetBalanceFullnodeFacadeReturnType,
@@ -2214,7 +2214,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options: DelegateAuthorityOptions = {}
+    options: FullnodeDelegateAuthorityOptions = {}
   ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
@@ -2276,7 +2276,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options: DelegateAuthorityOptions = {}
+    options: FullnodeDelegateAuthorityOptions = {}
   ): Promise<SendTransaction> {
     const transaction = await this.prepareDelegateAuthorityData(
       tokenUid,
@@ -2304,7 +2304,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options: DelegateAuthorityOptions = {}
+    options: FullnodeDelegateAuthorityOptions = {}
   ): Promise<Transaction | null> {
     const sendTx = await this.delegateAuthoritySendTransaction(
       tokenUid,
@@ -2330,7 +2330,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     count: number,
-    options: DestroyAuthorityOptions = {}
+    options: FullnodeDestroyAuthorityOptions = {}
   ): Promise<Transaction> {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
@@ -2390,7 +2390,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     count: number,
-    options: DestroyAuthorityOptions = {}
+    options: FullnodeDestroyAuthorityOptions = {}
   ): Promise<SendTransaction> {
     const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return new SendTransaction({ wallet: this, transaction });
@@ -2413,7 +2413,7 @@ class HathorWallet extends EventEmitter {
     tokenUid: string,
     type: AuthorityType,
     count: number,
-    options: DestroyAuthorityOptions = {}
+    options: FullnodeDestroyAuthorityOptions = {}
   ): Promise<Transaction | null> {
     const sendTx = await this.destroyAuthoritySendTransaction(tokenUid, type, count, options);
     return sendTx.runFromMining();
@@ -3014,7 +3014,7 @@ class HathorWallet extends EventEmitter {
   async createAndSendNanoContractTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
@@ -3035,7 +3035,7 @@ class HathorWallet extends EventEmitter {
   async createNanoContractTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
@@ -3101,7 +3101,7 @@ class HathorWallet extends EventEmitter {
   async createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
     options: CreateNanoTxOptions = {}
   ): Promise<Transaction | null> {
@@ -3127,7 +3127,7 @@ class HathorWallet extends EventEmitter {
   async createNanoContractCreateTokenTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
