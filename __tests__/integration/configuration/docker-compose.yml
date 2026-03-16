@@ -4,7 +4,7 @@ services:
   # All the following services are related to the core of the Private Network
   # For more information on these configs, refer to:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
-  # Fullnode on 8080 , tx mining service on 8035, cpuminer stratum on 8034
+  # Fullnode on 8080, tx-mining-service API on 8035, tx-mining-service DevMiner on 8034
 
 
   fullnode:
@@ -58,7 +58,7 @@ services:
       "--api-port=8035",
       "--dev-miner",
       "--testnet",
-      "--address", "WTjhJXzQJETVx7BVXdyZmvk396DRRsubdw",
+      "--address", "WTjhJXzQJETVx7BVXdyZmvk396DRRsubdw", # Miner rewards address (WALLET_CONSTANTS.miner in test-constants.ts)
     ]
     networks:
       - hathor-privnet
