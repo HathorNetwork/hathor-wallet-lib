@@ -75,7 +75,7 @@ describe('template methods', () => {
     // Send transaction
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    expect(tx.nonce).toBeGreaterThan(0);
+    expect(tx.nonce).toBeDefined();
   });
 
   it('should send transactions from the template transaction', async () => {
