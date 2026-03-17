@@ -457,6 +457,11 @@ const tokens = {
         }
         break;
       case TokenVersion.FEE:
+        if (data) {
+          // The deposit amount will be the quantity of data strings in the array
+          // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
+          depositAmount += this.getDataFee(data.length);
+        }
         // skipFeeCalculation: fee is managed externally (e.g., by NanoContractTransactionBuilder)
         if (skipFeeCalculation) {
           feeAmount = 0n;
@@ -477,12 +482,6 @@ const tokens = {
             mappedOutputs,
             await tokens.getTokensByManyIds(storage, new Set(tokensArray))
           );
-
-          if (data) {
-            // The deposit amount will be the quantity of data strings in the array
-            // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
-            depositAmount += this.getDataFee(data.length);
-          }
         }
         break;
       default:
