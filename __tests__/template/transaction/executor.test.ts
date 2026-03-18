@@ -27,6 +27,7 @@ import { getDefaultLogger } from '../../../src/types';
 import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
+  CompleteTxInstruction,
   DataOutputInstruction,
   FeeInstruction,
   RawInputInstruction,
@@ -35,6 +36,7 @@ import {
   TokenOutputInstruction,
   UtxoSelectInstruction,
 } from '../../../src/template/transaction/instructions';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import Network from '../../../src/models/network';
 import Output from '../../../src/models/output';
 import Input from '../../../src/models/input';
@@ -1027,6 +1029,68 @@ describe('timelock in output instructions', () => {
     await execTokenOutputInstruction(interpreter, ctx, ins);
 
     expect(ctx.outputs).toHaveLength(1);
+    const script = ctx.outputs[0].parseScript(new Network('testnet'));
+    expect(script).toBeInstanceOf(P2PKH);
+    expect((script as P2PKH).timelock).toBeNull();
+  });
+
+  it('should encode timelock in change outputs created by CompleteTxInstruction', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+      getChangeAddress: jest.fn().mockResolvedValue(address),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    // Cache HTR token details so getTokenBalance can resolve the version
+    await ctx.addToken(interpreter, NATIVE_TOKEN_UID);
+
+    // Simulate a +50 HTR surplus (inputs > outputs) so the
+    // complete action must create a change output.
+    const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
+    balance.tokens = 50n;
+    ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
+
+    const ins = CompleteTxInstruction.parse({
+      type: 'action/complete',
+      token: NATIVE_TOKEN_UID,
+      timelock: timelockTimestamp,
+      skipSelection: true,
+    });
+    await execCompleteTxInstruction(interpreter, ctx, ins);
+
+    // The complete action should have created a change output of 50 HTR
+    expect(ctx.outputs).toHaveLength(1);
+    expect(ctx.outputs[0].value).toBe(50n);
+    const script = ctx.outputs[0].parseScript(new Network('testnet'));
+    expect(script).toBeInstanceOf(P2PKH);
+    expect((script as P2PKH).timelock).toBe(timelockTimestamp);
+    expect((script as P2PKH).address.base58).toBe(address);
+  });
+
+  it('should not encode timelock in change outputs when not provided to CompleteTxInstruction', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+      getChangeAddress: jest.fn().mockResolvedValue(address),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+
+    await ctx.addToken(interpreter, NATIVE_TOKEN_UID);
+
+    const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
+    balance.tokens = 50n;
+    ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
+
+    const ins = CompleteTxInstruction.parse({
+      type: 'action/complete',
+      token: NATIVE_TOKEN_UID,
+      skipSelection: true,
+    });
+    await execCompleteTxInstruction(interpreter, ctx, ins);
+
+    expect(ctx.outputs).toHaveLength(1);
+    expect(ctx.outputs[0].value).toBe(50n);
     const script = ctx.outputs[0].parseScript(new Network('testnet'));
     expect(script).toBeInstanceOf(P2PKH);
     expect((script as P2PKH).timelock).toBeNull();
