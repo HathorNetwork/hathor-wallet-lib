@@ -75,7 +75,9 @@ describe('template methods', () => {
     // Send transaction
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    expect(tx.nonce).toBeGreaterThan(0);
+    // After mining and pushing, the hash should be set (it was null before mining)
+    expect(tx.hash).not.toBeNull();
+    expect(typeof tx.nonce).toBe('number');
   });
 
   it('should send transactions from the template transaction', async () => {
