@@ -1005,4 +1005,73 @@ describe('FeeBlueprint Template execution', () => {
     const tokenDetails = await hWallet.getTokenDetails(tx!.hash!);
     expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
   });
+  it('should create a fee token with data outputs and contractPaysFees', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const htrBalanceBefore = await hWallet.getBalance(NATIVE_TOKEN_UID);
+
+    const tx = await hWallet.createAndSendNanoContractCreateTokenTransaction(
+      'noop',
+      address0,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: 3n,
+            address: address0,
+          },
+        ],
+      },
+      {
+        name: 'FeeTokenData',
+        symbol: 'FBTD',
+        amount: 8582n,
+        mintAddress: address0,
+        tokenVersion: TokenVersion.FEE,
+        data: ['data1', 'data2'],
+      },
+      { contractPaysFees: true }
+    );
+    await checkTxValid(hWallet, tx);
+
+    const createTokenTx = tx as CreateTokenTransaction;
+
+    // token output
+    expect(createTokenTx.outputs.length).toBe(5);
+    expect(createTokenTx.outputs[0].value).toBe(8582n);
+
+    // authorities outputs
+    expect(createTokenTx.outputs[1].value).toBe(1n);
+    expect(createTokenTx.outputs[1].tokenData).toBe(129);
+    expect(createTokenTx.outputs[2].value).toBe(2n);
+    expect(createTokenTx.outputs[2].tokenData).toBe(129);
+
+    // data outputs
+    expect(createTokenTx.outputs[3].value).toBe(1n);
+    expect(createTokenTx.outputs[3].tokenData).toBe(0);
+    expect(createTokenTx.outputs[4].value).toBe(1n);
+    expect(createTokenTx.outputs[4].tokenData).toBe(0);
+
+    // Verify FeeHeader exists and has correct fee
+    const feeHeader = tx!.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].amount).toBe(1n);
+
+    // Verify nano contract header shows original withdrawal amount
+    const nanoHeader = createTokenTx.getNanoHeaders();
+    expect(nanoHeader.length).toBe(1);
+    expect(nanoHeader[0].actions.length).toBe(1);
+    expect(nanoHeader[0].actions[0].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+    expect(nanoHeader[0].actions[0].amount).toBe(3n);
+
+    // the htr amount in the wallet should be the same as the htr before
+    const htrBalanceAfter = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalanceAfter[0].balance.unlocked).toBe(htrBalanceBefore[0].balance.unlocked);
+
+    // Verify token was created with FEE version
+    const tokenDetails = await hWallet.getTokenDetails(tx!.hash!);
+    expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
+  });
 });

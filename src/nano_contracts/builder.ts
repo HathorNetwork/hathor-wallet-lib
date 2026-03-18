@@ -928,7 +928,7 @@ class NanoContractTransactionBuilder {
           throw new NanoContractTransactionError('No available HTR output to deduct fee from.');
         }
         const htrOutput = outputs[htrOutputIndex];
-        htrOutput.value -= fee;
+        htrOutput.value -= totalFee;
         if (htrOutput.value < 0n) {
           throw new NanoContractTransactionError(
             `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${totalFee}`
