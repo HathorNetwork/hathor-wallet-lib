@@ -7,7 +7,7 @@
 
 import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
-import { ILockedUtxo, IStore, IUtxo, OutputValueType, TokenVersion } from '../../src/types';
+import { ILockedUtxo, IStore, IUtxo, OutputValueType, TokenVersion, SCANNING_POLICY } from '../../src/types';
 
 describe('locked utxo methods', () => {
   const spyDate = jest.spyOn(Date, 'now');
@@ -243,4 +243,46 @@ describe('scanning policy methods', () => {
       endIndex: 42,
     });
   }
+
+  it('should work with single-address policy', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+
+    // Set single-address policy
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    await expect(storage.getScanningPolicy()).resolves.toEqual(SCANNING_POLICY.SINGLE_ADDRESS);
+    await expect(storage.getScanningPolicyData()).resolves.toEqual({
+      policy: SCANNING_POLICY.SINGLE_ADDRESS,
+    });
+  });
+
+  it('should not advance currentAddressIndex in single-address mode', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+
+    // Set single-address policy
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+
+    // Save address at index 0
+    await store.saveAddress({
+      base58: 'addr0',
+      bip32AddressIndex: 0,
+      numTransactions: 0,
+      transactions: [],
+    });
+
+    // currentAddressIndex should be 0 after initial save
+    const walletData = await store.getWalletData();
+    expect(walletData.currentAddressIndex).toBe(0);
+
+    // getCurrentAddress with markAsUsed should NOT advance
+    await store.getCurrentAddress(true);
+    const walletData2 = await store.getWalletData();
+    expect(walletData2.currentAddressIndex).toBe(0);
+
+    // setCurrentAddressIndex to a value > 0 should be a no-op
+    await store.setCurrentAddressIndex(5);
+    const walletData3 = await store.getWalletData();
+    expect(walletData3.currentAddressIndex).toBe(0);
+  });
 });

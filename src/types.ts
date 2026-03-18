@@ -384,6 +384,7 @@ export interface IWalletAccessData {
 export enum SCANNING_POLICY {
   GAP_LIMIT = 'gap-limit',
   INDEX_LIMIT = 'index-limit',
+  SINGLE_ADDRESS = 'single-address',
 }
 
 export interface IGapLimitAddressScanPolicy {
@@ -397,6 +398,10 @@ export interface IIndexLimitAddressScanPolicy {
   endIndex: number;
 }
 
+export interface ISingleAddressAddressScanPolicy {
+  policy: SCANNING_POLICY.SINGLE_ADDRESS;
+}
+
 /**
  * This is a request from the scanning policy to load `count` addresses starting from nextIndex.
  */
@@ -405,9 +410,9 @@ export interface IScanPolicyLoadAddresses {
   count: number;
 }
 
-export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT;
+export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT | SCANNING_POLICY.SINGLE_ADDRESS;
 
-export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy;
+export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy | ISingleAddressAddressScanPolicy;
 
 export function isGapLimitScanPolicy(
   scanPolicyData: AddressScanPolicyData
@@ -419,6 +424,12 @@ export function isIndexLimitScanPolicy(
   scanPolicyData: AddressScanPolicyData
 ): scanPolicyData is IIndexLimitAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.INDEX_LIMIT;
+}
+
+export function isSingleAddressScanPolicy(
+  scanPolicyData: AddressScanPolicyData
+): scanPolicyData is ISingleAddressAddressScanPolicy {
+  return scanPolicyData.policy === SCANNING_POLICY.SINGLE_ADDRESS;
 }
 
 export interface IWalletData {

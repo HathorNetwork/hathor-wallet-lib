@@ -7,7 +7,7 @@
 
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
-import { HistorySyncMode, WalletType, TokenVersion } from '../../src/types';
+import { HistorySyncMode, WalletType, TokenVersion, SCANNING_POLICY } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   scanPolicyStartAddresses,
@@ -54,6 +54,27 @@ describe('scanning policy methods', () => {
     });
 
     policyMock.mockReturnValue(Promise.resolve('invalid-policy'));
+    await expect(checkScanningPolicy(storage)).resolves.toEqual(null);
+  });
+
+  it('start addresses for single-address policy', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'getScanningPolicy').mockReturnValue(
+      Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS)
+    );
+    await expect(scanPolicyStartAddresses(storage)).resolves.toEqual({
+      nextIndex: 0,
+      count: 1,
+    });
+  });
+
+  it('check scanning policy returns null for single-address', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'getScanningPolicy').mockReturnValue(
+      Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS)
+    );
     await expect(checkScanningPolicy(storage)).resolves.toEqual(null);
   });
 });
