@@ -212,10 +212,17 @@ describe('createOutputScriptFromAddress', () => {
     expect((parsed as P2SH).timelock).toBe(timelockTimestamp);
   });
 
-  it('should create a script without timelock when timelock is null', () => {
+  it('should create a P2PKH script without timelock when timelock is null', () => {
     const script = createOutputScriptFromAddress(p2pkhAddress, testnet, { timelock: null });
     const parsed = parseScript(script, testnet);
     expect(parsed).toBeInstanceOf(P2PKH);
     expect((parsed as P2PKH).timelock).toBeNull();
+  });
+
+  it('should create a P2SH script without timelock when timelock is null', () => {
+    const script = createOutputScriptFromAddress(p2shAddress, testnet, { timelock: null });
+    const parsed = parseScript(script, testnet);
+    expect(parsed).toBeInstanceOf(P2SH);
+    expect((parsed as P2SH).timelock).toBeNull();
   });
 });
