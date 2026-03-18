@@ -459,10 +459,9 @@ const tokens = {
       case TokenVersion.FEE: {
         const feeResult = await this.calculateFeeForMintAndCreateToken({
           skipFeeCalculation,
-          isMintingToken,
+          mintingTokenUid: isMintingToken ? token! : undefined,
           outputs,
-          data,
-          token,
+          data: data ?? undefined,
           tokensArray,
           storage,
         });
@@ -937,28 +936,25 @@ const tokens = {
    * Calculate the fee amount for a fee-based token transaction.
    *
    * @param options.skipFeeCalculation Whether to skip fee calculation (fee is managed externally)
-   * @param options.isMintingToken Whether this is a minting operation (vs creating a new token)
+   * @param options.mintingTokenUid The token UID if minting an existing token; undefined if creating a new token
    * @param options.outputs The transaction outputs
    * @param options.data Optional data strings for data outputs
-   * @param options.token The token being minted (required if isMintingToken is true)
    * @param options.tokensArray Array of token UIDs in the transaction
    * @param options.storage The storage instance
    * @returns An object containing the calculated feeAmount and depositAmount to add
    */
   async calculateFeeForMintAndCreateToken({
     skipFeeCalculation,
-    isMintingToken,
+    mintingTokenUid,
     outputs,
     data,
-    token,
     tokensArray,
     storage,
   }: {
     skipFeeCalculation: boolean;
-    isMintingToken: boolean;
+    mintingTokenUid?: string;
     outputs: IDataOutput[];
-    data: string[] | null;
-    token: string | null;
+    data?: string[];
     tokensArray: string[];
     storage: IStorage;
   }): Promise<{ feeAmount: bigint; depositAmount: bigint }> {
@@ -976,7 +972,7 @@ const tokens = {
       depositAmount += this.getDataFee(data.length);
     }
 
-    if (!isMintingToken) {
+    if (!mintingTokenUid) {
       return { feeAmount: Fee.calculateTokenCreationTxFee(outputs), depositAmount };
     }
 
@@ -984,7 +980,7 @@ const tokens = {
       output =>
         ({
           ...output,
-          token: token!,
+          token: mintingTokenUid,
         }) satisfies IDataOutputWithToken
     );
     // since we control the inputs, we can assume we don't have any melt operation that should be charged at this point.

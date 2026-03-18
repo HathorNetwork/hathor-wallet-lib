@@ -167,6 +167,7 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow(/exceeds maximum fee/);
   });
+
   it('should create a fee token and deposit htr into the contract', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -230,6 +231,7 @@ describe('FeeBlueprint Template execution', () => {
     expect(nanoHeader[0].actions.length).toBe(1);
     expect(nanoHeader[0].actions[0].type).toBe(NanoContractHeaderActionType.DEPOSIT);
   });
+
   it('should create fee token with withdrawal and contract pays fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const address1 = await hWallet.getAddressAtIndex(1);
@@ -298,6 +300,7 @@ describe('FeeBlueprint Template execution', () => {
     // Validation: withdrawal(10n) = output(9n) + FeeHeader(1n)
     expect(nanoHeader[0].actions[0].amount).toBe(withdrawalAmount);
   });
+
   it('should withdraw FBT with contract paying fees via HTR withdrawal', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -355,6 +358,7 @@ describe('FeeBlueprint Template execution', () => {
     expect(nanoHeaders[0].actions[1].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
     expect(nanoHeaders[0].actions[1].amount).toBe(htrWithdrawalAmount);
   });
+
   it('should throw error when contractPaysFees is used without HTR withdrawal', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -381,6 +385,7 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow('No available HTR output to deduct fee from.');
   });
+
   it('should throw error when HTR withdrawal is insufficient to cover fee with contractPaysFees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -447,6 +452,7 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow(/HTR withdrawal amount insufficient to cover fee/);
   });
+
   it('should throw error when withdrawal amount is insufficient to cover token deposit', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -477,6 +483,7 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow('Withdrawal amount -100 for token 00 is less than 0.');
   });
+
   it('should withdraw DBT without paying fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -506,6 +513,7 @@ describe('FeeBlueprint Template execution', () => {
     const feeHeader = tx.getFeeHeader();
     expect(feeHeader).toBeNull();
   });
+
   it('should throw error when calculated fee exceeds maxFee', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -530,6 +538,7 @@ describe('FeeBlueprint Template execution', () => {
       )
     ).rejects.toThrow('Calculated fee (1) exceeds maximum fee (0)');
   });
+
   it('should deposit DBT back to contract', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -550,6 +559,7 @@ describe('FeeBlueprint Template execution', () => {
     const ncState = await ncApi.getNanoContractState(contractId, [], [dbtUid], []);
     expect(BigInt(ncState.balances[dbtUid].value)).toBe(950n);
   });
+
   it('should withdraw FBT paying fees in HTR', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
@@ -587,6 +597,7 @@ describe('FeeBlueprint Template execution', () => {
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 100n);
   });
+
   it('should get an error when trying to pay fees without enough HTR', async () => {
     /** Dedicated wallet for tests that require an empty wallet (never funded) */
     const emptyWallet = await generateWalletHelper(null);
@@ -609,6 +620,7 @@ describe('FeeBlueprint Template execution', () => {
       })
     ).rejects.toThrow('Not enough HTR utxos to pay the fee.');
   });
+
   it('should deposit FBT back to contract paying fees in HTR', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
@@ -639,6 +651,7 @@ describe('FeeBlueprint Template execution', () => {
     // Balance should increase by deposit amount (50)
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore + 50n);
   });
+
   it('should deposit FBT with contract paying fee via HTR withdrawal', async () => {
     const ncStateBefore = await ncApi.getNanoContractState(
       contractId,
@@ -718,6 +731,7 @@ describe('FeeBlueprint Template execution', () => {
       htrBalanceBefore - feeAmount
     );
   });
+
   it('should deposit FBT without change outputs', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
@@ -757,6 +771,7 @@ describe('FeeBlueprint Template execution', () => {
     // Balance should increase by deposit amount
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtNcBalanceBefore + depositAmount);
   });
+
   it('should initialize a second FeeBlueprint contract (nc2)', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -784,6 +799,7 @@ describe('FeeBlueprint Template execution', () => {
     const ncState = await ncApi.getNanoContractState(contractId2, [], [NATIVE_TOKEN_UID], []);
     expect(BigInt(ncState.balances[NATIVE_TOKEN_UID].value)).toBe(100n);
   });
+
   it('should move FBT tokens from nc1 to nc2', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
@@ -808,6 +824,7 @@ describe('FeeBlueprint Template execution', () => {
     // nc2 receives 200 FBT
     expect(BigInt(nc2StateAfter.balances[fbtUid].value)).toBe(200n);
   });
+
   it('should get FBT tokens back from nc2 to nc1', async () => {
     const nc1StateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid, dbtUid], []);
     const nc2StateBefore = await ncApi.getNanoContractState(contractId2, [], [fbtUid], []);
@@ -834,6 +851,7 @@ describe('FeeBlueprint Template execution', () => {
     // nc2 loses 100 FBT
     expect(BigInt(nc2StateAfter.balances[fbtUid].value)).toBe(nc2FbtBefore - 100n);
   });
+
   it('should grant authority of fee token to contract without paying fees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -956,6 +974,7 @@ describe('FeeBlueprint Template execution', () => {
     expect(tokenDetailsAfter.authorities.mint).toBe(false);
     expect(tokenDetailsAfter.authorities.melt).toBe(true); // Melt still in wallet
   });
+
   it('should create a fee token with data outputs', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
 
@@ -1005,6 +1024,7 @@ describe('FeeBlueprint Template execution', () => {
     const tokenDetails = await hWallet.getTokenDetails(tx!.hash!);
     expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
   });
+
   it('should create a fee token with data outputs and contractPaysFees', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const htrBalanceBefore = await hWallet.getBalance(NATIVE_TOKEN_UID);
