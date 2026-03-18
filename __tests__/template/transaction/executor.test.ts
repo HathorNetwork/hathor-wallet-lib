@@ -38,6 +38,7 @@ import {
 import Network from '../../../src/models/network';
 import Output from '../../../src/models/output';
 import Input from '../../../src/models/input';
+import P2PKH from '../../../src/models/p2pkh';
 
 /**
  * This DEBUG constant will enable or disable "build time" debug logs
@@ -963,5 +964,71 @@ describe('execFeeInstruction', () => {
 
     expect(ctx.fees.get(token)).toBe(150n);
     expect(ctx.fees.get(token2)).toBe(200n);
+  });
+});
+
+describe('timelock in output instructions', () => {
+  const timelockTimestamp = 1742240000;
+
+  it('should encode timelock in the script for TokenOutputInstruction', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const ins = TokenOutputInstruction.parse({
+      type: 'output/token',
+      amount: 50,
+      address,
+      token,
+      timelock: timelockTimestamp,
+    });
+    await execTokenOutputInstruction(interpreter, ctx, ins);
+
+    expect(ctx.outputs).toHaveLength(1);
+    const script = ctx.outputs[0].parseScript(new Network('testnet'));
+    expect(script).toBeInstanceOf(P2PKH);
+    expect((script as P2PKH).timelock).toBe(timelockTimestamp);
+  });
+
+  it('should encode timelock in the script for AuthorityOutputInstruction', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const ins = AuthorityOutputInstruction.parse({
+      type: 'output/authority',
+      authority: 'mint',
+      token,
+      address,
+      timelock: timelockTimestamp,
+    });
+    await execAuthorityOutputInstruction(interpreter, ctx, ins);
+
+    expect(ctx.outputs).toHaveLength(1);
+    const script = ctx.outputs[0].parseScript(new Network('testnet'));
+    expect(script).toBeInstanceOf(P2PKH);
+    expect((script as P2PKH).timelock).toBe(timelockTimestamp);
+  });
+
+  it('should not encode timelock in TokenOutputInstruction when not provided', async () => {
+    const interpreter = {
+      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+      getTokenDetails: jest.fn().mockResolvedValue(mockTokenDetails),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const ins = TokenOutputInstruction.parse({
+      type: 'output/token',
+      amount: 50,
+      address,
+      token,
+    });
+    await execTokenOutputInstruction(interpreter, ctx, ins);
+
+    expect(ctx.outputs).toHaveLength(1);
+    const script = ctx.outputs[0].parseScript(new Network('testnet'));
+    expect(script).toBeInstanceOf(P2PKH);
+    expect((script as P2PKH).timelock).toBeNull();
   });
 });
