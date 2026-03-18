@@ -16,7 +16,11 @@ import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
   getAddressFromPubkey,
+  createOutputScriptFromAddress,
 } from '../../src/utils/address';
+import { parseScript } from '../../src/utils/scripts';
+import P2PKH from '../../src/models/p2pkh';
+import P2SH from '../../src/models/p2sh';
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- These variables also serve as a documentation, even if unused */
 const seed =
@@ -174,4 +178,44 @@ test('Get address from pubkey', async () => {
   expect(address.getType()).toBe(WalletType.P2PKH);
   expect(address.base58).toBe(base58);
   expect(address.validateAddress()).toBeTruthy();
+});
+
+describe('createOutputScriptFromAddress', () => {
+  const testnet = new Network('testnet');
+  const p2pkhAddress = WALLET_DATA.p2pkh.addresses[0];
+  const p2shAddress = WALLET_DATA.multisig.addresses[0];
+
+  it('should create a P2PKH script without timelock when none is provided', () => {
+    const script = createOutputScriptFromAddress(p2pkhAddress, testnet);
+    const parsed = parseScript(script, testnet);
+    expect(parsed).toBeInstanceOf(P2PKH);
+    expect((parsed as P2PKH).timelock).toBeNull();
+  });
+
+  it('should create a P2PKH script with timelock when provided', () => {
+    const timelockTimestamp = 1742240000;
+    const script = createOutputScriptFromAddress(p2pkhAddress, testnet, {
+      timelock: timelockTimestamp,
+    });
+    const parsed = parseScript(script, testnet);
+    expect(parsed).toBeInstanceOf(P2PKH);
+    expect((parsed as P2PKH).timelock).toBe(timelockTimestamp);
+  });
+
+  it('should create a P2SH script with timelock when provided', () => {
+    const timelockTimestamp = 1742240000;
+    const script = createOutputScriptFromAddress(p2shAddress, testnet, {
+      timelock: timelockTimestamp,
+    });
+    const parsed = parseScript(script, testnet);
+    expect(parsed).toBeInstanceOf(P2SH);
+    expect((parsed as P2SH).timelock).toBe(timelockTimestamp);
+  });
+
+  it('should create a script without timelock when timelock is null', () => {
+    const script = createOutputScriptFromAddress(p2pkhAddress, testnet, { timelock: null });
+    const parsed = parseScript(script, testnet);
+    expect(parsed).toBeInstanceOf(P2PKH);
+    expect((parsed as P2PKH).timelock).toBeNull();
+  });
 });
