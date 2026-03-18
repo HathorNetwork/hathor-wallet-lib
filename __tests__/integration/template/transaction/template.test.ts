@@ -18,6 +18,9 @@ import {
   TOKEN_MINT_MASK,
 } from '../../../../src/constants';
 import { TokenVersion } from '../../../../src/types';
+import P2PKH from '../../../../src/models/p2pkh';
+import Network from '../../../../src/models/network';
+import dateFormatter from '../../../../src/utils/date';
 
 const DEBUG = true;
 
@@ -442,6 +445,60 @@ describe('Template execution', () => {
         }),
       ])
     );
+  });
+});
+
+describe('Template execution with timelock', () => {
+  let hWallet: HathorWallet;
+  let interpreter: WalletTxTemplateInterpreter;
+
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper(null);
+    interpreter = new WalletTxTemplateInterpreter(hWallet);
+    const address = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, {});
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should encode timelock in the output script when using addTokenOutput', async () => {
+    const outputAddr = await hWallet.getAddressAtIndex(1);
+    const changeAddr = await hWallet.getAddressAtIndex(2);
+    const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(Date.now() + 60_000));
+
+    const template = new TransactionTemplateBuilder()
+      .addUtxoSelect({ fill: 5, changeAddress: changeAddr })
+      .addTokenOutput({ address: outputAddr, amount: 5, timelock: timelockTimestamp })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+
+    // Find the timelocked output (sent to outputAddr, distinct from changeAddr)
+    const network = new Network('testnet');
+    const timelockOutput = tx.outputs.find(o => {
+      const parsed = o.parseScript(network);
+      return parsed instanceof P2PKH && parsed.address.base58 === outputAddr;
+    });
+    expect(timelockOutput).toBeDefined();
+    const parsed = timelockOutput!.parseScript(network);
+    expect(parsed).toBeInstanceOf(P2PKH);
+    expect((parsed as P2PKH).timelock).toBe(timelockTimestamp);
+
+    // Sign, prepare and send the transaction
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.hash).toBeDefined();
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+
+    // Verify the balance shows as locked
+    const balance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(balance[0].balance.locked).toBeGreaterThanOrEqual(5n);
   });
 });
 
