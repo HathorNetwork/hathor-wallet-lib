@@ -410,9 +410,15 @@ export interface IScanPolicyLoadAddresses {
   count: number;
 }
 
-export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT | SCANNING_POLICY.SINGLE_ADDRESS;
+export type AddressScanPolicy =
+  | SCANNING_POLICY.GAP_LIMIT
+  | SCANNING_POLICY.INDEX_LIMIT
+  | SCANNING_POLICY.SINGLE_ADDRESS;
 
-export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy | ISingleAddressAddressScanPolicy;
+export type AddressScanPolicyData =
+  | IGapLimitAddressScanPolicy
+  | IIndexLimitAddressScanPolicy
+  | ISingleAddressAddressScanPolicy;
 
 export function isGapLimitScanPolicy(
   scanPolicyData: AddressScanPolicyData

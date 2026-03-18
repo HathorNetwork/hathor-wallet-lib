@@ -7,10 +7,7 @@
 
 import { MemoryStore, Storage } from '../../src/storage';
 import { SCANNING_POLICY } from '../../src/types';
-import {
-  scanPolicyStartAddresses,
-  checkScanningPolicy,
-} from '../../src/utils/storage';
+import { scanPolicyStartAddresses, checkScanningPolicy } from '../../src/utils/storage';
 
 describe('single-address policy integration', () => {
   it('should load only 1 address and never request more', async () => {

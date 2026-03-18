@@ -171,7 +171,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   // Flag to indicate if the wallet is in single-address mode
   private singleAddress: boolean;
+
   private scanPolicy: AddressScanPolicyData | null;
+
   private firstAddress: string | null;
 
   public storage: IStorage;
@@ -186,7 +188,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
-    scanPolicy = null
+    scanPolicy = null,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -483,11 +485,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
     this.firstAddress = firstAddress;
     // Reset newAddresses to only the first address
-    this.newAddresses = [{
-      address: this.firstAddress,
-      index: 0,
-      addressPath: await this.getAddressPathForIndex(0),
-    }];
+    this.newAddresses = [
+      {
+        address: this.firstAddress,
+        index: 0,
+        addressPath: await this.getAddressPathForIndex(0),
+      },
+    ];
     this.indexToUse = 0;
 
     if (!renewPromise) {
@@ -915,11 +919,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (!this.firstAddress) {
         this.firstAddress = await this.getAddressAtIndex(0);
       }
-      this.newAddresses = [{
-        address: this.firstAddress,
-        index: 0,
-        addressPath: await this.getAddressPathForIndex(0),
-      }];
+      this.newAddresses = [
+        {
+          address: this.firstAddress,
+          index: 0,
+          addressPath: await this.getAddressPathForIndex(0),
+        },
+      ];
       this.indexToUse = 0;
       return;
     }
@@ -1589,11 +1595,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.singleAddress = true;
     this.firstAddress = await this.getAddressAtIndex(0);
     // Reset newAddresses to only the first address
-    this.newAddresses = [{
-      address: this.firstAddress,
-      index: 0,
-      addressPath: await this.getAddressPathForIndex(0),
-    }];
+    this.newAddresses = [
+      {
+        address: this.firstAddress,
+        index: 0,
+        addressPath: await this.getAddressPathForIndex(0),
+      },
+    ];
     this.indexToUse = 0;
   }
 

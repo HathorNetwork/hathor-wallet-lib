@@ -7,7 +7,14 @@
 
 import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
-import { ILockedUtxo, IStore, IUtxo, OutputValueType, TokenVersion, SCANNING_POLICY } from '../../src/types';
+import {
+  ILockedUtxo,
+  IStore,
+  IUtxo,
+  OutputValueType,
+  TokenVersion,
+  SCANNING_POLICY,
+} from '../../src/types';
 
 describe('locked utxo methods', () => {
   const spyDate = jest.spyOn(Date, 'now');

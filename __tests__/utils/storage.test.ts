@@ -60,9 +60,9 @@ describe('scanning policy methods', () => {
   it('start addresses for single-address policy', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
-    jest.spyOn(storage, 'getScanningPolicy').mockReturnValue(
-      Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS)
-    );
+    jest
+      .spyOn(storage, 'getScanningPolicy')
+      .mockReturnValue(Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS));
     await expect(scanPolicyStartAddresses(storage)).resolves.toEqual({
       nextIndex: 0,
       count: 1,
@@ -72,9 +72,9 @@ describe('scanning policy methods', () => {
   it('check scanning policy returns null for single-address', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
-    jest.spyOn(storage, 'getScanningPolicy').mockReturnValue(
-      Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS)
-    );
+    jest
+      .spyOn(storage, 'getScanningPolicy')
+      .mockReturnValue(Promise.resolve(SCANNING_POLICY.SINGLE_ADDRESS));
     await expect(checkScanningPolicy(storage)).resolves.toEqual(null);
   });
 });
