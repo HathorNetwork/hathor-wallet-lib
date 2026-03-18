@@ -459,7 +459,6 @@ const helpers = {
    */
   createOutputFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
     return new Output(historyOutput.value, Buffer.from(historyOutput.script, 'base64'), {
-      timelock: historyOutput.decoded.timelock || null,
       tokenData: historyOutput.token_data,
     });
   },
