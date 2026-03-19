@@ -22,6 +22,9 @@ import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const testConfig = require('../configuration/test.config');
+
 /**
  * @typedef SendTxResponse
  * @property {{hash:string,index:number,data:Buffer}[]} inputs
@@ -44,7 +47,7 @@ export function generateConnection() {
   return new Connection({
     network: NETWORK_NAME,
     servers: [FULLNODE_URL],
-    connectionTimeout: 30000,
+    connectionTimeout: testConfig.connectionTimeoutMs,
   });
 }
 
@@ -249,21 +252,25 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options =
  * @returns {Promise<unknown>}
  */
 export function waitForWalletReady(hWallet) {
+  const startTime = Date.now().valueOf();
   // Only return the positive response after the wallet is ready
   return new Promise((resolve, reject) => {
     const handleState = newState => {
       if (newState === HathorWallet.READY) {
+        const timeDiff = Date.now().valueOf() - startTime;
+        if (DEBUG_LOGGING) {
+          loggers.test.log(`waitForWalletReady took ${timeDiff}ms.`);
+        }
         resolve();
       } else if (newState === HathorWallet.ERROR) {
         reject(new Error('Wallet failed to start.'));
       }
     };
     hWallet.on('state', handleState);
-    // No wallet on tests should take more than 15s to be ready
     setTimeout(() => {
       hWallet.removeListener('state', handleState);
       reject(new Error('Wallet could not be ready.'));
-    }, 120000);
+    }, testConfig.walletReadyTimeoutMs);
   });
 }
 
@@ -297,8 +304,7 @@ export async function waitForTxReceived(
       break;
     }
 
-    // Tx not found, wait 1s before trying again
-    await delay(1000);
+    await delay(testConfig.txReceivedPollIntervalMs);
     storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
   }
 
@@ -405,18 +411,12 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
  * @returns {Promise<void>}
  */
 export async function waitNextBlock(storage) {
+  const startTime = Date.now().valueOf();
   const currentHeight = await storage.getCurrentHeight();
   let height = currentHeight;
 
-  // This timeout is a protection, so the integration tests
-  // don't keep running in case of a problem
-  // After using the timeout as 120s, we had some timeouts
-  // because the CI runs in a free github runner
-  // so we decided to increase this timeout to 600s, so
-  // we don't have this error anymore
-  const timeout = 600000;
+  const timeout = testConfig.nextBlockTimeoutMs;
   let timeoutReached = false;
-  // Timeout handler
   const timeoutHandler = setTimeout(() => {
     timeoutReached = true;
   }, timeout);
@@ -426,7 +426,7 @@ export async function waitNextBlock(storage) {
       break;
     }
 
-    await delay(1000);
+    await delay(testConfig.nextBlockPollIntervalMs);
     height = await storage.getCurrentHeight();
   }
 
@@ -435,6 +435,11 @@ export async function waitNextBlock(storage) {
 
   if (timeoutReached) {
     throw new Error('Timeout reached when waiting for the next block.');
+  }
+
+  const timeDiff = Date.now().valueOf() - startTime;
+  if (DEBUG_LOGGING) {
+    loggers.test.log(`waitNextBlock from height ${currentHeight} took ${timeDiff}ms.`);
   }
 }
 
@@ -454,14 +459,16 @@ export async function waitTxConfirmed(
   txId: string,
   timeout: number | null | undefined
 ): Promise<void> {
+  const startTime = Date.now().valueOf();
   let timeoutHandler: ReturnType<typeof setTimeout> | undefined;
   let timeoutErrorFlag = false;
 
-  // Initializing timeout handler, if requested
-  if (timeout) {
+  // Use provided timeout or fall back to config default
+  const effectiveTimeout = timeout ?? testConfig.txConfirmedTimeoutMs;
+  if (effectiveTimeout) {
     timeoutHandler = setTimeout(async () => {
       timeoutErrorFlag = true;
-    }, timeout);
+    }, effectiveTimeout);
   }
 
   try {
@@ -469,7 +476,7 @@ export async function waitTxConfirmed(
     // the nano contract txs are executing the method as soon as they arrive in the node
     // and adding the first_block as mempool so we shouldn't consider this as a valid first block for confirmation
     while (includes([null, 'mempool'], await getTxFirstBlock(hWallet, txId))) {
-      await delay(1000);
+      await delay(testConfig.txConfirmedPollIntervalMs);
 
       // If we've reached the requested timeout, break the while loop
       if (timeoutErrorFlag) {
@@ -483,12 +490,17 @@ export async function waitTxConfirmed(
 
   // Throw the timeout error if the loop aborted because of it
   if (timeoutErrorFlag) {
-    throw new Error(`Timeout of ${timeout}ms without confirming the transaction`);
+    throw new Error(`Timeout of ${effectiveTimeout}ms without confirming the transaction`);
   }
 
   // If no errors happened it means the first block was found: clearing the timeout and returning void.
   if (timeoutHandler) {
     clearTimeout(timeoutHandler);
+  }
+
+  const timeDiff = Date.now().valueOf() - startTime;
+  if (DEBUG_LOGGING) {
+    loggers.test.log(`waitTxConfirmed for ${txId} took ${timeDiff}ms.`);
   }
 }
 

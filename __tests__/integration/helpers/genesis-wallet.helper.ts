@@ -16,6 +16,9 @@ import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const testConfig = require('../configuration/test.config');
+
 interface InjectFundsOptions {
   waitTimeout?: number;
 }
@@ -42,7 +45,7 @@ export class GenesisWalletHelper {
     const connection = new Connection({
       network: 'testnet',
       servers: [FULLNODE_URL],
-      connectionTimeout: 30000,
+      connectionTimeout: testConfig.connectionTimeoutMs,
       logger: console, // Add required logger parameter
     });
     try {
@@ -114,7 +117,7 @@ export class GenesisWalletHelper {
 
     const hWallet = new GenesisWalletHelper();
     await hWallet.start();
-    await delay(500);
+    await delay(testConfig.genesisPostCreationDelayMs);
 
     singleton = hWallet;
     return singleton;
@@ -161,8 +164,8 @@ export class GenesisWalletServiceHelper {
     const startTime = Date.now();
 
     // Poll for the serverless app to be ready.
-    const delayBetweenRequests = 3000;
-    const lambdaTimeout = 30000;
+    const delayBetweenRequests = testConfig.pollServerlessIntervalMs;
+    const lambdaTimeout = testConfig.pollServerlessTimeoutMs;
     while (!isServerlessReady) {
       try {
         // Executing a method that does not depend on the wallet being started,

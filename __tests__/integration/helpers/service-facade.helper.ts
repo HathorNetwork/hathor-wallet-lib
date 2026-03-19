@@ -9,6 +9,9 @@ import { precalculationHelpers } from './wallet-precalculation.helper';
 import config from '../../../src/config';
 import ncApi from '../../../src/api/nano';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const testConfig = require('../configuration/test.config');
+
 /** Default pin to simplify the tests */
 const pinCode = '123456';
 /** Default password to simplify the tests */
@@ -90,15 +93,17 @@ export function buildWalletInstance({
  * @throws Error if the transaction is not found after max attempts
  */
 export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
-  const maxAttempts = 10;
-  const delayMs = 1000; // 1 second
+  const startTime = Date.now().valueOf();
+  const maxAttempts = testConfig.pollForTxMaxAttempts;
+  const delayMs = testConfig.pollForTxIntervalMs;
   let attempts = 0;
 
   while (attempts < maxAttempts) {
     try {
       const tx = await walletForPolling.getTxById(txId);
       if (tx) {
-        loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
+        const timeDiff = Date.now().valueOf() - startTime;
+        loggers.test!.log(`pollForTx for ${txId} took ${attempts + 1} attempts, ${timeDiff}ms`);
         return tx;
       }
     } catch (error) {
@@ -146,9 +151,10 @@ export async function pollForNcState(
   ncId: string,
   fields: string[],
   requiredField?: string,
-  maxAttempts = 10,
-  delayMs = 1000
+  maxAttempts = testConfig.pollForNcStateMaxAttempts,
+  delayMs = testConfig.pollForNcStateIntervalMs
 ): Promise<unknown> {
+  const startTime = Date.now().valueOf();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const state = await ncApi.getNanoContractState(ncId, fields, [], []);
@@ -164,6 +170,8 @@ export async function pollForNcState(
           continue;
         }
       }
+      const timeDiff = Date.now().valueOf() - startTime;
+      loggers.test!.log(`pollForNcState for ${ncId} took ${attempt + 1} attempts, ${timeDiff}ms`);
       return state;
     } catch (error) {
       if (attempt === maxAttempts - 1) throw error;
@@ -180,12 +188,15 @@ export async function pollForNcState(
 export async function pollForTokenDetails(
   wallet: HathorWalletServiceWallet,
   tokenId: string,
-  maxAttempts = 20,
-  delayMs = 2000
+  maxAttempts = testConfig.pollForTokenDetailsMaxAttempts,
+  delayMs = testConfig.pollForTokenDetailsIntervalMs
 ): Promise<void> {
+  const startTime = Date.now().valueOf();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       await wallet.getTokenDetails(tokenId);
+      const timeDiff = Date.now().valueOf() - startTime;
+      loggers.test!.log(`pollForTokenDetails for ${tokenId} took ${attempt + 1} attempts, ${timeDiff}ms`);
       return;
     } catch (error) {
       if (attempt === maxAttempts - 1) throw error;

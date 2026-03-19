@@ -108,5 +108,8 @@ export const NETWORK_NAME = 'testnet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
 
-export const TX_TIMEOUT_DEFAULT = 5000;
+// Re-exported from testConfig for backward compatibility
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const testConfig = require('./test.config');
+export const TX_TIMEOUT_DEFAULT = testConfig.txReceivedTimeoutMs;
 export const DEBUG_LOGGING = true;
