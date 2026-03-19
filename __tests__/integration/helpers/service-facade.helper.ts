@@ -7,9 +7,7 @@ import { TxNotFoundError } from '../../../src/errors';
 import { precalculationHelpers } from './wallet-precalculation.helper';
 import config from '../../../src/config';
 import ncApi from '../../../src/api/nano';
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const testConfig = require('../configuration/test.config');
+import { testConfig } from '../configuration/test.config';
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';

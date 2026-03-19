@@ -6,7 +6,7 @@
  * Values were set based on measured p90 data from full integration suite runs.
  */
 
-const testConfig = {
+export const testConfig = {
   // On CI, should match .github/workflows/integration-test.yml -> upload-artifact
   logOutputFolder: process.env.TEST_LOG_OUTPUT_FOLDER || 'tmp/',
 
@@ -61,5 +61,3 @@ const testConfig = {
   pollServerlessIntervalMs: Number(process.env.TEST_POLL_SERVERLESS_INTERVAL_MS) || 2000,
   pollServerlessTimeoutMs: Number(process.env.TEST_POLL_SERVERLESS_TIMEOUT_MS) || 30000,
 };
-
-module.exports = testConfig;

@@ -21,9 +21,7 @@ import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const testConfig = require('../configuration/test.config');
+import { testConfig } from '../configuration/test.config';
 
 /**
  * @typedef SendTxResponse

@@ -15,9 +15,7 @@ import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const testConfig = require('../configuration/test.config');
+import { testConfig } from '../configuration/test.config';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
