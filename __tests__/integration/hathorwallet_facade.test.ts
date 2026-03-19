@@ -1614,6 +1614,56 @@ describe('createNewToken', () => {
     expect(tknBalance[0].balance.unlocked).toBe(8582n);
   });
 
+  it('should create a fee token with data outputs', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    const previousHtrBalance = htrBalance[0].balance.unlocked;
+
+    const tx = await hWallet.createNewToken('TokenName', 'TKN', 9999n, {
+      changeAddress: addr0,
+      createMint: false,
+      createMelt: false,
+      data: ['Test Fee Data 01'],
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    const expectedHtrBalance = previousHtrBalance - 2n;
+
+    // Validating the creation tx
+    expect(tx).toMatchObject({
+      hash: expect.any(String),
+      name: 'TokenName',
+      symbol: 'TKN',
+      version: 2,
+      tokenVersion: TokenVersion.FEE,
+      headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
+      outputs: expect.arrayContaining([
+        expect.objectContaining({ value: 1n, tokenData: 0 }),
+        // this validation is important to check if the data output is being discounted correctly
+        expect.objectContaining({ value: expectedHtrBalance, tokenData: 0 }),
+        expect.objectContaining({ value: 9999n, tokenData: 1 }),
+      ]),
+    });
+
+    const feeHeader = tx?.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    // in addition to the previous htr validation, 1 HTR should be declared as fee for the token creation
+    expect(feeHeader!.entries[0].amount).toBe(1n); // HTR
+
+    // Validating wallet balance is updated with this new token
+    await waitForTxReceived(hWallet, tx!.hash!);
+    const tknBalance = await hWallet.getBalance(tx!.hash!);
+    expect(tknBalance[0].token.version).toBe(TokenVersion.FEE);
+    expect(tknBalance[0].balance.unlocked).toBe(9999n);
+
+    const htrBalanceAfter = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalanceAfter[0].balance.unlocked).toBe(expectedHtrBalance);
+  });
+
   it('should create a new token on the correct addresses', async () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
