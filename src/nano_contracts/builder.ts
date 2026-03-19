@@ -270,10 +270,11 @@ class NanoContractTransactionBuilder {
     inputs: IDataInput[],
     outputs: IDataOutput[],
     tokens: string[]
-  ): Promise<bigint> {
+  ): Promise<{ fee: bigint; dataOutputFee: bigint }> {
     this.assertWallet();
 
     let fee = 0n;
+    let dataOutputFee = 0n;
     const { fee: calculatedFee } = await Fee.fetchTokensAndCalculateFee(
       this.wallet,
       inputs,
@@ -286,10 +287,10 @@ class NanoContractTransactionBuilder {
     if (this.isCreatingFeeToken) {
       fee += FEE_PER_OUTPUT;
       const dataArray = this.createTokenOptions?.data ?? [];
-      fee += tokensUtils.getDataFee(dataArray.length);
+      dataOutputFee += tokensUtils.getDataFee(dataArray.length);
     }
 
-    return fee;
+    return { fee, dataOutputFee };
   }
 
   /**
@@ -900,17 +901,18 @@ class NanoContractTransactionBuilder {
 
       // the prepareMintTxData used by create token transactions already calculates the fee and adds it to the header
       // since it's auto generated we can rely on the native token index
-      const fee = await this.calculateFee(inputs, outputs, tokens);
+      const { fee, dataOutputFee } = await this.calculateFee(inputs, outputs, tokens);
+      const totalFee = fee + dataOutputFee;
 
       // Validate against maxFee if set
-      if (this.maxFee !== null && fee > this.maxFee) {
+      if (this.maxFee !== null && totalFee > this.maxFee) {
         throw new NanoContractTransactionError(
-          `Calculated fee (${fee}) exceeds maximum fee (${this.maxFee}).`
+          `Calculated fee (${totalFee}) exceeds maximum fee (${this.maxFee}).`
         );
       }
 
-      if (fee > 0n && !this.contractPaysFees && !this.tokenFeeAddedInDeposit) {
-        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(fee);
+      if (totalFee > 0n && !this.contractPaysFees && !this.tokenFeeAddedInDeposit) {
+        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(totalFee);
         inputs = concat(inputs, feeInputs);
         outputs = concat(outputs, feeOutputs);
       }
@@ -918,7 +920,7 @@ class NanoContractTransactionBuilder {
       // When contractPaysFees is true, deduct fee from HTR withdrawal output
       // We assume that we have only one HTR output when contractPaysFees, otherwise the user must use the tx template
       // to build a more complex tx.
-      if (fee > 0n && this.contractPaysFees) {
+      if (totalFee > 0n && this.contractPaysFees) {
         const htrOutputIndex = outputs.findIndex(
           output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
         );
@@ -926,10 +928,10 @@ class NanoContractTransactionBuilder {
           throw new NanoContractTransactionError('No available HTR output to deduct fee from.');
         }
         const htrOutput = outputs[htrOutputIndex];
-        htrOutput.value -= fee;
+        htrOutput.value -= totalFee;
         if (htrOutput.value < 0n) {
           throw new NanoContractTransactionError(
-            `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${fee}`
+            `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${totalFee}`
           );
         }
         if (htrOutput.value === 0n) {

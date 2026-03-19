@@ -283,6 +283,7 @@ export interface CreateNanoTokenTxOptions {
   allowExternalMeltAuthorityAddress?: boolean;
   data?: string[] | null;
   isCreateNFT?: boolean;
+  tokenVersion?: TokenVersion;
 }
 
 /**
