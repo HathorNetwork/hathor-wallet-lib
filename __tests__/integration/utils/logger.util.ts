@@ -8,7 +8,7 @@
 /* eslint-disable no-console */
 
 import winston from './placeholder-logger.util';
-import testConfig from '../configuration/test.config';
+import { testConfig } from '../configuration/test.config';
 
 export const loggers: {
   test?: LoggerUtil;
