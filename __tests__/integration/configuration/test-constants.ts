@@ -5,9 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { testConfig } from './test.config';
+
 /**
  * @type {Record<string,{walletId:string,words:string,addresses:string[]}>}
  */
+
 export const WALLET_CONSTANTS = {
   genesis: {
     walletId: 'genesiswallet',
@@ -107,8 +110,6 @@ export const FULLNODE_NETWORK_NAME = 'nano-testnet-bravo';
 export const NETWORK_NAME = 'testnet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
-
 // Re-exported from testConfig for backward compatibility
-import { testConfig } from './test.config';
 export const TX_TIMEOUT_DEFAULT = testConfig.txReceivedTimeoutMs;
 export const DEBUG_LOGGING = true;

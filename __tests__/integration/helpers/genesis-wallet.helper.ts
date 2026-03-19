@@ -172,7 +172,7 @@ export class GenesisWalletServiceHelper {
         isServerlessReady = true;
       } catch (e) {
         // Ignore errors, serverless app is probably not ready yet
-        loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
+        loggers.test!.log(`Ws-Serverless not ready yet, retrying in ${delayBetweenRequests}ms...`);
       }
 
       // Timeout after 30 seconds

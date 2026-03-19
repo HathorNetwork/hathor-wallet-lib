@@ -59,7 +59,7 @@ describe('Template execution', () => {
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
-    await waitTxConfirmed(wallet, txId, null);
+    await waitTxConfirmed(wallet, txId);
     // Now we query the transaction from the full node to double check it's still valid after the nano execution
     // and it already has a first block, so it was really executed
     const txAfterExecution = await wallet.getFullTxById(txId);
