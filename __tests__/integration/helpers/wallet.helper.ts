@@ -487,6 +487,9 @@ export async function waitTxConfirmed(
   if (timeoutHandler) {
     clearTimeout(timeoutHandler);
   }
+
+  // Ensure the next transaction will have a strictly greater timestamp.
+  await waitUntilNextTimestamp(hWallet, txId);
 }
 
 /**
