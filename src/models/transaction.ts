@@ -33,6 +33,7 @@ import {
 } from '../utils/buffer';
 import Input from './input';
 import Output from './output';
+import ShieldedOutput from './shielded_output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
@@ -75,6 +76,8 @@ class Transaction {
 
   outputs: Output[];
 
+  shieldedOutputs: ShieldedOutput[];
+
   signalBits: number;
 
   version: number;
@@ -113,6 +116,7 @@ class Transaction {
 
     this.inputs = inputs;
     this.outputs = outputs;
+    this.shieldedOutputs = [];
     this.signalBits = signalBits!;
     this.version = version!;
     this.weight = weight!;
@@ -222,6 +226,12 @@ class Transaction {
 
     // Len outputs
     array.push(intToBytes(this.outputs.length, 1));
+
+    // Len shielded outputs (only present when transaction has shielded outputs).
+    // TODO: Align with hathor-core wire format once finalized.
+    if (this.shieldedOutputs.length > 0) {
+      array.push(intToBytes(this.shieldedOutputs.length, 1));
+    }
   }
 
   /**
@@ -237,6 +247,10 @@ class Transaction {
 
     for (const outputTx of this.outputs) {
       array.push(...outputTx.serialize());
+    }
+
+    for (const shieldedOut of this.shieldedOutputs) {
+      array.push(...shieldedOut.serialize());
     }
   }
 
@@ -367,6 +381,10 @@ class Transaction {
       }
       sumOutputs += output.value;
     }
+    // Shielded outputs also contribute to the weight calculation
+    for (const shieldedOut of this.shieldedOutputs) {
+      sumOutputs += shieldedOut.value;
+    }
     return sumOutputs;
   }
 
@@ -412,9 +430,10 @@ class Transaction {
       );
     }
 
-    if (this.outputs.length > MAX_OUTPUTS) {
+    const totalOutputs = this.outputs.length + this.shieldedOutputs.length;
+    if (totalOutputs > MAX_OUTPUTS) {
       throw new MaximumNumberOutputsError(
-        `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+        `Transaction has ${totalOutputs} outputs (${this.outputs.length} transparent + ${this.shieldedOutputs.length} shielded) and can have at most ${MAX_OUTPUTS}.`
       );
     }
   }
