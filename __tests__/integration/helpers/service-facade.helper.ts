@@ -1,5 +1,4 @@
 import { isEmpty } from 'lodash';
-import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { HathorWalletServiceWallet, MemoryStore, Storage, walletUtils } from '../../../src';
 import Network from '../../../src/models/network';
@@ -93,7 +92,6 @@ export function buildWalletInstance({
  * @throws Error if the transaction is not found after max attempts
  */
 export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txId: string) {
-  const startTime = Date.now().valueOf();
   const maxAttempts = testConfig.pollForTxMaxAttempts;
   const delayMs = testConfig.pollForTxIntervalMs;
   let attempts = 0;
@@ -102,8 +100,6 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
     try {
       const tx = await walletForPolling.getTxById(txId);
       if (tx) {
-        const timeDiff = Date.now().valueOf() - startTime;
-        loggers.test!.log(`pollForTx for ${txId} took ${attempts + 1} attempts, ${timeDiff}ms`);
         return tx;
       }
     } catch (error) {
@@ -154,7 +150,6 @@ export async function pollForNcState(
   maxAttempts = testConfig.pollForNcStateMaxAttempts,
   delayMs = testConfig.pollForNcStateIntervalMs
 ): Promise<unknown> {
-  const startTime = Date.now().valueOf();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const state = await ncApi.getNanoContractState(ncId, fields, [], []);
@@ -170,8 +165,6 @@ export async function pollForNcState(
           continue;
         }
       }
-      const timeDiff = Date.now().valueOf() - startTime;
-      loggers.test!.log(`pollForNcState for ${ncId} took ${attempt + 1} attempts, ${timeDiff}ms`);
       return state;
     } catch (error) {
       if (attempt === maxAttempts - 1) throw error;
@@ -191,12 +184,9 @@ export async function pollForTokenDetails(
   maxAttempts = testConfig.pollForTokenDetailsMaxAttempts,
   delayMs = testConfig.pollForTokenDetailsIntervalMs
 ): Promise<void> {
-  const startTime = Date.now().valueOf();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       await wallet.getTokenDetails(tokenId);
-      const timeDiff = Date.now().valueOf() - startTime;
-      loggers.test!.log(`pollForTokenDetails for ${tokenId} took ${attempt + 1} attempts, ${timeDiff}ms`);
       return;
     } catch (error) {
       if (attempt === maxAttempts - 1) throw error;

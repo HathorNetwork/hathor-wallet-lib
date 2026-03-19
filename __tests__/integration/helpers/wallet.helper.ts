@@ -252,15 +252,10 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options =
  * @returns {Promise<unknown>}
  */
 export function waitForWalletReady(hWallet) {
-  const startTime = Date.now().valueOf();
   // Only return the positive response after the wallet is ready
   return new Promise((resolve, reject) => {
     const handleState = newState => {
       if (newState === HathorWallet.READY) {
-        const timeDiff = Date.now().valueOf() - startTime;
-        if (DEBUG_LOGGING) {
-          loggers.test.log(`waitForWalletReady took ${timeDiff}ms.`);
-        }
         resolve();
       } else if (newState === HathorWallet.ERROR) {
         reject(new Error('Wallet failed to start.'));
@@ -411,7 +406,6 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
  * @returns {Promise<void>}
  */
 export async function waitNextBlock(storage) {
-  const startTime = Date.now().valueOf();
   const currentHeight = await storage.getCurrentHeight();
   let height = currentHeight;
 
@@ -436,11 +430,6 @@ export async function waitNextBlock(storage) {
   if (timeoutReached) {
     throw new Error('Timeout reached when waiting for the next block.');
   }
-
-  const timeDiff = Date.now().valueOf() - startTime;
-  if (DEBUG_LOGGING) {
-    loggers.test.log(`waitNextBlock from height ${currentHeight} took ${timeDiff}ms.`);
-  }
 }
 
 /**
@@ -459,7 +448,6 @@ export async function waitTxConfirmed(
   txId: string,
   timeout: number | null | undefined
 ): Promise<void> {
-  const startTime = Date.now().valueOf();
   let timeoutHandler: ReturnType<typeof setTimeout> | undefined;
   let timeoutErrorFlag = false;
 
@@ -496,11 +484,6 @@ export async function waitTxConfirmed(
   // If no errors happened it means the first block was found: clearing the timeout and returning void.
   if (timeoutHandler) {
     clearTimeout(timeoutHandler);
-  }
-
-  const timeDiff = Date.now().valueOf() - startTime;
-  if (DEBUG_LOGGING) {
-    loggers.test.log(`waitTxConfirmed for ${txId} took ${timeDiff}ms.`);
   }
 }
 
