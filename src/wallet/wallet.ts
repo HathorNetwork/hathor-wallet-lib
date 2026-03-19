@@ -1555,8 +1555,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // TODO: call api to set single address on wallet-service.
-
     // Switch policy in storage
     await this.storage.setScanningPolicyData({
       policy: SCANNING_POLICY.SINGLE_ADDRESS,

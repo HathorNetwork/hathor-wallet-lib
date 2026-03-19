@@ -53,6 +53,8 @@ describe('enableSingleAddressMode', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).firstAddress = 'addr0';
 
+    jest.spyOn(wallet, 'getAddressPathForIndex').mockResolvedValue("m/44'/280'/0'/0/0");
+
     // Mock getAddresses to return only first address with txs
     jest.spyOn(walletApi, 'getHasTxOutsideFirstAddress').mockResolvedValue({
       success: true,
