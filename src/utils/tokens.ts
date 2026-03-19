@@ -393,7 +393,7 @@ const tokens = {
       utxoSelection?: UtxoSelectionAlgorithm;
       skipDepositFee?: boolean;
       skipFeeCalculation?: boolean;
-      tokenVersion: TokenVersion;
+      tokenVersion?: TokenVersion;
     }
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
@@ -456,35 +456,19 @@ const tokens = {
           depositAmount += this.getTransactionHTRDeposit(amount, data?.length ?? 0, storage);
         }
         break;
-      case TokenVersion.FEE:
-        // skipFeeCalculation: fee is managed externally (e.g., by NanoContractTransactionBuilder)
-        if (skipFeeCalculation) {
-          feeAmount = 0n;
-        } else if (!isMintingToken) {
-          feeAmount = Fee.calculateTokenCreationTxFee(outputs);
-        } else {
-          const mappedOutputs = outputs.map(
-            output =>
-              ({
-                ...output,
-                token: token!,
-              }) satisfies IDataOutputWithToken
-          );
-          // since we control the inputs, we can assume we don't have any melt operation that should be charged at this point.
-          // so we can pass an empty array for inputs
-          feeAmount = await Fee.calculate(
-            [],
-            mappedOutputs,
-            await tokens.getTokensByManyIds(storage, new Set(tokensArray))
-          );
-
-          if (data) {
-            // The deposit amount will be the quantity of data strings in the array
-            // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
-            depositAmount += this.getDataFee(data.length);
-          }
-        }
+      case TokenVersion.FEE: {
+        const feeResult = await this.calculateFeeForMintAndCreateToken({
+          skipFeeCalculation,
+          mintingTokenUid: isMintingToken ? token! : undefined,
+          outputs,
+          data: data ?? undefined,
+          tokensArray,
+          storage,
+        });
+        feeAmount = feeResult.feeAmount;
+        depositAmount += feeResult.depositAmount;
         break;
+      }
       default:
         throw new Error('Invalid token version');
     }
@@ -946,6 +930,68 @@ const tokens = {
   getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
     const depositPercent = storage.getTokenDepositPercentage();
     return this.getDepositAmount(mintAmount, depositPercent);
+  },
+
+  /**
+   * Calculate the fee amount for a fee-based token transaction.
+   *
+   * @param options.skipFeeCalculation Whether to skip fee calculation (fee is managed externally)
+   * @param options.mintingTokenUid The token UID if minting an existing token; undefined if creating a new token
+   * @param options.outputs The transaction outputs
+   * @param options.data Optional data strings for data outputs
+   * @param options.tokensArray Array of token UIDs in the transaction
+   * @param options.storage The storage instance
+   * @returns An object containing the calculated feeAmount and depositAmount to add
+   */
+  async calculateFeeForMintAndCreateToken({
+    skipFeeCalculation,
+    mintingTokenUid,
+    outputs,
+    data,
+    tokensArray,
+    storage,
+  }: {
+    skipFeeCalculation: boolean;
+    mintingTokenUid?: string;
+    outputs: IDataOutput[];
+    data?: string[];
+    tokensArray: string[];
+    storage: IStorage;
+  }): Promise<{ feeAmount: bigint; depositAmount: bigint }> {
+    let feeAmount = 0n;
+    let depositAmount = 0n;
+
+    // skipFeeCalculation: fee is managed externally (e.g., by NanoContractTransactionBuilder)
+    if (skipFeeCalculation) {
+      return { feeAmount: 0n, depositAmount: 0n };
+    }
+
+    if (data) {
+      // The deposit amount will be the quantity of data strings in the array
+      // multiplied by the fee (this fee is not related to the trasanction fee that is calculated based in the token version)
+      depositAmount += this.getDataFee(data.length);
+    }
+
+    if (!mintingTokenUid) {
+      return { feeAmount: Fee.calculateTokenCreationTxFee(outputs), depositAmount };
+    }
+
+    const mappedOutputs = outputs.map(
+      output =>
+        ({
+          ...output,
+          token: mintingTokenUid,
+        }) satisfies IDataOutputWithToken
+    );
+    // since we control the inputs, we can assume we don't have any melt operation that should be charged at this point.
+    // so we can pass an empty array for inputs
+    feeAmount = await Fee.calculate(
+      [],
+      mappedOutputs,
+      await tokens.getTokensByManyIds(storage, new Set(tokensArray))
+    );
+
+    return { feeAmount, depositAmount };
   },
 
   /**
