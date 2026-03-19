@@ -190,7 +190,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
-    singleAddressMode: boolean;
+    singleAddressMode?: boolean;
   }) {
     super();
 

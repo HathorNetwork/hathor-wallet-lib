@@ -32,13 +32,13 @@ describe('enableSingleAddressMode', () => {
     // Force wallet to ready state
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).state = 'Ready';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wallet as any).firstAddress = 'addr0';
 
     // Mock getAddresses to return addresses with tx on index > 0
-    jest.spyOn(walletApi, 'getAddresses').mockResolvedValue({
-      addresses: [
-        { address: 'addr0', index: 0, transactions: 5 },
-        { address: 'addr1', index: 1, transactions: 2 },
-      ],
+    jest.spyOn(walletApi, 'getHasTxOutsideFirstAddress').mockResolvedValue({
+      success: true,
+      hasTransactions: true,
     });
 
     await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
@@ -50,13 +50,13 @@ describe('enableSingleAddressMode', () => {
     // Force wallet to ready state
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).state = 'Ready';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wallet as any).firstAddress = 'addr0';
 
     // Mock getAddresses to return only first address with txs
-    jest.spyOn(walletApi, 'getAddresses').mockResolvedValue({
-      addresses: [
-        { address: 'addr0', index: 0, transactions: 5 },
-        { address: 'addr1', index: 1, transactions: 0 },
-      ],
+    jest.spyOn(walletApi, 'getHasTxOutsideFirstAddress').mockResolvedValue({
+      success: true,
+      hasTransactions: false,
     });
 
     await wallet.enableSingleAddressMode();
@@ -72,6 +72,8 @@ describe('enableSingleAddressMode', () => {
     (wallet as any).state = 'Ready';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).singleAddress = true;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wallet as any).firstAddress = 'addr0';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).newAddresses = [
       { address: 'addr0', index: 0, addressPath: "m/44'/280'/0'/0/0" },
@@ -94,6 +96,8 @@ describe('enableSingleAddressMode', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).singleAddress = true;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (wallet as any).firstAddress = 'addr0';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (wallet as any).newAddresses = [
       { address: 'addr0', index: 0, addressPath: "m/44'/280'/0'/0/0" },
     ];
@@ -102,5 +106,8 @@ describe('enableSingleAddressMode', () => {
 
     const addr = wallet.getNextAddress();
     expect(addr.address).toBe('addr0');
+
+    const addr1 = wallet.getNextAddress();
+    expect(addr1.address).toBe('addr0');
   });
 });
