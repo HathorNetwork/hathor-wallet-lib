@@ -60,6 +60,7 @@ import {
 import { stopGLLBackgroundTask } from './sync/gll';
 import * as enums from './models/enum';
 import { Fee } from './utils/fee';
+import * as shielded from './shielded';
 
 export {
   PartialTx,
@@ -124,6 +125,7 @@ export {
   WalletTxTemplateInterpreter,
   stopGLLBackgroundTask,
   enums,
+  shielded,
 };
 
 // Re-export all types from every module.
@@ -134,6 +136,7 @@ export * from './nano_contracts/types';
 export * from './models/types';
 export * from './template/transaction/types';
 export * from './headers/types';
+export * from './shielded/types';
 export * from './models/enum';
 export * from './wallet/types';
 export * from './new/types';

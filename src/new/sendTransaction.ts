@@ -19,6 +19,7 @@ import {
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
+  IDataShieldedOutput,
   IDataTx,
   isDataOutputCreateToken,
   IStorage,
@@ -26,6 +27,7 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
@@ -65,7 +67,20 @@ export interface ISendTokenOutput {
   timelock?: number | null;
 }
 
-export type ISendOutput = ISendDataOutput | ISendTokenOutput;
+export interface ISendShieldedOutput {
+  type: OutputType.P2PKH | OutputType.P2SH;
+  address: string;
+  value: OutputValueType;
+  token: string;
+  recipientPubkey: string;         // hex, 33 bytes compressed EC pubkey
+  shieldedMode: ShieldedOutputMode;
+}
+
+export function isShieldedOutput(output: ISendOutput): output is ISendShieldedOutput {
+  return 'shieldedMode' in output;
+}
+
+export type ISendOutput = ISendDataOutput | ISendTokenOutput | ISendShieldedOutput;
 
 /**
  * This is transaction mining class responsible for:
@@ -174,6 +189,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // Map of token uid to the chooseInputs value of this token
     const tokenMap = new Map<string, boolean>();
 
+    // Collect shielded output definitions separately
+    const shieldedOutputDefs: ISendShieldedOutput[] = [];
+    // Symbol used to tag phantom outputs for unambiguous removal after shuffle
+    const phantomTag = Symbol('shielded-phantom');
+
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
         tokenMap.set(HTR_UID, true);
@@ -187,6 +207,23 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           authorities: 0n,
           token: output.token,
         });
+      } else if (isShieldedOutput(output)) {
+        // Shielded output: store definition and add a phantom transparent output
+        // so UTXO selection accounts for this value
+        shieldedOutputDefs.push(output);
+        tokenMap.set(output.token, true);
+
+        // Phantom output for UTXO selection (tagged for removal after shuffle)
+        const phantom: IDataOutput & { [key: symbol]: boolean } = {
+          address: output.address,
+          value: output.value,
+          timelock: null,
+          authorities: 0n,
+          token: output.token,
+          type: new Address(output.address, { network }).getType(),
+        };
+        (phantom as any)[phantomTag] = true;
+        txData.outputs.push(phantom);
       } else {
         const addressObj = new Address(output.address, { network });
         // We set chooseInputs true as default and may be overwritten by the inputs.
@@ -307,6 +344,63 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       outputs = shuffle([...partialOutputs, ...partialHtrTxData.outputs]);
     }
 
+    // Remove phantom outputs (shielded) from the final outputs list.
+    // Phantom outputs are tagged with a Symbol for unambiguous identification after shuffle.
+    if (shieldedOutputDefs.length > 0) {
+      outputs = outputs.filter(out => !(out as any)[phantomTag]);
+    }
+
+    // Create shielded outputs with crypto
+    const shieldedOutputs: IDataShieldedOutput[] = [];
+    if (shieldedOutputDefs.length > 0) {
+      const cryptoProvider = this.storage.shieldedCryptoProvider;
+      if (!cryptoProvider) {
+        throw new SendTxError('Shielded crypto provider is not set. Cannot create shielded outputs.');
+      }
+
+      for (const def of shieldedOutputDefs) {
+        const fullyShielded = def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
+        const recipientPubkeyBuf = Buffer.from(def.recipientPubkey, 'hex');
+        const tokenUidBuf = Buffer.from(def.token === HTR_UID ? '00'.repeat(32) : def.token, 'hex');
+
+        const cryptoResult = cryptoProvider.createShieldedOutput(
+          def.value,
+          recipientPubkeyBuf,
+          tokenUidBuf,
+          fullyShielded,
+        );
+
+        // Create the output script for the address
+        const addressObj = new Address(def.address, { network });
+        const scriptBuf = transactionUtils.createOutputScript(
+          {
+            address: def.address,
+            value: def.value,
+            timelock: null,
+            authorities: 0n,
+            token: def.token,
+            type: addressObj.getType(),
+          },
+          network,
+        );
+
+        shieldedOutputs.push({
+          address: def.address,
+          value: def.value,
+          token: def.token,
+          recipientPubkey: def.recipientPubkey,
+          mode: def.shieldedMode,
+          ephemeralPubkey: cryptoResult.ephemeralPubkey,
+          commitment: cryptoResult.commitment,
+          rangeProof: cryptoResult.rangeProof,
+          blindingFactor: cryptoResult.blindingFactor,
+          assetCommitment: cryptoResult.assetCommitment,
+          assetBlindingFactor: cryptoResult.assetBlindingFactor,
+          script: scriptBuf.toString('hex'),
+        });
+      }
+    }
+
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       outputs,
@@ -314,6 +408,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // We already removed HTR from the tokenMap
       tokens: Array.from(tokenMap.keys()),
       headers,
+      ...(shieldedOutputs.length > 0 ? { shieldedOutputs } : {}),
     };
 
     return this.fullTxData;
