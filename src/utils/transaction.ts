@@ -28,12 +28,14 @@ import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
+import ShieldedOutput from '../models/shielded_output';
 import Network from '../models/network';
 import {
   IBalance,
   IStorage,
   IHistoryTx,
   IDataOutput,
+  IDataShieldedOutput,
   IDataTx,
   isDataOutputCreateToken,
   IHistoryOutput,
@@ -44,6 +46,7 @@ import {
   IHistoryInput,
   AuthorityType,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -629,7 +632,37 @@ const transaction = {
       );
     }
     if (options.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, options);
+      const tx = new Transaction(inputs, outputs, options);
+
+      // Populate shielded outputs if present
+      if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+        tx.shieldedOutputs = txData.shieldedOutputs.map(so => {
+          const tokenData = this.getTokenDataFromOutput(
+            {
+              type: 'p2pkh',
+              token: so.token,
+              value: so.value,
+              authorities: 0n,
+              address: so.address,
+              timelock: null,
+            },
+            txData.tokens,
+          );
+
+          return new ShieldedOutput(
+            so.mode,
+            so.commitment!,
+            so.rangeProof!,
+            tokenData,
+            Buffer.from(so.script!, 'hex'),
+            so.ephemeralPubkey!,
+            so.assetCommitment || null,
+            so.value,
+          );
+        });
+      }
+
+      return tx;
     }
     throw new ParseError('Invalid transaction version.');
   },

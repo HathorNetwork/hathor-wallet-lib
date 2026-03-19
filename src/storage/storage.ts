@@ -40,6 +40,7 @@ import {
   getDefaultLogger,
   AuthorityType,
 } from '../types';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -78,6 +79,8 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
+  shieldedCryptoProvider: IShieldedCryptoProvider | null;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -97,6 +100,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.shieldedCryptoProvider = null;
     this.logger = getDefaultLogger();
   }
 
@@ -165,6 +169,14 @@ export class Storage implements IStorage {
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+  }
+
+  /**
+   * Set the shielded crypto provider for confidential transaction support.
+   * @param provider The crypto provider, or null to clear it
+   */
+  setShieldedCryptoProvider(provider: IShieldedCryptoProvider | null): void {
+    this.shieldedCryptoProvider = provider;
   }
 
   /**

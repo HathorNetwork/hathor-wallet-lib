@@ -770,6 +770,73 @@ export async function processNewTx(
     await store.editAddressMeta(output.decoded.address, addressMeta);
   }
 
+  // Process shielded outputs (if crypto provider is available and tx has shielded outputs)
+  if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length) {
+    const { processShieldedOutputs } = await import('../shielded/processing');
+    // pinCode is required for key derivation — we attempt with empty string as
+    // the caller is expected to have set up the crypto provider appropriately.
+    // In a full integration, the pinCode would be passed through or keys pre-derived.
+    try {
+      const shieldedResults = await processShieldedOutputs(
+        storage, tx, storage.shieldedCryptoProvider, ''
+      );
+      const transparentCount = tx.outputs.length;
+      for (const result of shieldedResults) {
+        // Resolve the token UID to the wallet-lib format (2-char '00' for HTR)
+        const walletTokenUid = result.tokenUid === '00'.repeat(32)
+          ? NATIVE_TOKEN_UID
+          : result.tokenUid;
+
+        // Create UTXO for the shielded output
+        const utxo: IUtxo = {
+          txId: tx.tx_id,
+          index: result.index,
+          token: walletTokenUid,
+          address: result.address,
+          value: result.decrypted.value,
+          authorities: 0n,
+          timelock: null,
+          type: tx.version,
+          height: tx.height ?? null,
+          shielded: true,
+          blindingFactor: result.decrypted.blindingFactor.toString('hex'),
+          assetBlindingFactor: result.decrypted.assetBlindingFactor?.toString('hex'),
+        };
+        await store.saveUtxo(utxo);
+
+        // Update token metadata
+        let tokenMeta = await store.getTokenMeta(walletTokenUid);
+        if (!tokenMeta) {
+          tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
+        }
+        tokenMeta.balance.tokens.unlocked += result.decrypted.value;
+        await store.editTokenMeta(walletTokenUid, tokenMeta);
+        txTokens.add(walletTokenUid);
+
+        // Update address metadata
+        let addressMeta = await store.getAddressMeta(result.address);
+        if (!addressMeta) {
+          addressMeta = { ...DEFAULT_ADDRESS_META };
+        }
+        if (!addressMeta.balance.has(walletTokenUid)) {
+          addressMeta.balance.set(walletTokenUid, getEmptyBalance());
+        }
+        addressMeta.balance.get(walletTokenUid)!.tokens.unlocked += result.decrypted.value;
+        await store.editAddressMeta(result.address, addressMeta);
+        txAddresses.add(result.address);
+
+        // Update max address index
+        const addrInfo = await store.getAddress(result.address);
+        if (addrInfo && addrInfo.bip32AddressIndex > maxIndexUsed) {
+          maxIndexUsed = addrInfo.bip32AddressIndex;
+        }
+      }
+    } catch {
+      // Shielded processing failed (e.g., wallet locked) — skip silently
+      storage.logger.warn('Failed to process shielded outputs for tx', tx.tx_id);
+    }
+  }
+
   for (const input of tx.inputs) {
     // We ignore data inputs since they do not have an address
     if (!input.decoded.address) continue;

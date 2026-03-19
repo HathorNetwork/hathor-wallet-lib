@@ -62,6 +62,7 @@ import { stopGLLBackgroundTask } from './sync/gll';
 import * as enums from './models/enum';
 import type { TokenInfo } from './wallet/types';
 import { Fee } from './utils/fee';
+import * as shielded from './shielded';
 
 export {
   PartialTx,
@@ -129,10 +130,12 @@ export {
   stopGLLBackgroundTask,
   TokenInfo,
   enums,
+  shielded,
 };
 
 export * from './nano_contracts/types';
 export * from './models/types';
 export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';
-export type { IFeeEntry } from './types';
+export type { IFeeEntry, IHistoryShieldedOutput } from './types';
+export type { IShieldedCryptoProvider, IDecryptedShieldedOutput } from './shielded/types';
 export * from './models/enum';

@@ -13,6 +13,7 @@ import {
   OutputValueType,
   TokenVersion,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
 import Address from '../models/address';
@@ -332,12 +333,16 @@ export interface UtxoDetails {
  * @property value Value of the output
  * @property timelock Optional timelock for the output
  * @property token Token UID for the output
+ * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or FULLY_SHIELDED)
+ * @property recipientPubkey Hex-encoded 33-byte compressed EC pubkey (required when shielded)
  */
 export interface ProposedOutput {
   address: string;
   value: OutputValueType;
   timelock?: number;
   token: string;
+  shielded?: ShieldedOutputMode;
+  recipientPubkey?: string;
 }
 
 /**

@@ -10,6 +10,8 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
+import type { IShieldedCryptoProvider } from './shielded/types';
+import type { ShieldedOutputMode } from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -225,6 +227,19 @@ export interface IHistoryTx {
   nc_context?: IHistoryNanoContractContext;
   nc_seqnum?: number; // For nano contract
   first_block?: string | null;
+  shielded_outputs?: IHistoryShieldedOutput[]; // For confidential transactions
+}
+
+export interface IHistoryShieldedOutput {
+  mode: number;              // 1 = AmountShielded, 2 = FullShielded
+  commitment: string;        // hex
+  range_proof: string;       // hex
+  script: string;            // hex
+  token_data: number;
+  ephemeral_pubkey: string;  // hex
+  decoded: IHistoryOutputDecoded;
+  asset_commitment?: string; // hex (FullShielded only)
+  surjection_proof?: string; // hex (FullShielded only)
 }
 
 export enum TxHistoryProcessingStatus {
@@ -323,6 +338,26 @@ interface IDataTokenCreationTx {
   tokenVersion?: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
 }
 
+/**
+ * Intermediary representation of a shielded output during transaction building.
+ * Contains the output parameters and, after crypto processing, the cryptographic fields.
+ */
+export interface IDataShieldedOutput {
+  address: string;
+  value: OutputValueType;
+  token: string;
+  recipientPubkey: string;       // hex, 33 bytes compressed EC pubkey
+  mode: ShieldedOutputMode;      // 1 = AmountShielded, 2 = FullShielded
+  // Populated after crypto processing:
+  ephemeralPubkey?: Buffer;
+  commitment?: Buffer;
+  rangeProof?: Buffer;
+  blindingFactor?: Buffer;
+  assetCommitment?: Buffer | null;
+  assetBlindingFactor?: Buffer | null;
+  script?: string;               // hex, the P2PKH/P2SH output script
+}
+
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
 export interface IDataTx extends Partial<IDataTokenCreationTx> {
@@ -331,6 +366,7 @@ export interface IDataTx extends Partial<IDataTokenCreationTx> {
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
+  shieldedOutputs?: IDataShieldedOutput[];
   weight?: number;
   nonce?: number;
   timestamp?: number;
@@ -353,6 +389,9 @@ export interface IUtxo {
   timelock: number | null;
   type: number; // tx.version, is the value of the transaction version byte
   height: number | null; // only for block outputs
+  shielded?: boolean; // marks this as a shielded UTXO (confidential transaction)
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor from decryption
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export interface ILockedUtxo {
@@ -580,6 +619,10 @@ export interface IStorage {
   config: Config;
   version: ApiVersion | null;
   logger: ILogger;
+
+  // Shielded (confidential transaction) crypto provider
+  shieldedCryptoProvider: IShieldedCryptoProvider | null;
+  setShieldedCryptoProvider(provider: IShieldedCryptoProvider | null): void;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;

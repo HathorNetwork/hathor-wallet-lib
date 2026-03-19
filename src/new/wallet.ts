@@ -1574,9 +1574,34 @@ class HathorWallet extends EventEmitter {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { inputs, changeAddress } = newOptions;
+
+    // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
+    const sendOutputs = outputs.map(o => {
+      if (o.shielded) {
+        if (!o.recipientPubkey) {
+          throw new Error('recipientPubkey is required for shielded outputs');
+        }
+        return {
+          type: 'p2pkh',
+          address: o.address,
+          value: o.value,
+          token: o.token,
+          recipientPubkey: o.recipientPubkey,
+          shieldedMode: o.shielded,
+        };
+      }
+      return {
+        type: 'p2pkh',
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        ...(o.timelock ? { timelock: o.timelock } : {}),
+      };
+    });
+
     return new SendTransaction({
       wallet: this,
-      outputs,
+      outputs: sendOutputs,
       inputs,
       changeAddress,
       pin,
@@ -1679,6 +1704,18 @@ class HathorWallet extends EventEmitter {
     if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
+
+      // Auto-detect shielded crypto provider if not already set
+      if (!this.storage.shieldedCryptoProvider) {
+        try {
+          const { createDefaultShieldedCryptoProvider } = require('../shielded/provider');
+          this.storage.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+        } catch {
+          // Native addon not available — shielded outputs will be skipped
+          this.logger.info('Shielded crypto not available. Install @hathor/ct-crypto-node for shielded output support.');
+        }
+      }
+
       this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
@@ -3263,6 +3300,16 @@ class HathorWallet extends EventEmitter {
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set the shielded crypto provider for confidential transaction support.
+   * Use this for explicit injection (e.g., mobile apps using UniFFI bindings).
+   *
+   * @param provider The shielded crypto provider, or null to disable
+   */
+  setShieldedCryptoProvider(provider: any): void {
+    this.storage.setShieldedCryptoProvider(provider);
   }
 
   /**
