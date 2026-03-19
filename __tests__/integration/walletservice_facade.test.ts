@@ -2432,7 +2432,7 @@ describe('single-address mode', () => {
 
     const nextAddress = wallet.getNextAddress();
     expect(nextAddress.index).toBe(0);
-    expect(nextAddress.address).toBe(singleAddressWallet1.addresses[0]);
+    expect(nextAddress.address).toBe(singleAddressWallet2.addresses[0]);
   });
 
   it('should fail to enable single-address mode when wallet has tx on index > 0', async () => {
