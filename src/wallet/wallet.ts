@@ -101,8 +101,6 @@ import {
   ITokenData,
   TokenVersion,
   SCANNING_POLICY,
-  isSingleAddressScanPolicy,
-  AddressScanPolicyData,
 } from '../types';
 import { Fee } from '../utils/fee';
 
@@ -144,12 +142,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // State of the wallet. One of the walletState enum options
   private state: string;
 
-  // Variable to prevent start sending more than one tx concurrently
-  private isSendingTx: boolean;
-
-  // ID of tx proposal
-  private txProposalId: string | null;
-
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
 
@@ -172,8 +164,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Flag to indicate if the wallet is in single-address mode
   private singleAddress: boolean;
 
-  private scanPolicy: AddressScanPolicyData | null;
-
+  // Address at index 0
   private firstAddress: string | null;
 
   public storage: IStorage;
@@ -188,7 +179,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
-    scanPolicy = null,
+    singleAddressMode = false,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -199,7 +190,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
-    scanPolicy: AddressScanPolicyData | null;
+    singleAddressMode: boolean;
   }) {
     super();
 
@@ -250,8 +241,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // ID of wallet after created on wallet service
     this.walletId = null;
-    this.isSendingTx = false;
-    this.txProposalId = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -261,17 +250,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.newAddresses = [];
     this.indexToUse = -1;
-    this.singleAddress = false;
-    this.scanPolicy = null;
+    this.singleAddress = singleAddressMode;
     this.firstAddress = null;
 
-    if (scanPolicy !== null) {
-      if (isSingleAddressScanPolicy(scanPolicy)) {
-        this.singleAddress = true;
-      }
-
-      this.scanPolicy = scanPolicy;
-    }
     // TODO should we have a debug mode?
   }
 
@@ -419,7 +400,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     this.setState(walletState.LOADING);
-    await this.storage.setScanningPolicyData(this.scanPolicy);
+    if (this.singleAddress) {
+      await this.storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    }
 
     let accessData: IWalletAccessData | null = null;
     try {
@@ -484,15 +467,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authDerivedPrivKey,
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
     this.firstAddress = firstAddress;
-    // Reset newAddresses to only the first address
-    this.newAddresses = [
-      {
-        address: this.firstAddress,
-        index: 0,
-        addressPath: await this.getAddressPathForIndex(0),
-      },
-    ];
-    this.indexToUse = 0;
+    if (this.singleAddress) {
+      await this.prepareSingleAddressMode();
+    }
 
     if (!renewPromise) {
       // we need to start the process to renew the auth token If for any reason we had to
@@ -916,17 +893,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.failIfWalletNotReady();
     }
     if (this.singleAddress) {
-      if (!this.firstAddress) {
-        this.firstAddress = await this.getAddressAtIndex(0);
-      }
-      this.newAddresses = [
-        {
-          address: this.firstAddress,
-          index: 0,
-          addressPath: await this.getAddressPathForIndex(0),
-        },
-      ];
-      this.indexToUse = 0;
+      await this.prepareSingleAddressMode();
       return;
     }
     const data = await walletApi.getNewAddresses(this);
@@ -1285,6 +1252,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Derive walletId from xpub
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
+    if (this.singleAddress) {
+      await this.storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    }
 
     // Save accessData for read-only wallet
     // This is required for methods like getAddressPathForIndex() that need walletType
@@ -1576,7 +1546,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async enableSingleAddressPolicy(): Promise<void> {
+  async enableSingleAddressMode(): Promise<void> {
     this.failIfWalletNotReady();
 
     if (await this.hasTxOutsideFirstAddress()) {
@@ -1593,8 +1563,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     });
 
     this.singleAddress = true;
-    this.firstAddress = await this.getAddressAtIndex(0);
-    // Reset newAddresses to only the first address
+    await this.prepareSingleAddressMode();
+  }
+
+  private async prepareSingleAddressMode(): Promise<void> {
+    if (!this.singleAddress) return;
+
+    if (!this.firstAddress) {
+      this.firstAddress = await this.getAddressAtIndex(0);
+    }
+
     this.newAddresses = [
       {
         address: this.firstAddress,
