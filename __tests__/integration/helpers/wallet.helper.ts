@@ -239,7 +239,6 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options =
   const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
-  await waitUntilNextTimestamp(hWallet, tokenUid);
   return newTokenResponse;
 }
 
@@ -332,6 +331,11 @@ export async function waitForTxReceived(
     await updateInputsSpentBy(hWallet, storageTx);
     await hWallet.storage.processHistory();
   }
+
+  // Ensure the next transaction will have a strictly greater timestamp than this one.
+  // Hathor uses second-granularity timestamps and rejects child txs with timestamp <= parent.
+  // With fast polling, sequential transactions can land in the same second without this guard.
+  await waitUntilNextTimestamp(hWallet, txId);
 
   return storageTx;
 }

@@ -8,7 +8,7 @@
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import { waitForTxReceived, waitForWalletReady } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
@@ -97,7 +97,6 @@ export class GenesisWalletHelper {
 
       await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
       await waitForTxReceived(destinationWallet, result.hash, options.waitTimeout);
-      await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     } catch (e) {
       loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
