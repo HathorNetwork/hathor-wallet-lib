@@ -251,18 +251,23 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options =
 export function waitForWalletReady(hWallet) {
   // Only return the positive response after the wallet is ready
   return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      hWallet.removeListener('state', handleState);
+      reject(new Error('Wallet could not be ready.'));
+    }, testConfig.walletReadyTimeoutMs);
+
     const handleState = newState => {
       if (newState === HathorWallet.READY) {
+        hWallet.removeListener('state', handleState);
+        clearTimeout(timeoutId);
         resolve();
       } else if (newState === HathorWallet.ERROR) {
+        hWallet.removeListener('state', handleState);
+        clearTimeout(timeoutId);
         reject(new Error('Wallet failed to start.'));
       }
     };
     hWallet.on('state', handleState);
-    setTimeout(() => {
-      hWallet.removeListener('state', handleState);
-      reject(new Error('Wallet could not be ready.'));
-    }, testConfig.walletReadyTimeoutMs);
   });
 }
 
