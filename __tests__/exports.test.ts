@@ -147,9 +147,9 @@ import {
   type GetAddressesObject,
   type GetBalanceObject,
   type TokenInfo,
-  type WalletBalance,
+  type WalletServiceBalance,
   type AuthoritiesBalance,
-  type WalletAuthority,
+  type WalletServiceAuthority,
   type GetHistoryObject,
   type AddressInfoObject,
   type GetAddressDetailsObject,
@@ -623,7 +623,7 @@ describe('type-only exports compile correctly', () => {
     };
     expect(tokenInfo.id).toBe('00');
 
-    const walletBalance: WalletBalance = {
+    const walletBalance: WalletServiceBalance = {
       unlocked: 100n,
       locked: 0n,
     };
