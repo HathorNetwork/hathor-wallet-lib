@@ -19,14 +19,8 @@ import {
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests__/integration/helpers/wallet.helper';
 import { stopGLLBackgroundTask } from './src/sync/gll';
-import Transaction from './src/models/transaction';
 
 config.setTxMiningUrl(TX_MINING_URL);
-
-// Mock calculateWeight to always return 1 for faster mining in integration tests
-Transaction.prototype.calculateWeight = function () {
-  return 1;
-};
 
 
 /**
