@@ -1567,6 +1567,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private async prepareSingleAddressMode(): Promise<void> {
     if (!this.singleAddress) return;
 
+    if (await this.hasTxOutsideFirstAddress()) {
+      throw new WalletError(
+        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      );
+    }
+
     if (!this.firstAddress) {
       this.firstAddress = await this.getAddressAtIndex(0);
     }

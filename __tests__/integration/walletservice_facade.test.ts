@@ -2446,6 +2446,32 @@ describe('single-address mode', () => {
     );
   });
 
+  it('should fail to start in single-address mode via constructor when wallet has tx on index > 0', async () => {
+    // First, start wallet normally and fund index 1
+    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
+    await wallet.start({ pinCode, password });
+
+    await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);
+
+    await wallet.stop({ cleanStorage: true });
+
+    // Now try to re-start with singleAddressMode: true via constructor
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: jest.fn().mockResolvedValue('test-password'),
+      seed: singleAddressWallet2.words,
+      network: new Network('testnet'),
+      storage,
+      enableWs: false,
+      singleAddressMode: true,
+    });
+
+    await expect(wallet.start({ pinCode, password })).rejects.toThrow(
+      'Cannot enable single-address policy'
+    );
+  });
+
   it('should start in single-address mode via constructor', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
