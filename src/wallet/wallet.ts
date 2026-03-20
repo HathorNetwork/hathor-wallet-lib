@@ -100,6 +100,7 @@ import {
   WalletType,
   ITokenData,
   TokenVersion,
+  SCANNING_POLICY,
 } from '../types';
 import { Fee } from '../utils/fee';
 
@@ -141,12 +142,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // State of the wallet. One of the walletState enum options
   private state: string;
 
-  // Variable to prevent start sending more than one tx concurrently
-  private isSendingTx: boolean;
-
-  // ID of tx proposal
-  private txProposalId: string | null;
-
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
 
@@ -166,6 +161,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
 
+  // Flag to indicate if the wallet is in single-address mode
+  private singleAddress: boolean;
+
+  // Address at index 0
+  private firstAddress: string | null;
+
   public storage: IStorage;
 
   constructor({
@@ -178,6 +179,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
+    singleAddressMode = false,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -188,6 +190,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
+    singleAddressMode?: boolean;
   }) {
     super();
 
@@ -238,8 +241,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // ID of wallet after created on wallet service
     this.walletId = null;
-    this.isSendingTx = false;
-    this.txProposalId = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -249,6 +250,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.newAddresses = [];
     this.indexToUse = -1;
+    this.singleAddress = singleAddressMode;
+    this.firstAddress = null;
+
     // TODO should we have a debug mode?
   }
 
@@ -396,6 +400,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     this.setState(walletState.LOADING);
+    if (this.singleAddress) {
+      await this.storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    }
 
     let accessData: IWalletAccessData | null = null;
     try {
@@ -459,6 +466,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress,
       authDerivedPrivKey,
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
+    this.firstAddress = firstAddress;
+    if (this.singleAddress) {
+      await this.prepareSingleAddressMode();
+    }
 
     if (!renewPromise) {
       // we need to start the process to renew the auth token If for any reason we had to
@@ -881,6 +892,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // asynchronous, so we will get an empty or partial array of addresses if they are not all loaded.
       this.failIfWalletNotReady();
     }
+    if (this.singleAddress) {
+      await this.prepareSingleAddressMode();
+      return;
+    }
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
     this.indexToUse = 0;
@@ -1237,6 +1252,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Derive walletId from xpub
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
+    if (this.singleAddress) {
+      await this.storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    }
 
     // Save accessData for read-only wallet
     // This is required for methods like getAddressPathForIndex() that need walletType
@@ -1474,6 +1492,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
+    if (this.singleAddress) {
+      return this.newAddresses[0];
+    }
+
     const newAddressesLen = this.newAddresses.length;
     if (this.indexToUse > newAddressesLen - 1) {
       const addressInfo = this.newAddresses[newAddressesLen - 1];
@@ -1508,9 +1530,61 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   getNextAddress(): AddressInfoObject {
+    if (this.singleAddress) {
+      return this.newAddresses[0];
+    }
     // First we mark the current address as used, then return the next
     this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();
+  }
+
+  /**
+   * Enable single-address scanning policy for this wallet.
+   * Converts a gap-limit wallet to use only the first address (index 0).
+   * Will throw if the wallet has transactions on any address other than the first.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async enableSingleAddressMode(): Promise<void> {
+    this.failIfWalletNotReady();
+
+    if (await this.hasTxOutsideFirstAddress()) {
+      throw new WalletError(
+        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      );
+    }
+
+    // Switch policy in storage
+    await this.storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.SINGLE_ADDRESS,
+    });
+
+    this.singleAddress = true;
+    await this.prepareSingleAddressMode();
+  }
+
+  private async prepareSingleAddressMode(): Promise<void> {
+    if (!this.singleAddress) return;
+
+    if (await this.hasTxOutsideFirstAddress()) {
+      throw new WalletError(
+        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      );
+    }
+
+    if (!this.firstAddress) {
+      this.firstAddress = await this.getAddressAtIndex(0);
+    }
+
+    this.newAddresses = [
+      {
+        address: this.firstAddress,
+        index: 0,
+        addressPath: await this.getAddressPathForIndex(0),
+      },
+    ];
+    this.indexToUse = 0;
   }
 
   /**
