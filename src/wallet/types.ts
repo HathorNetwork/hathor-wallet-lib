@@ -45,7 +45,7 @@ export interface GetAddressesObject {
 
 export interface GetBalanceObject {
   token: TokenInfo; // Information about the token
-  balance: Balance; // Balance information
+  balance: WalletServiceBalance; // Balance information
   tokenAuthorities: AuthoritiesBalance; // Authorities mint/melt availability
   transactions: number; // quantity of transactions
   lockExpires: number | null; // When next lock expires, if has a timelock
@@ -58,17 +58,17 @@ export interface TokenInfo {
   version: TokenVersion; // Token version
 }
 
-export interface Balance {
+export interface WalletServiceBalance {
   unlocked: OutputValueType; // Available amount
   locked: OutputValueType; // Locked amount
 }
 
 export interface AuthoritiesBalance {
-  unlocked: Authority; // unlocked mint/melt
-  locked: Authority; // locked mint/melt
+  unlocked: WalletServiceAuthority; // unlocked mint/melt
+  locked: WalletServiceAuthority; // locked mint/melt
 }
 
-export interface Authority {
+export interface WalletServiceAuthority {
   mint: boolean; // if has mint authority
   melt: boolean; // if has melt authority
 }
@@ -320,13 +320,13 @@ export interface IStopWalletParams {
   cleanAddresses?: boolean;
 }
 
-export interface DelegateAuthorityOptions {
+export interface WalletServiceDelegateAuthorityOptions {
   anotherAuthorityAddress: string | null;
   createAnother: boolean;
   pinCode: string | null;
 }
 
-export interface DestroyAuthorityOptions {
+export interface WalletServiceDestroyAuthorityOptions {
   pinCode: string | null;
 }
 
@@ -385,25 +385,25 @@ export interface IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: DelegateAuthorityOptions
+    options: WalletServiceDelegateAuthorityOptions
   ): Promise<Transaction>;
   delegateAuthority(
     token: string,
     type: string,
     address: string,
-    options: DelegateAuthorityOptions
+    options: WalletServiceDelegateAuthorityOptions
   ): Promise<Transaction>;
   prepareDestroyAuthorityData(
     token: string,
     type: string,
     count: number,
-    options: DestroyAuthorityOptions
+    options: WalletServiceDestroyAuthorityOptions
   ): Promise<Transaction>;
   destroyAuthority(
     token: string,
     type: string,
     count: number,
-    options: DestroyAuthorityOptions
+    options: WalletServiceDestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[] | Promise<unknown>; // FIXME: Should have a single return type;
   getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
