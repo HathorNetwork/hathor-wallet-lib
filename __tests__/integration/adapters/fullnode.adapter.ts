@@ -108,7 +108,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   }
 
   buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
-    const walletData = this.resolveWalletData(options);
+    const walletData = this.resolveWordsAndAddresses(options);
     const walletConfig = this.buildConfig(walletData, options);
 
     const hWallet = new HathorWallet(walletConfig);
@@ -183,13 +183,13 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   // --- Private helpers ---
 
   /**
-   * Resolves the wallet identity data (seed, addresses) from the caller's options.
+   * Resolves the wallet identity for simple cases (seed, addresses) from the caller's options.
    *
    * When no explicit identity is provided, a precalculated wallet is used.
    * For xpub/xpriv-only wallets, `words` will be `undefined` — that's intentional:
    * {@link buildConfig} spreads `xpub`/`xpriv` into the config independently of the seed.
    */
-  private resolveWalletData(options?: CreateWalletOptions): {
+  private resolveWordsAndAddresses(options?: CreateWalletOptions): {
     words?: string;
     addresses?: string[];
   } {
