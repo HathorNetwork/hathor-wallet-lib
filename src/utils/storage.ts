@@ -172,7 +172,8 @@ export async function apiSyncHistory(
  */
 export async function* loadAddressHistory(
   addresses: string[],
-  storage: IStorage
+  storage: IStorage,
+  saveTxs: boolean = true
 ): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
@@ -226,7 +227,9 @@ export async function* loadAddressHistory(
       if (result.success) {
         for (const tx of result.history) {
           foundAnyTx = true;
-          await storage.addTx(tx);
+          if (saveTxs) {
+            await storage.addTx(tx);
+          }
         }
         hasMore = result.has_more;
         if (hasMore) {

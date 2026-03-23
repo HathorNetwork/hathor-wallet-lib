@@ -43,6 +43,7 @@ import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
+  HasTxOutsideFirstAddressError,
   NanoContractTransactionError,
   PinRequiredError,
   TxNotFoundError,
@@ -80,6 +81,7 @@ import {
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
+  loadAddressHistory,
   processMetadataChanged,
   scanPolicyStartAddresses,
 } from '../utils/storage';
@@ -621,6 +623,19 @@ class HathorWallet extends EventEmitter {
         // before loading the full data again
         if (this.firstConnection) {
           this.firstConnection = false;
+          const scanPolicy = await this.storage.getScanningPolicy();
+          if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+            try {
+              await this.enableSingleAddressMode();
+            } catch (err) {
+              if (err instanceof HasTxOutsideFirstAddressError) {
+                this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 };
+                await this.storage.setScanningPolicyData(this.scanPolicy);
+              } else {
+                throw err;
+              }
+            }
+          }
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
           await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
         } else {
@@ -761,12 +776,23 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    */
   async hasTxOutsideFirstAddress(): Promise<boolean> {
-    for await (const address of this.storage.getAllAddresses()) {
-      if (address.bip32AddressIndex > 0 && address.numTransactions > 0) {
-        return true;
+    const addresses: string[] = [];
+    let foundAnyTx = false;
+    // Load address from index 1 to 20
+    for (let i = 1; i < 20; i++) {
+      const address = await this.getAddressAtIndex(i);
+      addresses.push(address);
+    }
+
+    for await (const gotTx of loadAddressHistory(addresses, this.storage, false)) {
+      if (gotTx) {
+        // This will signal we have found a transaction when syncing the history
+        foundAnyTx = true;
+        break;
       }
     }
-    return false;
+
+    return foundAnyTx;
   }
 
   /**
@@ -3542,8 +3568,10 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async enableSingleAddressMode(): Promise<void> {
-    if (!this.isReady()) {
-      throw new WalletError('Wallet not ready');
+    if (await this.hasTxOutsideFirstAddress()) {
+      throw new HasTxOutsideFirstAddressError(
+        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      );
     }
 
     const currScanPolicy = await this.storage.getScanningPolicy();

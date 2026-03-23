@@ -27,7 +27,12 @@ import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import {
+  HasTxOutsideFirstAddressError,
+  NftValidationError,
+  TxNotFoundError,
+  WalletFromXPubGuard,
+} from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
@@ -38,6 +43,7 @@ import {
   SCANNING_POLICY,
   IGapLimitAddressScanPolicy,
   WalletAddressMode,
+  AddressScanPolicyData,
 } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -119,6 +125,61 @@ describe('single-address mode', () => {
     await wallet.enableSingleAddressMode();
 
     await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+  });
+
+  it('should not enable single-address mode after receiving tx outside index 0', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    await GenesisWalletHelper.injectFunds(wallet, walletData.addresses[1], 10n);
+
+    await expect(wallet.enableSingleAddressMode()).rejects.toThrow(HasTxOutsideFirstAddressError);
+  });
+
+  it('should fallback to multi-address mode when starting and we have tx outside index 0', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as AddressScanPolicyData,
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+    await GenesisWalletHelper.injectFunds(wallet, walletData.addresses[1], 10n);
+
+    // Start in single address mode
+    walletConfig.scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    // Wallet defaults to multi address mode automatically
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    // And still raises error
+    await expect(wallet.enableSingleAddressMode()).rejects.toThrow(HasTxOutsideFirstAddressError);
   });
 });
 
