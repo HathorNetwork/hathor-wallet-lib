@@ -3840,7 +3840,7 @@ describe('single-address mode', () => {
   });
 
   it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Start the wallet
     const walletConfig = {
@@ -3859,7 +3859,7 @@ describe('single-address mode', () => {
 
     const currentAddress = await wallet.getCurrentAddress();
     expect(currentAddress.index).toBe(0);
-    expect(currentAddress.address).toBe(singleAddressWallet1.addresses[0]);
+    expect(currentAddress.address).toBe(walletData.addresses[0]);
 
     await GenesisWalletHelper.injectFunds(wallet, await wallet.getAddressAtIndex(0), 10n);
 
@@ -3867,15 +3867,15 @@ describe('single-address mode', () => {
 
     const currentAddressAfterTx = await wallet.getCurrentAddress();
     expect(currentAddressAfterTx.index).toBe(0);
-    expect(currentAddressAfterTx.address).toBe(singleAddressWallet1.addresses[0]);
+    expect(currentAddressAfterTx.address).toBe(walletData.addresses[0]);
 
     const nextAddress = await wallet.getNextAddress();
     expect(nextAddress.index).toBe(0);
-    expect(nextAddress.address).toBe(singleAddressWallet1.addresses[0]);
+    expect(nextAddress.address).toBe(walletData.addresses[0]);
   });
 
   it('should enable single-address and multi-address mode', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Start the wallet
     const walletConfig = {
