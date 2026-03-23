@@ -20,6 +20,7 @@ import {
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import type { WalletStopOptions } from '../../../src/new/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import type {
   FuzzyWalletType,
@@ -29,6 +30,9 @@ import type {
   CreateWalletResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+
+/** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
+const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true, cleanAddresses: true };
 
 /**
  * Adapter for the fullnode facade ({@link HathorWallet}).
@@ -61,10 +65,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     },
   };
 
-  private readonly tracker = new WalletTracker<HathorWallet>({
-    cleanStorage: true,
-    cleanAddresses: true,
-  });
+  private readonly tracker = new WalletTracker<HathorWallet>(STOP_OPTIONS);
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWallet}.
@@ -87,6 +88,15 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     await GenesisWalletHelper.clearListeners();
   }
 
+  /**
+   * Creates a fully started, ready-to-use wallet with default credentials.
+   *
+   * This intentionally duplicates parts of {@link buildWalletInstance} because they serve
+   * different purposes: `buildWalletInstance` returns an unstarted wallet so tests can
+   * exercise error handling (e.g. missing pinCode/password), while `createWallet` fills
+   * in valid defaults and starts the wallet — optimizing for tests that need a working
+   * wallet with no setup friction.
+   */
   async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
     const walletData = this.resolveWalletData(options);
     const walletConfig = this.buildConfig(walletData, options, { fillDefaults: true });
@@ -135,7 +145,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
     const hWallet = this.concrete(wallet);
-    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+    await hWallet.stop(STOP_OPTIONS);
     this.tracker.untrack(hWallet);
   }
 

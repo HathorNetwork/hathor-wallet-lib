@@ -16,6 +16,7 @@ import {
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import type { WalletStopOptions } from '../../../src/new/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import type {
   FuzzyWalletType,
@@ -28,6 +29,9 @@ import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.h
 
 const SERVICE_PIN = '123456';
 const SERVICE_PASSWORD = 'testpass';
+
+/** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
+const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true };
 
 /**
  * Adapter for the wallet-service facade ({@link HathorWalletServiceWallet}).
@@ -60,9 +64,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     },
   };
 
-  private readonly tracker = new WalletTracker<HathorWalletServiceWallet>({
-    cleanStorage: true,
-  });
+  private readonly tracker = new WalletTracker<HathorWalletServiceWallet>(STOP_OPTIONS);
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWalletServiceWallet}.
@@ -131,7 +133,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
     const sw = this.concrete(wallet);
-    await sw.stop({ cleanStorage: true });
+    await sw.stop(STOP_OPTIONS);
     this.tracker.untrack(sw);
   }
 
