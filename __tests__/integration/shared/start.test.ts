@@ -40,7 +40,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
           await adapter.stopWallet(wallet);
         } catch (e) {
           loggers.test!.warn('Failed to stop wallet during cleanup', {
-            error: (e as Error).message,
+            error: e instanceof Error ? e.message : String(e),
           });
         }
       }
@@ -251,6 +251,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
       try {
         const addr = await wallet.getAddressAtIndex(1);
+        expect(addr).toBeDefined();
         await adapter.injectFunds(wallet, addr!, 1n);
 
         await expect(wallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject([

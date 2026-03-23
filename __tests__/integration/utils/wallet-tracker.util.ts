@@ -42,7 +42,7 @@ export class WalletTracker<T extends Stoppable> {
         await wallet.stop(this.stopOptions);
       } catch (e) {
         loggers.test!.warn('Failed to stop wallet during cleanup', {
-          error: (e as Error).message,
+          error: e instanceof Error ? e.message : String(e),
         });
       }
       wallet = this.wallets.pop();
