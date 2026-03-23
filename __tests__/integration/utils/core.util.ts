@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
+import { P2PKH_ACCT_PATH } from '../../../src/constants';
+import Network from '../../../src/models/network';
+
 /**
  * Simple way to wait asynchronously before continuing the funcion. Does not block the JS thread.
  * @param ms Amount of milliseconds to delay
@@ -23,4 +27,11 @@ export function getRandomInt(max: number, min: number = 0): number {
   const _min = Math.ceil(min);
   const _max = Math.floor(max);
   return Math.floor(Math.random() * (_max - _min + 1)) + _min;
+}
+
+/** Derives the account-level xpub from a mnemonic seed phrase. */
+export function deriveXpubFromSeed(words: string): string {
+  const code = new Mnemonic(words);
+  const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
+  return rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
 }

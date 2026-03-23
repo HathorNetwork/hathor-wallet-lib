@@ -7,12 +7,10 @@
  */
 
 import type { EventEmitter } from 'events';
-import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import type { AddressInfoObject } from '../../../src/wallet/types';
 import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
-import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
-import Network from '../../../src/models/network';
-import { getRandomInt } from '../utils/core.util';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
@@ -197,16 +195,9 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
   const readonlyDescribe = adapter.capabilities.supportsXpubReadonly ? describe : describe.skip;
 
   readonlyDescribe('readonly wallet (xpub)', () => {
-    /** Derives an xpub from a precalculated seed for readonly wallet creation. */
-    function deriveXpub(words: string): string {
-      const code = new Mnemonic(words);
-      const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
-      return rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
-    }
-
     it('should start an xpub wallet in readonly mode', async () => {
       const walletData = adapter.getPrecalculatedWallet();
-      const xpub = deriveXpub(walletData.words);
+      const xpub = deriveXpubFromSeed(walletData.words);
 
       // Pass seed alongside xpub so adapters that require backend pre-registration
       // (e.g. wallet-service) can create the wallet before starting in readonly mode.
@@ -226,7 +217,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
     it('should report zero balance on a fresh readonly wallet', async () => {
       const walletData = adapter.getPrecalculatedWallet();
-      const xpub = deriveXpub(walletData.words);
+      const xpub = deriveXpubFromSeed(walletData.words);
 
       const { wallet } = await adapter.createWallet({
         seed: walletData.words,
@@ -250,7 +241,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
     it('should reflect injected funds in balance', async () => {
       const walletData = adapter.getPrecalculatedWallet();
-      const xpub = deriveXpub(walletData.words);
+      const xpub = deriveXpubFromSeed(walletData.words);
 
       const { wallet } = await adapter.createWallet({
         seed: walletData.words,

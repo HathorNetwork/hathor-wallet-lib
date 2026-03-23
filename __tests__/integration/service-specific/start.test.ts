@@ -17,7 +17,7 @@
 
 import Mnemonic from 'bitcore-mnemonic';
 import { HathorWalletServiceWallet, Storage } from '../../../src';
-import { P2PKH_ACCT_PATH, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../../src/constants';
+import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../../src/constants';
 import { WalletFromXPubGuard } from '../../../src/errors';
 import { decryptData } from '../../../src/utils/crypto';
 import walletUtils from '../../../src/utils/wallet';
@@ -25,6 +25,7 @@ import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { deriveXpubFromSeed } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 
 const pinCode = '123456';
@@ -123,9 +124,7 @@ describe('[Service-specific] start', () => {
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {
     const walletData = adapter.getPrecalculatedWallet();
-    const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network(NETWORK_NAME));
-    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+    const xpub = deriveXpubFromSeed(walletData.words);
 
     const { wallet: xpubWallet } = await adapter.createWallet({
       seed: walletData.words,

@@ -23,6 +23,7 @@ import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { WalletTracker } from '../utils/wallet-tracker.util';
+import { deriveXpubFromSeed } from '../utils/core.util';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import {
   createTokenHelper,
@@ -276,9 +277,7 @@ describe('[Fullnode-specific] start', () => {
 
   it('should generate correct addresses from xpub (readonly)', async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
-    const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
-    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+    const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
@@ -294,9 +293,7 @@ describe('[Fullnode-specific] start', () => {
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
-    const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
-    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+    const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
