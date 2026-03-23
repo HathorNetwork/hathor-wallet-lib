@@ -37,6 +37,7 @@ import {
   TokenVersion,
   SCANNING_POLICY,
   IGapLimitAddressScanPolicy,
+  WalletAddressMode,
 } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -3827,5 +3828,76 @@ describe('storage methods', () => {
 
     const hWalletRO = await generateWalletHelperRO({ hardware: true });
     await expect(hWalletRO.isHardwareWallet()).resolves.toBe(true);
+  });
+});
+
+describe('single-address mode', () => {
+  let wallet: HathorWallet;
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true, cleanTokens: true });
+    }
+  });
+
+  it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      // single address mode is default
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    const currentAddress = await wallet.getCurrentAddress();
+    expect(currentAddress.index).toBe(0);
+    expect(currentAddress.address).toBe(singleAddressWallet1.addresses[0]);
+
+    await GenesisWalletHelper.injectFunds(wallet, await wallet.getAddressAtIndex(0), 10n);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    const currentAddressAfterTx = await wallet.getCurrentAddress();
+    expect(currentAddressAfterTx.index).toBe(0);
+    expect(currentAddressAfterTx.address).toBe(singleAddressWallet1.addresses[0]);
+
+    const nextAddress = await wallet.getNextAddress();
+    expect(nextAddress.index).toBe(0);
+    expect(nextAddress.address).toBe(singleAddressWallet1.addresses[0]);
+  });
+
+  it('should enable single-address and multi-address mode', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      // single address mode is default
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    await wallet.enableMultiAddressMode();
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    await wallet.enableSingleAddressMode();
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
   });
 });

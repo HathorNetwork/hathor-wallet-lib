@@ -77,6 +77,7 @@ export function buildWalletInstance({
     network,
     storage,
     enableWs, // Disable websocket for integration tests by default
+    singleAddressMode: false,
   });
 
   return { wallet: newWallet, store, storage, words, addresses };
