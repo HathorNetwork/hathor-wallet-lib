@@ -818,7 +818,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           this.singleAddress = false;
         } else {
           throw error;
-        };
+        }
       }
     }
     // We should wait for new addresses before setting wallet to ready
@@ -1556,9 +1556,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (this.singleAddress) {
       return WalletAddressMode.SINGLE;
-    } else {
-      return WalletAddressMode.MULTI;
     }
+    return WalletAddressMode.MULTI;
   }
 
   /**

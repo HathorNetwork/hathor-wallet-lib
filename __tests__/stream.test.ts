@@ -2,7 +2,12 @@ import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
-import { HistorySyncMode, IGapLimitAddressScanPolicy, SCANNING_POLICY, getDefaultLogger } from '../src/types';
+import {
+  HistorySyncMode,
+  IGapLimitAddressScanPolicy,
+  SCANNING_POLICY,
+  getDefaultLogger,
+} from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 
 const mock_tx = {

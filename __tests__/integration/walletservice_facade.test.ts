@@ -34,7 +34,7 @@ import {
 } from './helpers/service-facade.helper';
 import { SendTxError, UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
-import { TokenVersion } from '../../src/types';
+import { TokenVersion, WalletAddressMode } from '../../src/types';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
@@ -2446,7 +2446,7 @@ describe('single-address mode', () => {
     );
   });
 
-  it('should fail to start in single-address mode via constructor when wallet has tx on index > 0', async () => {
+  it('should fallback to start in multi-address mode via constructor when wallet has tx on index > 0', async () => {
     // First, start wallet normally and fund index 1
     ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
     await wallet.start({ pinCode, password });
@@ -2467,9 +2467,9 @@ describe('single-address mode', () => {
       singleAddressMode: true,
     });
 
-    await expect(wallet.start({ pinCode, password })).rejects.toThrow(
-      'Cannot enable single-address policy'
-    );
+    await wallet.start({ pinCode, password });
+
+    await expect(wallet.getAddressMode()).resolves.toBe(WalletAddressMode.MULTI);
   });
 
   it('should start in single-address mode via constructor', async () => {

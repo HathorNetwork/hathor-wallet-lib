@@ -53,7 +53,10 @@ export class GenesisWalletHelper {
         pinCode: pin,
         multisig: null,
         preCalculatedAddresses: WALLET_CONSTANTS.genesis.addresses,
-        scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
+        scanPolicy: {
+          policy: SCANNING_POLICY.GAP_LIMIT,
+          gapLimit: 20,
+        } as IGapLimitAddressScanPolicy,
       });
       await this.hWallet.start();
 

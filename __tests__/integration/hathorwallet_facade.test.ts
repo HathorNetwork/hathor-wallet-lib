@@ -32,7 +32,12 @@ import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
-import { WalletType, TokenVersion, SCANNING_POLICY, IGapLimitAddressScanPolicy } from '../../src/types';
+import {
+  WalletType,
+  TokenVersion,
+  SCANNING_POLICY,
+  IGapLimitAddressScanPolicy,
+} from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';

@@ -3502,9 +3502,8 @@ class HathorWallet extends EventEmitter {
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
       return WalletAddressMode.SINGLE;
-    } else {
-      return WalletAddressMode.MULTI;
     }
+    return WalletAddressMode.MULTI;
   }
 
   /**
