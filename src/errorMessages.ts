@@ -37,4 +37,5 @@ export enum ErrorMessages {
   NANO_ORACLE_PARSE_ERROR = 'nano-oracle-parse-error',
   // When PIN is required in a method and not set
   PIN_REQUIRED = 'pin-required',
+  HAS_TX_OUTSIDE_FIRST_ADDRESS = 'has-tx-outside-first-address'
 }

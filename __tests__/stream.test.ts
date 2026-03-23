@@ -2,7 +2,7 @@ import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
-import { HistorySyncMode, getDefaultLogger } from '../src/types';
+import { HistorySyncMode, IGapLimitAddressScanPolicy, SCANNING_POLICY, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 
 const mock_tx = {
@@ -153,6 +153,7 @@ async function startWalletFor(mode) {
     connection,
     password: '123',
     pinCode: '123',
+    scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
   };
   const hWallet = new HathorWallet(walletConfig);
   hWallet.setHistorySyncMode(mode);

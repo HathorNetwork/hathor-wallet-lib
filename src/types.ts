@@ -718,3 +718,8 @@ export enum AuthorityType {
 export function isAuthorityType(value?: string): value is AuthorityType {
   return Object.values(AuthorityType).includes(value as AuthorityType);
 }
+
+export enum WalletAddressMode {
+  SINGLE = 'single',
+  MULTI = 'multi',
+}

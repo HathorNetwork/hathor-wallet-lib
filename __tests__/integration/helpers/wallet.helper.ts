@@ -20,7 +20,7 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
-import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
+import { TxHistoryProcessingStatus, IHistoryTx, SCANNING_POLICY, IGapLimitAddressScanPolicy } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
@@ -101,6 +101,7 @@ export async function generateWalletHelper(param) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
   };
   if (param) {
     Object.assign(walletConfig, param);
@@ -158,6 +159,7 @@ export async function generateWalletHelperRO(options) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
   };
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
@@ -196,6 +198,7 @@ export async function generateMultisigWalletHelper(parameters) {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,
     },
+    scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
   };
   const mhWallet = new HathorWallet(walletConfig);
   await mhWallet.start();

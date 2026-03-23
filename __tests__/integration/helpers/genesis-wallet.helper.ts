@@ -11,7 +11,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
-import { OutputValueType } from '../../../src/types';
+import { IGapLimitAddressScanPolicy, OutputValueType, SCANNING_POLICY } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
@@ -53,6 +53,7 @@ export class GenesisWalletHelper {
         pinCode: pin,
         multisig: null,
         preCalculatedAddresses: WALLET_CONSTANTS.genesis.addresses,
+        scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
       });
       await this.hWallet.start();
 

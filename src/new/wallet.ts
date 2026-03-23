@@ -72,6 +72,7 @@ import {
   TxHistoryProcessingStatus,
   WalletState,
   WalletType,
+  WalletAddressMode,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -401,7 +402,12 @@ class HathorWallet extends EventEmitter {
     this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
 
-    this.scanPolicy = scanPolicy;
+    // Defaults to single address scanning policy
+    if (scanPolicy == null) {
+      this.scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    } else {
+      this.scanPolicy = scanPolicy;
+    }
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
@@ -3480,6 +3486,80 @@ class HathorWallet extends EventEmitter {
   // eslint-disable-next-line class-methods-use-this
   async getReadOnlyAuthToken(): Promise<string> {
     throw new Error('Not implemented.');
+  }
+
+  /**
+   * Get which address mode is currently enabled.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async getAddressMode(): Promise<WalletAddressMode> {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+      return WalletAddressMode.SINGLE;
+    } else {
+      return WalletAddressMode.MULTI;
+    }
+  }
+
+  /**
+   * Enable multi address mode for this wallet.
+   * Converts to a gap-limit wallet.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async enableMultiAddressMode(gapLimit: number = 20): Promise<void> {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+
+    const currScanPolicy = await this.storage.getScanningPolicy();
+    if (currScanPolicy !== SCANNING_POLICY.SINGLE_ADDRESS) {
+      // multi address mode is already enabled.
+      return;
+    }
+
+    // Switch policy in storage
+    await this.storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.GAP_LIMIT,
+      gapLimit,
+    });
+
+    // Load new addresses
+    await this.reloadStorage();
+  }
+
+  /**
+   * Enable single-address scanning policy for this wallet.
+   * Converts a gap-limit wallet to use only the first address (index 0).
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async enableSingleAddressMode(): Promise<void> {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+
+    const currScanPolicy = await this.storage.getScanningPolicy();
+    if (currScanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+      // single address mode is already enabled.
+      return;
+    }
+
+    // Switch policy in storage
+    await this.storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.SINGLE_ADDRESS,
+    });
+
+    // Load new addresses
+    await this.reloadStorage();
   }
 }
 

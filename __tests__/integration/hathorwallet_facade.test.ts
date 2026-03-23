@@ -32,7 +32,7 @@ import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Network from '../../src/models/network';
-import { WalletType, TokenVersion } from '../../src/types';
+import { WalletType, TokenVersion, SCANNING_POLICY, IGapLimitAddressScanPolicy } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
@@ -433,6 +433,7 @@ describe('start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
     };
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
@@ -477,6 +478,7 @@ describe('start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
     };
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
@@ -498,6 +500,7 @@ describe('start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
       /*
        * No precalculated addresses here. All will be calculated at runtime.
        * This operation takes a lot longer under jest's testing framework, so we avoid it
@@ -529,6 +532,7 @@ describe('start', () => {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
       },
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
     };
 
     const hWallet = new HathorWallet(walletConfig);
@@ -579,6 +583,7 @@ describe('start', () => {
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
       tokenUid,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
     });
     expect(hWallet.isReady()).toStrictEqual(true); // This operation should work
 
@@ -638,6 +643,7 @@ describe('start', () => {
       xpub,
       password: null,
       pinCode: null,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
     await expect(hWallet.isReadonly()).resolves.toBe(true);
