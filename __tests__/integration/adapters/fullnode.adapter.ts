@@ -189,6 +189,13 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   // --- Private helpers ---
 
+  /**
+   * Resolves the wallet identity data (seed, addresses) from the caller's options.
+   *
+   * When no explicit identity is provided, a precalculated wallet is used.
+   * For xpub/xpriv-only wallets, `words` will be `undefined` — that's intentional:
+   * {@link buildConfig} spreads `xpub`/`xpriv` into the config independently of the seed.
+   */
   private resolveWalletData(options?: CreateWalletOptions): {
     words?: string;
     addresses?: string[];
