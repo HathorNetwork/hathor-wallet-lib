@@ -161,6 +161,13 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return GenesisWalletHelper.injectFunds(this.concrete(destWallet), address, amount);
   }
 
+  /**
+   * Sends funds to an address whose wallet has not started yet.
+   *
+   * Cannot delegate to {@link injectFunds} because that method polls both the
+   * genesis and the destination wallet for tx confirmation — but the destination
+   * wallet isn't running yet, so polling it would hang or fail.
+   */
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     const result = await gWallet.sendTransaction(address, amount);

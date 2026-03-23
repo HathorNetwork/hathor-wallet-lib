@@ -149,6 +149,14 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return GenesisWalletServiceHelper.injectFunds(address, amount, this.concrete(destWallet));
   }
 
+  /**
+   * Sends funds to an address whose wallet has not started yet.
+   *
+   * Cannot delegate to {@link injectFunds} because that method passes the
+   * destination wallet to the helper so it polls for tx confirmation on both
+   * sides — but the destination wallet isn't running yet, so polling it would
+   * hang or fail. Omitting the destination wallet makes the helper skip that poll.
+   */
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
     const fundTx = await GenesisWalletServiceHelper.injectFunds(address, amount);
     if (!fundTx?.hash) {
