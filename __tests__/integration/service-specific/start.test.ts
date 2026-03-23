@@ -17,7 +17,8 @@
 
 import Mnemonic from 'bitcore-mnemonic';
 import { HathorWalletServiceWallet, Storage } from '../../../src';
-import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../../src/constants';
+import { P2PKH_ACCT_PATH, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../../src/constants';
+import { WalletFromXPubGuard } from '../../../src/errors';
 import { decryptData } from '../../../src/utils/crypto';
 import walletUtils from '../../../src/utils/wallet';
 import Network from '../../../src/models/network';
@@ -118,5 +119,28 @@ describe('[Service-specific] start', () => {
     const currentAddress = wallet.getCurrentAddress();
     expect(currentAddress.index).toBeDefined();
     expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+  });
+
+  it('should reject write operations on a readonly (xpub) wallet', async () => {
+    const walletData = adapter.getPrecalculatedWallet();
+    const code = new Mnemonic(walletData.words);
+    const rootXpriv = code.toHDPrivateKey('', new Network(NETWORK_NAME));
+    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+
+    const { wallet: xpubWallet } = await adapter.createWallet({
+      seed: walletData.words,
+      xpub,
+    });
+    wallet = xpubWallet as unknown as HathorWalletServiceWallet;
+
+    // Methods requiring private key should throw WalletFromXPubGuard.
+    // All calls below deliberately omit required args — the guard rejects before arg validation.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = wallet as any;
+    await expect(w.sendManyOutputsSendTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(w.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(w.signTx()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(w.createNanoContractTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(w.createNanoContractCreateTokenTransaction()).rejects.toThrow(WalletFromXPubGuard);
   });
 });

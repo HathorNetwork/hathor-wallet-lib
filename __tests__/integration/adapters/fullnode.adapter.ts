@@ -207,8 +207,12 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     walletData: { words?: string; addresses?: string[] },
     options?: CreateWalletOptions
   ) {
+    // xpub/xpriv and seed are mutually exclusive in HathorWallet's constructor.
+    // When both are provided (e.g. shared readonly tests pass seed for service
+    // pre-registration), prefer xpub/xpriv and omit the seed.
+    const useSeed = !options?.xpub && !options?.xpriv;
     return {
-      seed: walletData.words,
+      ...(useSeed && walletData.words ? { seed: walletData.words } : {}),
       connection: generateConnection(),
       // Credentials are intentionally omitted here — they are passed at start()
       // time instead. This lets validation tests exercise missing-credential paths

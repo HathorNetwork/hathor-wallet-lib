@@ -274,24 +274,38 @@ describe('[Fullnode-specific] start', () => {
     expect(txHistory1).toStrictEqual([expect.objectContaining({ txId: tokenUid })]);
   });
 
-  it('should start a wallet via xpub (readonly)', async () => {
+  it('should generate correct addresses from xpub (readonly)', async () => {
     const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
-    const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
-    const xpub = xpriv.xpubkey;
+    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
 
     const hWallet = await generateWalletHelper({
       xpub,
       password: null,
       pinCode: null,
     });
-    expect(hWallet.isReady()).toStrictEqual(true);
-    await expect(hWallet.isReadonly()).resolves.toBe(true);
+
+    // Fullnode derives addresses locally from xpub — verify all 20 match precalculated.
+    for (let i = 0; i < 20; ++i) {
+      expect(await hWallet.getAddressAtIndex(i)).toStrictEqual(walletData.addresses[i]);
+    }
+  });
+
+  it('should reject write operations on a readonly (xpub) wallet', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const code = new Mnemonic(walletData.words);
+    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
+    const xpub = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+
+    const hWallet = await generateWalletHelper({
+      xpub,
+      password: null,
+      pinCode: null,
+    });
 
     // Methods requiring private key should throw WalletFromXPubGuard.
     // All calls below deliberately omit required args — the guard rejects before arg validation.
-    // Disabling TypeScript validation for the following block
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const w = hWallet as any;
     await expect(w.consolidateUtxos()).rejects.toThrow(WalletFromXPubGuard);
@@ -311,33 +325,6 @@ describe('[Fullnode-specific] start', () => {
     );
     await expect(w.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createOnChainBlueprintTransaction()).rejects.toThrow(WalletFromXPubGuard);
-
-    // Address generation still works
-    for (let i = 0; i < 20; ++i) {
-      expect(await hWallet.getAddressAtIndex(i)).toStrictEqual(walletData.addresses[i]);
-    }
-
-    // Balance and utxo methods work
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toStrictEqual([
-      expect.objectContaining({
-        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
-        balance: { unlocked: 0n, locked: 0n },
-        transactions: 0,
-      }),
-    ]);
-    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 0n);
-
-    // Inject funds and verify they show in balance
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 1n);
-
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject([
-      expect.objectContaining({
-        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
-        balance: { unlocked: 1n, locked: 0n },
-        transactions: expect.any(Number),
-      }),
-    ]);
-    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 1n);
   });
 
   it('should start an externally signed wallet', async () => {

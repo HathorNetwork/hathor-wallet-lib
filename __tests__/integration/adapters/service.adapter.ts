@@ -38,7 +38,7 @@ const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true };
  *
  * Key behavioral differences from the fullnode adapter:
  * - `start()` blocks until the wallet is ready (no explicit `waitForReady()` needed).
- * - Does not support multisig, xpub-readonly, token scoping, or external signing.
+ * - Does not support multisig, token scoping, or external signing.
  * - Uses the wallet-service helpers ({@link GenesisWalletServiceHelper}) for fund injection.
  */
 export class ServiceWalletTestAdapter implements IWalletTestAdapter {
@@ -53,7 +53,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   capabilities: WalletCapabilities = {
     supportsMultisig: false,
     supportsTokenScope: false,
-    supportsXpubReadonly: false,
+    supportsXpubReadonly: true,
     supportsExternalSigning: false,
     supportsRuntimeAddressCalculation: false,
     supportsPreStartFunding: true,
@@ -65,6 +65,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   };
 
   private readonly tracker = new WalletTracker<HathorWalletServiceWallet>(STOP_OPTIONS);
+
+  /** Wallets created with xpub need {@link HathorWalletServiceWallet.startReadOnly} instead of start(). */
+  private readonly xpubWallets = new WeakSet<HathorWalletServiceWallet>();
 
   /**
    * Narrows a {@link FuzzyWalletType} to the concrete {@link HathorWalletServiceWallet}.
@@ -88,9 +91,21 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   }
 
   async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+    // The wallet-service backend must know about the wallet before startReadOnly() can
+    // attach to it. When both seed and xpub are provided, pre-register the wallet by
+    // starting it with the seed, then stop and restart as a readonly xpub client.
+    if (options?.xpub && options?.seed) {
+      const seedWallet = this.buildWalletInstance({ seed: options.seed });
+      await this.startWallet(seedWallet.wallet, {
+        pinCode: options.pinCode ?? SERVICE_PIN,
+        password: options.password ?? SERVICE_PASSWORD,
+      });
+      await this.stopWallet(seedWallet.wallet);
+    }
+
     const built = this.buildWalletInstance(options);
 
-    await this.concrete(built.wallet).start({
+    await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? SERVICE_PIN,
       password: options?.password ?? SERVICE_PASSWORD,
     });
@@ -99,12 +114,17 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   }
 
   buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
+    // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
     const result = buildWalletInstance({
-      words: options?.seed || '',
+      words: options?.xpub ? '' : options?.seed || '',
+      xpub: options?.xpub || '',
       enableWs: false,
     });
 
     this.tracker.track(result.wallet);
+    if (options?.xpub) {
+      this.xpubWallets.add(result.wallet);
+    }
 
     return {
       wallet: result.wallet as FuzzyWalletType,
@@ -118,9 +138,17 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     options?: { pinCode?: string; password?: string }
   ): Promise<void> {
+    const sw = this.concrete(wallet);
+
+    if (this.xpubWallets.has(sw)) {
+      // Readonly wallets use a dedicated start method that requires no credentials.
+      await sw.startReadOnly();
+      return;
+    }
+
     // Pass options through directly — do NOT fill defaults when the caller
     // explicitly passes undefined (used by validation tests).
-    await this.concrete(wallet).start({
+    await sw.start({
       pinCode: options?.pinCode,
       password: options?.password,
     });
