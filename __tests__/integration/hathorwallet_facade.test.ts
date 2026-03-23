@@ -169,6 +169,8 @@ describe('single-address mode', () => {
     await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
     await GenesisWalletHelper.injectFunds(wallet, walletData.addresses[1], 10n);
 
+    await wallet.stop({ cleanStorage: true, cleanAddresses: true, cleanTokens: true });
+
     // Start in single address mode
     walletConfig.scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
     wallet = new HathorWallet(walletConfig);

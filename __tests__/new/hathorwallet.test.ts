@@ -24,6 +24,7 @@ import { IHistoryTx, WalletType } from '../../src/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
+import * as storageUtils from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
@@ -1562,70 +1563,46 @@ test('getUtxosForAmount - should always get the best utxos', async () => {
 
 describe('hasTxOutsideFirstAddress', () => {
   test('returns true when there are transactions on addresses with index > 0', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-
-    async function* getAllAddressesMock() {
-      yield { base58: 'addr0', bip32AddressIndex: 0, numTransactions: 5 };
-      yield { base58: 'addr1', bip32AddressIndex: 1, numTransactions: 2 };
+    async function getAddressAtIndexMock(index: number) {
+      return `addr${index}`;
+    }
+    async function* loadAddressHistoryMock() {
+      yield true;
     }
 
-    jest.spyOn(storage, 'getAllAddresses').mockImplementation(getAllAddressesMock);
+    const spy = jest
+      .spyOn(storageUtils, 'loadAddressHistory')
+      .mockImplementation(loadAddressHistoryMock);
 
-    const hWallet = new FakeHathorWallet();
-    hWallet.storage = storage;
+    try {
+      const hWallet = new FakeHathorWallet();
+      hWallet.getAddressAtIndex = jest.fn().mockImplementation(getAddressAtIndexMock);
 
-    await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(true);
+      await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('returns false when only the first address has transactions', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-
-    async function* getAllAddressesMock() {
-      yield { base58: 'addr0', bip32AddressIndex: 0, numTransactions: 5 };
-      yield { base58: 'addr1', bip32AddressIndex: 1, numTransactions: 0 };
-      yield { base58: 'addr2', bip32AddressIndex: 2, numTransactions: 0 };
+    async function getAddressAtIndexMock(index: number) {
+      return `addr${index}`;
+    }
+    async function* loadAddressHistoryMock() {
+      yield false;
     }
 
-    jest.spyOn(storage, 'getAllAddresses').mockImplementation(getAllAddressesMock);
+    const spy = jest
+      .spyOn(storageUtils, 'loadAddressHistory')
+      .mockImplementation(loadAddressHistoryMock);
 
-    const hWallet = new FakeHathorWallet();
-    hWallet.storage = storage;
+    try {
+      const hWallet = new FakeHathorWallet();
+      hWallet.getAddressAtIndex = jest.fn().mockImplementation(getAddressAtIndexMock);
 
-    await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(false);
-  });
-
-  test('returns false when there are no addresses', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-
-    async function* getAllAddressesMock() {
-      // Empty generator
+      await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(false);
+    } finally {
+      spy.mockRestore();
     }
-
-    jest.spyOn(storage, 'getAllAddresses').mockImplementation(getAllAddressesMock);
-
-    const hWallet = new FakeHathorWallet();
-    hWallet.storage = storage;
-
-    await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(false);
-  });
-
-  test('returns false when there are no transactions at all', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-
-    async function* getAllAddressesMock() {
-      yield { base58: 'addr0', bip32AddressIndex: 0, numTransactions: 0 };
-      yield { base58: 'addr1', bip32AddressIndex: 1, numTransactions: 0 };
-    }
-
-    jest.spyOn(storage, 'getAllAddresses').mockImplementation(getAllAddressesMock);
-
-    const hWallet = new FakeHathorWallet();
-    hWallet.storage = storage;
-
-    await expect(hWallet.hasTxOutsideFirstAddress()).resolves.toBe(false);
   });
 });
