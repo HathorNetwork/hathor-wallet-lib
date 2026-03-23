@@ -91,27 +91,20 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   /**
    * Creates a fully started, ready-to-use wallet with default credentials.
    *
-   * This intentionally duplicates parts of {@link buildWalletInstance} because they serve
-   * different purposes: `buildWalletInstance` returns an unstarted wallet so tests can
-   * exercise error handling (e.g. missing pinCode/password), while `createWallet` fills
-   * in valid defaults and starts the wallet — optimizing for tests that need a working
-   * wallet with no setup friction.
+   * Delegates to {@link buildWalletInstance} for construction and
+   * {@link startWallet} for startup, filling in default credentials so tests
+   * that just need a working wallet have zero setup friction.
    */
   async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
-    const walletData = this.resolveWalletData(options);
-    const walletConfig = this.buildConfig(walletData, options, { fillDefaults: true });
+    const built = this.buildWalletInstance(options);
 
-    const hWallet = new HathorWallet(walletConfig);
-    this.tracker.track(hWallet);
-    await hWallet.start();
-    await waitForWalletReady(hWallet);
+    await this.startWallet(built.wallet, {
+      pinCode: options?.pinCode ?? DEFAULT_PIN_CODE,
+      password: options?.password ?? DEFAULT_PASSWORD,
+    });
+    await this.waitForReady(built.wallet);
 
-    return {
-      wallet: hWallet as FuzzyWalletType,
-      storage: hWallet.storage,
-      words: walletData.words,
-      addresses: walletData.addresses,
-    };
+    return built;
   }
 
   buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
@@ -212,21 +205,16 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   private buildConfig(
     walletData: { words?: string; addresses?: string[] },
-    options?: CreateWalletOptions,
-    { fillDefaults = false }: { fillDefaults?: boolean } = {}
+    options?: CreateWalletOptions
   ) {
     return {
       seed: walletData.words,
       connection: generateConnection(),
-      // Only fill default credentials when explicitly requested (e.g. createWallet).
-      // buildWalletInstance leaves them out so validation tests can exercise the
-      // "missing pinCode / password" code paths.
-      ...(fillDefaults
-        ? { password: DEFAULT_PASSWORD, pinCode: DEFAULT_PIN_CODE }
-        : {
-            ...(options?.password !== undefined && { password: options.password }),
-            ...(options?.pinCode !== undefined && { pinCode: options.pinCode }),
-          }),
+      // Credentials are intentionally omitted here — they are passed at start()
+      // time instead. This lets validation tests exercise missing-credential paths
+      // by calling buildWalletInstance + startWallet without defaults.
+      ...(options?.password !== undefined && { password: options.password }),
+      ...(options?.pinCode !== undefined && { pinCode: options.pinCode }),
       preCalculatedAddresses: walletData.addresses,
       ...(options?.xpub && { xpub: options.xpub }),
       ...(options?.xpriv && { xpriv: options.xpriv }),
