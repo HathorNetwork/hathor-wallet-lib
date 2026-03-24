@@ -815,6 +815,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         await this.enableSingleAddressMode(true);
       } catch (error) {
         if (error instanceof HasTxOutsideFirstAddressError) {
+          await this.storage.setScanningPolicyData({
+            policy: SCANNING_POLICY.GAP_LIMIT,
+            gapLimit: 20,
+          });
           this.singleAddress = false;
         } else {
           throw error;

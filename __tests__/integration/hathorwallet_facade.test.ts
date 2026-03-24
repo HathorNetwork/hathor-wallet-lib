@@ -63,6 +63,7 @@ describe('single-address mode', () => {
     if (wallet) {
       await wallet.stop({ cleanStorage: true, cleanAddresses: true, cleanTokens: true });
     }
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
