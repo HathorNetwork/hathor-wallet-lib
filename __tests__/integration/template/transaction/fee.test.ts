@@ -48,6 +48,10 @@ describe('FeeBlueprint Template execution', () => {
     );
     await waitForTxReceived(hWallet, initTx.hash);
     await waitTxConfirmed(hWallet, initTx.hash, null);
+    const initTxData = await hWallet.getFullTxById(initTx.hash);
+    if (!initTxData.success || !isEmpty(initTxData.meta.voided_by)) {
+      throw new Error(`Setup failed: initTx ${initTx.hash} was voided or failed to fetch`);
+    }
     contractId = initTx.hash!;
 
     // Create deposit token (DBT)
@@ -69,6 +73,10 @@ describe('FeeBlueprint Template execution', () => {
     );
     await waitForTxReceived(hWallet, dbtTx.hash);
     await waitTxConfirmed(hWallet, dbtTx.hash, null);
+    const dbtTxData = await hWallet.getFullTxById(dbtTx.hash);
+    if (!dbtTxData.success || !isEmpty(dbtTxData.meta.voided_by)) {
+      throw new Error(`Setup failed: dbtTx ${dbtTx.hash} was voided or failed to fetch`);
+    }
     const dbtState = await ncApi.getNanoContractState(contractId, ['dbt_uid'], [], []);
     dbtUid = dbtState.fields.dbt_uid.value;
 
@@ -87,6 +95,10 @@ describe('FeeBlueprint Template execution', () => {
     });
     await waitForTxReceived(hWallet, fbtTx.hash);
     await waitTxConfirmed(hWallet, fbtTx.hash, null);
+    const fbtTxData = await hWallet.getFullTxById(fbtTx.hash);
+    if (!fbtTxData.success || !isEmpty(fbtTxData.meta.voided_by)) {
+      throw new Error(`Setup failed: fbtTx ${fbtTx.hash} was voided or failed to fetch`);
+    }
     const fbtState = await ncApi.getNanoContractState(contractId, ['fbt_uid'], [], []);
     fbtUid = fbtState.fields.fbt_uid.value;
 
@@ -105,6 +117,10 @@ describe('FeeBlueprint Template execution', () => {
     });
     await waitForTxReceived(hWallet, withdrawTx.hash);
     await waitTxConfirmed(hWallet, withdrawTx.hash, null);
+    const withdrawTxData = await hWallet.getFullTxById(withdrawTx.hash);
+    if (!withdrawTxData.success || !isEmpty(withdrawTxData.meta.voided_by)) {
+      throw new Error(`Setup failed: withdrawTx ${withdrawTx.hash} was voided or failed to fetch`);
+    }
   });
 
   afterAll(async () => {
@@ -119,6 +135,10 @@ describe('FeeBlueprint Template execution', () => {
     await waitForTxReceived(wallet, txId);
     await waitTxConfirmed(wallet, txId, null);
     const txAfterExecution = await wallet.getFullTxById(txId);
+    expect(txAfterExecution.success).toBe(true);
+    if (!txAfterExecution.success) {
+      throw new Error(`Failed to fetch transaction ${txId}`);
+    }
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
     expect(txAfterExecution.meta.first_block).not.toBeNull();
   };

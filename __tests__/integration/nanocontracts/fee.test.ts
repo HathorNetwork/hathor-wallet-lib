@@ -39,6 +39,10 @@ describe('FeeBlueprint nano contract operations', () => {
     await waitForTxReceived(wallet, txId);
     await waitTxConfirmed(wallet, txId, null);
     const txAfterExecution = await wallet.getFullTxById(txId);
+    expect(txAfterExecution.success).toBe(true);
+    if (!txAfterExecution.success) {
+      throw new Error(`Failed to fetch transaction ${txId}`);
+    }
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
     expect(txAfterExecution.meta.first_block).not.toBeNull();
   };
