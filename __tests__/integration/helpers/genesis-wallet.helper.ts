@@ -8,13 +8,14 @@
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import { waitForTxReceived, waitForWalletReady } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import { testConfig } from '../configuration/test.config';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -42,7 +43,7 @@ export class GenesisWalletHelper {
     const connection = new Connection({
       network: 'testnet',
       servers: [FULLNODE_URL],
-      connectionTimeout: 30000,
+      connectionTimeout: testConfig.connectionTimeoutMs,
       logger: console, // Add required logger parameter
     });
     try {
@@ -96,7 +97,6 @@ export class GenesisWalletHelper {
 
       await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
       await waitForTxReceived(destinationWallet, result.hash, options.waitTimeout);
-      await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     } catch (e) {
       loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
@@ -114,7 +114,7 @@ export class GenesisWalletHelper {
 
     const hWallet = new GenesisWalletHelper();
     await hWallet.start();
-    await delay(500);
+    await delay(testConfig.genesisPostCreationDelayMs);
 
     singleton = hWallet;
     return singleton;
@@ -161,8 +161,8 @@ export class GenesisWalletServiceHelper {
     const startTime = Date.now();
 
     // Poll for the serverless app to be ready.
-    const delayBetweenRequests = 3000;
-    const lambdaTimeout = 30000;
+    const delayBetweenRequests = testConfig.pollServerlessIntervalMs;
+    const lambdaTimeout = testConfig.pollServerlessTimeoutMs;
     while (!isServerlessReady) {
       try {
         // Executing a method that does not depend on the wallet being started,
@@ -171,7 +171,7 @@ export class GenesisWalletServiceHelper {
         isServerlessReady = true;
       } catch (e) {
         // Ignore errors, serverless app is probably not ready yet
-        loggers.test!.log('Ws-Serverless not ready yet, retrying in 3 seconds...');
+        loggers.test!.log(`Ws-Serverless not ready yet, retrying in ${delayBetweenRequests}ms...`);
       }
 
       // Timeout after 30 seconds

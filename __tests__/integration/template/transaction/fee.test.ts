@@ -39,7 +39,7 @@ describe('FeeBlueprint Template execution', () => {
     const txId = tx.hash;
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
-    await waitTxConfirmed(wallet, txId, null);
+    await waitTxConfirmed(wallet, txId);
     const txAfterExecution = await wallet.getFullTxById(txId);
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
     expect(txAfterExecution.meta.first_block).not.toBeNull();
