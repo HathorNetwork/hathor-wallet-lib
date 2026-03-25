@@ -106,19 +106,24 @@ export async function deriveAddressP2SH(index: number, storage: IStorage): Promi
  *
  * @throws {AddressError} If the address is invalid
  */
-export function createOutputScriptFromAddress(address: string, network: Network): Buffer {
+export function createOutputScriptFromAddress(
+  address: string,
+  network: Network,
+  options?: { timelock?: number | null }
+): Buffer {
   const addressObj = new Address(address, { network });
   // This will throw AddressError in case the address is invalid
   addressObj.validateAddress();
+  const timelock = options?.timelock ?? null;
   const addressType = addressObj.getType();
   if (addressType === 'p2sh') {
     // P2SH
-    const p2sh = new P2SH(addressObj);
+    const p2sh = new P2SH(addressObj, { timelock });
     return p2sh.createScript();
   }
   if (addressType === 'p2pkh') {
     // P2PKH
-    const p2pkh = new P2PKH(addressObj);
+    const p2pkh = new P2PKH(addressObj, { timelock });
     return p2pkh.createScript();
   }
   throw new Error('Invalid address type');
