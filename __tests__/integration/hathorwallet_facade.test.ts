@@ -1,4 +1,4 @@
-import { multisigWalletsData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {

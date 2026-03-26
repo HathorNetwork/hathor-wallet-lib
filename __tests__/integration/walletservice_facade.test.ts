@@ -1140,7 +1140,7 @@ describe('basic transaction methods', () => {
   });
 });
 
-describe.skip('websocket events', () => { });
+describe.skip('websocket events', () => {});
 
 describe('balances', () => {
   beforeEach(async () => {
@@ -1228,7 +1228,7 @@ describe('balances', () => {
     });
   });
 
-  describe.skip('getTxBalance', () => { });
+  describe.skip('getTxBalance', () => {});
 });
 
 describe('address management methods', () => {
