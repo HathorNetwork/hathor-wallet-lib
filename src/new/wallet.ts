@@ -105,7 +105,7 @@ import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
   CreateTokenOptions,
-  CreateNanoTxData,
+  FullnodeCreateNanoTxData,
   CreateNanoTokenTxOptions,
   CreateOnChainBlueprintTxOptions,
   DelegateAuthorityOptions,
@@ -3046,7 +3046,7 @@ class HathorWallet extends EventEmitter {
   async createAndSendNanoContractTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     options: Omit<CreateNanoTxOptions, 'signTx'> = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.createNanoContractTransaction(method, address, data, {
@@ -3067,7 +3067,7 @@ class HathorWallet extends EventEmitter {
   async createNanoContractTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
     if (await this.storage.isReadonly()) {
@@ -3133,7 +3133,7 @@ class HathorWallet extends EventEmitter {
   async createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
     options: CreateNanoTxOptions = {}
   ): Promise<Transaction | null> {
@@ -3159,7 +3159,7 @@ class HathorWallet extends EventEmitter {
   async createNanoContractCreateTokenTransaction(
     method: string,
     address: string,
-    data: CreateNanoTxData,
+    data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
