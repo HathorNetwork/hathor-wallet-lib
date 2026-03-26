@@ -30,7 +30,8 @@ describe('[Fullnode] server changes', () => {
 
   afterAll(async () => {
     await GenesisWalletHelper.clearListeners();
-    await gWallet.stop();
+    // Do not stop gWallet: it is the shared singleton from GenesisWalletHelper
+    // and stopping it would break any subsequent test that calls getSingleton().
   });
 
   it('should change to a different server and revert', async () => {
@@ -56,7 +57,9 @@ describe('[Fullnode] server changes', () => {
 
     // Verifying the revert to the privatenet
     const networkData = await gWallet.getVersionData();
-    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
+    const checkTime = Date.now().valueOf();
+    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
+    expect(networkData.timestamp).toBeLessThanOrEqual(checkTime + 50);
     expect(networkData.network).toStrictEqual(FULLNODE_NETWORK_NAME);
   });
 });

@@ -7,6 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
+import config from '../../../src/config';
 import { WalletTracker } from '../utils/wallet-tracker.util';
 import type Transaction from '../../../src/models/transaction';
 import {
@@ -50,7 +51,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   defaultPassword = SERVICE_PASSWORD;
 
-  originalServerUrl = 'http://localhost:3000/dev/';
+  get originalServerUrl(): string {
+    return config.getWalletServiceBaseUrl();
+  }
 
   capabilities: WalletCapabilities = {
     supportsMultisig: false,

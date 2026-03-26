@@ -107,7 +107,7 @@ describe.each(adapters)('[Shared] internal methods — $name', adapter => {
           if (e.response) {
             return e.response;
           }
-          return {};
+          throw e;
         });
       expect(directResponse.status).toBe(200);
 

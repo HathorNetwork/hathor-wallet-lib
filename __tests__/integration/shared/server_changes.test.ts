@@ -49,16 +49,18 @@ describe.each(adapters)('[Shared] server changes — $name', adapter => {
     });
 
     afterAll(async () => {
-      // Revert to the adapter's original server URL before stopping.
-      // This is critical because changeServer modifies global config
-      // that persists across tests.
-      await wallet.changeServer(adapter.originalServerUrl);
-      await adapter.stopWallet(wallet);
+      if (wallet) {
+        // Revert to the adapter's original server URL before stopping.
+        // This is critical because changeServer modifies global config
+        // that persists across tests.
+        await wallet.changeServer(adapter.originalServerUrl);
+        await adapter.stopWallet(wallet);
+      }
     });
 
     it('should accept a new server URL without throwing', async () => {
       const newUrl = 'https://node1.testnet.hathor.network/v1a/';
-      await expect(wallet.changeServer(newUrl)).resolves.not.toThrow();
+      await expect(wallet.changeServer(newUrl)).resolves.toBeUndefined();
     });
   });
 });
