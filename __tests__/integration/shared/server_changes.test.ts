@@ -48,7 +48,7 @@ describe.each(adapters)('[Shared] server changes — $name', adapter => {
         await delay(100);
 
         // Validating the server change with getVersionData
-        let networkData = await wallet.getVersionData();
+        const networkData = await wallet.getVersionData();
         expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
         expect(networkData.network).toMatch(/^testnet.*/);
       } finally {

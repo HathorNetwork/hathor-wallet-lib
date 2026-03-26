@@ -1,5 +1,3 @@
-import config from '../../src/config';
-import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { CreateTokenTransaction, FeeHeader, Output, transactionUtils } from '../../src';
 import { WALLET_CONSTANTS } from './configuration/test-constants';
