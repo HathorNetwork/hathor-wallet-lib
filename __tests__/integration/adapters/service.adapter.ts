@@ -51,8 +51,19 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   defaultPassword = SERVICE_PASSWORD;
 
+  private _originalServerUrl?: string;
+
   get originalServerUrl(): string {
-    return config.getWalletServiceBaseUrl();
+    if (!this._originalServerUrl) {
+      throw new Error('originalServerUrl not initialized. Call suiteSetup() first.');
+    }
+    return this._originalServerUrl;
+  }
+
+  async suiteSetup(): Promise<void> {
+    initializeServiceGlobalConfigs();
+    this._originalServerUrl = config.getWalletServiceBaseUrl();
+    await GenesisWalletServiceHelper.start();
   }
 
   capabilities: WalletCapabilities = {
