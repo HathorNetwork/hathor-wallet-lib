@@ -172,7 +172,8 @@ export async function apiSyncHistory(
  */
 export async function* loadAddressHistory(
   addresses: string[],
-  storage: IStorage
+  storage: IStorage,
+  saveTxs: boolean = true
 ): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
@@ -226,7 +227,9 @@ export async function* loadAddressHistory(
       if (result.success) {
         for (const tx of result.history) {
           foundAnyTx = true;
-          await storage.addTx(tx);
+          if (saveTxs) {
+            await storage.addTx(tx);
+          }
         }
         hasMore = result.has_more;
         if (hasMore) {
@@ -269,6 +272,11 @@ export async function scanPolicyStartAddresses(
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
       };
+    case SCANNING_POLICY.SINGLE_ADDRESS:
+      return {
+        nextIndex: 0,
+        count: 1,
+      };
     case SCANNING_POLICY.GAP_LIMIT:
     default:
       return {
@@ -293,6 +301,7 @@ export async function checkScanningPolicy(
       return checkIndexLimit(storage);
     case SCANNING_POLICY.GAP_LIMIT:
       return checkGapLimit(storage);
+    case SCANNING_POLICY.SINGLE_ADDRESS:
     default:
       return null;
   }

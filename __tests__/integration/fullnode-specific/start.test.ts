@@ -19,7 +19,12 @@ import HathorWallet from '../../../src/new/wallet';
 import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
-import { AuthorityType, TokenVersion } from '../../../src/types';
+import {
+  AddressScanPolicyData,
+  AuthorityType,
+  SCANNING_POLICY,
+  TokenVersion,
+} from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { WalletTracker } from '../utils/wallet-tracker.util';
@@ -168,6 +173,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 },
     });
     tracker.track(hWallet);
     await hWallet.start();
@@ -188,6 +194,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       // No preCalculatedAddresses — all calculated at runtime
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as AddressScanPolicyData,
     };
     const hWallet = new HathorWallet(walletConfig);
     tracker.track(hWallet);
@@ -211,6 +218,7 @@ describe('[Fullnode-specific] start', () => {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
       },
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as AddressScanPolicyData,
     };
 
     const hWallet = new HathorWallet(walletConfig);

@@ -1,15 +1,20 @@
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
+  DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
+  generateConnection,
   generateMultisigWalletHelper,
   generateWalletHelper,
   generateWalletHelperRO,
   stopAllWallets,
   waitForTxReceived,
+  waitForWalletReady,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
+import HathorWallet from '../../src/new/wallet';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
@@ -20,10 +25,21 @@ import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import { NftValidationError, TxNotFoundError } from '../../src/errors';
+import {
+  HasTxOutsideFirstAddressError,
+  NftValidationError,
+  TxNotFoundError,
+} from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import transaction from '../../src/utils/transaction';
-import { WalletType, TokenVersion } from '../../src/types';
+import {
+  WalletType,
+  TokenVersion,
+  SCANNING_POLICY,
+  IGapLimitAddressScanPolicy,
+  WalletAddressMode,
+  AddressScanPolicyData,
+} from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import FeeHeader from '../../src/headers/fee';
@@ -33,6 +49,135 @@ import CreateTokenTransaction from '../../src/models/create_token_transaction';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
   'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
+
+describe('single-address mode', () => {
+  let wallet: HathorWallet;
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true, cleanTokens: true });
+    }
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      // single address mode is default
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    const currentAddress = await wallet.getCurrentAddress();
+    expect(currentAddress.index).toBe(0);
+    expect(currentAddress.address).toBe(walletData.addresses[0]);
+
+    await GenesisWalletHelper.injectFunds(wallet, await wallet.getAddressAtIndex(0), 10n);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    const currentAddressAfterTx = await wallet.getCurrentAddress();
+    expect(currentAddressAfterTx.index).toBe(0);
+    expect(currentAddressAfterTx.address).toBe(walletData.addresses[0]);
+
+    const nextAddress = await wallet.getNextAddress();
+    expect(nextAddress.index).toBe(0);
+    expect(nextAddress.address).toBe(walletData.addresses[0]);
+  });
+
+  it('should enable single-address and multi-address mode', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      // single address mode is default
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+    await wallet.enableMultiAddressMode();
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    await wallet.enableSingleAddressMode();
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+  });
+
+  it('should not enable single-address mode after receiving tx outside index 0', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    await GenesisWalletHelper.injectFunds(wallet, walletData.addresses[1], 10n);
+
+    await expect(wallet.enableSingleAddressMode()).rejects.toThrow(HasTxOutsideFirstAddressError);
+  });
+
+  it('should fallback to multi-address mode when starting and we have tx outside index 0', async () => {
+    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+
+    // Start the wallet
+    const walletConfig = {
+      seed: walletData.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as AddressScanPolicyData,
+    };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+    await GenesisWalletHelper.injectFunds(wallet, walletData.addresses[1], 10n);
+
+    await wallet.stop({ cleanStorage: true, cleanAddresses: true, cleanTokens: true });
+
+    // Start in single address mode
+    walletConfig.scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    wallet = new HathorWallet(walletConfig);
+    await wallet.start();
+    await waitForWalletReady(wallet);
+
+    // Wallet defaults to multi address mode automatically
+    await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+    // And still raises error
+    await expect(wallet.enableSingleAddressMode()).rejects.toThrow(HasTxOutsideFirstAddressError);
+  });
+});
 
 describe('template methods', () => {
   afterEach(async () => {

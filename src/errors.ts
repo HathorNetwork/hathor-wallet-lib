@@ -412,3 +412,13 @@ export class GlobalLoadLockTaskError extends Error {
 }
 
 export class NanoHeaderNotFound extends Error {}
+
+/**
+ * Error thrown when trying to enable single address mode with tx outside first address.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class HasTxOutsideFirstAddressError extends Error {
+  errorCode: string = ErrorMessages.HAS_TX_OUTSIDE_FIRST_ADDRESS;
+}

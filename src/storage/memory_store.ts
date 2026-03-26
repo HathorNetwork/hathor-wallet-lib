@@ -294,7 +294,7 @@ export class MemoryStore implements IStore {
     this.addressIndexes.set(info.bip32AddressIndex, info.base58);
 
     if (this.walletData.currentAddressIndex === -1) {
-      this.walletData.currentAddressIndex = info.bip32AddressIndex;
+      await this.setCurrentAddressIndex(info.bip32AddressIndex);
     }
 
     if (info.bip32AddressIndex > this.walletData.lastLoadedAddressIndex) {
@@ -327,9 +327,8 @@ export class MemoryStore implements IStore {
 
     if (markAsUsed) {
       // Will move the address index only if we have not reached the gap limit
-      this.walletData.currentAddressIndex = Math.min(
-        this.walletData.lastLoadedAddressIndex,
-        this.walletData.currentAddressIndex + 1
+      await this.setCurrentAddressIndex(
+        Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1)
       );
     }
     return addressInfo.base58;
@@ -340,6 +339,9 @@ export class MemoryStore implements IStore {
    * @param {number} index The index to set
    */
   async setCurrentAddressIndex(index: number): Promise<void> {
+    if (this.walletData.scanPolicyData?.policy === SCANNING_POLICY.SINGLE_ADDRESS && index > 0) {
+      return;
+    }
     this.walletData.currentAddressIndex = index;
   }
 
@@ -464,9 +466,8 @@ export class MemoryStore implements IStore {
       }
     }
     if (this.walletData.currentAddressIndex < maxIndex) {
-      this.walletData.currentAddressIndex = Math.min(
-        maxIndex + 1,
-        this.walletData.lastLoadedAddressIndex
+      await this.setCurrentAddressIndex(
+        Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex)
       );
     }
     this.walletData.lastUsedAddressIndex = maxIndex;

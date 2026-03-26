@@ -82,6 +82,7 @@ export function buildWalletInstance({
     network,
     storage,
     enableWs,
+    singleAddressMode: false,
   });
 
   return { wallet: newWallet, store, storage, words, addresses };
