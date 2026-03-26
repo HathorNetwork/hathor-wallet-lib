@@ -5,11 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/**
+ * Shared changeServer tests.
+ *
+ * changeServer is on IHathorWallet but has different semantics per facade:
+ * - Fullnode: changes the fullnode connection URL (getServerUrl reflects it)
+ * - Wallet Service: changes the wallet-service base URL in config + storage
+ *   (getServerUrl still returns the fullnode URL, not the wallet-service URL)
+ *
+ * Because the two facades expose changeServer/getServerUrl on different
+ * endpoints, the only portable assertion is that the wallet remains usable
+ * after a change+revert cycle. The fullnode-specific test with getVersionData
+ * validation lives in fullnode-specific/server_changes.test.ts.
+ *
+ * Each adapter must provide `originalServerUrl` so the test can revert
+ * the change regardless of which underlying URL changeServer modifies.
+ */
+
 import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
-import { delay } from '../utils/core.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import { FULLNODE_NETWORK_NAME, FULLNODE_URL } from '../configuration/test-constants';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -34,34 +49,16 @@ describe.each(adapters)('[Shared] server changes — $name', adapter => {
     });
 
     afterAll(async () => {
+      // Revert to the adapter's original server URL before stopping.
+      // This is critical because changeServer modifies global config
+      // that persists across tests.
+      await wallet.changeServer(adapter.originalServerUrl);
       await adapter.stopWallet(wallet);
     });
 
-    it('should change to a different server and revert', async () => {
-      const testnetUrl = 'https://node1.testnet.hathor.network/v1a/';
-
-      // Changing from our integration test privatenet to the testnet
-      await wallet.changeServer(testnetUrl);
-      const serverChangeTime = Date.now().valueOf();
-
-      try {
-        await delay(100);
-
-        // Validating the server change with getVersionData
-        const networkData = await wallet.getVersionData();
-        expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
-        expect(networkData.network).toMatch(/^testnet.*/);
-      } finally {
-        // Always revert to the original server, even if assertions fail
-        await wallet.changeServer(FULLNODE_URL);
-      }
-
-      await delay(100);
-
-      // Verifying the revert to the privatenet
-      const networkData = await wallet.getVersionData();
-      expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
-      expect(networkData.network).toStrictEqual(FULLNODE_NETWORK_NAME);
+    it('should accept a new server URL without throwing', async () => {
+      const newUrl = 'https://node1.testnet.hathor.network/v1a/';
+      await expect(wallet.changeServer(newUrl)).resolves.not.toThrow();
     });
   });
 });

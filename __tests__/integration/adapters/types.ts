@@ -95,6 +95,13 @@ export interface IWalletTestAdapter {
   defaultPinCode: string;
   defaultPassword: string;
 
+  /**
+   * The server URL that changeServer should revert to after tests.
+   * Fullnode: the fullnode connection URL (e.g. FULLNODE_URL)
+   * Wallet Service: the wallet-service base URL (e.g. 'http://localhost:3000/dev/')
+   */
+  originalServerUrl: string;
+
   // --- Lifecycle ---
 
   /** One-time setup for the test suite (e.g. start genesis wallet, init configs) */

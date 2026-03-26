@@ -95,6 +95,8 @@ describe.each(adapters)('[Shared] internal methods — $name', adapter => {
     it('getVersionData matches data from a direct fullnode request', async () => {
       const versionData = await wallet.getVersionData();
 
+      // The raw fullnode /version endpoint returns snake_case keys.
+      // Both facades transform these to camelCase in getVersionData().
       const directResponse = await axios
         .get('version', {
           baseURL: FULLNODE_URL,
@@ -109,14 +111,26 @@ describe.each(adapters)('[Shared] internal methods — $name', adapter => {
         });
       expect(directResponse.status).toBe(200);
 
-      // Both facades should return data consistent with the fullnode.
-      // Compare only the fields defined in FullNodeVersionData to
-      // tolerate extra fields the backend may include.
+      // Map raw snake_case keys to the camelCase keys returned by the facades.
+      // This allows us to verify both facades faithfully represent the fullnode.
+      const rawToFacade: Record<string, string> = {
+        version: 'version',
+        network: 'network',
+        min_weight: 'minWeight',
+        min_tx_weight: 'minTxWeight',
+        min_tx_weight_coefficient: 'minTxWeightCoefficient',
+        min_tx_weight_k: 'minTxWeightK',
+        token_deposit_percentage: 'tokenDepositPercentage',
+        reward_spend_min_blocks: 'rewardSpendMinBlocks',
+        max_number_inputs: 'maxNumberInputs',
+        max_number_outputs: 'maxNumberOutputs',
+      };
+
       const fullnodeData = directResponse.data;
-      for (const key of Object.keys(baseVersionDataExpectation)) {
-        expect(versionData).toHaveProperty(key);
-        expect(fullnodeData).toHaveProperty(key);
-        expect(versionData[key]).toStrictEqual(fullnodeData[key]);
+      for (const [rawKey, facadeKey] of Object.entries(rawToFacade)) {
+        expect(fullnodeData).toHaveProperty(rawKey);
+        expect(versionData).toHaveProperty(facadeKey);
+        expect(versionData[facadeKey]).toStrictEqual(fullnodeData[rawKey]);
       }
     });
   });

@@ -50,6 +50,8 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   defaultPassword = SERVICE_PASSWORD;
 
+  originalServerUrl = 'http://localhost:3000/dev/';
+
   capabilities: WalletCapabilities = {
     supportsMultisig: false,
     supportsTokenScope: false,
