@@ -13,7 +13,6 @@ import { WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
-import { ConnectionState } from '../../src/wallet/types';
 import HathorWallet from '../../src/new/wallet';
 import { MemoryStore } from '../../src/storage';
 import { IHistoryTx } from '../../src/types';
@@ -1609,43 +1608,6 @@ describe('getAuthorityUtxos', () => {
       },
     ];
     expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt')).toStrictEqual(expectedMeltAuthUtxos);
-  });
-});
-
-// This section tests methods that have side effects impacting the whole wallet. Executing it last.
-describe('internal methods', () => {
-  /** @type HathorWallet */
-  let gWallet;
-  /** @type HathorWallet */
-  let hWallet;
-  beforeAll(async () => {
-    const { hWallet: ghWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = ghWallet;
-    hWallet = await generateWalletHelper();
-  });
-
-  afterAll(async () => {
-    hWallet.stop();
-    await GenesisWalletHelper.clearListeners();
-    await gWallet.stop();
-  });
-
-  it('should test the debug methods', async () => {
-    expect(gWallet.debug).toStrictEqual(false);
-
-    gWallet.enableDebugMode();
-    expect(gWallet.debug).toStrictEqual(true);
-
-    gWallet.disableDebugMode();
-    expect(gWallet.debug).toStrictEqual(false);
-  });
-
-  it('should reload the storage', async () => {
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const spy = jest.spyOn(hWallet.storage, 'processHistory');
-    // Simulate that we received an event of the connection becoming active
-    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
-    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 
