@@ -1678,7 +1678,7 @@ describe('internal methods', () => {
 
   it('should change servers', async () => {
     // Changing from our integration test privatenet to the testnet
-    gWallet.changeServer('https://node1.testnet.hathor.network/v1a/');
+    await gWallet.changeServer('https://node1.testnet.hathor.network/v1a/');
     const serverChangeTime = Date.now().valueOf();
     await delay(100);
 
