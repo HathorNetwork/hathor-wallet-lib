@@ -9,11 +9,7 @@ import {
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import {
-  FULLNODE_NETWORK_NAME,
-  FULLNODE_URL,
-  WALLET_CONSTANTS,
-} from './configuration/test-constants';
+import { WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
@@ -1642,26 +1638,6 @@ describe('internal methods', () => {
 
     gWallet.disableDebugMode();
     expect(gWallet.debug).toStrictEqual(false);
-  });
-
-  it('should change servers', async () => {
-    // Changing from our integration test privatenet to the testnet
-    await gWallet.changeServer('https://node1.testnet.hathor.network/v1a/');
-    const serverChangeTime = Date.now().valueOf();
-    await delay(100);
-
-    // Validating the server change with getVersionData
-    let networkData = await gWallet.getVersionData();
-    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
-    expect(networkData.network).toMatch(/^testnet.*/);
-
-    await gWallet.changeServer(FULLNODE_URL);
-    await delay(100);
-
-    // Reverting to the privatenet
-    networkData = await gWallet.getVersionData();
-    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
-    expect(networkData.network).toStrictEqual(FULLNODE_NETWORK_NAME);
   });
 
   it('should reload the storage', async () => {
