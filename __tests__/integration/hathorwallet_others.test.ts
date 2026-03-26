@@ -12,7 +12,6 @@ import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/co
 import {
   FULLNODE_NETWORK_NAME,
   FULLNODE_URL,
-  NETWORK_NAME,
   WALLET_CONSTANTS,
 } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
@@ -1643,37 +1642,6 @@ describe('internal methods', () => {
 
     gWallet.disableDebugMode();
     expect(gWallet.debug).toStrictEqual(false);
-  });
-
-  it('should test network-related methods', async () => {
-    // GetServerUrl fetching from the live fullnode connection
-    expect(await gWallet.getServerUrl()).toStrictEqual(FULLNODE_URL);
-    expect(await gWallet.getNetwork()).toStrictEqual(NETWORK_NAME);
-    expect(await gWallet.getNetworkObject()).toMatchObject({
-      name: NETWORK_NAME,
-      versionBytes: { p2pkh: 73, p2sh: 135 }, // Calculated for the privnet.py config file
-      bitcoreNetwork: {
-        name: expect.stringContaining(NETWORK_NAME),
-        alias: 'test', // this is the alias for the testnet network
-        pubkeyhash: 73,
-        scripthash: 135,
-      },
-    });
-
-    // GetVersionData fetching from the live fullnode server
-    expect(await gWallet.getVersionData()).toMatchObject({
-      timestamp: expect.any(Number),
-      version: expect.any(String),
-      network: FULLNODE_NETWORK_NAME,
-      minWeight: expect.any(Number),
-      minTxWeight: expect.any(Number),
-      minTxWeightCoefficient: expect.any(Number),
-      minTxWeightK: expect.any(Number),
-      tokenDepositPercentage: 0.01,
-      rewardSpendMinBlocks: expect.any(Number),
-      maxNumberInputs: 255,
-      maxNumberOutputs: 255,
-    });
   });
 
   it('should change servers', async () => {

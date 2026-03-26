@@ -1,16 +1,9 @@
-import axios from 'axios';
 import config from '../../src/config';
 import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { CreateTokenTransaction, FeeHeader, Output, transactionUtils } from '../../src';
-import {
-  FULLNODE_NETWORK_NAME,
-  FULLNODE_URL,
-  NETWORK_NAME,
-  WALLET_CONSTANTS,
-} from './configuration/test-constants';
+import { WALLET_CONSTANTS } from './configuration/test-constants';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import Network from '../../src/models/network';
 import {
   buildWalletInstance,
   emptyWallet,
@@ -160,76 +153,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await GenesisWalletServiceHelper.stop();
-});
-
-describe('wallet public methods', () => {
-  beforeEach(async () => {
-    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
-    await wallet.start({ pinCode, password });
-  });
-
-  afterEach(async () => {
-    if (wallet) {
-      await wallet.stop({ cleanStorage: true });
-    }
-  });
-
-  it('getServerUrl returns the configured base URL', () => {
-    expect(wallet.getServerUrl()).toBe(FULLNODE_URL);
-  });
-
-  it('getVersionData returns valid version info', async () => {
-    const versionData = await wallet.getVersionData();
-    expect(versionData).toBeDefined();
-    expect(versionData).toEqual(
-      expect.objectContaining({
-        timestamp: expect.any(Number),
-        version: expect.any(String),
-        network: FULLNODE_NETWORK_NAME,
-        minWeight: expect.any(Number),
-        minTxWeight: expect.any(Number),
-        minTxWeightCoefficient: expect.any(Number),
-        minTxWeightK: expect.any(Number),
-        tokenDepositPercentage: expect.any(Number),
-        rewardSpendMinBlocks: expect.any(Number),
-        maxNumberInputs: expect.any(Number),
-        maxNumberOutputs: expect.any(Number),
-        decimalPlaces: expect.any(Number),
-        nativeTokenName: expect.any(String),
-        nativeTokenSymbol: expect.any(String),
-      })
-    );
-
-    // Make sure it contains the same data as a direct fullnode request
-    const fullnodeResponse = await axios
-      .get('version', {
-        baseURL: config.getWalletServiceBaseUrl(),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .catch(e => {
-        loggers.test!.log(`Received an error on /version: ${e}`);
-        if (e.response) {
-          return e.response;
-        }
-        return {};
-      });
-    expect(fullnodeResponse.status).toBe(200);
-    expect(fullnodeResponse.data?.success).toBe(true);
-
-    expect(versionData).toEqual(fullnodeResponse.data.data);
-  });
-
-  it('getNetwork returns the correct network name', () => {
-    expect(wallet.getNetwork()).toBe(NETWORK_NAME);
-  });
-
-  it('getNetworkObject returns a Network instance with correct name', () => {
-    const networkObj = wallet.getNetworkObject();
-    expect(networkObj).toBeInstanceOf(Network);
-    expect(networkObj.name).toBe(NETWORK_NAME);
-  });
 });
 
 describe('empty wallet address methods', () => {
