@@ -32,8 +32,13 @@ const adapters: IWalletTestAdapter[] = [
 ];
 
 describe.each(adapters)('[Shared] server changes — $name', adapter => {
+  // Captured after suiteSetup (config initialized) but before any test
+  // mutates it via changeServer. Safe to use in afterAll for revert.
+  let serverUrlBeforeTests: string;
+
   beforeAll(async () => {
     await adapter.suiteSetup();
+    serverUrlBeforeTests = adapter.originalServerUrl;
   });
 
   afterAll(async () => {
@@ -50,10 +55,10 @@ describe.each(adapters)('[Shared] server changes — $name', adapter => {
 
     afterAll(async () => {
       if (wallet) {
-        // Revert to the adapter's original server URL before stopping.
+        // Revert to the server URL captured before tests ran.
         // This is critical because changeServer modifies global config
         // that persists across tests.
-        await wallet.changeServer(adapter.originalServerUrl);
+        await wallet.changeServer(serverUrlBeforeTests);
         await adapter.stopWallet(wallet);
       }
     });

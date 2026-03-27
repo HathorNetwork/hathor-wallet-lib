@@ -96,11 +96,6 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return wallet as unknown as HathorWalletServiceWallet;
   }
 
-  async suiteSetup(): Promise<void> {
-    initializeServiceGlobalConfigs();
-    await GenesisWalletServiceHelper.start();
-  }
-
   async suiteTeardown(): Promise<void> {
     await this.stopAllWallets();
     await GenesisWalletServiceHelper.stop();
