@@ -172,7 +172,7 @@ export class WalletPrecalculationHelper {
     try {
       return JSON.parse(strData);
     } catch (err) {
-      loggers.test!.error('Corrupt wallets file');
+      loggers.test!.error('Corrupt wallets file', { error: err });
       throw err;
     }
   }
