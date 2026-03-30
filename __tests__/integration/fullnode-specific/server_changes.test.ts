@@ -29,7 +29,6 @@ describe('[Fullnode] server changes', () => {
   });
 
   afterAll(async () => {
-    await GenesisWalletHelper.clearListeners();
     // Do not stop gWallet: it is the shared singleton from GenesisWalletHelper
     // and stopping it would break any subsequent test that calls getSingleton().
   });

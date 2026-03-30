@@ -33,8 +33,6 @@ describe('[Fullnode] internal methods', () => {
 
   afterAll(async () => {
     await hWallet.stop();
-    await GenesisWalletHelper.clearListeners();
-    await gWallet.stop();
   });
 
   it('should test the debug methods', async () => {
@@ -47,7 +45,7 @@ describe('[Fullnode] internal methods', () => {
     expect(gWallet.debug).toStrictEqual(false);
   });
 
-  it('should reload the storage', async () => {
+  it('should call processHistory when connection state changes to CONNECTED', async () => {
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const spy = jest.spyOn(hWallet.storage, 'processHistory');
     // Simulate that we received an event of the connection becoming active
