@@ -8,23 +8,23 @@
 /**
  * Shared changeServer tests.
  *
- * changeServer is on IHathorWallet but has different semantics per facade:
- * - Fullnode: changes the fullnode connection URL (getServerUrl reflects it)
- * - Wallet Service: changes the wallet-service base URL in config + storage
- *   (getServerUrl still returns the fullnode URL, not the wallet-service URL)
+ * Both facades implement changeServer on IHathorWallet. Although the
+ * underlying URL they modify differs (fullnode connection URL vs.
+ * wallet-service base URL), getVersionData() is the universal
+ * observable side-effect: it routes through whichever URL changeServer
+ * modifies, returning FullNodeVersionData with a `network` field that
+ * distinguishes testnet from privatenet.
  *
- * Because the two facades expose changeServer/getServerUrl on different
- * endpoints, the only portable assertion is that the wallet remains usable
- * after a change+revert cycle. The fullnode-specific test with getVersionData
- * validation lives in fullnode-specific/server_changes.test.ts.
- *
- * Each adapter must provide `originalServerUrl` so the test can revert
- * the change regardless of which underlying URL changeServer modifies.
+ * Each adapter provides:
+ * - `originalServerUrl`: the URL to revert to after tests
+ * - `testnetServerUrl`: a real testnet endpoint for validation
  */
 
 import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
+import { delay } from '../utils/core.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { FULLNODE_NETWORK_NAME } from '../configuration/test-constants';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -55,17 +55,29 @@ describe.each(adapters)('[Shared] server changes — $name', adapter => {
 
     afterAll(async () => {
       if (wallet) {
-        // Revert to the server URL captured before tests ran.
-        // This is critical because changeServer modifies global config
-        // that persists across tests.
         await wallet.changeServer(serverUrlBeforeTests);
         await adapter.stopWallet(wallet);
       }
     });
 
-    it('should accept a new server URL without throwing', async () => {
-      const newUrl = 'https://node1.testnet.hathor.network/v1a/';
-      await expect(wallet.changeServer(newUrl)).resolves.toBeUndefined();
+    it('should change to a testnet server and verify via getVersionData', async () => {
+      await wallet.changeServer(adapter.testnetServerUrl);
+
+      try {
+        await delay(100);
+
+        const testnetData = await wallet.getVersionData();
+        expect(testnetData.network).toMatch(/^testnet.*/);
+      } finally {
+        // Always revert, even if assertions fail
+        await wallet.changeServer(serverUrlBeforeTests);
+      }
+
+      await delay(100);
+
+      // Verify the revert to the privatenet
+      const revertedData = await wallet.getVersionData();
+      expect(revertedData.network).toStrictEqual(FULLNODE_NETWORK_NAME);
     });
   });
 });

@@ -53,6 +53,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   originalServerUrl = FULLNODE_URL;
 
+  testnetServerUrl = 'https://node1.testnet.hathor.network/v1a/';
+
   capabilities: WalletCapabilities = {
     supportsMultisig: true,
     supportsTokenScope: true,

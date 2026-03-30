@@ -53,6 +53,8 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   private _originalServerUrl?: string;
 
+  testnetServerUrl = 'https://wallet-service.testnet.hathor.network/';
+
   get originalServerUrl(): string {
     if (!this._originalServerUrl) {
       throw new Error('originalServerUrl not initialized. Call suiteSetup() first.');

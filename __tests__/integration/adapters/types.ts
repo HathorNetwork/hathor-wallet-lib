@@ -102,6 +102,13 @@ export interface IWalletTestAdapter {
    */
   originalServerUrl: string;
 
+  /**
+   * A real testnet server URL for validating changeServer via getVersionData.
+   * Fullnode: a testnet fullnode URL
+   * Wallet Service: a testnet wallet-service URL
+   */
+  testnetServerUrl: string;
+
   // --- Lifecycle ---
 
   /** One-time setup for the test suite (e.g. start genesis wallet, init configs) */
