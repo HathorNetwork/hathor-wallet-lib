@@ -687,6 +687,32 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       );
     }
   }
+
+  /**
+   * Release all UTXOs that were marked as selected for this transaction.
+   * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
+   */
+  async releaseUtxos(): Promise<void> {
+    if (this.transaction === null) {
+      return;
+    }
+
+    if (!this.storage) {
+      return;
+    }
+
+    for (const input of this.transaction.inputs) {
+      try {
+        await this.storage.utxoSelectAsInput(
+          { txId: input.hash, index: input.index },
+          false,
+          SELECT_OUTPUTS_TIMEOUT
+        );
+      } catch {
+        // Best-effort: continue releasing remaining UTXOs
+      }
+    }
+  }
 }
 
 /**

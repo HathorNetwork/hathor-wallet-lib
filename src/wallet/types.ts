@@ -498,6 +498,7 @@ export interface ISendTransaction {
   runFromMining(until?: 'mine-tx' | null): Promise<Transaction>;
   prepareTx(): Promise<Transaction>;
   signTx(pin?: string | null): Promise<Transaction>;
+  releaseUtxos(): Promise<void>;
   readonly transaction: Transaction | null;
   readonly fullTxData: IDataTx | null;
 }
