@@ -13,12 +13,11 @@ import HathorWallet from '../../../../src/new/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 
-
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
   let contractId: string;
   let fbtUid: string;
-  let dbtUid: string;
+  let _dbtUid: string;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
@@ -78,7 +77,7 @@ describe('FeeBlueprint Template execution', () => {
       throw new Error(`Setup failed: dbtTx ${dbtTx.hash} was voided or failed to fetch`);
     }
     const dbtState = await ncApi.getNanoContractState(contractId, ['dbt_uid'], [], []);
-    dbtUid = dbtState.fields.dbt_uid.value;
+    _dbtUid = dbtState.fields.dbt_uid.value;
 
     // Create fee token (FBT)
     const fbtTx = await hWallet.createAndSendNanoContractTransaction('create_fee_token', address0, {
@@ -222,5 +221,4 @@ describe('FeeBlueprint Template execution', () => {
       htrBalanceBefore - feeAmount
     );
   });
-
 });
