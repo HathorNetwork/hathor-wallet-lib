@@ -147,7 +147,7 @@ export class WalletPrecalculationHelper {
     // Finishing benchmark and returning results
     const timeEnd = Date.now().valueOf();
     const timeDiff = timeEnd - timeStart;
-    loggers.test?.log(`Wallet calculation made in ${timeDiff}ms`);
+    loggers.test!.log(`Wallet calculation made in ${timeDiff}ms`);
 
     const returnObject: PrecalculatedWalletData = {
       isUsed: false,
@@ -172,7 +172,7 @@ export class WalletPrecalculationHelper {
     try {
       return JSON.parse(strData);
     } catch (err) {
-      loggers.test?.error('Corrupt wallets file');
+      loggers.test!.error('Corrupt wallets file');
       throw err;
     }
   }
@@ -212,7 +212,7 @@ export class WalletPrecalculationHelper {
     const wallets: PrecalculatedWalletData[] = [];
     for (let i = 0; i < amountOfCommonWallets; ++i) {
       wallets.push(WalletPrecalculationHelper.generateAddressesFromWords());
-      if (params.verbose) loggers.test?.log(`Generated ${i}`);
+      if (params.verbose) loggers.test!.log(`Generated ${i}`);
     }
 
     return wallets;
