@@ -214,6 +214,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     let scanPolicy: AddressScanPolicyData | null = null;
     if (options?.singleAddressMode === true) {
       scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    } else if (options?.singleAddressMode === false) {
+      scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 };
     }
     return {
       ...(useSeed && walletData.words ? { seed: walletData.words } : {}),
