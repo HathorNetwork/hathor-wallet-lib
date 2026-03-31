@@ -24,6 +24,9 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  CreateTokenOptions,
+  CreateTokenResult,
+  AuthorityUtxoResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -199,5 +202,39 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenOptions
+  ): Promise<CreateTokenResult> {
+    const sw = this.concrete(wallet);
+    const response = await sw.createNewToken(name, symbol, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!response.hash) {
+      throw new Error('createToken: transaction had no hash');
+    }
+    await pollForTx(sw, response.hash);
+    return { hash: response.hash };
+  }
+
+  async getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt'
+  ): Promise<AuthorityUtxoResult[]> {
+    const sw = this.concrete(wallet);
+    const utxos = await sw.getAuthorityUtxo(tokenUid, type);
+    return utxos.map(u => ({
+      txId: u.txId,
+      index: u.index,
+      address: u.address,
+      authorities: u.authorities,
+    }));
   }
 }

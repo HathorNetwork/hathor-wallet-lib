@@ -28,6 +28,9 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  CreateTokenOptions,
+  CreateTokenResult,
+  AuthorityUtxoResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -178,6 +181,35 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenOptions
+  ): Promise<CreateTokenResult> {
+    const hWallet = this.concrete(wallet);
+    const response = await hWallet.createNewToken(name, symbol, amount, options);
+    await waitForTxReceived(hWallet, response.hash);
+    await waitUntilNextTimestamp(hWallet, response.hash);
+    return { hash: response.hash };
+  }
+
+  async getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt'
+  ): Promise<AuthorityUtxoResult[]> {
+    const hWallet = this.concrete(wallet);
+    const utxos = await hWallet.getAuthorityUtxos(tokenUid, type);
+    return utxos.map(u => ({
+      txId: u.txId,
+      index: u.index,
+      address: u.address,
+      authorities: u.authorities,
+    }));
   }
 
   // --- Private helpers ---
