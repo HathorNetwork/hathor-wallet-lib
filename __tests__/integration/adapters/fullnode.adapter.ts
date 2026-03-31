@@ -212,7 +212,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     // pre-registration), prefer xpub/xpriv and omit the seed.
     const useSeed = !options?.xpub && !options?.xpriv;
     let scanPolicy: AddressScanPolicyData | null = null;
-    if (options?.singleAddressMode == true) {
+    if (options?.singleAddressMode === true) {
       scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
     }
     return {

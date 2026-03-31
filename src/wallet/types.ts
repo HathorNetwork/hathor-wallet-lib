@@ -6,7 +6,14 @@
  */
 
 import bitcore from 'bitcore-lib';
-import { TokenVersion, IStorage, OutputValueType, IHistoryTx, IDataTx } from '../types';
+import {
+  TokenVersion,
+  IStorage,
+  OutputValueType,
+  IHistoryTx,
+  IDataTx,
+  WalletAddressMode,
+} from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -488,6 +495,9 @@ export interface IHathorWallet {
   storage: IStorage;
   signTx(tx: Transaction, options: { pinCode?: string | null }): Promise<Transaction>;
   setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void>;
+  getAddressMode(): Promise<WalletAddressMode>;
+  enableMultiAddressMode(): Promise<void>;
+  enableSingleAddressMode(): Promise<void>;
 }
 
 export interface ISendTransaction {

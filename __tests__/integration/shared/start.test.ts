@@ -14,6 +14,7 @@ import { deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { WalletAddressMode } from '../../../src';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -250,6 +251,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
       });
 
       try {
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
         const addr = await wallet.getAddressAtIndex(1);
         expect(addr).toBeDefined();
         await adapter.injectFunds(wallet, addr!, 1n);
