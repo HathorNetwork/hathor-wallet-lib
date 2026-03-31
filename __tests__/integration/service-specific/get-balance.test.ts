@@ -58,7 +58,9 @@ describe('[Service] getBalance', () => {
     expect(typeof htrBalance?.balance).toBe('object');
   });
 
-  // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
+  // FIXME(wallet-service): getBalance() on an empty wallet should return a single
+  // entry with 0 balance for the native token, but currently returns an empty array.
+  // Ref: https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
   it.skip('should return balance array for empty wallet', async () => {
     ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode: adapter.defaultPinCode, password: adapter.defaultPassword });
@@ -73,7 +75,9 @@ describe('[Service] getBalance', () => {
     expect(htrBalance?.balance).toBe(0n);
   });
 
-  // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
+  // FIXME(wallet-service): getBalance(tokenUid) on an empty wallet should return
+  // a single entry with 0 balance, but currently returns an empty array.
+  // Ref: https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
   it.skip('should return balance for specific token when token parameter is provided', async () => {
     ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode: adapter.defaultPinCode, password: adapter.defaultPassword });

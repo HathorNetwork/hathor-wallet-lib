@@ -49,7 +49,7 @@ describe('[Fullnode] getBalance', () => {
     const balanceBefore = await hWallet.getBalance(NATIVE_TOKEN_UID);
 
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2n);
-    await waitForTxReceived(hWallet, tx1.hash);
+    await waitForTxReceived(hWallet, tx1.hash!);
     const balanceAfter = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balanceAfter[0].balance).toEqual(balanceBefore[0].balance);
   });
