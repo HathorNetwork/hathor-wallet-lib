@@ -47,7 +47,8 @@ describe('[Service] getBalance', () => {
     wallet = w as unknown as HathorWalletServiceWallet;
 
     const addr = await w.getAddressAtIndex(0);
-    await adapter.injectFunds(w, addr!, 1n);
+    expect(addr).toBeDefined();
+    await adapter.injectFunds(w, addr as string, 1n);
 
     const balances = await wallet.getBalance();
     expect(Array.isArray(balances)).toBe(true);
