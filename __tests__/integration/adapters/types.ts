@@ -161,4 +161,33 @@ export interface IWalletTestAdapter {
 
   /** Returns a fresh precalculated wallet for tests that need one */
   getPrecalculatedWallet(): PrecalculatedWalletData;
+
+  // --- Transaction operations ---
+
+  /**
+   * Sends a transaction from the wallet to the given address.
+   * Handles pinCode injection for facades that require per-call credentials.
+   * Returns a normalized result with at least a `hash` field.
+   */
+  sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult>;
+}
+
+/**
+ * Options for sending a transaction via the adapter.
+ */
+export interface SendTransactionOptions {
+  token?: string;
+  changeAddress?: string;
+}
+
+/**
+ * Result of sending a transaction.
+ */
+export interface SendTransactionResult {
+  hash: string;
 }

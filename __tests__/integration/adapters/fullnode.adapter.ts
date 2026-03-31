@@ -28,6 +28,8 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  SendTransactionOptions,
+  SendTransactionResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -178,6 +180,19 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.sendTransaction(address, amount, options);
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash };
   }
 
   // --- Private helpers ---

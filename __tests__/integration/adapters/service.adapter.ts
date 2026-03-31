@@ -24,6 +24,8 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  SendTransactionOptions,
+  SendTransactionResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -199,5 +201,23 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.sendTransaction(address, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result.hash) {
+      throw new Error('sendTransaction: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash };
   }
 }
