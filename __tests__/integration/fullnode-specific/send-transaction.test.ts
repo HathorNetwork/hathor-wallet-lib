@@ -212,7 +212,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
         ],
       }
     );
-    validateFeeAmount(tx.headers, 1n);
+    validateFeeAmount(tx.headers, 2n);
     await waitForTxReceived(hWallet, tx.hash);
 
     const decodedTx = await hWallet.getTx(tx.hash);

@@ -29,22 +29,6 @@ initializeServiceGlobalConfigs();
 const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const walletWithTxs = {
-  words:
-    'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
-  addresses: [
-    'WeSnE5dnrciKahKbTvbUWmY6YM9Ntgi6MJ',
-    'Wj52SGubNZu3JA2ncRXyNGfqyrdnj4XTU2',
-    'Wh1Xs7zPVT9bc6dzzA23Zu8aiP3H8zLkiy',
-    'WdFeZvVJkwAdLDpXLGJpFP9XSDcdrntvAg',
-    'WTdWsgnCPKBuzEKAT4NZkzHaD4gHYMrk4G',
-    'WSBhEBkuLpqu2Fz1j6PUyUa1W4GGybEYSF',
-    'WS8yocEYBykpgjQxAhxjTcjVw9gKtYdys8',
-    'WmkBa6ikYM2sZmiopM6zBGswJKvzs5Noix',
-    'WeEPszSx14og6c3uPXy2vYh7BK9c6Zb9TX',
-    'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
-  ],
-};
 const customTokenWallet = {
   words:
     'shine myself welcome feature nurse cement crumble input utility lizard melt great sample slab know leisure salmon path gate iron enlist discover cry radio',
@@ -965,9 +949,13 @@ describe('balances', () => {
     });
 
     it('should return balance array for wallet with transactions', async () => {
-      // Use walletWithTxs which has transaction history
-      const { wallet: walletTxs } = buildWalletInstance({ words: walletWithTxs.words });
+      const { wallet: walletTxs, addresses } = buildWalletInstance();
       await walletTxs.start({ pinCode, password });
+
+      // Fund the wallet so it has transaction history
+      const fundTx = await gWallet.sendTransaction(addresses[0], 10n, { pinCode });
+      await pollForTx(gWallet, fundTx.hash!);
+      await pollForTx(walletTxs, fundTx.hash!);
 
       const balances = await walletTxs.getBalance();
 

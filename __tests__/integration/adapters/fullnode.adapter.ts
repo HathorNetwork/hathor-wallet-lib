@@ -189,7 +189,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     options?: SendTransactionOptions
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
-    const result = await hWallet.sendTransaction(address, amount, options);
+    const result = await hWallet.sendTransaction(address, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
     return { hash: result.hash };
