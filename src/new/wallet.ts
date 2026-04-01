@@ -30,6 +30,7 @@ import {
   ON_CHAIN_BLUEPRINTS_VERSION,
   P2PKH_ACCT_PATH,
   P2SH_ACCT_PATH,
+  GAP_LIMIT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
@@ -629,7 +630,7 @@ class HathorWallet extends EventEmitter {
               await this.enableSingleAddressMode();
             } catch (err) {
               if (err instanceof HasTxOutsideFirstAddressError) {
-                this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 };
+                this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: GAP_LIMIT };
                 await this.storage.setScanningPolicyData(this.scanPolicy);
               } else {
                 throw err;
@@ -778,8 +779,8 @@ class HathorWallet extends EventEmitter {
   async hasTxOutsideFirstAddress(): Promise<boolean> {
     const addresses: string[] = [];
     let foundAnyTx = false;
-    // Load address from index 1 to 20
-    for (let i = 1; i < 20; i++) {
+    // Load address from index 1 to GAP_LIMIT
+    for (let i = 1; i < GAP_LIMIT; i++) {
       const address = await this.getAddressAtIndex(i);
       addresses.push(address);
     }
@@ -3539,7 +3540,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async enableMultiAddressMode(gapLimit: number = 20): Promise<void> {
+  async enableMultiAddressMode(gapLimit: number = GAP_LIMIT): Promise<void> {
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }

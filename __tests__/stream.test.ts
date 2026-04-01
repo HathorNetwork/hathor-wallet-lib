@@ -2,10 +2,7 @@ import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
-import {
-  HistorySyncMode,
-  getDefaultLogger,
-} from '../src/types';
+import { HistorySyncMode, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 import { getGapLimitConfig } from './integration/utils/core.util';
 

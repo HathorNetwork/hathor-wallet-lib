@@ -19,10 +19,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
-import {
-  AuthorityType,
-  TokenVersion,
-} from '../../../src/types';
+import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { WalletTracker } from '../utils/wallet-tracker.util';

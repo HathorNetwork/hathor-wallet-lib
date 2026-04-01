@@ -18,6 +18,7 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
+  GAP_LIMIT,
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -817,7 +818,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         if (error instanceof HasTxOutsideFirstAddressError) {
           await this.storage.setScanningPolicyData({
             policy: SCANNING_POLICY.GAP_LIMIT,
-            gapLimit: 20,
+            gapLimit: GAP_LIMIT,
           });
           this.singleAddress = false;
         } else {
@@ -1577,7 +1578,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Switch policy in storage
     await this.storage.setScanningPolicyData({
       policy: SCANNING_POLICY.GAP_LIMIT,
-      gapLimit: 20,
+      gapLimit: GAP_LIMIT,
     });
 
     this.singleAddress = false;

@@ -32,12 +32,7 @@ import {
 } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import transaction from '../../src/utils/transaction';
-import {
-  WalletType,
-  TokenVersion,
-  SCANNING_POLICY,
-  WalletAddressMode,
-} from '../../src/types';
+import { WalletType, TokenVersion, SCANNING_POLICY, WalletAddressMode } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import FeeHeader from '../../src/headers/fee';

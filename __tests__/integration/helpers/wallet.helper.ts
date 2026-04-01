@@ -20,10 +20,7 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
-import {
-  TxHistoryProcessingStatus,
-  IHistoryTx,
-} from '../../../src/types';
+import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
