@@ -420,7 +420,9 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
         });
 
         await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
-        await expect(wallet.enableSingleAddressMode()).rejects.toThrow(HasTxOutsideFirstAddressError);
+        await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
+          HasTxOutsideFirstAddressError
+        );
         await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
       } finally {
         await adapter.stopAllWallets();
