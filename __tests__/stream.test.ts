@@ -4,11 +4,10 @@ import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
 import {
   HistorySyncMode,
-  IGapLimitAddressScanPolicy,
-  SCANNING_POLICY,
   getDefaultLogger,
 } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
+import { getGapLimitConfig } from './integration/utils/core.util';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -158,7 +157,7 @@ async function startWalletFor(mode) {
     connection,
     password: '123',
     pinCode: '123',
-    scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
+    scanPolicy: getGapLimitConfig(),
   };
   const hWallet = new HathorWallet(walletConfig);
   hWallet.setHistorySyncMode(mode);

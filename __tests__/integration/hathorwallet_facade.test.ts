@@ -1,6 +1,6 @@
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay, getRandomInt } from './utils/core.util';
+import { delay, getGapLimitConfig, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
   DEFAULT_PASSWORD,
@@ -36,9 +36,7 @@ import {
   WalletType,
   TokenVersion,
   SCANNING_POLICY,
-  IGapLimitAddressScanPolicy,
   WalletAddressMode,
-  AddressScanPolicyData,
 } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
@@ -131,7 +129,7 @@ describe('single-address mode', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
-      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as IGapLimitAddressScanPolicy,
+      scanPolicy: getGapLimitConfig(),
     };
     wallet = new HathorWallet(walletConfig);
     await wallet.start();
@@ -154,7 +152,7 @@ describe('single-address mode', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
-      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 } as AddressScanPolicyData,
+      scanPolicy: getGapLimitConfig(),
     };
     wallet = new HathorWallet(walletConfig);
     await wallet.start();

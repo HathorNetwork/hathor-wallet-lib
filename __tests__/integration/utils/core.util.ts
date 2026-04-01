@@ -8,6 +8,7 @@
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import { P2PKH_ACCT_PATH } from '../../../src/constants';
 import Network from '../../../src/models/network';
+import { AddressScanPolicyData, SCANNING_POLICY } from '../../../src/types';
 
 /**
  * Simple way to wait asynchronously before continuing the funcion. Does not block the JS thread.
@@ -34,4 +35,11 @@ export function deriveXpubFromSeed(words: string): string {
   const code = new Mnemonic(words);
   const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
   return rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
+}
+
+/**
+ * Generates a gap limit scanning policy configuration.
+ */
+export function getGapLimitConfig(gapLimit: number = 20): AddressScanPolicyData {
+  return { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit };
 }

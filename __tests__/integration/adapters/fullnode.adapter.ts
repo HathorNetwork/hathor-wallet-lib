@@ -30,6 +30,7 @@ import type {
   CreateWalletResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+import { getGapLimitConfig } from '../utils/core.util';
 
 /** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true, cleanAddresses: true };
@@ -215,7 +216,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     if (options?.singleAddressMode === true) {
       scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
     } else if (!options?.singleAddressMode) {
-      scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 };
+      scanPolicy = getGapLimitConfig();
     }
     return {
       ...(useSeed && walletData.words ? { seed: walletData.words } : {}),
