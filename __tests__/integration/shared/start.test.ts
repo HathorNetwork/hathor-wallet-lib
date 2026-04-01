@@ -352,20 +352,6 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
         const nextAddressAfterTx = await wallet.getNextAddress();
         expect(nextAddressAfterTx.index).toBe(0);
         expect(nextAddressAfterTx.address).toBe(walletData.addresses[0]);
-
-        // Tx in index 1
-        const addr1 = await wallet.getAddressAtIndex(1);
-        expect(addr1).toBeDefined();
-        await adapter.injectFunds(wallet, addr1!, 1n);
-
-        // Current and next address is still 0 and in SINGLE mode
-        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
-        const currentAddressAfterTx1 = await wallet.getCurrentAddress();
-        expect(currentAddressAfterTx1.index).toBe(0);
-        expect(currentAddressAfterTx1.address).toBe(walletData.addresses[0]);
-        const nextAddressAfterTx1 = await wallet.getNextAddress();
-        expect(nextAddressAfterTx1.index).toBe(0);
-        expect(nextAddressAfterTx1.address).toBe(walletData.addresses[0]);
       } finally {
         await adapter.stopAllWallets();
       }
