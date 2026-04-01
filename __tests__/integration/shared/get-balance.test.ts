@@ -70,4 +70,52 @@ describe.each(adapters)('[Shared] getBalance — $name', adapter => {
       await adapter.stopWallet(wallet);
     }
   });
+
+  it('should not change balance after internal transfer', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const injectedValue = BigInt(getRandomInt(10, 2));
+      const addr = await wallet.getAddressAtIndex(0);
+      expect(addr).toBeDefined();
+      await adapter.injectFunds(wallet, addr!, injectedValue);
+
+      const balanceBefore = await wallet.getBalance(NATIVE_TOKEN_UID);
+
+      const tx = await wallet.sendTransaction(await wallet.getAddressAtIndex(1), 2n, {
+        pinCode: adapter.defaultPinCode,
+      });
+      await adapter.waitForTx(wallet, tx.hash!);
+
+      const balanceAfter = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(balanceAfter[0].balance).toEqual(balanceBefore[0].balance);
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('should get the balance for a custom token', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      // Creating a new custom token
+      const addr = await wallet.getAddressAtIndex(0);
+      expect(addr).toBeDefined();
+      await adapter.injectFunds(wallet, addr!, 10n);
+
+      const newTokenAmount = BigInt(getRandomInt(1000, 10));
+      const newToken = await wallet.createNewToken('BalanceToken', 'BAT', newTokenAmount, {
+        pinCode: adapter.defaultPinCode,
+      });
+      await adapter.waitForTx(wallet, newToken.hash!);
+
+      const tknBalance = await wallet.getBalance(newToken.hash!);
+      expect(tknBalance[0]).toMatchObject({
+        balance: { unlocked: newTokenAmount, locked: 0n },
+        transactions: expect.any(Number),
+      });
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
 });

@@ -8,8 +8,8 @@
 /**
  * Fullnode-facade getBalance() tests.
  *
- * Tests that rely on fullnode-only APIs or helpers (e.g. {@link createTokenHelper},
- * direct sendTransaction without pinCode).
+ * Tests that rely on fullnode-only APIs or behavior (e.g. no-arg getBalance()
+ * rejection, nonexistent token returning a zero-balance entry).
  *
  * Shared getBalance() tests live in `shared/get-balance.test.ts`.
  */
@@ -20,9 +20,7 @@ import {
   createTokenHelper,
   generateWalletHelper,
   stopAllWallets,
-  waitForTxReceived,
 } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -36,28 +34,9 @@ describe('[Fullnode] getBalance', () => {
     await expect(hWallet.getBalance()).rejects.toThrow();
   });
 
-  it('should not change balance after internal transfer', async () => {
+  it('should return zero balance for a nonexistent token', async () => {
     const hWallet = await generateWalletHelper();
 
-    const injectedValue = BigInt(getRandomInt(10, 2));
-    await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      injectedValue
-    );
-
-    const balanceBefore = await hWallet.getBalance(NATIVE_TOKEN_UID);
-
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2n);
-    await waitForTxReceived(hWallet, tx1.hash!);
-    const balanceAfter = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceAfter[0].balance).toEqual(balanceBefore[0].balance);
-  });
-
-  it('should get the balance for a custom token', async () => {
-    const hWallet = await generateWalletHelper();
-
-    // Validating results for a nonexistent token
     const emptyBalance = await hWallet.getBalance(fakeTokenUid);
     expect(emptyBalance).toHaveLength(1);
     expect(emptyBalance[0]).toMatchObject({
@@ -65,8 +44,11 @@ describe('[Fullnode] getBalance', () => {
       balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
+  });
 
-    // Creating a new custom token
+  it('should not show custom token balance on a different wallet', async () => {
+    const hWallet = await generateWalletHelper();
+
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const newTokenAmount = BigInt(getRandomInt(1000, 10));
     const { hash: tokenUid } = await createTokenHelper(
@@ -76,14 +58,6 @@ describe('[Fullnode] getBalance', () => {
       newTokenAmount
     );
 
-    const tknBalance = await hWallet.getBalance(tokenUid);
-    expect(tknBalance[0]).toMatchObject({
-      balance: { unlocked: newTokenAmount, locked: 0n },
-      transactions: expect.any(Number),
-      // transactions: 1, // TODO: The amount of transactions is often 8 but should be 1. Ref #397
-    });
-
-    // Validating that a different wallet (genesis) has no access to this token
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     const genesisTknBalance = await gWallet.getBalance(tokenUid);
     expect(genesisTknBalance).toHaveLength(1);
