@@ -22,23 +22,6 @@ import { WALLET_CONSTANTS } from '../configuration/test-constants';
 
 const adapter = new ServiceWalletTestAdapter();
 
-const walletWithTxs = {
-  words:
-    'bridge balance milk impact love orchard achieve matrix mule axis size hip cargo rescue truth stable setup problem nerve fit million manage harbor connect',
-  addresses: [
-    'WeSnE5dnrciKahKbTvbUWmY6YM9Ntgi6MJ',
-    'Wj52SGubNZu3JA2ncRXyNGfqyrdnj4XTU2',
-    'Wh1Xs7zPVT9bc6dzzA23Zu8aiP3H8zLkiy',
-    'WdFeZvVJkwAdLDpXLGJpFP9XSDcdrntvAg',
-    'WTdWsgnCPKBuzEKAT4NZkzHaD4gHYMrk4G',
-    'WSBhEBkuLpqu2Fz1j6PUyUa1W4GGybEYSF',
-    'WS8yocEYBykpgjQxAhxjTcjVw9gKtYdys8',
-    'WmkBa6ikYM2sZmiopM6zBGswJKvzs5Noix',
-    'WeEPszSx14og6c3uPXy2vYh7BK9c6Zb9TX',
-    'WWrNhymgFetPfxCv4DncveG6ykLHspHQxv',
-  ],
-};
-
 const pinCode = '123456';
 const password = 'testpass';
 
@@ -52,6 +35,7 @@ afterAll(async () => {
 
 describe('[Service] sendTransaction', () => {
   let wallet: HathorWalletServiceWallet;
+  let walletAddresses: string[];
 
   afterEach(async () => {
     if (wallet) {
@@ -61,7 +45,8 @@ describe('[Service] sendTransaction', () => {
 
   it('should validate full transaction structure', async () => {
     const gWallet = GenesisWalletServiceHelper.getSingleton();
-    const sendTransaction = await gWallet.sendTransaction(walletWithTxs.addresses[0], 10n, {
+    const { addresses: recipientAddresses } = buildWalletInstance();
+    const sendTransaction = await gWallet.sendTransaction(recipientAddresses[0], 10n, {
       pinCode,
     });
 
@@ -120,12 +105,15 @@ describe('[Service] sendTransaction', () => {
   });
 
   it('should send a transaction with a set changeAddress', async () => {
-    ({ wallet } = buildWalletInstance({ words: walletWithTxs.words }));
+    ({ wallet, addresses: walletAddresses } = buildWalletInstance());
     await wallet.start({ pinCode, password });
 
-    const sendTransaction = await wallet.sendTransaction(walletWithTxs.addresses[1], 4n, {
+    // Fund the wallet so it has UTXOs to spend
+    await GenesisWalletServiceHelper.injectFunds(walletAddresses[0], 10n, wallet);
+
+    const sendTransaction = await wallet.sendTransaction(walletAddresses[1], 4n, {
       pinCode,
-      changeAddress: walletWithTxs.addresses[0],
+      changeAddress: walletAddresses[0],
     });
 
     expect(sendTransaction.outputs.length).toBe(2);
@@ -146,11 +134,11 @@ describe('[Service] sendTransaction', () => {
     await pollForTx(wallet, sendTransaction.hash!);
     const recipientUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, recipientIndex);
     expect(recipientUtxo).toStrictEqual(
-      expect.objectContaining({ address: walletWithTxs.addresses[1], value: 4n })
+      expect.objectContaining({ address: walletAddresses[1], value: 4n })
     );
     const changeUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, changeIndex);
     expect(changeUtxo).toStrictEqual(
-      expect.objectContaining({ address: walletWithTxs.addresses[0], value: 6n })
+      expect.objectContaining({ address: walletAddresses[0], value: 6n })
     );
   });
 });

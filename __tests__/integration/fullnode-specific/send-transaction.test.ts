@@ -28,12 +28,13 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import SendTransaction from '../../../src/new/sendTransaction';
 import transaction from '../../../src/utils/transaction';
 import { TokenVersion } from '../../../src/types';
+import Header from '../../../src/headers/base';
 import FeeHeader from '../../../src/headers/fee';
 
 /**
  * Validates the total fee amount in a list of headers.
  */
-function validateFeeAmount(headers: unknown[], expectedFee: bigint) {
+function validateFeeAmount(headers: Header[], expectedFee: bigint) {
   const feeHeaders = headers.filter(h => h instanceof FeeHeader);
   expect(feeHeaders).toHaveLength(1);
   const totalFee = (feeHeaders[0] as FeeHeader).entries.reduce(
