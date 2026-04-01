@@ -191,7 +191,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult> {
     const hWallet = this.concrete(wallet);
-    const response = await hWallet.createNewToken(name, symbol, amount, options);
+    const response = await hWallet.createNewToken(name, symbol, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
     await waitForTxReceived(hWallet, response.hash);
     await waitUntilNextTimestamp(hWallet, response.hash);
     return { hash: response.hash };
