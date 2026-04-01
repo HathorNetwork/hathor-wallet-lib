@@ -23,8 +23,6 @@ import HathorWallet from '../../src/new/wallet';
 import { MemoryStore } from '../../src/storage';
 import { IHistoryTx } from '../../src/types';
 
-const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
-
 describe('processing transaction metadata changes', () => {
   let hWallet: HathorWallet;
 
