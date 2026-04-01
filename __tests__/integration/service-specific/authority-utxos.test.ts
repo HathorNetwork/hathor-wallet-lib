@@ -130,7 +130,7 @@ describe('[Service] getAuthorityUtxo', () => {
           txId: expect.any(String),
           index: expect.any(Number),
           address: expect.any(String),
-          authorities: expect.any(Number),
+          authorities: expect.any(BigInt),
         })
       );
     });

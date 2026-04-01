@@ -1304,7 +1304,7 @@ describe('address management methods', () => {
   });
 });
 
-describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
+describe('getUtxos, getUtxosForAmount', () => {
   let utxosTestWallet: HathorWalletServiceWallet;
   let createdTokenUid: string;
 
