@@ -813,7 +813,6 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
-      await this.storage.saveAddress(address);
     }
     return address.base58;
   }

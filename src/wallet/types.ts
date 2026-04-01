@@ -361,8 +361,8 @@ export interface IHathorWallet {
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
-  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type
-  getNextAddress(): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
+  getNextAddress(): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(
