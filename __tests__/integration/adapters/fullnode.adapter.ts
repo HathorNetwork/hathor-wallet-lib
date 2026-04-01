@@ -193,6 +193,9 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       pinCode: DEFAULT_PIN_CODE,
       ...options,
     });
+    if (!result || !result.hash) {
+      throw new Error('sendTransaction: transaction had no hash');
+    }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
     return { hash: result.hash };
