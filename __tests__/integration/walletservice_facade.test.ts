@@ -949,25 +949,28 @@ describe('balances', () => {
     });
 
     it('should return balance array for wallet with transactions', async () => {
+      expect.hasAssertions();
       const { wallet: walletTxs, addresses } = buildWalletInstance();
       await walletTxs.start({ pinCode, password });
 
-      // Fund the wallet so it has transaction history
-      const fundTx = await gWallet.sendTransaction(addresses[0], 10n, { pinCode });
-      await pollForTx(gWallet, fundTx.hash!);
-      await pollForTx(walletTxs, fundTx.hash!);
+      try {
+        // Fund the wallet so it has transaction history
+        const fundTx = await gWallet.sendTransaction(addresses[0], 10n, { pinCode });
+        await pollForTx(gWallet, fundTx.hash!);
+        await pollForTx(walletTxs, fundTx.hash!);
 
-      const balances = await walletTxs.getBalance();
+        const balances = await walletTxs.getBalance();
 
-      expect(Array.isArray(balances)).toBe(true);
-      expect(balances.length).toBeGreaterThanOrEqual(1);
+        expect(Array.isArray(balances)).toBe(true);
+        expect(balances.length).toBeGreaterThanOrEqual(1);
 
-      // Should have HTR balance
-      const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
-      expect(htrBalance).toBeDefined();
-      expect(typeof htrBalance?.balance).toBe('object');
-
-      await walletTxs.stop({ cleanStorage: true });
+        // Should have HTR balance
+        const htrBalance = balances.find(b => b.token.id === NATIVE_TOKEN_UID);
+        expect(htrBalance).toBeDefined();
+        expect(typeof htrBalance?.balance).toBe('object');
+      } finally {
+        await walletTxs.stop({ cleanStorage: true });
+      }
     });
 
     // FIXME: The test does not return balance for empty wallet. It should return 0 for the native token
