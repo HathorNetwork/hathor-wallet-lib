@@ -10,7 +10,7 @@ import type { EventEmitter } from 'events';
 import type { AddressInfoObject } from '../../../src/wallet/types';
 import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
+import { delay, deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
@@ -424,6 +424,41 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
           HasTxOutsideFirstAddressError
         );
         await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+      } finally {
+        await adapter.stopAllWallets();
+      }
+    });
+
+    it('should not respond to tx on not-loaded index', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+
+      try {
+        const { wallet: walletMulti } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: false,
+        });
+        await expect(walletMulti.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+        // Re-create the wallet with single address mode
+        const { wallet } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: true,
+        });
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+        // Same address on index 1 since its the same wallet
+        const addr1Multi = await walletMulti.getAddressAtIndex(1);
+        const addr1 = await wallet.getAddressAtIndex(1);
+        expect(addr1).toEqual(addr1Multi);
+        // Tx in index 1
+        expect(addr1).toBeDefined();
+        await adapter.injectFunds(walletMulti, addr1!, 1n);
+
+        await delay(100);
+
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+        await expect(walletMulti.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
       } finally {
         await adapter.stopAllWallets();
       }
