@@ -945,6 +945,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this
   async releaseUtxos(): Promise<void> {
     // No-op: wallet-service manages UTXO state server-side
   }
