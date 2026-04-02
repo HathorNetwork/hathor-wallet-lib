@@ -112,6 +112,64 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(htrBalance[0].balance.unlocked).toEqual(5n);
   });
 
+  it('should pay only 1 HTR fee when sending entire fee token UTXO (no change output)', async () => {
+    const { wallet } = await createFundedPair(10n);
+    const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeTokenNoChange', 'FTNC', 200n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    // Send the entire token balance so there is no change output — only 1 token output
+    const { transaction: tx } = await adapter.sendTransaction(
+      wallet,
+      (await wallet.getAddressAtIndex(5))!,
+      200n,
+      { token: tokenUid }
+    );
+    validateFeeAmount(tx.headers, 1n);
+
+    const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
+    // Exactly one token output (destination, no change)
+    const tokenOutputs = fullTx.tx.outputs.filter(
+      (o: { token_data: number }) => o.token_data !== 0
+    );
+    expect(tokenOutputs).toHaveLength(1);
+    expect(tokenOutputs[0].value).toBe(200n);
+
+    // 10 HTR - 1 deposit - 1 fee = 8 HTR remaining
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(8n);
+  });
+
+  it('should pay 5 HTR fee when spreading fee token across 5 outputs with no change', async () => {
+    const { wallet } = await createFundedPair(10n);
+    const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeToken5Out', 'FT5O', 500n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    // Spread the entire 500n supply across 5 outputs (100n each) — no change
+    const outputs = await Promise.all(
+      [1, 2, 3, 4, 5].map(async i => ({
+        address: (await wallet.getAddressAtIndex(i))!,
+        value: 100n,
+        token: tokenUid,
+      }))
+    );
+
+    const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, outputs);
+    validateFeeAmount(tx.headers, 5n);
+
+    const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
+    const tokenOutputs = fullTx.tx.outputs.filter(
+      (o: { token_data: number }) => o.token_data !== 0
+    );
+    expect(tokenOutputs).toHaveLength(5);
+    tokenOutputs.forEach((o: { value: bigint }) => expect(o.value).toBe(100n));
+
+    // 10 HTR - 1 deposit - 5 fee = 4 HTR remaining
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(4n);
+  });
+
   it('should send fee token with manually provided HTR input (no HTR output)', async () => {
     const { wallet } = await createFundedPair(10n);
     const { hash: tokenUid } = await adapter.createToken(
@@ -145,7 +203,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);
     expect(fullTx.tx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token: tokenUid })
+      expect.objectContaining({ value: 50n, token_data: 1 })
     );
   });
 });
