@@ -30,6 +30,7 @@ import {
   ON_CHAIN_BLUEPRINTS_VERSION,
   P2PKH_ACCT_PATH,
   P2SH_ACCT_PATH,
+  GAP_LIMIT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
@@ -43,6 +44,7 @@ import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
+  HasTxOutsideFirstAddressError,
   NanoContractTransactionError,
   PinRequiredError,
   TxNotFoundError,
@@ -72,6 +74,7 @@ import {
   TxHistoryProcessingStatus,
   WalletState,
   WalletType,
+  WalletAddressMode,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -79,6 +82,7 @@ import {
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
+  loadAddressHistory,
   processMetadataChanged,
   scanPolicyStartAddresses,
 } from '../utils/storage';
@@ -401,7 +405,12 @@ class HathorWallet extends EventEmitter {
     this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
 
-    this.scanPolicy = scanPolicy;
+    // Defaults to single address scanning policy
+    if (scanPolicy == null) {
+      this.scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    } else {
+      this.scanPolicy = scanPolicy;
+    }
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
@@ -615,6 +624,19 @@ class HathorWallet extends EventEmitter {
         // before loading the full data again
         if (this.firstConnection) {
           this.firstConnection = false;
+          const scanPolicy = await this.storage.getScanningPolicy();
+          if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+            try {
+              await this.enableSingleAddressMode();
+            } catch (err) {
+              if (err instanceof HasTxOutsideFirstAddressError) {
+                this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: GAP_LIMIT };
+                await this.storage.setScanningPolicyData(this.scanPolicy);
+              } else {
+                throw err;
+              }
+            }
+          }
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
           await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
         } else {
@@ -755,12 +777,23 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    */
   async hasTxOutsideFirstAddress(): Promise<boolean> {
-    for await (const address of this.storage.getAllAddresses()) {
-      if (address.bip32AddressIndex > 0 && address.numTransactions > 0) {
-        return true;
+    const addresses: string[] = [];
+    let foundAnyTx = false;
+    // Load address from index 1 to GAP_LIMIT
+    for (let i = 1; i < GAP_LIMIT; i++) {
+      const address = await this.getAddressAtIndex(i);
+      addresses.push(address);
+    }
+
+    for await (const gotTx of loadAddressHistory(addresses, this.storage, false)) {
+      if (gotTx) {
+        // This will signal we have found a transaction when syncing the history
+        foundAnyTx = true;
+        break;
       }
     }
-    return false;
+
+    return foundAnyTx;
   }
 
   /**
@@ -780,7 +813,6 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
-      await this.storage.saveAddress(address);
     }
     return address.base58;
   }
@@ -3480,6 +3512,81 @@ class HathorWallet extends EventEmitter {
   // eslint-disable-next-line class-methods-use-this
   async getReadOnlyAuthToken(): Promise<string> {
     throw new Error('Not implemented.');
+  }
+
+  /**
+   * Get which address mode is currently enabled.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async getAddressMode(): Promise<WalletAddressMode> {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+      return WalletAddressMode.SINGLE;
+    }
+    return WalletAddressMode.MULTI;
+  }
+
+  /**
+   * Enable multi address mode for this wallet.
+   * Converts to a gap-limit wallet.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async enableMultiAddressMode(gapLimit: number = GAP_LIMIT): Promise<void> {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+
+    const currScanPolicy = await this.storage.getScanningPolicy();
+    if (currScanPolicy !== SCANNING_POLICY.SINGLE_ADDRESS) {
+      // multi address mode is already enabled.
+      return;
+    }
+
+    // Switch policy in storage
+    await this.storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.GAP_LIMIT,
+      gapLimit,
+    });
+
+    // Load new addresses
+    await this.reloadStorage();
+  }
+
+  /**
+   * Enable single-address scanning policy for this wallet.
+   * Converts a gap-limit wallet to use only the first address (index 0).
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async enableSingleAddressMode(): Promise<void> {
+    if (await this.hasTxOutsideFirstAddress()) {
+      throw new HasTxOutsideFirstAddressError(
+        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      );
+    }
+
+    const currScanPolicy = await this.storage.getScanningPolicy();
+    if (currScanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
+      // single address mode is already enabled.
+      return;
+    }
+
+    // Switch policy in storage
+    await this.storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.SINGLE_ADDRESS,
+    });
+
+    // Load new addresses
+    await this.reloadStorage();
   }
 }
 

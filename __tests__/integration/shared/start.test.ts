@@ -10,10 +10,12 @@ import type { EventEmitter } from 'events';
 import type { AddressInfoObject } from '../../../src/wallet/types';
 import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
+import { delay, deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { WalletAddressMode } from '../../../src';
+import { HasTxOutsideFirstAddressError } from '../../../src/errors';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -266,6 +268,30 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
         await adapter.stopWallet(wallet);
       }
     });
+
+    it('should be able to start in single address mode', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+      const xpub = deriveXpubFromSeed(walletData.words);
+
+      const { wallet } = await adapter.createWallet({
+        seed: walletData.words,
+        xpub,
+        preCalculatedAddresses: walletData.addresses,
+        singleAddressMode: true,
+      });
+
+      try {
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+        const currentAddress = await wallet.getCurrentAddress();
+        expect(currentAddress.index).toBe(0);
+        expect(currentAddress.address).toBe(walletData.addresses[0]);
+        const nextAddress = await wallet.getNextAddress();
+        expect(nextAddress.index).toBe(0);
+        expect(nextAddress.address).toBe(walletData.addresses[0]);
+      } finally {
+        await adapter.stopWallet(wallet);
+      }
+    });
   });
 
   // --- Stop lifecycle tests ---
@@ -288,6 +314,140 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
       const { wallet } = await adapter.createWallet();
       await adapter.stopWallet(wallet);
       await expect(adapter.stopWallet(wallet)).resolves.not.toThrow();
+    });
+  });
+
+  // --- Single Address mode ---
+
+  describe('single address mode', () => {
+    it('should be able to receive txs on index 0 and keep in single address mode', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+
+      const { wallet } = await adapter.createWallet({
+        seed: walletData.words,
+        preCalculatedAddresses: walletData.addresses,
+        singleAddressMode: true,
+      });
+
+      try {
+        // Start in SINGLE mode
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+        const currentAddress = await wallet.getCurrentAddress();
+        expect(currentAddress.index).toBe(0);
+        expect(currentAddress.address).toBe(walletData.addresses[0]);
+        const nextAddress = await wallet.getNextAddress();
+        expect(nextAddress.index).toBe(0);
+        expect(nextAddress.address).toBe(walletData.addresses[0]);
+
+        // Tx in index 0
+        const addr = await wallet.getAddressAtIndex(0);
+        expect(addr).toBeDefined();
+        await adapter.injectFunds(wallet, addr!, 1n);
+
+        // Current and next address is still 0 and in SINGLE mode
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+        const currentAddressAfterTx = await wallet.getCurrentAddress();
+        expect(currentAddressAfterTx.index).toBe(0);
+        expect(currentAddressAfterTx.address).toBe(walletData.addresses[0]);
+        const nextAddressAfterTx = await wallet.getNextAddress();
+        expect(nextAddressAfterTx.index).toBe(0);
+        expect(nextAddressAfterTx.address).toBe(walletData.addresses[0]);
+      } finally {
+        await adapter.stopAllWallets();
+      }
+    });
+
+    it('should be able to switch between modes', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+
+      const { wallet } = await adapter.createWallet({
+        seed: walletData.words,
+        preCalculatedAddresses: walletData.addresses,
+        singleAddressMode: true,
+      });
+
+      try {
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+        await wallet.enableMultiAddressMode();
+
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+        await wallet.enableSingleAddressMode();
+
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+      } finally {
+        await adapter.stopAllWallets();
+      }
+    });
+
+    it('should not be able to switch with tx outside index 0', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+
+      try {
+        const { wallet: walletMulti } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: false,
+        });
+        await expect(walletMulti.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+
+        // Tx in index 1
+        const addr1 = await walletMulti.getAddressAtIndex(1);
+        expect(addr1).toBeDefined();
+        await adapter.injectFunds(walletMulti, addr1!, 1n);
+        await adapter.stopWallet(walletMulti);
+
+        // Re-create the wallet with single address mode
+        const { wallet } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: true, // This will be ignored by the wallet
+        });
+
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+        await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
+          HasTxOutsideFirstAddressError
+        );
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+      } finally {
+        await adapter.stopAllWallets();
+      }
+    });
+
+    it('should not respond to tx on not-loaded index', async () => {
+      const walletData = adapter.getPrecalculatedWallet();
+
+      try {
+        const { wallet: walletMulti } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: false,
+        });
+        await expect(walletMulti.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+        // Re-create the wallet with single address mode
+        const { wallet } = await adapter.createWallet({
+          seed: walletData.words,
+          preCalculatedAddresses: walletData.addresses,
+          singleAddressMode: true,
+        });
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+
+        // Same address on index 1 since its the same wallet
+        const addr1Multi = await walletMulti.getAddressAtIndex(1);
+        const addr1 = await wallet.getAddressAtIndex(1);
+        expect(addr1).toEqual(addr1Multi);
+        // Tx in index 1
+        expect(addr1).toBeDefined();
+        await adapter.injectFunds(walletMulti, addr1!, 1n);
+
+        await delay(100);
+
+        await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.SINGLE);
+        await expect(walletMulti.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
+      } finally {
+        await adapter.stopAllWallets();
+      }
     });
   });
 });

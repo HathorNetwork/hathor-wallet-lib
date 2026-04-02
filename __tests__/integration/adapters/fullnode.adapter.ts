@@ -8,7 +8,7 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import { WalletTracker } from '../utils/wallet-tracker.util';
-import { WalletState } from '../../../src/types';
+import { AddressScanPolicyData, SCANNING_POLICY, WalletState } from '../../../src/types';
 import type Transaction from '../../../src/models/transaction';
 import {
   generateConnection,
@@ -30,6 +30,7 @@ import type {
   CreateWalletResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+import { getGapLimitConfig } from '../utils/core.util';
 
 /** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true, cleanAddresses: true };
@@ -211,6 +212,12 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     // When both are provided (e.g. shared readonly tests pass seed for service
     // pre-registration), prefer xpub/xpriv and omit the seed.
     const useSeed = !options?.xpub && !options?.xpriv;
+    let scanPolicy: AddressScanPolicyData | null = null;
+    if (options?.singleAddressMode === true) {
+      scanPolicy = { policy: SCANNING_POLICY.SINGLE_ADDRESS };
+    } else if (!options?.singleAddressMode) {
+      scanPolicy = getGapLimitConfig();
+    }
     return {
       ...(useSeed && walletData.words ? { seed: walletData.words } : {}),
       connection: generateConnection(),
@@ -225,6 +232,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       ...(options?.passphrase && { passphrase: options.passphrase }),
       ...(options?.multisig && { multisig: options.multisig }),
       ...(options?.tokenUid && { tokenUid: options.tokenUid }),
+      scanPolicy,
     };
   }
 }
