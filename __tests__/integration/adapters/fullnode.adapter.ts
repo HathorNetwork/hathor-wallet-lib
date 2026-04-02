@@ -31,6 +31,9 @@ import type {
   CreateTokenOptions,
   CreateTokenResult,
   AuthorityUtxoResult,
+  GetAuthorityUtxosOptions,
+  DelegateAuthorityAdapterOptions,
+  DelegateAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -203,16 +206,40 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async getAuthorityUtxos(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt'
+    type: 'mint' | 'melt',
+    options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]> {
     const hWallet = this.concrete(wallet);
-    const utxos = await hWallet.getAuthorityUtxos(tokenUid, type);
+    const utxos = await hWallet.getAuthorityUtxo(tokenUid, type, {
+      many: true,
+      filter_address: options?.filter_address,
+    });
     return utxos.map(u => ({
       txId: u.txId,
       index: u.index,
       address: u.address,
       authorities: u.authorities,
     }));
+  }
+
+  async delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.delegateAuthority(tokenUid, type, destinationAddress, {
+      pinCode: DEFAULT_PIN_CODE,
+      createAnother: options?.createAnother ?? false,
+    });
+    if (!result?.hash) {
+      throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash };
   }
 
   // --- Private helpers ---

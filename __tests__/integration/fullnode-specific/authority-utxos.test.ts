@@ -9,24 +9,17 @@
  * Fullnode-facade authority UTXO tests.
  *
  * Tests that rely on fullnode-only APIs: detailed return shape with extra fields
- * (token, value, height, timelock, type), delegateAuthority, and
+ * (token, value, height, timelock, type), and
  * getMintAuthority/getMeltAuthority with markUtxoSelected.
  *
  * Shared authority UTXO tests live in `shared/authority-utxos.test.ts`.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import {
-  createTokenHelper,
-  generateWalletHelper,
-  stopAllWallets,
-  waitForTxReceived,
-} from '../helpers/wallet.helper';
-import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
+import { createTokenHelper, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
+import { TOKEN_MELT_MASK } from '../../../src/constants';
 
-const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
-
-describe('[Fullnode] getAuthorityUtxos', () => {
+describe('[Fullnode] getAuthorityUtxos — fullnode-specific fields', () => {
   /** @type HathorWallet */
   let hWallet;
   /** @type string */
@@ -34,21 +27,6 @@ describe('[Fullnode] getAuthorityUtxos', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-  });
-
-  afterAll(async () => {
-    await hWallet.stop();
-  });
-
-  it('should work on an empty wallet', async () => {
-    expect(await hWallet.getAuthorityUtxos(fakeTokenUid, 'mint')).toStrictEqual([]);
-    expect(await hWallet.getAuthorityUtxos(fakeTokenUid, 'melt')).toStrictEqual([]);
-    await expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid')).rejects.toThrow(
-      'This should never happen.'
-    ); // TODO: Improve this error message
-  });
-
-  it('should return fullnode-specific fields on authority utxos', async () => {
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
@@ -57,7 +35,13 @@ describe('[Fullnode] getAuthorityUtxos', () => {
       100n
     );
     tokenHash = tokenUid;
+  });
 
+  afterAll(async () => {
+    await hWallet.stop();
+  });
+
+  it('should return fullnode-specific fields on authority utxos', async () => {
     expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint')).toStrictEqual([
       {
         txId: tokenHash,
@@ -86,59 +70,10 @@ describe('[Fullnode] getAuthorityUtxos', () => {
     ]);
   });
 
-  it('should find delegated mint authority utxo', async () => {
-    const mintDelegationTx = await hWallet.delegateAuthority(
-      tokenHash,
-      'mint',
-      await hWallet.getAddressAtIndex(1),
-      { createAnother: false }
+  it('should throw on invalid authority type', async () => {
+    await expect(hWallet.getAuthorityUtxos(tokenHash, 'invalid')).rejects.toThrow(
+      'This should never happen.'
     );
-    await waitForTxReceived(hWallet, mintDelegationTx.hash);
-
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint')).toMatchObject([
-      {
-        txId: mintDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MINT_MASK,
-      },
-    ]);
-  });
-
-  it('should find many "melt" authority utxos after delegation', async () => {
-    const meltDelegationTx = await hWallet.delegateAuthority(
-      tokenHash,
-      'melt',
-      await hWallet.getAddressAtIndex(1),
-      { createAnother: true }
-    );
-    await waitForTxReceived(hWallet, meltDelegationTx.hash);
-
-    const expectedMeltAuthUtxos = [
-      {
-        txId: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-        height: null,
-        timelock: null,
-        token: tokenHash,
-        type: expect.any(Number),
-        value: TOKEN_MELT_MASK,
-      },
-      {
-        txId: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-        height: null,
-        timelock: null,
-        token: tokenHash,
-        type: expect.any(Number),
-        value: TOKEN_MELT_MASK,
-      },
-    ];
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt')).toStrictEqual(expectedMeltAuthUtxos);
   });
 });
 

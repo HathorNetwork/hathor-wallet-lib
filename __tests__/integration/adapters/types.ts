@@ -185,8 +185,23 @@ export interface IWalletTestAdapter {
   getAuthorityUtxos(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt'
+    type: 'mint' | 'melt',
+    options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]>;
+
+  // --- Authority delegation ---
+
+  /**
+   * Delegates a token authority (mint or melt) to a destination address.
+   * Both facades support `delegateAuthority()`.
+   */
+  delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult>;
 }
 
 /**
@@ -219,4 +234,25 @@ export interface AuthorityUtxoResult {
   index: number;
   address: string;
   authorities: bigint;
+}
+
+/**
+ * Options for querying authority UTXOs via the adapter.
+ */
+export interface GetAuthorityUtxosOptions {
+  filter_address?: string;
+}
+
+/**
+ * Options for delegating authority via the adapter.
+ */
+export interface DelegateAuthorityAdapterOptions {
+  createAnother?: boolean;
+}
+
+/**
+ * Result of delegating authority.
+ */
+export interface DelegateAuthorityResult {
+  hash: string;
 }

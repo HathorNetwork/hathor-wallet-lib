@@ -8,8 +8,8 @@
 /**
  * Service-facade authority UTXO tests.
  *
- * Tests for service-only behavior: address filtering, many option,
- * only_available_utxos, and error messages specific to the wallet-service facade.
+ * Tests for service-only behavior: error messages specific to the wallet-service
+ * facade, and skipped tests that need additional infrastructure.
  *
  * Shared authority UTXO tests live in `shared/authority-utxos.test.ts`.
  */
@@ -34,25 +34,21 @@ afterAll(async () => {
 
 describe('[Service] getAuthorityUtxo', () => {
   let utxosTestWallet: HathorWalletServiceWallet;
-  let walletAddresses: string[];
   let createdTokenUid: string;
 
   beforeAll(async () => {
     const { wallet, addresses } = buildWalletInstance();
     utxosTestWallet = wallet;
-    walletAddresses = addresses;
     await utxosTestWallet.start({ pinCode, password });
 
-    // Fund the wallet
-    await GenesisWalletServiceHelper.injectFunds(walletAddresses[0], 100n, utxosTestWallet);
+    await GenesisWalletServiceHelper.injectFunds(addresses[0], 100n, utxosTestWallet);
 
-    // Create a custom token with specific authority addresses
     const createTokenTx = await utxosTestWallet.createNewToken('UtxoTestToken', 'UTT', 200n, {
       pinCode,
-      address: walletAddresses[1],
-      mintAuthorityAddress: walletAddresses[2],
-      meltAuthorityAddress: walletAddresses[3],
-      changeAddress: walletAddresses[1],
+      address: addresses[1],
+      mintAuthorityAddress: addresses[2],
+      meltAuthorityAddress: addresses[3],
+      changeAddress: addresses[1],
     });
 
     createdTokenUid = createTokenTx.hash!;
@@ -63,18 +59,6 @@ describe('[Service] getAuthorityUtxo', () => {
     if (utxosTestWallet) {
       await utxosTestWallet.stop({ cleanStorage: true });
     }
-  });
-
-  it('should filter authority UTXOs by address', async () => {
-    const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-      filter_address: walletAddresses[2],
-    });
-    expect(mintAuthorities).toHaveLength(1);
-
-    const noAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-      filter_address: walletAddresses[3],
-    });
-    expect(noAuthorities).toHaveLength(0);
   });
 
   it('should throw error for invalid authority type', async () => {

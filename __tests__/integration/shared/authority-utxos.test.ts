@@ -104,4 +104,56 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
     expect(mintAuthorities).toHaveLength(0);
     expect(meltAuthorities).toHaveLength(0);
   });
+
+  it('should find delegated mint authority utxo', async () => {
+    const addr1 = (await wallet.getAddressAtIndex(1))!;
+    await adapter.delegateAuthority(wallet, tokenUid, 'mint', addr1, { createAnother: false });
+
+    const mintUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, 'mint');
+    expect(mintUtxos).toHaveLength(1);
+    expect(mintUtxos[0]).toMatchObject({
+      txId: expect.any(String),
+      index: expect.any(Number),
+      address: expect.any(String),
+      authorities: TOKEN_MINT_MASK,
+    });
+  });
+
+  it('should find many "melt" authority utxos after delegation with createAnother', async () => {
+    const addr2 = (await wallet.getAddressAtIndex(2))!;
+    await adapter.delegateAuthority(wallet, tokenUid, 'melt', addr2, { createAnother: true });
+
+    const meltUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, 'melt');
+    expect(meltUtxos).toHaveLength(2);
+    meltUtxos.forEach(utxo => {
+      expect(utxo).toMatchObject({
+        txId: expect.any(String),
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      });
+    });
+  });
+
+  it('should filter authority UTXOs by address', async () => {
+    // Create a token with authority at a specific address
+    const addr4 = (await wallet.getAddressAtIndex(4))!;
+    const addr5 = (await wallet.getAddressAtIndex(5))!;
+    const filterToken = await adapter.createToken(wallet, 'FilterAuthToken', 'FAT', 50n, {
+      mintAuthorityAddress: addr4,
+      meltAuthorityAddress: addr5,
+    });
+
+    const mintAtAddr4 = await adapter.getAuthorityUtxos(wallet, filterToken.hash, 'mint', {
+      filter_address: addr4,
+    });
+    expect(mintAtAddr4).toHaveLength(1);
+    expect(mintAtAddr4[0].address).toBe(addr4);
+
+    // Should return empty when filtering by a different address
+    const mintAtAddr5 = await adapter.getAuthorityUtxos(wallet, filterToken.hash, 'mint', {
+      filter_address: addr5,
+    });
+    expect(mintAtAddr5).toHaveLength(0);
+  });
 });
