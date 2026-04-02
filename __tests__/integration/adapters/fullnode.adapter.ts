@@ -37,7 +37,6 @@ import type {
   GetUtxosResult,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
-  AddressInfoResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -213,19 +212,6 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     // The fullnode facade returns FullNodeTxApiResponse (zod-inferred), which is structurally
     // compatible with FullNodeTxResponse but has minor nullability differences.
     return this.concrete(wallet).getFullTxById(txId) as Promise<FullNodeTxResponse>;
-  }
-
-  async getAddressInfo(
-    wallet: FuzzyWalletType,
-    address: string
-  ): Promise<AddressInfoResult | null> {
-    const info = await this.concrete(wallet).storage.getAddressInfo(address);
-    if (!info) return null;
-    return {
-      base58: info.base58,
-      bip32AddressIndex: info.bip32AddressIndex,
-      numTransactions: info.numTransactions,
-    };
   }
 
   async createToken(

@@ -182,14 +182,6 @@ export interface IWalletTestAdapter {
    */
   getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse>;
 
-  // --- Address info ---
-
-  /**
-   * Returns per-address metadata, including numTransactions.
-   * Both facades support this via `storage.getAddressInfo()`.
-   */
-  getAddressInfo(wallet: FuzzyWalletType, address: string): Promise<AddressInfoResult | null>;
-
   // --- Token creation ---
 
   /**
@@ -315,13 +307,4 @@ export interface AdapterInput {
 export interface SendManyOutputsAdapterOptions {
   inputs?: AdapterInput[];
   changeAddress?: string;
-}
-
-/**
- * Result of getAddressInfo via the adapter.
- */
-export interface AddressInfoResult {
-  base58: string;
-  bip32AddressIndex: number;
-  numTransactions: number;
 }
