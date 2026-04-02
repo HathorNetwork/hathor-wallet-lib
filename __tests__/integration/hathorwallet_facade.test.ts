@@ -17,9 +17,7 @@ import {
   TOKEN_AUTHORITY_MASK,
 } from '../../src/constants';
 import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
-import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
-import { loggers } from './utils/logger.util';
 import { NftValidationError, TxNotFoundError } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import transaction from '../../src/utils/transaction';

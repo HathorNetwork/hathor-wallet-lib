@@ -101,9 +101,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     expect(tx.timestamp).toBeGreaterThan(0);
 
     const recipientOutput = tx.outputs.find(output => output.value === 1n);
-    expect(recipientOutput).toStrictEqual(
-      expect.objectContaining({ value: 1n, tokenData: 0 })
-    );
+    expect(recipientOutput).toStrictEqual(expect.objectContaining({ value: 1n, tokenData: 0 }));
   });
 
   it('should send a transaction to a P2SH (multisig) address', async () => {
@@ -122,9 +120,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     const fullTx = await adapter.getFullTxById(wallet, hash);
     expect(fullTx.success).toBe(true);
 
-    const p2shOutput = fullTx.tx.outputs.find(
-      output => output.decoded?.address === p2shAddress
-    );
+    const p2shOutput = fullTx.tx.outputs.find(output => output.decoded?.address === p2shAddress);
     expect(p2shOutput).toBeDefined();
     expect(p2shOutput!.value).toBe(1n);
     expect(p2shOutput!.decoded.type).toBe('MultiSig');
@@ -134,12 +130,9 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     const recipientAddr = walletAddresses[1];
     const changeAddr = walletAddresses[0];
 
-    const { hash, transaction: tx } = await adapter.sendTransaction(
-      wallet,
-      recipientAddr,
-      2n,
-      { changeAddress: changeAddr }
-    );
+    const { hash, transaction: tx } = await adapter.sendTransaction(wallet, recipientAddr, 2n, {
+      changeAddress: changeAddr,
+    });
 
     expect(tx.outputs.length).toBe(2);
 
@@ -152,9 +145,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     expect(recipientOutput).toBeDefined();
     expect(recipientOutput!.value).toBe(2n);
 
-    const changeOutput = fullTx.tx.outputs.find(
-      output => output.decoded?.address === changeAddr
-    );
+    const changeOutput = fullTx.tx.outputs.find(output => output.decoded?.address === changeAddr);
     expect(changeOutput).toBeDefined();
   });
 });
