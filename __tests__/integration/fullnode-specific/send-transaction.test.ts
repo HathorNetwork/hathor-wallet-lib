@@ -8,17 +8,17 @@
 /**
  * Fullnode-facade sendTransaction tests.
  *
- * Tests that rely on fullnode-only APIs: storage.getAddressInfo, multisig.
+ * Tests that rely on fullnode-only APIs: multisig.
  *
  * Shared sendTransaction tests live in `shared/send-transaction.test.ts`.
  * Shared token tests live in `shared/send-transaction-tokens.test.ts`.
+ * Shared address tracking tests live in `shared/send-transaction-address-tracking.test.ts`.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
   generateMultisigWalletHelper,
-  generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
   waitUntilNextTimestamp,
@@ -27,63 +27,9 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import SendTransaction from '../../../src/new/sendTransaction';
 import transaction from '../../../src/utils/transaction';
 
-describe('[Fullnode] sendTransaction — address tracking', () => {
+describe('[Fullnode] sendTransaction — multisig', () => {
   afterEach(async () => {
     await stopAllWallets();
-  });
-
-  it('should track address usage for HTR transactions', async () => {
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6n);
-    await waitForTxReceived(hWallet, tx1.hash);
-
-    expect(tx1).toMatchObject({
-      hash: expect.any(String),
-      inputs: expect.any(Array),
-      outputs: expect.any(Array),
-      version: expect.any(Number),
-      weight: expect.any(Number),
-      nonce: expect.any(Number),
-      timestamp: expect.any(Number),
-      parents: expect.any(Array),
-      tokens: expect.any(Array),
-    });
-
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty(
-      'numTransactions',
-      2
-    );
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(1))).toHaveProperty(
-      'numTransactions',
-      1
-    );
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(2))).toHaveProperty(
-      'numTransactions',
-      1
-    );
-
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      8n,
-      { changeAddress: await hWallet.getAddressAtIndex(5) }
-    );
-    await waitForTxReceived(hWallet, tx2Hash);
-
-    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance.unlocked).toEqual(2n);
-
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
-      'numTransactions',
-      1
-    );
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
-      'numTransactions',
-      0
-    );
   });
 
   it('should send a multisig transaction', async () => {

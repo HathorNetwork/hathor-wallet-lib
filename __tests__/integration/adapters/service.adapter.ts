@@ -33,6 +33,7 @@ import type {
   GetUtxosResult,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
+  AddressInfoResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -230,6 +231,19 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
     return this.concrete(wallet).getFullTxById(txId);
+  }
+
+  async getAddressInfo(
+    wallet: FuzzyWalletType,
+    address: string
+  ): Promise<AddressInfoResult | null> {
+    const info = await this.concrete(wallet).storage.getAddressInfo(address);
+    if (!info) return null;
+    return {
+      base58: info.base58,
+      bip32AddressIndex: info.bip32AddressIndex,
+      numTransactions: info.numTransactions,
+    };
   }
 
   async createToken(
