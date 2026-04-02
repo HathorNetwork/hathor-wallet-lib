@@ -6,7 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { IHathorWallet } from '../../../src/wallet/types';
+import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
 import type { IStorage } from '../../../src/types';
@@ -167,7 +167,7 @@ export interface IWalletTestAdapter {
   /**
    * Sends a transaction from the wallet to the given address.
    * Handles pinCode injection for facades that require per-call credentials.
-   * Returns a normalized result with at least a `hash` field.
+   * Returns the hash and the full Transaction model.
    */
   sendTransaction(
     wallet: FuzzyWalletType,
@@ -175,6 +175,12 @@ export interface IWalletTestAdapter {
     amount: bigint,
     options?: SendTransactionOptions
   ): Promise<SendTransactionResult>;
+
+  /**
+   * Retrieves the full transaction data from the network node.
+   * Both facades support this via the fullnode API.
+   */
+  getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse>;
 }
 
 /**
@@ -190,4 +196,5 @@ export interface SendTransactionOptions {
  */
 export interface SendTransactionResult {
   hash: string;
+  transaction: Transaction;
 }

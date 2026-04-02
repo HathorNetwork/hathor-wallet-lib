@@ -311,8 +311,7 @@ describe('basic transaction methods', () => {
     }
   });
 
-  // sendTransaction - native token tests moved to
-  // shared/send-transaction.test.ts and service-specific/send-transaction.test.ts
+  // sendTransaction - native token tests moved to shared/send-transaction.test.ts
 
   describe('createNewToken, getTokenDetails', () => {
     const tokenName = 'TestToken';

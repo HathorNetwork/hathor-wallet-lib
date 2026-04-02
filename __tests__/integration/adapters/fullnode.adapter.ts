@@ -22,6 +22,7 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
@@ -198,7 +199,13 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
-    return { hash: result.hash };
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
+    // The fullnode facade returns FullNodeTxApiResponse (zod-inferred), which is structurally
+    // compatible with FullNodeTxResponse but has minor nullability differences.
+    return this.concrete(wallet).getFullTxById(txId) as Promise<FullNodeTxResponse>;
   }
 
   // --- Private helpers ---

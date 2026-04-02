@@ -18,6 +18,7 @@ import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
@@ -218,6 +219,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       throw new Error('sendTransaction: transaction had no hash');
     }
     await pollForTx(sw, result.hash);
-    return { hash: result.hash };
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
+    return this.concrete(wallet).getFullTxById(txId);
   }
 }
