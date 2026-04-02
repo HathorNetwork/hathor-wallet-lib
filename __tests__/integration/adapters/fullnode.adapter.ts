@@ -21,7 +21,7 @@ import {
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
-import { NETWORK_NAME } from '../configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
@@ -50,6 +50,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   defaultPinCode = DEFAULT_PIN_CODE;
 
   defaultPassword = DEFAULT_PASSWORD;
+
+  originalServerUrl = FULLNODE_URL;
+
+  testnetServerUrl = 'https://node1.testnet.hathor.network/v1a/';
 
   capabilities: WalletCapabilities = {
     supportsMultisig: true,
