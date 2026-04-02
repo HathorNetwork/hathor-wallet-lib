@@ -16,11 +16,7 @@
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { getRandomInt } from '../utils/core.util';
-import {
-  createTokenHelper,
-  generateWalletHelper,
-  stopAllWallets,
-} from '../helpers/wallet.helper';
+import { createTokenHelper, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
