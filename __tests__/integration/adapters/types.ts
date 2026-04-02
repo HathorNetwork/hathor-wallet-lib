@@ -240,6 +240,7 @@ export interface AuthorityUtxoResult {
  * Options for querying authority UTXOs via the adapter.
  */
 export interface GetAuthorityUtxosOptions {
+  many?: boolean;
   filter_address?: string;
 }
 

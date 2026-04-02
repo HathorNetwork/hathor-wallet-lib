@@ -234,6 +234,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<AuthorityUtxoResult[]> {
     const sw = this.concrete(wallet);
     const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+      many: options?.many ?? true,
       filter_address: options?.filter_address,
     });
     return utxos.map(u => ({

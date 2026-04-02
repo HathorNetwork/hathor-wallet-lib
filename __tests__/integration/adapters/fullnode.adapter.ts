@@ -211,7 +211,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<AuthorityUtxoResult[]> {
     const hWallet = this.concrete(wallet);
     const utxos = await hWallet.getAuthorityUtxo(tokenUid, type, {
-      many: true,
+      many: options?.many ?? true,
       filter_address: options?.filter_address,
     });
     return utxos.map(u => ({

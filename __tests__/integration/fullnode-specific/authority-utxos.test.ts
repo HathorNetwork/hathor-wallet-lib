@@ -16,10 +16,15 @@
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { createTokenHelper, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
-import { TOKEN_MELT_MASK } from '../../../src/constants';
+import {
+  createTokenHelper,
+  generateWalletHelper,
+  stopAllWallets,
+  waitForTxReceived,
+} from '../helpers/wallet.helper';
+import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
 
-describe('[Fullnode] getAuthorityUtxos — fullnode-specific fields', () => {
+describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   /** @type HathorWallet */
   let hWallet;
   /** @type string */
@@ -74,6 +79,55 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific fields', () => {
     await expect(hWallet.getAuthorityUtxos(tokenHash, 'invalid')).rejects.toThrow(
       'This should never happen.'
     );
+  });
+
+  // createAnother produces 2 authority outputs on the fullnode but the wallet-service
+  // backend does not reliably return both via its API, so this stays fullnode-specific.
+  it('should find many melt authority utxos after delegation with createAnother', async () => {
+    const meltDelegationTx = await hWallet.delegateAuthority(
+      tokenHash,
+      'melt',
+      await hWallet.getAddressAtIndex(1),
+      { createAnother: true }
+    );
+    await waitForTxReceived(hWallet, meltDelegationTx.hash);
+
+    const meltUtxos = await hWallet.getAuthorityUtxos(tokenHash, 'melt');
+    expect(meltUtxos).toHaveLength(2);
+    meltUtxos.forEach(utxo => {
+      expect(utxo.authorities).toBe(TOKEN_MELT_MASK);
+      expect(utxo.txId).toBe(meltDelegationTx.hash);
+    });
+  });
+
+  it('should return single utxo with many: false when multiple exist', async () => {
+    // After the previous delegation there are 2 melt authority UTXOs
+    const allMelt = await hWallet.getMeltAuthority(tokenHash, { many: true });
+    expect(allMelt.length).toBeGreaterThan(1);
+
+    const singleMelt = await hWallet.getMeltAuthority(tokenHash, { many: false });
+    expect(singleMelt).toHaveLength(1);
+    expect(singleMelt[0].authorities).toBe(TOKEN_MELT_MASK);
+  });
+
+  it('should find delegated mint authority utxo with createAnother', async () => {
+    const mintDelegationTx = await hWallet.delegateAuthority(
+      tokenHash,
+      'mint',
+      await hWallet.getAddressAtIndex(2),
+      { createAnother: true }
+    );
+    await waitForTxReceived(hWallet, mintDelegationTx.hash);
+
+    const mintUtxos = await hWallet.getAuthorityUtxos(tokenHash, 'mint');
+    expect(mintUtxos).toHaveLength(2);
+    mintUtxos.forEach(utxo => {
+      expect(utxo.authorities).toBe(TOKEN_MINT_MASK);
+      expect(utxo.txId).toBe(mintDelegationTx.hash);
+    });
+
+    const singleMint = await hWallet.getMintAuthority(tokenHash, { many: false });
+    expect(singleMint).toHaveLength(1);
   });
 });
 
