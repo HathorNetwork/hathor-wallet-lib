@@ -314,7 +314,7 @@ export async function execRawOutputInstruction(
     throw new Error('Raw token output missing amount');
   }
 
-  const output = new Output(amount, script, { timelock, tokenData });
+  const output = new Output(amount, script, { tokenData });
   ctx.addOutputs(position, output);
 }
 
@@ -398,8 +398,8 @@ export async function execTokenOutputInstruction(
     ctx.balance.addOutput(amount, token);
   }
 
-  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
-  const output = new Output(amount, script, { timelock, tokenData });
+  const script = createOutputScriptFromAddress(address, interpreter.getNetwork(), { timelock });
+  const output = new Output(amount, script, { tokenData });
   ctx.addOutputs(position, output);
 }
 
@@ -471,8 +471,8 @@ export async function execAuthorityOutputInstruction(
       throw new Error('Authority token output missing `authority`');
   }
 
-  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
-  const output = new Output(amount, script, { timelock, tokenData });
+  const script = createOutputScriptFromAddress(address, interpreter.getNetwork(), { timelock });
+  const output = new Output(amount, script, { tokenData });
   // Creates `count` outputs that are copies of the `output`
   ctx.addOutputs(position, ...Array(count).fill(output));
 }
@@ -508,7 +508,6 @@ interface ICompleteTokenInputAndOutputsParams {
   skipSelection: boolean;
   changeAddress: string;
   changeScript: Buffer;
-  timelock: number | undefined;
   address: string | undefined;
 }
 
@@ -521,7 +520,6 @@ async function completeTokenInputAndOutputs(params: ICompleteTokenInputAndOutput
     skipSelection,
     changeAddress,
     changeScript,
-    timelock,
     address,
   } = params;
   ctx.log(`Completing tx for token ${tokenUid}`);
@@ -537,7 +535,7 @@ async function completeTokenInputAndOutputs(params: ICompleteTokenInputAndOutput
     ctx.balance.addOutput(value, tokenUid);
 
     // Creates an output with the value of the outstanding balance
-    const output = new Output(value, changeScript, { timelock, tokenData });
+    const output = new Output(value, changeScript, { tokenData });
     ctx.addOutputs(-1, output);
   } else if (balance.tokens < 0 && !skipSelection) {
     const value = -balance.tokens;
@@ -642,7 +640,9 @@ export async function execCompleteTxInstruction(
     }
   }
 
-  const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
+  const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork(), {
+    timelock,
+  });
 
   // We remove the HTR from the tokens to check to call the getUtxos for it only once.
   const shouldCheckHTR = tokensToCheck.has(NATIVE_TOKEN_UID);
@@ -659,7 +659,6 @@ export async function execCompleteTxInstruction(
       skipSelection,
       changeAddress,
       changeScript,
-      timelock,
       address,
     });
 
@@ -677,7 +676,6 @@ export async function execCompleteTxInstruction(
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, changeScript, {
-        timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
       ctx.addOutputs(-1, ...Array(count).fill(output));
@@ -716,7 +714,6 @@ export async function execCompleteTxInstruction(
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, changeScript, {
-        timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
       ctx.addOutputs(-1, ...Array(count).fill(output));
@@ -768,7 +765,6 @@ export async function execCompleteTxInstruction(
       skipSelection,
       changeAddress,
       changeScript,
-      timelock,
       address,
     });
   }
