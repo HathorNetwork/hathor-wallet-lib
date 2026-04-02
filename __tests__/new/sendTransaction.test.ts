@@ -5,7 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
+import {
+  TOKEN_AUTHORITY_MASK,
+  NATIVE_TOKEN_UID,
+  SELECT_OUTPUTS_TIMEOUT,
+} from '../../src/constants';
 import SendTransaction, {
   isDataOutput,
   checkUnspentInput,
@@ -436,4 +440,82 @@ test('prepareSendTokensData', async () => {
   });
   // Reset mocks
   prepareSpy.mockRestore();
+});
+
+describe('releaseUtxos', () => {
+  it('should unmark all transaction inputs as selected', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const utxoSelectSpy = jest.spyOn(storage, 'utxoSelectAsInput');
+
+    const sendTx = new SendTransaction({ storage, outputs: [], inputs: [] });
+
+    const mockTx = {
+      inputs: [
+        { hash: 'tx1', index: 0 },
+        { hash: 'tx2', index: 1 },
+      ],
+    } as unknown as import('../../src/models/transaction').default;
+    sendTx.transaction = mockTx;
+
+    await sendTx.releaseUtxos();
+
+    expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
+    expect(utxoSelectSpy).toHaveBeenCalledWith(
+      { txId: 'tx1', index: 0 },
+      false,
+      SELECT_OUTPUTS_TIMEOUT
+    );
+    expect(utxoSelectSpy).toHaveBeenCalledWith(
+      { txId: 'tx2', index: 1 },
+      false,
+      SELECT_OUTPUTS_TIMEOUT
+    );
+  });
+
+  it('should no-op when transaction is null', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const utxoSelectSpy = jest.spyOn(storage, 'utxoSelectAsInput');
+
+    const sendTx = new SendTransaction({ storage, outputs: [], inputs: [] });
+
+    await sendTx.releaseUtxos();
+
+    expect(utxoSelectSpy).not.toHaveBeenCalled();
+  });
+
+  it('should no-op when storage is not set', async () => {
+    const sendTx = new SendTransaction({ outputs: [], inputs: [] });
+
+    const mockTx = {
+      inputs: [{ hash: 'tx1', index: 0 }],
+    } as unknown as import('../../src/models/transaction').default;
+    sendTx.transaction = mockTx;
+
+    // Should resolve without throwing
+    await expect(sendTx.releaseUtxos()).resolves.toBeUndefined();
+  });
+
+  it('should continue releasing remaining UTXOs if one fails', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const utxoSelectSpy = jest
+      .spyOn(storage, 'utxoSelectAsInput')
+      .mockRejectedValueOnce(new Error('fail'))
+      .mockResolvedValueOnce(undefined);
+
+    const sendTx = new SendTransaction({ storage, outputs: [], inputs: [] });
+    const mockTx = {
+      inputs: [
+        { hash: 'tx1', index: 0 },
+        { hash: 'tx2', index: 1 },
+      ],
+    } as unknown as import('../../src/models/transaction').default;
+    sendTx.transaction = mockTx;
+
+    await sendTx.releaseUtxos(); // should not throw
+
+    expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
+  });
 });
