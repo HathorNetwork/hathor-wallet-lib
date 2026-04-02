@@ -12,7 +12,8 @@
  * ({@link HathorWallet}) and wallet-service ({@link HathorWalletServiceWallet})
  * facades.
  *
- * Facade-specific tests (address tracking, custom tokens, fee tokens, multisig signing)
+ * Custom token and fee token shared tests live in `shared/send-transaction-tokens.test.ts`.
+ * Facade-specific tests (address tracking, multisig signing)
  * live in `fullnode-specific/send-transaction.test.ts`.
  */
 

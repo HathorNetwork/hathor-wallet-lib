@@ -1,0 +1,144 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/**
+ * Shared custom token and fee token sendTransaction tests.
+ *
+ * Validates token creation, custom token sends, and fee token behavior that
+ * is common to both the fullnode ({@link HathorWallet}) and wallet-service
+ * ({@link HathorWalletServiceWallet}) facades.
+ */
+
+import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { TokenVersion } from '../../../src/types';
+import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
+import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import FeeHeader from '../../../src/headers/fee';
+import Header from '../../../src/headers/base';
+
+const adapters: IWalletTestAdapter[] = [
+  new FullnodeWalletTestAdapter(),
+  new ServiceWalletTestAdapter(),
+];
+
+/**
+ * Validates the total fee amount in a list of headers.
+ */
+function validateFeeAmount(headers: Header[], expectedFee: bigint) {
+  const feeHeaders = headers.filter(h => h instanceof FeeHeader);
+  expect(feeHeaders).toHaveLength(1);
+  const totalFee = (feeHeaders[0] as FeeHeader).entries.reduce(
+    (sum, entry) => sum + entry.amount,
+    0n
+  );
+  expect(totalFee).toBe(expectedFee);
+}
+
+describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', adapter => {
+  let wallet: FuzzyWalletType;
+  let externalWallet: FuzzyWalletType;
+
+  beforeAll(async () => {
+    await adapter.suiteSetup();
+
+    const created = await adapter.createWallet();
+    wallet = created.wallet;
+    await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, 20n);
+
+    externalWallet = (await adapter.createWallet()).wallet;
+  });
+
+  afterAll(async () => {
+    await adapter.suiteTeardown();
+  });
+
+  it('should send custom token transactions', async () => {
+    const { hash: tokenUid } = await adapter.createToken(wallet, 'Token to Send', 'TTS', 100n);
+
+    const addr5 = (await wallet.getAddressAtIndex(5))!;
+    const { hash: txHash } = await adapter.sendTransaction(wallet, addr5, 30n, {
+      token: tokenUid,
+      changeAddress: (await wallet.getAddressAtIndex(6))!,
+    });
+
+    const tokenBalance = await wallet.getBalance(tokenUid);
+    expect(tokenBalance[0].balance.unlocked).toEqual(100n);
+
+    const externalAddr = (await externalWallet.getAddressAtIndex(0))!;
+    await adapter.sendTransaction(wallet, externalAddr, 80n, { token: tokenUid });
+    await adapter.waitForTx(externalWallet, txHash);
+
+    const remainingBalance = await wallet.getBalance(tokenUid);
+    expect(remainingBalance[0].balance.unlocked).toEqual(20n);
+  });
+
+  it('should send custom fee token transactions', async () => {
+    const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeBasedToken', 'FBT', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    const addr5 = (await wallet.getAddressAtIndex(5))!;
+    const { transaction: tx1 } = await adapter.sendTransaction(wallet, addr5, 8000n, {
+      token: tokenUid,
+      changeAddress: (await wallet.getAddressAtIndex(6))!,
+    });
+    validateFeeAmount(tx1.headers, 2n);
+
+    let fbtBalance = await wallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(8582n);
+
+    const externalAddr = (await externalWallet.getAddressAtIndex(0))!;
+    const { transaction: tx2 } = await adapter.sendTransaction(wallet, externalAddr, 82n, {
+      token: tokenUid,
+    });
+    validateFeeAmount(tx2.headers, 2n);
+
+    fbtBalance = await wallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(8500n);
+
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(5n);
+  });
+
+  it('should send fee token with manually provided HTR input (no HTR output)', async () => {
+    const { hash: tokenUid } = await adapter.createToken(
+      wallet,
+      'FeeTokenManualInput',
+      'FTMI',
+      100n,
+      { tokenVersion: TokenVersion.FEE }
+    );
+
+    const { utxos: utxosHtr } = await adapter.getUtxos(wallet, {
+      token: NATIVE_TOKEN_UID,
+    });
+    const { utxos: utxosToken } = await adapter.getUtxos(wallet, { token: tokenUid });
+
+    const htrUtxo = utxosHtr[0];
+    const tokenUtxo = utxosToken[0];
+
+    const addr5 = (await wallet.getAddressAtIndex(5))!;
+    const { transaction: tx } = await adapter.sendManyOutputsTransaction(
+      wallet,
+      [{ address: addr5, value: 50n, token: tokenUid }],
+      {
+        inputs: [
+          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
+          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
+        ],
+      }
+    );
+    validateFeeAmount(tx.headers, 2n);
+
+    const decodedTx = await wallet.getTx(tx.hash!);
+    expect(decodedTx.inputs).toHaveLength(2);
+    expect(decodedTx.outputs).toContainEqual(
+      expect.objectContaining({ value: 50n, token: tokenUid })
+    );
+  });
+});

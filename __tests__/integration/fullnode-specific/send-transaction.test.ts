@@ -8,15 +8,14 @@
 /**
  * Fullnode-facade sendTransaction tests.
  *
- * Tests that rely on fullnode-only APIs: storage.getAddressInfo,
- * custom token transactions, fee tokens, multisig, sendManyOutputsTransaction.
+ * Tests that rely on fullnode-only APIs: storage.getAddressInfo, multisig.
  *
  * Shared sendTransaction tests live in `shared/send-transaction.test.ts`.
+ * Shared token tests live in `shared/send-transaction-tokens.test.ts`.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
-  createTokenHelper,
   DEFAULT_PIN_CODE,
   generateMultisigWalletHelper,
   generateWalletHelper,
@@ -27,22 +26,6 @@ import {
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import SendTransaction from '../../../src/new/sendTransaction';
 import transaction from '../../../src/utils/transaction';
-import { TokenVersion } from '../../../src/types';
-import Header from '../../../src/headers/base';
-import FeeHeader from '../../../src/headers/fee';
-
-/**
- * Validates the total fee amount in a list of headers.
- */
-function validateFeeAmount(headers: Header[], expectedFee: bigint) {
-  const feeHeaders = headers.filter(h => h instanceof FeeHeader);
-  expect(feeHeaders).toHaveLength(1);
-  const totalFee = (feeHeaders[0] as FeeHeader).entries.reduce(
-    (sum, entry) => sum + entry.amount,
-    0n
-  );
-  expect(totalFee).toBe(expectedFee);
-}
 
 describe('[Fullnode] sendTransaction — address tracking', () => {
   afterEach(async () => {
@@ -100,126 +83,6 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
       0
-    );
-  });
-
-  it('should send custom token transactions', async () => {
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Send', 'TTS', 100n);
-
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30n, {
-      token: tokenUid,
-      changeAddress: await hWallet.getAddressAtIndex(6),
-    });
-    await waitForTxReceived(hWallet, tx1.hash);
-
-    let htrBalance = await hWallet.getBalance(tokenUid);
-    expect(htrBalance[0].balance.unlocked).toEqual(100n);
-
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
-      'numTransactions',
-      1
-    );
-    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
-      'numTransactions',
-      1
-    );
-
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      80n,
-      {
-        token: tokenUid,
-        changeAddress: await hWallet.getAddressAtIndex(12),
-      }
-    );
-    await waitForTxReceived(hWallet, tx2Hash);
-    await waitForTxReceived(gWallet, tx2Hash);
-
-    htrBalance = await hWallet.getBalance(tokenUid);
-    expect(htrBalance[0].balance.unlocked).toEqual(20n);
-  });
-
-  it('should send custom fee token transactions', async () => {
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
-      tokenVersion: TokenVersion.FEE,
-    });
-
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 8000n, {
-      token: tokenUid,
-      changeAddress: await hWallet.getAddressAtIndex(6),
-    });
-    validateFeeAmount(tx1.headers, 2n);
-    await waitForTxReceived(hWallet, tx1.hash);
-
-    let fbtBalance = await hWallet.getBalance(tokenUid);
-    expect(fbtBalance[0].balance.unlocked).toEqual(8582n);
-
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash, headers: tx2Headers } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      82n,
-      {
-        token: tokenUid,
-        changeAddress: await hWallet.getAddressAtIndex(12),
-      }
-    );
-    validateFeeAmount(tx2Headers, 2n);
-    await waitForTxReceived(hWallet, tx2Hash);
-    await waitForTxReceived(gWallet, tx2Hash);
-
-    fbtBalance = await hWallet.getBalance(tokenUid);
-    expect(fbtBalance[0].balance.unlocked).toEqual(8500n);
-
-    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance.unlocked).toEqual(5n);
-  });
-
-  it('should send fee token with manually provided HTR input (no HTR output)', async () => {
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const { hash: tokenUid } = await createTokenHelper(
-      hWallet,
-      'FeeTokenManualInput',
-      'FTMI',
-      100n,
-      { tokenVersion: TokenVersion.FEE }
-    );
-
-    const { utxos: utxosHtr } = await hWallet.getUtxos({ token: NATIVE_TOKEN_UID });
-    const { utxos: utxosToken } = await hWallet.getUtxos({ token: tokenUid });
-
-    const htrUtxo = utxosHtr[0];
-    const tokenUtxo = utxosToken[0];
-
-    const tx = await hWallet.sendManyOutputsTransaction(
-      [
-        {
-          address: await hWallet.getAddressAtIndex(5),
-          value: 50n,
-          token: tokenUid,
-        },
-      ],
-      {
-        inputs: [
-          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
-          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
-        ],
-      }
-    );
-    validateFeeAmount(tx.headers, 2n);
-    await waitForTxReceived(hWallet, tx.hash);
-
-    const decodedTx = await hWallet.getTx(tx.hash);
-    expect(decodedTx.inputs).toHaveLength(2);
-    expect(decodedTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token: tokenUid })
     );
   });
 
