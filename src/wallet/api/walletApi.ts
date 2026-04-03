@@ -68,7 +68,9 @@ const walletApi = {
     if (response.status === 200 && data.success) {
       return parseSchema(data, walletStatusResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet status.');
+    throw new WalletRequestError(`Error getting wallet status. Status: ${response.status}`, {
+      cause: response.data,
+    });
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
