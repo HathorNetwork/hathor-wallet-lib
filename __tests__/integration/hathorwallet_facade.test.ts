@@ -1193,7 +1193,7 @@ describe('sendTransaction', () => {
 
     // Should have outputs: token output (50) + token change (50) + HTR change
     expect(decodedTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token: tokenUid })
+      expect.objectContaining({ value: 50n, token_data: 1 })
     );
   });
 

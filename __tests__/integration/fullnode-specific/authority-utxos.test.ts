@@ -53,7 +53,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
         index: expect.any(Number),
         address: expect.any(String),
         token: tokenHash,
-        authorities: 1n,
+        authorities: TOKEN_MINT_MASK,
         value: 1n,
         height: null,
         timelock: null,
