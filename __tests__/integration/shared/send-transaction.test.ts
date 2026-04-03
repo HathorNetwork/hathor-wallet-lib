@@ -30,7 +30,6 @@ const adapters: IWalletTestAdapter[] = [
 
 describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
   let wallet: FuzzyWalletType;
-  let walletAddresses: string[];
   let externalWallet: FuzzyWalletType;
 
   beforeAll(async () => {
@@ -39,7 +38,6 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     // Create a funded wallet
     const created = await adapter.createWallet();
     wallet = created.wallet;
-    walletAddresses = created.addresses!;
     const addr = await wallet.getAddressAtIndex(0);
     await adapter.injectFunds(wallet, addr!, 20n);
 
@@ -128,16 +126,22 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
   });
 
   it('should send a transaction with a set changeAddress', async () => {
-    const recipientAddr = walletAddresses[1];
-    const changeAddr = walletAddresses[0];
+    const freshWallet = (await adapter.createWallet()).wallet;
+    await adapter.injectFunds(freshWallet, (await freshWallet.getAddressAtIndex(0))!, 10n);
 
-    const { hash, transaction: tx } = await adapter.sendTransaction(wallet, recipientAddr, 2n, {
-      changeAddress: changeAddr,
-    });
+    const recipientAddr = (await freshWallet.getAddressAtIndex(1))!;
+    const changeAddr = (await freshWallet.getAddressAtIndex(2))!;
+
+    const { hash, transaction: tx } = await adapter.sendTransaction(
+      freshWallet,
+      recipientAddr,
+      2n,
+      { changeAddress: changeAddr }
+    );
 
     expect(tx.outputs.length).toBe(2);
 
-    const fullTx = await adapter.getFullTxById(wallet, hash);
+    const fullTx = await adapter.getFullTxById(freshWallet, hash);
     expect(fullTx.success).toBe(true);
 
     const recipientOutput = fullTx.tx.outputs.find(
