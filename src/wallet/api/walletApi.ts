@@ -68,7 +68,9 @@ const walletApi = {
     if (response.status === 200 && data.success) {
       return parseSchema(data, walletStatusResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet status.');
+    throw new WalletRequestError(`Error getting wallet status. Status: ${response.status}`, {
+      cause: response.data,
+    });
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
@@ -246,7 +248,9 @@ const walletApi = {
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
     }
-    throw new WalletRequestError('Error creating tx proposal.');
+    throw new WalletRequestError(`Error creating tx proposal. Status: ${response.status}`, {
+      cause: response.data,
+    });
   },
 
   async updateTxProposal(
@@ -260,7 +264,9 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    throw new WalletRequestError('Error sending tx proposal.');
+    throw new WalletRequestError(`Error sending tx proposal. Status: ${response.status}`, {
+      cause: response.data,
+    });
   },
 
   async deleteTxProposal(
