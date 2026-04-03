@@ -42,11 +42,7 @@ export const JSONBigInt = {
       // Otherwise, we can keep it as a Number.
       return value;
     } catch (e) {
-      if (
-        e instanceof SyntaxError &&
-        (e.message === `Cannot convert ${context.source} to a BigInt` ||
-          e.message === `invalid BigInt syntax`)
-      ) {
+      if (e instanceof SyntaxError) {
         // When this error happens, it means the number cannot be converted to a BigInt,
         // so it's a double, for example '123.456' or '1e2'.
         return value;
