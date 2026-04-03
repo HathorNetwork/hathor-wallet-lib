@@ -18,12 +18,21 @@ import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  SendTransactionOptions,
+  SendTransactionResult,
+  CreateTokenAdapterOptions,
+  CreateTokenResult,
+  GetUtxosAdapterOptions,
+  GetUtxosResult,
+  AdapterOutput,
+  SendManyOutputsAdapterOptions,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -199,5 +208,75 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.sendTransaction(address, amount, {
+      pinCode: SERVICE_PIN,
+      ...options,
+    });
+    if (!result.hash) {
+      throw new Error('sendTransaction: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
+    return this.concrete(wallet).getFullTxById(txId);
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenAdapterOptions
+  ): Promise<CreateTokenResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.createNewToken(name, symbol, amount, {
+      pinCode: SERVICE_PIN,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('createToken: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getUtxos(
+    wallet: FuzzyWalletType,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosResult> {
+    const result = await this.concrete(wallet).getUtxos(options);
+    return {
+      total_amount_available: result.total_amount_available,
+      total_utxos_available: result.total_utxos_available,
+      utxos: result.utxos,
+    };
+  }
+
+  async sendManyOutputsTransaction(
+    wallet: FuzzyWalletType,
+    outputs: AdapterOutput[],
+    options?: SendManyOutputsAdapterOptions
+  ): Promise<SendTransactionResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.sendManyOutputsTransaction(outputs, {
+      pinCode: SERVICE_PIN,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('sendManyOutputsTransaction: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash, transaction: result };
   }
 }

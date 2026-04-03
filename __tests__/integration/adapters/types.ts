@@ -6,10 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { IHathorWallet } from '../../../src/wallet/types';
+import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
-import type { IStorage } from '../../../src/types';
+import type { IStorage, TokenVersion } from '../../../src/types';
 import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
 
 /**
@@ -161,4 +161,150 @@ export interface IWalletTestAdapter {
 
   /** Returns a fresh precalculated wallet for tests that need one */
   getPrecalculatedWallet(): PrecalculatedWalletData;
+
+  // --- Transaction operations ---
+
+  /**
+   * Sends a transaction from the wallet to the given address.
+   * Handles pinCode injection for facades that require per-call credentials.
+   * Returns the hash and the full Transaction model.
+   */
+  sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult>;
+
+  /**
+   * Retrieves the full transaction data from the network node.
+   * Both facades support this via the fullnode API.
+   */
+  getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse>;
+
+  // --- Token creation ---
+
+  /**
+   * Creates a new custom token and waits for it to be processed.
+   * Both facades support token creation via `createNewToken()`.
+   */
+  createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenAdapterOptions
+  ): Promise<CreateTokenResult>;
+
+  // --- UTXO queries ---
+
+  /**
+   * Retrieves unspent transaction outputs for a wallet.
+   * Both facades support `getUtxos()`.
+   */
+  getUtxos(wallet: FuzzyWalletType, options?: GetUtxosAdapterOptions): Promise<GetUtxosResult>;
+
+  // --- Multi-output transactions ---
+
+  /**
+   * Sends a transaction with multiple outputs and optional explicit inputs.
+   * Both facades support `sendManyOutputsTransaction()`.
+   */
+  sendManyOutputsTransaction(
+    wallet: FuzzyWalletType,
+    outputs: AdapterOutput[],
+    options?: SendManyOutputsAdapterOptions
+  ): Promise<SendTransactionResult>;
+}
+
+/**
+ * Options for sending a transaction via the adapter.
+ */
+export interface SendTransactionOptions {
+  token?: string;
+  changeAddress?: string;
+}
+
+/**
+ * Result of sending a transaction.
+ */
+export interface SendTransactionResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for creating a token via the adapter.
+ */
+export interface CreateTokenAdapterOptions {
+  tokenVersion?: TokenVersion;
+  address?: string;
+  changeAddress?: string;
+  createMint?: boolean;
+  createMelt?: boolean;
+}
+
+/**
+ * Result of creating a token.
+ */
+export interface CreateTokenResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for querying UTXOs via the adapter.
+ */
+export interface GetUtxosAdapterOptions {
+  token?: string;
+  max_utxos?: number;
+  filter_address?: string;
+  amount_smaller_than?: bigint;
+  amount_bigger_than?: bigint;
+}
+
+/**
+ * A single UTXO entry returned by the adapter.
+ */
+export interface AdapterUtxo {
+  address: string;
+  amount: bigint;
+  tx_id: string;
+  locked: boolean;
+  index: number;
+}
+
+/**
+ * Result of a getUtxos query.
+ */
+export interface GetUtxosResult {
+  total_amount_available: bigint;
+  total_utxos_available: bigint;
+  utxos: AdapterUtxo[];
+}
+
+/**
+ * An output for sendManyOutputsTransaction.
+ */
+export interface AdapterOutput {
+  address: string;
+  value: bigint;
+  token: string;
+}
+
+/**
+ * An explicit input for sendManyOutputsTransaction.
+ */
+export interface AdapterInput {
+  txId: string;
+  index: number;
+  token?: string;
+}
+
+/**
+ * Options for sendManyOutputsTransaction via the adapter.
+ */
+export interface SendManyOutputsAdapterOptions {
+  inputs?: AdapterInput[];
+  changeAddress?: string;
 }
