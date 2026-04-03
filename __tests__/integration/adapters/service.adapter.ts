@@ -24,6 +24,12 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  CreateTokenOptions,
+  CreateTokenResult,
+  AuthorityUtxoResult,
+  GetAuthorityUtxosOptions,
+  DelegateAuthorityAdapterOptions,
+  DelegateAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -199,5 +205,63 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenOptions
+  ): Promise<CreateTokenResult> {
+    const sw = this.concrete(wallet);
+    const response = await sw.createNewToken(name, symbol, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!response.hash) {
+      throw new Error('createToken: transaction had no hash');
+    }
+    await pollForTx(sw, response.hash);
+    return { hash: response.hash };
+  }
+
+  async getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    options?: GetAuthorityUtxosOptions
+  ): Promise<AuthorityUtxoResult[]> {
+    const sw = this.concrete(wallet);
+    const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+      many: options?.many ?? true,
+      filter_address: options?.filter_address,
+    });
+    return utxos.map(u => ({
+      txId: u.txId,
+      index: u.index,
+      address: u.address,
+      authorities: u.authorities,
+    }));
+  }
+
+  async delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: 'mint' | 'melt',
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {
+      pinCode: SERVICE_PIN,
+      anotherAuthorityAddress: null,
+      createAnother: options?.createAnother ?? false,
+    });
+    if (!result?.hash) {
+      throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash };
   }
 }

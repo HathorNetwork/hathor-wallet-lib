@@ -1304,7 +1304,7 @@ describe('address management methods', () => {
   });
 });
 
-describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
+describe('getUtxos, getUtxosForAmount', () => {
   let utxosTestWallet: HathorWalletServiceWallet;
   let createdTokenUid: string;
 
@@ -1448,134 +1448,7 @@ describe('getUtxos, getUtxosForAmount, getAuthorityUtxos', () => {
     });
   });
 
-  describe('getAuthorityUtxo', () => {
-    it('should return mint authority UTXOs', async () => {
-      const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint');
-
-      expect(Array.isArray(mintAuthorities)).toBe(true);
-      expect(mintAuthorities.length).toBeGreaterThan(0);
-
-      mintAuthorities.forEach(authUtxo => {
-        expect(authUtxo).toEqual(
-          expect.objectContaining({
-            txId: expect.any(String),
-            index: expect.any(Number),
-            address: expect.any(String),
-            authorities: expect.any(BigInt),
-          })
-        );
-        expect(authUtxo.txId).toBe(createdTokenUid);
-        expect(authUtxo.address).toBe(utxosWallet.addresses[2]);
-        expect(authUtxo.authorities & TOKEN_MINT_MASK).toBe(TOKEN_MINT_MASK);
-      });
-    });
-
-    it('should return melt authority UTXOs', async () => {
-      const meltAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'melt');
-
-      expect(Array.isArray(meltAuthorities)).toBe(true);
-      expect(meltAuthorities.length).toBeGreaterThan(0);
-
-      meltAuthorities.forEach(authUtxo => {
-        expect(authUtxo).toEqual(
-          expect.objectContaining({
-            txId: expect.any(String),
-            index: expect.any(Number),
-            address: expect.any(String),
-            authorities: expect.any(BigInt),
-          })
-        );
-        expect(authUtxo.txId).toBe(createdTokenUid);
-        expect(authUtxo.address).toBe(utxosWallet.addresses[3]);
-        expect(authUtxo.authorities & TOKEN_MELT_MASK).toBe(TOKEN_MELT_MASK);
-      });
-    });
-
-    it.skip('should return multiple authority UTXOs when many option is true', async () => {
-      // TODO: Create another authority transaction to test this
-      const multipleAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-        many: true,
-      });
-
-      expect(Array.isArray(multipleAuthorities)).toBe(true);
-      // Should return all available mint authorities, not just one
-      expect(multipleAuthorities.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it.skip('should return single authority UTXO when many option is false', async () => {
-      // TODO: Create another authority transaction to test this
-      const singleAuthority = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-        many: false,
-      });
-
-      expect(Array.isArray(singleAuthority)).toBe(true);
-      expect(singleAuthority.length).toBeLessThanOrEqual(1);
-    });
-
-    it('should filter authority UTXOs by address', async () => {
-      // First get all mint authorities to find an address that has them
-      const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-        filter_address: utxosWallet.addresses[2],
-      });
-      expect(mintAuthorities).toHaveLength(1);
-
-      // Try to find them in an address that has none
-      const noAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-        filter_address: utxosWallet.addresses[3],
-      });
-      expect(noAuthorities).toHaveLength(0);
-    });
-
-    it.skip('should include only available UTXOs when only_available_utxos is true', async () => {
-      // TODO: Create a timelocked authority to test this
-      const availableAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-        only_available_utxos: true,
-      });
-
-      expect(Array.isArray(availableAuthorities)).toBe(true);
-      // Should return available authorities
-      availableAuthorities.forEach(auth => {
-        expect(auth).toEqual(
-          expect.objectContaining({
-            txId: expect.any(String),
-            index: expect.any(Number),
-            address: expect.any(String),
-            authorities: expect.any(Number),
-          })
-        );
-      });
-    });
-
-    it('should throw error for invalid authority type', async () => {
-      await expect(utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'invalid')).rejects.toThrow(
-        'Invalid authority value.'
-      );
-    });
-
-    it('should return empty array for non-existent token', async () => {
-      const nonExistentTokenUid = 'cafe'.repeat(16); // 64 character hex string
-      const authorities = await utxosTestWallet.getAuthorityUtxo(nonExistentTokenUid, 'mint');
-
-      expect(Array.isArray(authorities)).toBe(true);
-      expect(authorities).toHaveLength(0);
-    });
-
-    it('should return empty array for token without authorities', async () => {
-      // Create a token without authorities
-      const noAuthTokenTx = await utxosTestWallet.createNewToken('NoAuthToken', 'NAT', 100n, {
-        pinCode,
-        createMint: false,
-        createMelt: false,
-      });
-      await pollForTx(utxosTestWallet, noAuthTokenTx.hash!);
-
-      const mintAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'mint');
-      const meltAuthorities = await utxosTestWallet.getAuthorityUtxo(noAuthTokenTx.hash!, 'melt');
-
-      expect(mintAuthorities).toHaveLength(0);
-      expect(meltAuthorities).toHaveLength(0);
-    });
-  });
+  // getAuthorityUtxo tests moved to shared/authority-utxos.test.ts and service-specific/authority-utxos.test.ts
 });
 
 describe('Fee-based tokens', () => {
