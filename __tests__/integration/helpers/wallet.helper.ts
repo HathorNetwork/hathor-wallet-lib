@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get, includes } from 'lodash';
+import { get, includes, isEmpty } from 'lodash';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -495,6 +495,33 @@ export async function waitTxConfirmed(
 
   // Ensure the next transaction will have a strictly greater timestamp.
   await waitUntilNextTimestamp(hWallet, txId);
+}
+
+/**
+ * Polls until the transaction is confirmed and not voided.
+ *
+ * Nano contract transactions can be voided shortly after receiving their first block
+ * because the NC execution happens at block time. This helper ensures the tx has
+ * stabilized: it has a first_block, the fetch succeeded, and voided_by is empty.
+ *
+ * @param hWallet
+ * @param txId
+ * @param timeoutMs
+ */
+export async function waitTxNotVoided(
+  hWallet: HathorWallet,
+  txId: string,
+  timeoutMs: number = testConfig.txConfirmedTimeoutMs
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const txData = await hWallet.getFullTxById(txId);
+    if (txData.success && isEmpty(txData.meta.voided_by) && txData.meta.first_block) {
+      return;
+    }
+    await delay(testConfig.txConfirmedPollIntervalMs);
+  }
+  throw new Error(`Timeout: tx ${txId} still voided after ${timeoutMs}ms`);
 }
 
 /**

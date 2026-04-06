@@ -6,6 +6,8 @@ import {
   stopAllWallets,
   waitForTxReceived,
   waitTxConfirmed,
+  waitNextBlock,
+  waitTxNotVoided,
 } from '../../helpers/wallet.helper';
 
 import ncApi from '../../../../src/api/nano';
@@ -133,7 +135,11 @@ describe('FeeBlueprint Template execution', () => {
     const txId = tx.hash;
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
-    await waitTxConfirmed(wallet, txId, null);
+    await waitTxConfirmed(wallet, txId);
+    // Wait for an additional block so NC execution can settle.
+    // NC txs can be voided shortly after first_block is assigned.
+    await waitNextBlock(wallet.storage);
+    await waitTxNotVoided(wallet, txId);
     const txAfterExecution = await wallet.getFullTxById(txId);
     expect(txAfterExecution.success).toBe(true);
     if (!txAfterExecution.success) {
