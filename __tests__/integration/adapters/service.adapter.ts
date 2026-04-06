@@ -7,6 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
+import config from '../../../src/config';
 import { WalletTracker } from '../utils/wallet-tracker.util';
 import type Transaction from '../../../src/models/transaction';
 import {
@@ -57,6 +58,23 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   defaultPassword = SERVICE_PASSWORD;
 
+  private _originalServerUrl?: string;
+
+  testnetServerUrl = 'https://wallet-service.testnet.hathor.network/';
+
+  get originalServerUrl(): string {
+    if (!this._originalServerUrl) {
+      throw new Error('originalServerUrl not initialized. Call suiteSetup() first.');
+    }
+    return this._originalServerUrl;
+  }
+
+  async suiteSetup(): Promise<void> {
+    initializeServiceGlobalConfigs();
+    this._originalServerUrl = config.getWalletServiceBaseUrl();
+    await GenesisWalletServiceHelper.start();
+  }
+
   capabilities: WalletCapabilities = {
     supportsMultisig: false,
     supportsTokenScope: false,
@@ -85,11 +103,6 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
    */
   private concrete(wallet: FuzzyWalletType): HathorWalletServiceWallet {
     return wallet as unknown as HathorWalletServiceWallet;
-  }
-
-  async suiteSetup(): Promise<void> {
-    initializeServiceGlobalConfigs();
-    await GenesisWalletServiceHelper.start();
   }
 
   async suiteTeardown(): Promise<void> {

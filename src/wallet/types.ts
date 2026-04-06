@@ -417,6 +417,7 @@ export interface IHathorWallet {
   checkPin(pin: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
+  changeServer(newServer: string): Promise<void>;
   getServerUrl(): string;
   getNetwork(): string;
   getAddressPathForIndex(index: number): Promise<string>;
