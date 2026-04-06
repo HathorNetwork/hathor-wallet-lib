@@ -62,8 +62,8 @@ import {
   FullNodeVersionData,
   WalletAddressMap,
   TxByIdTokensResponseData,
-  DelegateAuthorityOptions,
-  DestroyAuthorityOptions,
+  WalletServiceDelegateAuthorityOptions,
+  WalletServiceDestroyAuthorityOptions,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
@@ -2473,7 +2473,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       anotherAuthorityAddress = null,
       createAnother = true,
       pinCode = null,
-    }: DelegateAuthorityOptions
+    }: WalletServiceDelegateAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
@@ -2563,7 +2563,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: DelegateAuthorityOptions
+    options: WalletServiceDelegateAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
@@ -2580,7 +2580,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     count: number,
-    { pinCode = null }: DestroyAuthorityOptions
+    { pinCode = null }: WalletServiceDestroyAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
@@ -2643,7 +2643,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     count: number,
-    options: DestroyAuthorityOptions
+    options: WalletServiceDestroyAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count, options);
