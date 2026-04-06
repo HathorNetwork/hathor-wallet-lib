@@ -1,20 +1,15 @@
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay, getGapLimitConfig, getRandomInt } from './utils/core.util';
+import { delay, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
-  DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection,
   generateMultisigWalletHelper,
   generateWalletHelper,
   generateWalletHelperRO,
   stopAllWallets,
   waitForTxReceived,
-  waitForWalletReady,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import HathorWallet from '../../src/new/wallet';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
@@ -25,14 +20,10 @@ import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import {
-  HasTxOutsideFirstAddressError,
-  NftValidationError,
-  TxNotFoundError,
-} from '../../src/errors';
+import { NftValidationError, TxNotFoundError } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import transaction from '../../src/utils/transaction';
-import { WalletType, TokenVersion, SCANNING_POLICY, WalletAddressMode } from '../../src/types';
+import { WalletType, TokenVersion } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
 import FeeHeader from '../../src/headers/fee';
