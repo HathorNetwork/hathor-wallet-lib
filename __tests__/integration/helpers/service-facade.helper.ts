@@ -88,6 +88,38 @@ export function buildWalletInstance({
 }
 
 /**
+ * Polls until a predicate returns a truthy value, with retries and delay.
+ *
+ * Use this when you need to wait for a wallet-service side-effect that lags behind
+ * tx visibility (e.g. UTXO index updates after a delegation).
+ *
+ * @param predicate - Async function that returns a truthy value when the condition is met.
+ * @param label - Human-readable description for log/error messages.
+ * @param maxAttempts - Maximum number of polling attempts (default: 10).
+ * @param delayMs - Delay between attempts in milliseconds (default: 500).
+ * @returns The truthy value returned by the predicate.
+ */
+export async function pollUntilCondition<T>(
+  predicate: () => Promise<T>,
+  label: string,
+  maxAttempts = 10,
+  delayMs = 500
+): Promise<T> {
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    const result = await predicate();
+    if (result) {
+      loggers.test!.log(`Condition "${label}" met after ${attempts + 1} attempts`);
+      return result;
+    }
+    attempts++;
+    await delay(delayMs);
+  }
+  throw new Error(`Condition "${label}" not met after ${maxAttempts} attempts`);
+}
+
+/**
  * Polls the wallet for a transaction by its ID until found or max attempts reached
  * @param walletForPolling - The wallet instance to poll
  * @param txId - The transaction ID to look for

@@ -13,6 +13,7 @@ import {
   buildWalletInstance,
   initializeServiceGlobalConfigs,
   pollForTx,
+  pollUntilCondition,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
@@ -263,6 +264,18 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       throw new Error('delegateAuthority: transaction had no hash');
     }
     await pollForTx(sw, result.hash);
+
+    // The wallet service UTXO index may lag behind tx visibility.
+    // Poll until the delegation tx appears in the authority UTXO list.
+    const delegationTxId = result.hash;
+    await pollUntilCondition(async () => {
+      const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+        many: true,
+        only_available_utxos: true,
+      });
+      return utxos.some(u => u.txId === delegationTxId);
+    }, `authority UTXO index reflects delegation ${delegationTxId}`);
+
     return { hash: result.hash };
   }
 }
