@@ -479,7 +479,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
-  changeServer(newServer: string): void {
+  async changeServer(newServer: string): Promise<void> {
     this.storage.config.setServerUrl(newServer);
   }
 
