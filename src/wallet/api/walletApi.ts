@@ -264,7 +264,7 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    throw new WalletRequestError(`Error sending tx proposal. Status: ${response.status}`, {
+    throw new WalletRequestError(`Error updating tx proposal. Status: ${response.status}`, {
       cause: response.data,
     });
   },
