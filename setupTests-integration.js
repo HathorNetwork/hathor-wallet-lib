@@ -53,17 +53,17 @@ async function createOCBs(sharedState) {
 
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
   const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
-  await waitTxConfirmed(ocbWallet, txBet.hash, null);
+  await waitTxConfirmed(ocbWallet, txBet.hash);
   sharedState.blueprintIds.BET_BLUEPRINT_ID = txBet.hash;
 
   const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
   const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
-  await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
+  await waitTxConfirmed(ocbWallet, txAuthority.hash);
   sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
 
   const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
   const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
-  await waitTxConfirmed(ocbWallet, txFull.hash, null);
+  await waitTxConfirmed(ocbWallet, txFull.hash);
   sharedState.blueprintIds.FULL_BLUEPRINT_ID = txFull.hash;
 
   const codeParent = fs.readFileSync(
@@ -91,7 +91,7 @@ async function createOCBs(sharedState) {
     'utf8'
   );
   const txFee = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFee, address0);
-  await waitTxConfirmed(ocbWallet, txFee.hash, null);
+  await waitTxConfirmed(ocbWallet, txFee.hash);
   sharedState.blueprintIds.FEE_BLUEPRINT_ID = txFee.hash;
 }
 

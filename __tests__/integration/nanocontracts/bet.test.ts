@@ -72,7 +72,7 @@ describe('full cycle of bet nano contract', () => {
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
-    await waitTxConfirmed(wallet, txId, null);
+    await waitTxConfirmed(wallet, txId);
     // Now we query the transaction from the full node to double check it's still valid after the nano execution
     // and it already has a first block, so it was really executed
     const txAfterExecution = await wallet.getFullTxById(txId);
@@ -631,7 +631,7 @@ describe('full cycle of bet nano contract', () => {
 
     jest.spyOn(wallet.storage, 'processHistory');
     expect(wallet.storage.processHistory.mock.calls.length).toBe(0);
-    await waitTxConfirmed(wallet, txWithdrawal2.hash, null);
+    await waitTxConfirmed(wallet, txWithdrawal2.hash);
     const txWithdrawal2Data = await wallet.getFullTxById(txWithdrawal2.hash);
 
     // The tx became voided after the block because of the nano execution
@@ -660,7 +660,7 @@ describe('full cycle of bet nano contract', () => {
       ],
     });
     await waitForTxReceived(wallet, txBet3.hash);
-    await waitTxConfirmed(wallet, txBet3.hash, null);
+    await waitTxConfirmed(wallet, txBet3.hash);
     await waitNextBlock(wallet.storage);
     const utxosAfter = new Map(wallet.storage.store.utxos);
     // Validate that the utxos are the same before the tx is created and after it's voided
