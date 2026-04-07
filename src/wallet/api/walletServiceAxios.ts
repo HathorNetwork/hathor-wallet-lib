@@ -7,6 +7,7 @@
 
 import axios from 'axios';
 import { TIMEOUT } from '../../constants';
+import { getDefaultLogger } from '../../types';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -54,7 +55,22 @@ export const axiosInstance = async (
   if (needsAuth) {
     // Then we need the auth token
     await wallet.validateAndRenewAuthToken();
-    defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
+    const token = wallet.getAuthToken();
+    // DIAGNOSTIC: log token state to help debug flaky 403s
+    const logger = getDefaultLogger();
+    if (!token) {
+      logger.warn('[DIAG] Auth token is null/undefined after validateAndRenewAuthToken');
+    } else {
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        logger.info(
+          `[DIAG] Token mode=${payload.mode ?? 'undefined'}, wid=${payload.wid}, has_sign=${!!payload.sign}`
+        );
+      } catch {
+        logger.warn('[DIAG] Could not decode token payload');
+      }
+    }
+    defaultOptions.headers.Authorization = `Bearer ${token}`;
   }
 
   return axios.create(defaultOptions);
