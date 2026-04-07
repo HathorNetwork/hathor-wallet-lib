@@ -56,18 +56,21 @@ export const axiosInstance = async (
     // Then we need the auth token
     await wallet.validateAndRenewAuthToken();
     const token = wallet.getAuthToken();
-    // Fail fast: sending "Bearer null" causes confusing 401/403 downstream
-    if (!token) {
-      throw new Error('Auth token missing after validateAndRenewAuthToken');
-    }
+
     // DIAGNOSTIC: log token state to help debug flaky 403s
-    try {
-      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-      getDefaultLogger().info(
-        `[DIAG] Token mode=${payload.mode ?? 'undefined'}, has_wid=${!!payload.wid}, has_sign=${!!payload.sign}`
-      );
-    } catch {
-      getDefaultLogger().warn('[DIAG] Could not decode token payload');
+    const logger = getDefaultLogger();
+    if (!token) {
+      logger.warn('[DIAG] Auth token is null/undefined after validateAndRenewAuthToken');
+    } else {
+      // DIAGNOSTIC: log token state to help debug flaky 403s
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+        getDefaultLogger().info(
+          `[DIAG] Token mode=${payload.mode ?? 'undefined'}, has_wid=${!!payload.wid}, has_sign=${!!payload.sign}`
+        );
+      } catch {
+        getDefaultLogger().warn('[DIAG] Could not decode token payload');
+      }
     }
     defaultOptions.headers.Authorization = `Bearer ${token}`;
   }
