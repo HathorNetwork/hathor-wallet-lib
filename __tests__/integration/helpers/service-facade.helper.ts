@@ -55,6 +55,7 @@ export function buildWalletInstance({
   words = '',
   xpub = '',
   passwordForRequests = 'test-password',
+  singleAddressMode = false,
 } = {}) {
   let addresses: string[] = [];
 
@@ -82,6 +83,7 @@ export function buildWalletInstance({
     network,
     storage,
     enableWs,
+    singleAddressMode,
   });
 
   return { wallet: newWallet, store, storage, words, addresses };

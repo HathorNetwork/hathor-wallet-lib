@@ -33,6 +33,7 @@ import {
   OutputValueType,
   WALLET_FLAGS,
   TokenVersion,
+  ApiVersion,
 } from '../../src/types';
 
 describe('handleStop', () => {
@@ -218,17 +219,39 @@ describe('config version', () => {
   it('should get native token from version', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
+    // No version set: should use DEFAULT_NATIVE_TOKEN_CONFIG
     expect(storage.getNativeTokenData()).toEqual({
       ...DEFAULT_NATIVE_TOKEN_CONFIG,
       uid: NATIVE_TOKEN_UID,
     });
+
+    // Fullnode provides native_token without version field: should default to NATIVE
     const version = { native_token: { name: 'Native', symbol: 'N' } };
     storage.setApiVersion(version);
     expect(storage.getNativeTokenData()).toEqual({
+      version: TokenVersion.NATIVE,
       name: 'Native',
       symbol: 'N',
       uid: NATIVE_TOKEN_UID,
     });
+
+    // Fullnode explicitly provides version: should preserve it
+    storage.setApiVersion({
+      native_token: { name: 'Hathor', symbol: 'HTR', version: TokenVersion.NATIVE },
+    } as ApiVersion);
+    expect(storage.getNativeTokenData().version).toBe(TokenVersion.NATIVE);
+
+    // Fullnode provides an unknown version: should forward it as-is
+    storage.setApiVersion({
+      native_token: { name: 'Hathor', symbol: 'HTR', version: 99 as number },
+    } as ApiVersion);
+    expect(storage.getNativeTokenData().version).toBe(99);
+
+    // native_token is null: should fall back to DEFAULT_NATIVE_TOKEN_CONFIG
+    storage.setApiVersion({ native_token: null } as ApiVersion);
+    expect(storage.getNativeTokenData().version).toBe(TokenVersion.NATIVE);
+
+    // Version reset to null: should fall back to DEFAULT_NATIVE_TOKEN_CONFIG
     storage.setApiVersion(null);
     expect(storage.getNativeTokenData()).toEqual({
       ...DEFAULT_NATIVE_TOKEN_CONFIG,
@@ -247,16 +270,19 @@ describe('config version', () => {
     });
   });
 
-  it('should save native token from version', async () => {
+  it('should save native token from version with version NATIVE', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
     await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toEqual(null);
+    // Fullnode response without version field
     const version = { native_token: { name: 'Native', symbol: 'N' } };
     storage.setApiVersion(version);
     await storage.saveNativeToken();
-    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({
+    const saved = await storage.getToken(NATIVE_TOKEN_UID);
+    expect(saved).toMatchObject({
       name: 'Native',
       symbol: 'N',
+      version: TokenVersion.NATIVE,
       uid: NATIVE_TOKEN_UID,
     });
   });

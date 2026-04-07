@@ -139,7 +139,7 @@ export class WalletPrecalculationHelper {
         accountDerivationIndex,
       });
       for (let i = addressIntervalStart; i < addressIntervalEnd; i++) {
-        const addrInfo = deriveAddressFromXPubP2PKH(xpubkey, addressIntervalStart, NETWORK_NAME);
+        const addrInfo = deriveAddressFromXPubP2PKH(xpubkey, i, NETWORK_NAME);
         addressesArray.push(addrInfo.base58);
       }
     }
