@@ -76,44 +76,6 @@ describe('[Service] getBalance', () => {
     expect(htrBalance?.balance).toBe(0n);
   });
 
-  // FIXME(wallet-service): getBalance(tokenUid) on an empty wallet should return
-  // a single entry with 0 balance, but currently returns an empty array.
-  // Ref: https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
-  it.skip('should return balance for specific token when token parameter is provided', async () => {
-    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
-    await wallet.start({ pinCode: adapter.defaultPinCode, password: adapter.defaultPassword });
-
-    const balances = await wallet.getBalance(NATIVE_TOKEN_UID);
-
-    expect(Array.isArray(balances)).toBe(true);
-    expect(balances.length).toStrictEqual(1);
-    expect(balances[0]).toEqual(
-      expect.objectContaining({
-        token: expect.objectContaining({
-          id: NATIVE_TOKEN_UID,
-          name: expect.any(String),
-          symbol: expect.any(String),
-        }),
-        balance: expect.objectContaining({
-          unlocked: 0n,
-          locked: 0n,
-        }),
-        tokenAuthorities: expect.objectContaining({
-          unlocked: expect.objectContaining({
-            mint: false,
-            melt: false,
-          }),
-          locked: expect.objectContaining({
-            mint: false,
-            melt: false,
-          }),
-        }),
-        transactions: 0,
-        lockExpires: expect.anything(),
-      })
-    );
-  });
-
   it('should throw error when wallet is not ready', async () => {
     const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
     await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');

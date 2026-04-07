@@ -53,6 +53,36 @@ describe.each(adapters)('[Shared] getBalance — $name', adapter => {
     }
   });
 
+  it('should return full balance shape for a specific token on an empty wallet', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const balance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(balance).toHaveLength(1);
+      expect(balance[0]).toMatchObject({
+        token: {
+          id: NATIVE_TOKEN_UID,
+          name: expect.any(String),
+          symbol: expect.any(String),
+          version: expect.any(Number),
+        },
+        balance: { unlocked: 0n, locked: 0n },
+        transactions: 0,
+      });
+
+      // Authorities shape is present but the value type differs between facades
+      // (fullnode returns 0n, wallet-service returns false), so we check structure only
+      const { tokenAuthorities } = balance[0];
+      expect(tokenAuthorities).toBeDefined();
+      expect(tokenAuthorities).toHaveProperty('unlocked.mint');
+      expect(tokenAuthorities).toHaveProperty('unlocked.melt');
+      expect(tokenAuthorities).toHaveProperty('locked.mint');
+      expect(tokenAuthorities).toHaveProperty('locked.melt');
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
   it('should reflect injected funds in balance', async () => {
     const { wallet } = await adapter.createWallet();
 
