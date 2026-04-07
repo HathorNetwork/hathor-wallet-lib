@@ -132,6 +132,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       words: options?.xpub ? '' : options?.seed || '',
       xpub: options?.xpub || '',
       enableWs: false,
+      singleAddressMode: options?.singleAddressMode,
     });
 
     this.tracker.track(result.wallet);
