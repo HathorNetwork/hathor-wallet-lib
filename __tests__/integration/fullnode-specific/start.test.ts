@@ -23,7 +23,7 @@ import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { WalletTracker } from '../utils/wallet-tracker.util';
-import { deriveXpubFromSeed } from '../utils/core.util';
+import { deriveXpubFromSeed, getGapLimitConfig } from '../utils/core.util';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import {
   createTokenHelper,
@@ -168,6 +168,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
     await hWallet.start();
@@ -188,6 +189,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       // No preCalculatedAddresses — all calculated at runtime
+      scanPolicy: getGapLimitConfig(),
     };
     const hWallet = new HathorWallet(walletConfig);
     tracker.track(hWallet);
@@ -211,6 +213,7 @@ describe('[Fullnode-specific] start', () => {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
       },
+      scanPolicy: getGapLimitConfig(),
     };
 
     const hWallet = new HathorWallet(walletConfig);

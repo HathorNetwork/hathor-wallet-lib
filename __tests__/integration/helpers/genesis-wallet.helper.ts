@@ -10,7 +10,7 @@ import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
-import { delay } from '../utils/core.util';
+import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
@@ -53,6 +53,7 @@ export class GenesisWalletHelper {
         pinCode: pin,
         multisig: null,
         preCalculatedAddresses: WALLET_CONSTANTS.genesis.addresses,
+        scanPolicy: getGapLimitConfig(),
       });
       await this.hWallet.start();
 
