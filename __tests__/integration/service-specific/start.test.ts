@@ -122,6 +122,24 @@ describe('[Service-specific] start', () => {
     expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
   });
 
+  it('should complete start() on a brand-new wallet that goes through creating→ready', async () => {
+    // This test exercises the full sequential auth flow: createWallet returns
+    // 'creating', then validateAndRenewAuthToken obtains a token, then
+    // pollForWalletStatus polls until 'ready'. This is the exact path where
+    // the old fire-and-forget pattern caused flaky 403 errors.
+    ({ wallet } = buildWalletInstance());
+
+    await wallet.start({ pinCode, password });
+
+    expect(wallet.isReady()).toBe(true);
+    expect(wallet.getAuthToken()).not.toBeNull();
+
+    // Verify the wallet is functional by checking it has an address
+    const currentAddress = wallet.getCurrentAddress();
+    expect(currentAddress.address).toBeDefined();
+    expect(currentAddress.index).toBeDefined();
+  });
+
   it('should reject write operations on a readonly (xpub) wallet', async () => {
     const walletData = adapter.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
