@@ -1188,7 +1188,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.authToken = data.token;
     } catch (err) {
       // We should not throw here since this method is called in a fire-and-forget manner
-      // TODO: When this wallet has a logger, we should log this error to help with debugging
       // DIAGNOSTIC: log when token renewal silently fails
       getDefaultLogger().warn(
         `[DIAG] renewAuthToken failed silently, setting authToken=null. Error: ${(err as Error).message}`
