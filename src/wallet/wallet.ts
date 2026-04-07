@@ -113,6 +113,10 @@ const WALLET_STATUS_POLLING_INTERVAL = 1000;
 // Maximum number of polling attempts before timing out
 const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
 
+// Wallet status values returned by the wallet-service API
+const WS_STATUS_READY = 'ready';
+const WS_STATUS_CREATING = 'creating';
+
 enum walletState {
   NOT_STARTED = 'Not started',
   LOADING = 'Loading',
@@ -470,6 +474,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.walletId = data.status.walletId;
 
+    // If waitReady is false, return immediately after wallet creation
     if (!waitReady) {
       this.clearSensitiveData();
       return;
@@ -479,9 +484,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // so the auth token endpoint will find it.
     await this.validateAndRenewAuthToken(pinCode);
 
-    if (data.status.status === 'creating') {
+    if (data.status.status === WS_STATUS_CREATING) {
+      // If the wallet status is creating, we should wait until it is ready
+      // before continuing
       await this.pollForWalletStatus();
-    } else if (data.status.status !== 'ready') {
+    } else if (data.status.status !== WS_STATUS_READY) {
+      // At this stage, if the wallet is not 'ready' or 'creating' we should
+      // throw an error as there are only three states: 'ready', 'creating' or 'error'
       throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {
         cause: data.status,
       });
@@ -713,10 +722,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
       const data = await walletApi.getWalletStatus(this);
 
-      if (data.status.status === 'ready') {
+      if (data.status.status === WS_STATUS_READY) {
         return;
       }
-      if (data.status.status !== 'creating') {
+      // Only possible states are 'ready', 'creating' and 'error'. If status
+      // is not ready or creating, we should throw an error.
+      if (data.status.status !== WS_STATUS_CREATING) {
         throw new WalletRequestError('Error getting wallet status.', { cause: data.status });
       }
 
@@ -1146,8 +1157,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       this.authToken = data.token;
     } catch (err) {
-      // We should not throw here since this method is called in a fire-and-forget manner
-      // TODO: When this wallet has a logger, we should log this error to help with debugging
+      // Does not throw — callers rely on the non-throwing contract.
+      // On failure, authToken is cleared so the next authenticated call
+      // will trigger a fresh renewal via validateAndRenewAuthToken.
       this.authToken = null;
     }
   }

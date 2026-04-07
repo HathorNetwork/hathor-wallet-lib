@@ -179,6 +179,8 @@ describe('Read-Only Wallet Access', () => {
     });
 
     it('should time out if getReadOnlyAuthToken never succeeds', async () => {
+      jest.useFakeTimers();
+
       const wallet = new HathorWalletServiceWallet({
         requestPassword,
         xpub,
@@ -191,10 +193,23 @@ describe('Read-Only Wallet Access', () => {
       // Always fail — simulates wallet stuck in error or creating state
       mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
 
-      await expect(wallet.startReadOnly()).rejects.toThrow('Read-only wallet startup timed out');
+      const promise = wallet.startReadOnly();
+      // Catch the rejection early to prevent unhandled rejection during timer advancement
+      const caught = promise.catch((err: Error) => err);
+
+      // Advance through all 60 polling intervals
+      for (let i = 0; i < 60; i++) {
+        await jest.advanceTimersByTimeAsync(1000);
+      }
+
+      const error = await caught;
+      expect(error).toBeInstanceOf(WalletRequestError);
+      expect(error.message).toContain('Read-only wallet startup timed out');
       // Should never call getWalletStatus (no authenticated fallback)
       expect(mockGetWalletStatus).not.toHaveBeenCalled();
-    }, 120_000);
+
+      jest.useRealTimers();
+    });
 
     it('should throw error if xpub is not set', async () => {
       const wallet = new HathorWalletServiceWallet({

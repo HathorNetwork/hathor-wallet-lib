@@ -3599,6 +3599,8 @@ describe('pollForWalletStatus', () => {
   });
 
   it('should reject when max poll attempts are exceeded', async () => {
+    jest.useFakeTimers();
+
     jest.spyOn(walletApi, 'getWalletStatus').mockResolvedValue({
       success: true,
       status: {
@@ -3611,8 +3613,20 @@ describe('pollForWalletStatus', () => {
       },
     });
 
-    await expect(wallet.pollForWalletStatus()).rejects.toThrow('Wallet status polling timed out');
-  }, 120_000);
+    const promise = wallet.pollForWalletStatus();
+    // Catch the rejection early to prevent unhandled rejection during timer advancement
+    const caught = promise.catch((err: Error) => err);
+
+    // Advance through all 60 polling intervals
+    for (let i = 0; i < 60; i++) {
+      await jest.advanceTimersByTimeAsync(1000);
+    }
+
+    const error = await caught;
+    expect(error).toBeInstanceOf(WalletRequestError);
+    expect(error.message).toContain('Wallet status polling timed out');
+    jest.useRealTimers();
+  });
 
   it('should propagate errors from getWalletStatus', async () => {
     jest
