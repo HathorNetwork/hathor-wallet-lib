@@ -3522,6 +3522,144 @@ describe('HathorWalletServiceWallet server configuration', () => {
   });
 });
 
+describe('pollForWalletStatus', () => {
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let wallet: HathorWalletServiceWallet;
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: jest.fn(),
+      seed,
+      network,
+      storage: new Storage(new MemoryStore()),
+    });
+  });
+
+  it('should resolve immediately when status is ready on first poll', async () => {
+    jest.spyOn(walletApi, 'getWalletStatus').mockResolvedValue({
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'ready',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: Date.now(),
+      },
+    });
+
+    await expect(wallet.pollForWalletStatus()).resolves.toBeUndefined();
+    expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('should poll until status becomes ready', async () => {
+    const creatingResponse = {
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: null,
+      },
+    };
+    const readyResponse = {
+      success: true,
+      status: { ...creatingResponse.status, status: 'ready', readyAt: Date.now() },
+    };
+
+    jest
+      .spyOn(walletApi, 'getWalletStatus')
+      .mockResolvedValueOnce(creatingResponse)
+      .mockResolvedValueOnce(creatingResponse)
+      .mockResolvedValueOnce(readyResponse);
+
+    await expect(wallet.pollForWalletStatus()).resolves.toBeUndefined();
+    expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it('should reject when status is an error state', async () => {
+    jest.spyOn(walletApi, 'getWalletStatus').mockResolvedValue({
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'error',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: null,
+      },
+    });
+
+    await expect(wallet.pollForWalletStatus()).rejects.toThrow(WalletRequestError);
+    expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('should reject when max poll attempts are exceeded', async () => {
+    jest.spyOn(walletApi, 'getWalletStatus').mockResolvedValue({
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: null,
+      },
+    });
+
+    await expect(wallet.pollForWalletStatus()).rejects.toThrow('Wallet status polling timed out');
+  }, 120_000);
+
+  it('should propagate errors from getWalletStatus', async () => {
+    jest
+      .spyOn(walletApi, 'getWalletStatus')
+      .mockRejectedValue(new WalletRequestError('Network error'));
+
+    await expect(wallet.pollForWalletStatus()).rejects.toThrow('Network error');
+    // Only one call — error propagates immediately, no retry
+    expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('should execute polls sequentially (no stacking)', async () => {
+    let concurrentCalls = 0;
+    let maxConcurrent = 0;
+    let callCount = 0;
+
+    jest.spyOn(walletApi, 'getWalletStatus').mockImplementation(async () => {
+      callCount++;
+      concurrentCalls++;
+      maxConcurrent = Math.max(maxConcurrent, concurrentCalls);
+      // Simulate a slow response
+      await new Promise(resolve => {
+        setTimeout(resolve, 10);
+      });
+      concurrentCalls--;
+
+      return {
+        success: true,
+        status: {
+          walletId: 'test-id',
+          xpubkey: 'test-xpub',
+          status: callCount >= 3 ? 'ready' : 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      };
+    });
+
+    await wallet.pollForWalletStatus();
+
+    expect(callCount).toBeGreaterThanOrEqual(3);
+    // Verify no concurrent calls happened
+    expect(maxConcurrent).toBe(1);
+  });
+});
+
 describe('HathorWalletServiceWallet start method error conditions', () => {
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
@@ -3894,12 +4032,11 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       expect(wallet.walletId).toBe(mockWalletId);
     });
 
-    it('should handle async errors from first validateAndRenewAuthToken before await', async () => {
+    it('should propagate validateAndRenewAuthToken errors', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
 
-      // Mock validateAndRenewAuthToken to reject immediately (async error before await)
       const authError = new Error('Auth token validation failed');
       jest.spyOn(wallet, 'validateAndRenewAuthToken').mockRejectedValue(authError);
 
@@ -3915,48 +4052,60 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
         },
       });
 
-      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
-        success: true,
-        addresses: [
-          {
-            address: 'test-address',
-            index: 0,
-            addressPath: "m/44'/280'/0'/0/0",
-          },
-        ],
-      });
+      // Token renewal failure should propagate — not be silently swallowed
+      await expect(wallet.start({ pinCode: '123', password: '123' })).rejects.toThrow(
+        'Auth token validation failed'
+      );
 
-      // @ts-expect-error - Accessing private method for testing
-      jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
-
-      // The wallet should handle the auth error gracefully
-      await wallet.start({ pinCode: '123', password: '123' });
-
-      // Auth token should be cleared when error occurs
-      expect(wallet.authToken).toBeNull();
-
-      // validateAndRenewAuthToken should be called twice:
-      // 1. First attempt that fails
-      // 2. Second retry after wallet creation
-      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(2);
+      // Only one call — no fire-and-forget retry
+      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(1);
     });
 
-    it('should handle async errors from second validateAndRenewAuthToken in handleCreate', async () => {
+    it('should call validateAndRenewAuthToken before pollForWalletStatus', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
-
-      // Mock first call to succeed, but second call (retry) to fail
-      const authError = new Error('Auth token renewal failed on retry');
-      jest
-        .spyOn(wallet, 'validateAndRenewAuthToken')
-        .mockRejectedValueOnce(new Error('First auth attempt failed'))
-        .mockRejectedValueOnce(authError);
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
 
       jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
         success: true,
         status: {
           walletId: 'test-wallet-id',
+          xpubkey: 'test-xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: Date.now(),
+          readyAt: null,
+        },
+      });
+
+      const callOrder: string[] = [];
+      jest.spyOn(wallet, 'validateAndRenewAuthToken').mockImplementation(async () => {
+        callOrder.push('validateAndRenewAuthToken');
+      });
+      jest.spyOn(wallet, 'pollForWalletStatus').mockImplementation(async () => {
+        callOrder.push('pollForWalletStatus');
+      });
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
+
+      await wallet.start({ pinCode: '123', password: '123' });
+
+      // Token must be ready BEFORE polling starts
+      expect(callOrder).toEqual(['validateAndRenewAuthToken', 'pollForWalletStatus']);
+    });
+
+    it('should set walletId exactly once from createWallet response', async () => {
+      jest
+        .spyOn(wallet.storage, 'getAccessData')
+        .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
+      jest.spyOn(wallet, 'renewAuthToken').mockImplementation(() => Promise.resolve(undefined));
+
+      const mockWalletId = 'unique-wallet-id';
+      jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
+        success: true,
+        status: {
+          walletId: mockWalletId,
           xpubkey: 'test-xpub',
           status: 'ready',
           maxGap: 20,
@@ -3965,28 +4114,12 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
         },
       });
 
-      jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
-        success: true,
-        addresses: [
-          {
-            address: 'test-address',
-            index: 0,
-            addressPath: "m/44'/280'/0'/0/0",
-          },
-        ],
-      });
-
       // @ts-expect-error - Accessing private method for testing
       jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
 
-      // The wallet should handle both auth errors gracefully
       await wallet.start({ pinCode: '123', password: '123' });
 
-      // Auth token should be cleared when errors occur
-      expect(wallet.authToken).toBeNull();
-
-      // validateAndRenewAuthToken should be called twice (both failed)
-      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(2);
+      expect(wallet.walletId).toBe(mockWalletId);
     });
   });
 });
