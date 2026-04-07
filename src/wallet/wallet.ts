@@ -1216,8 +1216,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } catch (err) {
       // We should not throw here since this method is called in a fire-and-forget manner
       // DIAGNOSTIC: log when token renewal silently fails
+      const safeMsg =
+        err && (err as Error).message ? (err as Error).message : String(err ?? 'unknown error');
       getDefaultLogger().warn(
-        `[DIAG] renewAuthToken failed silently, setting authToken=null. Error: ${(err as Error).message}`
+        `[DIAG] renewAuthToken failed silently, setting authToken=null. Error: ${safeMsg}`
       );
       this.authToken = null;
     }

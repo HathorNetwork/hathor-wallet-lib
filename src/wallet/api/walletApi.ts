@@ -69,10 +69,12 @@ const walletApi = {
     if (response.status === 200 && data.success) {
       return parseSchema(data, walletStatusResponseSchema);
     }
-    // DIAGNOSTIC: log the full response body for non-200 status
+    // DIAGNOSTIC: log a sanitized summary (avoid leaking walletId, tokens, etc.)
+    const safeBody = String(
+      response.data?.error ?? response.data?.message ?? '[no error field]'
+    ).slice(0, 200);
     getDefaultLogger().error(
-      `[DIAG] getWalletStatus failed — status=${response.status}, body=`,
-      JSON.stringify(response.data)
+      `[DIAG] getWalletStatus failed — status=${response.status}, error=${safeBody}`
     );
     throw new WalletRequestError(`Error getting wallet status. Status: ${response.status}`, {
       cause: response.data,
