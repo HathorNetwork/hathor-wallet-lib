@@ -27,26 +27,26 @@ const adapters: IWalletTestAdapter[] = [
 ];
 
 /**
- * Validates the total fee amount in a list of headers.
+ * Validates that the fee header contains exactly one entry with the expected amount.
+ * Asserts a single entry to avoid silently summing fees across tokens with
+ * different denominations (e.g., 1 HTR ≠ 100 of another token).
  */
 function validateFeeAmount(headers: Header[], expectedFee: bigint) {
   const feeHeaders = headers.filter(h => h instanceof FeeHeader);
   expect(feeHeaders).toHaveLength(1);
-  const totalFee = (feeHeaders[0] as FeeHeader).entries.reduce(
-    (sum, entry) => sum + entry.amount,
-    0n
-  );
-  expect(totalFee).toBe(expectedFee);
+  const { entries } = feeHeaders[0] as FeeHeader;
+  expect(entries).toHaveLength(1);
+  expect(entries[0].amount).toBe(expectedFee);
 }
 
 describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', adapter => {
   /** Creates a funded wallet and an external wallet for receiving. */
   async function createFundedPair(htrAmount: bigint) {
     const created = await adapter.createWallet();
-    const w = created.wallet;
-    await adapter.injectFunds(w, (await w.getAddressAtIndex(0))!, htrAmount);
+    const wallet = created.wallet;
+    await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, htrAmount);
     const ext = (await adapter.createWallet()).wallet;
-    return { wallet: w, externalWallet: ext };
+    return { wallet, externalWallet: ext };
   }
 
   beforeAll(async () => {
@@ -80,7 +80,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   });
 
   it('should send custom fee token transactions', async () => {
-    // 10n HTR: 1n token deposit, 2n fee per send × 2 sends = 5n spent → 5n remaining
+    // 10n HTR: 1n non-refundable deposit (createToken) + 2n fee × 2 sends = 5n spent → 5n remaining
     const { wallet, externalWallet } = await createFundedPair(10n);
     const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeBasedToken', 'FBT', 8582n, {
       tokenVersion: TokenVersion.FEE,
@@ -135,7 +135,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(tokenOutputs).toHaveLength(1);
     expect(tokenOutputs[0].value).toBe(200n);
 
-    // 10 HTR - 1 deposit - 1 fee = 8 HTR remaining
+    // 10 HTR - 1 non-refundable deposit (createToken) - 1 fee = 8 HTR remaining
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(8n);
   });
@@ -165,7 +165,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(tokenOutputs).toHaveLength(5);
     tokenOutputs.forEach((o: { value: bigint }) => expect(o.value).toBe(100n));
 
-    // 10 HTR - 1 deposit - 5 fee = 4 HTR remaining
+    // 10 HTR - 1 non-refundable deposit (createToken) - 5 fee = 4 HTR remaining
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(4n);
   });
