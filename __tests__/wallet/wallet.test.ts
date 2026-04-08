@@ -4176,7 +4176,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       );
     });
 
-    it('should call validateAndRenewAuthToken before pollForWalletStatus', async () => {
+    it('should call validateAndRenewAuthToken after pollForWalletStatus', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
@@ -4213,8 +4213,8 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
       await wallet.start({ pinCode: '123', password: '123' });
 
-      // Token must be ready BEFORE polling starts
-      expect(callOrder).toEqual(['validateAndRenewAuthToken', 'pollForWalletStatus']);
+      // Wallet must be ready BEFORE requesting auth token
+      expect(callOrder).toEqual(['pollForWalletStatus', 'validateAndRenewAuthToken']);
     });
 
     it('should set walletId exactly once from createWallet response', async () => {

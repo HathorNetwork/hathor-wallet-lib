@@ -480,12 +480,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       return;
     }
 
-    // Token renewal is sequential: the wallet now exists on the server,
-    // so the auth token endpoint will find it. Errors from renewAuthToken
-    // now propagate with the original cause (e.g., invalid signature,
-    // network failure) instead of being swallowed.
-    await this.validateAndRenewAuthToken(pinCode);
-
     if (data.status.status === WS_STATUS_CREATING) {
       // If the wallet status is creating, we should wait until it is ready
       // before continuing
@@ -497,6 +491,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         cause: data.status,
       });
     }
+
+    // Token renewal is sequential and happens after the wallet is confirmed
+    // ready. The auth token endpoint requires the wallet to exist and be in
+    // 'ready' state; requesting it earlier (e.g. while status is 'creating')
+    // would fail. Errors propagate with the original cause (e.g., invalid
+    // signature, network failure) instead of being swallowed.
+    await this.validateAndRenewAuthToken(pinCode);
 
     await this.onWalletReady();
     this.clearSensitiveData();
