@@ -43,7 +43,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   /** Creates a funded wallet and an external wallet for receiving. */
   async function createFundedPair(htrAmount: bigint) {
     const created = await adapter.createWallet();
-    const wallet = created.wallet;
+    const { wallet } = created;
     await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, htrAmount);
     const ext = (await adapter.createWallet()).wallet;
     return { wallet, externalWallet: ext };
