@@ -8,7 +8,7 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import { WalletTracker } from '../utils/wallet-tracker.util';
-import { WalletState } from '../../../src/types';
+import { WalletState, AuthorityType } from '../../../src/types';
 import type Transaction from '../../../src/models/transaction';
 import {
   generateConnection,
@@ -210,7 +210,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async getAuthorityUtxos(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]> {
     const hWallet = this.concrete(wallet);
@@ -229,7 +229,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async delegateAuthority(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult> {

@@ -19,6 +19,7 @@ import {
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
+import { AuthorityType } from '../../../src/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import type {
   FuzzyWalletType,
@@ -243,7 +244,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async getAuthorityUtxos(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]> {
     const sw = this.concrete(wallet);
@@ -263,7 +264,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async delegateAuthority(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult> {

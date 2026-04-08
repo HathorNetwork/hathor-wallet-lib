@@ -18,6 +18,7 @@ import type { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
+import { AuthorityType } from '../../../src/types';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -70,9 +71,13 @@ describe('[Service] getAuthorityUtxo', () => {
   // Skipped: requires a delegateAuthority-like setup to produce multiple authority UTXOs,
   // which is not yet available on the wallet-service facade. (originally skipped in PR #949)
   it.skip('should return multiple authority UTXOs when many option is true', async () => {
-    const multipleAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-      many: true,
-    });
+    const multipleAuthorities = await utxosTestWallet.getAuthorityUtxo(
+      createdTokenUid,
+      AuthorityType.MINT,
+      {
+        many: true,
+      }
+    );
 
     expect(Array.isArray(multipleAuthorities)).toBe(true);
     expect(multipleAuthorities.length).toBeGreaterThanOrEqual(1);
@@ -81,9 +86,13 @@ describe('[Service] getAuthorityUtxo', () => {
   // Skipped: same as above — needs multiple authority UTXOs to meaningfully test `many: false`.
   // (originally skipped in PR #949)
   it.skip('should return single authority UTXO when many option is false', async () => {
-    const singleAuthority = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-      many: false,
-    });
+    const singleAuthority = await utxosTestWallet.getAuthorityUtxo(
+      createdTokenUid,
+      AuthorityType.MINT,
+      {
+        many: false,
+      }
+    );
 
     expect(Array.isArray(singleAuthority)).toBe(true);
     expect(singleAuthority.length).toBeLessThanOrEqual(1);
@@ -92,9 +101,13 @@ describe('[Service] getAuthorityUtxo', () => {
   // Skipped: requires a timelocked authority UTXO to test filtering by availability,
   // which needs additional test infrastructure. (originally skipped in PR #949)
   it.skip('should include only available UTXOs when only_available_utxos is true', async () => {
-    const availableAuthorities = await utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'mint', {
-      only_available_utxos: true,
-    });
+    const availableAuthorities = await utxosTestWallet.getAuthorityUtxo(
+      createdTokenUid,
+      AuthorityType.MINT,
+      {
+        only_available_utxos: true,
+      }
+    );
 
     expect(Array.isArray(availableAuthorities)).toBe(true);
     availableAuthorities.forEach(auth => {

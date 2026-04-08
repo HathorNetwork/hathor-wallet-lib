@@ -9,7 +9,7 @@
 import type { IHathorWallet } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
-import type { IStorage, TokenVersion } from '../../../src/types';
+import type { IStorage, TokenVersion, AuthorityType } from '../../../src/types';
 import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
 
 /**
@@ -199,7 +199,7 @@ export interface IWalletTestAdapter {
   getAuthorityUtxos(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]>;
 
@@ -212,7 +212,7 @@ export interface IWalletTestAdapter {
   delegateAuthority(
     wallet: FuzzyWalletType,
     tokenUid: string,
-    type: 'mint' | 'melt',
+    type: AuthorityType,
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;

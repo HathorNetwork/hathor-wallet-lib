@@ -19,6 +19,7 @@
 
 import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
+import { AuthorityType } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
@@ -47,7 +48,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
   });
 
   it('should return mint authority UTXOs', async () => {
-    const mintAuthorities = await adapter.getAuthorityUtxos(wallet, tokenUid, 'mint');
+    const mintAuthorities = await adapter.getAuthorityUtxos(wallet, tokenUid, AuthorityType.MINT);
 
     expect(Array.isArray(mintAuthorities)).toBe(true);
     expect(mintAuthorities.length).toBeGreaterThan(0);
@@ -66,7 +67,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
   });
 
   it('should return melt authority UTXOs', async () => {
-    const meltAuthorities = await adapter.getAuthorityUtxos(wallet, tokenUid, 'melt');
+    const meltAuthorities = await adapter.getAuthorityUtxos(wallet, tokenUid, AuthorityType.MELT);
 
     expect(Array.isArray(meltAuthorities)).toBe(true);
     expect(meltAuthorities.length).toBeGreaterThan(0);
@@ -86,7 +87,11 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
 
   it('should return empty array for non-existent token', async () => {
     const nonExistentTokenUid = 'cafe'.repeat(16); // 64 character hex string
-    const authorities = await adapter.getAuthorityUtxos(wallet, nonExistentTokenUid, 'mint');
+    const authorities = await adapter.getAuthorityUtxos(
+      wallet,
+      nonExistentTokenUid,
+      AuthorityType.MINT
+    );
 
     expect(Array.isArray(authorities)).toBe(true);
     expect(authorities).toHaveLength(0);
@@ -98,8 +103,16 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
       createMelt: false,
     });
 
-    const mintAuthorities = await adapter.getAuthorityUtxos(wallet, noAuthToken.hash, 'mint');
-    const meltAuthorities = await adapter.getAuthorityUtxos(wallet, noAuthToken.hash, 'melt');
+    const mintAuthorities = await adapter.getAuthorityUtxos(
+      wallet,
+      noAuthToken.hash,
+      AuthorityType.MINT
+    );
+    const meltAuthorities = await adapter.getAuthorityUtxos(
+      wallet,
+      noAuthToken.hash,
+      AuthorityType.MELT
+    );
 
     expect(mintAuthorities).toHaveLength(0);
     expect(meltAuthorities).toHaveLength(0);
@@ -107,9 +120,11 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
 
   it('should delegate mint authority without keeping another', async () => {
     const addr1 = (await wallet.getAddressAtIndex(1))!;
-    await adapter.delegateAuthority(wallet, tokenUid, 'mint', addr1, { createAnother: false });
+    await adapter.delegateAuthority(wallet, tokenUid, AuthorityType.MINT, addr1, {
+      createAnother: false,
+    });
 
-    const mintUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, 'mint');
+    const mintUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, AuthorityType.MINT);
     expect(mintUtxos).toHaveLength(1);
     expect(mintUtxos[0]).toMatchObject({
       address: addr1,
@@ -119,9 +134,11 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
 
   it('should delegate melt authority without keeping another', async () => {
     const addr2 = (await wallet.getAddressAtIndex(2))!;
-    await adapter.delegateAuthority(wallet, tokenUid, 'melt', addr2, { createAnother: false });
+    await adapter.delegateAuthority(wallet, tokenUid, AuthorityType.MELT, addr2, {
+      createAnother: false,
+    });
 
-    const meltUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, 'melt');
+    const meltUtxos = await adapter.getAuthorityUtxos(wallet, tokenUid, AuthorityType.MELT);
     expect(meltUtxos).toHaveLength(1);
     expect(meltUtxos[0]).toMatchObject({
       address: addr2,
@@ -134,16 +151,16 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
     const caToken = await adapter.createToken(wallet, 'CreateAnotherMint', 'CAM', 50n);
     const addr6 = (await wallet.getAddressAtIndex(6))!;
 
-    await adapter.delegateAuthority(wallet, caToken.hash, 'mint', addr6, {
+    await adapter.delegateAuthority(wallet, caToken.hash, AuthorityType.MINT, addr6, {
       createAnother: true,
     });
 
-    const mintUtxos = await adapter.getAuthorityUtxos(wallet, caToken.hash, 'mint');
+    const mintUtxos = await adapter.getAuthorityUtxos(wallet, caToken.hash, AuthorityType.MINT);
     // Both facades produce 2 outputs in the tx, but the wallet-service
     // backend may only surface 1 via its API. Assert the destination got one.
     expect(mintUtxos.length).toBeGreaterThanOrEqual(1);
 
-    const atDest = await adapter.getAuthorityUtxos(wallet, caToken.hash, 'mint', {
+    const atDest = await adapter.getAuthorityUtxos(wallet, caToken.hash, AuthorityType.MINT, {
       filter_address: addr6,
     });
     expect(atDest).toHaveLength(1);
@@ -154,14 +171,14 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
     const caToken = await adapter.createToken(wallet, 'CreateAnotherMelt', 'CAML', 50n);
     const addr7 = (await wallet.getAddressAtIndex(7))!;
 
-    await adapter.delegateAuthority(wallet, caToken.hash, 'melt', addr7, {
+    await adapter.delegateAuthority(wallet, caToken.hash, AuthorityType.MELT, addr7, {
       createAnother: true,
     });
 
-    const meltUtxos = await adapter.getAuthorityUtxos(wallet, caToken.hash, 'melt');
+    const meltUtxos = await adapter.getAuthorityUtxos(wallet, caToken.hash, AuthorityType.MELT);
     expect(meltUtxos.length).toBeGreaterThanOrEqual(1);
 
-    const atDest = await adapter.getAuthorityUtxos(wallet, caToken.hash, 'melt', {
+    const atDest = await adapter.getAuthorityUtxos(wallet, caToken.hash, AuthorityType.MELT, {
       filter_address: addr7,
     });
     expect(atDest).toHaveLength(1);
@@ -177,16 +194,26 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
       meltAuthorityAddress: addr5,
     });
 
-    const mintAtAddr4 = await adapter.getAuthorityUtxos(wallet, filterToken.hash, 'mint', {
-      filter_address: addr4,
-    });
+    const mintAtAddr4 = await adapter.getAuthorityUtxos(
+      wallet,
+      filterToken.hash,
+      AuthorityType.MINT,
+      {
+        filter_address: addr4,
+      }
+    );
     expect(mintAtAddr4).toHaveLength(1);
     expect(mintAtAddr4[0].address).toBe(addr4);
 
     // Should return empty when filtering by a different address
-    const mintAtAddr5 = await adapter.getAuthorityUtxos(wallet, filterToken.hash, 'mint', {
-      filter_address: addr5,
-    });
+    const mintAtAddr5 = await adapter.getAuthorityUtxos(
+      wallet,
+      filterToken.hash,
+      AuthorityType.MINT,
+      {
+        filter_address: addr5,
+      }
+    );
     expect(mintAtAddr5).toHaveLength(0);
   });
 });

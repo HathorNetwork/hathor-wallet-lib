@@ -23,12 +23,12 @@ import {
   waitForTxReceived,
 } from '../helpers/wallet.helper';
 import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
+import HathorWallet from '../../../src/new/wallet';
+import { AuthorityType } from '../../../src/types';
 
 describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
-  /** @type HathorWallet */
-  let hWallet;
-  /** @type string */
-  let tokenHash;
+  let hWallet: HathorWallet;
+  let tokenHash: string;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
@@ -47,7 +47,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   });
 
   it('should return fullnode-specific fields on authority utxos', async () => {
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint')).toStrictEqual([
+    expect(await hWallet.getAuthorityUtxos(tokenHash, AuthorityType.MINT)).toStrictEqual([
       {
         txId: tokenHash,
         index: expect.any(Number),
@@ -60,7 +60,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
         type: expect.any(Number),
       },
     ]);
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt')).toStrictEqual([
+    expect(await hWallet.getAuthorityUtxos(tokenHash, AuthorityType.MELT)).toStrictEqual([
       {
         txId: tokenHash,
         index: expect.any(Number),
@@ -76,7 +76,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   });
 
   it('should throw on invalid authority type', async () => {
-    await expect(hWallet.getAuthorityUtxos(tokenHash, 'invalid')).rejects.toThrow(
+    await expect(hWallet.getAuthorityUtxos(tokenHash, 'invalid' as AuthorityType)).rejects.toThrow(
       'This should never happen.'
     );
   });
@@ -86,17 +86,17 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   it('should find many melt authority utxos after delegation with createAnother', async () => {
     const meltDelegationTx = await hWallet.delegateAuthority(
       tokenHash,
-      'melt',
+      AuthorityType.MELT,
       await hWallet.getAddressAtIndex(1),
       { createAnother: true }
     );
-    await waitForTxReceived(hWallet, meltDelegationTx.hash);
+    await waitForTxReceived(hWallet, meltDelegationTx!.hash!);
 
-    const meltUtxos = await hWallet.getAuthorityUtxos(tokenHash, 'melt');
+    const meltUtxos = await hWallet.getAuthorityUtxos(tokenHash, AuthorityType.MELT);
     expect(meltUtxos).toHaveLength(2);
     meltUtxos.forEach(utxo => {
       expect(utxo.authorities).toBe(TOKEN_MELT_MASK);
-      expect(utxo.txId).toBe(meltDelegationTx.hash);
+      expect(utxo.txId).toBe(meltDelegationTx!.hash);
     });
   });
 
@@ -113,17 +113,17 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   it('should find delegated mint authority utxo with createAnother', async () => {
     const mintDelegationTx = await hWallet.delegateAuthority(
       tokenHash,
-      'mint',
+      AuthorityType.MINT,
       await hWallet.getAddressAtIndex(2),
       { createAnother: true }
     );
-    await waitForTxReceived(hWallet, mintDelegationTx.hash);
+    await waitForTxReceived(hWallet, mintDelegationTx!.hash!);
 
-    const mintUtxos = await hWallet.getAuthorityUtxos(tokenHash, 'mint');
+    const mintUtxos = await hWallet.getAuthorityUtxos(tokenHash, AuthorityType.MINT);
     expect(mintUtxos).toHaveLength(2);
     mintUtxos.forEach(utxo => {
       expect(utxo.authorities).toBe(TOKEN_MINT_MASK);
-      expect(utxo.txId).toBe(mintDelegationTx.hash);
+      expect(utxo.txId).toBe(mintDelegationTx!.hash);
     });
 
     const singleMint = await hWallet.getMintAuthority(tokenHash, { many: false });
