@@ -178,6 +178,56 @@ describe('Read-Only Wallet Access', () => {
       expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(3);
     });
 
+    it('should propagate non-WalletRequestError immediately without retrying', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
+      });
+
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+
+      // Simulate a network error (not a WalletRequestError)
+      const networkError = new Error('ECONNREFUSED');
+      mockCreateReadOnlyAuthToken.mockRejectedValue(networkError);
+
+      // Should fail immediately with the original error — no 60s timeout
+      await expect(wallet.startReadOnly()).rejects.toThrow('ECONNREFUSED');
+      // Only one attempt — did not retry
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('should include last retry error as cause when timing out', async () => {
+      jest.useFakeTimers();
+      try {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+
+        mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
+
+        const promise = wallet.startReadOnly();
+        const caught = promise.catch((err: Error) => err);
+
+        for (let i = 0; i < 60; i++) {
+          await jest.advanceTimersByTimeAsync(1000);
+        }
+
+        const error = await caught;
+        expect(error).toBeInstanceOf(WalletRequestError);
+        expect(error.message).toContain('Read-only wallet startup timed out');
+        // The root cause should be preserved
+        expect(error.cause).toBeInstanceOf(WalletRequestError);
+        expect((error.cause as Error).message).toBe('Wallet not ready');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should time out if getReadOnlyAuthToken never succeeds', async () => {
       jest.useFakeTimers();
 

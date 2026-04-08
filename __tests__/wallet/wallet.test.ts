@@ -4145,13 +4145,17 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       expect(wallet.walletId).toBe(mockWalletId);
     });
 
-    it('should propagate validateAndRenewAuthToken errors', async () => {
+    it('should propagate the root cause from renewAuthToken through start()', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
 
-      const authError = new Error('Auth token validation failed');
-      jest.spyOn(wallet, 'validateAndRenewAuthToken').mockRejectedValue(authError);
+      // Mock createAuthToken to reject with a specific error — this exercises
+      // the real validateAndRenewAuthToken → renewAuthToken → createAuthToken
+      // path, NOT a mock of validateAndRenewAuthToken itself.
+      jest
+        .spyOn(walletApi, 'createAuthToken')
+        .mockRejectedValue(new WalletRequestError('Auth invalid signature'));
 
       jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
         success: true,
@@ -4165,13 +4169,11 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
         },
       });
 
-      // Token renewal failure should propagate — not be silently swallowed
+      // The original error from createAuthToken should propagate through
+      // renewAuthToken → validateAndRenewAuthToken → start()
       await expect(wallet.start({ pinCode: '123', password: '123' })).rejects.toThrow(
-        'Auth token validation failed'
+        'Auth invalid signature'
       );
-
-      // Only one call — no fire-and-forget retry
-      expect(wallet.validateAndRenewAuthToken).toHaveBeenCalledTimes(1);
     });
 
     it('should call validateAndRenewAuthToken before pollForWalletStatus', async () => {
