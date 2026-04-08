@@ -708,8 +708,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           false,
           SELECT_OUTPUTS_TIMEOUT
         );
-      } catch {
+      } catch (err) {
         // Best-effort: continue releasing remaining UTXOs
+        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
       }
     }
   }

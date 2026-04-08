@@ -6,17 +6,17 @@
  */
 
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
   waitTxConfirmed,
-} from './helpers/wallet.helper';
-import HathorWallet from '../../src/new/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
-import { NanoContractTransactionError } from '../../src/errors';
-import { SendTransaction } from '../../src';
+} from '../helpers/wallet.helper';
+import HathorWallet from '../../../src/new/wallet';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import { NanoContractTransactionError } from '../../../src/errors';
+import { SendTransaction } from '../../../src';
 
 describe('Nano contract UTXO lock/unlock lifecycle', () => {
   let hWallet: HathorWallet;
