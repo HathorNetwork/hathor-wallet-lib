@@ -3646,14 +3646,63 @@ describe('pollForWalletStatus', () => {
     }
   });
 
-  it('should propagate errors from getWalletStatus', async () => {
+  it('should retry WalletRequestError from getWalletStatus (transient)', async () => {
+    const creatingResponse = {
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: null,
+      },
+    };
+    const readyResponse = {
+      success: true,
+      status: { ...creatingResponse.status, status: 'ready', readyAt: Date.now() },
+    };
+
     jest
       .spyOn(walletApi, 'getWalletStatus')
-      .mockRejectedValue(new WalletRequestError('Network error'));
+      .mockRejectedValueOnce(new WalletRequestError('Server error'))
+      .mockResolvedValueOnce(creatingResponse)
+      .mockResolvedValueOnce(readyResponse);
 
-    await expect(wallet.pollForWalletStatus()).rejects.toThrow('Network error');
-    // Only one call — error propagates immediately, no retry
+    await expect(wallet.pollForWalletStatus()).resolves.toBeUndefined();
+    expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(3);
+  });
+
+  it('should propagate non-WalletRequestError immediately', async () => {
+    jest.spyOn(walletApi, 'getWalletStatus').mockRejectedValue(new Error('Bad key'));
+
+    await expect(wallet.pollForWalletStatus()).rejects.toThrow('Bad key');
     expect(walletApi.getWalletStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('should include last transient error as cause when timing out', async () => {
+    jest.useFakeTimers();
+
+    try {
+      jest
+        .spyOn(walletApi, 'getWalletStatus')
+        .mockRejectedValue(new WalletRequestError('Persistent server error'));
+
+      const promise = wallet.pollForWalletStatus();
+      const caught = promise.catch((err: Error) => err);
+
+      for (let i = 0; i < 60; i++) {
+        await jest.advanceTimersByTimeAsync(1000);
+      }
+
+      const error = await caught;
+      expect(error).toBeInstanceOf(WalletRequestError);
+      expect(error.message).toContain('Wallet status polling timed out');
+      expect(error.cause).toBeInstanceOf(WalletRequestError);
+      expect((error.cause as Error).message).toBe('Persistent server error');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should execute polls sequentially (no stacking)', async () => {

@@ -721,9 +721,26 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async pollForWalletStatus(): Promise<void> {
+    let lastError: Error | null = null;
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
-      const data = await walletApi.getWalletStatus(this);
+      let data;
+      try {
+        data = await walletApi.getWalletStatus(this);
+      } catch (err) {
+        if (!(err instanceof WalletRequestError)) {
+          throw err;
+        }
+        // WalletRequestError means the server (or the auth interceptor)
+        // responded but said no — could be a transient 502/503 or a
+        // momentary auth endpoint hiccup. Retry until we exhaust attempts.
+        lastError = err;
+        await new Promise(resolve => {
+          setTimeout(resolve, WALLET_STATUS_POLLING_INTERVAL);
+        });
+        continue;
+      }
 
+      lastError = null;
       if (data.status.status === WS_STATUS_READY) {
         return;
       }
@@ -737,7 +754,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         setTimeout(resolve, WALLET_STATUS_POLLING_INTERVAL);
       });
     }
-    throw new WalletRequestError('Wallet status polling timed out.');
+    throw new WalletRequestError('Wallet status polling timed out.', {
+      cause: lastError ?? undefined,
+    });
   }
 
   /**
