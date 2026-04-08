@@ -1192,8 +1192,12 @@ describe('sendTransaction', () => {
     );
 
     // Should have outputs: token output (50) + token change (50) + HTR change
+    // Validate both token identity and token_data in a mixed-token transaction
     expect(decodedTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token_data: 1 })
+      expect.objectContaining({ value: 50n, token: tokenUid, token_data: TOKEN_DATA.TOKEN })
+    );
+    expect(decodedTx.outputs).toContainEqual(
+      expect.objectContaining({ token: NATIVE_TOKEN_UID, token_data: TOKEN_DATA.HTR })
     );
   });
 

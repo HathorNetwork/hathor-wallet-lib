@@ -62,6 +62,30 @@ describe('[Service] getAuthorityUtxo', () => {
     }
   });
 
+  it('should return mint authority at the configured address with default options', async () => {
+    const { wallet, addresses } = buildWalletInstance();
+    await wallet.start({ pinCode, password });
+
+    await GenesisWalletServiceHelper.injectFunds(addresses[0], 100n, wallet);
+    const createTx = await wallet.createNewToken('MintAddrToken', 'MAT', 100n, {
+      pinCode,
+      mintAuthorityAddress: addresses[2],
+      meltAuthorityAddress: addresses[3],
+    });
+    await pollForTx(wallet, createTx.hash!);
+
+    // Call without options — exercises the wallet-service default behavior
+    const mintUtxos = await wallet.getAuthorityUtxo(createTx.hash!, AuthorityType.MINT);
+    expect(mintUtxos).toHaveLength(1);
+    expect(mintUtxos[0].address).toBe(addresses[2]);
+
+    const meltUtxos = await wallet.getAuthorityUtxo(createTx.hash!, AuthorityType.MELT);
+    expect(meltUtxos).toHaveLength(1);
+    expect(meltUtxos[0].address).toBe(addresses[3]);
+
+    await wallet.stop({ cleanStorage: true });
+  });
+
   it('should throw error for invalid authority type', async () => {
     await expect(utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'invalid')).rejects.toThrow(
       'Invalid authority value.'
