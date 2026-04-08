@@ -10,6 +10,7 @@ import { Address, Script } from 'bitcore-lib';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
+import { loggers } from '../utils/logger.util';
 
 /**
  * Precalculated wallet data containing addresses and related information
@@ -146,7 +147,7 @@ export class WalletPrecalculationHelper {
     // Finishing benchmark and returning results
     const timeEnd = Date.now().valueOf();
     const timeDiff = timeEnd - timeStart;
-    console.log(`Wallet calculation made in ${timeDiff}ms`);
+    loggers.test!.log(`Wallet calculation made in ${timeDiff}ms`);
 
     const returnObject: PrecalculatedWalletData = {
       isUsed: false,
@@ -171,7 +172,7 @@ export class WalletPrecalculationHelper {
     try {
       return JSON.parse(strData);
     } catch (err) {
-      console.error('Corrupt wallets file');
+      loggers.test!.error('Corrupt wallets file', { error: err });
       throw err;
     }
   }
@@ -211,7 +212,7 @@ export class WalletPrecalculationHelper {
     const wallets: PrecalculatedWalletData[] = [];
     for (let i = 0; i < amountOfCommonWallets; ++i) {
       wallets.push(WalletPrecalculationHelper.generateAddressesFromWords());
-      if (params.verbose) console.log(`Generated ${i}`);
+      if (params.verbose) loggers.test!.log(`Generated ${i}`);
     }
 
     return wallets;
