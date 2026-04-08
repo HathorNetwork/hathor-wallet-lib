@@ -43,6 +43,7 @@ export interface CreateWalletOptions {
     numSignatures: number;
   };
   tokenUid?: string;
+  singleAddressMode?: boolean;
 }
 
 /**
