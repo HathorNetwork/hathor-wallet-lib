@@ -197,6 +197,67 @@ describe('Read-Only Wallet Access', () => {
       expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(1);
     });
 
+    it('should fail immediately on non-400 WalletRequestError (permanent failure)', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
+      });
+
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+
+      // 401 is a permanent failure — should NOT be retried
+      const error = new WalletRequestError('Error requesting read-only auth token.', {
+        cause: { status: 401, data: { error: 'unauthorized' } },
+      });
+      mockCreateReadOnlyAuthToken.mockRejectedValue(error);
+
+      await expect(wallet.startReadOnly()).rejects.toThrow(
+        'Error requesting read-only auth token.'
+      );
+      // Only one attempt — did not retry
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry on 400 WalletRequestError (wallet still creating)', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
+      });
+
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+      const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+      // 400 is transient (wallet still creating) — should be retried
+      const error400 = new WalletRequestError('Error requesting read-only auth token.', {
+        cause: { status: 400, data: { error: 'wallet-not-ready' } },
+      });
+      mockCreateReadOnlyAuthToken
+        .mockRejectedValueOnce(error400)
+        .mockResolvedValueOnce({ success: true, token: mockToken });
+
+      mockGetNewAddresses.mockResolvedValueOnce({
+        success: true,
+        addresses: [
+          {
+            address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+      await wallet.startReadOnly();
+
+      expect(wallet.isReady()).toBe(true);
+      // Two attempts: 1 failure (400) + 1 success
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(2);
+    });
+
     it('should include last retry error as cause when timing out', async () => {
       jest.useFakeTimers();
       try {

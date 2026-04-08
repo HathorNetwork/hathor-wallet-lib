@@ -309,7 +309,9 @@ const walletApi = {
       return parseSchema(response.data, authTokenResponseSchema);
     }
 
-    throw new WalletRequestError('Error requesting read-only auth token.');
+    throw new WalletRequestError('Error requesting read-only auth token.', {
+      cause: { status: response.status, data: response.data },
+    });
   },
 
   async getTxById(

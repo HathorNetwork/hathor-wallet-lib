@@ -492,13 +492,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       });
     }
 
-    // Token renewal is sequential and happens after the wallet is confirmed
-    // ready. The auth token endpoint requires the wallet to exist and be in
-    // 'ready' state; requesting it earlier (e.g. while status is 'creating')
-    // would fail. Errors propagate with the original cause (e.g., invalid
-    // signature, network failure) instead of being swallowed.
-    await this.validateAndRenewAuthToken(pinCode);
-
+    // Auth token renewal is NOT called explicitly here. The axios interceptor
+    // in walletServiceAxios.ts handles it on-demand: any authenticated API
+    // call (including getWalletStatus during polling) triggers
+    // validateAndRenewAuthToken() automatically when the token is missing or
+    // expired. By this point, authPrivKey and walletId are both set, so the
+    // interceptor can obtain a token without needing the PIN.
     await this.onWalletReady();
     this.clearSensitiveData();
   }
@@ -1224,6 +1223,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         break;
       } catch (err) {
         if (!(err instanceof WalletRequestError)) {
+          throw err;
+        }
+        // Only retry on HTTP 400 (wallet may still be creating).
+        // Other status codes (401, 403, 404, etc.) are permanent failures.
+        const cause = err.cause as { status?: number } | undefined;
+        if (cause && typeof cause.status === 'number' && cause.status !== 400) {
           throw err;
         }
         lastError = err;

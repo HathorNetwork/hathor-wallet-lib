@@ -4145,17 +4145,10 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       expect(wallet.walletId).toBe(mockWalletId);
     });
 
-    it('should propagate the root cause from renewAuthToken through start()', async () => {
+    it('should propagate errors from onWalletReady through start()', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
-
-      // Mock createAuthToken to reject with a specific error — this exercises
-      // the real validateAndRenewAuthToken → renewAuthToken → createAuthToken
-      // path, NOT a mock of validateAndRenewAuthToken itself.
-      jest
-        .spyOn(walletApi, 'createAuthToken')
-        .mockRejectedValue(new WalletRequestError('Auth invalid signature'));
 
       jest.spyOn(walletApi, 'createWallet').mockResolvedValue({
         success: true,
@@ -4169,14 +4162,20 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
         },
       });
 
-      // The original error from createAuthToken should propagate through
-      // renewAuthToken → validateAndRenewAuthToken → start()
+      // Errors during onWalletReady (e.g. address fetch, auth renewal via
+      // the axios interceptor) should propagate through start() rather than
+      // being swallowed.
+      // @ts-expect-error - Accessing private method for testing
+      jest
+        .spyOn(wallet, 'onWalletReady')
+        .mockRejectedValue(new WalletRequestError('Auth invalid signature'));
+
       await expect(wallet.start({ pinCode: '123', password: '123' })).rejects.toThrow(
         'Auth invalid signature'
       );
     });
 
-    it('should call validateAndRenewAuthToken after pollForWalletStatus', async () => {
+    it('should not explicitly call validateAndRenewAuthToken during start', async () => {
       jest
         .spyOn(wallet.storage, 'getAccessData')
         .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
@@ -4198,23 +4197,19 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
         },
       });
 
-      const callOrder: string[] = [];
-      jest
+      const validateSpy = jest
         .spyOn(wallet, 'validateAndRenewAuthToken')
-        .mockImplementation(async function mockValidate(this: HathorWalletServiceWallet) {
-          this.authToken = 'mocked-token';
-          callOrder.push('validateAndRenewAuthToken');
-        });
-      jest.spyOn(wallet, 'pollForWalletStatus').mockImplementation(async () => {
-        callOrder.push('pollForWalletStatus');
-      });
+        .mockResolvedValue(undefined);
+      jest.spyOn(wallet, 'pollForWalletStatus').mockResolvedValue(undefined);
       // @ts-expect-error - Accessing private method for testing
       jest.spyOn(wallet, 'onWalletReady').mockResolvedValue(undefined);
 
       await wallet.start({ pinCode: '123', password: '123' });
 
-      // Wallet must be ready BEFORE requesting auth token
-      expect(callOrder).toEqual(['pollForWalletStatus', 'validateAndRenewAuthToken']);
+      // Auth token renewal is handled by the axios interceptor (via
+      // axiosInstance), not by start() directly. start() should NOT call
+      // validateAndRenewAuthToken explicitly.
+      expect(validateSpy).not.toHaveBeenCalled();
     });
 
     it('should set walletId exactly once from createWallet response', async () => {
