@@ -123,10 +123,10 @@ describe('[Service-specific] start', () => {
   });
 
   it('should complete start() on a brand-new wallet that goes through creating→ready', async () => {
-    // This test exercises the full sequential auth flow: createWallet returns
-    // 'creating', then validateAndRenewAuthToken obtains a token, then
-    // pollForWalletStatus polls until 'ready'. This is the exact path where
-    // the old fire-and-forget pattern caused flaky 403 errors.
+    // This test exercises the full auth flow: createWallet returns 'creating',
+    // then pollForWalletStatus polls until 'ready'. Auth tokens are obtained
+    // on-demand by the axios interceptor during each polling call. This is
+    // the exact path where the old fire-and-forget pattern raced.
     ({ wallet } = buildWalletInstance());
 
     await wallet.start({ pinCode, password });
