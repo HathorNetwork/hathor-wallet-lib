@@ -484,6 +484,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // so the auth token endpoint will find it.
     await this.validateAndRenewAuthToken(pinCode);
 
+    if (!this.authToken) {
+      throw new WalletRequestError(
+        'Auth token missing after renewal. Cannot proceed with wallet startup.'
+      );
+    }
+
     if (data.status.status === WS_STATUS_CREATING) {
       // If the wallet status is creating, we should wait until it is ready
       // before continuing
@@ -1220,12 +1226,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Poll for read-only auth token. The RO token endpoint (no auth required)
     // returns 400 while the wallet is still 'creating'. We retry until it
-    // succeeds or we time out.
+    // succeeds or we time out. onWalletReady is called outside the loop so
+    // its errors propagate immediately instead of being retried.
+    let tokenObtained = false;
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
       try {
         await this.getReadOnlyAuthToken();
-        await this.onWalletReady(skipAddressFetch);
-        return;
+        tokenObtained = true;
+        break;
       } catch {
         // Token request failed — wallet may still be creating. Wait and retry.
         await new Promise(resolve => {
@@ -1233,9 +1241,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         });
       }
     }
-    throw new WalletRequestError(
-      'Read-only wallet startup timed out. The wallet may not be initialized or is in an error state.'
-    );
+    if (!tokenObtained) {
+      throw new WalletRequestError(
+        'Read-only wallet startup timed out. The wallet may not be initialized or is in an error state.'
+      );
+    }
+    await this.onWalletReady(skipAddressFetch);
   }
 
   /**

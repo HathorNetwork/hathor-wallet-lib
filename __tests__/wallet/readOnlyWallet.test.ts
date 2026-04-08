@@ -181,34 +181,36 @@ describe('Read-Only Wallet Access', () => {
     it('should time out if getReadOnlyAuthToken never succeeds', async () => {
       jest.useFakeTimers();
 
-      const wallet = new HathorWalletServiceWallet({
-        requestPassword,
-        xpub,
-        network,
-      });
+      try {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
 
-      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
-      const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
 
-      // Always fail — simulates wallet stuck in error or creating state
-      mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
+        // Always fail — simulates wallet stuck in error or creating state
+        mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
 
-      const promise = wallet.startReadOnly();
-      // Catch the rejection early to prevent unhandled rejection during timer advancement
-      const caught = promise.catch((err: Error) => err);
+        const promise = wallet.startReadOnly();
+        // Catch the rejection early to prevent unhandled rejection during timer advancement
+        const caught = promise.catch((err: Error) => err);
 
-      // Advance through all 60 polling intervals
-      for (let i = 0; i < 60; i++) {
-        await jest.advanceTimersByTimeAsync(1000);
+        // Advance through all 60 polling intervals
+        for (let i = 0; i < 60; i++) {
+          await jest.advanceTimersByTimeAsync(1000);
+        }
+
+        const error = await caught;
+        expect(error).toBeInstanceOf(WalletRequestError);
+        expect(error.message).toContain('Read-only wallet startup timed out');
+        // Should never call getWalletStatus (no authenticated fallback)
+        expect(mockGetWalletStatus).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
       }
-
-      const error = await caught;
-      expect(error).toBeInstanceOf(WalletRequestError);
-      expect(error.message).toContain('Read-only wallet startup timed out');
-      // Should never call getWalletStatus (no authenticated fallback)
-      expect(mockGetWalletStatus).not.toHaveBeenCalled();
-
-      jest.useRealTimers();
     });
 
     it('should throw error if xpub is not set', async () => {
