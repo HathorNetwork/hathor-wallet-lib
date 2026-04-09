@@ -936,7 +936,7 @@ export class Storage implements IStorage {
 
   /**
    * Get the spend chain xprivkey for shielded UTXO signing.
-   * This is the key at m/44'/280'/2'/0.
+   * This is the key at m/44'/280'/1'/0.
    */
   async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();

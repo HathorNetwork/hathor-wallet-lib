@@ -289,7 +289,7 @@ export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
  * Account path for shielded spend keys (signing/spending authority).
  * Note: Shielded scan keys use the same account as legacy P2PKH (m/44'/280'/0').
  */
-export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
+export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
 
 /**
  * String to be prefixed before signed messages using bitcore-message
