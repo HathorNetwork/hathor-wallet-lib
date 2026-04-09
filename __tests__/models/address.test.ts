@@ -9,6 +9,7 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 
 test('Validate address', () => {
   // Invalid address
@@ -52,6 +53,43 @@ test('Address getType', () => {
   // Mainnet p2sh
   const addr4 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', { network: mainnetNetwork });
   expect(addr4.getType()).toBe('p2sh');
+});
+
+test('Shielded address validation and type detection', () => {
+  const testnetNetwork = new Network('testnet');
+  // Create a valid shielded address with known pubkeys
+  const scanPubkey = Buffer.alloc(33, 0x02); // Fake compressed pubkey
+  scanPubkey[0] = 0x02; // Valid compressed prefix
+  const spendPubkey = Buffer.alloc(33, 0x03);
+  spendPubkey[0] = 0x03; // Valid compressed prefix
+
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnetNetwork);
+  const addr = new Address(shieldedAddr, { network: testnetNetwork });
+
+  // Should be valid
+  expect(addr.isValid()).toBe(true);
+  // Should be recognized as shielded
+  expect(addr.getType()).toBe('shielded');
+  expect(addr.isShielded()).toBe(true);
+});
+
+test('Shielded address getScanPubkey and getSpendPubkey', () => {
+  const testnetNetwork = new Network('testnet');
+  const scanPubkey = Buffer.alloc(33, 0xaa);
+  const spendPubkey = Buffer.alloc(33, 0xbb);
+
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnetNetwork);
+  const addr = new Address(shieldedAddr, { network: testnetNetwork });
+
+  expect(addr.getScanPubkey()).toEqual(scanPubkey);
+  expect(addr.getSpendPubkey()).toEqual(spendPubkey);
+});
+
+test('Non-shielded address getScanPubkey throws', () => {
+  const addr = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
+  expect(() => addr.getScanPubkey()).toThrow('Not a shielded address');
+  expect(() => addr.getSpendPubkey()).toThrow('Not a shielded address');
+  expect(addr.isShielded()).toBe(false);
 });
 
 test('Address script', () => {

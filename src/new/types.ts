@@ -329,12 +329,11 @@ export interface UtxoDetails {
 
 /**
  * Proposed output for a transaction
- * @property address Destination address for the output
+ * @property address Destination address for the output. Must be a shielded address when shielded mode is set.
  * @property value Value of the output
  * @property timelock Optional timelock for the output
  * @property token Token UID for the output
  * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or FULLY_SHIELDED)
- * @property recipientPubkey Hex-encoded 33-byte compressed EC pubkey (required when shielded)
  */
 export interface ProposedOutput {
   address: string;
@@ -342,7 +341,6 @@ export interface ProposedOutput {
   timelock?: number;
   token: string;
   shielded?: ShieldedOutputMode;
-  recipientPubkey?: string;
 }
 
 /**

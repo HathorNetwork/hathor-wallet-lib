@@ -146,6 +146,11 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
 export const NATIVE_TOKEN_UID: string = '00';
 
 /**
+ * Native token uid as 32-byte hex (used in cryptographic operations such as shielded outputs)
+ */
+export const NATIVE_TOKEN_UID_HEX: string = '00'.repeat(32);
+
+/**
  * Default HTR token config
  */
 export const DEFAULT_NATIVE_TOKEN_CONFIG = {
@@ -295,6 +300,12 @@ export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
 export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
 
 /**
+ * Account path for shielded spend keys (signing/spending authority).
+ * Note: Shielded scan keys use the same account as legacy P2PKH (m/44'/280'/0').
+ */
+export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
+
+/**
  * String to be prefixed before signed messages using bitcore-message
  */
 export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
@@ -308,6 +319,18 @@ export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLIC
  * Fee per output
  */
 export const FEE_PER_OUTPUT: bigint = 1n;
+
+/**
+ * Fee per AmountShielded output (in HTR base units).
+ * Defined by hathor-core shielded transaction protocol (no external docs yet).
+ */
+export const FEE_PER_AMOUNT_SHIELDED_OUTPUT: bigint = 1n;
+
+/**
+ * Fee per FullShielded output (in HTR base units).
+ * Defined by hathor-core shielded transaction protocol (no external docs yet).
+ */
+export const FEE_PER_FULL_SHIELDED_OUTPUT: bigint = 2n;
 
 /**
  * Fee divisor

@@ -8,10 +8,11 @@
 import EventEmitter from 'events';
 import { shuffle } from 'lodash';
 import txApi from '../api/txApi';
-import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, SELECT_OUTPUTS_TIMEOUT, FEE_PER_AMOUNT_SHIELDED_OUTPUT, FEE_PER_FULL_SHIELDED_OUTPUT } from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
 import Address from '../models/address';
+import { getAddressType } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { Fee } from '../utils/fee';
 import Transaction from '../models/transaction';
@@ -72,7 +73,7 @@ export interface ISendShieldedOutput {
   address: string;
   value: OutputValueType;
   token: string;
-  recipientPubkey: string;         // hex, 33 bytes compressed EC pubkey
+  scanPubkey: string;              // hex, 33 bytes compressed EC scan pubkey for ECDH
   shieldedMode: ShieldedOutputMode;
 }
 
@@ -191,8 +192,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     // Collect shielded output definitions separately
     const shieldedOutputDefs: ISendShieldedOutput[] = [];
-    // Symbol used to tag phantom outputs for unambiguous removal after shuffle
-    const phantomTag = Symbol('shielded-phantom');
+    // Track phantom outputs for removal after UTXO selection and shuffle
+    const phantomOutputs = new Set<IDataOutput>();
 
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
@@ -213,19 +214,27 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         shieldedOutputDefs.push(output);
         tokenMap.set(output.token, true);
 
-        // Phantom output for UTXO selection (tagged for removal after shuffle)
-        const phantom: IDataOutput & { [key: symbol]: boolean } = {
+        // Phantom output for UTXO selection (removed after shuffle).
+        // output.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
+        const phantom: IDataOutput = {
           address: output.address,
           value: output.value,
           timelock: null,
           authorities: 0n,
           token: output.token,
-          type: new Address(output.address, { network }).getType(),
+          type: getAddressType(output.address, network),
         };
-        (phantom as any)[phantomTag] = true;
+        phantomOutputs.add(phantom);
         txData.outputs.push(phantom);
       } else {
         const addressObj = new Address(output.address, { network });
+        let outputAddrType = addressObj.getType();
+        if (outputAddrType === 'shielded') {
+          // Shielded address used for transparent output — use the spend-derived P2PKH
+          const spendAddress = addressObj.getSpendAddress();
+          output.address = spendAddress.base58;
+          outputAddrType = 'p2pkh';
+        }
         // We set chooseInputs true as default and may be overwritten by the inputs.
         // chooseInputs should be true if no inputs are given
         tokenMap.set(output.token, true);
@@ -236,7 +245,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           timelock: output.timelock ? output.timelock : null,
           authorities: 0n,
           token: output.token,
-          type: addressObj.getType(),
+          type: outputAddrType,
         });
       }
     }
@@ -307,9 +316,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       throw err;
     }
 
+    // Calculate shielded output fee
+    let shieldedFee = 0n;
+    for (const def of shieldedOutputDefs) {
+      if (def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED) {
+        shieldedFee += FEE_PER_FULL_SHIELDED_OUTPUT;
+      } else {
+        shieldedFee += FEE_PER_AMOUNT_SHIELDED_OUTPUT;
+      }
+    }
+
+    const totalFee = fee + shieldedFee;
+
     const headers: Header[] = [];
-    if (fee > 0) {
-      headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
+    if (totalFee > 0) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: totalFee }]));
       // if the token map doesn't have HTR, it means that the user didn't provide any HTR input or output, so we need to choose inputs for HTR to pay fees
       if (!tokenMapHasHTR) {
         shouldChooseHTRInputs = true;
@@ -332,7 +353,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         outputs: partialOutputs,
       },
       options,
-      fee
+      totalFee
     );
 
     const shouldShuffleOutputs =
@@ -345,12 +366,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     }
 
     // Remove phantom outputs (shielded) from the final outputs list.
-    // Phantom outputs are tagged with a Symbol for unambiguous identification after shuffle.
-    if (shieldedOutputDefs.length > 0) {
-      outputs = outputs.filter(out => !(out as any)[phantomTag]);
+    if (phantomOutputs.size > 0) {
+      outputs = outputs.filter(out => !phantomOutputs.has(out));
     }
 
     // Create shielded outputs with crypto
+    // The homomorphic balance equation requires all blinding factors to sum to zero
+    // (when all inputs are transparent). We create N-1 outputs with random blinding
+    // factors, then compute a balancing factor for the last output.
     const shieldedOutputs: IDataShieldedOutput[] = [];
     if (shieldedOutputDefs.length > 0) {
       const cryptoProvider = this.storage.shieldedCryptoProvider;
@@ -358,20 +381,69 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         throw new SendTxError('Shielded crypto provider is not set. Cannot create shielded outputs.');
       }
 
-      for (const def of shieldedOutputDefs) {
+      const ZERO_TWEAK = Buffer.alloc(32, 0);
+      // Collect created outputs for balance computation
+      const createdOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+
+      // Create all outputs except the last with random blinding factors
+      for (let i = 0; i < shieldedOutputDefs.length; i++) {
+        const def = shieldedOutputDefs[i];
         const fullyShielded = def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
-        const recipientPubkeyBuf = Buffer.from(def.recipientPubkey, 'hex');
-        const tokenUidBuf = Buffer.from(def.token === HTR_UID ? '00'.repeat(32) : def.token, 'hex');
+        const recipientPubkeyBuf = Buffer.from(def.scanPubkey, 'hex');
+        const tokenUidBuf = Buffer.from(def.token === HTR_UID ? NATIVE_TOKEN_UID_HEX : def.token, 'hex');
 
-        const cryptoResult = cryptoProvider.createShieldedOutput(
-          def.value,
-          recipientPubkeyBuf,
-          tokenUidBuf,
-          fullyShielded,
-        );
+        let cryptoResult;
+        const isLast = i === shieldedOutputDefs.length - 1;
 
-        // Create the output script for the address
-        const addressObj = new Address(def.address, { network });
+        if (isLast && createdOutputs.length > 0) {
+          if (fullyShielded) {
+            // FullShielded last output: generate abf, compute balancing vbf, create with both
+            const lastAbf = await cryptoProvider.generateRandomBlindingFactor();
+            const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
+              def.value,
+              lastAbf,
+              [],            // no blinded inputs (all transparent)
+              createdOutputs,
+            );
+            cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
+              def.value, recipientPubkeyBuf, tokenUidBuf, balancingBf, lastAbf,
+            );
+          } else {
+            // AmountShielded last output: compute balancing vbf, create with it
+            const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
+              def.value, ZERO_TWEAK, [], createdOutputs,
+            );
+            cryptoResult = await cryptoProvider.createAmountShieldedOutput(
+              def.value, recipientPubkeyBuf, tokenUidBuf, balancingBf,
+            );
+          }
+        } else if (fullyShielded) {
+          // FullShielded non-last output: generate both blinding factors
+          const vbf = await cryptoProvider.generateRandomBlindingFactor();
+          const abf = await cryptoProvider.generateRandomBlindingFactor();
+          cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
+            def.value, recipientPubkeyBuf, tokenUidBuf, vbf, abf,
+          );
+          createdOutputs.push({
+            value: def.value,
+            vbf: cryptoResult.blindingFactor,
+            gbf: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
+          });
+        } else {
+          // AmountShielded non-last output: generate random vbf
+          const vbf = await cryptoProvider.generateRandomBlindingFactor();
+          cryptoResult = await cryptoProvider.createAmountShieldedOutput(
+            def.value, recipientPubkeyBuf, tokenUidBuf, vbf,
+          );
+          createdOutputs.push({
+            value: def.value,
+            vbf: cryptoResult.blindingFactor,
+            gbf: ZERO_TWEAK,
+          });
+        }
+
+        // Create the output script for the on-chain address (spend-derived P2PKH).
+        // def.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
         const scriptBuf = transactionUtils.createOutputScript(
           {
             address: def.address,
@@ -379,16 +451,29 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             timelock: null,
             authorities: 0n,
             token: def.token,
-            type: addressObj.getType(),
+            type: getAddressType(def.address, network),
           },
           network,
         );
+
+        // For FullShielded outputs, generate a surjection proof
+        let surjectionProof: Buffer | undefined;
+        if (fullyShielded && cryptoResult.assetBlindingFactor) {
+          // Domain: for each transparent input of the same token, provide its unblinded generator
+          const tag = await cryptoProvider.deriveTag(tokenUidBuf);
+          const generator = await cryptoProvider.createAssetCommitment(tag, ZERO_TWEAK);
+          surjectionProof = await cryptoProvider.createSurjectionProof(
+            tag,
+            cryptoResult.assetBlindingFactor,
+            [{ generator, tag, blindingFactor: ZERO_TWEAK }],
+          );
+        }
 
         shieldedOutputs.push({
           address: def.address,
           value: def.value,
           token: def.token,
-          recipientPubkey: def.recipientPubkey,
+          scanPubkey: def.scanPubkey,
           mode: def.shieldedMode,
           ephemeralPubkey: cryptoResult.ephemeralPubkey,
           commitment: cryptoResult.commitment,
@@ -396,6 +481,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           blindingFactor: cryptoResult.blindingFactor,
           assetCommitment: cryptoResult.assetCommitment,
           assetBlindingFactor: cryptoResult.assetBlindingFactor,
+          surjectionProof,
           script: scriptBuf.toString('hex'),
         });
       }

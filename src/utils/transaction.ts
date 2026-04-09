@@ -30,6 +30,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import ShieldedOutput from '../models/shielded_output';
+import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import Network from '../models/network';
 import {
   IBalance,
@@ -72,6 +73,16 @@ const transaction = {
       tx.version === MERGED_MINED_BLOCK_VERSION ||
       tx.version === POA_BLOCK_VERSION
     );
+  },
+
+  /**
+   * Check if an output entry from IHistoryTx.outputs is a shielded output appended
+   * by the fullnode's to_json_extended(). These entries have type='shielded' and lack
+   * the 'value' and 'token' fields that transparent outputs have.
+   * Shielded outputs are processed separately via processShieldedOutputs().
+   */
+  isShieldedOutputEntry(output: { type?: string | null }): boolean {
+    return output.type === 'shielded';
   },
 
   /**
@@ -178,6 +189,10 @@ const transaction = {
   ): Promise<ITxSignatureData> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
+
+    // Lazily load the spend key chain for shielded-spend addresses
+    let spendXprivkey: typeof xprivkey | null = null;
+
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
     let ncCallerSignature: Buffer | null = null;
@@ -198,12 +213,25 @@ const transaction = {
         // Not a wallet address
         continue;
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+
+      let derivedKey;
+      if (addressInfo.addressType === 'shielded-spend') {
+        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs
+        if (!spendXprivkey) {
+          const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
+          spendXprivkey = HDPrivateKey.fromString(spendXprivStr);
+        }
+        derivedKey = spendXprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      } else {
+        // Use legacy key chain (m/44'/280'/0'/0) for regular addresses
+        derivedKey = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      }
+
       signatures.push({
         inputIndex,
         addressIndex: addressInfo.bip32AddressIndex,
-        signature: this.getSignature(dataToSignHash, xpriv.privateKey),
-        pubkey: xpriv.publicKey.toDER(),
+        signature: this.getSignature(dataToSignHash, derivedKey.privateKey),
+        pubkey: derivedKey.publicKey.toDER(),
       });
     }
 
@@ -401,6 +429,8 @@ const transaction = {
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
     for (const output of tx.outputs) {
+      // Skip shielded output entries (no value/token fields); processed separately
+      if (this.isShieldedOutputEntry(output)) continue;
       const { address } = output.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
@@ -635,9 +665,12 @@ const transaction = {
     if (options.version === DEFAULT_TX_VERSION) {
       const tx = new Transaction(inputs, outputs, options);
 
-      // Populate shielded outputs if present
+      // Populate shielded outputs as a ShieldedOutputsHeader
       if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
-        tx.shieldedOutputs = txData.shieldedOutputs.map(so => {
+        const shieldedModels = txData.shieldedOutputs.map(so => {
+          if (!so.commitment || !so.rangeProof || !so.script || !so.ephemeralPubkey) {
+            throw new Error('Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)');
+          }
           const tokenData = this.getTokenDataFromOutput(
             {
               type: 'p2pkh',
@@ -652,15 +685,19 @@ const transaction = {
 
           return new ShieldedOutput(
             so.mode,
-            so.commitment!,
-            so.rangeProof!,
+            so.commitment,
+            so.rangeProof,
             tokenData,
-            Buffer.from(so.script!, 'hex'),
-            so.ephemeralPubkey!,
-            so.assetCommitment || null,
+            Buffer.from(so.script, 'hex'),
+            so.ephemeralPubkey,
+            so.assetCommitment,
             so.value,
+            so.surjectionProof,
           );
         });
+
+        tx.shieldedOutputs = shieldedModels;
+        tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
       }
 
       return tx;
@@ -972,6 +1009,8 @@ const transaction = {
       return hydratedInput as IHistoryInput;
     });
     const outputs: IHistoryOutput[] = tx.outputs.map(o => {
+      // Skip hydration for shielded output entries (they lack value/token fields)
+      if ((o as any).type === 'shielded') return o as unknown as IHistoryOutput;
       const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
       return hydratedoutput as IHistoryOutput;
     });

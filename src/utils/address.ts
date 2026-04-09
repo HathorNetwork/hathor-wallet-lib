@@ -18,16 +18,37 @@ import Network from '../models/network';
 import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
+import { deriveShieldedAddress } from './shieldedAddress';
 
 /**
- * Parse address and return the address type
+ * Parse address and return the address type.
+ * Returns 'p2pkh' or 'p2sh' for legacy addresses.
+ * Throws for shielded addresses — callers expecting an output script type
+ * should not receive shielded addresses directly.
  *
  * @param {string} address
  * @param {Network} network
  *
- * @returns {string} output type of the address (p2pkh or p2sh)
+ * @returns {'p2pkh' | 'p2sh'} output type of the address
  */
 export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' {
+  const addressObj = new Address(address, { network });
+  const addrType = addressObj.getType();
+  if (addrType === 'shielded') {
+    throw new Error('Shielded addresses cannot be used directly as output script type. Use the spend-derived P2PKH address instead.');
+  }
+  return addrType;
+}
+
+/**
+ * Parse address and return the full address type including shielded.
+ *
+ * @param {string} address
+ * @param {Network} network
+ *
+ * @returns {'p2pkh' | 'p2sh' | 'shielded'} address type
+ */
+export function getFullAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' | 'shielded' {
   const addressObj = new Address(address, { network });
   return addressObj.getType();
 }
@@ -121,6 +142,12 @@ export function createOutputScriptFromAddress(address: string, network: Network)
     const p2pkh = new P2PKH(addressObj);
     return p2pkh.createScript();
   }
+  if (addressType === 'shielded') {
+    // For shielded addresses, derive P2PKH script from spend_pubkey
+    const spendAddress = addressObj.getSpendAddress();
+    const p2pkh = new P2PKH(spendAddress);
+    return p2pkh.createScript();
+  }
   throw new Error('Invalid address type');
 }
 
@@ -138,4 +165,43 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
     network.bitcoreNetwork
   ).toString();
   return new Address(base58, { network });
+}
+
+/**
+ * Derive shielded address and its on-chain spend address from storage at a given index.
+ *
+ * Returns two IAddressInfo entries:
+ * 1. The shielded address (user-facing, 71-byte format)
+ * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
+ *
+ * Returns null if the wallet doesn't have shielded key material.
+ */
+export async function deriveShieldedAddressFromStorage(
+  index: number,
+  storage: IStorage,
+): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  if (!scanXpub || !spendXpub) {
+    return null;
+  }
+
+  const networkName = storage.config.getNetwork().name;
+  const info = deriveShieldedAddress(scanXpub, spendXpub, index, networkName);
+
+  const shieldedAddress: IAddressInfo = {
+    base58: info.base58,
+    bip32AddressIndex: index,
+    publicKey: info.scanPubkey,
+    addressType: 'shielded',
+  };
+
+  const spendAddress: IAddressInfo = {
+    base58: info.spendAddress,
+    bip32AddressIndex: index,
+    publicKey: info.spendPubkey,
+    addressType: 'shielded-spend',
+  };
+
+  return { shieldedAddress, spendAddress };
 }

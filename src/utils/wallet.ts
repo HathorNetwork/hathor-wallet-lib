@@ -13,6 +13,7 @@ import {
   HATHOR_BIP44_CODE,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
+  SHIELDED_SPEND_ACCT_PATH,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import { OP_0 } from '../opcodes';
@@ -619,6 +620,16 @@ const wallet = {
       accessData.acctPathKey = encryptedAcctPathKey;
     }
 
+    // Derive shielded spend key if root key is available
+    // Scan key uses the same account as legacy (m/44'/280'/0'/0), so no separate derivation needed.
+    if (argXpriv.depth === 0) {
+      const spendAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+      const spendXpriv2 = spendAcctXpriv.deriveNonCompliantChild(0);
+
+      accessData.spendXpubkey = spendXpriv2.xpubkey;
+      accessData.spendMainKey = encryptData(spendXpriv2.xprivkey, pin);
+    }
+
     if (authXpriv || derivedAuthKey) {
       let authKey: IEncryptedData;
       if (authXpriv) {
@@ -690,6 +701,11 @@ const wallet = {
       };
     }
 
+    // Derive shielded spend key (account 2')
+    // Scan key uses the same account as legacy (m/44'/280'/0'/0), so no separate derivation needed.
+    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+
     return {
       walletType,
       multisigData,
@@ -699,6 +715,8 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
+      spendXpubkey: spendXpriv.xpubkey,
+      spendMainKey: encryptData(spendXpriv.xprivkey, pin),
     };
   },
 
@@ -737,6 +755,11 @@ const wallet = {
       const acctPathKey = decryptData(data.acctPathKey, oldPin);
       const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
       data.acctPathKey = newEncryptedAcctPathKey;
+    }
+
+    if (data.spendMainKey) {
+      const spendKey = decryptData(data.spendMainKey, oldPin);
+      data.spendMainKey = encryptData(spendKey, newPin);
     }
 
     return data;

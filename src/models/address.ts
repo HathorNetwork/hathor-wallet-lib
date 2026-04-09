@@ -5,13 +5,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { encoding, util } from 'bitcore-lib';
+import { crypto, encoding, util, Address as BitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
 import _ from 'lodash';
 import { AddressError } from '../errors';
 import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
 import helpers from '../utils/helpers';
+
+/** Valid address types */
+export type AddressType = 'p2pkh' | 'p2sh' | 'shielded';
+
+/** Shielded address payload length: 1B version + 33B scan + 33B spend = 67B + 4B checksum = 71B */
+const SHIELDED_ADDR_LENGTH = 71;
+/** Legacy address payload length: 1B version + 20B hash + 4B checksum = 25B */
+const LEGACY_ADDR_LENGTH = 25;
 
 class Address {
   // String with address as base58
@@ -67,9 +75,10 @@ class Address {
   /**
    * Validate address
    *
-   * 1. Address must have 25 bytes
+   * Supports both legacy 25-byte addresses and 71-byte shielded addresses.
+   * 1. Address must have 25 bytes (legacy) or 71 bytes (shielded)
    * 2. Address checksum must be valid
-   * 3. Address first byte must match one of the options for P2PKH or P2SH
+   * 3. Address first byte must match one of the valid version bytes
    *
    * @throws {AddressError} Will throw an error if address is not valid
    *
@@ -82,9 +91,9 @@ class Address {
     const errorMessage = `Invalid address: ${this.base58}.`;
 
     // Validate address length
-    if (addressBytes.length !== 25) {
+    if (addressBytes.length !== LEGACY_ADDR_LENGTH && addressBytes.length !== SHIELDED_ADDR_LENGTH) {
       throw new AddressError(
-        `${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`
+        `${errorMessage} Address has ${addressBytes.length} bytes and should have ${LEGACY_ADDR_LENGTH} or ${SHIELDED_ADDR_LENGTH}.`
       );
     }
 
@@ -102,11 +111,11 @@ class Address {
       return true;
     }
 
-    // Validate version byte. Should be the p2pkh or p2sh
+    // Validate version byte
     const firstByte = addressBytes[0];
     if (!this.network.isVersionByteValid(firstByte)) {
       throw new AddressError(
-        `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`
+        `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh}, ${this.network.versionBytes.p2sh}, or ${this.network.versionBytes.shielded} and received ${firstByte}.`
       );
     }
     return true;
@@ -116,19 +125,22 @@ class Address {
    * Get address type
    *
    * Will check the version byte of the address against the network's version bytes.
-   * Valid types are p2pkh and p2sh.
+   * Valid types are p2pkh, p2sh, and shielded.
    *
    * @throws {AddressError} Will throw an error if address is not valid
    *
-   * @return {string}
+   * @return {AddressType}
    * @memberof Address
    * @inner
    */
-  getType(): 'p2pkh' | 'p2sh' {
+  getType(): AddressType {
     this.validateAddress();
     const addressBytes = this.decode();
 
     const firstByte = addressBytes[0];
+    if (firstByte === this.network.versionBytes.shielded) {
+      return 'shielded';
+    }
     if (firstByte === this.network.versionBytes.p2pkh) {
       return 'p2pkh';
     }
@@ -139,10 +151,78 @@ class Address {
   }
 
   /**
+   * Check if this is a shielded address (71-byte format with scan + spend pubkeys)
+   *
+   * @return {boolean}
+   * @memberof Address
+   * @inner
+   */
+  isShielded(): boolean {
+    try {
+      return this.getType() === 'shielded';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Extract the 33-byte scan pubkey from a shielded address.
+   * Bytes [1..34) of the decoded address.
+   *
+   * @throws {AddressError} If address is not shielded
+   * @return {Buffer} 33-byte compressed EC public key
+   * @memberof Address
+   * @inner
+   */
+  getScanPubkey(): Buffer {
+    if (!this.isShielded()) {
+      throw new AddressError('Not a shielded address');
+    }
+    const addressBytes = this.decode();
+    return Buffer.from(addressBytes.subarray(1, 34));
+  }
+
+  /**
+   * Extract the 33-byte spend pubkey from a shielded address.
+   * Bytes [34..67) of the decoded address.
+   *
+   * @throws {AddressError} If address is not shielded
+   * @return {Buffer} 33-byte compressed EC public key
+   * @memberof Address
+   * @inner
+   */
+  getSpendPubkey(): Buffer {
+    if (!this.isShielded()) {
+      throw new AddressError('Not a shielded address');
+    }
+    const addressBytes = this.decode();
+    return Buffer.from(addressBytes.subarray(34, 67));
+  }
+
+  /**
+   * Derive the on-chain P2PKH address from the spend_pubkey of a shielded address.
+   * This is the address that appears on-chain in the shielded output script.
+   *
+   * @throws {AddressError} If address is not shielded
+   * @return {Address} The P2PKH address derived from HASH160(spend_pubkey)
+   * @memberof Address
+   * @inner
+   */
+  getSpendAddress(): Address {
+    const spendPubkey = this.getSpendPubkey();
+    const base58 = new BitcoreAddress(
+      bitcorePublicKey(spendPubkey),
+      this.network.bitcoreNetwork
+    ).toString();
+    return new Address(base58, { network: this.network });
+  }
+
+  /**
    * Get address script
    *
-   * Will get the type of the address (p2pkh or p2sh)
-   * then create the script
+   * Will get the type of the address (p2pkh, p2sh, or shielded)
+   * then create the script.
+   * For shielded addresses, creates a P2PKH script from the spend_pubkey.
    *
    * @throws {AddressError} Will throw an error if address is not valid
    *
@@ -152,6 +232,12 @@ class Address {
    */
   getScript(): Buffer {
     const addressType = this.getType();
+    if (addressType === 'shielded') {
+      // For shielded addresses, derive P2PKH script from spend_pubkey
+      const spendAddress = this.getSpendAddress();
+      const p2pkh = new P2PKH(spendAddress);
+      return p2pkh.createScript();
+    }
     if (addressType === 'p2pkh') {
       const p2pkh = new P2PKH(this);
       return p2pkh.createScript();

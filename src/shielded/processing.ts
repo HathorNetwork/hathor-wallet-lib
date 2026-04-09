@@ -5,12 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IHistoryTx } from '../types';
-import { NATIVE_TOKEN_UID } from '../constants';
+import { HDPrivateKey } from 'bitcore-lib';
+import { IStorage, IHistoryTx, ILogger } from '../types';
+import { NATIVE_TOKEN_UID_HEX } from '../constants';
 import {
   IShieldedCryptoProvider,
   IShieldedOutput,
   IProcessedShieldedOutput,
+  ShieldedOutputMode,
 } from './types';
 
 /**
@@ -20,41 +22,42 @@ import {
  * referencing the tx.tokens array (0 = native token, 1+ = custom tokens).
  * For FullShielded outputs, the token is unknown until decrypted.
  */
-function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx): string {
+export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx): string {
   // token_data uses the same convention as transparent outputs:
   // The lower bits indicate the token index (0 = HTR, 1+ = index into tx.tokens)
   const tokenIndex = shieldedOutput.token_data & 0b01111111;
   if (tokenIndex === 0) {
     // Native token (HTR) — use 32 zero bytes
-    return '00'.repeat(32);
+    return NATIVE_TOKEN_UID_HEX;
   }
   if (tx.tokens && tokenIndex <= tx.tokens.length) {
     return tx.tokens[tokenIndex - 1];
   }
   // Fallback: use zero bytes (will fail decryption if wrong)
-  return '00'.repeat(32);
+  return NATIVE_TOKEN_UID_HEX;
 }
 
 /**
- * Derive the private key for an address.
+ * Derive the scan private key for an address.
  *
- * Requires the wallet to be unlocked (pin code available / key material in memory).
- * Returns the raw 32-byte private key for ECDH, or null if not derivable.
+ * The scan key uses the same account as legacy P2PKH (m/44'/280'/0'/0).
+ * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
-async function derivePrivkeyForAddress(
+async function deriveScanPrivkeyForAddress(
   storage: IStorage,
   addressIndex: number,
   pinCode: string,
-): Promise<Buffer | null> {
+  logger: ILogger,
+): Promise<Buffer | undefined> {
   try {
-    const { HDPrivateKey } = require('bitcore-lib');
-    const acctPathXPriv = await storage.getAcctPathXPrivKey(pinCode);
-    const hdPrivKey = new HDPrivateKey(acctPathXPriv);
+    const xprivStr = await storage.getScanXPrivKey(pinCode);
+    const hdPrivKey = new HDPrivateKey(xprivStr);
     const childKey = hdPrivKey.deriveChild(addressIndex);
     // bitcore-lib stores the private key as a BN; convert to 32-byte Buffer
     return childKey.privateKey.toBuffer({ size: 32 });
-  } catch {
-    return null;
+  } catch (e) {
+    logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
+    return undefined;
   }
 }
 
@@ -89,38 +92,78 @@ export async function processShieldedOutputs(
     const addressInfo = await storage.getAddressInfo(address);
     if (!addressInfo) continue;
 
-    // Derive the private key for this address
-    const privkey = await derivePrivkeyForAddress(
+    // Derive the scan private key for this address (ECDH)
+    const privkey = await deriveScanPrivkeyForAddress(
       storage,
       addressInfo.bip32AddressIndex,
       pinCode,
+      storage.logger,
     );
     if (!privkey) continue;
 
-    // Determine token_uid for the decryption
-    const tokenUid = resolveTokenUid(shieldedOutput, tx);
+    const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
+    const commitment = Buffer.from(shieldedOutput.commitment, 'hex');
+    const rangeProof = Buffer.from(shieldedOutput.range_proof, 'hex');
+    const isFullShielded = !!shieldedOutput.asset_commitment;
 
     try {
-      const decrypted = cryptoProvider.decryptShieldedOutput(
-        privkey,
-        Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex'),
-        Buffer.from(shieldedOutput.commitment, 'hex'),
-        Buffer.from(shieldedOutput.range_proof, 'hex'),
-        Buffer.from(tokenUid, 'hex'),
-        shieldedOutput.asset_commitment
-          ? Buffer.from(shieldedOutput.asset_commitment, 'hex')
-          : null,
-      );
+      let recoveredValue: bigint;
+      let recoveredBf: Buffer;
+      let recoveredTokenUid: string;
+      let recoveredAbf: Buffer | undefined;
+      let outputType: ShieldedOutputMode;
+
+      if (isFullShielded) {
+        // FullShielded: rewind recovers token UID and asset blinding factor
+        const assetCommitment = Buffer.from(shieldedOutput.asset_commitment!, 'hex');
+        const result = await cryptoProvider.rewindFullShieldedOutput(
+          privkey, ephPk, commitment, rangeProof, assetCommitment,
+        );
+        recoveredValue = result.value;
+        recoveredBf = result.blindingFactor;
+        recoveredAbf = result.assetBlindingFactor;
+        recoveredTokenUid = result.tokenUid.toString('hex');
+        outputType = ShieldedOutputMode.FULLY_SHIELDED;
+
+        // Cross-check token UID (Section 4.3 of the guide):
+        // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
+        const expectedTag = await cryptoProvider.deriveTag(result.tokenUid);
+        const expectedAc = await cryptoProvider.createAssetCommitment(expectedTag, result.assetBlindingFactor);
+        if (!assetCommitment.equals(expectedAc)) {
+          storage.logger.warn('FullShielded token UID cross-check failed — asset commitment mismatch');
+          continue;
+        }
+      } else {
+        // AmountShielded: token UID is known from the visible token_data field
+        const tokenUid = resolveTokenUid(shieldedOutput, tx);
+        const result = await cryptoProvider.rewindAmountShieldedOutput(
+          privkey, ephPk, commitment, rangeProof, Buffer.from(tokenUid, 'hex'),
+        );
+        recoveredValue = result.value;
+        recoveredBf = result.blindingFactor;
+        recoveredTokenUid = tokenUid;
+        outputType = ShieldedOutputMode.AMOUNT_SHIELDED;
+      }
 
       results.push({
         txId: tx.tx_id,
         index: transparentCount + idx,
-        decrypted,
+        decrypted: {
+          value: recoveredValue,
+          blindingFactor: recoveredBf,
+          tokenUid: recoveredTokenUid,
+          assetBlindingFactor: recoveredAbf,
+          outputType,
+        },
         address,
-        tokenUid: decrypted.tokenUid,
+        tokenUid: recoveredTokenUid,
       });
-    } catch {
-      // Decryption failed — output doesn't belong to us or data is corrupt
+    } catch (e) {
+      // Rewind failed — output doesn't belong to us or data is corrupt
+      storage.logger.debug(
+        'Shielded output rewind failed for tx', tx.tx_id,
+        'index', transparentCount + idx, e,
+      );
       continue;
     }
   }

@@ -7,51 +7,119 @@
 
 import {
   IShieldedCryptoProvider,
-  IDecryptedShieldedOutput,
   ICreatedShieldedOutput,
-  ShieldedOutputMode,
+  IRewoundAmountShieldedOutput,
+  IRewoundFullShieldedOutput,
 } from './types';
 
 /**
  * Creates the default shielded crypto provider using @hathor/ct-crypto-node.
+ * All function names follow the SHIELDED-OUTPUTS-CLIENT-GUIDE.md specification.
  * Throws if the native addon is not installed.
  */
 export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
-  // Dynamic require so wallet-lib doesn't fail to import when addon is absent
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const addon = require('@hathor/ct-crypto-node');
-  const cryptoAddon = addon.loadNativeAddon();
+  const ct = require('@hathor/ct-crypto-node');
 
   return {
-    decryptShieldedOutput(
-      recipientPrivkey, ephemeralPubkey, commitment, rangeProof, tokenUid, assetCommitment
-    ): IDecryptedShieldedOutput {
-      const result = cryptoAddon.decryptShieldedOutput(
-        recipientPrivkey, ephemeralPubkey, commitment, rangeProof, tokenUid, assetCommitment
-      );
-      return {
-        value: result.value, // already bigint from cryptoAddon wrapper
-        blindingFactor: result.blindingFactor,
-        tokenUid: result.tokenUid.toString('hex'),
-        assetBlindingFactor: result.assetBlindingFactor,
-        outputType: assetCommitment
-          ? ShieldedOutputMode.FULLY_SHIELDED
-          : ShieldedOutputMode.AMOUNT_SHIELDED,
-      };
+    generateRandomBlindingFactor(): Buffer {
+      return ct.generateRandomBlindingFactor();
     },
 
-    deriveEcdhSharedSecret(privkey, pubkey) {
-      return cryptoAddon.deriveEcdhSharedSecret(privkey, pubkey);
-    },
-
-    createShieldedOutput(value, recipientPubkey, tokenUid, fullyShielded): ICreatedShieldedOutput {
+    createAmountShieldedOutput(value, recipientPubkey, tokenUid, valueBlindingFactor): ICreatedShieldedOutput {
       if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new Error('Shielded output value exceeds safe integer range');
       }
-      const result = cryptoAddon.createShieldedOutput(
-        Number(value), recipientPubkey, tokenUid, fullyShielded
+      const result = ct.createAmountShieldedOutput(
+        Number(value), recipientPubkey, tokenUid, valueBlindingFactor,
       );
-      return result;
+      return {
+        ephemeralPubkey: result.ephemeralPubkey,
+        commitment: result.commitment,
+        rangeProof: result.rangeProof,
+        blindingFactor: result.blindingFactor,
+      };
+    },
+
+    createShieldedOutputWithBothBlindings(value, recipientPubkey, tokenUid, vbf, abf): ICreatedShieldedOutput {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('Shielded output value exceeds safe integer range');
+      }
+      const result = ct.createShieldedOutputWithBothBlindings(
+        Number(value), recipientPubkey, tokenUid, vbf, abf,
+      );
+      return {
+        ephemeralPubkey: result.ephemeralPubkey,
+        commitment: result.commitment,
+        rangeProof: result.rangeProof,
+        blindingFactor: result.blindingFactor,
+        assetCommitment: result.assetCommitment ?? undefined,
+        assetBlindingFactor: result.assetBlindingFactor ?? undefined,
+      };
+    },
+
+    rewindAmountShieldedOutput(privateKey, ephemeralPubkey, commitment, rangeProof, tokenUid): IRewoundAmountShieldedOutput {
+      const result = ct.rewindAmountShieldedOutput(
+        privateKey, ephemeralPubkey, commitment, rangeProof, tokenUid,
+      );
+      return {
+        value: BigInt(result.value),
+        blindingFactor: result.blindingFactor,
+      };
+    },
+
+    rewindFullShieldedOutput(privateKey, ephemeralPubkey, commitment, rangeProof, assetCommitment): IRewoundFullShieldedOutput {
+      const result = ct.rewindFullShieldedOutput(
+        privateKey, ephemeralPubkey, commitment, rangeProof, assetCommitment,
+      );
+      return {
+        value: BigInt(result.value),
+        blindingFactor: result.blindingFactor,
+        tokenUid: result.tokenUid,
+        assetBlindingFactor: result.assetBlindingFactor,
+      };
+    },
+
+    computeBalancingBlindingFactor(value, generatorBlindingFactor, inputs, otherOutputs): Buffer {
+      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('Shielded output value exceeds safe integer range');
+      }
+      const toSafeNumber = (v: bigint): number => {
+        if (v > BigInt(Number.MAX_SAFE_INTEGER)) {
+          throw new Error('Shielded output value exceeds safe integer range');
+        }
+        return Number(v);
+      };
+      return ct.computeBalancingBlindingFactor(
+        Number(value),
+        generatorBlindingFactor,
+        inputs.map(i => ({
+          value: toSafeNumber(i.value),
+          valueBlindingFactor: i.vbf,
+          generatorBlindingFactor: i.gbf,
+        })),
+        otherOutputs.map(o => ({
+          value: toSafeNumber(o.value),
+          valueBlindingFactor: o.vbf,
+          generatorBlindingFactor: o.gbf,
+        })),
+      );
+    },
+
+    deriveTag(tokenUid: Buffer): Buffer {
+      return ct.deriveTag(tokenUid);
+    },
+
+    createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Buffer {
+      return ct.createAssetCommitment(tag, blindingFactor);
+    },
+
+    createSurjectionProof(codomainTag, codomainBlindingFactor, domain): Buffer {
+      return ct.createSurjectionProof(codomainTag, codomainBlindingFactor, domain);
+    },
+
+    deriveEcdhSharedSecret(privkey, pubkey): Buffer {
+      return ct.deriveEcdhSharedSecret(privkey, pubkey);
     },
   };
 }
