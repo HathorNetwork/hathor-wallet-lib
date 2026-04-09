@@ -701,7 +701,7 @@ const wallet = {
       };
     }
 
-    // Derive shielded spend key (account 2')
+    // Derive shielded spend key (account 1')
     // Scan key uses the same account as legacy (m/44'/280'/0'/0), so no separate derivation needed.
     const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
     const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);

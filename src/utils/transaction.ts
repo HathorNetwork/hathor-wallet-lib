@@ -216,7 +216,7 @@ const transaction = {
 
       let derivedKey;
       if (addressInfo.addressType === 'shielded-spend') {
-        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs
+        // Use spend key chain (m/44'/280'/1'/0) for shielded UTXO inputs
         if (!spendXprivkey) {
           const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
           spendXprivkey = HDPrivateKey.fromString(spendXprivStr);
