@@ -28,8 +28,8 @@ const adapters: IWalletTestAdapter[] = [
 
 /**
  * Validates that the fee header contains exactly one entry with the expected amount.
- * Asserts a single entry to avoid silently summing fees across tokens with
- * different denominations (e.g., 1 HTR ≠ 100 of another token).
+ * This is the expected result for createToken / sendTransaction methods, which interact with only
+ * one token per tx.
  */
 function validateFeeAmount(headers: Header[], expectedFee: bigint) {
   const feeHeaders = headers.filter(h => h instanceof FeeHeader);
@@ -58,34 +58,41 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   });
 
   it('should send custom token transactions', async () => {
+    // wallet: 10n HTR
     const { wallet, externalWallet } = await createFundedPair(10n);
+    // 100n TTS created, 1n HTR deposit deducted
     const { hash: tokenUid } = await adapter.createToken(wallet, 'Token to Send', 'TTS', 100n);
 
+    // Self-send 30n TTS, total TTS unchanged
     await adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(5))!, 30n, {
       token: tokenUid,
       changeAddress: (await wallet.getAddressAtIndex(6))!,
     });
 
+    // 100n TTS remaining (self-send doesn't change balance)
     const tokenBalance = await wallet.getBalance(tokenUid);
     expect(tokenBalance[0].balance.unlocked).toEqual(100n);
 
+    // Sends 80n TTS to external wallet
     const externalAddr = (await externalWallet.getAddressAtIndex(0))!;
     const { hash: externalTxHash } = await adapter.sendTransaction(wallet, externalAddr, 80n, {
       token: tokenUid,
     });
     await adapter.waitForTx(externalWallet, externalTxHash);
 
+    // 20n TTS remaining after sending 80n to external wallet
     const remainingBalance = await wallet.getBalance(tokenUid);
     expect(remainingBalance[0].balance.unlocked).toEqual(20n);
   });
 
   it('should send custom fee token transactions', async () => {
-    // 10n HTR: 1n non-refundable deposit (createToken) + 2n fee × 2 sends = 5n spent → 5n remaining
     const { wallet, externalWallet } = await createFundedPair(10n);
+    // Spends 1n HTR as fee, 9n HTR remaining
     const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeBasedToken', 'FBT', 8582n, {
       tokenVersion: TokenVersion.FEE,
     });
 
+    // Spends 2n HTR as fee, 7n HTR remaining
     const { transaction: tx1 } = await adapter.sendTransaction(
       wallet,
       (await wallet.getAddressAtIndex(5))!,
@@ -94,9 +101,11 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     );
     validateFeeAmount(tx1.headers, 2n);
 
+    // Full FBT and 7n HTR remaining after first send
     let fbtBalance = await wallet.getBalance(tokenUid);
     expect(fbtBalance[0].balance.unlocked).toEqual(8582n);
 
+    // Spends 2n HTR as fee, 5n HTR remaining
     const { transaction: tx2 } = await adapter.sendTransaction(
       wallet,
       (await externalWallet.getAddressAtIndex(0))!,
@@ -105,20 +114,24 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     );
     validateFeeAmount(tx2.headers, 2n);
 
+    // 8500n FBT remaining on original wallet after second send
     fbtBalance = await wallet.getBalance(tokenUid);
     expect(fbtBalance[0].balance.unlocked).toEqual(8500n);
 
+    // 5n HTR remaining after both sends
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(5n);
   });
 
   it('should pay only 1 HTR fee when sending entire fee token UTXO (no change output)', async () => {
+    // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
+    // Spends 1n HTR as fee, 9n HTR remaining. 200n FTNC created
     const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeTokenNoChange', 'FTNC', 200n, {
       tokenVersion: TokenVersion.FEE,
     });
 
-    // Send the entire token balance so there is no change output — only 1 token output
+    // Sends entire 200n FTNC (no change output = 1 token output), spends 1n HTR as fee, 8n HTR remaining
     const { transaction: tx } = await adapter.sendTransaction(
       wallet,
       (await wallet.getAddressAtIndex(5))!,
@@ -135,18 +148,20 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(tokenOutputs).toHaveLength(1);
     expect(tokenOutputs[0].value).toBe(200n);
 
-    // 10 HTR - 1 non-refundable deposit (createToken) - 1 fee = 8 HTR remaining
+    // 8n HTR remaining after createToken (1n fee) + send (1n fee)
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(8n);
   });
 
   it('should pay 5 HTR fee when spreading fee token across 5 outputs with no change', async () => {
+    // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
+    // Spends 1n HTR as fee, 9n HTR remaining. 500n FT5O created
     const { hash: tokenUid } = await adapter.createToken(wallet, 'FeeToken5Out', 'FT5O', 500n, {
       tokenVersion: TokenVersion.FEE,
     });
 
-    // Spread the entire 500n supply across 5 outputs (100n each) — no change
+    // Spreads entire 500n FT5O across 5 outputs (100n each), no change output
     const outputs = await Promise.all(
       [1, 2, 3, 4, 5].map(async i => ({
         address: (await wallet.getAddressAtIndex(i))!,
@@ -155,6 +170,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       }))
     );
 
+    // 5 token outputs × 1n HTR each = 5n HTR fee, 4n HTR remaining
     const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, outputs);
     validateFeeAmount(tx.headers, 5n);
 
@@ -165,7 +181,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(tokenOutputs).toHaveLength(5);
     tokenOutputs.forEach((o: { value: bigint }) => expect(o.value).toBe(100n));
 
-    // 10 HTR - 1 non-refundable deposit (createToken) - 5 fee = 4 HTR remaining
+    // 4n HTR remaining after createToken (1n fee) + send (5n fee)
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(4n);
   });
@@ -175,7 +191,9 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   // signatures when HTR inputs come before token inputs. See #1057.
   // eslint-disable-next-line jest/no-disabled-tests
   it.skip('should send fee token with manually provided HTR input — HTR first (broken signing)', async () => {
+    // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
+    // Spends 1n HTR as fee, 9n HTR remaining. 100n FTMI created
     const { hash: tokenUid } = await adapter.createToken(
       wallet,
       'FeeTokenManualInput',
@@ -192,6 +210,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     const htrUtxo = utxosHtr[0];
     const tokenUtxo = utxosToken[0];
 
+    // Sends 50n FTMI with manual inputs (HTR first), spends 2n HTR as fee, 7n HTR remaining
     const { transaction: tx } = await adapter.sendManyOutputsTransaction(
       wallet,
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
@@ -215,7 +234,9 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     // Inputs are listed token-first to match the internal processing order
     // of SendTransactionWalletService.prepareTx(), which builds address
     // paths as [custom_tokens..., htr...]. See #1057 for the underlying bug.
+    // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
+    // Spends 1n HTR as fee, 9n HTR remaining. 100n FTMI created
     const { hash: tokenUid } = await adapter.createToken(
       wallet,
       'FeeTokenManualInput',
@@ -232,6 +253,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     const htrUtxo = utxosHtr[0];
     const tokenUtxo = utxosToken[0];
 
+    // Sends 50n FTMI with manual inputs (token first), spends 2n HTR as fee, 7n HTR remaining
     const { transaction: tx } = await adapter.sendManyOutputsTransaction(
       wallet,
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
