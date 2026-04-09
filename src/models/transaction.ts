@@ -223,14 +223,8 @@ class Transaction {
     // Len inputs
     array.push(intToBytes(this.inputs.length, 1));
 
-    // Len outputs
+    // Len outputs (transparent only; shielded go in the ShieldedOutputsHeader)
     array.push(intToBytes(this.outputs.length, 1));
-
-    // Len shielded outputs (only present when transaction has shielded outputs).
-    // TODO: Align with hathor-core wire format once finalized.
-    if (this.shieldedOutputs.length > 0) {
-      array.push(intToBytes(this.shieldedOutputs.length, 1));
-    }
   }
 
   /**
@@ -247,10 +241,7 @@ class Transaction {
     for (const outputTx of this.outputs) {
       array.push(...outputTx.serialize());
     }
-
-    for (const shieldedOut of this.shieldedOutputs) {
-      array.push(...shieldedOut.serialize());
-    }
+    // Shielded outputs are serialized in the ShieldedOutputsHeader, not here.
   }
 
   /**

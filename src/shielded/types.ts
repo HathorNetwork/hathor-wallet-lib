@@ -43,7 +43,7 @@ export interface IDecryptedShieldedOutput {
   value: bigint;
   blindingFactor: Buffer;
   tokenUid: string;           // hex, 32 bytes
-  assetBlindingFactor: Buffer | null;
+  assetBlindingFactor?: Buffer;
   outputType: ShieldedOutputMode;
 }
 
@@ -55,12 +55,14 @@ export interface ICreatedShieldedOutput {
   commitment: Buffer;
   rangeProof: Buffer;
   blindingFactor: Buffer;
-  assetCommitment: Buffer | null;
-  assetBlindingFactor: Buffer | null;
+  assetCommitment?: Buffer;
+  assetBlindingFactor?: Buffer;
+  surjectionProof?: Buffer;
 }
 
 /**
  * Swappable crypto provider interface.
+ * Function names follow the SHIELDED-OUTPUTS-CLIENT-GUIDE.md specification.
  *
  * Implementations:
  * - Node.js: @hathor/ct-crypto-node (napi-rs, default)
@@ -69,40 +71,116 @@ export interface ICreatedShieldedOutput {
  */
 export interface IShieldedCryptoProvider {
   /**
-   * Full decrypt pipeline: ECDH -> nonce -> generator -> rewind -> verify.
+   * Generate a random 32-byte blinding factor (valid secp256k1 scalar).
+   * MUST use the Rust crypto RNG — never use JS crypto.randomBytes.
    */
-  decryptShieldedOutput(
-    recipientPrivkey: Buffer,
+  generateRandomBlindingFactor(): Buffer | Promise<Buffer>;
+
+  /**
+   * Create an AmountShielded output (amount hidden, token visible).
+   * Caller provides the value blinding factor (from generateRandomBlindingFactor
+   * or computeBalancingBlindingFactor).
+   */
+  createAmountShieldedOutput(
+    value: bigint,
+    recipientPubkey: Buffer,
+    tokenUid: Buffer,
+    valueBlindingFactor: Buffer,
+  ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
+
+  /**
+   * Create a FullShielded output (amount AND token hidden).
+   * Caller provides both the value and asset blinding factors.
+   */
+  createShieldedOutputWithBothBlindings(
+    value: bigint,
+    recipientPubkey: Buffer,
+    tokenUid: Buffer,
+    valueBlindingFactor: Buffer,
+    assetBlindingFactor: Buffer,
+  ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
+
+  /**
+   * Rewind an AmountShielded output to recover value and blinding factor.
+   * The token UID is known from the visible token_data field.
+   */
+  rewindAmountShieldedOutput(
+    privateKey: Buffer,
     ephemeralPubkey: Buffer,
     commitment: Buffer,
     rangeProof: Buffer,
     tokenUid: Buffer,
-    assetCommitment: Buffer | null,
-  ): IDecryptedShieldedOutput;
+  ): IRewoundAmountShieldedOutput | Promise<IRewoundAmountShieldedOutput>;
+
+  /**
+   * Rewind a FullShielded output to recover value, blinding factor, token UID,
+   * and asset blinding factor. Does NOT take tokenUid — it's recovered from the proof message.
+   */
+  rewindFullShieldedOutput(
+    privateKey: Buffer,
+    ephemeralPubkey: Buffer,
+    commitment: Buffer,
+    rangeProof: Buffer,
+    assetCommitment: Buffer,
+  ): IRewoundFullShieldedOutput | Promise<IRewoundFullShieldedOutput>;
+
+  /**
+   * Compute the balancing blinding factor for the last shielded output.
+   * Uses secp256k1-zkp's compute_adaptive_blinding_factor.
+   *
+   * @param value - The value of the last output
+   * @param generatorBlindingFactor - Generator bf for the last output (zero for AmountShielded)
+   * @param inputs - Array of {value, vbf, gbf} for all inputs
+   * @param otherOutputs - Array of {value, vbf, gbf} for all other outputs (not the last)
+   */
+  computeBalancingBlindingFactor(
+    value: bigint,
+    generatorBlindingFactor: Buffer,
+    inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
+    otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
+  ): Buffer | Promise<Buffer>;
+
+  /**
+   * Derive a raw Tag from a token UID (for surjection proofs and cross-checks).
+   */
+  deriveTag(tokenUid: Buffer): Buffer | Promise<Buffer>;
+
+  /**
+   * Derive a blinded asset generator from a raw tag and blinding factor.
+   */
+  createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Buffer | Promise<Buffer>;
+
+  /**
+   * Create a surjection proof proving the output asset derives from one of the input assets.
+   */
+  createSurjectionProof(
+    codomainTag: Buffer,
+    codomainBlindingFactor: Buffer,
+    domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>,
+  ): Buffer | Promise<Buffer>;
 
   /**
    * ECDH shared secret derivation (for scanning optimization).
    */
-  deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer;
+  deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer | Promise<Buffer>;
+}
 
-  /**
-   * Create a shielded output for a recipient.
-   *
-   * Encapsulates the full creation pipeline:
-   * ephemeral key generation, ECDH, nonce derivation, generator/asset commitment,
-   * range proof creation. The ephemeral private key never leaves the crypto layer.
-   *
-   * @param value - The output value
-   * @param recipientPubkey - 33 bytes compressed EC public key of the recipient
-   * @param tokenUid - 32 bytes token UID (all zeros for HTR)
-   * @param fullyShielded - true for FullShielded (hides token), false for AmountShielded
-   */
-  createShieldedOutput(
-    value: bigint,
-    recipientPubkey: Buffer,
-    tokenUid: Buffer,
-    fullyShielded: boolean,
-  ): ICreatedShieldedOutput;
+/**
+ * Result of rewinding an AmountShielded output.
+ */
+export interface IRewoundAmountShieldedOutput {
+  value: bigint;
+  blindingFactor: Buffer;
+}
+
+/**
+ * Result of rewinding a FullShielded output.
+ */
+export interface IRewoundFullShieldedOutput {
+  value: bigint;
+  blindingFactor: Buffer;
+  tokenUid: Buffer;             // 32 bytes, recovered from proof message
+  assetBlindingFactor: Buffer;  // 32 bytes, recovered from proof message
 }
 
 /**

@@ -10,8 +10,7 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
-import type { IShieldedCryptoProvider } from './shielded/types';
-import type { ShieldedOutputMode } from './shielded/types';
+import type { IShieldedCryptoProvider, ShieldedOutputMode } from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -103,6 +102,16 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
+  // Address type: undefined = legacy, 'shielded' = full shielded address, 'shielded-spend' = on-chain P2PKH from spend key
+  addressType?: 'p2pkh' | 'p2sh' | 'shielded' | 'shielded-spend';
+}
+
+/**
+ * Options for address methods that can operate on either the legacy or shielded address chain.
+ * Defaults to legacy (true) for backward compatibility.
+ */
+export interface IAddressChainOptions {
+  legacy?: boolean; // default: true
 }
 
 export interface IAddressMetadata {
@@ -231,7 +240,7 @@ export interface IHistoryTx {
 }
 
 export interface IHistoryShieldedOutput {
-  mode: number;              // 1 = AmountShielded, 2 = FullShielded
+  mode: ShieldedOutputMode;
   commitment: string;        // hex
   range_proof: string;       // hex
   script: string;            // hex
@@ -273,6 +282,13 @@ export interface IHistoryOutput {
   token: string;
   spent_by: string | null;
   selected_as_input?: boolean;
+  // Shielded output entries (appended by fullnode's to_json_extended) have these instead of value/token:
+  type?: string;           // 'shielded' for shielded output entries
+  commitment?: string;     // hex
+  range_proof?: string;    // hex
+  ephemeral_pubkey?: string; // hex
+  asset_commitment?: string; // hex (FullShielded only)
+  surjection_proof?: string; // hex (FullShielded only)
 }
 
 export interface IDataOutputData {
@@ -346,15 +362,16 @@ export interface IDataShieldedOutput {
   address: string;
   value: OutputValueType;
   token: string;
-  recipientPubkey: string;       // hex, 33 bytes compressed EC pubkey
+  scanPubkey: string;            // hex, 33 bytes compressed EC pubkey for ECDH
   mode: ShieldedOutputMode;      // 1 = AmountShielded, 2 = FullShielded
   // Populated after crypto processing:
   ephemeralPubkey?: Buffer;
   commitment?: Buffer;
   rangeProof?: Buffer;
   blindingFactor?: Buffer;
-  assetCommitment?: Buffer | null;
-  assetBlindingFactor?: Buffer | null;
+  assetCommitment?: Buffer;
+  assetBlindingFactor?: Buffer;
+  surjectionProof?: Buffer;
   script?: string;               // hex, the P2PKH/P2SH output script
 }
 
@@ -418,6 +435,10 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
+  // Shielded address key material (optional, absent on wallets created before shielded feature)
+  // Scan key uses the same account as legacy (m/44'/280'/0'/0) — no separate field needed.
+  spendXpubkey?: string;         // xpub at m/44'/280'/2'/0
+  spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/2'/0
 }
 
 export enum SCANNING_POLICY {
@@ -481,6 +502,10 @@ export interface IWalletData {
   lastLoadedAddressIndex: number;
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
+  // Shielded address chain tracking (separate gap-limit scanning)
+  shieldedLastLoadedAddressIndex: number;
+  shieldedLastUsedAddressIndex: number;
+  shieldedCurrentAddressIndex: number;
   bestBlockHeight: number;
   scanPolicyData: AddressScanPolicyData;
 }
@@ -559,7 +584,7 @@ export interface IStore {
   getAddress(base58: string): Promise<IAddressInfo | null>;
   getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
   getSeqnumMeta(base58: string): Promise<number | null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
@@ -596,13 +621,13 @@ export interface IStore {
   getAccessData(): Promise<IWalletAccessData | null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getWalletData(): Promise<IWalletData>;
-  getLastLoadedAddressIndex(): Promise<number>;
-  getLastUsedAddressIndex(): Promise<number>;
-  setLastUsedAddressIndex(index: number): Promise<void>;
+  getLastLoadedAddressIndex(opts?: IAddressChainOptions): Promise<number>;
+  getLastUsedAddressIndex(opts?: IAddressChainOptions): Promise<number>;
+  setLastUsedAddressIndex(index: number, opts?: IAddressChainOptions): Promise<void>;
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
-  getCurrentAddress(markAsUsed?: boolean): Promise<string>;
-  setCurrentAddressIndex(index: number): Promise<void>;
+  getCurrentAddress(markAsUsed?: boolean, opts?: IAddressChainOptions): Promise<string>;
+  setCurrentAddressIndex(index: number, opts?: IAddressChainOptions): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
   getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
@@ -638,8 +663,12 @@ export interface IStorage {
   logger: ILogger;
 
   // Shielded (confidential transaction) crypto provider
-  shieldedCryptoProvider: IShieldedCryptoProvider | null;
-  setShieldedCryptoProvider(provider: IShieldedCryptoProvider | null): void;
+  shieldedCryptoProvider?: IShieldedCryptoProvider;
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+
+  // Pin code for shielded output decryption during tx processing
+  pinCode?: string;
+  setPinCode(pinCode: string): void;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
@@ -654,11 +683,11 @@ export interface IStorage {
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
   getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   getAddressPubkey(index: number): Promise<string>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
-  getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  getCurrentAddress(markAsUsed?: boolean, opts?: IAddressChainOptions): Promise<string>;
   getChangeAddress(options?: { changeAddress?: null | string }): Promise<string>;
 
   // Transaction methods
@@ -699,6 +728,12 @@ export interface IStorage {
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
+
+  // Shielded key methods (return undefined if wallet was created before shielded feature)
+  getScanXPrivKey(pinCode: string): Promise<string>;
+  getSpendXPrivKey(pinCode: string): Promise<string>;
+  getScanXPubKey(): Promise<string | undefined>;
+  getSpendXPubKey(): Promise<string | undefined>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
   getCurrentHeight(): Promise<number>;

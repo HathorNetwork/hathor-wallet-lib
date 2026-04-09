@@ -18,7 +18,6 @@ import { getDefaultLogger } from '../types';
 export const JSONBigInt = {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   parse(text: string): any {
-    // @ts-expect-error TypeScript hasn't been updated with the `context` argument from Node v22.
     return JSON.parse(text, this.bigIntReviver);
   },
 
@@ -26,9 +25,15 @@ export const JSONBigInt = {
     return JSON.stringify(value, this.bigIntReplacer, space);
   },
 
-  bigIntReviver(_key: string, value: any, context: { source: string }): any {
+  bigIntReviver(_key: string, value: any, context?: { source: string }): any {
     if (typeof value !== 'number') {
       // No special handling needed for non-number values.
+      return value;
+    }
+
+    // Hermes (React Native) doesn't support the context parameter in JSON.parse reviver.
+    // Fall back to returning the value as-is when context is unavailable.
+    if (!context?.source) {
       return value;
     }
 
@@ -44,7 +49,7 @@ export const JSONBigInt = {
     } catch (e) {
       if (
         e instanceof SyntaxError &&
-        (e.message === `Cannot convert ${context.source} to a BigInt` ||
+        (e.message === `Cannot convert ${context?.source} to a BigInt` ||
           e.message === `invalid BigInt syntax`)
       ) {
         // When this error happens, it means the number cannot be converted to a BigInt,

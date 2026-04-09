@@ -52,7 +52,8 @@ services:
     command: [
       "http://fullnode:8080",
       "--stratum-port=8034",
-      "--api-port=8035"
+      "--api-port=8035",
+      "--testnet"
     ]
     networks:
       - hathor-privnet
@@ -236,8 +237,8 @@ services:
       AWS_SHARED_CREDENTIALS_FILE: ".aws/credentials" # Credentials for mocked AWS
       AWS_CONFIG_FILE: ".aws/config" # Config for mocked AWS
     ports:
-      - "3000:3000"
-      - "3001:3001"
+      - "3100:3000"
+      - "3101:3001"
     networks:
       - hathor-privnet
 

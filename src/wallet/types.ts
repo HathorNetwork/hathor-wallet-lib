@@ -13,6 +13,7 @@ import {
   IHistoryTx,
   IDataTx,
   WalletAddressMode,
+  IAddressChainOptions,
 } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -359,11 +360,11 @@ export interface IHathorWallet {
     options: { token?: string; changeAddress?: string }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
-  getAddressAtIndex(index: number): Promise<string>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
   getCurrentAddress(options?: {
     markAsUsed: boolean;
-  }): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
+  }, opts?: IAddressChainOptions): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
   getNextAddress(): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
@@ -724,6 +725,8 @@ export interface FullNodeOutput {
   decoded: FullNodeDecodedOutput;
   token?: string | null;
   spent_by?: string | null;
+  // Shielded entries appended by fullnode's to_json_extended() have type='shielded'
+  type?: string;
 }
 
 export interface FullNodeTx {

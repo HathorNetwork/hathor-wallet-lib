@@ -94,8 +94,8 @@ describe('handleStop', () => {
     await storage.registerNanoContract('abc', testNano);
     // We have 1 transaction
     await expect(store.historyCount()).resolves.toEqual(1);
-    // 20 addresses
-    await expect(store.addressCount()).resolves.toEqual(20);
+    // 20 legacy addresses + 20 shielded + 20 shielded-spend = 60
+    await expect(store.addressCount()).resolves.toEqual(60);
     // And 1 registered token
     let tokens = await toArray(storage.getRegisteredTokens());
     expect(tokens).toHaveLength(1);
@@ -122,7 +122,7 @@ describe('handleStop', () => {
     expect(storage.version).toEqual(null);
     // Nothing changed in the store
     await expect(store.historyCount()).resolves.toEqual(1);
-    await expect(store.addressCount()).resolves.toEqual(20);
+    await expect(store.addressCount()).resolves.toEqual(60);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
     await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeTruthy();
     tokens = await toArray(storage.getRegisteredTokens());
@@ -134,9 +134,9 @@ describe('handleStop', () => {
 
     // handleStop with cleanStorage = true
     await storage.handleStop({ cleanStorage: true });
-    // Will clean the history bit not addresses or registered tokens
+    // Will clean the history but not addresses or registered tokens
     await expect(store.historyCount()).resolves.toEqual(0);
-    await expect(store.addressCount()).resolves.toEqual(20);
+    await expect(store.addressCount()).resolves.toEqual(60);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
     await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeTruthy();
     tokens = await toArray(storage.getRegisteredTokens());
@@ -177,9 +177,9 @@ describe('handleStop', () => {
     // handleStop with cleanAddresses = true
     await loadAddresses(0, 20, storage);
     await storage.handleStop({ cleanTokens: true });
-    // Will clean the history bit not addresses
+    // Will clean the tokens but not addresses
     await expect(store.historyCount()).resolves.toEqual(1);
-    await expect(store.addressCount()).resolves.toEqual(20);
+    await expect(store.addressCount()).resolves.toEqual(60);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeFalsy();
     await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeFalsy();
 

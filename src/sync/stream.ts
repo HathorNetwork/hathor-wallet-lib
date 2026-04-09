@@ -18,6 +18,7 @@ import {
 import Network from '../models/network';
 import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
+import { deriveShieldedAddressFromStorage } from '../utils/address';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -559,6 +560,19 @@ export class StreamManager extends AbortController {
         const alreadyExists = await this.storage.isAddressMine(addr.base58);
         if (!alreadyExists) {
           await this.storage.saveAddress(addr);
+        }
+        // Generate shielded address pair at the same index (if keys are available)
+        const shieldedResult = await deriveShieldedAddressFromStorage(
+          addr.bip32AddressIndex,
+          this.storage,
+        );
+        if (shieldedResult) {
+          if (!(await this.storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
+            await this.storage.saveAddress(shieldedResult.shieldedAddress);
+          }
+          if (!(await this.storage.isAddressMine(shieldedResult.spendAddress.base58))) {
+            await this.storage.saveAddress(shieldedResult.spendAddress);
+          }
         }
       } else if (isStreamItemVertex(item)) {
         await this.storage.addTx(item.vertex);

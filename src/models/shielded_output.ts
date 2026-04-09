@@ -9,20 +9,17 @@ import { intToBytes } from '../utils/buffer';
 import { ShieldedOutputMode } from '../shielded/types';
 import { OutputValueType } from '../types';
 
+const EPHEMERAL_PUBKEY_SIZE = 33;
+
 /**
  * Represents a shielded output in a transaction.
  *
- * Wire format (matching hathor-core):
- * [1 byte: mode]
- * [33 bytes: commitment]
- * [2 bytes: range_proof_length]
- * [variable: range_proof]
- * [1 byte: token_data]
- * [2 bytes: script_length]
- * [variable: script]
- * [33 bytes: ephemeral_pubkey]
- * // If FullShielded:
- * [33 bytes: asset_commitment]
+ * Wire format (matching hathor-core serialization order):
+ *   mode(1) | commitment(33) | rp_len(2) | range_proof(var) |
+ *   script_len(2) | script(var) |
+ *   [if AMOUNT_SHIELDED]: token_data(1)
+ *   [if FULLY_SHIELDED]:  asset_commitment(33) | sp_len(2) | surjection_proof(var)
+ *   ephemeral_pubkey(33)
  */
 class ShieldedOutput {
   mode: ShieldedOutputMode;
@@ -37,7 +34,9 @@ class ShieldedOutput {
 
   ephemeralPubkey: Buffer;
 
-  assetCommitment: Buffer | null;
+  assetCommitment?: Buffer;
+
+  surjectionProof?: Buffer;
 
   /** The plaintext value, used for weight calculation. Not serialized on-chain. */
   value: OutputValueType;
@@ -49,8 +48,9 @@ class ShieldedOutput {
     tokenData: number,
     script: Buffer,
     ephemeralPubkey: Buffer,
-    assetCommitment: Buffer | null = null,
+    assetCommitment?: Buffer,
     value: OutputValueType = 0n,
+    surjectionProof?: Buffer,
   ) {
     this.mode = mode;
     this.commitment = commitment;
@@ -60,10 +60,11 @@ class ShieldedOutput {
     this.ephemeralPubkey = ephemeralPubkey;
     this.assetCommitment = assetCommitment;
     this.value = value;
+    this.surjectionProof = surjectionProof;
   }
 
   /**
-   * Serialize a shielded output to bytes.
+   * Serialize a shielded output to bytes (wire format matching hathor-core).
    */
   serialize(): Buffer[] {
     const arr: Buffer[] = [];
@@ -78,20 +79,55 @@ class ShieldedOutput {
     arr.push(intToBytes(this.rangeProof.length, 2));
     arr.push(this.rangeProof);
 
-    // Token data (1 byte)
-    arr.push(intToBytes(this.tokenData, 1));
-
     // Script (2 bytes length + variable)
     arr.push(intToBytes(this.script.length, 2));
     arr.push(this.script);
 
-    // Ephemeral pubkey (33 bytes)
-    arr.push(this.ephemeralPubkey);
-
-    // Asset commitment (33 bytes, FullShielded only)
-    if (this.mode === ShieldedOutputMode.FULLY_SHIELDED && this.assetCommitment) {
-      arr.push(this.assetCommitment);
+    if (this.mode === ShieldedOutputMode.AMOUNT_SHIELDED) {
+      // Token data (1 byte, AmountShielded only)
+      arr.push(intToBytes(this.tokenData, 1));
+    } else if (this.mode === ShieldedOutputMode.FULLY_SHIELDED) {
+      // Asset commitment (33 bytes, FullShielded only)
+      arr.push(this.assetCommitment ?? Buffer.alloc(33));
+      // Surjection proof (2 bytes length + variable, FullShielded only)
+      const sp = this.surjectionProof ?? Buffer.alloc(0);
+      arr.push(intToBytes(sp.length, 2));
+      arr.push(sp);
     }
+
+    // Ephemeral pubkey (always 33 bytes; zeros if not present)
+    arr.push(
+      this.ephemeralPubkey && this.ephemeralPubkey.length === EPHEMERAL_PUBKEY_SIZE
+        ? this.ephemeralPubkey
+        : Buffer.alloc(EPHEMERAL_PUBKEY_SIZE)
+    );
+
+    return arr;
+  }
+
+  /**
+   * Serialize for sighash (excludes proofs).
+   */
+  serializeSighash(): Buffer[] {
+    const arr: Buffer[] = [];
+
+    arr.push(intToBytes(this.mode, 1));
+    arr.push(this.commitment);
+
+    if (this.mode === ShieldedOutputMode.AMOUNT_SHIELDED) {
+      arr.push(intToBytes(this.tokenData, 1));
+    } else if (this.mode === ShieldedOutputMode.FULLY_SHIELDED) {
+      arr.push(this.assetCommitment ?? Buffer.alloc(33));
+    }
+
+    arr.push(this.script);
+
+    // Always include ephemeral pubkey in sighash
+    arr.push(
+      this.ephemeralPubkey && this.ephemeralPubkey.length === EPHEMERAL_PUBKEY_SIZE
+        ? this.ephemeralPubkey
+        : Buffer.alloc(EPHEMERAL_PUBKEY_SIZE)
+    );
 
     return arr;
   }
