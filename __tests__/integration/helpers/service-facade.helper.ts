@@ -39,28 +39,22 @@ export function initializeServiceGlobalConfigs() {
 }
 
 /**
- * Builds a HathorWalletServiceWallet instance.
- *
- * Accepts either `words` (seed) or `xpub` — they are mutually exclusive.
- * If neither is provided, a precalculated wallet is used for faster tests.
- *
+ * Builds a HathorWalletServiceWallet instance with a wallet seed words
+ * If no words are provided, it will use a precalculated wallet for faster tests and return its addresses.
  * @param enableWs - Whether to enable websocket connection (default: false)
  * @param words - The 24 words to use for the wallet (default: random wallet)
- * @param xpub - An xpub key for creating a readonly wallet (mutually exclusive with words)
  * @param passwordForRequests - The password that will be returned by the mocked requestPassword function (default: 'test-password')
  * @returns The wallet instance along with its store and storage for eventual mocking/spying
  */
 export function buildWalletInstance({
   enableWs = false,
   words = '',
-  xpub = '',
   passwordForRequests = 'test-password',
-  singleAddressMode = false,
 } = {}) {
   let addresses: string[] = [];
 
-  // If neither identity is provided, use a precalculated wallet
-  if (!words && !xpub) {
+  // If no words are provided, use an empty precalculated wallet
+  if (!words) {
     if (!precalculationHelpers.test) {
       throw new Error('Precalculation helper not initialized');
     }
@@ -70,20 +64,19 @@ export function buildWalletInstance({
     addresses = preFetchedWallet.addresses;
   }
 
+  // Builds the wallet parameters
+  const walletData = { words };
   const network = new Network(NETWORK_NAME);
   const requestPassword = jest.fn().mockResolvedValue(passwordForRequests);
 
   const store = new MemoryStore();
   const storage = new Storage(store);
-
-  // xpub and seed are mutually exclusive in the constructor
   const newWallet = new HathorWalletServiceWallet({
     requestPassword,
-    ...(xpub ? { xpub } : { seed: words }),
+    seed: walletData.words,
     network,
     storage,
-    enableWs,
-    singleAddressMode,
+    enableWs, // Disable websocket for integration tests by default
   });
 
   return { wallet: newWallet, store, storage, words, addresses };

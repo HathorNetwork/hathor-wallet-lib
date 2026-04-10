@@ -17,7 +17,6 @@ import { MemoryStore, Storage } from '../../../src/storage';
 import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { IHathorWallet } from '../../../src/wallet/types';
-import { getGapLimitConfig } from '../utils/core.util';
 
 const startedWallets = [];
 
@@ -46,7 +45,6 @@ async function startWallet(storage, walletData) {
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
     storage,
-    scanPolicy: getGapLimitConfig(),
   };
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();

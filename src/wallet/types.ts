@@ -6,14 +6,7 @@
  */
 
 import bitcore from 'bitcore-lib';
-import {
-  TokenVersion,
-  IStorage,
-  OutputValueType,
-  IHistoryTx,
-  IDataTx,
-  WalletAddressMode,
-} from '../types';
+import { TokenVersion, IStorage, OutputValueType, IHistoryTx, IDataTx } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -52,7 +45,7 @@ export interface GetAddressesObject {
 
 export interface GetBalanceObject {
   token: TokenInfo; // Information about the token
-  balance: WalletServiceBalance; // Balance information
+  balance: Balance; // Balance information
   tokenAuthorities: AuthoritiesBalance; // Authorities mint/melt availability
   transactions: number; // quantity of transactions
   lockExpires: number | null; // When next lock expires, if has a timelock
@@ -65,17 +58,17 @@ export interface TokenInfo {
   version: TokenVersion; // Token version
 }
 
-export interface WalletServiceBalance {
+export interface Balance {
   unlocked: OutputValueType; // Available amount
   locked: OutputValueType; // Locked amount
 }
 
 export interface AuthoritiesBalance {
-  unlocked: WalletServiceAuthority; // unlocked mint/melt
-  locked: WalletServiceAuthority; // locked mint/melt
+  unlocked: Authority; // unlocked mint/melt
+  locked: Authority; // locked mint/melt
 }
 
-export interface WalletServiceAuthority {
+export interface Authority {
   mint: boolean; // if has mint authority
   melt: boolean; // if has melt authority
 }
@@ -327,13 +320,13 @@ export interface IStopWalletParams {
   cleanAddresses?: boolean;
 }
 
-export interface WalletServiceDelegateAuthorityOptions {
+export interface DelegateAuthorityOptions {
   anotherAuthorityAddress: string | null;
   createAnother: boolean;
   pinCode: string | null;
 }
 
-export interface WalletServiceDestroyAuthorityOptions {
+export interface DestroyAuthorityOptions {
   pinCode: string | null;
 }
 
@@ -361,10 +354,8 @@ export interface IHathorWallet {
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
-  getCurrentAddress(options?: {
-    markAsUsed: boolean;
-  }): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
-  getNextAddress(): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type
+  getNextAddress(): AddressInfoObject | Promise<unknown>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(
@@ -394,25 +385,25 @@ export interface IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: WalletServiceDelegateAuthorityOptions
+    options: DelegateAuthorityOptions
   ): Promise<Transaction>;
   delegateAuthority(
     token: string,
     type: string,
     address: string,
-    options: WalletServiceDelegateAuthorityOptions
+    options: DelegateAuthorityOptions
   ): Promise<Transaction>;
   prepareDestroyAuthorityData(
     token: string,
     type: string,
     count: number,
-    options: WalletServiceDestroyAuthorityOptions
+    options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   destroyAuthority(
     token: string,
     type: string,
     count: number,
-    options: WalletServiceDestroyAuthorityOptions
+    options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[] | Promise<unknown>; // FIXME: Should have a single return type;
   getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
@@ -426,7 +417,6 @@ export interface IHathorWallet {
   checkPin(pin: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
-  changeServer(newServer: string): Promise<void>;
   getServerUrl(): string;
   getNetwork(): string;
   getAddressPathForIndex(index: number): Promise<string>;
@@ -498,9 +488,6 @@ export interface IHathorWallet {
   storage: IStorage;
   signTx(tx: Transaction, options: { pinCode?: string | null }): Promise<Transaction>;
   setNanoHeaderCaller(nanoHeader: NanoContractHeader, address: string): Promise<void>;
-  getAddressMode(): Promise<WalletAddressMode>;
-  enableMultiAddressMode(): Promise<void>;
-  enableSingleAddressMode(): Promise<void>;
 }
 
 export interface ISendTransaction {

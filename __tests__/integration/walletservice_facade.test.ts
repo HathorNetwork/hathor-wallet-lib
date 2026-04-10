@@ -1,15 +1,24 @@
+import axios from 'axios';
+import Mnemonic from 'bitcore-mnemonic';
+import config from '../../src/config';
+import { loggers } from './utils/logger.util';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import Network from '../../src/models/network';
+import { CreateTokenTransaction, FeeHeader, Output, Storage, transactionUtils } from '../../src';
 import {
-  CreateTokenTransaction,
-  MemoryStore,
-  FeeHeader,
-  Output,
-  Storage,
-  Network,
-  transactionUtils,
-} from '../../src';
-import { WALLET_CONSTANTS } from './configuration/test-constants';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+  FULLNODE_NETWORK_NAME,
+  FULLNODE_URL,
+  NETWORK_NAME,
+  WALLET_CONSTANTS,
+} from './configuration/test-constants';
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../../src/constants';
+import { decryptData } from '../../src/utils/crypto';
+import walletUtils from '../../src/utils/wallet';
 import {
   buildWalletInstance,
   emptyWallet,
@@ -18,7 +27,7 @@ import {
 } from './helpers/service-facade.helper';
 import { SendTxError, UtxoError, WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
-import { TokenVersion, WalletAddressMode } from '../../src/types';
+import { TokenVersion } from '../../src/types';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
@@ -141,58 +150,6 @@ const emptyFeeWallet = {
     'Wfh8oHVEJcUqLeyX9k8YCF6Lnq8Q5wT3in',
   ],
 };
-const singleAddressWallet1 = {
-  words:
-    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
-  addresses: [
-    'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN',
-    'WmtWgtk5GxdcDKwjNwmXXn74nQWTPWhKfx',
-    'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
-    'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-    'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi',
-    'Wc4dKp6hBgr5PU9gBmzJofc93XZGAEEUXD',
-    'WUujvZnk3LMbFWUW7CnZbjn5JZzALaqLfm',
-    'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-    'WXN7sf6WzhpESgUuRCBrjzjzHtWTCfV8Cq',
-    'WYaMN32qQ9CAUNsDnbtwi1U41JY9prYhvR',
-    'WWbt2ww4W45YLUAumnumZiyWrABYDzCTdN',
-    'WgpRs9NxhkBPxe7ptm9RcuLdABb7DdVUA5',
-    'WPzpVP34vx6X5Krj4jeiQz9VW87F4LEZnV',
-    'WSn9Bn6EDPSWZqNQdpV3FxGjpTEMsqQHYQ',
-    'WmYnieT3vzzY83eHphQHs6HJ5mYyPwcKSE',
-    'WZfcHjgkfK9UroTzpiricB6gtg99QKraG1',
-    'WiHovoQ5ZLKPpQjZYkLVeoVgP7LoVLK518',
-    'Wi5AvNTnh4mZft65kzsRbDYEPGbTRhd5q3',
-    'Weg6WEncAEJs5qDbGUxcLTR3iycM3hrt4C',
-    'WSVarF73e6UVccGwb44FvTtqFWsHQmjKCt',
-  ],
-};
-const singleAddressWallet2 = {
-  words:
-    'glad drop admit april disagree picnic claim soon permit ethics cross soul pulp desert weather capital praise nose wise color else flock royal merit',
-  addresses: [
-    'WjE2yiEeBYSoHLnTXkGgJvB1Afn3vG3LX6',
-    'WaGshSrBBCrWAjAgNHZSU3DJXTysAso5q3',
-    'WS3LUTDKSgejR28v6Gi2ejT3RH2diDAS3g',
-    'WR6188ey4v6BUfY29UyHgMaVLmqQ7PGxFa',
-    'WTPeL8fApUQgz7UhaL694Xqt4YcDTPMGu1',
-    'WdqpeFjGoUhT8Kyfbc2qjFyRsy6agwe3VU',
-    'WZMjeMMnx3BPNagTqbHW2XkP1nrzxPVGCw',
-    'WPgxrd5BcfDpMynrsWXAySbLhS6DCmTeKL',
-    'WY7NCX2j98VfStbTyyxgai9y3xma63W1Bk',
-    'WYYsfkTSRQ6fzQtdeSVMYLsPkBA6MemPhv',
-    'Wjzb9KiBVL4xNArQd8ckR3UtvBmYo8NxYG',
-    'WdCyoh1JzvxJhgQcrCVkZ3SpAoUwqVSEfS',
-    'WfFpwweGNQ1QurAwqYLwSuccHcUz12q3Zi',
-    'Wddb5Maxq6B7rFYH1JZJvZY7kTQezwrafL',
-    'Wfw58Z5GrYfp4Ecmg1hDLBCQspPQC2gpqH',
-    'WU931UJrREpFn8dhi3HNn4nLNkVjx9hdj5',
-    'WakAnQEvsUgxUd8kGkmeeaUPC2XNPDXxFu',
-    'WZUBn2K9evu3U9jPe8Y92LvYFWgctVov9L',
-    'Whwv9XaKtDUpyXpEJPhvT9WdQEpfeeadr1',
-    'WUL7Bc2o7ekAZHo19YVZCjc5As1ZeM3XRv',
-  ],
-};
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -211,6 +168,221 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await GenesisWalletServiceHelper.stop();
+});
+
+describe('start', () => {
+  describe('mandatory parameters validation', () => {
+    beforeEach(() => {
+      ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should throw error when pinCode is not provided', async () => {
+      await expect(wallet.start({})).rejects.toThrow(
+        'Pin code is required when starting the wallet.'
+      );
+    });
+
+    it('should throw error when password is not provided for new wallet from seed', async () => {
+      await expect(wallet.start({ pinCode })).rejects.toThrow(
+        'Password is required when starting the wallet from the seed.'
+      );
+    });
+  });
+
+  describe('handling internal errors', () => {
+    const events: string[] = [];
+    let storage: Storage;
+
+    beforeEach(() => {
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
+
+      // Clear events array
+      events.length = 0;
+
+      // Listen for state events
+      wallet.on('state', state => {
+        events.push(`state:${state}`);
+      });
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should handle getAccessData unexpected errors', async () => {
+      // XXX: This test belongs to the unit tests, but adding it here temporarily for coverage
+      jest.spyOn(storage, 'getAccessData').mockRejectedValueOnce(new Error('Crash'));
+
+      // Start the wallet
+      await expect(() => wallet.start({ pinCode, password })).rejects.toThrow('Crash');
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(false);
+    });
+  });
+
+  describe('successful wallet creation', () => {
+    const events: string[] = [];
+    let storage: Storage;
+
+    beforeEach(() => {
+      ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
+
+      // Clear events array
+      events.length = 0;
+
+      // Listen for state events
+      wallet.on('state', state => {
+        events.push(`state:${state}`);
+      });
+    });
+
+    afterEach(async () => {
+      if (wallet) {
+        await wallet.stop({ cleanStorage: true });
+      }
+    });
+
+    it('should create wallet with words and emit correct state events', async () => {
+      // Start the wallet
+      await wallet.start({ pinCode, password });
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(true);
+
+      // Verify correct state transitions occurred
+      expect(events).toContain('state:Loading');
+      expect(events).toContain('state:Ready');
+
+      // Verify wallet has correct network
+      expect(wallet.getNetwork()).toBe(NETWORK_NAME);
+
+      // Verify wallet has addresses available
+      const currentAddress = wallet.getCurrentAddress();
+      expect(currentAddress.index).toBeDefined();
+      expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+
+      // Verify websocket is disabled for this test
+      expect(wallet.isWsEnabled()).toBe(false);
+    });
+
+    it('should create wallet with xpriv', async () => {
+      // Generate access data to get the xpriv
+      const seed = emptyWallet.words;
+      const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+        networkName: 'testnet',
+        password: '1234',
+        pin: '1234',
+      });
+
+      // Derive auth xpriv and account key
+      const code = new Mnemonic(seed);
+      const xpriv = code.toHDPrivateKey('', new Network('testnet'));
+      const authxpriv = xpriv.deriveChild(WALLET_SERVICE_AUTH_DERIVATION_PATH).xprivkey;
+      const acctKey = decryptData(accessData.acctPathKey!, '1234');
+
+      // Build wallet with xpriv and authxpriv
+      const network = new Network(NETWORK_NAME);
+      const requestPassword = jest.fn().mockResolvedValue('test-password');
+      wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpriv: acctKey,
+        authxpriv,
+        network,
+        storage,
+        enableWs: false, // Disable websocket for integration tests
+      });
+
+      // Start the wallet
+      await wallet.start({ pinCode, password });
+
+      // Verify wallet is ready
+      expect(wallet.isReady()).toBe(true);
+
+      // Verify wallet has addresses available
+      const currentAddress = wallet.getCurrentAddress();
+      expect(currentAddress.index).toBeDefined();
+      expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+    });
+  });
+});
+
+describe('wallet public methods', () => {
+  beforeEach(async () => {
+    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
+    await wallet.start({ pinCode, password });
+  });
+
+  afterEach(async () => {
+    if (wallet) {
+      await wallet.stop({ cleanStorage: true });
+    }
+  });
+
+  it('getServerUrl returns the configured base URL', () => {
+    expect(wallet.getServerUrl()).toBe(FULLNODE_URL);
+  });
+
+  it('getVersionData returns valid version info', async () => {
+    const versionData = await wallet.getVersionData();
+    expect(versionData).toBeDefined();
+    expect(versionData).toEqual(
+      expect.objectContaining({
+        timestamp: expect.any(Number),
+        version: expect.any(String),
+        network: FULLNODE_NETWORK_NAME,
+        minWeight: expect.any(Number),
+        minTxWeight: expect.any(Number),
+        minTxWeightCoefficient: expect.any(Number),
+        minTxWeightK: expect.any(Number),
+        tokenDepositPercentage: expect.any(Number),
+        rewardSpendMinBlocks: expect.any(Number),
+        maxNumberInputs: expect.any(Number),
+        maxNumberOutputs: expect.any(Number),
+        decimalPlaces: expect.any(Number),
+        nativeTokenName: expect.any(String),
+        nativeTokenSymbol: expect.any(String),
+      })
+    );
+
+    // Make sure it contains the same data as a direct fullnode request
+    const fullnodeResponse = await axios
+      .get('version', {
+        baseURL: config.getWalletServiceBaseUrl(),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .catch(e => {
+        loggers.test!.log(`Received an error on /version: ${e}`);
+        if (e.response) {
+          return e.response;
+        }
+        return {};
+      });
+    expect(fullnodeResponse.status).toBe(200);
+    expect(fullnodeResponse.data?.success).toBe(true);
+
+    expect(versionData).toEqual(fullnodeResponse.data.data);
+  });
+
+  it('getNetwork returns the correct network name', () => {
+    expect(wallet.getNetwork()).toBe(NETWORK_NAME);
+  });
+
+  it('getNetworkObject returns a Network instance with correct name', () => {
+    const networkObj = wallet.getNetworkObject();
+    expect(networkObj).toBeInstanceOf(Network);
+    expect(networkObj.name).toBe(NETWORK_NAME);
+  });
 });
 
 describe('empty wallet address methods', () => {
@@ -2156,111 +2328,5 @@ describe('Fee-based tokens', () => {
     const tokenBalanceAfter = await feeWallet.getBalance(tokenUid);
     // 200n - 50n sent = 150n remaining
     expect(tokenBalanceAfter[0].balance.unlocked).toBe(150n);
-  });
-});
-
-describe('single-address mode', () => {
-  afterEach(async () => {
-    if (wallet) {
-      await wallet.stop({ cleanStorage: true });
-    }
-  });
-
-  it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet1.words }));
-    await wallet.start({ pinCode, password });
-
-    await wallet.enableSingleAddressMode();
-
-    const currentAddress = wallet.getCurrentAddress();
-    expect(currentAddress.index).toBe(0);
-    expect(currentAddress.address).toBe(singleAddressWallet1.addresses[0]);
-
-    await GenesisWalletServiceHelper.injectFunds(singleAddressWallet1.addresses[0], 10n, wallet);
-
-    const currentAddressAfterTx = wallet.getCurrentAddress();
-    expect(currentAddressAfterTx.index).toBe(0);
-    expect(currentAddressAfterTx.address).toBe(singleAddressWallet1.addresses[0]);
-
-    const nextAddress = wallet.getNextAddress();
-    expect(nextAddress.index).toBe(0);
-    expect(nextAddress.address).toBe(singleAddressWallet1.addresses[0]);
-  });
-
-  it('should succeed enabling single-address mode when wallet only has tx on index 0', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
-    await wallet.start({ pinCode, password });
-
-    await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[0], 5n, wallet);
-
-    await wallet.enableSingleAddressMode();
-
-    const currentAddress = wallet.getCurrentAddress();
-    expect(currentAddress.index).toBe(0);
-    expect(currentAddress.address).toBe(singleAddressWallet2.addresses[0]);
-
-    const nextAddress = wallet.getNextAddress();
-    expect(nextAddress.index).toBe(0);
-    expect(nextAddress.address).toBe(singleAddressWallet2.addresses[0]);
-  });
-
-  it('should fail to enable single-address mode when wallet has tx on index > 0', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
-    await wallet.start({ pinCode, password });
-
-    await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);
-
-    await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
-      'Cannot enable single-address policy'
-    );
-  });
-
-  it('should fallback to start in multi-address mode via constructor when wallet has tx on index > 0', async () => {
-    // First, start wallet normally and fund index 1
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
-    await wallet.start({ pinCode, password });
-
-    await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);
-
-    await wallet.stop({ cleanStorage: true });
-
-    // Now try to re-start with singleAddressMode: true via constructor
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-    wallet = new HathorWalletServiceWallet({
-      requestPassword: jest.fn().mockResolvedValue('test-password'),
-      seed: singleAddressWallet2.words,
-      network: new Network('testnet'),
-      storage,
-      enableWs: false,
-      singleAddressMode: true,
-    });
-
-    await wallet.start({ pinCode, password });
-
-    await expect(wallet.getAddressMode()).resolves.toBe(WalletAddressMode.MULTI);
-  });
-
-  it('should start in single-address mode via constructor', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-    wallet = new HathorWalletServiceWallet({
-      requestPassword: jest.fn().mockResolvedValue('test-password'),
-      seed: singleAddressWallet1.words,
-      network: new Network('testnet'),
-      storage,
-      enableWs: false,
-      singleAddressMode: true,
-    });
-
-    await wallet.start({ pinCode, password });
-
-    const currentAddress = wallet.getCurrentAddress();
-    expect(currentAddress.index).toBe(0);
-    expect(currentAddress.address).toBe(singleAddressWallet1.addresses[0]);
-
-    const nextAddress = wallet.getNextAddress();
-    expect(nextAddress.index).toBe(0);
-    expect(nextAddress.address).toBe(singleAddressWallet1.addresses[0]);
   });
 });

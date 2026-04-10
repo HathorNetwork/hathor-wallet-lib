@@ -18,7 +18,6 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
-  GAP_LIMIT,
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -63,8 +62,8 @@ import {
   FullNodeVersionData,
   WalletAddressMap,
   TxByIdTokensResponseData,
-  WalletServiceDelegateAuthorityOptions,
-  WalletServiceDestroyAuthorityOptions,
+  DelegateAuthorityOptions,
+  DestroyAuthorityOptions,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
@@ -79,7 +78,6 @@ import {
   WalletFromXPubGuard,
   PinRequiredError,
   TokenNotFoundError,
-  HasTxOutsideFirstAddressError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
@@ -102,8 +100,6 @@ import {
   WalletType,
   ITokenData,
   TokenVersion,
-  SCANNING_POLICY,
-  WalletAddressMode,
 } from '../types';
 import { Fee } from '../utils/fee';
 
@@ -145,6 +141,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // State of the wallet. One of the walletState enum options
   private state: string;
 
+  // Variable to prevent start sending more than one tx concurrently
+  private isSendingTx: boolean;
+
+  // ID of tx proposal
+  private txProposalId: string | null;
+
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
 
@@ -164,12 +166,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
 
-  // Flag to indicate if the wallet is in single-address mode
-  private singleAddress: boolean;
-
-  // Address at index 0
-  private firstAddress: string | null;
-
   public storage: IStorage;
 
   constructor({
@@ -182,7 +178,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
     enableWs = true,
     storage = null,
-    singleAddressMode = false,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -193,7 +188,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase?: string;
     enableWs?: boolean;
     storage?: IStorage | null;
-    singleAddressMode?: boolean;
   }) {
     super();
 
@@ -244,6 +238,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // ID of wallet after created on wallet service
     this.walletId = null;
+    this.isSendingTx = false;
+    this.txProposalId = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -253,9 +249,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.newAddresses = [];
     this.indexToUse = -1;
-    this.singleAddress = singleAddressMode;
-    this.firstAddress = null;
-
     // TODO should we have a debug mode?
   }
 
@@ -466,7 +459,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress,
       authDerivedPrivKey,
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
-    this.firstAddress = firstAddress;
 
     if (!renewPromise) {
       // we need to start the process to renew the auth token If for any reason we had to
@@ -811,21 +803,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady(skipAddressFetch: boolean = false) {
-    if (this.singleAddress) {
-      try {
-        await this.enableSingleAddressMode(true);
-      } catch (error) {
-        if (error instanceof HasTxOutsideFirstAddressError) {
-          await this.storage.setScanningPolicyData({
-            policy: SCANNING_POLICY.GAP_LIMIT,
-            gapLimit: GAP_LIMIT,
-          });
-          this.singleAddress = false;
-        } else {
-          throw error;
-        }
-      }
-    }
     // We should wait for new addresses before setting wallet to ready
     // Skip address fetching if requested (useful for read-only wallets that don't need gap addresses)
     if (!skipAddressFetch) {
@@ -903,10 +880,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // We should fail if the wallet is not ready because the wallet service address load mechanism is
       // asynchronous, so we will get an empty or partial array of addresses if they are not all loaded.
       this.failIfWalletNotReady();
-    }
-    if (this.singleAddress) {
-      await this.prepareSingleAddressMode();
-      return;
     }
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
@@ -1264,9 +1237,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Derive walletId from xpub
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(this.xpub);
     this.walletId = walletId;
-    if (this.singleAddress) {
-      await this.storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
-    }
 
     // Save accessData for read-only wallet
     // This is required for methods like getAddressPathForIndex() that need walletType
@@ -1504,10 +1474,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
-    if (this.singleAddress) {
-      return this.newAddresses[0];
-    }
-
     const newAddressesLen = this.newAddresses.length;
     if (this.indexToUse > newAddressesLen - 1) {
       const addressInfo = this.newAddresses[newAddressesLen - 1];
@@ -1542,95 +1508,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   getNextAddress(): AddressInfoObject {
-    if (this.singleAddress) {
-      return this.newAddresses[0];
-    }
     // First we mark the current address as used, then return the next
     this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();
-  }
-
-  /**
-   * Get which address mode is currently enabled.
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async getAddressMode(): Promise<WalletAddressMode> {
-    this.failIfWalletNotReady();
-
-    if (this.singleAddress) {
-      return WalletAddressMode.SINGLE;
-    }
-    return WalletAddressMode.MULTI;
-  }
-
-  /**
-   * Enable multi address mode for this wallet.
-   * Converts to a gap-limit wallet.
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async enableMultiAddressMode(): Promise<void> {
-    this.failIfWalletNotReady();
-
-    // Switch policy in storage
-    await this.storage.setScanningPolicyData({
-      policy: SCANNING_POLICY.GAP_LIMIT,
-      gapLimit: GAP_LIMIT,
-    });
-
-    this.singleAddress = false;
-    await this.getNewAddresses();
-  }
-
-  /**
-   * Enable single-address scanning policy for this wallet.
-   * Converts a gap-limit wallet to use only the first address (index 0).
-   * Will throw if the wallet has transactions on any address other than the first.
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async enableSingleAddressMode(ignoreWalletReady: boolean = false): Promise<void> {
-    if (await this.hasTxOutsideFirstAddress(ignoreWalletReady)) {
-      throw new HasTxOutsideFirstAddressError(
-        'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
-      );
-    }
-
-    // Switch policy in storage
-    await this.storage.setScanningPolicyData({
-      policy: SCANNING_POLICY.SINGLE_ADDRESS,
-    });
-
-    this.singleAddress = true;
-    await this.prepareSingleAddressMode();
-  }
-
-  /**
-   * Prepare the wallet for single address mode.
-   * Loads first address if needed.
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  private async prepareSingleAddressMode(): Promise<void> {
-    if (!this.singleAddress) return;
-
-    if (!this.firstAddress) {
-      this.firstAddress = await this.getAddressAtIndex(0);
-    }
-
-    this.newAddresses = [
-      {
-        address: this.firstAddress,
-        index: 0,
-        addressPath: await this.getAddressPathForIndex(0),
-      },
-    ];
-    this.indexToUse = 0;
   }
 
   /**
@@ -2593,7 +2473,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       anotherAuthorityAddress = null,
       createAnother = true,
       pinCode = null,
-    }: WalletServiceDelegateAuthorityOptions
+    }: DelegateAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
@@ -2683,7 +2563,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: WalletServiceDelegateAuthorityOptions
+    options: DelegateAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
@@ -2700,7 +2580,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     count: number,
-    { pinCode = null }: WalletServiceDestroyAuthorityOptions
+    { pinCode = null }: DestroyAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
@@ -2763,7 +2643,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     token: string,
     type: string,
     count: number,
-    options: WalletServiceDestroyAuthorityOptions
+    options: DestroyAuthorityOptions
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count, options);
@@ -3164,13 +3044,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async hasTxOutsideFirstAddress(ignoreWalletReady: boolean = false): Promise<boolean> {
-    // If the user is sure the wallet service has already loaded his wallet, he can ignore the check
-    if (!ignoreWalletReady) {
-      // We should fail if the wallet is not ready because the wallet service address load mechanism is
-      // asynchronous, so we will get an empty or partial array of addresses if they are not all loaded.
-      this.failIfWalletNotReady();
-    }
+  async hasTxOutsideFirstAddress(): Promise<boolean> {
+    this.failIfWalletNotReady();
     const data = await walletApi.getHasTxOutsideFirstAddress(this);
     return data.hasTransactions;
   }

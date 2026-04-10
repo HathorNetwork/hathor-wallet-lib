@@ -39,7 +39,6 @@ import {
   ILogger,
   getDefaultLogger,
   AuthorityType,
-  TokenVersion,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import {
@@ -141,7 +140,8 @@ export class Storage implements IStorage {
    */
   getNativeTokenData(): ITokenData {
     const nativeToken = this.version?.native_token ?? DEFAULT_NATIVE_TOKEN_CONFIG;
-    return { version: TokenVersion.NATIVE, ...nativeToken, uid: NATIVE_TOKEN_UID };
+
+    return { ...nativeToken, uid: NATIVE_TOKEN_UID };
   }
 
   /**

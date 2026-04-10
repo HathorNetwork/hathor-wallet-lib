@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import winston from 'winston';
+/* eslint-disable no-console */
+
+import winston from './placeholder-logger.util';
 import testConfig from '../configuration/test.config';
 
 export const loggers: {
@@ -80,14 +82,14 @@ export class LoggerUtil {
   init(options = { filePrettyPrint: false }) {
     const consoleOptions = {
       format: winston.format.combine(winston.format.timestamp(), winston.format.colorize()),
-      level: testConfig.consoleLevel,
+      level: testConfig.consoleLevel || 'silly',
     };
     const fileOptions = {
       format: options.filePrettyPrint
         ? winston.format.combine(winston.format.timestamp(), winston.format.prettyPrint())
         : winston.format.combine(winston.format.timestamp(), winston.format.json()),
       filename: `${testConfig.logOutputFolder}${this.#instanceFilename}`,
-      level: testConfig.fileLevel,
+      level: testConfig.consoleLevel || 'silly',
     };
 
     this.#logger = winston.createLogger({

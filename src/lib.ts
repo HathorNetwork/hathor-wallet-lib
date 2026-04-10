@@ -44,6 +44,7 @@ import SendTransactionWalletService from './wallet/sendTransactionWalletService'
 import { WalletServiceStorageProxy } from './wallet/walletServiceStorageProxy';
 import config from './config';
 import * as PushNotification from './pushNotification';
+import { WalletType, HistorySyncMode } from './types';
 import { PartialTx, PartialTxInputData } from './models/partial_tx';
 import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
@@ -59,6 +60,7 @@ import {
 } from './template/transaction';
 import { stopGLLBackgroundTask } from './sync/gll';
 import * as enums from './models/enum';
+import type { TokenInfo } from './wallet/types';
 import { Fee } from './utils/fee';
 
 export {
@@ -115,6 +117,8 @@ export {
   config,
   PushNotification,
   swapService,
+  WalletType,
+  HistorySyncMode,
   ncApi,
   nanoUtils,
   NanoContractTransactionParser,
@@ -123,17 +127,12 @@ export {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
   stopGLLBackgroundTask,
+  TokenInfo,
   enums,
 };
 
-// Re-export all types from every module.
-// Naming conflicts have been resolved at the source (e.g. WalletServiceBalance,
-// FullnodeCreateNanoTxData) so no manual listing is needed here.
-export * from './types';
 export * from './nano_contracts/types';
 export * from './models/types';
-export * from './template/transaction/types';
-export * from './headers/types';
+export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';
+export type { IFeeEntry } from './types';
 export * from './models/enum';
-export * from './wallet/types';
-export * from './new/types';

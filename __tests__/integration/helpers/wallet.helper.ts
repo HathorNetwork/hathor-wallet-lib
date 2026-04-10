@@ -17,7 +17,7 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
-import { delay, getGapLimitConfig } from '../utils/core.util';
+import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
@@ -101,7 +101,6 @@ export async function generateWalletHelper(param) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
-    scanPolicy: getGapLimitConfig(),
   };
   if (param) {
     Object.assign(walletConfig, param);
@@ -159,7 +158,6 @@ export async function generateWalletHelperRO(options) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
-    scanPolicy: getGapLimitConfig(),
   };
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
@@ -198,7 +196,6 @@ export async function generateMultisigWalletHelper(parameters) {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,
     },
-    scanPolicy: getGapLimitConfig(),
   };
   const mhWallet = new HathorWallet(walletConfig);
   await mhWallet.start();
