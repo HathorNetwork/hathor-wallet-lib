@@ -1080,6 +1080,59 @@ describe('prepareTxData', () => {
     expect(changeOutput).toBeDefined();
     expect(changeOutput.address).toBe(customChangeAddress);
   });
+
+  it('should reject an unnecessary HTR input when no HTR is needed', async () => {
+    // When an HTR input is provided but outputs only use custom tokens (no HTR
+    // needed), validateUtxos rejects it because NATIVE_TOKEN_UID is not in the
+    // tokenAmountMap. This validates the existing guard; the defensive
+    // "Address path not found" throw in prepareTx is unreachable as a result.
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId: 'token-tx',
+          index: 0,
+          value: 10n,
+          address: 'token-address',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'unnecessary-htr-tx' && index === 0) {
+        return {
+          txId: 'unnecessary-htr-tx',
+          index: 0,
+          value: 5n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [
+      { txId: 'token-tx', index: 0 },
+      { txId: 'unnecessary-htr-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(SendTxError);
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+      'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.'
+    );
+  });
 });
 
 describe('selectUtxosToUse', () => {
@@ -2325,6 +2378,63 @@ describe('prepareTx - Fee Tokens', () => {
     await expect(sendTransaction.prepareTx()).rejects.toThrow(
       `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
     );
+  });
+
+  it('should preserve address path order when HTR inputs come before token inputs', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // HTR input at index 0, fee token input at index 1
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId: 'htr-tx',
+          index: 0,
+          value: 10n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'fee-token-tx' && index === 0) {
+        return {
+          txId: 'fee-token-tx',
+          index: 0,
+          value: 100n,
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Inputs: HTR first, then fee token (triggers the ordering bug before fix)
+    const inputs = [
+      { txId: 'htr-tx', index: 0 },
+      { txId: 'fee-token-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    await sendTransaction.prepareTx();
+
+    // utxosAddressPath must follow this.inputs order:
+    // index 0 = HTR input, index 1 = fee token input
+    expect(sendTransaction.utxosAddressPath[0]).toBe("m/44'/280'/0'/0/1");
+    expect(sendTransaction.utxosAddressPath[1]).toBe("m/44'/280'/0'/0/2");
   });
 });
 
