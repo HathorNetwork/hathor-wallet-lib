@@ -51,6 +51,15 @@ export interface HathorWalletConstructorParams {
   xpriv?: string;
   /** Extended public key (xpub) for read-only wallet */
   xpub?: string;
+  /**
+   * Raw secp256k1 private key (hex string) for single-key wallets (Web3Auth PoC).
+   * When set, `publicKey` and `preCalculatedAddresses[0]` are required and
+   * `seed`/`xpriv`/`xpub` must NOT be provided. The wallet has exactly one
+   * address and relies on an external signer for transactions.
+   */
+  privateKey?: string;
+  /** DER-encoded secp256k1 public key (hex). Required alongside `privateKey`. */
+  publicKey?: string;
 
   // Token configuration
   /** UID of the token to track (defaults to HTR) */

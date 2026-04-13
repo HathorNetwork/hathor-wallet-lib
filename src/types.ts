@@ -371,7 +371,8 @@ export enum WALLET_FLAGS {
 }
 
 export interface IWalletAccessData {
-  xpubkey: string;
+  // Optional because single-key wallets (Web3Auth PoC) have no HD key hierarchy
+  xpubkey?: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
   acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
   words?: IEncryptedData; // encrypted seed (uses password for encryption)
@@ -379,6 +380,12 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
+
+  // Single-key mode (no BIP32). The wallet is backed by a raw secp256k1
+  // private key — e.g. a Web3Auth-managed key — and has exactly one address.
+  singleKeyMode?: boolean;
+  singleKeyPublicKey?: string; // hex-encoded DER public key
+  singleKeyPrivateKey?: IEncryptedData; // encrypted raw private key (pin)
 }
 
 export enum SCANNING_POLICY {
@@ -656,6 +663,7 @@ export interface IStorage {
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
+  getSingleKeyPrivateKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
   getCurrentHeight(): Promise<number>;
