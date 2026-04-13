@@ -458,7 +458,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       utxosAddressPath = this.inputs.map(input => {
         const path = addressPathMap.get(`${input.txId}:${input.index}`);
         if (!path) {
-          throw new SendTxError(`Address path not found for input ${input.txId}:${input.index}.`);
+          throw new SendTxError(
+            `Input ${input.txId}:${input.index} was not processed by any validation pass. ` +
+              'This usually means an HTR input was provided but no HTR is required ' +
+              '(no HTR outputs and no fee-token fees).'
+          );
         }
         return path;
       });

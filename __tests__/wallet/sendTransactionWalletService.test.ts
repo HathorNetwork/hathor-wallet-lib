@@ -1084,8 +1084,7 @@ describe('prepareTxData', () => {
   it('should reject an unnecessary HTR input when no HTR is needed', async () => {
     // When an HTR input is provided but outputs only use custom tokens (no HTR
     // needed), validateUtxos rejects it because NATIVE_TOKEN_UID is not in the
-    // tokenAmountMap. This validates the existing guard; the defensive
-    // "Address path not found" throw in prepareTx is unreachable as a result.
+    // tokenAmountMap. This validates the existing guard in prepareTxData.
     wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
       if (txId === 'token-tx' && index === 0) {
         return {
@@ -1131,6 +1130,63 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
       'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.'
+    );
+  });
+
+  it('should show a helpful error when HTR input is unneeded via prepareTx path', async () => {
+    // prepareTx has a separate code path where the two-pass validation skips
+    // HTR inputs entirely when htrAmount === 0. The rebuild guard should
+    // produce a user-friendly message explaining the root cause.
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId: 'token-tx',
+          index: 0,
+          value: 10n,
+          address: 'token-address',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'unnecessary-htr-tx' && index === 0) {
+        return {
+          txId: 'unnecessary-htr-tx',
+          index: 0,
+          value: 5n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [
+      { txId: 'token-tx', index: 0 },
+      { txId: 'unnecessary-htr-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(SendTxError);
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(
+      'an HTR input was provided but no HTR is required'
     );
   });
 });
