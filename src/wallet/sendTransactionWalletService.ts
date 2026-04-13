@@ -433,8 +433,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     } else {
       // If the user selected the inputs, we must validate that
       // all utxos are valid and the sum is enought to fill the outputs
+      // We use an addressPathMap to collect paths keyed by input identity,
+      // then rebuild in this.inputs order. This is necessary because the
+      // two-pass validation (tokens first, HTR second) would otherwise
+      // produce paths in token-processing order rather than input order.
+      const addressPathMap = new Map<string, string>();
+
       // ignoreNative=true: HTR inputs will be validated separately below
-      utxosAddressPath = await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true });
+      await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true, addressPathMap });
 
       // here we should know the fee amount (in case of any fee-based token change output was added)
       const htrAmount = (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount;
@@ -445,9 +451,17 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
             amount: htrAmount,
           },
         };
-        const htrAddressPath = await this.validateUtxos(htrTokenAmount, { onlyNative: true });
-        utxosAddressPath.push(...htrAddressPath);
+        await this.validateUtxos(htrTokenAmount, { onlyNative: true, addressPathMap });
       }
+
+      // Rebuild utxosAddressPath in this.inputs order
+      utxosAddressPath = this.inputs.map(input => {
+        const path = addressPathMap.get(`${input.txId}:${input.index}`);
+        if (!path) {
+          throw new SendTxError(`Address path not found for input ${input.txId}:${input.index}.`);
+        }
+        return path;
+      });
     }
     const tokens = Object.keys(tokenAmountMap);
     const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
@@ -534,9 +548,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async validateUtxos(
     tokenAmountMap: TokenMap,
-    options: { ignoreNative?: boolean; onlyNative?: boolean } = {}
+    options: {
+      ignoreNative?: boolean;
+      onlyNative?: boolean;
+      addressPathMap?: Map<string, string>;
+    } = {}
   ): Promise<string[]> {
-    const { ignoreNative = false, onlyNative = false } = options;
+    const { ignoreNative = false, onlyNative = false, addressPathMap } = options;
     const amountInputMap = {};
     const utxosAddressPath: string[] = [];
     for (const input of this.inputs) {
@@ -566,6 +584,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
 
       utxosAddressPath.push(utxo.addressPath);
+      if (addressPathMap) {
+        addressPathMap.set(`${input.txId}:${input.index}`, utxo.addressPath);
+      }
 
       if (utxo.tokenId in amountInputMap) {
         amountInputMap[utxo.tokenId] += utxo.value;
