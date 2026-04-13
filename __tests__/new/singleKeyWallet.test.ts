@@ -10,11 +10,7 @@ import Mnemonic from 'bitcore-mnemonic';
 import HathorWallet from '../../src/new/wallet';
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
-import {
-  ITxSignatureData,
-  IStorage,
-  SCANNING_POLICY,
-} from '../../src/types';
+import { ITxSignatureData, IStorage, SCANNING_POLICY } from '../../src/types';
 import { P2PKH_ACCT_PATH } from '../../src/constants';
 import walletUtils from '../../src/utils/wallet';
 import { verifyMessage } from '../../src/utils/crypto';
@@ -34,17 +30,12 @@ const network = new Network(NETWORK_NAME);
 // Mirror the derivation used internally by `generateAccessDataFromSeed`:
 // m/44'/280'/0'/0 (change path), then bitcore's `.deriveChild(0)` for addr 0.
 const rootXpriv = new Mnemonic(SEED).toHDPrivateKey('', network.bitcoreNetwork);
-const changeXpriv = rootXpriv
-  .deriveNonCompliantChild(P2PKH_ACCT_PATH)
-  .deriveNonCompliantChild(0);
+const changeXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).deriveNonCompliantChild(0);
 const addr0HDKey = changeXpriv.deriveChild(0);
 
 const rawPrivHex = addr0HDKey.privateKey.toString('hex');
 const pubKeyHex = addr0HDKey.publicKey.toString('hex');
-const expectedAddress = new BitcoreAddress(
-  addr0HDKey.publicKey,
-  network.bitcoreNetwork
-).toString();
+const expectedAddress = new BitcoreAddress(addr0HDKey.publicKey, network.bitcoreNetwork).toString();
 
 const PIN = '123456';
 const PASSWORD = 'test-password';
@@ -87,11 +78,9 @@ async function buildPopulatedSingleKeyWallet(opts?: {
 
   await storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
 
-  const accessData = walletUtils.generateAccessDataFromPrivateKey(
-    rawPrivHex,
-    pubKeyHex,
-    { pin: opts?.pin ?? PIN }
-  );
+  const accessData = walletUtils.generateAccessDataFromPrivateKey(rawPrivHex, pubKeyHex, {
+    pin: opts?.pin ?? PIN,
+  });
   await storage.saveAccessData(accessData);
   await storage.saveAddress({
     base58: expectedAddress,
@@ -315,10 +304,7 @@ describe('singleKeyWallet — parity with HD wallet at index 0', () => {
   test('single-key address matches HD-derived address at index 0', () => {
     // By construction the raw key was derived from m/44'/280'/0'/0/0 of the
     // test seed. This asserts the fixture itself is consistent.
-    const viaHD = new BitcoreAddress(
-      addr0HDKey.publicKey,
-      network.bitcoreNetwork
-    ).toString();
+    const viaHD = new BitcoreAddress(addr0HDKey.publicKey, network.bitcoreNetwork).toString();
     expect(viaHD).toBe(expectedAddress);
   });
 

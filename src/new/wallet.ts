@@ -1807,9 +1807,7 @@ class HathorWallet extends EventEmitter {
     const accessData = await this.storage.getAccessData();
     if (accessData?.singleKeyMode) {
       if (addressIndex !== 0) {
-        throw new AddressError(
-          'Single-key wallets only support address index 0.'
-        );
+        throw new AddressError('Single-key wallets only support address index 0.');
       }
       const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pinCode);
       // Return a raw bitcore PrivateKey (not an HDPrivateKey) so callers
@@ -3349,9 +3347,7 @@ class HathorWallet extends EventEmitter {
     const accessData = await this.storage.getAccessData();
     if (accessData?.singleKeyMode) {
       if (addressIndex !== 0) {
-        throw new AddressError(
-          'Single-key wallets only support address index 0.'
-        );
+        throw new AddressError('Single-key wallets only support address index 0.');
       }
       const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pin);
       return new bitcore.PrivateKey(rawPrivHex);
