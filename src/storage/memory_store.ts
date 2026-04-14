@@ -112,12 +112,6 @@ export class MemoryStore implements IStore {
   shieldedAddressIndexes: Map<number, string>;
 
   /**
-   * Map<index, base58>
-   * Tracks shielded-spend (on-chain P2PKH derived from spend_pubkey) addresses by BIP32 index.
-   */
-  spendAddressIndexes: Map<number, string>;
-
-  /**
    * Map<base58, IAddressMetadata>
    * where base58 is the address in base58
    */
@@ -194,7 +188,6 @@ export class MemoryStore implements IStore {
     this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
     this.shieldedAddressIndexes = new Map<number, string>();
-    this.spendAddressIndexes = new Map<number, string>();
     this.addressesMetadata = new Map<string, IAddressMetadata>();
     this.seqnumMetadata = new Map<string, number>();
     this.tokens = new Map<string, ITokenData>();
@@ -320,9 +313,7 @@ export class MemoryStore implements IStore {
     // Each BIP32 index can have up to 3 addresses: legacy, shielded, and shielded-spend.
     if (info.addressType === 'shielded') {
       this.shieldedAddressIndexes.set(info.bip32AddressIndex, info.base58);
-    } else if (info.addressType === 'shielded-spend') {
-      this.spendAddressIndexes.set(info.bip32AddressIndex, info.base58);
-    } else {
+    } else if (info.addressType !== 'shielded-spend') {
       // Legacy P2PKH/P2SH (addressType undefined, 'p2pkh', or 'p2sh')
       this.addressIndexes.set(info.bip32AddressIndex, info.base58);
     }
@@ -1028,7 +1019,6 @@ export class MemoryStore implements IStore {
       this.addresses = new Map<string, IAddressInfo>();
       this.addressIndexes = new Map<number, string>();
       this.shieldedAddressIndexes = new Map<number, string>();
-      this.spendAddressIndexes = new Map<number, string>();
       this.addressesMetadata = new Map<string, IAddressMetadata>();
       this.seqnumMetadata = new Map<string, number>();
       this.walletData = { ...this.walletData, ...DEFAULT_ADDRESSES_WALLET_DATA };
