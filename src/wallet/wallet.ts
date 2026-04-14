@@ -746,8 +746,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const balance: { [tokenId: string]: OutputValueType } = {};
     for (const txout of tx.outputs) {
-      // Skip shielded output entries (no value/token fields)
-      if (transaction.isShieldedOutputEntry(txout)) continue;
       if (transaction.isAuthorityOutput(txout)) {
         if (options.includeAuthorities) {
           if (!balance[txout.token]) {

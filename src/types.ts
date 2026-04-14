@@ -274,12 +274,7 @@ export interface IHistoryOutputDecoded {
   data?: string;
 }
 
-// TODO: This interface is inaccurate for shielded outputs. Shielded outputs
-// (from fullnode's to_json_extended) don't have value/token_data/script/decoded/token/spent_by,
-// but those fields are marked as required here. Making them optional or splitting
-// into a discriminated union (ITransparentOutput | IShieldedOutputEntry) requires
-// updating ~166 call sites across the codebase. This will be fixed in a follow-up PR.
-export interface IHistoryOutput {
+export interface ITransparentOutput {
   value: OutputValueType;
   token_data: number;
   script: string;
@@ -287,14 +282,30 @@ export interface IHistoryOutput {
   token: string;
   spent_by: string | null;
   selected_as_input?: boolean;
-  // Shielded output entries (appended by fullnode's to_json_extended) have these instead of value/token:
-  type?: string; // 'shielded' for shielded output entries
-  commitment?: string; // hex
-  range_proof?: string; // hex
-  ephemeral_pubkey?: string; // hex
-  asset_commitment?: string; // hex (FullShielded only)
-  surjection_proof?: string; // hex (FullShielded only)
 }
+
+/**
+ * Shielded output entry as it appears in tx.outputs after decryption.
+ * Before decryption (from fullnode), value/token/decoded are absent.
+ * After decryption (by processNewTx), they are populated so the output
+ * can be processed uniformly with transparent outputs.
+ */
+export interface IShieldedOutputEntry {
+  type: 'shielded';
+  value: OutputValueType;
+  token_data: number;
+  script: string;
+  decoded: IHistoryOutputDecoded;
+  token: string;
+  spent_by: string | null;
+  commitment: string;
+  range_proof: string;
+  ephemeral_pubkey: string;
+  asset_commitment?: string;
+  surjection_proof?: string;
+}
+
+export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;
 
 export interface IDataOutputData {
   type: 'data';

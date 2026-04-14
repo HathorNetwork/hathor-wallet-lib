@@ -397,12 +397,12 @@ export class Storage implements IStorage {
         if (transactionUtils.isShieldedOutputEntry(output)) {
           shieldedEntries.push({
             mode: output.asset_commitment ? 2 : 1,
-            commitment: output.commitment!,
-            range_proof: Buffer.from(output.range_proof!, 'base64').toString('hex'),
+            commitment: output.commitment,
+            range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
             script: Buffer.from(output.script, 'base64').toString('hex'),
-            token_data: output.token_data ?? 0,
-            ephemeral_pubkey: output.ephemeral_pubkey ?? '',
-            decoded: output.decoded ?? { type: '', address: '', timelock: null },
+            token_data: output.token_data,
+            ephemeral_pubkey: output.ephemeral_pubkey,
+            decoded: output.decoded,
             asset_commitment: output.asset_commitment,
             surjection_proof: output.surjection_proof
               ? Buffer.from(output.surjection_proof, 'base64').toString('hex')

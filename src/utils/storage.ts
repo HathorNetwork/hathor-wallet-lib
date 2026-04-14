@@ -538,9 +538,6 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
   for (let index = 0; index < tx.outputs.length; index++) {
     const output = tx.outputs[index];
 
-    // Skip shielded output entries (no value/token fields); processed separately
-    if (transactionUtils.isShieldedOutputEntry(output)) continue;
-
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
       continue;
@@ -764,9 +761,51 @@ export async function processNewTx(
   let legacyMaxIndexUsed = -1;
   let shieldedMaxIndexUsed = -1;
 
+  // Decrypt shielded outputs and append decoded entries to tx.outputs BEFORE the main loop.
+  // This unifies the processing: the same loop handles transparent + decoded shielded outputs.
+  const effectivePinCode = pinCode ?? storage.pinCode;
+  if (
+    storage.shieldedCryptoProvider &&
+    tx.shielded_outputs?.length &&
+    effectivePinCode !== undefined
+  ) {
+    try {
+      const shieldedResults = await processShieldedOutputs(
+        storage,
+        tx,
+        storage.shieldedCryptoProvider,
+        effectivePinCode
+      );
+      for (const result of shieldedResults) {
+        const walletTokenUid =
+          result.tokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : result.tokenUid;
+        const so = tx.shielded_outputs[result.index - tx.outputs.length];
+
+        // Append decoded shielded output to tx.outputs so the main loop processes it
+        // alongside transparent outputs (UTXO creation, balance, metadata).
+        tx.outputs.push({
+          type: 'shielded',
+          value: result.decrypted.value,
+          token_data: so?.token_data ?? 0,
+          script: so?.script ?? '',
+          decoded: { address: result.address },
+          token: walletTokenUid,
+          spent_by: null,
+          commitment: so?.commitment ?? '',
+          range_proof: so?.range_proof ?? '',
+          ephemeral_pubkey: so?.ephemeral_pubkey ?? '',
+          asset_commitment: so?.asset_commitment,
+          surjection_proof: so?.surjection_proof,
+        });
+      }
+      // Persist the updated tx with decoded shielded outputs in outputs[]
+      await store.saveTx(tx);
+    } catch (e) {
+      storage.logger.warn('Failed to process shielded outputs for tx', tx.tx_id, e);
+    }
+  }
+
   for (const [index, output] of tx.outputs.entries()) {
-    // Skip shielded output entries (no value/token fields); processed separately
-    if (transactionUtils.isShieldedOutputEntry(output)) continue;
     // Skip data outputs since they do not have an address and do not "belong" in a wallet
     if (!output.decoded.address) continue;
     const addressInfo = await store.getAddress(output.decoded.address);
@@ -870,80 +909,6 @@ export async function processNewTx(
 
     await store.editTokenMeta(output.token, tokenMeta);
     await store.editAddressMeta(output.decoded.address, addressMeta);
-  }
-
-  // Process shielded outputs (if crypto provider is available and tx has shielded outputs)
-  const effectivePinCode = pinCode ?? storage.pinCode;
-  if (
-    storage.shieldedCryptoProvider &&
-    tx.shielded_outputs?.length &&
-    effectivePinCode !== undefined
-  ) {
-    try {
-      const shieldedResults = await processShieldedOutputs(
-        storage,
-        tx,
-        storage.shieldedCryptoProvider,
-        effectivePinCode
-      );
-      for (const result of shieldedResults) {
-        // Resolve the token UID to the wallet-lib format (2-char '00' for HTR)
-        const walletTokenUid =
-          result.tokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : result.tokenUid;
-
-        // Create UTXO for the shielded output
-        const utxo: IUtxo = {
-          txId: tx.tx_id,
-          index: result.index,
-          token: walletTokenUid,
-          address: result.address,
-          value: result.decrypted.value,
-          authorities: 0n,
-          timelock: null,
-          type: tx.version,
-          height: tx.height ?? null,
-          shielded: true,
-          blindingFactor: result.decrypted.blindingFactor.toString('hex'),
-          assetBlindingFactor: result.decrypted.assetBlindingFactor?.toString('hex'),
-        };
-        await store.saveUtxo(utxo);
-
-        // Update token metadata
-        let tokenMeta = await store.getTokenMeta(walletTokenUid);
-        if (!tokenMeta) {
-          tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
-        }
-        tokenMeta.balance.tokens.unlocked += result.decrypted.value;
-        await store.editTokenMeta(walletTokenUid, tokenMeta);
-        txTokens.add(walletTokenUid);
-
-        // Update address metadata
-        let addressMeta = await store.getAddressMeta(result.address);
-        if (!addressMeta) {
-          addressMeta = { ...DEFAULT_ADDRESS_META };
-        }
-        if (!addressMeta.balance.has(walletTokenUid)) {
-          addressMeta.balance.set(walletTokenUid, getEmptyBalance());
-        }
-        addressMeta.balance.get(walletTokenUid)!.tokens.unlocked += result.decrypted.value;
-        await store.editAddressMeta(result.address, addressMeta);
-        txAddresses.add(result.address);
-
-        // Update max address index (shielded outputs hit shielded-spend addresses)
-        const addrInfo = await store.getAddress(result.address);
-        if (addrInfo) {
-          if (addrInfo.addressType === 'shielded-spend') {
-            if (addrInfo.bip32AddressIndex > shieldedMaxIndexUsed) {
-              shieldedMaxIndexUsed = addrInfo.bip32AddressIndex;
-            }
-          } else if (addrInfo.bip32AddressIndex > legacyMaxIndexUsed) {
-            legacyMaxIndexUsed = addrInfo.bip32AddressIndex;
-          }
-        }
-      }
-    } catch (e) {
-      storage.logger.warn('Failed to process shielded outputs for tx', tx.tx_id, e);
-    }
   }
 
   for (const input of tx.inputs) {
