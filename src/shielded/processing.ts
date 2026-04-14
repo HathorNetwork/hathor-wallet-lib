@@ -7,7 +7,8 @@
 
 import { HDPrivateKey } from 'bitcore-lib';
 import { IStorage, IHistoryTx, ILogger } from '../types';
-import { NATIVE_TOKEN_UID_HEX } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../constants';
+import tokenUtils from '../utils/tokens';
 import {
   IShieldedCryptoProvider,
   IShieldedOutput,
@@ -18,22 +19,20 @@ import {
 /**
  * Resolve the token UID for a shielded output.
  *
- * For AmountShielded outputs, the token is determined by token_data
- * referencing the tx.tokens array (0 = native token, 1+ = custom tokens).
+ * Uses the same token_data convention as transparent outputs (via getTokenIndexFromData).
+ * Returns the 32-byte hex UID needed by the crypto layer (NATIVE_TOKEN_UID_HEX for HTR).
  * For FullShielded outputs, the token is unknown until decrypted.
  */
 export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx): string {
-  // token_data uses the same convention as transparent outputs:
-  // The lower bits indicate the token index (0 = HTR, 1+ = index into tx.tokens)
-  const tokenIndex = shieldedOutput.token_data & 0b01111111;
+  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data);
   if (tokenIndex === 0) {
-    // Native token (HTR) — use 32 zero bytes
     return NATIVE_TOKEN_UID_HEX;
   }
   if (tx.tokens && tokenIndex <= tx.tokens.length) {
-    return tx.tokens[tokenIndex - 1];
+    const uid = tx.tokens[tokenIndex - 1];
+    // Custom token UIDs are already 32-byte hex
+    return uid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : uid;
   }
-  // Fallback: use zero bytes (will fail decryption if wrong)
   return NATIVE_TOKEN_UID_HEX;
 }
 
@@ -52,8 +51,11 @@ async function deriveScanPrivkeyForAddress(
   try {
     const xprivStr = await storage.getScanXPrivKey(pinCode);
     const hdPrivKey = new HDPrivateKey(xprivStr);
-    const childKey = hdPrivKey.deriveChild(addressIndex);
-    // bitcore-lib stores the private key as a BN; convert to 32-byte Buffer
+    const childKey = hdPrivKey.deriveNonCompliantChild(addressIndex);
+    // The native crypto provider (ECDH) needs raw 32-byte private key bytes.
+    // Other wallet-lib code passes bitcore PrivateKey objects directly to bitcore
+    // signing functions, but here we cross into the native ct-crypto boundary.
+    // { size: 32 } ensures zero-padding for keys with leading zeros.
     return childKey.privateKey.toBuffer({ size: 32 });
   } catch (e) {
     logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
@@ -125,7 +127,8 @@ export async function processShieldedOutputs(
         recoveredTokenUid = result.tokenUid.toString('hex');
         outputType = ShieldedOutputMode.FULLY_SHIELDED;
 
-        // Cross-check token UID (Section 4.3 of the guide):
+        // Cross-check token UID (Section 4.3 of the client guide):
+        // https://github.com/HathorNetwork/hathor-core/blob/feat/ct-amount-token-privacy/hathor-ct-crypto/SHIELDED-OUTPUTS-CLIENT-GUIDE.md
         // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
         const expectedTag = await cryptoProvider.deriveTag(result.tokenUid);
         const expectedAc = await cryptoProvider.createAssetCommitment(expectedTag, result.assetBlindingFactor);

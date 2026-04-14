@@ -41,16 +41,10 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 }
 
 /**
- * Parse address and return the full address type including shielded.
- *
- * @param {string} address
- * @param {Network} network
- *
- * @returns {'p2pkh' | 'p2sh' | 'shielded'} address type
+ * Convert a bitcore PublicKey to a base58 P2PKH address string.
  */
-export function getFullAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' | 'shielded' {
-  const addressObj = new Address(address, { network });
-  return addressObj.getType();
+export function publicKeyToP2PKH(publicKey: InstanceType<typeof bitcorePublicKey>, network: Network): string {
+  return new BitcoreAddress(publicKey, network.bitcoreNetwork).toString();
 }
 
 export function deriveAddressFromXPubP2PKH(
@@ -62,7 +56,7 @@ export function deriveAddressFromXPubP2PKH(
   const hdpubkey = new HDPublicKey(xpubkey);
   const key = hdpubkey.deriveChild(index);
   return {
-    base58: new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString(),
+    base58: publicKeyToP2PKH(key.publicKey, network),
     bip32AddressIndex: index,
     publicKey: key.publicKey.toString('hex'),
   };
@@ -189,6 +183,8 @@ export async function deriveShieldedAddressFromStorage(
   const networkName = storage.config.getNetwork().name;
   const info = deriveShieldedAddress(scanXpub, spendXpub, index, networkName);
 
+  // The user-facing shielded address encodes both scan and spend pubkeys.
+  // This is what users share with senders to receive shielded outputs.
   const shieldedAddress: IAddressInfo = {
     base58: info.base58,
     bip32AddressIndex: index,
@@ -196,6 +192,9 @@ export async function deriveShieldedAddressFromStorage(
     addressType: 'shielded',
   };
 
+  // The on-chain P2PKH derived from the spend pubkey (spend_pubkey → HASH160 → P2PKH).
+  // Stored separately so the wallet can match incoming transactions by decoded.address,
+  // since on-chain scripts reference this P2PKH, not the shielded address.
   const spendAddress: IAddressInfo = {
     base58: info.spendAddress,
     bip32AddressIndex: index,

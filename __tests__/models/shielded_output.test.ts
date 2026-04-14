@@ -127,19 +127,13 @@ describe('ShieldedOutput', () => {
       expect(serialized.subarray(acOffset + 35, acOffset + 37)).toEqual(surjectionProof);
     });
 
-    it('should use zero buffers when optional fields are undefined', () => {
+    it('should throw when FullShielded fields are missing', () => {
       const out = makeOutput({
         mode: ShieldedOutputMode.FULLY_SHIELDED,
       });
 
-      const parts = out.serialize();
-      const serialized = Buffer.concat(parts);
-
-      // asset_commitment should be 33 zero bytes
-      const acOffset = 1 + 33 + 2 + 10 + 2 + 3;
-      expect(serialized.subarray(acOffset, acOffset + 33)).toEqual(Buffer.alloc(33));
-      // surjection_proof length should be 0
-      expect(serialized.readUInt16BE(acOffset + 33)).toBe(0);
+      expect(() => out.serialize()).toThrow('FullShielded output requires assetCommitment and surjectionProof');
+      expect(() => out.serializeSighash()).toThrow('FullShielded output requires assetCommitment');
     });
   });
 

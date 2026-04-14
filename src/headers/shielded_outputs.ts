@@ -30,12 +30,16 @@ class ShieldedOutputsHeader extends Header {
     this.shieldedOutputs = shieldedOutputs;
   }
 
-  serializeFields(array: Buffer[]) {
+  private serializeWith(array: Buffer[], outputSerializer: (output: ShieldedOutput) => Buffer[]) {
     array.push(getVertexHeaderIdBuffer(VertexHeaderId.SHIELDED_OUTPUTS_HEADER));
     array.push(intToBytes(this.shieldedOutputs.length, 1));
     for (const output of this.shieldedOutputs) {
-      array.push(...output.serialize());
+      array.push(...outputSerializer(output));
     }
+  }
+
+  serializeFields(array: Buffer[]) {
+    this.serializeWith(array, o => o.serialize());
   }
 
   serialize(array: Buffer[]) {
@@ -43,11 +47,7 @@ class ShieldedOutputsHeader extends Header {
   }
 
   serializeSighash(array: Buffer[]) {
-    array.push(getVertexHeaderIdBuffer(VertexHeaderId.SHIELDED_OUTPUTS_HEADER));
-    array.push(intToBytes(this.shieldedOutputs.length, 1));
-    for (const output of this.shieldedOutputs) {
-      array.push(...output.serializeSighash());
-    }
+    this.serializeWith(array, o => o.serializeSighash());
   }
 
   static deserialize(srcBuf: Buffer, _network: Network): [Header, Buffer] {

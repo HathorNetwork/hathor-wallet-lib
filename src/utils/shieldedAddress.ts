@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { encoding, HDPublicKey, Address as BitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
+import { encoding, HDPublicKey } from 'bitcore-lib';
 import Network from '../models/network';
 import helpers from './helpers';
+import { publicKeyToP2PKH } from './address';
 
 export interface IShieldedAddressInfo {
   /** Full shielded address in base58 */
@@ -70,6 +71,8 @@ export function deriveShieldedAddress(
   const scanHdPub = new HDPublicKey(scanXpubkey);
   const spendHdPub = new HDPublicKey(spendXpubkey);
 
+  // Public keys use deriveChild (compliant BIP32 derivation).
+  // Private keys use deriveNonCompliantChild throughout the codebase.
   const scanKey = scanHdPub.deriveChild(index);
   const spendKey = spendHdPub.deriveChild(index);
 
@@ -79,10 +82,7 @@ export function deriveShieldedAddress(
   const base58 = encodeShieldedAddress(scanPubkeyBuf, spendPubkeyBuf, network);
 
   // Derive on-chain P2PKH from spend_pubkey
-  const spendAddress = new BitcoreAddress(
-    bitcorePublicKey(spendPubkeyBuf),
-    network.bitcoreNetwork,
-  ).toString();
+  const spendAddress = publicKeyToP2PKH(spendKey.publicKey, network);
 
   return {
     base58,

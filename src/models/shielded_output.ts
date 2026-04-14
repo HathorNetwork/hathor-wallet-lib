@@ -87,15 +87,17 @@ class ShieldedOutput {
       // Token data (1 byte, AmountShielded only)
       arr.push(intToBytes(this.tokenData, 1));
     } else if (this.mode === ShieldedOutputMode.FULLY_SHIELDED) {
+      if (!this.assetCommitment || !this.surjectionProof) {
+        throw new Error('FullShielded output requires assetCommitment and surjectionProof');
+      }
       // Asset commitment (33 bytes, FullShielded only)
-      arr.push(this.assetCommitment ?? Buffer.alloc(33));
+      arr.push(this.assetCommitment);
       // Surjection proof (2 bytes length + variable, FullShielded only)
-      const sp = this.surjectionProof ?? Buffer.alloc(0);
-      arr.push(intToBytes(sp.length, 2));
-      arr.push(sp);
+      arr.push(intToBytes(this.surjectionProof.length, 2));
+      arr.push(this.surjectionProof);
     }
 
-    // Ephemeral pubkey (always 33 bytes; zeros if not present)
+    // Ephemeral pubkey (always 33 bytes; zeros if not present for backward compat)
     arr.push(
       this.ephemeralPubkey && this.ephemeralPubkey.length === EPHEMERAL_PUBKEY_SIZE
         ? this.ephemeralPubkey
@@ -117,7 +119,10 @@ class ShieldedOutput {
     if (this.mode === ShieldedOutputMode.AMOUNT_SHIELDED) {
       arr.push(intToBytes(this.tokenData, 1));
     } else if (this.mode === ShieldedOutputMode.FULLY_SHIELDED) {
-      arr.push(this.assetCommitment ?? Buffer.alloc(33));
+      if (!this.assetCommitment) {
+        throw new Error('FullShielded output requires assetCommitment');
+      }
+      arr.push(this.assetCommitment);
     }
 
     arr.push(this.script);

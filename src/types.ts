@@ -274,6 +274,11 @@ export interface IHistoryOutputDecoded {
   data?: string;
 }
 
+// TODO: This interface is inaccurate for shielded outputs. Shielded outputs
+// (from fullnode's to_json_extended) don't have value/token_data/script/decoded/token/spent_by,
+// but those fields are marked as required here. Making them optional or splitting
+// into a discriminated union (ITransparentOutput | IShieldedOutputEntry) requires
+// updating ~166 call sites across the codebase. This will be fixed in a follow-up PR.
 export interface IHistoryOutput {
   value: OutputValueType;
   token_data: number;
