@@ -27,6 +27,7 @@ import { ShieldedOutputMode } from '../../src/shielded/types';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import Network from '../../src/models/network';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { getGapLimitConfig } from './utils/core.util';
 import * as constants from '../../src/constants';
 
 // Increase Axios timeout for test environment — the fullnode is under load from continuous mining.
@@ -483,6 +484,7 @@ describe('shielded transactions', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
+      scanPolicy: getGapLimitConfig(),
     });
     await walletB2.start();
     await waitForWalletReady(walletB2);
