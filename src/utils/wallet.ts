@@ -13,6 +13,7 @@ import {
   HATHOR_BIP44_CODE,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
+  SHIELDED_SCAN_ACCT_PATH,
   SHIELDED_SPEND_ACCT_PATH,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
@@ -620,12 +621,17 @@ const wallet = {
       accessData.acctPathKey = encryptedAcctPathKey;
     }
 
-    // Derive shielded spend key if root key is available
-    // Scan key uses the same account as legacy (m/44'/280'/0'/0), so no separate derivation needed.
+    // Derive shielded scan and spend keys if root key is available.
+    // Scan (account 1') and spend (account 2') use separate derivation paths from legacy (account 0')
+    // so the scan key only grants view access, not spending authority over legacy funds.
     if (argXpriv.depth === 0) {
+      const scanAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+      const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+      accessData.scanXpubkey = scanXpriv.xpubkey;
+      accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+
       const spendAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
       const spendXpriv2 = spendAcctXpriv.deriveNonCompliantChild(0);
-
       accessData.spendXpubkey = spendXpriv2.xpubkey;
       accessData.spendMainKey = encryptData(spendXpriv2.xprivkey, pin);
     }
@@ -701,8 +707,10 @@ const wallet = {
       };
     }
 
-    // Derive shielded spend key (account 1')
-    // Scan key uses the same account as legacy (m/44'/280'/0'/0), so no separate derivation needed.
+    // Derive shielded scan (account 1') and spend (account 2') keys.
+    // Separate from legacy (account 0') so scan key only grants view access.
+    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
     const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
     const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
 
@@ -715,6 +723,8 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
+      scanXpubkey: scanXpriv.xpubkey,
+      scanMainKey: encryptData(scanXpriv.xprivkey, pin),
       spendXpubkey: spendXpriv.xpubkey,
       spendMainKey: encryptData(spendXpriv.xprivkey, pin),
     };
