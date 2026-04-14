@@ -244,7 +244,7 @@ export interface WalletWebSocketData {
  * @property actions List of actions to execute in the nano contract transaction
  * @property args List of arguments for the method to be executed in the transaction
  */
-export interface CreateNanoTxData {
+export interface FullnodeCreateNanoTxData {
   blueprintId?: string | null;
   ncId?: string | null;
   actions?: NanoContractAction[];
