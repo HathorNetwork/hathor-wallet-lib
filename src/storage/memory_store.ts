@@ -328,14 +328,14 @@ export class MemoryStore implements IStore {
     const isShieldedChain = info.addressType === 'shielded' || info.addressType === 'shielded-spend';
     if (isShieldedChain) {
       if (this.walletData.shieldedCurrentAddressIndex === -1) {
-        this.walletData.shieldedCurrentAddressIndex = info.bip32AddressIndex;
+        await this.setCurrentAddressIndex(info.bip32AddressIndex, { legacy: false });
       }
       if (info.bip32AddressIndex > this.walletData.shieldedLastLoadedAddressIndex) {
         this.walletData.shieldedLastLoadedAddressIndex = info.bip32AddressIndex;
       }
     } else {
       if (this.walletData.currentAddressIndex === -1) {
-        this.walletData.currentAddressIndex = info.bip32AddressIndex;
+        await this.setCurrentAddressIndex(info.bip32AddressIndex);
       }
       if (info.bip32AddressIndex > this.walletData.lastLoadedAddressIndex) {
         this.walletData.lastLoadedAddressIndex = info.bip32AddressIndex;
@@ -532,9 +532,9 @@ export class MemoryStore implements IStore {
     this.walletData.lastUsedAddressIndex = legacyMaxIndex;
     // Update shielded chain tracking
     if (this.walletData.shieldedCurrentAddressIndex < shieldedMaxIndex) {
-      this.walletData.shieldedCurrentAddressIndex = Math.min(
-        shieldedMaxIndex + 1,
-        this.walletData.shieldedLastLoadedAddressIndex
+      await this.setCurrentAddressIndex(
+        Math.min(shieldedMaxIndex + 1, this.walletData.shieldedLastLoadedAddressIndex),
+        { legacy: false }
       );
     }
     this.walletData.shieldedLastUsedAddressIndex = shieldedMaxIndex;
