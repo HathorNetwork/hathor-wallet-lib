@@ -32,11 +32,8 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       tokenUid,
       valueBlindingFactor
     ): ICreatedShieldedOutput {
-      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new Error('Shielded output value exceeds safe integer range');
-      }
       const result = ct.createAmountShieldedOutput(
-        Number(value),
+        value,
         recipientPubkey,
         tokenUid,
         valueBlindingFactor
@@ -56,11 +53,8 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       vbf,
       abf
     ): ICreatedShieldedOutput {
-      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new Error('Shielded output value exceeds safe integer range');
-      }
       const result = ct.createShieldedOutputWithBothBlindings(
-        Number(value),
+        value,
         recipientPubkey,
         tokenUid,
         vbf,
@@ -91,7 +85,7 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
         tokenUid
       );
       return {
-        value: BigInt(result.value),
+        value: result.value,
         blindingFactor: result.blindingFactor,
       };
     },
@@ -111,7 +105,7 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
         assetCommitment
       );
       return {
-        value: BigInt(result.value),
+        value: result.value,
         blindingFactor: result.blindingFactor,
         tokenUid: result.tokenUid,
         assetBlindingFactor: result.assetBlindingFactor,
@@ -119,25 +113,16 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     },
 
     computeBalancingBlindingFactor(value, generatorBlindingFactor, inputs, otherOutputs): Buffer {
-      if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
-        throw new Error('Shielded output value exceeds safe integer range');
-      }
-      const toSafeNumber = (v: bigint): number => {
-        if (v > BigInt(Number.MAX_SAFE_INTEGER)) {
-          throw new Error('Shielded output value exceeds safe integer range');
-        }
-        return Number(v);
-      };
       return ct.computeBalancingBlindingFactor(
-        Number(value),
+        value,
         generatorBlindingFactor,
         inputs.map(i => ({
-          value: toSafeNumber(i.value),
+          value: i.value,
           valueBlindingFactor: i.vbf,
           generatorBlindingFactor: i.gbf,
         })),
         otherOutputs.map(o => ({
-          value: toSafeNumber(o.value),
+          value: o.value,
           valueBlindingFactor: o.vbf,
           generatorBlindingFactor: o.gbf,
         }))
