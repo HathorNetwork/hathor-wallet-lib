@@ -285,7 +285,10 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {Promise<IAddressInfo | null>} The address info or null if not in storage
    */
-  async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null> {
+  async getAddressAtIndex(
+    index: number,
+    opts?: IAddressChainOptions
+  ): Promise<IAddressInfo | null> {
     const isLegacy = opts?.legacy !== false;
     const indexMap = isLegacy ? this.addressIndexes : this.shieldedAddressIndexes;
     const addr = indexMap.get(index);
@@ -325,7 +328,8 @@ export class MemoryStore implements IStore {
     }
 
     // Update per-chain tracking: currentAddressIndex and lastLoadedAddressIndex
-    const isShieldedChain = info.addressType === 'shielded' || info.addressType === 'shielded-spend';
+    const isShieldedChain =
+      info.addressType === 'shielded' || info.addressType === 'shielded-spend';
     if (isShieldedChain) {
       if (this.walletData.shieldedCurrentAddressIndex === -1) {
         await this.setCurrentAddressIndex(info.bip32AddressIndex, { legacy: false });
@@ -518,7 +522,11 @@ export class MemoryStore implements IStore {
         const index = addrInfo.bip32AddressIndex;
         if (addrInfo.addressType === 'shielded-spend') {
           if (index > shieldedMaxIndex) shieldedMaxIndex = index;
-        } else if (!addrInfo.addressType || addrInfo.addressType === 'p2pkh' || addrInfo.addressType === 'p2sh') {
+        } else if (
+          !addrInfo.addressType ||
+          addrInfo.addressType === 'p2pkh' ||
+          addrInfo.addressType === 'p2sh'
+        ) {
           if (index > legacyMaxIndex) legacyMaxIndex = index;
         }
       }

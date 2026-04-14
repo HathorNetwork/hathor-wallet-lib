@@ -241,11 +241,11 @@ export interface IHistoryTx {
 
 export interface IHistoryShieldedOutput {
   mode: ShieldedOutputMode;
-  commitment: string;        // hex
-  range_proof: string;       // hex
-  script: string;            // hex
+  commitment: string; // hex
+  range_proof: string; // hex
+  script: string; // hex
   token_data: number;
-  ephemeral_pubkey: string;  // hex
+  ephemeral_pubkey: string; // hex
   decoded: IHistoryOutputDecoded;
   asset_commitment?: string; // hex (FullShielded only)
   surjection_proof?: string; // hex (FullShielded only)
@@ -288,9 +288,9 @@ export interface IHistoryOutput {
   spent_by: string | null;
   selected_as_input?: boolean;
   // Shielded output entries (appended by fullnode's to_json_extended) have these instead of value/token:
-  type?: string;           // 'shielded' for shielded output entries
-  commitment?: string;     // hex
-  range_proof?: string;    // hex
+  type?: string; // 'shielded' for shielded output entries
+  commitment?: string; // hex
+  range_proof?: string; // hex
   ephemeral_pubkey?: string; // hex
   asset_commitment?: string; // hex (FullShielded only)
   surjection_proof?: string; // hex (FullShielded only)
@@ -367,8 +367,8 @@ export interface IDataShieldedOutput {
   address: string;
   value: OutputValueType;
   token: string;
-  scanPubkey: string;            // hex, 33 bytes compressed EC pubkey for ECDH
-  mode: ShieldedOutputMode;      // 1 = AmountShielded, 2 = FullShielded
+  scanPubkey: string; // hex, 33 bytes compressed EC pubkey for ECDH
+  mode: ShieldedOutputMode; // 1 = AmountShielded, 2 = FullShielded
   // Populated after crypto processing:
   ephemeralPubkey?: Buffer;
   commitment?: Buffer;
@@ -377,7 +377,7 @@ export interface IDataShieldedOutput {
   assetCommitment?: Buffer;
   assetBlindingFactor?: Buffer;
   surjectionProof?: Buffer;
-  script?: string;               // hex, the P2PKH/P2SH output script
+  script?: string; // hex, the P2PKH/P2SH output script
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions
@@ -442,7 +442,7 @@ export interface IWalletAccessData {
   walletFlags: number;
   // Shielded address key material (optional, absent on wallets created before shielded feature)
   // Scan key uses the same account as legacy (m/44'/280'/0'/0) — no separate field needed.
-  spendXpubkey?: string;         // xpub at m/44'/280'/1'/0
+  spendXpubkey?: string; // xpub at m/44'/280'/1'/0
   spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
 }
 

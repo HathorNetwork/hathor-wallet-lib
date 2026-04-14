@@ -668,7 +668,9 @@ const transaction = {
       if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
         const shieldedModels = txData.shieldedOutputs.map(so => {
           if (!so.commitment || !so.rangeProof || !so.script || !so.ephemeralPubkey) {
-            throw new Error('Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)');
+            throw new Error(
+              'Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)'
+            );
           }
           const tokenData = this.getTokenDataFromOutput(
             {
@@ -679,7 +681,7 @@ const transaction = {
               address: so.address,
               timelock: null,
             },
-            txData.tokens,
+            txData.tokens
           );
 
           return new ShieldedOutput(
@@ -691,7 +693,7 @@ const transaction = {
             so.ephemeralPubkey,
             so.assetCommitment,
             so.value,
-            so.surjectionProof,
+            so.surjectionProof
           );
         });
 

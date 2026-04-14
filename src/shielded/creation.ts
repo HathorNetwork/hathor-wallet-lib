@@ -37,7 +37,7 @@ interface ShieldedOutputDef {
 export async function createShieldedOutputs(
   defs: ShieldedOutputDef[],
   cryptoProvider: IShieldedCryptoProvider,
-  network: Network,
+  network: Network
 ): Promise<IDataShieldedOutput[]> {
   const results: IDataShieldedOutput[] = [];
   const createdOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
@@ -46,7 +46,10 @@ export async function createShieldedOutputs(
     const def = defs[i];
     const fullyShielded = def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
     const recipientPubkeyBuf = Buffer.from(def.scanPubkey, 'hex');
-    const tokenUidBuf = Buffer.from(def.token === HTR_UID ? NATIVE_TOKEN_UID_HEX : def.token, 'hex');
+    const tokenUidBuf = Buffer.from(
+      def.token === HTR_UID ? NATIVE_TOKEN_UID_HEX : def.token,
+      'hex'
+    );
 
     let cryptoResult;
     const isLast = i === defs.length - 1;
@@ -58,11 +61,15 @@ export async function createShieldedOutputs(
         const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
           def.value,
           lastAbf,
-          [],            // no blinded inputs (all transparent)
-          createdOutputs,
+          [], // no blinded inputs (all transparent)
+          createdOutputs
         );
         cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-          def.value, recipientPubkeyBuf, tokenUidBuf, balancingBf, lastAbf,
+          def.value,
+          recipientPubkeyBuf,
+          tokenUidBuf,
+          balancingBf,
+          lastAbf
         );
         createdOutputs.push({
           value: def.value,
@@ -72,10 +79,16 @@ export async function createShieldedOutputs(
       } else {
         // AmountShielded last output: compute balancing vbf, create with it
         const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
-          def.value, ZERO_TWEAK, [], createdOutputs,
+          def.value,
+          ZERO_TWEAK,
+          [],
+          createdOutputs
         );
         cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-          def.value, recipientPubkeyBuf, tokenUidBuf, balancingBf,
+          def.value,
+          recipientPubkeyBuf,
+          tokenUidBuf,
+          balancingBf
         );
         createdOutputs.push({
           value: def.value,
@@ -88,7 +101,11 @@ export async function createShieldedOutputs(
       const vbf = await cryptoProvider.generateRandomBlindingFactor();
       const abf = await cryptoProvider.generateRandomBlindingFactor();
       cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-        def.value, recipientPubkeyBuf, tokenUidBuf, vbf, abf,
+        def.value,
+        recipientPubkeyBuf,
+        tokenUidBuf,
+        vbf,
+        abf
       );
       createdOutputs.push({
         value: def.value,
@@ -99,7 +116,10 @@ export async function createShieldedOutputs(
       // AmountShielded non-last output: generate random vbf
       const vbf = await cryptoProvider.generateRandomBlindingFactor();
       cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-        def.value, recipientPubkeyBuf, tokenUidBuf, vbf,
+        def.value,
+        recipientPubkeyBuf,
+        tokenUidBuf,
+        vbf
       );
       createdOutputs.push({
         value: def.value,
@@ -119,7 +139,7 @@ export async function createShieldedOutputs(
         token: def.token,
         type: getAddressType(def.address, network),
       },
-      network,
+      network
     );
 
     // For FullShielded outputs, generate a surjection proof
@@ -131,7 +151,7 @@ export async function createShieldedOutputs(
       surjectionProof = await cryptoProvider.createSurjectionProof(
         tag,
         cryptoResult.assetBlindingFactor,
-        [{ generator, tag, blindingFactor: ZERO_TWEAK }],
+        [{ generator, tag, blindingFactor: ZERO_TWEAK }]
       );
     }
 

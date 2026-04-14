@@ -11,31 +11,35 @@ import { ShieldedOutputMode } from '../../src/shielded/types';
 import { VertexHeaderId } from '../../src/headers/types';
 import Network from '../../src/models/network';
 
-function makeAmountShieldedOutput(overrides: Partial<{
-  commitment: Buffer;
-  rangeProof: Buffer;
-  tokenData: number;
-  script: Buffer;
-  ephemeralPubkey: Buffer;
-}> = {}): ShieldedOutput {
+function makeAmountShieldedOutput(
+  overrides: Partial<{
+    commitment: Buffer;
+    rangeProof: Buffer;
+    tokenData: number;
+    script: Buffer;
+    ephemeralPubkey: Buffer;
+  }> = {}
+): ShieldedOutput {
   return new ShieldedOutput(
     ShieldedOutputMode.AMOUNT_SHIELDED,
     overrides.commitment ?? Buffer.alloc(33, 0x01),
     overrides.rangeProof ?? Buffer.from([0x02, 0x03, 0x04]),
     overrides.tokenData ?? 0,
     overrides.script ?? Buffer.from([0x76, 0xa9, 0x14]),
-    overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x05),
+    overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x05)
   );
 }
 
-function makeFullShieldedOutput(overrides: Partial<{
-  commitment: Buffer;
-  rangeProof: Buffer;
-  script: Buffer;
-  ephemeralPubkey: Buffer;
-  assetCommitment: Buffer;
-  surjectionProof: Buffer;
-}> = {}): ShieldedOutput {
+function makeFullShieldedOutput(
+  overrides: Partial<{
+    commitment: Buffer;
+    rangeProof: Buffer;
+    script: Buffer;
+    ephemeralPubkey: Buffer;
+    assetCommitment: Buffer;
+    surjectionProof: Buffer;
+  }> = {}
+): ShieldedOutput {
   return new ShieldedOutput(
     ShieldedOutputMode.FULLY_SHIELDED,
     overrides.commitment ?? Buffer.alloc(33, 0x11),
@@ -45,7 +49,7 @@ function makeFullShieldedOutput(overrides: Partial<{
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x44),
     overrides.assetCommitment ?? Buffer.alloc(33, 0x55),
     0n,
-    overrides.surjectionProof ?? Buffer.from([0x66, 0x77, 0x88]),
+    overrides.surjectionProof ?? Buffer.from([0x66, 0x77, 0x88])
   );
 }
 

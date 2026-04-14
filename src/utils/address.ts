@@ -35,7 +35,9 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
   const addressObj = new Address(address, { network });
   const addrType = addressObj.getType();
   if (addrType === 'shielded') {
-    throw new Error('Shielded addresses cannot be used directly as output script type. Use the spend-derived P2PKH address instead.');
+    throw new Error(
+      'Shielded addresses cannot be used directly as output script type. Use the spend-derived P2PKH address instead.'
+    );
   }
   return addrType;
 }
@@ -43,7 +45,10 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 /**
  * Convert a bitcore PublicKey to a base58 P2PKH address string.
  */
-export function publicKeyToP2PKH(publicKey: InstanceType<typeof bitcorePublicKey>, network: Network): string {
+export function publicKeyToP2PKH(
+  publicKey: InstanceType<typeof bitcorePublicKey>,
+  network: Network
+): string {
   return new BitcoreAddress(publicKey, network.bitcoreNetwork).toString();
 }
 
@@ -172,7 +177,7 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
  */
 export async function deriveShieldedAddressFromStorage(
   index: number,
-  storage: IStorage,
+  storage: IStorage
 ): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
   const scanXpub = await storage.getScanXPubKey();
   const spendXpub = await storage.getSpendXPubKey();

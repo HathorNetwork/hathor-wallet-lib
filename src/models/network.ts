@@ -168,9 +168,11 @@ class Network {
    */
   isVersionByteValid(version: number): boolean {
     const instanceVersionBytes = this.getVersionBytes();
-    return version === instanceVersionBytes.p2pkh
-      || version === instanceVersionBytes.p2sh
-      || version === instanceVersionBytes.shielded;
+    return (
+      version === instanceVersionBytes.p2pkh ||
+      version === instanceVersionBytes.p2sh ||
+      version === instanceVersionBytes.shielded
+    );
   }
 
   /**

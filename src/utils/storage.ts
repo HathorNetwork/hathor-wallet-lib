@@ -29,7 +29,12 @@ import {
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH, deriveShieldedAddressFromStorage, getAddressFromPubkey } from './address';
+import {
+  deriveAddressP2PKH,
+  deriveAddressP2SH,
+  deriveShieldedAddressFromStorage,
+  getAddressFromPubkey,
+} from './address';
 import { processShieldedOutputs } from '../shielded/processing';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
@@ -334,7 +339,8 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
     // Since the wallet is not configured to use index-limit this is a no-op
     return null;
   }
-  const { lastLoadedAddressIndex, shieldedLastLoadedAddressIndex, scanPolicyData } = await storage.getWalletData();
+  const { lastLoadedAddressIndex, shieldedLastLoadedAddressIndex, scanPolicyData } =
+    await storage.getWalletData();
   if (!isIndexLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
     throw new Error(
@@ -373,8 +379,10 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     return null;
   }
   const {
-    lastLoadedAddressIndex, lastUsedAddressIndex,
-    shieldedLastLoadedAddressIndex, shieldedLastUsedAddressIndex,
+    lastLoadedAddressIndex,
+    lastUsedAddressIndex,
+    shieldedLastLoadedAddressIndex,
+    shieldedLastUsedAddressIndex,
   } = await storage.getWalletData();
   const scanPolicyData = await storage.getScanningPolicyData();
   if (!isGapLimitScanPolicy(scanPolicyData)) {
@@ -388,8 +396,8 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   const legacyNeedMore = lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex;
   // Only check shielded gap if shielded keys are available (spendXpubkey exists).
   const hasShieldedKeys = !!(await storage.getAccessData())?.spendXpubkey;
-  const shieldedNeedMore = hasShieldedKeys
-    && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
+  const shieldedNeedMore =
+    hasShieldedKeys && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
 
   if (!legacyNeedMore && !shieldedNeedMore) {
     return null;
@@ -400,7 +408,9 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // Use the minimum of the two lastLoaded as the starting point, so that
   // the lagging chain gets its addresses loaded.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
-  const shieldedTarget = shieldedNeedMore ? shieldedLastUsedAddressIndex + gapLimit : shieldedLastLoadedAddressIndex;
+  const shieldedTarget = shieldedNeedMore
+    ? shieldedLastUsedAddressIndex + gapLimit
+    : shieldedLastLoadedAddressIndex;
   const maxTarget = Math.max(legacyTarget, shieldedTarget);
   const minLastLoaded = Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex);
 
@@ -446,7 +456,11 @@ export async function processHistory(
   }
 
   // Update wallet data
-  await updateWalletMetadataFromProcessedTxData(storage, { legacyMaxIndexUsed, shieldedMaxIndexUsed, tokens });
+  await updateWalletMetadataFromProcessedTxData(storage, {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  });
 }
 
 export async function processSingleTx(
@@ -506,7 +520,11 @@ export async function processSingleTx(
   }
 
   // Update wallet data in the store
-  await updateWalletMetadataFromProcessedTxData(storage, { legacyMaxIndexUsed, shieldedMaxIndexUsed, tokens });
+  await updateWalletMetadataFromProcessedTxData(storage, {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  });
 }
 
 /**
@@ -629,7 +647,11 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
  */
 async function updateWalletMetadataFromProcessedTxData(
   storage: IStorage,
-  { legacyMaxIndexUsed, shieldedMaxIndexUsed, tokens }: { legacyMaxIndexUsed: number; shieldedMaxIndexUsed: number; tokens: Set<string> }
+  {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  }: { legacyMaxIndexUsed: number; shieldedMaxIndexUsed: number; tokens: Set<string> }
 ): Promise<void> {
   const { store } = storage;
   const walletData = await store.getWalletData();
@@ -763,7 +785,11 @@ export async function processNewTx(
       if (addressInfo.bip32AddressIndex > shieldedMaxIndexUsed) {
         shieldedMaxIndexUsed = addressInfo.bip32AddressIndex;
       }
-    } else if (!addressInfo.addressType || addressInfo.addressType === 'p2pkh' || addressInfo.addressType === 'p2sh') {
+    } else if (
+      !addressInfo.addressType ||
+      addressInfo.addressType === 'p2pkh' ||
+      addressInfo.addressType === 'p2sh'
+    ) {
       if (addressInfo.bip32AddressIndex > legacyMaxIndexUsed) {
         legacyMaxIndexUsed = addressInfo.bip32AddressIndex;
       }
@@ -848,16 +874,22 @@ export async function processNewTx(
 
   // Process shielded outputs (if crypto provider is available and tx has shielded outputs)
   const effectivePinCode = pinCode ?? storage.pinCode;
-  if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length && effectivePinCode !== undefined) {
+  if (
+    storage.shieldedCryptoProvider &&
+    tx.shielded_outputs?.length &&
+    effectivePinCode !== undefined
+  ) {
     try {
       const shieldedResults = await processShieldedOutputs(
-        storage, tx, storage.shieldedCryptoProvider, effectivePinCode
+        storage,
+        tx,
+        storage.shieldedCryptoProvider,
+        effectivePinCode
       );
       for (const result of shieldedResults) {
         // Resolve the token UID to the wallet-lib format (2-char '00' for HTR)
-        const walletTokenUid = result.tokenUid === NATIVE_TOKEN_UID_HEX
-          ? NATIVE_TOKEN_UID
-          : result.tokenUid;
+        const walletTokenUid =
+          result.tokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : result.tokenUid;
 
         // Create UTXO for the shielded output
         const utxo: IUtxo = {
@@ -931,7 +963,11 @@ export async function processNewTx(
       if (addressInfo.bip32AddressIndex > shieldedMaxIndexUsed) {
         shieldedMaxIndexUsed = addressInfo.bip32AddressIndex;
       }
-    } else if (!addressInfo.addressType || addressInfo.addressType === 'p2pkh' || addressInfo.addressType === 'p2sh') {
+    } else if (
+      !addressInfo.addressType ||
+      addressInfo.addressType === 'p2pkh' ||
+      addressInfo.addressType === 'p2sh'
+    ) {
       if (addressInfo.bip32AddressIndex > legacyMaxIndexUsed) {
         legacyMaxIndexUsed = addressInfo.bip32AddressIndex;
       }

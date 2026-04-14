@@ -26,12 +26,20 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       return ct.generateRandomBlindingFactor();
     },
 
-    createAmountShieldedOutput(value, recipientPubkey, tokenUid, valueBlindingFactor): ICreatedShieldedOutput {
+    createAmountShieldedOutput(
+      value,
+      recipientPubkey,
+      tokenUid,
+      valueBlindingFactor
+    ): ICreatedShieldedOutput {
       if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new Error('Shielded output value exceeds safe integer range');
       }
       const result = ct.createAmountShieldedOutput(
-        Number(value), recipientPubkey, tokenUid, valueBlindingFactor,
+        Number(value),
+        recipientPubkey,
+        tokenUid,
+        valueBlindingFactor
       );
       return {
         ephemeralPubkey: result.ephemeralPubkey,
@@ -41,12 +49,22 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    createShieldedOutputWithBothBlindings(value, recipientPubkey, tokenUid, vbf, abf): ICreatedShieldedOutput {
+    createShieldedOutputWithBothBlindings(
+      value,
+      recipientPubkey,
+      tokenUid,
+      vbf,
+      abf
+    ): ICreatedShieldedOutput {
       if (value > BigInt(Number.MAX_SAFE_INTEGER)) {
         throw new Error('Shielded output value exceeds safe integer range');
       }
       const result = ct.createShieldedOutputWithBothBlindings(
-        Number(value), recipientPubkey, tokenUid, vbf, abf,
+        Number(value),
+        recipientPubkey,
+        tokenUid,
+        vbf,
+        abf
       );
       return {
         ephemeralPubkey: result.ephemeralPubkey,
@@ -58,9 +76,19 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    rewindAmountShieldedOutput(privateKey, ephemeralPubkey, commitment, rangeProof, tokenUid): IRewoundAmountShieldedOutput {
+    rewindAmountShieldedOutput(
+      privateKey,
+      ephemeralPubkey,
+      commitment,
+      rangeProof,
+      tokenUid
+    ): IRewoundAmountShieldedOutput {
       const result = ct.rewindAmountShieldedOutput(
-        privateKey, ephemeralPubkey, commitment, rangeProof, tokenUid,
+        privateKey,
+        ephemeralPubkey,
+        commitment,
+        rangeProof,
+        tokenUid
       );
       return {
         value: BigInt(result.value),
@@ -68,9 +96,19 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    rewindFullShieldedOutput(privateKey, ephemeralPubkey, commitment, rangeProof, assetCommitment): IRewoundFullShieldedOutput {
+    rewindFullShieldedOutput(
+      privateKey,
+      ephemeralPubkey,
+      commitment,
+      rangeProof,
+      assetCommitment
+    ): IRewoundFullShieldedOutput {
       const result = ct.rewindFullShieldedOutput(
-        privateKey, ephemeralPubkey, commitment, rangeProof, assetCommitment,
+        privateKey,
+        ephemeralPubkey,
+        commitment,
+        rangeProof,
+        assetCommitment
       );
       return {
         value: BigInt(result.value),
@@ -102,7 +140,7 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
           value: toSafeNumber(o.value),
           valueBlindingFactor: o.vbf,
           generatorBlindingFactor: o.gbf,
-        })),
+        }))
       );
     },
 

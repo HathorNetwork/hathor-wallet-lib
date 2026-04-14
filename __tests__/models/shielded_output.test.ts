@@ -9,17 +9,19 @@ import ShieldedOutput from '../../src/models/shielded_output';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import { intToBytes } from '../../src/utils/buffer';
 
-function makeOutput(overrides: Partial<{
-  mode: ShieldedOutputMode;
-  commitment: Buffer;
-  rangeProof: Buffer;
-  tokenData: number;
-  script: Buffer;
-  ephemeralPubkey: Buffer;
-  assetCommitment: Buffer;
-  surjectionProof: Buffer;
-  value: bigint;
-}> = {}): ShieldedOutput {
+function makeOutput(
+  overrides: Partial<{
+    mode: ShieldedOutputMode;
+    commitment: Buffer;
+    rangeProof: Buffer;
+    tokenData: number;
+    script: Buffer;
+    ephemeralPubkey: Buffer;
+    assetCommitment: Buffer;
+    surjectionProof: Buffer;
+    value: bigint;
+  }> = {}
+): ShieldedOutput {
   return new ShieldedOutput(
     overrides.mode ?? ShieldedOutputMode.AMOUNT_SHIELDED,
     overrides.commitment ?? Buffer.alloc(33, 0xaa),
@@ -29,7 +31,7 @@ function makeOutput(overrides: Partial<{
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0xcc),
     overrides.assetCommitment,
     overrides.value ?? 100n,
-    overrides.surjectionProof,
+    overrides.surjectionProof
   );
 }
 
@@ -132,7 +134,9 @@ describe('ShieldedOutput', () => {
         mode: ShieldedOutputMode.FULLY_SHIELDED,
       });
 
-      expect(() => out.serialize()).toThrow('FullShielded output requires assetCommitment and surjectionProof');
+      expect(() => out.serialize()).toThrow(
+        'FullShielded output requires assetCommitment and surjectionProof'
+      );
       expect(() => out.serializeSighash()).toThrow('FullShielded output requires assetCommitment');
     });
   });
