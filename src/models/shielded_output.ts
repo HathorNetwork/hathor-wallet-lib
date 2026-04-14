@@ -41,6 +41,7 @@ class ShieldedOutput {
   /** The plaintext value, used for weight calculation. Not serialized on-chain. */
   value: OutputValueType;
 
+  // eslint-disable-next-line default-param-last
   constructor(
     mode: ShieldedOutputMode,
     commitment: Buffer,
@@ -49,8 +50,8 @@ class ShieldedOutput {
     script: Buffer,
     ephemeralPubkey: Buffer,
     assetCommitment?: Buffer,
-    value: OutputValueType = 0n,
-    surjectionProof?: Buffer
+    surjectionProof?: Buffer,
+    value: OutputValueType = 0n
   ) {
     this.mode = mode;
     this.commitment = commitment;

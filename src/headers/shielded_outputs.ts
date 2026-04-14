@@ -61,6 +61,7 @@ class ShieldedOutputsHeader extends Header {
 
     // Number of shielded outputs (1 byte)
     let numOutputs: number;
+    // eslint-disable-next-line prefer-const
     [numOutputs, buf] = unpackToInt(1, false, buf);
 
     const outputs: ShieldedOutput[] = [];
@@ -117,8 +118,8 @@ class ShieldedOutputsHeader extends Header {
           script,
           ephemeralPubkey,
           assetCommitment,
-          0n, // value is not stored on-chain; it's recovered via rewind
-          surjectionProof
+          surjectionProof,
+          0n // value is not stored on-chain; it's recovered via rewind
         )
       );
     }

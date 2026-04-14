@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { resolveTokenUid, processShieldedOutputs } from '../../src/shielded/processing';
 import { NATIVE_TOKEN_UID_HEX } from '../../src/constants';
 import {

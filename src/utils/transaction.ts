@@ -693,8 +693,8 @@ const transaction = {
             Buffer.from(so.script, 'hex'),
             so.ephemeralPubkey,
             so.assetCommitment,
-            so.value,
-            so.surjectionProof
+            so.surjectionProof,
+            so.value
           );
         });
 
@@ -1012,6 +1012,7 @@ const transaction = {
     });
     const outputs: IHistoryOutput[] = tx.outputs.map(o => {
       // Skip hydration for shielded output entries (they lack value/token fields)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if ((o as any).type === 'shielded') return o as unknown as IHistoryOutput;
       const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
       return hydratedoutput as IHistoryOutput;

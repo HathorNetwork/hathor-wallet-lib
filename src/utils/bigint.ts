@@ -18,6 +18,7 @@ import { getDefaultLogger } from '../types';
 export const JSONBigInt = {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   parse(text: string): any {
+    // @ts-expect-error TypeScript hasn't been updated with the `context` argument from Node v22.
     return JSON.parse(text, this.bigIntReviver);
   },
 

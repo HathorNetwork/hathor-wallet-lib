@@ -48,8 +48,8 @@ function makeFullShieldedOutput(
     overrides.script ?? Buffer.from([0x76, 0xa9]),
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x44),
     overrides.assetCommitment ?? Buffer.alloc(33, 0x55),
-    0n,
-    overrides.surjectionProof ?? Buffer.from([0x66, 0x77, 0x88])
+    overrides.surjectionProof ?? Buffer.from([0x66, 0x77, 0x88]),
+    0n
   );
 }
 

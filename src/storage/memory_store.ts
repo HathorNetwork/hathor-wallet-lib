@@ -469,6 +469,7 @@ export class MemoryStore implements IStore {
       }
       for (const output of tx.outputs) {
         if (
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (output as any).type !== 'shielded' &&
           output.decoded.address &&
           this.addresses.has(output.decoded.address) &&
