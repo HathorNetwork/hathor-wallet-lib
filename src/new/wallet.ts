@@ -1530,12 +1530,12 @@ class HathorWallet extends EventEmitter {
         if (transactionUtils.isShieldedOutputEntry(output)) {
           shieldedEntries.push({
             mode: output.asset_commitment ? 2 : 1, // FullShielded=2, AmountShielded=1
-            commitment: output.commitment!, // already hex
-            range_proof: Buffer.from(output.range_proof!, 'base64').toString('hex'),
+            commitment: output.commitment, // already hex
+            range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
             script: Buffer.from(output.script, 'base64').toString('hex'),
-            token_data: output.token_data ?? 0,
-            ephemeral_pubkey: output.ephemeral_pubkey ?? '',
-            decoded: output.decoded ?? { type: '', address: '', timelock: null },
+            token_data: output.token_data,
+            ephemeral_pubkey: output.ephemeral_pubkey,
+            decoded: output.decoded,
             asset_commitment: output.asset_commitment, // already hex
             surjection_proof: output.surjection_proof
               ? Buffer.from(output.surjection_proof, 'base64').toString('hex')
@@ -3065,8 +3065,9 @@ class HathorWallet extends EventEmitter {
     }
 
     fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (output as any).type === 'shielded' ? output : hydrateWithTokenUid(output, fullTx.tx.tokens)
+      transactionUtils.isShieldedOutputEntry(output)
+        ? output
+        : hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
     fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
 

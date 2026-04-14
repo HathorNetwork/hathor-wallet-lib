@@ -40,6 +40,7 @@ import {
   IDataTx,
   isDataOutputCreateToken,
   IHistoryOutput,
+  IShieldedOutputEntry,
   IUtxoId,
   IInputSignature,
   ITxSignatureData,
@@ -80,8 +81,9 @@ const transaction = {
    * the 'value' and 'token' fields that transparent outputs have.
    * Shielded outputs are processed separately via processShieldedOutputs().
    */
-  isShieldedOutputEntry(output: { type?: string | null }): boolean {
-    return output.type === 'shielded';
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  isShieldedOutputEntry(output: any): output is IShieldedOutputEntry {
+    return output != null && output.type === 'shielded';
   },
 
   /**
@@ -428,8 +430,6 @@ const transaction = {
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
     for (const output of tx.outputs) {
-      // Skip shielded output entries (no value/token fields); processed separately
-      if (this.isShieldedOutputEntry(output)) continue;
       const { address } = output.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
@@ -994,9 +994,8 @@ const transaction = {
       return hydratedInput as IHistoryInput;
     });
     const outputs: IHistoryOutput[] = tx.outputs.map(o => {
-      // Skip hydration for shielded output entries (they lack value/token fields)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      if ((o as any).type === 'shielded') return o as unknown as IHistoryOutput;
+      // Shielded outputs already have token populated after decryption
+      if (this.isShieldedOutputEntry(o)) return o;
       const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
       return hydratedoutput as IHistoryOutput;
     });
