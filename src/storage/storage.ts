@@ -963,15 +963,19 @@ export class Storage implements IStorage {
 
   /**
    * Get the scan chain xprivkey for shielded ECDH.
-   * The scan key shares the same account as legacy (m/44'/280'/0'/0).
+   * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
    */
   async getScanXPrivKey(pinCode: string): Promise<string> {
-    return this.getMainXPrivKey(pinCode);
+    const accessData = await this._getValidAccessData();
+    if (!accessData.scanMainKey) {
+      throw new Error('Scan private key is not present on this wallet.');
+    }
+    return decryptData(accessData.scanMainKey, pinCode);
   }
 
   /**
    * Get the spend chain xprivkey for shielded UTXO signing.
-   * This is the key at m/44'/280'/1'/0.
+   * Uses account 2' (m/44'/280'/2'/0).
    */
   async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
@@ -983,16 +987,17 @@ export class Storage implements IStorage {
 
   /**
    * Get the scan chain xpubkey for shielded address derivation.
-   * The scan key shares the same account as legacy (m/44'/280'/0'/0).
+   * Uses account 1' (m/44'/280'/1'/0).
    * Returns undefined if wallet was created before shielded feature.
    */
   async getScanXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
-    return accessData.xpubkey;
+    return accessData.scanXpubkey;
   }
 
   /**
    * Get the spend chain xpubkey for shielded address derivation.
+   * Uses account 2' (m/44'/280'/2'/0).
    * Returns undefined if wallet was created before shielded feature.
    */
   async getSpendXPubKey(): Promise<string | undefined> {

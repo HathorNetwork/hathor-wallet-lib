@@ -305,9 +305,19 @@ export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
 export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
 
 /**
- * Account path for shielded spend keys (signing/spending authority).
+ * Account path for shielded scan keys (ECDH / view-only access to shielded outputs).
+ * Uses a separate account from legacy P2PKH (account 0') so that the scan key only
+ * grants read access to shielded outputs, not spending authority over legacy funds.
+ * This separation is critical for view key delegation (e.g., scanning services) and
+ * prevents compromising legacy address signing keys when debugging shielded decryption.
  */
-export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
+export const SHIELDED_SCAN_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
+
+/**
+ * Account path for shielded spend keys (signing/spending authority).
+ * Uses account 2' to remain separate from both legacy (0') and scan (1') keys.
+ */
+export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
 
 /**
  * String to be prefixed before signed messages using bitcore-message

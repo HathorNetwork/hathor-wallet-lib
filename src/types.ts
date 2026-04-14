@@ -441,9 +441,10 @@ export interface IWalletAccessData {
   walletType: WalletType;
   walletFlags: number;
   // Shielded address key material (optional, absent on wallets created before shielded feature)
-  // Scan key uses the same account as legacy (m/44'/280'/0'/0) — no separate field needed.
-  spendXpubkey?: string; // xpub at m/44'/280'/1'/0
-  spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
+  scanXpubkey?: string; // xpub at m/44'/280'/1'/0 (scan chain — view-only access)
+  scanMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
+  spendXpubkey?: string; // xpub at m/44'/280'/2'/0 (spend chain — signing authority)
+  spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/2'/0
 }
 
 export enum SCANNING_POLICY {

@@ -39,7 +39,7 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
 /**
  * Derive the scan private key for an address.
  *
- * The scan key uses the same account as legacy P2PKH (m/44'/280'/0'/0).
+ * The scan key uses a separate account (m/44'/280'/1'/0) from legacy P2PKH (account 0').
  * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
 async function deriveScanPrivkeyForAddress(
