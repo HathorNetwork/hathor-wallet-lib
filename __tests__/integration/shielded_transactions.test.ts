@@ -32,6 +32,7 @@ import * as constants from '../../src/constants';
 
 // Increase Axios timeout for test environment — the fullnode is under load from continuous mining.
 // TIMEOUT is declared as `const` so we must cast to override it in tests.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (constants as any).TIMEOUT = 30000;
 
 describe('shielded transactions', () => {

@@ -30,8 +30,8 @@ function makeOutput(
     overrides.script ?? Buffer.from([0x76, 0xa9, 0x14]),
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0xcc),
     overrides.assetCommitment,
-    overrides.value ?? 100n,
-    overrides.surjectionProof
+    overrides.surjectionProof,
+    overrides.value ?? 100n
   );
 }
 

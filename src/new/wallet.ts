@@ -873,6 +873,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getCurrentAddress(
+    // eslint-disable-next-line default-param-last
     { markAsUsed = false } = {},
     opts?: IAddressChainOptions
   ): Promise<{
@@ -3064,6 +3065,7 @@ class HathorWallet extends EventEmitter {
     }
 
     fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (output as any).type === 'shielded' ? output : hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
     fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));

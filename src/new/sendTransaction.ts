@@ -397,8 +397,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // zero (to balance), making the commitment trivially deducible.
     if (shieldedOutputs.length === 1 && outputs.length === 0) {
       throw new SendTxError(
-        'At least 2 shielded outputs are required when there are no transparent outputs'
-        + ' (trivial commitment protection).'
+        'At least 2 shielded outputs are required when there are no transparent outputs' +
+          ' (trivial commitment protection).'
       );
     }
 
