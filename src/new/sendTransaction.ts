@@ -384,6 +384,17 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       shieldedOutputs = await createShieldedOutputs(shieldedOutputDefs, cryptoProvider, network);
     }
 
+    // Trivial commitment protection.
+    // When all inputs are transparent, either need >=2 shielded outputs or >=1 transparent output.
+    // With a single shielded output and no transparent outputs, the blinding factor is forced to
+    // zero (to balance), making the commitment trivially deducible.
+    if (shieldedOutputs.length === 1 && outputs.length === 0) {
+      throw new SendTxError(
+        'At least 2 shielded outputs are required when there are no transparent outputs'
+        + ' (trivial commitment protection).'
+      );
+    }
+
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       outputs,
