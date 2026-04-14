@@ -46,7 +46,7 @@ async function deriveScanPrivkeyForAddress(
   storage: IStorage,
   addressIndex: number,
   pinCode: string,
-  logger: ILogger,
+  logger: ILogger
 ): Promise<Buffer | undefined> {
   try {
     const xprivStr = await storage.getScanXPrivKey(pinCode);
@@ -78,7 +78,7 @@ export async function processShieldedOutputs(
   storage: IStorage,
   tx: IHistoryTx,
   cryptoProvider: IShieldedCryptoProvider,
-  pinCode: string,
+  pinCode: string
 ): Promise<IProcessedShieldedOutput[]> {
   const shieldedOutputs = tx.shielded_outputs ?? [];
   if (shieldedOutputs.length === 0) return [];
@@ -99,14 +99,14 @@ export async function processShieldedOutputs(
       storage,
       addressInfo.bip32AddressIndex,
       pinCode,
-      storage.logger,
+      storage.logger
     );
     if (!privkey) continue;
 
     const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
     const commitment = Buffer.from(shieldedOutput.commitment, 'hex');
     const rangeProof = Buffer.from(shieldedOutput.range_proof, 'hex');
-    const isFullShielded = !!shieldedOutput.asset_commitment;
+    const isFullShielded = shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED;
 
     try {
       let recoveredValue: bigint;
@@ -119,7 +119,11 @@ export async function processShieldedOutputs(
         // FullShielded: rewind recovers token UID and asset blinding factor
         const assetCommitment = Buffer.from(shieldedOutput.asset_commitment!, 'hex');
         const result = await cryptoProvider.rewindFullShieldedOutput(
-          privkey, ephPk, commitment, rangeProof, assetCommitment,
+          privkey,
+          ephPk,
+          commitment,
+          rangeProof,
+          assetCommitment
         );
         recoveredValue = result.value;
         recoveredBf = result.blindingFactor;
@@ -131,16 +135,25 @@ export async function processShieldedOutputs(
         // https://github.com/HathorNetwork/hathor-core/blob/feat/ct-amount-token-privacy/hathor-ct-crypto/SHIELDED-OUTPUTS-CLIENT-GUIDE.md
         // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
         const expectedTag = await cryptoProvider.deriveTag(result.tokenUid);
-        const expectedAc = await cryptoProvider.createAssetCommitment(expectedTag, result.assetBlindingFactor);
+        const expectedAc = await cryptoProvider.createAssetCommitment(
+          expectedTag,
+          result.assetBlindingFactor
+        );
         if (!assetCommitment.equals(expectedAc)) {
-          storage.logger.warn('FullShielded token UID cross-check failed — asset commitment mismatch');
+          storage.logger.warn(
+            'FullShielded token UID cross-check failed — asset commitment mismatch'
+          );
           continue;
         }
       } else {
         // AmountShielded: token UID is known from the visible token_data field
         const tokenUid = resolveTokenUid(shieldedOutput, tx);
         const result = await cryptoProvider.rewindAmountShieldedOutput(
-          privkey, ephPk, commitment, rangeProof, Buffer.from(tokenUid, 'hex'),
+          privkey,
+          ephPk,
+          commitment,
+          rangeProof,
+          Buffer.from(tokenUid, 'hex')
         );
         recoveredValue = result.value;
         recoveredBf = result.blindingFactor;
@@ -164,8 +177,11 @@ export async function processShieldedOutputs(
     } catch (e) {
       // Rewind failed — output doesn't belong to us or data is corrupt
       storage.logger.debug(
-        'Shielded output rewind failed for tx', tx.tx_id,
-        'index', transparentCount + idx, e,
+        'Shielded output rewind failed for tx',
+        tx.tx_id,
+        'index',
+        transparentCount + idx,
+        e
       );
       continue;
     }

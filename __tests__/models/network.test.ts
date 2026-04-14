@@ -49,10 +49,12 @@ test('network.isVersionByteValid', () => {
     mainnet: {
       p2pkh: 0x28,
       p2sh: 0x64,
+      shielded: 0x3c,
     },
     testnet: {
       p2pkh: 0x49,
       p2sh: 0x87,
+      shielded: 0x5d,
     },
   };
 

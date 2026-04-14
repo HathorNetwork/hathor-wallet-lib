@@ -35,7 +35,7 @@ export interface IShieldedAddressInfo {
 export function encodeShieldedAddress(
   scanPubkey: Buffer,
   spendPubkey: Buffer,
-  network: Network,
+  network: Network
 ): string {
   if (scanPubkey.length !== 33) {
     throw new Error(`Scan pubkey must be 33 bytes, got ${scanPubkey.length}`);
@@ -64,7 +64,7 @@ export function deriveShieldedAddress(
   scanXpubkey: string,
   spendXpubkey: string,
   index: number,
-  networkName: string,
+  networkName: string
 ): IShieldedAddressInfo {
   const network = new Network(networkName);
 

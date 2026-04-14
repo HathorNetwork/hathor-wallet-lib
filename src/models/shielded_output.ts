@@ -50,7 +50,7 @@ class ShieldedOutput {
     ephemeralPubkey: Buffer,
     assetCommitment?: Buffer,
     value: OutputValueType = 0n,
-    surjectionProof?: Buffer,
+    surjectionProof?: Buffer
   ) {
     this.mode = mode;
     this.commitment = commitment;

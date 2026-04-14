@@ -256,7 +256,10 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<IAddressInfo|null>} The address info or null if not found
    */
-  async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null> {
+  async getAddressAtIndex(
+    index: number,
+    opts?: IAddressChainOptions
+  ): Promise<IAddressInfo | null> {
     return this.store.getAddressAtIndex(index, opts);
   }
 
@@ -410,7 +413,9 @@ export class Storage implements IStorage {
         }
       }
       if (shieldedEntries.length > 0) {
+        // eslint-disable-next-line no-param-reassign
         tx.shielded_outputs = shieldedEntries;
+        // eslint-disable-next-line no-param-reassign
         tx.outputs = transparentOutputs;
       }
     }

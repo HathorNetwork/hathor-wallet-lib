@@ -7,7 +7,11 @@
 
 import { resolveTokenUid, processShieldedOutputs } from '../../src/shielded/processing';
 import { NATIVE_TOKEN_UID_HEX } from '../../src/constants';
-import { ShieldedOutputMode, IShieldedOutput, IShieldedCryptoProvider } from '../../src/shielded/types';
+import {
+  ShieldedOutputMode,
+  IShieldedOutput,
+  IShieldedCryptoProvider,
+} from '../../src/shielded/types';
 import { IHistoryTx } from '../../src/types';
 
 function makeShieldedOutput(overrides: Partial<IShieldedOutput> = {}): IShieldedOutput {
@@ -42,7 +46,9 @@ function makeHistoryTx(overrides: Partial<IHistoryTx> = {}): IHistoryTx {
   } as IHistoryTx;
 }
 
-function makeMockProvider(overrides: Partial<IShieldedCryptoProvider> = {}): IShieldedCryptoProvider {
+function makeMockProvider(
+  overrides: Partial<IShieldedCryptoProvider> = {}
+): IShieldedCryptoProvider {
   return {
     generateRandomBlindingFactor: jest.fn().mockReturnValue(Buffer.alloc(32)),
     createAmountShieldedOutput: jest.fn(),
@@ -105,7 +111,10 @@ describe('resolveTokenUid', () => {
 describe('processShieldedOutputs', () => {
   it('should return empty array when no shielded outputs', async () => {
     const tx = makeHistoryTx();
-    const storage = { getAddressInfo: jest.fn(), logger: { warn: jest.fn(), debug: jest.fn() } } as any;
+    const storage = {
+      getAddressInfo: jest.fn(),
+      logger: { warn: jest.fn(), debug: jest.fn() },
+    } as any;
     const provider = makeMockProvider();
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
     expect(result).toEqual([]);
@@ -114,7 +123,10 @@ describe('processShieldedOutputs', () => {
   it('should skip outputs without decoded address', async () => {
     const so = makeShieldedOutput({ decoded: {} });
     const tx = makeHistoryTx({ shielded_outputs: [so] });
-    const storage = { getAddressInfo: jest.fn(), logger: { warn: jest.fn(), debug: jest.fn() } } as any;
+    const storage = {
+      getAddressInfo: jest.fn(),
+      logger: { warn: jest.fn(), debug: jest.fn() },
+    } as any;
     const provider = makeMockProvider();
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
     expect(result).toEqual([]);

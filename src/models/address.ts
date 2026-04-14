@@ -5,7 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { crypto, encoding, util, Address as BitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
+import {
+  crypto,
+  encoding,
+  util,
+  Address as BitcoreAddress,
+  PublicKey as bitcorePublicKey,
+} from 'bitcore-lib';
 import _ from 'lodash';
 import { AddressError } from '../errors';
 import Network from './network';
@@ -91,7 +97,10 @@ class Address {
     const errorMessage = `Invalid address: ${this.base58}.`;
 
     // Validate address length
-    if (addressBytes.length !== LEGACY_ADDR_LENGTH && addressBytes.length !== SHIELDED_ADDR_LENGTH) {
+    if (
+      addressBytes.length !== LEGACY_ADDR_LENGTH &&
+      addressBytes.length !== SHIELDED_ADDR_LENGTH
+    ) {
       throw new AddressError(
         `${errorMessage} Address has ${addressBytes.length} bytes and should have ${LEGACY_ADDR_LENGTH} or ${SHIELDED_ADDR_LENGTH}.`
       );

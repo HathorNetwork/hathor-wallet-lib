@@ -19,11 +19,11 @@ export enum ShieldedOutputMode {
  */
 export interface IShieldedOutput {
   mode: ShieldedOutputMode;
-  commitment: string;        // hex, 33 bytes
-  range_proof: string;       // hex, variable (~675 bytes)
-  script: string;            // hex, output script (P2PKH/P2SH)
-  token_data: number;        // token index (AmountShielded only)
-  ephemeral_pubkey: string;  // hex, 33 bytes
+  commitment: string; // hex, 33 bytes
+  range_proof: string; // hex, variable (~675 bytes)
+  script: string; // hex, output script (P2PKH/P2SH)
+  token_data: number; // token index (AmountShielded only)
+  ephemeral_pubkey: string; // hex, 33 bytes
   decoded: IShieldedOutputDecoded;
   // FullShielded only:
   asset_commitment?: string; // hex, 33 bytes
@@ -42,7 +42,7 @@ export interface IShieldedOutputDecoded {
 export interface IDecryptedShieldedOutput {
   value: bigint;
   blindingFactor: Buffer;
-  tokenUid: string;           // hex, 32 bytes
+  tokenUid: string; // hex, 32 bytes
   assetBlindingFactor?: Buffer;
   outputType: ShieldedOutputMode;
 }
@@ -85,7 +85,7 @@ export interface IShieldedCryptoProvider {
     value: bigint,
     recipientPubkey: Buffer,
     tokenUid: Buffer,
-    valueBlindingFactor: Buffer,
+    valueBlindingFactor: Buffer
   ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
 
   /**
@@ -97,7 +97,7 @@ export interface IShieldedCryptoProvider {
     recipientPubkey: Buffer,
     tokenUid: Buffer,
     valueBlindingFactor: Buffer,
-    assetBlindingFactor: Buffer,
+    assetBlindingFactor: Buffer
   ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
 
   /**
@@ -109,7 +109,7 @@ export interface IShieldedCryptoProvider {
     ephemeralPubkey: Buffer,
     commitment: Buffer,
     rangeProof: Buffer,
-    tokenUid: Buffer,
+    tokenUid: Buffer
   ): IRewoundAmountShieldedOutput | Promise<IRewoundAmountShieldedOutput>;
 
   /**
@@ -121,7 +121,7 @@ export interface IShieldedCryptoProvider {
     ephemeralPubkey: Buffer,
     commitment: Buffer,
     rangeProof: Buffer,
-    assetCommitment: Buffer,
+    assetCommitment: Buffer
   ): IRewoundFullShieldedOutput | Promise<IRewoundFullShieldedOutput>;
 
   /**
@@ -137,7 +137,7 @@ export interface IShieldedCryptoProvider {
     value: bigint,
     generatorBlindingFactor: Buffer,
     inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
-    otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
+    otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>
   ): Buffer | Promise<Buffer>;
 
   /**
@@ -156,7 +156,7 @@ export interface IShieldedCryptoProvider {
   createSurjectionProof(
     codomainTag: Buffer,
     codomainBlindingFactor: Buffer,
-    domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>,
+    domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>
   ): Buffer | Promise<Buffer>;
 
   /**
@@ -179,8 +179,8 @@ export interface IRewoundAmountShieldedOutput {
 export interface IRewoundFullShieldedOutput {
   value: bigint;
   blindingFactor: Buffer;
-  tokenUid: Buffer;             // 32 bytes, recovered from proof message
-  assetBlindingFactor: Buffer;  // 32 bytes, recovered from proof message
+  tokenUid: Buffer; // 32 bytes, recovered from proof message
+  assetBlindingFactor: Buffer; // 32 bytes, recovered from proof message
 }
 
 /**

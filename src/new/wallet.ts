@@ -91,7 +91,12 @@ import {
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
-import { deriveAddressP2PKH, deriveAddressP2SH, deriveShieldedAddressFromStorage, getAddressFromPubkey } from '../utils/address';
+import {
+  deriveAddressP2PKH,
+  deriveAddressP2SH,
+  deriveShieldedAddressFromStorage,
+  getAddressFromPubkey,
+} from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -105,7 +110,13 @@ import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import type { IShieldedCryptoProvider } from '../shielded/types';
-import { ConnectionState, FullNodeVersionData, IHathorWallet, OutputType, Utxo } from '../wallet/types';
+import {
+  ConnectionState,
+  FullNodeVersionData,
+  IHathorWallet,
+  OutputType,
+  Utxo,
+} from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -861,7 +872,10 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getCurrentAddress({ markAsUsed = false } = {}, opts?: IAddressChainOptions): Promise<{
+  async getCurrentAddress(
+    { markAsUsed = false } = {},
+    opts?: IAddressChainOptions
+  ): Promise<{
     address: string;
     index: number | null;
     addressPath: string;
@@ -876,7 +890,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the next address after the current available
    */
-  async getNextAddress(opts?: IAddressChainOptions): Promise<{ address: string; index: number | null; addressPath: string }> {
+  async getNextAddress(
+    opts?: IAddressChainOptions
+  ): Promise<{ address: string; index: number | null; addressPath: string }> {
     // First we mark the current address as used, then return the next
     await this.getCurrentAddress({ markAsUsed: true }, opts);
     return this.getCurrentAddress({}, opts);
@@ -1800,7 +1816,10 @@ class HathorWallet extends EventEmitter {
           const { createDefaultShieldedCryptoProvider } = await import('../shielded/provider');
           this.storage.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
         } catch (e) {
-          this.logger.info('Shielded crypto not available. Install @hathor/ct-crypto-node for shielded output support.', e);
+          this.logger.info(
+            'Shielded crypto not available. Install @hathor/ct-crypto-node for shielded output support.',
+            e
+          );
         }
       }
 

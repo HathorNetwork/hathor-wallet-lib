@@ -108,17 +108,19 @@ class ShieldedOutputsHeader extends Header {
       const ephemeralPubkey = Buffer.from(buf.subarray(0, 33));
       buf = buf.subarray(33);
 
-      outputs.push(new ShieldedOutput(
-        mode,
-        commitment,
-        rangeProof,
-        tokenData,
-        script,
-        ephemeralPubkey,
-        assetCommitment,
-        0n, // value is not stored on-chain; it's recovered via rewind
-        surjectionProof,
-      ));
+      outputs.push(
+        new ShieldedOutput(
+          mode,
+          commitment,
+          rangeProof,
+          tokenData,
+          script,
+          ephemeralPubkey,
+          assetCommitment,
+          0n, // value is not stored on-chain; it's recovered via rewind
+          surjectionProof
+        )
+      );
     }
 
     const header = new ShieldedOutputsHeader(outputs);

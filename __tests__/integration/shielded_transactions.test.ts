@@ -131,8 +131,18 @@ describe('shielded transactions', () => {
     // Send mixed: transparent to B, 2 shielded to B
     const tx = await walletA.sendManyOutputsTransaction([
       { address: addrB, value: 50n, token: NATIVE_TOKEN_UID },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB2, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB2,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
 
     expect(tx).not.toBeNull();
@@ -160,8 +170,18 @@ describe('shielded transactions', () => {
     const shieldedAddrA2 = await walletA.getAddressAtIndex(2, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrA1, value: 25n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrA2, value: 15n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrA1,
+        value: 25n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrA2,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
 
     expect(tx).not.toBeNull();
@@ -183,8 +203,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
 
     expect(tx).not.toBeNull();
@@ -208,8 +238,18 @@ describe('shielded transactions', () => {
 
     await expect(
       walletA.sendManyOutputsTransaction([
-        { address: legacyAddrB, value: 50n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-        { address: legacyAddrB, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+        {
+          address: legacyAddrB,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: legacyAddrB,
+          value: 10n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
       ])
     ).rejects.toThrow('Shielded output requires a shielded address');
   });
@@ -235,8 +275,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB0 = await walletB.getAddressAtIndex(1, { legacy: false });
     const shieldedAddrB1 = await walletB.getAddressAtIndex(2, { legacy: false });
     const tx2 = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 50n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(tx2).not.toBeNull();
     await waitForTxReceived(walletA, tx2!.hash!);
@@ -249,8 +299,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB4 = await walletB.getAddressAtIndex(5, { legacy: false });
     const tx3 = await walletA.sendManyOutputsTransaction([
       { address: legacyAddrB2, value: 40n, token: NATIVE_TOKEN_UID },
-      { address: shieldedAddrB3, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB4, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB3,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB4,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(tx3).not.toBeNull();
     await waitForTxReceived(walletB, tx3!.hash!);
@@ -292,8 +352,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB5 = await walletB.getAddressAtIndex(5, { legacy: false });
     const shieldedAddrB6 = await walletB.getAddressAtIndex(6, { legacy: false });
     const tx2 = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB5, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB6, value: 15n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB5,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB6,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(tx2).not.toBeNull();
     await waitForTxReceived(walletB, tx2!.hash!);
@@ -340,13 +410,25 @@ describe('shielded transactions', () => {
 
     // Build but don't send — we want to inspect the Transaction object
     const sendTx = await walletA.sendManyOutputsSendTransaction([
-      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     const tx = await sendTx.run('sign-tx');
 
     // Find the ShieldedOutputsHeader
-    const shieldedHeader = tx.headers.find(h => h instanceof ShieldedOutputsHeader) as ShieldedOutputsHeader | undefined;
+    const shieldedHeader = tx.headers.find(h => h instanceof ShieldedOutputsHeader) as
+      | ShieldedOutputsHeader
+      | undefined;
     expect(shieldedHeader).toBeDefined();
     expect(shieldedHeader!.shieldedOutputs.length).toBe(2);
 
@@ -395,12 +477,24 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const sendTx = await walletA.sendManyOutputsSendTransaction([
-      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
     ]);
     const tx = await sendTx.run('sign-tx');
 
-    const shieldedHeader = tx.headers.find(h => h instanceof ShieldedOutputsHeader) as ShieldedOutputsHeader | undefined;
+    const shieldedHeader = tx.headers.find(h => h instanceof ShieldedOutputsHeader) as
+      | ShieldedOutputsHeader
+      | undefined;
     expect(shieldedHeader).toBeDefined();
 
     const serializedParts: Buffer[] = [];
@@ -455,7 +549,10 @@ describe('shielded transactions', () => {
 
     // Use a precalculated wallet so we know the seed for restart
     const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
-    const walletB = await generateWalletHelper({ seed: walletDataB.words, preCalculatedAddresses: walletDataB.addresses });
+    const walletB = await generateWalletHelper({
+      seed: walletDataB.words,
+      preCalculatedAddresses: walletDataB.addresses,
+    });
 
     const addrA = await walletA.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
@@ -465,8 +562,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
@@ -515,8 +622,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 300n, token: tokenUid, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 200n, token: tokenUid, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 300n,
+        token: tokenUid,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 200n,
+        token: tokenUid,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
@@ -544,8 +661,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 400n, token: tokenUid, shielded: ShieldedOutputMode.FULLY_SHIELDED },
-      { address: shieldedAddrB1, value: 100n, token: tokenUid, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 400n,
+        token: tokenUid,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 100n,
+        token: tokenUid,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
     ]);
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
@@ -565,8 +692,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
-      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
     ]);
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
@@ -587,8 +724,18 @@ describe('shielded transactions', () => {
     const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
 
     const tx = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 25n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 15n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 25n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
     ]);
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
@@ -610,8 +757,18 @@ describe('shielded transactions', () => {
 
     // Send 2 AmountShielded outputs
     const txAmount = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrB0, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
-      { address: shieldedAddrB1, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      {
+        address: shieldedAddrB0,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
     ]);
     expect(txAmount).not.toBeNull();
     await waitForTxReceived(walletA, txAmount!.hash!);
@@ -634,13 +791,25 @@ describe('shielded transactions', () => {
     const expectedFeeFull = 2n * FEE_PER_FULL_SHIELDED_OUTPUT;
 
     const txFull = await walletA.sendManyOutputsTransaction([
-      { address: shieldedAddrC0, value: sendValue, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
-      { address: shieldedAddrC1, value: sendValue, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      {
+        address: shieldedAddrC0,
+        value: sendValue,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddrC1,
+        value: sendValue,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
     ]);
     expect(txFull).not.toBeNull();
     await waitForTxReceived(walletA, txFull!.hash!);
 
     const balanceAfterFull = await walletA.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceAfterFull[0].balance.unlocked).toBe(remainingBalance - 2n * sendValue - expectedFeeFull);
+    expect(balanceAfterFull[0].balance.unlocked).toBe(
+      remainingBalance - 2n * sendValue - expectedFeeFull
+    );
   });
 });

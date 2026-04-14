@@ -8,7 +8,12 @@
 import EventEmitter from 'events';
 import { shuffle } from 'lodash';
 import txApi from '../api/txApi';
-import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT, FEE_PER_AMOUNT_SHIELDED_OUTPUT, FEE_PER_FULL_SHIELDED_OUTPUT } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  SELECT_OUTPUTS_TIMEOUT,
+  FEE_PER_AMOUNT_SHIELDED_OUTPUT,
+  FEE_PER_FULL_SHIELDED_OUTPUT,
+} from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
 import Address from '../models/address';
@@ -74,7 +79,7 @@ export interface ISendShieldedOutput {
   address: string;
   value: OutputValueType;
   token: string;
-  scanPubkey: string;              // hex, 33 bytes compressed EC scan pubkey for ECDH
+  scanPubkey: string; // hex, 33 bytes compressed EC scan pubkey for ECDH
   shieldedMode: ShieldedOutputMode;
 }
 
@@ -378,7 +383,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     if (shieldedOutputDefs.length > 0) {
       const cryptoProvider = this.storage.shieldedCryptoProvider;
       if (!cryptoProvider) {
-        throw new SendTxError('Shielded crypto provider is not set. Cannot create shielded outputs.');
+        throw new SendTxError(
+          'Shielded crypto provider is not set. Cannot create shielded outputs.'
+        );
       }
 
       shieldedOutputs = await createShieldedOutputs(shieldedOutputDefs, cryptoProvider, network);

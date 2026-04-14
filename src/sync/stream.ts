@@ -564,7 +564,7 @@ export class StreamManager extends AbortController {
         // Generate shielded address pair at the same index (if keys are available)
         const shieldedResult = await deriveShieldedAddressFromStorage(
           addr.bip32AddressIndex,
-          this.storage,
+          this.storage
         );
         if (shieldedResult) {
           if (!(await this.storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
