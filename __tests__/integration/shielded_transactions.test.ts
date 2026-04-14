@@ -8,15 +8,25 @@
 import HathorWallet from '../../src/new/wallet';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import {
+  createTokenHelper,
+  generateConnection,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
+  waitForWalletReady,
   waitUntilNextTimestamp,
+  DEFAULT_PASSWORD,
+  DEFAULT_PIN_CODE,
 } from './helpers/wallet.helper';
-import { NATIVE_TOKEN_UID } from '../../src/constants';
+import {
+  NATIVE_TOKEN_UID,
+  FEE_PER_AMOUNT_SHIELDED_OUTPUT,
+  FEE_PER_FULL_SHIELDED_OUTPUT,
+} from '../../src/constants';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import Network from '../../src/models/network';
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import * as constants from '../../src/constants';
 
 // Increase Axios timeout for test environment — the fullnode is under load from continuous mining.
@@ -437,5 +447,198 @@ describe('shielded transactions', () => {
 
     const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
     expect(balanceB[0].balance.unlocked).toBe(50n);
+  });
+
+  it('should recover shielded balance after wallet restart', async () => {
+    const walletA = await generateWalletHelper();
+
+    // Use a precalculated wallet so we know the seed for restart
+    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletB = await generateWalletHelper({ seed: walletDataB.words, preCalculatedAddresses: walletDataB.addresses });
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Send shielded outputs to walletB
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // Verify balance before restart
+    const balanceBefore = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceBefore[0].balance.unlocked).toBe(50n);
+
+    // Stop walletB (clean storage to simulate fresh load from fullnode)
+    await walletB.stop({ cleanStorage: true, cleanAddresses: true });
+
+    // Restart walletB from same seed
+    const walletB2 = new HathorWallet({
+      seed: walletDataB.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    });
+    await walletB2.start();
+    await waitForWalletReady(walletB2);
+
+    // Balance should be recovered from fullnode history (including shielded outputs)
+    const balanceAfter = await walletB2.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceAfter[0].balance.unlocked).toBe(50n);
+
+    await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
+  // TODO: Custom token shielded outputs fail with "tokens melted, but there is no melt authority input".
+  // The phantom output trick in sendTransaction.ts balances UTXO selection, but when phantoms are
+  // removed the custom token inputs exceed the transparent outputs, looking like a melt to the fullnode.
+  // The shielded output amounts need to be accounted for in the token balance equation.
+  it.skip('should send shielded outputs with a custom token (AmountShielded)', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    // Fund walletA and create a custom token
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 20n);
+    const tokenResp = await createTokenHelper(walletA, 'ShieldedToken', 'SHT', 1000n);
+    const tokenUid = tokenResp.hash;
+
+    // Send shielded outputs of the custom token to walletB
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 300n, token: tokenUid, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      { address: shieldedAddrB1, value: 200n, token: tokenUid, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // WalletB should see the custom token balance from decrypted shielded outputs
+    const balanceB = await walletB.getBalance(tokenUid);
+    expect(balanceB[0].balance.unlocked).toBe(500n);
+
+    // WalletA should have the remaining custom tokens
+    const balanceA = await walletA.getBalance(tokenUid);
+    expect(balanceA[0].balance.unlocked).toBe(500n);
+  });
+
+  // TODO: Same issue as AmountShielded custom token test above.
+  it.skip('should send FullShielded outputs with a custom token', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 20n);
+    const tokenResp = await createTokenHelper(walletA, 'FullShieldToken', 'FST', 1000n);
+    const tokenUid = tokenResp.hash;
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 400n, token: tokenUid, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      { address: shieldedAddrB1, value: 100n, token: tokenUid, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    const balanceB = await walletB.getBalance(tokenUid);
+    expect(balanceB[0].balance.unlocked).toBe(500n);
+  });
+
+  it('should decrypt FullShielded outputs and include in receiver balance', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 30n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      { address: shieldedAddrB1, value: 20n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // Wallet B should see the decrypted FullShielded amounts in its balance
+    const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceB[0].balance.unlocked).toBe(50n);
+  });
+
+  it('should send mixed AmountShielded and FullShielded outputs in the same transaction', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 25n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      { address: shieldedAddrB1, value: 15n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // Wallet B should see both decrypted amounts
+    const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceB[0].balance.unlocked).toBe(40n);
+  });
+
+  it('should deduct correct fees for shielded outputs', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    // Send 2 AmountShielded outputs
+    const txAmount = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrB0, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+      { address: shieldedAddrB1, value: 10n, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.AMOUNT_SHIELDED },
+    ]);
+    expect(txAmount).not.toBeNull();
+    await waitForTxReceived(walletA, txAmount!.hash!);
+
+    // Fee for 2 AmountShielded outputs = 2 * FEE_PER_AMOUNT_SHIELDED_OUTPUT
+    const expectedFeeAmount = 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT;
+    const balanceAfterAmount = await walletA.getBalance(NATIVE_TOKEN_UID);
+    // Sender sent 20 + fees, so balance = 100 - 20 - fees
+    expect(balanceAfterAmount[0].balance.unlocked).toBe(100n - 20n - expectedFeeAmount);
+
+    await waitUntilNextTimestamp(walletA, txAmount!.hash!);
+
+    // Now send 2 FullShielded outputs from remaining balance
+    const walletC = await generateWalletHelper();
+    const shieldedAddrC0 = await walletC.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrC1 = await walletC.getAddressAtIndex(1, { legacy: false });
+
+    const remainingBalance = balanceAfterAmount[0].balance.unlocked;
+    const sendValue = 5n;
+    const expectedFeeFull = 2n * FEE_PER_FULL_SHIELDED_OUTPUT;
+
+    const txFull = await walletA.sendManyOutputsTransaction([
+      { address: shieldedAddrC0, value: sendValue, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+      { address: shieldedAddrC1, value: sendValue, token: NATIVE_TOKEN_UID, shielded: ShieldedOutputMode.FULLY_SHIELDED },
+    ]);
+    expect(txFull).not.toBeNull();
+    await waitForTxReceived(walletA, txFull!.hash!);
+
+    const balanceAfterFull = await walletA.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceAfterFull[0].balance.unlocked).toBe(remainingBalance - 2n * sendValue - expectedFeeFull);
   });
 });

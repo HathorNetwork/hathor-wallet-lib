@@ -60,7 +60,7 @@ test('network.isVersionByteValid', () => {
   // Valid version bytes for testnet
   expect(testnet.isVersionByteValid(versionBytes.testnet.p2pkh)).toBe(true);
   expect(testnet.isVersionByteValid(versionBytes.testnet.p2sh)).toBe(true);
-  expect(testnet.isVersionByteValid(0x5d)).toBe(true); // shielded
+  expect(testnet.isVersionByteValid(versionBytes.testnet.shielded)).toBe(true);
   // Invalid version bytes
   expect(testnet.isVersionByteValid(1)).toBe(false);
   expect(testnet.isVersionByteValid(105)).toBe(false);
@@ -70,7 +70,7 @@ test('network.isVersionByteValid', () => {
   // Valid version bytes for mainnet
   expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2pkh)).toBe(true);
   expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2sh)).toBe(true);
-  expect(mainnet.isVersionByteValid(0x3c)).toBe(true); // shielded
+  expect(mainnet.isVersionByteValid(versionBytes.mainnet.shielded)).toBe(true);
   // Invalid version bytes
   expect(mainnet.isVersionByteValid(1)).toBe(false);
   expect(mainnet.isVersionByteValid(105)).toBe(false);

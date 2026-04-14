@@ -91,7 +91,7 @@ import {
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
-import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
+import { deriveAddressP2PKH, deriveAddressP2SH, deriveShieldedAddressFromStorage, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -814,17 +814,12 @@ class HathorWallet extends EventEmitter {
     if (address === null) {
       if (opts?.legacy === false) {
         // Shielded address not yet derived at this index — derive and save
-        const { deriveShieldedAddressFromStorage } = await import('../utils/address');
         const result = await deriveShieldedAddressFromStorage(index, this.storage);
         if (!result) {
           throw new Error('Shielded keys not available');
         }
-        if (!(await this.storage.isAddressMine(result.shieldedAddress.base58))) {
-          await this.storage.saveAddress(result.shieldedAddress);
-        }
-        if (!(await this.storage.isAddressMine(result.spendAddress.base58))) {
-          await this.storage.saveAddress(result.spendAddress);
-        }
+        await this.storage.saveAddress(result.shieldedAddress);
+        await this.storage.saveAddress(result.spendAddress);
         return result.shieldedAddress.base58;
       }
       // Legacy address derivation
@@ -898,60 +893,8 @@ class HathorWallet extends EventEmitter {
         // Not ready yet — queue for processTxQueue during startup
         this.wsTxQueue.enqueue(wsData);
       } else {
-        // Queue and kick off processing if not already running
-        this._wsLiveQueue.push(wsData);
-        this._scheduleLiveQueueDrain();
+        this.enqueueOnNewTx(wsData);
       }
-    }
-  }
-
-  /** @internal */
-  private _wsLiveQueue: WalletWebSocketData[] = [];
-  /** @internal */
-  private _liveQueueDraining = false;
-  /** @internal — true while _drainLiveQueue is running, prevents state=PROCESSING in onNewTx */
-  private _inLiveDrain = false;
-
-  /** @internal */
-  private _scheduleLiveQueueDrain(): void {
-    if (this._liveQueueDraining) return;
-    this._liveQueueDraining = true;
-    // Use setTimeout to yield to macrotask queue, allowing other
-    // callbacks (timers, I/O) to run between drain batches.
-    setTimeout(() => {
-      this._drainLiveQueue().catch((err) => {
-        this.logger.error('Error in live queue drain:', err);
-        this._inLiveDrain = false;
-        this._liveQueueDraining = false;
-        // Reschedule if there are still items
-        if (this._wsLiveQueue.length > 0) {
-          this._scheduleLiveQueueDrain();
-        }
-      });
-    }, 0);
-  }
-
-  /** @internal */
-  private async _drainLiveQueue(): Promise<void> {
-    this._inLiveDrain = true;
-    // Process a small batch, then reschedule via setTimeout.
-    // This ensures other macrotask callbacks (timers, polls) can fire between batches.
-    const BATCH_SIZE = 5;
-    let processed = 0;
-    while (this._wsLiveQueue.length > 0 && processed < BATCH_SIZE) {
-      const wsData = this._wsLiveQueue.shift()!;
-      try {
-        await this.onNewTx(wsData);
-      } catch (err) {
-        this.logger.error('Error processing new tx from websocket:', err);
-      }
-      processed++;
-    }
-    this._inLiveDrain = false;
-    this._liveQueueDraining = false;
-    // Reschedule if more items in queue
-    if (this._wsLiveQueue.length > 0) {
-      this._scheduleLiveQueueDrain();
     }
   }
 
@@ -1167,8 +1110,6 @@ class HathorWallet extends EventEmitter {
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        // Skip shielded output entries (no value/token fields)
-        if (transactionUtils.isShieldedOutputEntry(output)) continue;
         const is_address_valid = output.decoded && output.decoded.address === address;
         const is_token_valid = token === output.token;
         const is_authority = transactionUtils.isAuthorityOutput(output);
@@ -1546,9 +1487,7 @@ class HathorWallet extends EventEmitter {
    * @param wsData WebSocket message data containing transaction history
    */
   enqueueOnNewTx(wsData: WalletWebSocketData): void {
-    // Route through the live queue for proper macrotask yielding
-    this._wsLiveQueue.push(wsData);
-    this._scheduleLiveQueueDrain();
+    this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
   /**
@@ -1600,24 +1539,14 @@ class HathorWallet extends EventEmitter {
     const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
     const isNewTx = storageTx === null;
 
-    // Only set PROCESSING for truly new txs. For updates, preserve the existing status
-    // to avoid a race where repeated ws notifications keep overwriting FINISHED with PROCESSING.
-    if (isNewTx) {
-      newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
-    } else {
-      newTx.processingStatus = storageTx.processingStatus;
-    }
+    newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
 
     // set state to processing and save current state.
-    // During live drain, keep state as READY so ws messages go directly to _wsLiveQueue
-    // instead of being detoured through wsTxQueue (which causes event loop starvation).
     const previousState = this.state;
-    if (!this._inLiveDrain) {
-      this.state = HathorWallet.PROCESSING;
-    }
+    this.state = HathorWallet.PROCESSING;
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
@@ -1631,9 +1560,7 @@ class HathorWallet extends EventEmitter {
       await processMetadataChanged(this.storage, newTx);
     }
     // restore previous state
-    if (!this._inLiveDrain) {
-      this.state = previousState;
-    }
+    this.state = previousState;
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage
@@ -1643,20 +1570,6 @@ class HathorWallet extends EventEmitter {
       this.emit('new-tx', newTx);
     } else {
       this.emit('update-tx', newTx);
-    }
-
-    // Drain any ws messages that arrived while we were in PROCESSING state.
-    // Only needed during startup — in live drain, state stays READY so messages
-    // go directly to _wsLiveQueue.
-    if (!this._inLiveDrain && this.state === HathorWallet.READY) {
-      let queued = this.wsTxQueue.dequeue();
-      while (queued !== undefined) {
-        this._wsLiveQueue.push(queued);
-        queued = this.wsTxQueue.dequeue();
-      }
-      if (this._wsLiveQueue.length > 0) {
-        this._scheduleLiveQueueDrain();
-      }
     }
   }
 
@@ -1879,7 +1792,9 @@ class HathorWallet extends EventEmitter {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
 
-      // Auto-detect shielded crypto provider if not already set
+      // Auto-detect shielded crypto provider if not already set.
+      // Dynamic import because @hathor/ct-crypto-node is an optional dependency —
+      // a static import would crash the wallet module if the native package isn't installed.
       if (!this.storage.shieldedCryptoProvider) {
         try {
           const { createDefaultShieldedCryptoProvider } = await import('../shielded/provider');

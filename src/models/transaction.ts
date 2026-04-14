@@ -17,6 +17,7 @@ import {
   DEFAULT_TX_VERSION,
   MAX_INPUTS,
   MAX_OUTPUTS,
+  MAX_SHIELDED_OUTPUTS,
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
@@ -414,10 +415,15 @@ class Transaction {
       );
     }
 
-    const totalOutputs = this.outputs.length + this.shieldedOutputs.length;
-    if (totalOutputs > MAX_OUTPUTS) {
+    if (this.outputs.length > MAX_OUTPUTS) {
       throw new MaximumNumberOutputsError(
-        `Transaction has ${totalOutputs} outputs (${this.outputs.length} transparent + ${this.shieldedOutputs.length} shielded) and can have at most ${MAX_OUTPUTS}.`
+        `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+      );
+    }
+
+    if (this.shieldedOutputs.length > MAX_SHIELDED_OUTPUTS) {
+      throw new MaximumNumberOutputsError(
+        `Transaction has ${this.shieldedOutputs.length} shielded outputs and can have at most ${MAX_SHIELDED_OUTPUTS}.`
       );
     }
   }

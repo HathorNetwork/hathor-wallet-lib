@@ -218,9 +218,14 @@ export const TX_WEIGHT_CONSTANTS = {
 export const MAX_INPUTS: number = 255;
 
 /**
- * Maximum number of outputs
+ * Maximum number of transparent outputs
  */
 export const MAX_OUTPUTS: number = 255;
+
+/**
+ * Maximum number of shielded outputs
+ */
+export const MAX_SHIELDED_OUTPUTS: number = 32;
 
 /**
  * Maximum number of fee entries in a FeeHeader
@@ -287,7 +292,6 @@ export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
 
 /**
  * Account path for shielded spend keys (signing/spending authority).
- * Note: Shielded scan keys use the same account as legacy P2PKH (m/44'/280'/0').
  */
 export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
 

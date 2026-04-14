@@ -25,15 +25,9 @@ export const JSONBigInt = {
     return JSON.stringify(value, this.bigIntReplacer, space);
   },
 
-  bigIntReviver(_key: string, value: any, context?: { source: string }): any {
+  bigIntReviver(_key: string, value: any, context: { source: string }): any {
     if (typeof value !== 'number') {
       // No special handling needed for non-number values.
-      return value;
-    }
-
-    // Hermes (React Native) doesn't support the context parameter in JSON.parse reviver.
-    // Fall back to returning the value as-is when context is unavailable.
-    if (!context?.source) {
       return value;
     }
 

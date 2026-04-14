@@ -84,31 +84,44 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   })
   .passthrough();
 
-/**
- * Output schema that accepts both transparent and shielded entries.
- * Transparent outputs have value/token/decoded; shielded entries (appended by
- * fullnode's to_json_extended) have type='shielded', commitment, etc. instead.
- * All fields are optional to accommodate both shapes in a single schema.
- */
-export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
+const TransparentOutputSchema = z
   .object({
-    // Transparent output fields
-    value: bigIntCoercibleSchema.optional(),
-    token_data: z.number().optional(),
-    script: z.string().optional(),
-    decoded: IHistoryOutputDecodedSchema.optional(),
-    token: z.string().optional(),
-    spent_by: z.string().nullable().optional(),
+    value: bigIntCoercibleSchema,
+    token_data: z.number(),
+    script: z.string(),
+    decoded: IHistoryOutputDecodedSchema,
+    token: z.string(),
+    spent_by: z.string().nullable(),
     selected_as_input: z.boolean().optional(),
-    // Shielded output entry fields
-    type: z.string().optional(),
-    commitment: z.string().optional(),
-    range_proof: z.string().optional(),
-    ephemeral_pubkey: z.string().optional(),
-    asset_commitment: z.string().optional(),
-    surjection_proof: z.string().optional(),
   })
-  .passthrough() as ZodSchema<IHistoryOutput>;
+  .passthrough();
+
+const AmountShieldedOutputSchema = z
+  .object({
+    type: z.string(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    ephemeral_pubkey: z.string(),
+    token_data: z.number(),
+  })
+  .passthrough();
+
+const FullShieldedOutputSchema = z
+  .object({
+    type: z.string(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    ephemeral_pubkey: z.string(),
+    asset_commitment: z.string(),
+    surjection_proof: z.string(),
+  })
+  .passthrough();
+
+export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z.union([
+  TransparentOutputSchema,
+  AmountShieldedOutputSchema,
+  FullShieldedOutputSchema,
+]) as ZodSchema<IHistoryOutput>;
 
 export const IHistoryNanoContractBaseAction = z.object({
   token_uid: z.string(),

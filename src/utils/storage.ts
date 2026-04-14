@@ -30,6 +30,7 @@ import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH, deriveShieldedAddressFromStorage, getAddressFromPubkey } from './address';
+import { processShieldedOutputs } from '../shielded/processing';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
@@ -659,6 +660,8 @@ async function updateWalletMetadataFromProcessedTxData(
   }
 
   // Update token config
+  // Up until now we have updated the tokens metadata, but the token config may be missing
+  // So we will check if we have each token found, if not we will fetch the token config from the api.
   await _updateTokensData(storage, tokens);
 }
 
@@ -846,7 +849,6 @@ export async function processNewTx(
   // Process shielded outputs (if crypto provider is available and tx has shielded outputs)
   const effectivePinCode = pinCode ?? storage.pinCode;
   if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length && effectivePinCode !== undefined) {
-    const { processShieldedOutputs } = await import('../shielded/processing');
     try {
       const shieldedResults = await processShieldedOutputs(
         storage, tx, storage.shieldedCryptoProvider, effectivePinCode
