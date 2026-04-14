@@ -813,4 +813,104 @@ describe('shielded transactions', () => {
       remainingBalance - 2n * sendValue - expectedFeeFull
     );
   });
+
+  it('should reject a single shielded output with no transparent outputs (Rule 4)', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB = await walletB.getAddressAtIndex(0, { legacy: false });
+
+    // Sending a single shielded output should fail due to trivial commitment protection.
+    // The wallet-lib or fullnode rejects transactions with fewer than 2 shielded outputs.
+    await expect(
+      walletA.sendManyOutputsTransaction([
+        {
+          address: shieldedAddrB,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ])
+    ).rejects.toThrow(/at least 2 shielded outputs/i);
+  });
+
+  it('should reject a single shielded output even with transparent outputs present', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const addrB = await walletB.getAddressAtIndex(0);
+    const shieldedAddrB = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    // The fullnode requires at least 2 shielded outputs, even when transparent outputs are present.
+    await expect(
+      walletA.sendManyOutputsTransaction([
+        { address: addrB, value: 30n, token: NATIVE_TOKEN_UID },
+        {
+          address: shieldedAddrB,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ])
+    ).rejects.toThrow(/at least 2 shielded outputs/i);
+  });
+
+  it('should recover FullShielded balance after wallet restart', async () => {
+    const walletA = await generateWalletHelper();
+
+    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletB = await generateWalletHelper({
+      seed: walletDataB.words,
+      preCalculatedAddresses: walletDataB.addresses,
+    });
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    const balanceBefore = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceBefore[0].balance.unlocked).toBe(50n);
+
+    await walletB.stop({ cleanStorage: true, cleanAddresses: true });
+
+    const walletB2 = new HathorWallet({
+      seed: walletDataB.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      scanPolicy: getGapLimitConfig(),
+    });
+    await walletB2.start();
+    await waitForWalletReady(walletB2);
+
+    const balanceAfter = await walletB2.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceAfter[0].balance.unlocked).toBe(50n);
+
+    await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
+  });
 });
