@@ -30,6 +30,7 @@ import {
   ON_CHAIN_BLUEPRINTS_VERSION,
   P2PKH_ACCT_PATH,
   P2SH_ACCT_PATH,
+  SHIELDED_SPEND_ACCT_PATH,
   GAP_LIMIT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -852,7 +853,15 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPathForIndex(index: number): Promise<string> {
+  async getAddressPathForIndex(
+    index: number,
+    opts?: IAddressChainOptions
+  ): Promise<string> {
+    if (opts?.legacy === false) {
+      // Shielded addresses use the spend account path
+      return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
+    }
+
     const walletType = await this.storage.getWalletType();
     if (walletType === WalletType.MULTISIG) {
       // P2SH
@@ -883,7 +892,7 @@ class HathorWallet extends EventEmitter {
   }> {
     const address = await this.storage.getCurrentAddress(markAsUsed, opts);
     const index = await this.getAddressIndex(address);
-    const addressPath = await this.getAddressPathForIndex(index!);
+    const addressPath = await this.getAddressPathForIndex(index!, opts);
 
     return { address, index, addressPath };
   }

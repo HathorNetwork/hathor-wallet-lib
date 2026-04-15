@@ -67,22 +67,28 @@ class ShieldedOutputsHeader extends Header {
     const outputs: ShieldedOutput[] = [];
     for (let i = 0; i < numOutputs; i++) {
       // Mode (1 byte)
+      if (buf.length < 1) throw new Error('Truncated shielded output: missing mode byte');
       let mode: number;
       [mode, buf] = unpackToInt(1, false, buf);
 
       // Commitment (33 bytes)
+      if (buf.length < 33) throw new Error('Truncated shielded output: missing commitment');
       const commitment = Buffer.from(buf.subarray(0, 33));
       buf = buf.subarray(33);
 
       // Range proof (2 bytes length + variable)
+      if (buf.length < 2) throw new Error('Truncated shielded output: missing range proof length');
       let rpLen: number;
       [rpLen, buf] = unpackToInt(2, false, buf);
+      if (buf.length < rpLen) throw new Error('Truncated shielded output: incomplete range proof');
       const rangeProof = Buffer.from(buf.subarray(0, rpLen));
       buf = buf.subarray(rpLen);
 
       // Script (2 bytes length + variable)
+      if (buf.length < 2) throw new Error('Truncated shielded output: missing script length');
       let scriptLen: number;
       [scriptLen, buf] = unpackToInt(2, false, buf);
+      if (buf.length < scriptLen) throw new Error('Truncated shielded output: incomplete script');
       const script = Buffer.from(buf.subarray(0, scriptLen));
       buf = buf.subarray(scriptLen);
 
@@ -92,20 +98,27 @@ class ShieldedOutputsHeader extends Header {
 
       if (mode === ShieldedOutputMode.AMOUNT_SHIELDED) {
         // Token data (1 byte)
+        if (buf.length < 1) throw new Error('Truncated AmountShielded output: missing token_data');
         [tokenData, buf] = unpackToInt(1, false, buf);
       } else if (mode === ShieldedOutputMode.FULLY_SHIELDED) {
         // Asset commitment (33 bytes)
+        if (buf.length < 33) throw new Error('Truncated FullShielded output: missing asset commitment');
         assetCommitment = Buffer.from(buf.subarray(0, 33));
         buf = buf.subarray(33);
 
         // Surjection proof (2 bytes length + variable)
+        if (buf.length < 2) throw new Error('Truncated FullShielded output: missing surjection proof length');
         let spLen: number;
         [spLen, buf] = unpackToInt(2, false, buf);
+        if (buf.length < spLen) throw new Error('Truncated FullShielded output: incomplete surjection proof');
         surjectionProof = Buffer.from(buf.subarray(0, spLen));
         buf = buf.subarray(spLen);
+      } else {
+        throw new Error(`Unsupported shielded output mode: ${mode}`);
       }
 
       // Ephemeral pubkey (33 bytes)
+      if (buf.length < 33) throw new Error('Truncated shielded output: missing ephemeral pubkey');
       const ephemeralPubkey = Buffer.from(buf.subarray(0, 33));
       buf = buf.subarray(33);
 

@@ -49,6 +49,7 @@ async function deriveScanPrivkeyForAddress(
 ): Promise<Buffer | undefined> {
   try {
     const xprivStr = await storage.getScanXPrivKey(pinCode);
+    if (!xprivStr) return undefined;
     const hdPrivKey = new HDPrivateKey(xprivStr);
     const childKey = hdPrivKey.deriveNonCompliantChild(addressIndex);
     // The native crypto provider (ECDH) needs raw 32-byte private key bytes.
@@ -116,7 +117,11 @@ export async function processShieldedOutputs(
 
       if (isFullShielded) {
         // FullShielded: rewind recovers token UID and asset blinding factor
-        const assetCommitment = Buffer.from(shieldedOutput.asset_commitment!, 'hex');
+        if (!shieldedOutput.asset_commitment) {
+          storage.logger.warn('FullShielded output missing asset_commitment, skipping');
+          continue;
+        }
+        const assetCommitment = Buffer.from(shieldedOutput.asset_commitment, 'hex');
         const result = await cryptoProvider.rewindFullShieldedOutput(
           privkey,
           ephPk,

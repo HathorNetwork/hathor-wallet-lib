@@ -9,7 +9,9 @@ import { createShieldedOutputs } from '../../src/shielded/creation';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
 import Network from '../../src/models/network';
 
-function makeMockProvider(overrides: Partial<IShieldedCryptoProvider> = {}): IShieldedCryptoProvider {
+function makeMockProvider(
+  overrides: Partial<IShieldedCryptoProvider> = {}
+): IShieldedCryptoProvider {
   let callCount = 0;
   return {
     generateRandomBlindingFactor: jest.fn().mockReturnValue(Buffer.alloc(32, 0x01)),

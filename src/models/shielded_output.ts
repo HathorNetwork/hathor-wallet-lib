@@ -98,12 +98,14 @@ class ShieldedOutput {
       arr.push(this.surjectionProof);
     }
 
-    // Ephemeral pubkey (always 33 bytes; zeros if not present for backward compat)
-    arr.push(
-      this.ephemeralPubkey && this.ephemeralPubkey.length === EPHEMERAL_PUBKEY_SIZE
-        ? this.ephemeralPubkey
-        : Buffer.alloc(EPHEMERAL_PUBKEY_SIZE)
-    );
+    // Ephemeral pubkey (always 33 bytes)
+    if (!this.ephemeralPubkey || this.ephemeralPubkey.length !== EPHEMERAL_PUBKEY_SIZE) {
+      throw new Error(
+        `Invalid ephemeral pubkey: expected ${EPHEMERAL_PUBKEY_SIZE} bytes, ` +
+          `got ${this.ephemeralPubkey?.length ?? 0}`
+      );
+    }
+    arr.push(this.ephemeralPubkey);
 
     return arr;
   }
