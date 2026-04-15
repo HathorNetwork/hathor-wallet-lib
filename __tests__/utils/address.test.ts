@@ -175,3 +175,24 @@ test('Get address from pubkey', async () => {
   expect(address.base58).toBe(base58);
   expect(address.validateAddress()).toBeTruthy();
 });
+
+test('deriveShieldedAddressFromStorage returns null when shielded keys unavailable', async () => {
+  const { HDPrivateKey } = await import('bitcore-lib');
+  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+  const { encryptData } = await import('../../src/utils/crypto');
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  // Provide minimal access data WITHOUT shielded keys (legacy-only wallet)
+  const xpriv = new HDPrivateKey();
+  await store.saveAccessData({
+    xpubkey: xpriv.xpubkey,
+    mainKey: encryptData(xpriv.xprivkey, '123'),
+    walletType: 'p2pkh' as any,
+    walletFlags: 0,
+    // No scanXpubkey, no spendXpubkey — shielded keys absent
+  });
+
+  const result = await deriveShieldedAddressFromStorage(0, storage);
+  expect(result).toBeNull();
+});

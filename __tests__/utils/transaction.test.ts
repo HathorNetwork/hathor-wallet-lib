@@ -733,3 +733,46 @@ test('convertTransactionToHistoryTx', async () => {
     getTxSpy.mockRestore();
   }
 });
+
+test('getSignatureForTx uses spend key chain for shielded-spend addresses', async () => {
+  const legacyXpriv = new HDPrivateKey();
+  const spendXpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest.spyOn(storage, 'getMainXPrivKey').mockResolvedValue(legacyXpriv.xprivkey);
+  jest
+    .spyOn(storage, 'getSpendXPrivKey')
+    .mockResolvedValue(spendXpriv.deriveNonCompliantChild(0).xprivkey);
+
+  const shieldedAddr = 'shielded-spend-addr';
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr => {
+    if (addr === shieldedAddr) {
+      return {
+        base58: addr,
+        bip32AddressIndex: 0,
+        addressType: 'shielded-spend' as const,
+      };
+    }
+    return null;
+  });
+
+  async function* getSpentMock(inputs: any) {
+    yield {
+      index: 0,
+      input: inputs[0],
+      tx: { outputs: [{ decoded: { address: shieldedAddr } }] },
+    };
+  }
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock as any);
+
+  const input = new Input('cafe'.repeat(8), 0);
+  const tx = new Transaction([input], []);
+
+  const sigData = await transaction.getSignatureForTx(tx, storage, '123');
+
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0].addressIndex).toBe(0);
+  // getSpendXPrivKey should have been called (not just getMainXPrivKey)
+  expect(storage.getSpendXPrivKey).toHaveBeenCalledWith('123');
+});
