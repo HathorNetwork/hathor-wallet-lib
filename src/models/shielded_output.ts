@@ -131,11 +131,13 @@ class ShieldedOutput {
     arr.push(this.script);
 
     // Always include ephemeral pubkey in sighash
-    arr.push(
-      this.ephemeralPubkey && this.ephemeralPubkey.length === EPHEMERAL_PUBKEY_SIZE
-        ? this.ephemeralPubkey
-        : Buffer.alloc(EPHEMERAL_PUBKEY_SIZE)
-    );
+    if (!this.ephemeralPubkey || this.ephemeralPubkey.length !== EPHEMERAL_PUBKEY_SIZE) {
+      throw new Error(
+        `Invalid ephemeral pubkey: expected ${EPHEMERAL_PUBKEY_SIZE} bytes, ` +
+          `got ${this.ephemeralPubkey?.length ?? 0}`
+      );
+    }
+    arr.push(this.ephemeralPubkey);
 
     return arr;
   }
