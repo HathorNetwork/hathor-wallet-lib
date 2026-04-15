@@ -824,7 +824,14 @@ export async function processNewTx(
         await store.saveTx(tx);
       }
     } catch (e) {
-      storage.logger.warn('Failed to process shielded outputs for tx', tx.tx_id, e);
+      // processShieldedOutputs handles per-output rewind failures internally.
+      // If we get here, something unexpected went wrong at the infrastructure level.
+      storage.logger.error(
+        'Unexpected error processing shielded outputs for tx',
+        tx.tx_id,
+        '- wallet may be missing shielded funds.',
+        e
+      );
     }
   }
 

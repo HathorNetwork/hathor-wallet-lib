@@ -10,6 +10,7 @@ import { shuffle } from 'lodash';
 import txApi from '../api/txApi';
 import {
   NATIVE_TOKEN_UID,
+  MAX_SHIELDED_OUTPUTS,
   SELECT_OUTPUTS_TIMEOUT,
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
@@ -385,6 +386,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       if (!cryptoProvider) {
         throw new SendTxError(
           'Shielded crypto provider is not set. Cannot create shielded outputs.'
+        );
+      }
+
+      if (shieldedOutputDefs.length > MAX_SHIELDED_OUTPUTS) {
+        throw new SendTxError(
+          `Cannot create more than ${MAX_SHIELDED_OUTPUTS} shielded outputs per transaction ` +
+            `(requested ${shieldedOutputDefs.length}).`
         );
       }
 

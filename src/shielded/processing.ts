@@ -144,7 +144,8 @@ export async function processShieldedOutputs(
         );
         if (!assetCommitment.equals(expectedAc)) {
           storage.logger.warn(
-            'FullShielded token UID cross-check failed — asset commitment mismatch'
+            `FullShielded token UID cross-check failed for tx ${tx.tx_id} ` +
+              `output ${transparentCount + idx} — asset commitment mismatch`
           );
           continue;
         }
