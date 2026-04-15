@@ -1705,6 +1705,7 @@ class HathorWallet extends EventEmitter {
           token: o.token,
           scanPubkey: addressObj.getScanPubkey().toString('hex'),
           shieldedMode: o.shielded,
+          ...(o.timelock != null ? { timelock: o.timelock } : {}),
         };
       }
       return {

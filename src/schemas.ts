@@ -171,6 +171,20 @@ export const IHistoryNanoContractContextSchema = z
   })
   .passthrough();
 
+const IHistoryShieldedOutputSchema = z
+  .object({
+    mode: z.number(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    script: z.string(),
+    token_data: z.number(),
+    ephemeral_pubkey: z.string(),
+    decoded: IHistoryOutputDecodedSchema,
+    asset_commitment: z.string().optional(),
+    surjection_proof: z.string().optional(),
+  })
+  .passthrough();
+
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
     tx_id: txIdSchema,
@@ -187,6 +201,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     token_symbol: z.string().optional(),
     tokens: z.string().array().optional(),
     height: z.number().optional(),
+    shielded_outputs: IHistoryShieldedOutputSchema.array().optional(),
     processingStatus: z.nativeEnum(TxHistoryProcessingStatus).optional(),
     nc_id: z.string().optional(),
     nc_blueprint_id: z.string().optional(),
