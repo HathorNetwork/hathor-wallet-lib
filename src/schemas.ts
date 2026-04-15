@@ -74,15 +74,17 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
 
 export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   .object({
-    value: bigIntCoercibleSchema,
-    token_data: z.number(),
-    script: z.string(),
-    decoded: IHistoryOutputDecodedSchema,
-    token: z.string(),
+    // These fields may be absent for shielded inputs (spent output value/token hidden)
+    value: bigIntCoercibleSchema.optional(),
+    token_data: z.number().optional(),
+    script: z.string().optional(),
+    decoded: IHistoryOutputDecodedSchema.optional(),
+    token: z.string().optional(),
+    // Always present:
     tx_id: txIdSchema,
     index: z.number(),
   })
-  .passthrough();
+  .passthrough() as ZodSchema<IHistoryInput>;
 
 const TransparentOutputSchema = z
   .object({
