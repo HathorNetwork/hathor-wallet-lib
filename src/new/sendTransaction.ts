@@ -388,7 +388,20 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
-      shieldedOutputs = await createShieldedOutputs(shieldedOutputDefs, cryptoProvider, network);
+      // Collect token UIDs from all transparent inputs for surjection proof domain.
+      // The fullnode verifies surjection proofs against ALL input generators, so
+      // the wallet must create proofs with the same domain.
+      const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
+      const inputTokenUids = allInputs
+        .filter(inp => inp.token)
+        .map(inp => inp.token as string);
+
+      shieldedOutputs = await createShieldedOutputs(
+        shieldedOutputDefs,
+        cryptoProvider,
+        network,
+        inputTokenUids
+      );
     }
 
     // Trivial commitment protection: the fullnode requires at least 2 shielded outputs

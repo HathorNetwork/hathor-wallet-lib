@@ -30,7 +30,6 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
   }
   if (tx.tokens && tokenIndex <= tx.tokens.length) {
     const uid = tx.tokens[tokenIndex - 1];
-    // Custom token UIDs are already 32-byte hex
     return uid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : uid;
   }
   return NATIVE_TOKEN_UID_HEX;
