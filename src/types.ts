@@ -240,6 +240,8 @@ export interface IHistoryTx {
   shielded_outputs?: IHistoryShieldedOutput[]; // For confidential transactions
 }
 
+// Equivalent to IShieldedOutput in shielded/types.ts but uses IHistoryOutputDecoded
+// (which includes the extra `data?` field). Keep both in sync when modifying.
 export interface IHistoryShieldedOutput {
   mode: ShieldedOutputMode;
   commitment: string; // hex
