@@ -7,7 +7,6 @@
 
 import ShieldedOutput from '../../src/models/shielded_output';
 import { ShieldedOutputMode } from '../../src/shielded/types';
-import { intToBytes } from '../../src/utils/buffer';
 
 function makeOutput(
   overrides: Partial<{

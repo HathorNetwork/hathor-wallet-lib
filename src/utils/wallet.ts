@@ -767,6 +767,11 @@ const wallet = {
       data.acctPathKey = newEncryptedAcctPathKey;
     }
 
+    if (data.scanMainKey) {
+      const scanKey = decryptData(data.scanMainKey, oldPin);
+      data.scanMainKey = encryptData(scanKey, newPin);
+    }
+
     if (data.spendMainKey) {
       const spendKey = decryptData(data.spendMainKey, oldPin);
       data.spendMainKey = encryptData(spendKey, newPin);
