@@ -61,7 +61,6 @@ import {
   EcdsaTxSign,
   getDefaultLogger,
   HistorySyncMode,
-  IHistoryOutput,
   IHistoryTx,
   IIndexLimitAddressScanPolicy,
   ILogger,

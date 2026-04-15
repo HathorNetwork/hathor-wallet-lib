@@ -965,7 +965,9 @@ export async function processNewTx(
     if (!addressInfo) continue;
 
     // At this point input.token is defined (checked above), so all transparent fields exist.
-    const isAuthority: boolean = transactionUtils.isAuthorityOutput({ token_data: input.token_data! });
+    const isAuthority: boolean = transactionUtils.isAuthorityOutput({
+      token_data: input.token_data!,
+    });
     let addressMeta = await store.getAddressMeta(input.decoded.address);
     let tokenMeta = await store.getTokenMeta(input.token);
 
