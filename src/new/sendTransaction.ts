@@ -703,11 +703,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     for (const input of this.transaction.inputs) {
       try {
-        await this.storage.utxoSelectAsInput(
-          { txId: input.hash, index: input.index },
-          false,
-          SELECT_OUTPUTS_TIMEOUT
-        );
+        await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
       } catch (err) {
         // Best-effort: continue releasing remaining UTXOs
         this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
