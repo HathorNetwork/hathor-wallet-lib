@@ -263,11 +263,11 @@ export interface IHistoryInput {
   // These fields are resolved from the spent output.
   // For shielded inputs (spending shielded outputs), they may be absent
   // because the spent output's value/token are hidden in commitments.
-  value: OutputValueType;
-  token_data: number;
-  script: string;
-  decoded: IHistoryOutputDecoded;
-  token: string;
+  value?: OutputValueType;
+  token_data?: number;
+  script?: string;
+  decoded?: IHistoryOutputDecoded;
+  token?: string;
   // Always present:
   tx_id: string;
   index: number;

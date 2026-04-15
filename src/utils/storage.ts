@@ -957,13 +957,15 @@ export async function processNewTx(
 
   for (const input of tx.inputs) {
     // We ignore data inputs and shielded inputs since they do not have an address
-    if (!input.decoded?.address) continue;
+    // Shielded inputs also lack value/token/token_data fields.
+    if (!input.decoded?.address || input.token === undefined) continue;
 
     const addressInfo = await store.getAddress(input.decoded.address);
     // This is not our address, ignore
     if (!addressInfo) continue;
 
-    const isAuthority: boolean = transactionUtils.isAuthorityOutput(input);
+    // At this point input.token is defined (checked above), so all transparent fields exist.
+    const isAuthority: boolean = transactionUtils.isAuthorityOutput({ token_data: input.token_data! });
     let addressMeta = await store.getAddressMeta(input.decoded.address);
     let tokenMeta = await store.getTokenMeta(input.token);
 
@@ -999,22 +1001,22 @@ export async function processNewTx(
     txAddresses.add(input.decoded.address);
 
     if (isAuthority) {
-      if (transactionUtils.isMint(input)) {
+      if (transactionUtils.isMint({ value: input.value!, token_data: input.token_data! })) {
         tokenMeta.balance.authorities.mint.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1n;
       }
-      if (transactionUtils.isMelt(input)) {
+      if (transactionUtils.isMelt({ value: input.value!, token_data: input.token_data! })) {
         tokenMeta.balance.authorities.melt.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1n;
       }
     } else {
-      tokenMeta.balance.tokens.unlocked -= input.value;
-      addressMeta.balance.get(input.token)!.tokens.unlocked -= input.value;
+      tokenMeta.balance.tokens.unlocked -= input.value!;
+      addressMeta.balance.get(input.token)!.tokens.unlocked -= input.value!;
     }
 
     // save address and token metadata
     await store.editTokenMeta(input.token, tokenMeta);
-    await store.editAddressMeta(input.decoded.address, addressMeta);
+    await store.editAddressMeta(input.decoded!.address!, addressMeta);
   }
 
   // Nano contract and ocb transactions have the address used to sign the tx

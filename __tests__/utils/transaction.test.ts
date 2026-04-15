@@ -745,12 +745,15 @@ test('getSignatureForTx uses spend key chain for shielded-spend addresses', asyn
     .spyOn(storage, 'getSpendXPrivKey')
     .mockResolvedValue(spendXpriv.deriveNonCompliantChild(0).xprivkey);
 
+  // Use a non-zero index to verify the derivation path actually uses bip32AddressIndex
+  // (index 0 can pass even if the production path ignores the index).
   const shieldedAddr = 'shielded-spend-addr';
+  const addressIndex = 3;
   jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr => {
     if (addr === shieldedAddr) {
       return {
         base58: addr,
-        bip32AddressIndex: 0,
+        bip32AddressIndex: addressIndex,
         addressType: 'shielded-spend' as const,
       };
     }
@@ -774,7 +777,7 @@ test('getSignatureForTx uses spend key chain for shielded-spend addresses', asyn
   const sigData = await transaction.getSignatureForTx(tx, storage, '123');
 
   expect(sigData.inputSignatures).toHaveLength(1);
-  expect(sigData.inputSignatures[0].addressIndex).toBe(0);
+  expect(sigData.inputSignatures[0].addressIndex).toBe(addressIndex);
   // getSpendXPrivKey should have been called (not just getMainXPrivKey)
   expect(storage.getSpendXPrivKey).toHaveBeenCalledWith('123');
 });

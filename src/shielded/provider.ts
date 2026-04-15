@@ -27,10 +27,10 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     },
 
     createAmountShieldedOutput(
-      value,
-      recipientPubkey,
-      tokenUid,
-      valueBlindingFactor
+      value: bigint,
+      recipientPubkey: Buffer,
+      tokenUid: Buffer,
+      valueBlindingFactor: Buffer
     ): ICreatedShieldedOutput {
       const result = ct.createAmountShieldedOutput(
         value,
@@ -47,11 +47,11 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     },
 
     createShieldedOutputWithBothBlindings(
-      value,
-      recipientPubkey,
-      tokenUid,
-      vbf,
-      abf
+      value: bigint,
+      recipientPubkey: Buffer,
+      tokenUid: Buffer,
+      vbf: Buffer,
+      abf: Buffer
     ): ICreatedShieldedOutput {
       const result = ct.createShieldedOutputWithBothBlindings(
         value,
@@ -71,11 +71,11 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     },
 
     rewindAmountShieldedOutput(
-      privateKey,
-      ephemeralPubkey,
-      commitment,
-      rangeProof,
-      tokenUid
+      privateKey: Buffer,
+      ephemeralPubkey: Buffer,
+      commitment: Buffer,
+      rangeProof: Buffer,
+      tokenUid: Buffer
     ): IRewoundAmountShieldedOutput {
       const result = ct.rewindAmountShieldedOutput(
         privateKey,
@@ -91,11 +91,11 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     },
 
     rewindFullShieldedOutput(
-      privateKey,
-      ephemeralPubkey,
-      commitment,
-      rangeProof,
-      assetCommitment
+      privateKey: Buffer,
+      ephemeralPubkey: Buffer,
+      commitment: Buffer,
+      rangeProof: Buffer,
+      assetCommitment: Buffer
     ): IRewoundFullShieldedOutput {
       const result = ct.rewindFullShieldedOutput(
         privateKey,
@@ -112,7 +112,12 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    computeBalancingBlindingFactor(value, generatorBlindingFactor, inputs, otherOutputs): Buffer {
+    computeBalancingBlindingFactor(
+      value: bigint,
+      generatorBlindingFactor: Buffer,
+      inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
+      otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>
+    ): Buffer {
       return ct.computeBalancingBlindingFactor(
         value,
         generatorBlindingFactor,
@@ -137,11 +142,15 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       return ct.createAssetCommitment(tag, blindingFactor);
     },
 
-    createSurjectionProof(codomainTag, codomainBlindingFactor, domain): Buffer {
+    createSurjectionProof(
+      codomainTag: Buffer,
+      codomainBlindingFactor: Buffer,
+      domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>
+    ): Buffer {
       return ct.createSurjectionProof(codomainTag, codomainBlindingFactor, domain);
     },
 
-    deriveEcdhSharedSecret(privkey, pubkey): Buffer {
+    deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer {
       return ct.deriveEcdhSharedSecret(privkey, pubkey);
     },
   };
