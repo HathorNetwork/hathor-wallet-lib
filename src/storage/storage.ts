@@ -525,6 +525,13 @@ export class Storage implements IStorage {
    * @param {Omit<IUtxoFilterOptions, 'reward_lock'>} [options={}] Options to filter utxos and stop when the target is found.
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
+  /**
+   * Look up a specific UTXO by txId and index.
+   */
+  async getUtxo(utxoId: IUtxoId): Promise<IUtxo | null> {
+    return this.store.getUtxo(utxoId);
+  }
+
   async *selectUtxos(
     options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
   ): AsyncGenerator<IUtxo, void, void> {
@@ -958,10 +965,10 @@ export class Storage implements IStorage {
    * Get the scan chain xprivkey for shielded ECDH.
    * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
    */
-  async getScanXPrivKey(pinCode: string): Promise<string | undefined> {
+  async getScanXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
     if (!accessData.scanMainKey) {
-      return undefined;
+      throw new Error('Scan private key is not present on this wallet.');
     }
     return decryptData(accessData.scanMainKey, pinCode);
   }
@@ -970,10 +977,10 @@ export class Storage implements IStorage {
    * Get the spend chain xprivkey for shielded UTXO signing.
    * Uses account 2' (m/44'/280'/2'/0).
    */
-  async getSpendXPrivKey(pinCode: string): Promise<string | undefined> {
+  async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
     if (!accessData.spendMainKey) {
-      return undefined;
+      throw new Error('Spend private key is not present on this wallet.');
     }
     return decryptData(accessData.spendMainKey, pinCode);
   }

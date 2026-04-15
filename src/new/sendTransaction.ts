@@ -397,7 +397,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // Extract blinding factors from shielded inputs for the homomorphic balance equation.
       const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
       for (const inp of allInputs) {
-        const utxo = await this.storage.store.getUtxo({
+        const utxo = await this.storage.getUtxo({
           txId: inp.txId,
           index: inp.index,
         });

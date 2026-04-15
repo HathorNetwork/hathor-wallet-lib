@@ -220,9 +220,6 @@ const transaction = {
         // Use spend key chain (m/44'/280'/1'/0) for shielded UTXO inputs
         if (!spendXprivkey) {
           const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
-          if (!spendXprivStr) {
-            throw new Error('Spend private key not available for shielded-spend address signing');
-          }
           spendXprivkey = HDPrivateKey.fromString(spendXprivStr);
         }
         derivedKey = spendXprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);

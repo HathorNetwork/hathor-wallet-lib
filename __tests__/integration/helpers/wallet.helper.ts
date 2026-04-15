@@ -357,9 +357,8 @@ async function updateInputsSpentBy(hWallet, tx) {
     }
 
     if (input.index > inputTx.outputs.length - 1) {
-      // Index beyond output array — may be a shielded input referencing
-      // a shielded output that wasn't decoded in this wallet's storage.
-      continue;
+      // Invalid output index
+      throw new Error("Try to get output in an index that doesn't exist.");
     }
 
     const output = inputTx.outputs[input.index];
