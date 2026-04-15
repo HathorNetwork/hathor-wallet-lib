@@ -94,7 +94,8 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ) => Promise<void>;
 
 export interface IAddressInfo {
@@ -693,10 +694,6 @@ export interface IStorage {
   shieldedCryptoProvider?: IShieldedCryptoProvider;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
 
-  // Pin code for shielded output decryption during tx processing
-  pinCode?: string;
-  setPinCode(pinCode?: string): void;
-
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
   saveNativeToken(): Promise<void>;
@@ -723,8 +720,8 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  processHistory(): Promise<void>;
-  processNewTx(tx: IHistoryTx): Promise<void>;
+  processHistory(pinCode?: string): Promise<void>;
+  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
 
   // Tokens
   addToken(data: ITokenData): Promise<void>;

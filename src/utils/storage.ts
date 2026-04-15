@@ -146,7 +146,8 @@ export async function apiSyncHistory(
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
+  pinCode?: string
 ) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -179,7 +180,7 @@ export async function apiSyncHistory(
     itCount = loadMoreAddresses.count;
   }
   if (foundAnyTx && shouldProcessHistory) {
-    await storage.processHistory();
+    await storage.processHistory(pinCode);
   }
 }
 
@@ -412,6 +413,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // Use the minimum of the two lastLoaded as the starting point, so that
   // the lagging chain gets its addresses loaded.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
+  // eslint-disable-next-line no-nested-ternary
   const shieldedTarget = hasShieldedKeys
     ? shieldedNeedMore
       ? shieldedLastUsedAddressIndex + gapLimit
@@ -441,7 +443,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  */
 export async function processHistory(
   storage: IStorage,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock, pinCode }: { rewardLock?: number; pinCode?: string } = {}
 ): Promise<void> {
   const { store } = storage;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
@@ -455,7 +457,12 @@ export async function processHistory(
   let shieldedMaxIndexUsed = -1;
   // Iterate on all txs of the history updating the metadata as we go
   for await (const tx of store.historyIter()) {
-    const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
+    const processedData = await processNewTx(storage, tx, {
+      rewardLock,
+      nowTs,
+      currentHeight,
+      pinCode,
+    });
     legacyMaxIndexUsed = Math.max(legacyMaxIndexUsed, processedData.legacyMaxAddressIndex);
     shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
     for (const token of processedData.tokens) {
@@ -474,14 +481,19 @@ export async function processHistory(
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock, pinCode }: { rewardLock?: number; pinCode?: string } = {}
 ): Promise<void> {
   const { store } = storage;
   const nowTs = Math.floor(Date.now() / 1000);
   const currentHeight = await store.getCurrentHeight();
 
   const tokens = new Set<string>();
-  const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
+  const processedData = await processNewTx(storage, tx, {
+    rewardLock,
+    nowTs,
+    currentHeight,
+    pinCode,
+  });
   const legacyMaxIndexUsed = processedData.legacyMaxAddressIndex;
   const shieldedMaxIndexUsed = processedData.shieldedMaxAddressIndex;
   for (const token of processedData.tokens) {
@@ -771,12 +783,7 @@ export async function processNewTx(
 
   // Decrypt shielded outputs and append decoded entries to tx.outputs BEFORE the main loop.
   // This unifies the processing: the same loop handles transparent + decoded shielded outputs.
-  const effectivePinCode = pinCode ?? storage.pinCode;
-  if (
-    storage.shieldedCryptoProvider &&
-    tx.shielded_outputs?.length &&
-    effectivePinCode !== undefined
-  ) {
+  if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length && pinCode !== undefined) {
     try {
       // Capture the original outputs length before appending so index math
       // doesn't shift as we push, and skip already-merged entries (idempotent).
@@ -786,7 +793,7 @@ export async function processNewTx(
         storage,
         tx,
         storage.shieldedCryptoProvider,
-        effectivePinCode
+        pinCode
       );
       let appended = false;
       for (const result of shieldedResults) {

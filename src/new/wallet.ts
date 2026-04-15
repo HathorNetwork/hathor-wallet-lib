@@ -654,7 +654,12 @@ class HathorWallet extends EventEmitter {
             }
           }
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+          await this.syncHistory(
+            addressesToLoad.nextIndex,
+            addressesToLoad.count,
+            false,
+            this.pinCode || undefined
+          );
         } else {
           if (this.beforeReloadCallback) {
             this.beforeReloadCallback();
@@ -853,10 +858,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPathForIndex(
-    index: number,
-    opts?: IAddressChainOptions
-  ): Promise<string> {
+  async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
     if (opts?.legacy === false) {
       // Shielded addresses use the spend account path
       return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
@@ -1463,7 +1465,7 @@ class HathorWallet extends EventEmitter {
       });
     }
 
-    await this.storage.processHistory();
+    await this.storage.processHistory(this.pinCode || undefined);
   }
 
   /**
@@ -1476,7 +1478,12 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      await this.syncHistory(loadMoreAddresses.nextIndex, loadMoreAddresses.count, processHistory);
+      await this.syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        processHistory,
+        this.pinCode || undefined
+      );
     }
   }
 
@@ -1576,11 +1583,11 @@ class HathorWallet extends EventEmitter {
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
-      await this.storage.processNewTx(newTx);
+      await this.storage.processNewTx(newTx, this.pinCode || undefined);
     } else if (storageTx.is_voided !== newTx.is_voided) {
       // This is a voided transaction update event.
       // voided transactions require a full history reprocess.
-      await this.storage.processHistory();
+      await this.storage.processHistory(this.pinCode || undefined);
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
@@ -1741,10 +1748,6 @@ class HathorWallet extends EventEmitter {
     const options = { pinCode: null, password: null, ...optionsParams };
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
-
-    if (pinCode) {
-      this.storage.setPinCode(pinCode);
-    }
 
     if (!this.xpub && !pinCode) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
@@ -3450,7 +3453,8 @@ class HathorWallet extends EventEmitter {
   async syncHistory(
     startIndex: number,
     count: number,
-    shouldProcessHistory: boolean = false
+    shouldProcessHistory: boolean = false,
+    pinCode?: string
   ): Promise<void> {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
@@ -3474,7 +3478,7 @@ class HathorWallet extends EventEmitter {
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
     await GLL.add(async () => {
-      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
+      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory, pinCode);
     });
   }
 
@@ -3496,7 +3500,12 @@ class HathorWallet extends EventEmitter {
       await this.storage.saveAccessData(accessData);
     }
     const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-    await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+    await this.syncHistory(
+      addressesToLoad.nextIndex,
+      addressesToLoad.count,
+      false,
+      this.pinCode || undefined
+    );
   }
 
   /**

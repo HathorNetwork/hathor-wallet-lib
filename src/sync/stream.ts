@@ -262,7 +262,8 @@ export async function xpubStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
+  pinCode?: string
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -279,7 +280,7 @@ export async function xpubStreamSyncHistory(
     connection,
     HistorySyncMode.XPUB_STREAM_WS
   );
-  await streamSyncHistory(manager, shouldProcessHistory);
+  await streamSyncHistory(manager, shouldProcessHistory, pinCode);
 }
 
 export async function manualStreamSyncHistory(
@@ -287,7 +288,8 @@ export async function manualStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
+  pinCode?: string
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -304,7 +306,7 @@ export async function manualStreamSyncHistory(
     connection,
     HistorySyncMode.MANUAL_STREAM_WS
   );
-  await streamSyncHistory(manager, shouldProcessHistory);
+  await streamSyncHistory(manager, shouldProcessHistory, pinCode);
 }
 
 /**
@@ -770,7 +772,8 @@ function buildListener(manager: StreamManager, resolve: () => void) {
  */
 export async function streamSyncHistory(
   manager: StreamManager,
-  shouldProcessHistory: boolean
+  shouldProcessHistory: boolean,
+  pinCode?: string
 ): Promise<void> {
   await manager.setupStream();
 
@@ -817,7 +820,7 @@ export async function streamSyncHistory(
     await manager.shutdown();
 
     if (manager.foundAnyTx && shouldProcessHistory) {
-      await manager.storage.processHistory();
+      await manager.storage.processHistory(pinCode);
     }
   } finally {
     // Always abort on finally to avoid memory leaks
