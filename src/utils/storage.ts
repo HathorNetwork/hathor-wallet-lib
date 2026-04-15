@@ -355,7 +355,11 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
   }
   // If either chain is below the end index, load more.
   // Use min so the lagging chain gets its addresses loaded.
-  const lastLoaded = Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex);
+  // Only consider shielded cursor when shielded keys are available.
+  const hasShieldedKeys = !!(await storage.getAccessData())?.spendXpubkey;
+  const lastLoaded = hasShieldedKeys
+    ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
+    : lastLoadedAddressIndex;
   if (lastLoaded < limits.endIndex) {
     return {
       nextIndex: lastLoaded + 1,
@@ -408,11 +412,15 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // Use the minimum of the two lastLoaded as the starting point, so that
   // the lagging chain gets its addresses loaded.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
-  const shieldedTarget = shieldedNeedMore
-    ? shieldedLastUsedAddressIndex + gapLimit
-    : shieldedLastLoadedAddressIndex;
+  const shieldedTarget = hasShieldedKeys
+    ? shieldedNeedMore
+      ? shieldedLastUsedAddressIndex + gapLimit
+      : shieldedLastLoadedAddressIndex
+    : legacyTarget;
   const maxTarget = Math.max(legacyTarget, shieldedTarget);
-  const minLastLoaded = Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex);
+  const minLastLoaded = hasShieldedKeys
+    ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
+    : lastLoadedAddressIndex;
 
   const nextIndex = minLastLoaded + 1;
   const count = Math.max(maxTarget - minLastLoaded, 1);
@@ -770,16 +778,30 @@ export async function processNewTx(
     effectivePinCode !== undefined
   ) {
     try {
+      // Capture the original outputs length before appending so index math
+      // doesn't shift as we push, and skip already-merged entries (idempotent).
+      const originalOutputsLen = tx.outputs.length;
+
       const shieldedResults = await processShieldedOutputs(
         storage,
         tx,
         storage.shieldedCryptoProvider,
         effectivePinCode
       );
+      let appended = false;
       for (const result of shieldedResults) {
         const walletTokenUid =
           result.tokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : result.tokenUid;
-        const so = tx.shielded_outputs[result.index - tx.outputs.length];
+        const so = tx.shielded_outputs[result.index - originalOutputsLen];
+
+        // Skip if this shielded output was already merged in a previous run
+        const alreadyMerged = tx.outputs.some(
+          o =>
+            transactionUtils.isShieldedOutputEntry(o) &&
+            o.commitment === so?.commitment &&
+            o.decoded?.address === result.address
+        );
+        if (alreadyMerged) continue;
 
         // Append decoded shielded output to tx.outputs so the main loop processes it
         // alongside transparent outputs (UTXO creation, balance, metadata).
@@ -797,9 +819,12 @@ export async function processNewTx(
           asset_commitment: so?.asset_commitment,
           surjection_proof: so?.surjection_proof,
         });
+        appended = true;
       }
-      // Persist the updated tx with decoded shielded outputs in outputs[]
-      await store.saveTx(tx);
+      // Persist the updated tx only if we appended new decoded outputs
+      if (appended) {
+        await store.saveTx(tx);
+      }
     } catch (e) {
       storage.logger.warn('Failed to process shielded outputs for tx', tx.tx_id, e);
     }
