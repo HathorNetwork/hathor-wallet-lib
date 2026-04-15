@@ -5,16 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, ZERO_TWEAK } from '../constants';
 import { IDataShieldedOutput } from '../types';
 import { getAddressType } from '../utils/address';
 import transactionUtils from '../utils/transaction';
 import Network from '../models/network';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from './types';
-
-// Zero blinding factor representing transparent (unblinded) inputs/outputs
-// in Pedersen commitment balance equations.
-const ZERO_TWEAK = Buffer.alloc(32, 0);
 
 interface ShieldedOutputDef {
   address: string;
@@ -22,6 +18,7 @@ interface ShieldedOutputDef {
   token: string;
   scanPubkey: string;
   shieldedMode: ShieldedOutputMode;
+  timelock?: number;
 }
 
 export interface ShieldedInputBlinding {
@@ -167,7 +164,7 @@ export async function createShieldedOutputs(
         {
           address: def.address,
           value: def.value,
-          timelock: null,
+          timelock: def.timelock ?? null,
           authorities: 0n,
           token: def.token,
           type: getAddressType(def.address, network),

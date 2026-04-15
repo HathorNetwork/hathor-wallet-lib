@@ -96,6 +96,8 @@ class ShieldedOutput {
       // Surjection proof (2 bytes length + variable, FullShielded only)
       arr.push(intToBytes(this.surjectionProof.length, 2));
       arr.push(this.surjectionProof);
+    } else {
+      throw new Error(`Unsupported shielded output mode: ${this.mode}`);
     }
 
     // Ephemeral pubkey (always 33 bytes)
@@ -126,6 +128,8 @@ class ShieldedOutput {
         throw new Error('FullShielded output requires assetCommitment');
       }
       arr.push(this.assetCommitment);
+    } else {
+      throw new Error(`Unsupported shielded output mode: ${this.mode}`);
     }
 
     arr.push(this.script);

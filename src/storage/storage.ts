@@ -41,7 +41,6 @@ import {
   AuthorityType,
   TokenVersion,
   IAddressChainOptions,
-  IHistoryShieldedOutput,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
 import transactionUtils from '../utils/transaction';
@@ -378,37 +377,9 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
-    // Normalize: the fullnode API puts shielded entries in outputs[].
-    // Extract them into shielded_outputs so processNewTx can handle them.
-    if (!tx.shielded_outputs) {
-      const shieldedEntries: IHistoryShieldedOutput[] = [];
-      const transparentOutputs: IHistoryTx['outputs'] = [];
-      for (const output of tx.outputs) {
-        if (transactionUtils.isShieldedOutputEntry(output)) {
-          shieldedEntries.push({
-            mode: output.asset_commitment ? 2 : 1,
-            commitment: output.commitment,
-            range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
-            script: Buffer.from(output.script, 'base64').toString('hex'),
-            token_data: output.token_data,
-            ephemeral_pubkey: output.ephemeral_pubkey,
-            decoded: output.decoded,
-            asset_commitment: output.asset_commitment,
-            surjection_proof: output.surjection_proof
-              ? Buffer.from(output.surjection_proof, 'base64').toString('hex')
-              : undefined,
-          });
-        } else {
-          transparentOutputs.push(output);
-        }
-      }
-      if (shieldedEntries.length > 0) {
-        // eslint-disable-next-line no-param-reassign
-        tx.shielded_outputs = shieldedEntries;
-        // eslint-disable-next-line no-param-reassign
-        tx.outputs = transparentOutputs;
-      }
-    }
+    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
+    // converting base64 fields to hex.
+    transactionUtils.normalizeShieldedOutputs(tx);
     await this.store.saveTx(tx);
   }
 

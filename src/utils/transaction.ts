@@ -45,8 +45,10 @@ import {
   ITxSignatureData,
   OutputValueType,
   IHistoryInput,
+  IHistoryShieldedOutput,
   AuthorityType,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -79,9 +81,49 @@ const transaction = {
    * the 'value' and 'token' fields that transparent outputs have.
    * Shielded outputs are processed separately via processShieldedOutputs().
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  isShieldedOutputEntry(output: any): output is IShieldedOutputEntry {
-    return output != null && output.type === 'shielded';
+  isShieldedOutputEntry(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    output: IHistoryOutput | Record<string, any>
+  ): output is IShieldedOutputEntry {
+    return output != null && (output as { type?: string }).type === 'shielded';
+  },
+
+  /**
+   * Normalize a transaction's outputs by extracting shielded entries from outputs[]
+   * into a separate shielded_outputs[] array. Converts base64-encoded fields to hex.
+   * Mutates the tx in place. No-op if shielded_outputs is already populated.
+   */
+  normalizeShieldedOutputs(tx: IHistoryTx): void {
+    if (tx.shielded_outputs) return;
+    const shieldedEntries: IHistoryShieldedOutput[] = [];
+    const transparentOutputs: IHistoryOutput[] = [];
+    for (const output of tx.outputs) {
+      if (this.isShieldedOutputEntry(output)) {
+        shieldedEntries.push({
+          mode: output.asset_commitment
+            ? ShieldedOutputMode.FULLY_SHIELDED
+            : ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: output.commitment,
+          range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
+          script: Buffer.from(output.script, 'base64').toString('hex'),
+          token_data: output.token_data,
+          ephemeral_pubkey: output.ephemeral_pubkey,
+          decoded: output.decoded,
+          asset_commitment: output.asset_commitment,
+          surjection_proof: output.surjection_proof
+            ? Buffer.from(output.surjection_proof, 'base64').toString('hex')
+            : undefined,
+        });
+      } else {
+        transparentOutputs.push(output);
+      }
+    }
+    if (shieldedEntries.length > 0) {
+      // eslint-disable-next-line no-param-reassign
+      tx.shielded_outputs = shieldedEntries;
+      // eslint-disable-next-line no-param-reassign
+      tx.outputs = transparentOutputs;
+    }
   },
 
   /**
@@ -215,7 +257,7 @@ const transaction = {
 
       let derivedKey;
       if (addressInfo.addressType === 'shielded-spend') {
-        // Use spend key chain (m/44'/280'/1'/0) for shielded UTXO inputs
+        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs
         if (!spendXprivkey) {
           const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
           spendXprivkey = HDPrivateKey.fromString(spendXprivStr);

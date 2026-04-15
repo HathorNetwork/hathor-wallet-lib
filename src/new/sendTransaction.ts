@@ -12,6 +12,7 @@ import {
   NATIVE_TOKEN_UID,
   MAX_SHIELDED_OUTPUTS,
   SELECT_OUTPUTS_TIMEOUT,
+  ZERO_TWEAK,
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
 } from '../constants';
@@ -415,13 +416,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           txId: inp.txId,
           index: inp.index,
         });
-        if (utxo?.shielded && utxo.blindingFactor) {
+        if (utxo?.shielded) {
+          if (!utxo.blindingFactor) {
+            throw new SendTxError(
+              `Shielded input ${inp.txId}:${inp.index} is missing blindingFactor — ` +
+                'cannot satisfy the homomorphic balance equation.'
+            );
+          }
           blindedInputsArr.push({
             value: utxo.value,
             vbf: Buffer.from(utxo.blindingFactor, 'hex'),
+            // assetBlindingFactor is only present for FullShielded inputs.
+            // AmountShielded inputs use ZERO_TWEAK (unblinded generator).
             gbf: utxo.assetBlindingFactor
               ? Buffer.from(utxo.assetBlindingFactor, 'hex')
-              : Buffer.alloc(32, 0),
+              : ZERO_TWEAK,
           });
         }
       }

@@ -24,6 +24,13 @@ import {
  * For FullShielded outputs, the token is unknown until decrypted.
  */
 export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx): string {
+  // FullShielded outputs have hidden tokens — token UID is recovered from rewind, not token_data
+  if (shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED) {
+    throw new Error(
+      'resolveTokenUid must not be called for FullShielded outputs — ' +
+        'token UID is recovered from the range proof during rewind, not from token_data'
+    );
+  }
   const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data);
   if (tokenIndex === 0) {
     return NATIVE_TOKEN_UID_HEX;
@@ -168,6 +175,15 @@ export async function processShieldedOutputs(
         outputType = ShieldedOutputMode.AMOUNT_SHIELDED;
       }
 
+      // Validate recovered value — a corrupted rewind could return garbage
+      if (recoveredValue <= 0n) {
+        storage.logger.warn(
+          `Shielded output rewind returned non-positive value ${recoveredValue} ` +
+            `for tx ${tx.tx_id} output ${transparentCount + idx} — skipping`
+        );
+        continue;
+      }
+
       results.push({
         txId: tx.tx_id,
         index: transparentCount + idx,
@@ -191,6 +207,10 @@ export async function processShieldedOutputs(
         e
       );
       continue;
+    } finally {
+      // Zero the private key buffer to reduce the window for memory-scraping attacks.
+      // Not guaranteed by JS GC but a defense-in-depth best practice.
+      privkey.fill(0);
     }
   }
 

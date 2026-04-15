@@ -124,7 +124,10 @@ export async function loadAddresses(
       if (!(await storage.isAddressMine(shieldedResult.spendAddress.base58))) {
         await storage.saveAddress(shieldedResult.spendAddress);
       }
-      // The spend-derived address must also be subscribed for tx notifications
+      // Only the spend-derived P2PKH is subscribed for tx notifications.
+      // The user-facing shielded address (scan+spend pubkeys) is NOT subscribed
+      // because the fullnode indexes transactions by on-chain script address,
+      // not by the shielded address format.
       addresses.push(shieldedResult.spendAddress.base58);
     }
   }
