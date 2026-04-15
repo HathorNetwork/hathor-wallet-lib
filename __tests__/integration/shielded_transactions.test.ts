@@ -608,7 +608,7 @@ describe('shielded transactions', () => {
   // The phantom output trick in sendTransaction.ts balances UTXO selection, but when phantoms are
   // removed the custom token inputs exceed the transparent outputs, looking like a melt to the fullnode.
   // The shielded output amounts need to be accounted for in the token balance equation.
-  it.skip('should send shielded outputs with a custom token (AmountShielded)', async () => {
+  it('should send shielded outputs with a custom token (AmountShielded)', async () => {
     const walletA = await generateWalletHelper();
     const walletB = await generateWalletHelper();
 
@@ -649,7 +649,7 @@ describe('shielded transactions', () => {
   });
 
   // TODO: Same issue as AmountShielded custom token test above.
-  it.skip('should send FullShielded outputs with a custom token', async () => {
+  it('should send FullShielded outputs with a custom token', async () => {
     const walletA = await generateWalletHelper();
     const walletB = await generateWalletHelper();
 

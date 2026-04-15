@@ -37,7 +37,8 @@ interface ShieldedOutputDef {
 export async function createShieldedOutputs(
   defs: ShieldedOutputDef[],
   cryptoProvider: IShieldedCryptoProvider,
-  network: Network
+  network: Network,
+  inputTokenUids: string[] = []
 ): Promise<IDataShieldedOutput[]> {
   const results: IDataShieldedOutput[] = [];
   const createdOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
@@ -142,16 +143,25 @@ export async function createShieldedOutputs(
       network
     );
 
-    // For FullShielded outputs, generate a surjection proof
+    // For FullShielded outputs, generate a surjection proof.
+    // The domain must include ALL transparent input generators (matching the fullnode's verification).
     let surjectionProof: Buffer | undefined;
     if (fullyShielded && cryptoResult.assetBlindingFactor) {
-      // Domain: for each transparent input of the same token, provide its unblinded generator
-      const tag = await cryptoProvider.deriveTag(tokenUidBuf);
-      const generator = await cryptoProvider.createAssetCommitment(tag, ZERO_TWEAK);
+      const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
+      const domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }> = [];
+      for (const inputToken of inputTokenUids) {
+        const inputTokenBuf = Buffer.from(
+          inputToken === HTR_UID ? NATIVE_TOKEN_UID_HEX : inputToken,
+          'hex'
+        );
+        const inputTag = await cryptoProvider.deriveTag(inputTokenBuf);
+        const inputGen = await cryptoProvider.createAssetCommitment(inputTag, ZERO_TWEAK);
+        domain.push({ generator: inputGen, tag: inputTag, blindingFactor: ZERO_TWEAK });
+      }
       surjectionProof = await cryptoProvider.createSurjectionProof(
-        tag,
+        codomainTag,
         cryptoResult.assetBlindingFactor,
-        [{ generator, tag, blindingFactor: ZERO_TWEAK }]
+        domain
       );
     }
 
