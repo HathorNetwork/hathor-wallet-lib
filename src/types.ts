@@ -695,7 +695,7 @@ export interface IStorage {
 
   // Pin code for shielded output decryption during tx processing
   pinCode?: string;
-  setPinCode(pinCode: string): void;
+  setPinCode(pinCode?: string): void;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
@@ -757,8 +757,8 @@ export interface IStorage {
   getAuthPrivKey(pinCode: string): Promise<string>;
 
   // Shielded key methods (return undefined if wallet was created before shielded feature)
-  getScanXPrivKey(pinCode: string): Promise<string>;
-  getSpendXPrivKey(pinCode: string): Promise<string>;
+  getScanXPrivKey(pinCode: string): Promise<string | undefined>;
+  getSpendXPrivKey(pinCode: string): Promise<string | undefined>;
   getScanXPubKey(): Promise<string | undefined>;
   getSpendXPubKey(): Promise<string | undefined>;
   getWalletData(): Promise<IWalletData>;

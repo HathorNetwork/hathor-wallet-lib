@@ -187,7 +187,7 @@ export class Storage implements IStorage {
    * Set the pin code for shielded output decryption during tx processing.
    * @param pinCode The pin code
    */
-  setPinCode(pinCode: string): void {
+  setPinCode(pinCode?: string): void {
     this.pinCode = pinCode;
   }
 
@@ -965,10 +965,10 @@ export class Storage implements IStorage {
    * Get the scan chain xprivkey for shielded ECDH.
    * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
    */
-  async getScanXPrivKey(pinCode: string): Promise<string> {
+  async getScanXPrivKey(pinCode: string): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
     if (!accessData.scanMainKey) {
-      throw new Error('Scan private key is not present on this wallet.');
+      return undefined;
     }
     return decryptData(accessData.scanMainKey, pinCode);
   }
@@ -977,10 +977,10 @@ export class Storage implements IStorage {
    * Get the spend chain xprivkey for shielded UTXO signing.
    * Uses account 2' (m/44'/280'/2'/0).
    */
-  async getSpendXPrivKey(pinCode: string): Promise<string> {
+  async getSpendXPrivKey(pinCode: string): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
     if (!accessData.spendMainKey) {
-      throw new Error('Spend private key is not present on this wallet.');
+      return undefined;
     }
     return decryptData(accessData.spendMainKey, pinCode);
   }
