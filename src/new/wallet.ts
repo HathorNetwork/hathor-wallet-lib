@@ -3454,9 +3454,10 @@ class HathorWallet extends EventEmitter {
   async syncHistory(
     startIndex: number,
     count: number,
-    shouldProcessHistory: boolean = false,
+    shouldProcessHistory?: boolean,
     pinCode?: string
   ): Promise<void> {
+    const processHistory = shouldProcessHistory ?? false;
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
@@ -3479,7 +3480,7 @@ class HathorWallet extends EventEmitter {
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
     await GLL.add(async () => {
-      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory, pinCode);
+      await syncMethod(startIndex, count, this.storage, this.conn, processHistory, pinCode);
     });
   }
 

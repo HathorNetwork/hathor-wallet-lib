@@ -7,6 +7,7 @@
 
 import lodash from 'lodash';
 import Transaction from '../../src/models/transaction';
+import ShieldedOutput from '../../src/models/shielded_output';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
@@ -634,7 +635,7 @@ describe('Transaction.validate shielded outputs', () => {
     };
     tx.shieldedOutputs = Array.from({ length: MAX_SHIELDED_OUTPUTS }, () => ({
       ...fakeShielded,
-    })) as any;
+    })) as ShieldedOutput[];
     expect(() => tx.validate()).not.toThrow();
   });
 
@@ -653,7 +654,7 @@ describe('Transaction.validate shielded outputs', () => {
     };
     tx.shieldedOutputs = Array.from({ length: MAX_SHIELDED_OUTPUTS + 1 }, () => ({
       ...fakeShielded,
-    })) as any;
+    })) as ShieldedOutput[];
     expect(() => tx.validate()).toThrow(MaximumNumberOutputsError);
   });
 });
