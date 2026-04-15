@@ -8,7 +8,6 @@
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import ShieldedOutput from '../../src/models/shielded_output';
 import { ShieldedOutputMode } from '../../src/shielded/types';
-import { VertexHeaderId } from '../../src/headers/types';
 import Network from '../../src/models/network';
 
 function makeAmountShieldedOutput(

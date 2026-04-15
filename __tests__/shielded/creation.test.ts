@@ -12,11 +12,9 @@ import Network from '../../src/models/network';
 function makeMockProvider(
   overrides: Partial<IShieldedCryptoProvider> = {}
 ): IShieldedCryptoProvider {
-  let callCount = 0;
   return {
     generateRandomBlindingFactor: jest.fn().mockReturnValue(Buffer.alloc(32, 0x01)),
     createAmountShieldedOutput: jest.fn().mockImplementation(() => {
-      callCount++;
       return {
         ephemeralPubkey: Buffer.alloc(33, 0x02),
         commitment: Buffer.alloc(33, 0x03),

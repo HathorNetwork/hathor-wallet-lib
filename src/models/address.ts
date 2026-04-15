@@ -6,7 +6,6 @@
  */
 
 import {
-  crypto,
   encoding,
   util,
   Address as BitcoreAddress,

@@ -6,6 +6,7 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { HDPrivateKey } from 'bitcore-lib';
 import { resolveTokenUid, processShieldedOutputs } from '../../src/shielded/processing';
 import { NATIVE_TOKEN_UID_HEX } from '../../src/constants';
 import {
@@ -176,7 +177,6 @@ describe('processShieldedOutputs', () => {
     // Mock a valid scan xpriv so key derivation succeeds and rewind is actually called.
     // Use a real-looking xpriv that bitcore can parse.
     // A real xpriv at depth 1 (chain-level) so deriveNonCompliantChild(index) works
-    const { HDPrivateKey } = require('bitcore-lib');
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
 
     const storage = {
@@ -216,7 +216,6 @@ describe('processShieldedOutputs', () => {
 
     // addr1 is ours and succeeds, addr2 is unknown, addr3 is ours but rewind fails
     // A real xpriv at depth 1 (chain-level) so deriveNonCompliantChild(index) works
-    const { HDPrivateKey } = require('bitcore-lib');
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
 
     const storage = {

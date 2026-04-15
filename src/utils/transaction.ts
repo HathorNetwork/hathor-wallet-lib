@@ -36,7 +36,6 @@ import {
   IStorage,
   IHistoryTx,
   IDataOutput,
-  IDataShieldedOutput,
   IDataTx,
   isDataOutputCreateToken,
   IHistoryOutput,
@@ -48,7 +47,6 @@ import {
   IHistoryInput,
   AuthorityType,
 } from '../types';
-import { ShieldedOutputMode } from '../shielded/types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
