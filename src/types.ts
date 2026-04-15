@@ -310,6 +310,8 @@ export interface IShieldedOutputEntry {
   ephemeral_pubkey: string;
   asset_commitment?: string;
   surjection_proof?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (populated after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;

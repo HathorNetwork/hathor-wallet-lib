@@ -1113,4 +1113,78 @@ describe('shielded transactions', () => {
 
     expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
   });
+
+  it('should persist blinding factors and use them for shielded-to-shielded spending', async () => {
+    // This test verifies that blinding factors are persisted to the UTXO
+    // and correctly used when spending shielded inputs to create new shielded outputs.
+    // Without blinding factor persistence, computeBalancingBlindingFactor receives
+    // empty inputs and the homomorphic balance equation fails.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Step 1: A sends shielded to B
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx1 = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx1).not.toBeNull();
+    await waitForTxReceived(walletB, tx1!.hash!);
+    await waitUntilNextTimestamp(walletA, tx1!.hash!);
+
+    // Verify B has 50 HTR shielded
+    expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
+
+    // Verify blinding factors are persisted on UTXOs
+    let shieldedUtxoCount = 0;
+    for await (const utxo of walletB.storage.selectUtxos({
+      token: NATIVE_TOKEN_UID,
+      shielded: true,
+    })) {
+      expect(utxo.shielded).toBe(true);
+      expect(utxo.blindingFactor).toBeDefined();
+      expect(utxo.blindingFactor!.length).toBe(64); // 32 bytes hex
+      shieldedUtxoCount++;
+    }
+    expect(shieldedUtxoCount).toBe(2);
+
+    // Step 2: B spends shielded UTXOs to create new shielded outputs for C.
+    // This requires B's blinding factors to satisfy the balance equation.
+    const shieldedAddrC0 = await walletC.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrC1 = await walletC.getAddressAtIndex(1, { legacy: false });
+    const tx2 = await walletB.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrC0,
+        value: 25n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrC1,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx2).not.toBeNull();
+    await waitForTxReceived(walletC, tx2!.hash!);
+
+    // C should have 40 HTR shielded
+    expect((await walletC.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
+  });
 });

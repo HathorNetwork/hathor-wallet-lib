@@ -25,6 +25,7 @@ import {
   IUtxo,
   ITokenData,
   TokenVersion,
+  IShieldedOutputEntry,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -818,6 +819,8 @@ export async function processNewTx(
           ephemeral_pubkey: so?.ephemeral_pubkey ?? '',
           asset_commitment: so?.asset_commitment,
           surjection_proof: so?.surjection_proof,
+          blindingFactor: result.decrypted.blindingFactor.toString('hex'),
+          assetBlindingFactor: result.decrypted.assetBlindingFactor?.toString('hex'),
         });
       }
       if (shieldedResults.length > 0) {
@@ -927,7 +930,13 @@ export async function processNewTx(
         value: output.value,
         timelock: output.decoded.timelock || null,
         height: tx.height || null,
-        ...(isShielded ? { shielded: true } : {}),
+        ...(isShielded
+          ? {
+              shielded: true,
+              blindingFactor: (output as IShieldedOutputEntry).blindingFactor,
+              assetBlindingFactor: (output as IShieldedOutputEntry).assetBlindingFactor,
+            }
+          : {}),
       });
       if (isLocked) {
         // We will save this utxo on the index of locked utxos
