@@ -210,4 +210,54 @@ describe('ShieldedOutputsHeader', () => {
       expect(bytes2).toEqual(bytes1);
     });
   });
+
+  describe('deserialization bounds checking', () => {
+    const network = new Network('testnet');
+    // Header ID (0x12) + numOutputs(1) + mode(1) = minimum 3 bytes before commitment
+    const headerId = 0x12;
+
+    it('should throw on truncated commitment', () => {
+      // header_id + num_outputs=1 + mode=1 + only 32 bytes (need 33)
+      const buf = Buffer.from([headerId, 0x01, 0x01, ...Array(32).fill(0)]);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /missing commitment/
+      );
+    });
+
+    it('should throw on truncated range proof', () => {
+      // header_id + num=1 + mode=1 + commitment(33) + rp_len=2 bytes saying 100 + only 10 bytes
+      const buf = Buffer.alloc(3 + 33 + 2 + 10);
+      buf[0] = headerId;
+      buf[1] = 1; // num outputs
+      buf[2] = 1; // mode AMOUNT_SHIELDED
+      buf.writeUInt16BE(100, 3 + 33); // range proof length = 100
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /incomplete range proof/
+      );
+    });
+
+    it('should throw on unknown mode byte', () => {
+      // header_id + num=1 + mode=0x99 + enough bytes for commitment
+      const buf = Buffer.alloc(3 + 33 + 2 + 5 + 2 + 5 + 1 + 33);
+      buf[0] = headerId;
+      buf[1] = 1;
+      buf[2] = 0x99; // unknown mode
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /Unsupported shielded output mode: 153/
+      );
+    });
+
+    it('should throw on truncated ephemeral pubkey', () => {
+      // Build a valid AmountShielded up to the ephemeral pubkey, then truncate
+      const header = new ShieldedOutputsHeader([makeAmountShieldedOutput()]);
+      const parts: Buffer[] = [];
+      header.serialize(parts);
+      const full = Buffer.concat(parts);
+      // Trim the last 10 bytes (ephemeral pubkey is 33 bytes at the end)
+      const truncated = full.subarray(0, full.length - 10);
+      expect(() => ShieldedOutputsHeader.deserialize(truncated, network)).toThrow(
+        /missing ephemeral pubkey/
+      );
+    });
+  });
 });

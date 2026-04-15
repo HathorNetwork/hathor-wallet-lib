@@ -195,5 +195,15 @@ describe('ShieldedOutput', () => {
       const acOffset = 1 + 33;
       expect(serialized.subarray(acOffset, acOffset + 33)).toEqual(assetCommitment);
     });
+
+    it('should throw when ephemeral pubkey is missing', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(0) });
+      expect(() => out.serializeSighash()).toThrow(/Invalid ephemeral pubkey/);
+    });
+
+    it('should throw when ephemeral pubkey has wrong size', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
+      expect(() => out.serializeSighash()).toThrow(/expected 33 bytes/);
+    });
   });
 });

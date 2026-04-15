@@ -963,4 +963,155 @@ describe('shielded transactions', () => {
     const balanceCAfter = await walletC.getBalance(NATIVE_TOKEN_UID);
     expect(balanceCAfter[0].balance.unlocked - balanceCBefore).toBe(40n);
   });
+
+  it('should chain shielded outputs (shielded-to-shielded)', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    // Fund walletA
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // A sends shielded to B
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx1 = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx1).not.toBeNull();
+    await waitForTxReceived(walletB, tx1!.hash!);
+    await waitUntilNextTimestamp(walletA, tx1!.hash!);
+
+    expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
+
+    // B sends shielded to C (spending shielded UTXOs as shielded outputs)
+    const shieldedAddrC0 = await walletC.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrC1 = await walletC.getAddressAtIndex(1, { legacy: false });
+    const tx2 = await walletB.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrC0,
+        value: 25n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrC1,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx2).not.toBeNull();
+    await waitForTxReceived(walletC, tx2!.hash!);
+
+    // C should have 40 HTR shielded
+    expect((await walletC.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
+  });
+
+  it('should spend shielded UTXOs after wallet restart', async () => {
+    const walletA = await generateWalletHelper();
+    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletB = await generateWalletHelper({
+      seed: walletDataB.words,
+      preCalculatedAddresses: walletDataB.addresses,
+    });
+    const walletC = await generateWalletHelper();
+
+    // Fund A and send shielded to B
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx1 = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx1).not.toBeNull();
+    await waitForTxReceived(walletB, tx1!.hash!);
+    await waitUntilNextTimestamp(walletA, tx1!.hash!);
+
+    expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
+
+    // Restart walletB
+    await walletB.stop({ cleanStorage: true, cleanAddresses: true });
+    const walletB2 = new HathorWallet({
+      seed: walletDataB.words,
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      scanPolicy: getGapLimitConfig(),
+    });
+    await walletB2.start();
+    await waitForWalletReady(walletB2);
+
+    // Verify balance survived restart
+    expect((await walletB2.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
+
+    // Spend shielded UTXOs after restart
+    const addrC = await walletC.getAddressAtIndex(0);
+    const balanceCBefore =
+      (await walletC.getBalance(NATIVE_TOKEN_UID))[0]?.balance.unlocked ?? 0n;
+    const tx2 = await walletB2.sendTransaction(addrC, 40n);
+    expect(tx2).not.toBeNull();
+    await waitForTxReceived(walletC, tx2!.hash!);
+
+    const balanceCAfter = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceCAfter[0].balance.unlocked - balanceCBefore).toBe(40n);
+
+    await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
+  it('should send mixed AmountShielded and FullShielded for the same token', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    // Same token (HTR), one AmountShielded and one FullShielded
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 25n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
+  });
 });

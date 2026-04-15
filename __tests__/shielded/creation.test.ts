@@ -142,4 +142,10 @@ describe('createShieldedOutputs', () => {
     // Single output: isLast=true but createdOutputs.length=0, so random vbf path
     expect(provider.computeBalancingBlindingFactor).not.toHaveBeenCalled();
   });
+
+  it('should return empty array for empty defs', async () => {
+    const provider = makeMockProvider();
+    const results = await createShieldedOutputs([], provider, network);
+    expect(results).toEqual([]);
+  });
 });
