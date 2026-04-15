@@ -26,6 +26,7 @@ import {
   INcData,
   TokenVersion,
   IAddressChainOptions,
+  IUtxoId,
 } from '../types';
 import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
@@ -747,6 +748,8 @@ export class MemoryStore implements IStore {
         (options.amount_bigger_than && utxo.value <= options.amount_bigger_than) ||
         (options.amount_smaller_than && utxo.value >= options.amount_smaller_than) ||
         (options.filter_address && utxo.address !== options.filter_address) ||
+        (options.shielded === true && !utxo.shielded) ||
+        (options.shielded === false && !!utxo.shielded) ||
         !authority_match ||
         utxo.token !== token
       ) {
@@ -786,6 +789,10 @@ export class MemoryStore implements IStore {
    */
   async saveUtxo(utxo: IUtxo): Promise<void> {
     this.utxos.set(`${utxo.txId}:${utxo.index}`, utxo);
+  }
+
+  async getUtxo(utxoId: IUtxoId): Promise<IUtxo | null> {
+    return this.utxos.get(`${utxoId.txId}:${utxoId.index}`) ?? null;
   }
 
   /**

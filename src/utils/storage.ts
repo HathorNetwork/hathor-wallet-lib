@@ -886,6 +886,7 @@ export async function processNewTx(
     // Add utxo to the storage if unspent
     // This is idempotent so it's safe to call it multiple times
     if (output.spent_by === null) {
+      const isShielded = transactionUtils.isShieldedOutputEntry(output);
       await store.saveUtxo({
         txId: tx.tx_id,
         index,
@@ -896,6 +897,7 @@ export async function processNewTx(
         value: output.value,
         timelock: output.decoded.timelock || null,
         height: tx.height || null,
+        ...(isShielded ? { shielded: true } : {}),
       });
       if (isLocked) {
         // We will save this utxo on the index of locked utxos
@@ -912,8 +914,8 @@ export async function processNewTx(
   }
 
   for (const input of tx.inputs) {
-    // We ignore data inputs since they do not have an address
-    if (!input.decoded.address) continue;
+    // We ignore data inputs and shielded inputs since they do not have an address
+    if (!input.decoded?.address) continue;
 
     const addressInfo = await store.getAddress(input.decoded.address);
     // This is not our address, ignore

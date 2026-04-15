@@ -77,9 +77,9 @@ describe('shielded transactions', () => {
     // Wait for sender to see the tx (via change output)
     await waitForTxReceived(walletA, tx!.hash!);
 
-    // Verify sender balance decreased: 100 - 30 - 20 - fees
+    // Verify sender balance: 100 - 30 - 20 - 2*FEE_PER_AMOUNT_SHIELDED_OUTPUT
     const balanceA = await walletA.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceA[0].balance.unlocked).toBeLessThan(100n);
+    expect(balanceA[0].balance.unlocked).toBe(100n - 50n - 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT);
   });
 
   it('should send FullShielded outputs using shielded addresses', async () => {
@@ -112,8 +112,9 @@ describe('shielded transactions', () => {
 
     await waitForTxReceived(walletA, tx!.hash!);
 
+    // Verify sender balance: 100 - 30 - 20 - 2*FEE_PER_FULL_SHIELDED_OUTPUT
     const balanceA = await walletA.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceA[0].balance.unlocked).toBeLessThan(100n);
+    expect(balanceA[0].balance.unlocked).toBe(100n - 50n - 2n * FEE_PER_FULL_SHIELDED_OUTPUT);
   });
 
   it('should send mixed transaction (transparent + shielded outputs)', async () => {
@@ -152,13 +153,13 @@ describe('shielded transactions', () => {
     await waitForTxReceived(walletB, tx!.hash!);
     await waitForTxReceived(walletA, tx!.hash!);
 
-    // Wallet B should have at least the transparent output
+    // Wallet B should have 80 HTR (50 transparent + 20 + 10 shielded)
     const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceB[0].balance.unlocked).toBeGreaterThanOrEqual(50n);
+    expect(balanceB[0].balance.unlocked).toBe(80n);
 
-    // Sender balance decreased
+    // Sender balance: 200 - 50 - 20 - 10 - 2*FEE_PER_AMOUNT_SHIELDED_OUTPUT
     const balanceA = await walletA.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceA[0].balance.unlocked).toBeLessThan(200n);
+    expect(balanceA[0].balance.unlocked).toBe(200n - 80n - 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT);
   });
 
   it('should send shielded outputs to self', async () => {
@@ -188,9 +189,9 @@ describe('shielded transactions', () => {
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletA, tx!.hash!);
 
+    // Balance should be 100 - fees (2 shielded outputs × FEE_PER_AMOUNT_SHIELDED_OUTPUT)
     const balanceA = await walletA.getBalance(NATIVE_TOKEN_UID);
-    expect(balanceA[0].balance.unlocked).toBeLessThanOrEqual(100n);
-    expect(balanceA[0].balance.unlocked).toBeGreaterThan(0n);
+    expect(balanceA[0].balance.unlocked).toBe(100n - 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT);
   });
 
   it('should decrypt received shielded outputs and include in receiver balance', async () => {
@@ -376,7 +377,7 @@ describe('shielded transactions', () => {
     // Check wallet data tracks both chains
     const walletData = await walletB.storage.getWalletData();
     expect(walletData.lastUsedAddressIndex).toBe(0);
-    expect(walletData.shieldedLastUsedAddressIndex).toBeGreaterThanOrEqual(5);
+    expect(walletData.shieldedLastUsedAddressIndex).toBe(6);
   });
 
   it('should send transparent output to a shielded address (auto-converts to spend P2PKH)', async () => {
@@ -912,5 +913,54 @@ describe('shielded transactions', () => {
     expect(balanceAfter[0].balance.unlocked).toBe(50n);
 
     await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
+  it('should unshield funds (spend shielded UTXOs as transparent output)', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    // Fund walletA
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Send shielded outputs from A to B
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx1 = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx1).not.toBeNull();
+    await waitForTxReceived(walletB, tx1!.hash!);
+    await waitUntilNextTimestamp(walletA, tx1!.hash!);
+
+    // WalletB has 50 HTR (from shielded outputs)
+    const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceB[0].balance.unlocked).toBe(50n);
+
+    // Now walletB sends a transparent output to walletC from its shielded balance
+    const addrC = await walletC.getAddressAtIndex(0);
+
+    // Record walletC's balance before receiving
+    const balanceCBefore = (await walletC.getBalance(NATIVE_TOKEN_UID))[0]?.balance.unlocked ?? 0n;
+
+    const tx2 = await walletB.sendTransaction(addrC, 40n);
+    expect(tx2).not.toBeNull();
+    await waitForTxReceived(walletC, tx2!.hash!);
+
+    // WalletC should have received exactly 40 HTR more
+    const balanceCAfter = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceCAfter[0].balance.unlocked - balanceCBefore).toBe(40n);
   });
 });

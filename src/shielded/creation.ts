@@ -26,19 +26,27 @@ interface ShieldedOutputDef {
   shieldedMode: ShieldedOutputMode;
 }
 
+export interface ShieldedInputBlinding {
+  value: bigint;
+  vbf: Buffer; // value blinding factor
+  gbf: Buffer; // generator/asset blinding factor (ZERO_TWEAK for AmountShielded)
+}
+
 /**
  * Create shielded outputs with cryptographic commitments and proofs.
  *
- * The homomorphic balance equation requires blinding factors to sum to zero
- * (when all inputs are transparent). N-1 outputs use random blinding factors;
- * the last output's blinding factor is computed via computeBalancingBlindingFactor
- * to satisfy this constraint.
+ * The homomorphic balance equation requires blinding factors to sum to zero.
+ * For transparent-only inputs, all input blinding factors are zero.
+ * For shielded inputs, their blinding factors are passed via `blindedInputs`.
+ * N-1 outputs use random blinding factors; the last output's blinding factor
+ * is computed via computeBalancingBlindingFactor to satisfy the constraint.
  */
 export async function createShieldedOutputs(
   defs: ShieldedOutputDef[],
   cryptoProvider: IShieldedCryptoProvider,
   network: Network,
-  inputTokenUids: string[] = []
+  inputTokenUids: string[] = [],
+  blindedInputs: ShieldedInputBlinding[] = []
 ): Promise<IDataShieldedOutput[]> {
   const results: IDataShieldedOutput[] = [];
   const createdOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
@@ -62,7 +70,7 @@ export async function createShieldedOutputs(
         const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
           def.value,
           lastAbf,
-          [], // no blinded inputs (all transparent)
+          blindedInputs,
           createdOutputs
         );
         cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
@@ -82,7 +90,7 @@ export async function createShieldedOutputs(
         const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
           def.value,
           ZERO_TWEAK,
-          [],
+          blindedInputs,
           createdOutputs
         );
         cryptoResult = await cryptoProvider.createAmountShieldedOutput(

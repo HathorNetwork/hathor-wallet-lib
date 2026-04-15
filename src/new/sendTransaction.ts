@@ -388,7 +388,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
-      // Collect token UIDs from all transparent inputs for surjection proof domain.
+      // Collect token UIDs from all inputs for surjection proof domain.
       // The fullnode verifies surjection proofs against ALL input generators, so
       // the wallet must create proofs with the same domain.
       const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
@@ -396,11 +396,30 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         .filter(inp => inp.token)
         .map(inp => inp.token as string);
 
+      // Extract blinding factors from shielded inputs for the homomorphic balance equation.
+      const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      for (const inp of allInputs) {
+        const utxo = await this.storage.store.getUtxo({
+          txId: inp.txId,
+          index: inp.index,
+        });
+        if (utxo?.shielded && utxo.blindingFactor) {
+          blindedInputsArr.push({
+            value: utxo.value,
+            vbf: Buffer.from(utxo.blindingFactor, 'hex'),
+            gbf: utxo.assetBlindingFactor
+              ? Buffer.from(utxo.assetBlindingFactor, 'hex')
+              : Buffer.alloc(32, 0),
+          });
+        }
+      }
+
       shieldedOutputs = await createShieldedOutputs(
         shieldedOutputDefs,
         cryptoProvider,
         network,
-        inputTokenUids
+        inputTokenUids,
+        blindedInputsArr
       );
     }
 
