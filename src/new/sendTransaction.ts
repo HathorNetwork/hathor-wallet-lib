@@ -389,6 +389,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
+      // Validate shielded output count before expensive crypto work
+      if (shieldedOutputDefs.length === 1) {
+        throw new SendTxError(
+          'At least 2 shielded outputs are required to prevent trivial commitment matching.'
+        );
+      }
       if (shieldedOutputDefs.length > MAX_SHIELDED_OUTPUTS) {
         throw new SendTxError(
           `Cannot create more than ${MAX_SHIELDED_OUTPUTS} shielded outputs per transaction ` +
@@ -426,14 +432,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         network,
         inputTokenUids,
         blindedInputsArr
-      );
-    }
-
-    // Trivial commitment protection: the fullnode requires at least 2 shielded outputs
-    // to prevent trivial commitment matching. Reject early to avoid a round-trip.
-    if (shieldedOutputs.length === 1) {
-      throw new SendTxError(
-        'At least 2 shielded outputs are required to prevent trivial commitment matching.'
       );
     }
 

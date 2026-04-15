@@ -95,10 +95,10 @@ describe('resolveTokenUid', () => {
     expect(resolveTokenUid(so, tx)).toBe(tokenB);
   });
 
-  it('should fallback to NATIVE_TOKEN_UID_HEX for out-of-range token_data', () => {
+  it('should throw for out-of-range token_data', () => {
     const so = makeShieldedOutput({ token_data: 5 });
     const tx = makeHistoryTx({ tokens: ['aa'.repeat(32)] });
-    expect(resolveTokenUid(so, tx)).toBe(NATIVE_TOKEN_UID_HEX);
+    expect(() => resolveTokenUid(so, tx)).toThrow(/Invalid token_data index 5/);
   });
 
   it('should mask authority bit when resolving', () => {
