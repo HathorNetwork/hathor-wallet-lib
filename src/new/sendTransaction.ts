@@ -392,9 +392,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // The fullnode verifies surjection proofs against ALL input generators, so
       // the wallet must create proofs with the same domain.
       const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
-      const inputTokenUids = allInputs
-        .filter(inp => inp.token)
-        .map(inp => inp.token as string);
+      const inputTokenUids = allInputs.filter(inp => inp.token).map(inp => inp.token as string);
 
       // Extract blinding factors from shielded inputs for the homomorphic balance equation.
       const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];

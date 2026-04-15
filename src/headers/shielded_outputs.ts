@@ -102,15 +102,18 @@ class ShieldedOutputsHeader extends Header {
         [tokenData, buf] = unpackToInt(1, false, buf);
       } else if (mode === ShieldedOutputMode.FULLY_SHIELDED) {
         // Asset commitment (33 bytes)
-        if (buf.length < 33) throw new Error('Truncated FullShielded output: missing asset commitment');
+        if (buf.length < 33)
+          throw new Error('Truncated FullShielded output: missing asset commitment');
         assetCommitment = Buffer.from(buf.subarray(0, 33));
         buf = buf.subarray(33);
 
         // Surjection proof (2 bytes length + variable)
-        if (buf.length < 2) throw new Error('Truncated FullShielded output: missing surjection proof length');
+        if (buf.length < 2)
+          throw new Error('Truncated FullShielded output: missing surjection proof length');
         let spLen: number;
         [spLen, buf] = unpackToInt(2, false, buf);
-        if (buf.length < spLen) throw new Error('Truncated FullShielded output: incomplete surjection proof');
+        if (buf.length < spLen)
+          throw new Error('Truncated FullShielded output: incomplete surjection proof');
         surjectionProof = Buffer.from(buf.subarray(0, spLen));
         buf = buf.subarray(spLen);
       } else {

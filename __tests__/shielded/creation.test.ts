@@ -47,7 +47,7 @@ const network = new Network('testnet');
 
 // Use a valid testnet P2PKH address for script generation
 const TEST_ADDRESS = 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo';
-const TEST_SCAN_PUBKEY = '02' + 'aa'.repeat(32);
+const TEST_SCAN_PUBKEY = `02${'aa'.repeat(32)}`;
 
 function makeDef(overrides = {}) {
   return {
