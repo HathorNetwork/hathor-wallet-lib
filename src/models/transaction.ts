@@ -41,6 +41,7 @@ import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
 import FeeHeader from '../headers/fee';
 import HeaderParser from '../headers/parser';
+import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
 enum txType {
@@ -664,6 +665,15 @@ class Transaction {
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
     tx.getHeadersFromBytes(txBuffer, network);
+
+    // Hydrate shieldedOutputs from the ShieldedOutputsHeader (if present)
+    // so validate() and weight calculations use the correct count.
+    for (const header of tx.headers) {
+      if (header instanceof ShieldedOutputsHeader) {
+        tx.shieldedOutputs = header.shieldedOutputs;
+        break;
+      }
+    }
 
     tx.updateHash();
 
