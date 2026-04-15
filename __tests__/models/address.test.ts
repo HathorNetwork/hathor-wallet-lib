@@ -76,7 +76,9 @@ test('Shielded address validation and type detection', () => {
 test('Shielded address getScanPubkey and getSpendPubkey', () => {
   const testnetNetwork = new Network('testnet');
   const scanPubkey = Buffer.alloc(33, 0xaa);
+  scanPubkey[0] = 0x02; // Valid compressed prefix
   const spendPubkey = Buffer.alloc(33, 0xbb);
+  spendPubkey[0] = 0x03; // Valid compressed prefix
 
   const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnetNetwork);
   const addr = new Address(shieldedAddr, { network: testnetNetwork });

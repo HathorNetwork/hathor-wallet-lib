@@ -37,11 +37,17 @@ export function encodeShieldedAddress(
   spendPubkey: Buffer,
   network: Network
 ): string {
-  if (scanPubkey.length !== 33) {
-    throw new Error(`Scan pubkey must be 33 bytes, got ${scanPubkey.length}`);
+  if (scanPubkey.length !== 33 || (scanPubkey[0] !== 0x02 && scanPubkey[0] !== 0x03)) {
+    throw new Error(
+      `Invalid scan pubkey: expected 33-byte compressed EC point (02/03 prefix), ` +
+        `got ${scanPubkey.length} bytes with prefix 0x${scanPubkey[0]?.toString(16).padStart(2, '0')}`
+    );
   }
-  if (spendPubkey.length !== 33) {
-    throw new Error(`Spend pubkey must be 33 bytes, got ${spendPubkey.length}`);
+  if (spendPubkey.length !== 33 || (spendPubkey[0] !== 0x02 && spendPubkey[0] !== 0x03)) {
+    throw new Error(
+      `Invalid spend pubkey: expected 33-byte compressed EC point (02/03 prefix), ` +
+        `got ${spendPubkey.length} bytes with prefix 0x${spendPubkey[0]?.toString(16).padStart(2, '0')}`
+    );
   }
 
   const versionByte = Buffer.from([network.versionBytes.shielded]);
@@ -71,8 +77,9 @@ export function deriveShieldedAddress(
   const scanHdPub = new HDPublicKey(scanXpubkey);
   const spendHdPub = new HDPublicKey(spendXpubkey);
 
-  // Public keys use deriveChild (compliant BIP32 derivation).
-  // Private keys use deriveNonCompliantChild throughout the codebase.
+  // Standard BIP32 derivation for public keys.
+  // Note: private key derivation (in processing.ts) uses deriveNonCompliantChild
+  // due to a historical bitcore-lib bug. Do not align these — the asymmetry is intentional.
   const scanKey = scanHdPub.deriveChild(index);
   const spendKey = spendHdPub.deriveChild(index);
 

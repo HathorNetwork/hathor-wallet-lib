@@ -1072,8 +1072,7 @@ describe('shielded transactions', () => {
 
     // Spend shielded UTXOs after restart
     const addrC = await walletC.getAddressAtIndex(0);
-    const balanceCBefore =
-      (await walletC.getBalance(NATIVE_TOKEN_UID))[0]?.balance.unlocked ?? 0n;
+    const balanceCBefore = (await walletC.getBalance(NATIVE_TOKEN_UID))[0]?.balance.unlocked ?? 0n;
     const tx2 = await walletB2.sendTransaction(addrC, 40n);
     expect(tx2).not.toBeNull();
     await waitForTxReceived(walletC, tx2!.hash!);

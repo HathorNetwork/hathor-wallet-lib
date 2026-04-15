@@ -219,9 +219,7 @@ describe('ShieldedOutputsHeader', () => {
     it('should throw on truncated commitment', () => {
       // header_id + num_outputs=1 + mode=1 + only 32 bytes (need 33)
       const buf = Buffer.from([headerId, 0x01, 0x01, ...Array(32).fill(0)]);
-      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
-        /missing commitment/
-      );
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(/missing commitment/);
     });
 
     it('should throw on truncated range proof', () => {

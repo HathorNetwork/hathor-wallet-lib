@@ -50,6 +50,9 @@ async function deriveScanPrivkeyForAddress(
   try {
     const xprivStr = await storage.getScanXPrivKey(pinCode);
     const hdPrivKey = new HDPrivateKey(xprivStr);
+    // deriveNonCompliantChild is required for private keys due to a historical
+    // bitcore-lib serialization bug. Public key derivation (in shieldedAddress.ts)
+    // uses standard deriveChild because it was always correct. Do not align these.
     const childKey = hdPrivKey.deriveNonCompliantChild(addressIndex);
     // The native crypto provider (ECDH) needs raw 32-byte private key bytes.
     // Other wallet-lib code passes bitcore PrivateKey objects directly to bitcore
