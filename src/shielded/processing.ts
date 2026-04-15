@@ -32,7 +32,10 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
     const uid = tx.tokens[tokenIndex - 1];
     return uid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : uid;
   }
-  return NATIVE_TOKEN_UID_HEX;
+  throw new Error(
+    `Invalid token_data index ${tokenIndex} for tx ${tx.tx_id} ` +
+      `(transaction has ${tx.tokens?.length ?? 0} custom tokens)`
+  );
 }
 
 /**
