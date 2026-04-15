@@ -173,9 +173,15 @@ describe('processShieldedOutputs', () => {
       outputs: [],
     });
 
+    // Mock a valid scan xpriv so key derivation succeeds and rewind is actually called.
+    // Use a real-looking xpriv that bitcore can parse.
+    // A real xpriv at depth 1 (chain-level) so deriveNonCompliantChild(index) works
+    const { HDPrivateKey } = require('bitcore-lib');
+    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+
     const storage = {
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
-      getScanXPrivKey: jest.fn().mockRejectedValue(new Error('invalid-xpriv')),
+      getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), debug: jest.fn() },
     } as any;
 
@@ -187,6 +193,9 @@ describe('processShieldedOutputs', () => {
 
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
     expect(result).toEqual([]);
+    // rewind was called and threw — the debug log should capture the failure
+    expect(provider.rewindAmountShieldedOutput).toHaveBeenCalled();
+    expect(storage.logger.debug).toHaveBeenCalled();
   });
 
   it('should process multiple shielded outputs and return only decryptable ones', async () => {
@@ -205,26 +214,45 @@ describe('processShieldedOutputs', () => {
       outputs: [{ value: 5n } as any],
     });
 
-    // Only addr1 is ours, addr2 is unknown, addr3 is ours but key derivation fails
+    // addr1 is ours and succeeds, addr2 is unknown, addr3 is ours but rewind fails
+    // A real xpriv at depth 1 (chain-level) so deriveNonCompliantChild(index) works
+    const { HDPrivateKey } = require('bitcore-lib');
+    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+
     const storage = {
       getAddressInfo: jest.fn().mockImplementation(async (addr: string) => {
         if (addr === 'addr1') return { bip32AddressIndex: 0 };
         if (addr === 'addr3') return { bip32AddressIndex: 2 };
         return null;
       }),
-      getScanXPrivKey: jest.fn().mockRejectedValue(new Error('no key')),
+      getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), debug: jest.fn() },
     } as any;
 
-    const provider = makeMockProvider();
+    // addr1 rewind succeeds, addr3 rewind fails
+    let callCount = 0;
+    const provider = makeMockProvider({
+      rewindAmountShieldedOutput: jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          // addr1: success
+          return { value: 100n, blindingFactor: Buffer.alloc(32, 0x01) };
+        }
+        // addr3: failure
+        throw new Error('decryption failed');
+      }),
+    });
 
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
-    // Both addr1 and addr3 fail at key derivation, so empty result
-    expect(result).toEqual([]);
-    // getAddressInfo should have been called for addr1, addr2 (skipped as null), addr3
+    // Only addr1 succeeded
+    expect(result).toHaveLength(1);
+    expect(result[0].address).toBe('addr1');
+    expect(result[0].decrypted.value).toBe(100n);
+    // addr2 was skipped (unknown), addr3 failed rewind
     expect(storage.getAddressInfo).toHaveBeenCalledWith('addr1');
     expect(storage.getAddressInfo).toHaveBeenCalledWith('addr2');
     expect(storage.getAddressInfo).toHaveBeenCalledWith('addr3');
+    expect(provider.rewindAmountShieldedOutput).toHaveBeenCalledTimes(2);
   });
 
   it('should skip FullShielded output when asset commitment cross-check fails', async () => {
