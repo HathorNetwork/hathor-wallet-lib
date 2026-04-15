@@ -503,6 +503,8 @@ const transaction = {
     }
 
     for (const input of tx.inputs) {
+      // Shielded inputs don't have value/token/decoded fields
+      if (!input.decoded || input.token === undefined) continue;
       const { address } = input.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
@@ -511,15 +513,15 @@ const transaction = {
         balance[input.token] = getEmptyBalance();
       }
 
-      if (this.isAuthorityOutput(input)) {
-        if (this.isMint(input)) {
+      if (this.isAuthorityOutput({ token_data: input.token_data! })) {
+        if (this.isMint({ value: input.value!, token_data: input.token_data! })) {
           balance[input.token].authorities.mint.unlocked -= 1n;
         }
-        if (this.isMelt(input)) {
+        if (this.isMelt({ value: input.value!, token_data: input.token_data! })) {
           balance[input.token].authorities.melt.unlocked -= 1n;
         }
       } else {
-        balance[input.token].tokens.unlocked -= input.value;
+        balance[input.token].tokens.unlocked -= input.value!;
       }
     }
 

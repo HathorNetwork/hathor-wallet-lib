@@ -447,7 +447,7 @@ export class MemoryStore implements IStore {
       let found = false;
       for (const input of tx.inputs) {
         if (
-          input.decoded.address &&
+          input.decoded?.address &&
           this.addresses.has(input.decoded.address) &&
           input.token === tokenUid
         ) {

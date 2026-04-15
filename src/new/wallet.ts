@@ -3058,6 +3058,10 @@ class HathorWallet extends EventEmitter {
     );
     fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
 
+    // Normalize shielded outputs before balance calculation so raw shielded
+    // entries are moved to shielded_outputs[] and don't break getTxBalance.
+    transactionUtils.normalizeShieldedOutputs(fullTx.tx as unknown as IHistoryTx);
+
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
     const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
