@@ -146,7 +146,7 @@ export async function apiSyncHistory(
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false,
+  shouldProcessHistory?: boolean,
   pinCode?: string
 ) {
   let itStartIndex = startIndex;

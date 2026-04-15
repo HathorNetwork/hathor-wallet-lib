@@ -262,7 +262,7 @@ export async function xpubStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false,
+  shouldProcessHistory?: boolean,
   pinCode?: string
 ) {
   let firstIndex = startIndex;
@@ -288,7 +288,7 @@ export async function manualStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false,
+  shouldProcessHistory?: boolean,
   pinCode?: string
 ) {
   let firstIndex = startIndex;
@@ -772,7 +772,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
  */
 export async function streamSyncHistory(
   manager: StreamManager,
-  shouldProcessHistory: boolean,
+  shouldProcessHistory?: boolean,
   pinCode?: string
 ): Promise<void> {
   await manager.setupStream();
