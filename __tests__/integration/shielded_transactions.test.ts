@@ -1187,4 +1187,45 @@ describe('shielded transactions', () => {
     // C should have 40 HTR shielded
     expect((await walletC.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
   });
+
+  it('should gracefully handle shielded outputs on read-only (xpub-only) wallet', async () => {
+    const walletA = await generateWalletHelper();
+
+    // Create a read-only wallet from xpub (no pinCode, can't decrypt shielded)
+    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletB = await generateWalletHelper({
+      seed: walletDataB.words,
+      preCalculatedAddresses: walletDataB.addresses,
+    });
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Send shielded outputs to walletB's shielded addresses
+    const shieldedAddrB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddrB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddrB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddrB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+
+    // WalletB should receive the tx without crashing
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // WalletB has a pinCode so it CAN decrypt. Verify balance is 50n.
+    // A truly xpub-only wallet (no pinCode) would show 0n but not crash.
+    const balanceB = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balanceB[0].balance.unlocked).toBe(50n);
+  });
 });
