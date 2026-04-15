@@ -563,18 +563,27 @@ export class StreamManager extends AbortController {
         if (!alreadyExists) {
           await this.storage.saveAddress(addr);
         }
-        // Generate shielded address pair at the same index (if keys are available)
-        const shieldedResult = await deriveShieldedAddressFromStorage(
-          addr.bip32AddressIndex,
-          this.storage
-        );
-        if (shieldedResult) {
-          if (!(await this.storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
-            await this.storage.saveAddress(shieldedResult.shieldedAddress);
+        // Generate shielded address pair at the same index (if keys are available).
+        // Wrapped in try/catch so derivation failures don't crash the queue.
+        try {
+          const shieldedResult = await deriveShieldedAddressFromStorage(
+            addr.bip32AddressIndex,
+            this.storage
+          );
+          if (shieldedResult) {
+            if (!(await this.storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
+              await this.storage.saveAddress(shieldedResult.shieldedAddress);
+            }
+            if (!(await this.storage.isAddressMine(shieldedResult.spendAddress.base58))) {
+              await this.storage.saveAddress(shieldedResult.spendAddress);
+            }
           }
-          if (!(await this.storage.isAddressMine(shieldedResult.spendAddress.base58))) {
-            await this.storage.saveAddress(shieldedResult.spendAddress);
-          }
+        } catch (e) {
+          this.logger.error(
+            'Failed to derive shielded address at index',
+            addr.bip32AddressIndex,
+            e
+          );
         }
       } else if (isStreamItemVertex(item)) {
         await this.storage.addTx(item.vertex);

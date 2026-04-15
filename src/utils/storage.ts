@@ -811,7 +811,7 @@ export async function processNewTx(
           value: result.decrypted.value,
           token_data: so?.token_data ?? 0,
           script: so?.script ?? '',
-          decoded: { address: result.address },
+          decoded: { ...so?.decoded, address: result.address },
           token: walletTokenUid,
           spent_by: null,
           commitment: so?.commitment ?? '',

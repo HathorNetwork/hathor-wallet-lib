@@ -60,8 +60,8 @@ export function encodeShieldedAddress(
 /**
  * Derive a shielded address at a given BIP32 index from xpub keys.
  *
- * @param scanXpubkey xpub at the scan chain (m/44'/280'/0'/0 — same as legacy P2PKH)
- * @param spendXpubkey xpub at the spend chain (m/44'/280'/1'/0)
+ * @param scanXpubkey xpub at the scan chain (m/44'/280'/1'/0)
+ * @param spendXpubkey xpub at the spend chain (m/44'/280'/2'/0)
  * @param index BIP32 address index
  * @param networkName Network name (mainnet, testnet, privatenet)
  * @returns Shielded address info

@@ -18,7 +18,7 @@ import {
  * Throws if the native addon is not installed.
  */
 export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require, import/no-unresolved
   const ct = require('@hathor/ct-crypto-node');
 
   return {
