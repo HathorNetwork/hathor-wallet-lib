@@ -413,12 +413,14 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // Use the minimum of the two lastLoaded as the starting point, so that
   // the lagging chain gets its addresses loaded.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
-  // eslint-disable-next-line no-nested-ternary
-  const shieldedTarget = hasShieldedKeys
-    ? shieldedNeedMore
-      ? shieldedLastUsedAddressIndex + gapLimit
-      : shieldedLastLoadedAddressIndex
-    : legacyTarget;
+  let shieldedTarget: number;
+  if (!hasShieldedKeys) {
+    shieldedTarget = legacyTarget;
+  } else if (shieldedNeedMore) {
+    shieldedTarget = shieldedLastUsedAddressIndex + gapLimit;
+  } else {
+    shieldedTarget = shieldedLastLoadedAddressIndex;
+  }
   const maxTarget = Math.max(legacyTarget, shieldedTarget);
   const minLastLoaded = hasShieldedKeys
     ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
@@ -785,9 +787,10 @@ export async function processNewTx(
   // This unifies the processing: the same loop handles transparent + decoded shielded outputs.
   if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length && pinCode !== undefined) {
     try {
-      // Capture the original outputs length before appending so index math
-      // doesn't shift as we push, and skip already-merged entries (idempotent).
-      const originalOutputsLen = tx.outputs.length;
+      // Capture transparent output count before appending decoded shielded outputs.
+      // result.index from processShieldedOutputs uses this same count as base,
+      // so (result.index - transparentCount) gives the shielded_outputs array index.
+      const transparentCount = tx.outputs.length;
 
       const shieldedResults = await processShieldedOutputs(
         storage,
@@ -795,20 +798,10 @@ export async function processNewTx(
         storage.shieldedCryptoProvider,
         pinCode
       );
-      let appended = false;
       for (const result of shieldedResults) {
         const walletTokenUid =
           result.tokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : result.tokenUid;
-        const so = tx.shielded_outputs[result.index - originalOutputsLen];
-
-        // Skip if this shielded output was already merged in a previous run
-        const alreadyMerged = tx.outputs.some(
-          o =>
-            transactionUtils.isShieldedOutputEntry(o) &&
-            o.commitment === so?.commitment &&
-            o.decoded?.address === result.address
-        );
-        if (alreadyMerged) continue;
+        const so = tx.shielded_outputs[result.index - transparentCount];
 
         // Append decoded shielded output to tx.outputs so the main loop processes it
         // alongside transparent outputs (UTXO creation, balance, metadata).
@@ -826,10 +819,8 @@ export async function processNewTx(
           asset_commitment: so?.asset_commitment,
           surjection_proof: so?.surjection_proof,
         });
-        appended = true;
       }
-      // Persist the updated tx only if we appended new decoded outputs
-      if (appended) {
+      if (shieldedResults.length > 0) {
         await store.saveTx(tx);
       }
     } catch (e) {

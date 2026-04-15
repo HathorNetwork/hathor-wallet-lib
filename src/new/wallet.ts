@@ -860,7 +860,8 @@ class HathorWallet extends EventEmitter {
    */
   async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
     if (opts?.legacy === false) {
-      // Shielded addresses use the spend account path
+      // Shielded addresses are formed by scanPubkey (account 1') + spendPubkey (account 2').
+      // We return the spend path since it's used for on-chain scripts and signing.
       return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
     }
 

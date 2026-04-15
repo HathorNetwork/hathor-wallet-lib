@@ -722,6 +722,7 @@ export interface IStorage {
   addTx(tx: IHistoryTx): Promise<void>;
   processHistory(pinCode?: string): Promise<void>;
   processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
+  getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens
   addToken(data: ITokenData): Promise<void>;
@@ -754,8 +755,8 @@ export interface IStorage {
   getAuthPrivKey(pinCode: string): Promise<string>;
 
   // Shielded key methods (return undefined if wallet was created before shielded feature)
-  getScanXPrivKey(pinCode: string): Promise<string | undefined>;
-  getSpendXPrivKey(pinCode: string): Promise<string | undefined>;
+  getScanXPrivKey(pinCode: string): Promise<string>;
+  getSpendXPrivKey(pinCode: string): Promise<string>;
   getScanXPubKey(): Promise<string | undefined>;
   getSpendXPubKey(): Promise<string | undefined>;
   getWalletData(): Promise<IWalletData>;
