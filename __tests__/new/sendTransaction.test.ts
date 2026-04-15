@@ -5,11 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  TOKEN_AUTHORITY_MASK,
-  NATIVE_TOKEN_UID,
-  SELECT_OUTPUTS_TIMEOUT,
-} from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
 import SendTransaction, {
   isDataOutput,
   checkUnspentInput,
@@ -461,16 +457,8 @@ describe('releaseUtxos', () => {
     await sendTx.releaseUtxos();
 
     expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
-    expect(utxoSelectSpy).toHaveBeenCalledWith(
-      { txId: 'tx1', index: 0 },
-      false,
-      SELECT_OUTPUTS_TIMEOUT
-    );
-    expect(utxoSelectSpy).toHaveBeenCalledWith(
-      { txId: 'tx2', index: 1 },
-      false,
-      SELECT_OUTPUTS_TIMEOUT
-    );
+    expect(utxoSelectSpy).toHaveBeenCalledWith({ txId: 'tx1', index: 0 }, false);
+    expect(utxoSelectSpy).toHaveBeenCalledWith({ txId: 'tx2', index: 1 }, false);
   });
 
   it('should no-op when transaction is null', async () => {

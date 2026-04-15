@@ -455,7 +455,7 @@ export async function waitNextBlock(storage) {
 export async function waitTxConfirmed(
   hWallet: HathorWallet,
   txId: string,
-  timeout?: number | null
+  timeout?: number
 ): Promise<void> {
   let timeoutHandler: ReturnType<typeof setTimeout> | undefined;
   let timeoutErrorFlag = false;
