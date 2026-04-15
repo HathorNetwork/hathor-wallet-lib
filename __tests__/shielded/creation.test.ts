@@ -123,7 +123,7 @@ describe('createShieldedOutputs', () => {
       makeDef({ value: 40n, shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
     ];
 
-    const results = await createShieldedOutputs(defs, provider, network);
+    const results = await createShieldedOutputs(defs, provider, network, ['00']);
 
     expect(results).toHaveLength(2);
     // Both FullShielded outputs should have surjection proofs
