@@ -880,6 +880,7 @@ test('getSignatureForTx uses spend key chain for shielded-spend addresses', asyn
     return null;
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function* getSpentMock(inputs: any) {
     yield {
       index: 0,
@@ -887,6 +888,7 @@ test('getSignatureForTx uses spend key chain for shielded-spend addresses', asyn
       tx: { outputs: [{ decoded: { address: shieldedAddr } }] },
     };
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock as any);
 
   const input = new Input('cafe'.repeat(8), 0);

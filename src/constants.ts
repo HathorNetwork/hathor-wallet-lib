@@ -151,6 +151,12 @@ export const NATIVE_TOKEN_UID: string = '00';
 export const NATIVE_TOKEN_UID_HEX: string = '00'.repeat(32);
 
 /**
+ * Zero blinding factor (32 zero bytes) representing transparent (unblinded)
+ * inputs/outputs in Pedersen commitment balance equations.
+ */
+export const ZERO_TWEAK: Buffer = Buffer.alloc(32, 0);
+
+/**
  * Default HTR token config
  */
 export const DEFAULT_NATIVE_TOKEN_CONFIG = {

@@ -212,7 +212,7 @@ describe('ShieldedOutputsHeader', () => {
   });
 
   describe('deserialization bounds checking', () => {
-    const network = new Network('testnet');
+    // Reuse suite-level `network` from line 56
     // Header ID (0x12) + numOutputs(1) + mode(1) = minimum 3 bytes before commitment
     const headerId = 0x12;
 

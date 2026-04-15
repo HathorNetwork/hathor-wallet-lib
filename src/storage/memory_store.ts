@@ -319,10 +319,10 @@ export class MemoryStore implements IStore {
       this.addressIndexes.set(info.bip32AddressIndex, info.base58);
     }
 
-    // Update per-chain tracking: currentAddressIndex and lastLoadedAddressIndex
-    const isShieldedChain =
-      info.addressType === 'shielded' || info.addressType === 'shielded-spend';
-    if (isShieldedChain) {
+    // Update per-chain tracking: currentAddressIndex and lastLoadedAddressIndex.
+    // Only the 'shielded' type (not 'shielded-spend') advances the cursor, since
+    // getCurrentAddress looks up shieldedAddressIndexes which only contains 'shielded' entries.
+    if (info.addressType === 'shielded') {
       if (this.walletData.shieldedCurrentAddressIndex === -1) {
         await this.setCurrentAddressIndex(info.bip32AddressIndex, { legacy: false });
       }

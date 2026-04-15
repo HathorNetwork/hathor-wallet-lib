@@ -188,7 +188,7 @@ test('deriveShieldedAddressFromStorage returns null when shielded keys unavailab
   await store.saveAccessData({
     xpubkey: xpriv.xpubkey,
     mainKey: encryptData(xpriv.xprivkey, '123'),
-    walletType: 'p2pkh' as any,
+    walletType: 'p2pkh' as const,
     walletFlags: 0,
     // No scanXpubkey, no spendXpubkey — shielded keys absent
   });

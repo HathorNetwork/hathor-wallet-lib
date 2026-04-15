@@ -62,7 +62,6 @@ import {
   getDefaultLogger,
   HistorySyncMode,
   IHistoryOutput,
-  IHistoryShieldedOutput,
   IHistoryTx,
   IIndexLimitAddressScanPolicy,
   ILogger,
@@ -845,6 +844,7 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
+      await this.storage.saveAddress(address);
     }
     return address.base58;
   }
@@ -1537,36 +1537,9 @@ class HathorWallet extends EventEmitter {
     }
     const newTx = parseResult.data;
 
-    // Normalize: to_json_extended() appends shielded entries to outputs[] but does NOT
-    // include a separate shielded_outputs key. Extract them so processShieldedOutputs can find them.
-    // Also convert base64-encoded fields (range_proof, script, surjection_proof) to hex.
-    if (!newTx.shielded_outputs) {
-      const shieldedEntries: IHistoryShieldedOutput[] = [];
-      const transparentOutputs: IHistoryOutput[] = [];
-      for (const output of newTx.outputs) {
-        if (transactionUtils.isShieldedOutputEntry(output)) {
-          shieldedEntries.push({
-            mode: output.asset_commitment ? 2 : 1, // FullShielded=2, AmountShielded=1
-            commitment: output.commitment, // already hex
-            range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
-            script: Buffer.from(output.script, 'base64').toString('hex'),
-            token_data: output.token_data,
-            ephemeral_pubkey: output.ephemeral_pubkey,
-            decoded: output.decoded,
-            asset_commitment: output.asset_commitment, // already hex
-            surjection_proof: output.surjection_proof
-              ? Buffer.from(output.surjection_proof, 'base64').toString('hex')
-              : undefined,
-          });
-        } else {
-          transparentOutputs.push(output);
-        }
-      }
-      if (shieldedEntries.length > 0) {
-        newTx.shielded_outputs = shieldedEntries;
-        newTx.outputs = transparentOutputs;
-      }
-    }
+    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
+    // converting base64 fields to hex.
+    transactionUtils.normalizeShieldedOutputs(newTx);
 
     // Later we will compare the storageTx and the received tx.
     // To avoid reference issues we clone the current storageTx.
