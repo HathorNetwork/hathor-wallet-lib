@@ -16,6 +16,7 @@ import {
   FEE_PER_OUTPUT,
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
+  SELECT_OUTPUTS_TIMEOUT,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../constants';
@@ -383,7 +384,7 @@ class NanoContractTransactionBuilder {
     }
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
-      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true, SELECT_OUTPUTS_TIMEOUT);
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
@@ -543,7 +544,7 @@ class NanoContractTransactionBuilder {
     const inputs: IDataInput[] = [];
     // The method gets only one utxo
     const utxo = utxos[0];
-    await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+    await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true, SELECT_OUTPUTS_TIMEOUT);
     inputs.push({
       txId: utxo.txId,
       index: utxo.index,
@@ -768,7 +769,7 @@ class NanoContractTransactionBuilder {
 
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
-      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true, SELECT_OUTPUTS_TIMEOUT);
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
