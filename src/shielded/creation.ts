@@ -28,6 +28,17 @@ export interface ShieldedInputBlinding {
 }
 
 /**
+ * Per-input generator info for surjection proof domain construction.
+ * For transparent/AmountShielded inputs, only tokenUid is needed (unblinded generator).
+ * For FullShielded inputs, the assetBlindingFactor is required to reconstruct
+ * the blinded generator (asset_commitment) that the fullnode uses for verification.
+ */
+export interface InputGeneratorInfo {
+  tokenUid: string;
+  assetBlindingFactor?: Buffer; // present only for FullShielded inputs
+}
+
+/**
  * Create shielded outputs with cryptographic commitments and proofs.
  *
  * The homomorphic balance equation requires blinding factors to sum to zero.
@@ -40,7 +51,7 @@ export async function createShieldedOutputs(
   defs: ShieldedOutputDef[],
   cryptoProvider: IShieldedCryptoProvider,
   network: Network,
-  inputTokenUids: string[] = [],
+  inputGenerators: InputGeneratorInfo[] = [],
   blindedInputs: ShieldedInputBlinding[] = []
 ): Promise<IDataShieldedOutput[]> {
   if (defs.length === 0) return [];
@@ -62,7 +73,7 @@ export async function createShieldedOutputs(
       throw new Error(`Shielded output ${idx}: token UID must be 32 bytes, got ${tokenBuf.length}`);
     }
   }
-  if (hasFullShielded && inputTokenUids.length === 0) {
+  if (hasFullShielded && inputGenerators.length === 0) {
     throw new Error(
       'FullShielded outputs require at least one input token UID for surjection proof domain'
     );
@@ -173,19 +184,23 @@ export async function createShieldedOutputs(
       );
 
       // For FullShielded outputs, generate a surjection proof.
-      // The domain must include ALL transparent input generators (matching the fullnode's verification).
+      // The domain must include ALL input generators (matching the fullnode's verification).
+      // For transparent/AmountShielded inputs: use unblinded generator (ZERO_TWEAK).
+      // For FullShielded inputs: use the blinded generator (asset_commitment) reconstructed
+      // from the input's asset blinding factor — the fullnode verifies against this.
       let surjectionProof: Buffer | undefined;
       if (fullyShielded && cryptoResult.assetBlindingFactor) {
         const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
         const domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }> = [];
-        for (const inputToken of inputTokenUids) {
+        for (const inputInfo of inputGenerators) {
           const inputTokenBuf = Buffer.from(
-            inputToken === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : inputToken,
+            inputInfo.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : inputInfo.tokenUid,
             'hex'
           );
           const inputTag = await cryptoProvider.deriveTag(inputTokenBuf);
-          const inputGen = await cryptoProvider.createAssetCommitment(inputTag, ZERO_TWEAK);
-          domain.push({ generator: inputGen, tag: inputTag, blindingFactor: ZERO_TWEAK });
+          const abf = inputInfo.assetBlindingFactor ?? ZERO_TWEAK;
+          const inputGen = await cryptoProvider.createAssetCommitment(inputTag, abf);
+          domain.push({ generator: inputGen, tag: inputTag, blindingFactor: abf });
         }
         surjectionProof = await cryptoProvider.createSurjectionProof(
           codomainTag,

@@ -48,7 +48,7 @@ test('addresses methods', async () => {
   await expect(store.getAddressMeta('b')).resolves.toEqual(5);
   await expect(store.addressCount()).resolves.toEqual(3);
 
-  await expect(store.getCurrentAddress()).rejects.toThrow('Current address is not loaded');
+  await expect(store.getCurrentAddress()).rejects.toThrow('Current legacy address is not loaded');
   expect(store.walletData.currentAddressIndex).toEqual(-1);
   expect(store.walletData.lastLoadedAddressIndex).toEqual(0);
   await store.saveAddress({

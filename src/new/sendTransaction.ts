@@ -36,7 +36,7 @@ import {
   WalletType,
 } from '../types';
 import { ShieldedOutputMode } from '../shielded/types';
-import { createShieldedOutputs } from '../shielded/creation';
+import { createShieldedOutputs, InputGeneratorInfo } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
@@ -403,19 +403,33 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
-      // Collect token UIDs from all inputs for surjection proof domain.
+      // Collect per-input generator info for surjection proof domain and
+      // blinding factors for the homomorphic balance equation.
       // The fullnode verifies surjection proofs against ALL input generators, so
       // the wallet must create proofs with the same domain.
       const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
-      const inputTokenUids = allInputs.filter(inp => inp.token).map(inp => inp.token as string);
-
-      // Extract blinding factors from shielded inputs for the homomorphic balance equation.
+      const inputGenerators: InputGeneratorInfo[] = [];
       const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+
       for (const inp of allInputs) {
         const utxo = await this.storage.getUtxo({
           txId: inp.txId,
           index: inp.index,
         });
+
+        // Build generator info for surjection proof domain
+        if (inp.token) {
+          const genInfo: InputGeneratorInfo = { tokenUid: inp.token as string };
+          // For FullShielded inputs, pass the asset blinding factor so the
+          // surjection proof domain uses the blinded generator (asset_commitment)
+          // matching what the fullnode verifies against.
+          if (utxo?.shielded && utxo.assetBlindingFactor) {
+            genInfo.assetBlindingFactor = Buffer.from(utxo.assetBlindingFactor, 'hex');
+          }
+          inputGenerators.push(genInfo);
+        }
+
+        // Extract blinding factors from shielded inputs for the homomorphic balance equation.
         if (utxo?.shielded) {
           if (!utxo.blindingFactor) {
             throw new SendTxError(
@@ -426,8 +440,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           blindedInputsArr.push({
             value: utxo.value,
             vbf: Buffer.from(utxo.blindingFactor, 'hex'),
-            // assetBlindingFactor is only present for FullShielded inputs.
-            // AmountShielded inputs use ZERO_TWEAK (unblinded generator).
             gbf: utxo.assetBlindingFactor
               ? Buffer.from(utxo.assetBlindingFactor, 'hex')
               : ZERO_TWEAK,
@@ -439,7 +451,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         shieldedOutputDefs,
         cryptoProvider,
         network,
-        inputTokenUids,
+        inputGenerators,
         blindedInputsArr
       );
     }
