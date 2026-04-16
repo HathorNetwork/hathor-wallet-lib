@@ -8,6 +8,7 @@
 import bitcore, { Address as BitcoreAddress } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import HathorWallet from '../../src/new/wallet';
+import SingleKeyWallet from '../../src/new/singleKeyWallet';
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
 import { ITxSignatureData, IStorage, SCANNING_POLICY } from '../../src/types';
@@ -71,7 +72,7 @@ function makeMockedConnection() {
  */
 async function buildPopulatedSingleKeyWallet(opts?: {
   pin?: string;
-}): Promise<{ wallet: HathorWallet; storage: IStorage }> {
+}): Promise<{ wallet: SingleKeyWallet; storage: IStorage }> {
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork(NETWORK_NAME);
@@ -88,12 +89,12 @@ async function buildPopulatedSingleKeyWallet(opts?: {
     publicKey: pubKeyHex,
   });
 
-  const wallet = new HathorWallet({
+  const wallet = new SingleKeyWallet({
     connection: makeMockedConnection() as never,
     storage,
     privateKey: rawPrivHex,
     publicKey: pubKeyHex,
-    preCalculatedAddresses: [expectedAddress],
+    address: expectedAddress,
     pinCode: opts?.pin ?? PIN,
     password: PASSWORD,
   });
@@ -105,84 +106,44 @@ async function buildPopulatedSingleKeyWallet(opts?: {
 // 1. Construction validation
 // ---------------------------------------------------------------------------
 
-describe('singleKeyWallet — construction validation', () => {
-  const baseOpts = {
-    connection: makeMockedConnection() as never,
-    pinCode: PIN,
-    password: PASSWORD,
-  };
-
-  test('privateKey + publicKey + preCalculatedAddresses constructs cleanly', () => {
+describe('SingleKeyWallet — construction validation', () => {
+  test('constructs with required params', () => {
     expect(
       () =>
-        new HathorWallet({
-          ...baseOpts,
+        new SingleKeyWallet({
+          connection: makeMockedConnection() as never,
           privateKey: rawPrivHex,
           publicKey: pubKeyHex,
-          preCalculatedAddresses: [expectedAddress],
+          address: expectedAddress,
+          pinCode: PIN,
         })
     ).not.toThrow();
   });
 
-  test('privateKey without publicKey throws', () => {
-    expect(
-      () =>
-        new HathorWallet({
-          ...baseOpts,
-          privateKey: rawPrivHex,
-          preCalculatedAddresses: [expectedAddress],
-        })
-    ).toThrow(/publicKey/);
+  test('is an instance of both SingleKeyWallet and HathorWallet', () => {
+    const wallet = new SingleKeyWallet({
+      connection: makeMockedConnection() as never,
+      privateKey: rawPrivHex,
+      publicKey: pubKeyHex,
+      address: expectedAddress,
+      pinCode: PIN,
+    });
+    expect(wallet).toBeInstanceOf(SingleKeyWallet);
+    expect(wallet).toBeInstanceOf(HathorWallet);
   });
 
-  test('privateKey without preCalculatedAddresses throws', () => {
+  test('HathorWallet rejects privateKey directly (new.target guard)', () => {
     expect(
       () =>
         new HathorWallet({
-          ...baseOpts,
-          privateKey: rawPrivHex,
-          publicKey: pubKeyHex,
-        })
-    ).toThrow(/preCalculatedAddresses/);
-  });
-
-  test('privateKey + seed throws', () => {
-    expect(
-      () =>
-        new HathorWallet({
-          ...baseOpts,
+          connection: makeMockedConnection() as never,
           privateKey: rawPrivHex,
           publicKey: pubKeyHex,
           preCalculatedAddresses: [expectedAddress],
-          seed: SEED,
-        })
-    ).toThrow(/cannot combine privateKey/);
-  });
-
-  test('privateKey + xpriv throws', () => {
-    expect(
-      () =>
-        new HathorWallet({
-          ...baseOpts,
-          privateKey: rawPrivHex,
-          publicKey: pubKeyHex,
-          preCalculatedAddresses: [expectedAddress],
-          xpriv: rootXpriv.xprivkey,
-        })
-    ).toThrow(/cannot combine privateKey/);
-  });
-
-  test('privateKey + xpub throws', () => {
-    expect(
-      () =>
-        new HathorWallet({
-          ...baseOpts,
-          privateKey: rawPrivHex,
-          publicKey: pubKeyHex,
-          preCalculatedAddresses: [expectedAddress],
-          xpub: rootXpriv.xpubkey,
-        })
-    ).toThrow(/cannot combine privateKey/);
+          pinCode: PIN,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any)
+    ).toThrow(/Use SingleKeyWallet/);
   });
 });
 
@@ -204,12 +165,12 @@ describe('singleKeyWallet — start & access data', () => {
     const storage = new Storage(store);
     storage.config.setNetwork(NETWORK_NAME);
 
-    const wallet = new HathorWallet({
+    const wallet = new SingleKeyWallet({
       connection: makeMockedConnection() as never,
       storage,
       privateKey: rawPrivHex,
       publicKey: pubKeyHex,
-      preCalculatedAddresses: [expectedAddress],
+      address: expectedAddress,
       pinCode: PIN,
       password: PASSWORD,
     });
@@ -237,6 +198,116 @@ describe('singleKeyWallet — start & access data', () => {
     // Scan policy defaults to SINGLE_ADDRESS
     const policy = await storage.getScanningPolicy();
     expect(policy).toBe(SCANNING_POLICY.SINGLE_ADDRESS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 2: Unsupported HD methods throw
+// ---------------------------------------------------------------------------
+
+describe('SingleKeyWallet — unsupported HD methods throw', () => {
+  let wallet: SingleKeyWallet;
+
+  beforeEach(async () => {
+    ({ wallet } = await buildPopulatedSingleKeyWallet());
+  });
+
+  test('setGapLimit throws', async () => {
+    await expect(wallet.setGapLimit(20)).rejects.toThrow(/not supported/i);
+  });
+
+  test('indexLimitLoadMore throws', async () => {
+    await expect(wallet.indexLimitLoadMore(10)).rejects.toThrow(/not supported/i);
+  });
+
+  test('indexLimitSetEndIndex throws', async () => {
+    await expect(wallet.indexLimitSetEndIndex(5)).rejects.toThrow(/not supported/i);
+  });
+
+  test('enableMultiAddressMode throws', async () => {
+    await expect(wallet.enableMultiAddressMode()).rejects.toThrow(/not supported/i);
+  });
+
+  test('getMultisigData throws', async () => {
+    await expect(wallet.getMultisigData()).rejects.toThrow(/not supported/i);
+  });
+
+  test('getAllSignatures throws', async () => {
+    await expect(wallet.getAllSignatures('deadbeef', PIN)).rejects.toThrow(/not supported/i);
+  });
+
+  test('assemblePartialTransaction throws', async () => {
+    await expect(wallet.assemblePartialTransaction('deadbeef', [])).rejects.toThrow(
+      /not supported/i
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 3: Single-key behavior overrides
+// ---------------------------------------------------------------------------
+
+describe('SingleKeyWallet — single-key behavior overrides', () => {
+  let wallet: SingleKeyWallet;
+  let storage: IStorage;
+
+  beforeEach(async () => {
+    ({ wallet, storage } = await buildPopulatedSingleKeyWallet());
+  });
+
+  test('getNextAddress returns the single address', async () => {
+    const result = await wallet.getNextAddress();
+    expect(result.address).toBe(expectedAddress);
+    expect(result.index).toBe(0);
+  });
+
+  test('getAddressAtIndex(0) returns the single address', async () => {
+    const addr = await wallet.getAddressAtIndex(0);
+    expect(addr).toBe(expectedAddress);
+  });
+
+  test('getAddressAtIndex(1) throws', async () => {
+    await expect(wallet.getAddressAtIndex(1)).rejects.toThrow(/index 0/);
+  });
+
+  test('getCurrentAddress returns the single address', async () => {
+    const result = await wallet.getCurrentAddress();
+    expect(result.address).toBe(expectedAddress);
+    expect(result.index).toBe(0);
+  });
+
+  test('getAddressPathForIndex(0) returns empty string', async () => {
+    const path = await wallet.getAddressPathForIndex(0);
+    expect(path).toBe('');
+  });
+
+  test('getAddressPathForIndex(1) throws', async () => {
+    await expect(wallet.getAddressPathForIndex(1)).rejects.toThrow(/index 0/);
+  });
+
+  test('getAddressMode returns single-address', async () => {
+    const mode = await wallet.getAddressMode();
+    expect(mode).toBe('single');
+  });
+
+  test('hasTxOutsideFirstAddress returns false', async () => {
+    expect(await wallet.hasTxOutsideFirstAddress()).toBe(false);
+  });
+
+  test('enableSingleAddressMode is a no-op', async () => {
+    await expect(wallet.enableSingleAddressMode()).resolves.not.toThrow();
+    const policy = await storage.getScanningPolicy();
+    expect(policy).toBe(SCANNING_POLICY.SINGLE_ADDRESS);
+  });
+
+  test('clearSensitiveData clears privateKey', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((wallet as any).privateKey).toBeDefined();
+    wallet.clearSensitiveData();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((wallet as any).privateKey).toBeUndefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((wallet as any).seed).toBeUndefined();
   });
 });
 
@@ -372,5 +443,93 @@ describe('singleKeyWallet — scan policy invariants', () => {
     await wallet.enableSingleAddressMode();
     const policy = await storage.getScanningPolicy();
     expect(policy).toBe(SCANNING_POLICY.SINGLE_ADDRESS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. changeEncryptionPin
+// ---------------------------------------------------------------------------
+
+describe('SingleKeyWallet — changeEncryptionPin', () => {
+  test('re-encrypts singleKeyPrivateKey with new pin', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet({ pin: PIN });
+    const accessData = await storage.getAccessData();
+    expect(accessData).not.toBeNull();
+
+    const OLD_PIN = PIN;
+    const NEW_PIN = '654321';
+
+    const newAccessData = walletUtils.changeEncryptionPin(accessData!, OLD_PIN, NEW_PIN);
+
+    expect(newAccessData.singleKeyPrivateKey).toBeDefined();
+    expect(newAccessData.singleKeyMode).toBe(true);
+
+    await storage.saveAccessData(newAccessData);
+    const decrypted = await storage.getSingleKeyPrivateKey(NEW_PIN);
+    expect(decrypted).toBe(rawPrivHex);
+
+    await expect(storage.getSingleKeyPrivateKey(OLD_PIN)).rejects.toThrow();
+  });
+
+  test('throws when no encrypted data exists', () => {
+    const emptyAccessData = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletType: 'p2pkh' as any,
+      walletFlags: 0,
+    };
+    expect(() =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      walletUtils.changeEncryptionPin(emptyAccessData as any, '1', '2')
+    ).toThrow(/No data to change/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Override safety net
+// ---------------------------------------------------------------------------
+
+describe('SingleKeyWallet — override safety net', () => {
+  const HD_METHODS_REQUIRING_OVERRIDE = [
+    'setGapLimit',
+    'indexLimitLoadMore',
+    'indexLimitSetEndIndex',
+    'enableMultiAddressMode',
+    'getMultisigData',
+    'getAllSignatures',
+    'assemblePartialTransaction',
+    'getNextAddress',
+    'getAddressAtIndex',
+    'getCurrentAddress',
+    'getAddressPathForIndex',
+    'getAddressMode',
+    'hasTxOutsideFirstAddress',
+    'enableSingleAddressMode',
+    'clearSensitiveData',
+    'getAddressPrivKey',
+    'getPrivateKeyFromAddress',
+    'signMessageWithAddress',
+  ];
+
+  for (const method of HD_METHODS_REQUIRING_OVERRIDE) {
+    test(`overrides ${method}`, () => {
+      expect(SingleKeyWallet.prototype[method]).not.toBe(HathorWallet.prototype[method]);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 10. Review gap fixes
+// ---------------------------------------------------------------------------
+
+describe('SingleKeyWallet — review gap fixes', () => {
+  test('signing a tx without external signer registered produces a clear error', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    const tx = new Transaction([], []);
+    await expect(storage.getTxSignatures(tx, PIN)).rejects.toThrow();
+  });
+
+  test('getAddressPrivKey with wrong pin throws', async () => {
+    const { wallet } = await buildPopulatedSingleKeyWallet();
+    await expect(wallet.getAddressPrivKey('wrong-pin', 0)).rejects.toThrow();
   });
 });

@@ -86,6 +86,7 @@ describe('WalletServiceStorageProxy', () => {
       getTxBalance: jest.fn(),
       updateToken: jest.fn(),
       getTxSignatures: jest.fn(),
+      getSingleKeyPrivateKey: jest.fn(),
       getAddressInfo: jest.fn(),
       getTx: jest.fn(),
       getSpentTxs: jest.fn(),

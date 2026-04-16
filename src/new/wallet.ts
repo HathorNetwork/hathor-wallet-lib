@@ -120,7 +120,7 @@ import {
   GetUtxosForAmountOptions,
   MintTokensOptions,
   MeltTokensOptions,
-  HathorWalletConstructorParams,
+  HathorWalletInternalConstructorParams,
   ISignature,
   IWalletInputInfo,
   ProposedOutput,
@@ -187,9 +187,9 @@ class HathorWallet extends EventEmitter {
   xpub?: string;
 
   // Single-key wallet (Web3Auth PoC): raw secp256k1 private key + public key
-  privateKey?: string;
+  protected privateKey?: string;
 
-  publicKey?: string;
+  protected publicKey?: string;
 
   // Token configuration
   token: ITokenData | null;
@@ -323,12 +323,19 @@ class HathorWallet extends EventEmitter {
       preCalculatedAddresses = null,
       scanPolicy = null,
       logger = null,
-    }: HathorWalletConstructorParams = {} as HathorWalletConstructorParams
+    }: HathorWalletInternalConstructorParams = {} as HathorWalletInternalConstructorParams
   ) {
     super();
 
     if (!connection) {
       throw Error('You must provide a connection.');
+    }
+
+    // Prevent direct use of privateKey on HathorWallet — use SingleKeyWallet instead.
+    if (privateKey && new.target === HathorWallet) {
+      throw new Error(
+        'privateKey is not accepted directly on HathorWallet. Use SingleKeyWallet instead.'
+      );
     }
 
     if (!seed && !xpriv && !xpub && !privateKey) {
@@ -804,13 +811,6 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    */
   async hasTxOutsideFirstAddress(): Promise<boolean> {
-    // Single-key wallets have exactly one address (index 0), so by definition
-    // no transactions can exist outside of it.
-    const accessData = await this.storage?.getAccessData?.();
-    if (accessData?.singleKeyMode) {
-      return false;
-    }
-
     const addresses: string[] = [];
     let foundAnyTx = false;
     // Load address from index 1 to GAP_LIMIT
@@ -1804,17 +1804,6 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<unknown> {
-    const accessData = await this.storage.getAccessData();
-    if (accessData?.singleKeyMode) {
-      if (addressIndex !== 0) {
-        throw new AddressError('Single-key wallets only support address index 0.');
-      }
-      const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pinCode);
-      // Return a raw bitcore PrivateKey (not an HDPrivateKey) so callers
-      // that ignore HD-specific affordances (e.g. signMessage) work directly.
-      return new bitcore.PrivateKey(rawPrivHex);
-    }
-
     const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
     const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
@@ -1832,15 +1821,10 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const key = await this.getAddressPrivKey(pinCode, index);
-    // HD-derived keys expose `.privateKey`; raw (single-key) PrivateKey
-    // objects don't, and can be passed directly to `signMessage`.
-    const privateKey =
-      (key as { privateKey?: unknown }).privateKey !== undefined
-        ? (key as { privateKey: unknown }).privateKey
-        : key;
-    const signedMessage = signMessage(message, privateKey);
-
+    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      privateKey: unknown;
+    };
+    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
     return signedMessage;
   }
 
@@ -2524,7 +2508,6 @@ class HathorWallet extends EventEmitter {
   clearSensitiveData(): void {
     this.xpriv = undefined;
     this.seed = undefined;
-    this.privateKey = undefined;
   }
 
   /**
@@ -3342,15 +3325,6 @@ class HathorWallet extends EventEmitter {
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
-    }
-
-    const accessData = await this.storage.getAccessData();
-    if (accessData?.singleKeyMode) {
-      if (addressIndex !== 0) {
-        throw new AddressError('Single-key wallets only support address index 0.');
-      }
-      const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pin);
-      return new bitcore.PrivateKey(rawPrivHex);
     }
 
     const xprivkey = await this.storage.getMainXPrivKey(pin);
