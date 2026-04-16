@@ -656,7 +656,7 @@ class HathorWallet extends EventEmitter {
             addressesToLoad.nextIndex,
             addressesToLoad.count,
             false,
-            this.pinCode || undefined
+            this.pinCode ?? undefined
           );
         } else {
           if (this.beforeReloadCallback) {
@@ -1465,7 +1465,7 @@ class HathorWallet extends EventEmitter {
       });
     }
 
-    await this.storage.processHistory(this.pinCode || undefined);
+    await this.storage.processHistory(this.pinCode ?? undefined);
   }
 
   /**
@@ -1482,7 +1482,7 @@ class HathorWallet extends EventEmitter {
         loadMoreAddresses.nextIndex,
         loadMoreAddresses.count,
         processHistory,
-        this.pinCode || undefined
+        this.pinCode ?? undefined
       );
     }
   }
@@ -1556,11 +1556,11 @@ class HathorWallet extends EventEmitter {
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
-      await this.storage.processNewTx(newTx, this.pinCode || undefined);
+      await this.storage.processNewTx(newTx, this.pinCode ?? undefined);
     } else if (storageTx.is_voided !== newTx.is_voided) {
       // This is a voided transaction update event.
       // voided transactions require a full history reprocess.
-      await this.storage.processHistory(this.pinCode || undefined);
+      await this.storage.processHistory(this.pinCode ?? undefined);
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
@@ -3482,7 +3482,7 @@ class HathorWallet extends EventEmitter {
       addressesToLoad.nextIndex,
       addressesToLoad.count,
       false,
-      this.pinCode || undefined
+      this.pinCode ?? undefined
     );
   }
 

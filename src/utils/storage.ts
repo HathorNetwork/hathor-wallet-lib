@@ -513,12 +513,19 @@ export async function processSingleTx(
       continue;
     }
 
-    if (origTx.outputs.length <= input.index) {
+    const totalOutputs = origTx.outputs.length + (origTx.shielded_outputs?.length ?? 0);
+    if (totalOutputs <= input.index) {
       throw new Error('Spending an unexistent output');
     }
 
+    // If the index refers to a shielded output that hasn't been decoded yet,
+    // skip it — it will be handled when the decoded output is appended.
+    if (input.index >= origTx.outputs.length) {
+      continue;
+    }
+
     const output = origTx.outputs[input.index];
-    if (!output.decoded.address) {
+    if (!output.decoded?.address) {
       // Tx is ours but output is not from an address.
       continue;
     }
@@ -789,7 +796,14 @@ export async function processNewTx(
 
   // Decrypt shielded outputs and append decoded entries to tx.outputs BEFORE the main loop.
   // This unifies the processing: the same loop handles transparent + decoded shielded outputs.
-  if (storage.shieldedCryptoProvider && tx.shielded_outputs?.length && pinCode !== undefined) {
+  // Skip if already decoded (e.g., processHistory re-processing a previously processed tx).
+  const alreadyDecoded = tx.outputs.some(o => transactionUtils.isShieldedOutputEntry(o));
+  if (
+    !alreadyDecoded &&
+    storage.shieldedCryptoProvider &&
+    tx.shielded_outputs?.length &&
+    pinCode !== undefined
+  ) {
     try {
       // Capture transparent output count before appending decoded shielded outputs.
       // result.index from processShieldedOutputs uses this same count as base,

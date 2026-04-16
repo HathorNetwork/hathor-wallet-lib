@@ -227,6 +227,12 @@ export class MemoryStore implements IStore {
    */
   async *addressIter(): AsyncGenerator<IAddressInfo, void, void> {
     for (const addrInfo of this.addresses.values()) {
+      // Only yield legacy addresses (p2pkh, p2sh, or untyped).
+      // Shielded and shielded-spend addresses are internal and should not
+      // be exposed through the general address iteration.
+      if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
+        continue;
+      }
       yield addrInfo;
     }
   }
@@ -270,7 +276,13 @@ export class MemoryStore implements IStore {
    * @returns {Promise<number>} A promise with the number of addresses
    */
   async addressCount(): Promise<number> {
-    return this.addresses.size;
+    let count = 0;
+    for (const addrInfo of this.addresses.values()) {
+      if (addrInfo.addressType !== 'shielded' && addrInfo.addressType !== 'shielded-spend') {
+        count++;
+      }
+    }
+    return count;
   }
 
   /**
@@ -329,7 +341,8 @@ export class MemoryStore implements IStore {
       if (info.bip32AddressIndex > this.walletData.shieldedLastLoadedAddressIndex) {
         this.walletData.shieldedLastLoadedAddressIndex = info.bip32AddressIndex;
       }
-    } else {
+    } else if (info.addressType !== 'shielded-spend') {
+      // Legacy P2PKH/P2SH only — shielded-spend does not track its own cursor
       if (this.walletData.currentAddressIndex === -1) {
         await this.setCurrentAddressIndex(info.bip32AddressIndex);
       }
@@ -369,7 +382,11 @@ export class MemoryStore implements IStore {
 
     const base58 = indexMap.get(currentIndex);
     if (!base58) {
-      throw new Error('Current address is not loaded');
+      const chain = isLegacy ? 'legacy' : 'shielded';
+      throw new Error(
+        `Current ${chain} address is not loaded (index=${currentIndex}). ` +
+          `Derive at least one ${chain} address before calling getCurrentAddress.`
+      );
     }
 
     if (markAsUsed) {

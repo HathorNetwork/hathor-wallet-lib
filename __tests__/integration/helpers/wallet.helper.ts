@@ -334,7 +334,7 @@ export async function waitForTxReceived(
     // so after the transaction arrives, all the metadata involved on it is updated and we can
     // continue running the tests to correctly check balances, addresses, and everyting else
     await updateInputsSpentBy(hWallet, storageTx);
-    await hWallet.storage.processHistory(hWallet.pinCode || undefined);
+    await hWallet.storage.processHistory(hWallet.pinCode ?? undefined);
   }
 
   return storageTx;
