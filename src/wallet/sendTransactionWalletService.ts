@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable max-classes-per-file -- AddressPathMap is a private helper tightly coupled to SendTransactionWalletService */
 import { EventEmitter } from 'events';
 import { shuffle } from 'lodash';
 import tokensUtils from '../utils/tokens';
@@ -39,6 +40,27 @@ type optionsType = {
   transaction?: Transaction | null;
   pin?: string | null;
 };
+
+/**
+ * Maps a transaction input (identified by its txId + index) to its
+ * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
+ * the key format so the read and write sides cannot drift out of sync.
+ */
+class AddressPathMap {
+  private readonly map = new Map<string, string>();
+
+  private static key(input: { txId: string; index: number }): string {
+    return `${input.txId}:${input.index}`;
+  }
+
+  set(input: { txId: string; index: number }, path: string): void {
+    this.map.set(AddressPathMap.key(input), path);
+  }
+
+  get(input: { txId: string; index: number }): string | undefined {
+    return this.map.get(AddressPathMap.key(input));
+  }
+}
 
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
@@ -437,7 +459,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       // then rebuild in this.inputs order. This is necessary because the
       // two-pass validation (tokens first, HTR second) would otherwise
       // produce paths in token-processing order rather than input order.
-      const addressPathMap = new Map<string, string>();
+      const addressPathMap = new AddressPathMap();
 
       // ignoreNative=true: HTR inputs will be validated separately below
       await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true, addressPathMap });
@@ -456,7 +478,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
       // Rebuild utxosAddressPath in this.inputs order
       utxosAddressPath = this.inputs.map(input => {
-        const path = addressPathMap.get(`${input.txId}:${input.index}`);
+        const path = addressPathMap.get(input);
         if (!path) {
           throw new SendTxError(
             `Input ${input.txId}:${input.index} was not processed by any validation pass. ` +
@@ -555,7 +577,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     options: {
       ignoreNative?: boolean;
       onlyNative?: boolean;
-      addressPathMap?: Map<string, string>;
+      addressPathMap?: AddressPathMap;
     } = {}
   ): Promise<string[]> {
     const { ignoreNative = false, onlyNative = false, addressPathMap } = options;
@@ -589,7 +611,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
       utxosAddressPath.push(utxo.addressPath);
       if (addressPathMap) {
-        addressPathMap.set(`${input.txId}:${input.index}`, utxo.addressPath);
+        addressPathMap.set(input, utxo.addressPath);
       }
 
       if (utxo.tokenId in amountInputMap) {
