@@ -8,7 +8,12 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import { WalletTracker } from '../utils/wallet-tracker.util';
-import { AddressScanPolicyData, SCANNING_POLICY, WalletState } from '../../../src/types';
+import {
+  AddressScanPolicyData,
+  AuthorityType,
+  SCANNING_POLICY,
+  WalletState,
+} from '../../../src/types';
 import type Transaction from '../../../src/models/transaction';
 import {
   generateConnection,
@@ -28,6 +33,12 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  CreateTokenOptions,
+  CreateTokenResult,
+  AuthorityUtxoResult,
+  GetAuthorityUtxosOptions,
+  DelegateAuthorityAdapterOptions,
+  DelegateAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
@@ -183,6 +194,62 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenOptions
+  ): Promise<CreateTokenResult> {
+    const hWallet = this.concrete(wallet);
+    const response = await hWallet.createNewToken(name, symbol, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    await waitForTxReceived(hWallet, response.hash);
+    await waitUntilNextTimestamp(hWallet, response.hash);
+    return { hash: response.hash };
+  }
+
+  async getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    options?: GetAuthorityUtxosOptions
+  ): Promise<AuthorityUtxoResult[]> {
+    const hWallet = this.concrete(wallet);
+    const utxos = await hWallet.getAuthorityUtxo(tokenUid, type, {
+      many: options?.many ?? true,
+      filter_address: options?.filter_address,
+    });
+    return utxos.map(u => ({
+      txId: u.txId,
+      index: u.index,
+      address: u.address,
+      authorities: u.authorities,
+    }));
+  }
+
+  async delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.delegateAuthority(tokenUid, type, destinationAddress, {
+      pinCode: DEFAULT_PIN_CODE,
+      createAnother: options?.createAnother ?? false,
+    });
+    if (!result?.hash) {
+      throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash };
   }
 
   // --- Private helpers ---
