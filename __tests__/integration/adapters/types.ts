@@ -9,7 +9,7 @@
 import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
-import type { IStorage, TokenVersion } from '../../../src/types';
+import type { IStorage, TokenVersion, AuthorityType } from '../../../src/types';
 import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
 
 /**
@@ -197,18 +197,18 @@ export interface IWalletTestAdapter {
    */
   getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse>;
 
-  // --- Token creation ---
+  // --- Token operations ---
 
   /**
-   * Creates a new custom token and waits for it to be processed.
-   * Both facades support token creation via `createNewToken()`.
+   * Creates a new custom token on the given wallet and waits for it to be confirmed.
+   * Handles pinCode injection and tx-waiting differences between facades.
    */
   createToken(
     wallet: FuzzyWalletType,
     name: string,
     symbol: string,
     amount: bigint,
-    options?: CreateTokenAdapterOptions
+    options?: CreateTokenOptions
   ): Promise<CreateTokenResult>;
 
   // --- UTXO queries ---
@@ -230,6 +230,33 @@ export interface IWalletTestAdapter {
     outputs: AdapterOutput[],
     options?: SendManyOutputsAdapterOptions
   ): Promise<SendTransactionResult>;
+
+  // --- Authority UTXOs ---
+
+  /**
+   * Queries authority UTXOs for a given token on the wallet.
+   * Normalizes fullnode's `getAuthorityUtxos()` vs service's `getAuthorityUtxo()`.
+   */
+  getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    options?: GetAuthorityUtxosOptions
+  ): Promise<AuthorityUtxoResult[]>;
+
+  // --- Authority delegation ---
+
+  /**
+   * Delegates a token authority (mint or melt) to a destination address.
+   * Both facades support `delegateAuthority()`.
+   */
+  delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult>;
 }
 
 /**
@@ -249,18 +276,21 @@ export interface SendTransactionResult {
 }
 
 /**
- * Options for creating a token via the adapter.
+ * Options for creating a new token via the adapter.
  */
-export interface CreateTokenAdapterOptions {
-  tokenVersion?: TokenVersion;
-  address?: string;
-  changeAddress?: string;
+export interface CreateTokenOptions {
   createMint?: boolean;
   createMelt?: boolean;
+  mintAuthorityAddress?: string;
+  meltAuthorityAddress?: string;
+  address?: string;
+  changeAddress?: string;
+  tokenVersion?: TokenVersion;
+  data?: string[];
 }
 
 /**
- * Result of creating a token.
+ * Result of creating a new token.
  */
 export interface CreateTokenResult {
   hash: string;
@@ -322,4 +352,37 @@ export interface AdapterInput {
 export interface SendManyOutputsAdapterOptions {
   inputs?: AdapterInput[];
   changeAddress?: string;
+}
+
+/**
+ * Normalized authority UTXO result — the common fields
+ * returned by both facade implementations.
+ */
+export interface AuthorityUtxoResult {
+  txId: string;
+  index: number;
+  address: string;
+  authorities: bigint;
+}
+
+/**
+ * Options for querying authority UTXOs via the adapter.
+ */
+export interface GetAuthorityUtxosOptions {
+  many?: boolean;
+  filter_address?: string;
+}
+
+/**
+ * Options for delegating authority via the adapter.
+ */
+export interface DelegateAuthorityAdapterOptions {
+  createAnother?: boolean;
+}
+
+/**
+ * Result of delegating authority.
+ */
+export interface DelegateAuthorityResult {
+  hash: string;
 }

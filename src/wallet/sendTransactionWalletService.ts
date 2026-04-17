@@ -939,6 +939,18 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   }
 
   /**
+   * Release all UTXOs that were marked as selected for this transaction.
+   * No-op: wallet-service manages UTXO state server-side.
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
+  // eslint-disable-next-line class-methods-use-this
+  async releaseUtxos(): Promise<void> {
+    // No-op: wallet-service manages UTXO state server-side
+  }
+
+  /**
    * Run sendTransaction from preparing, i.e. prepare, sign, mine and send the tx
    *
    * 'until' parameter can be 'prepare-tx' (it will stop before signing the tx), 'sign-tx' (it will stop before mining the tx),
