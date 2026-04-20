@@ -14,10 +14,12 @@ import {
   buildWalletInstance,
   initializeServiceGlobalConfigs,
   pollForTx,
+  pollUntilCondition,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
+import { AuthorityType } from '../../../src/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import type {
   FuzzyWalletType,
@@ -25,6 +27,12 @@ import type {
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  CreateTokenOptions,
+  CreateTokenResult,
+  AuthorityUtxoResult,
+  GetAuthorityUtxosOptions,
+  DelegateAuthorityAdapterOptions,
+  DelegateAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -213,5 +221,76 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async createToken(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    options?: CreateTokenOptions
+  ): Promise<CreateTokenResult> {
+    const sw = this.concrete(wallet);
+    const response = await sw.createNewToken(name, symbol, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!response.hash) {
+      throw new Error('createToken: transaction had no hash');
+    }
+    await pollForTx(sw, response.hash);
+    return { hash: response.hash };
+  }
+
+  async getAuthorityUtxos(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    options?: GetAuthorityUtxosOptions
+  ): Promise<AuthorityUtxoResult[]> {
+    const sw = this.concrete(wallet);
+    const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+      many: options?.many ?? true,
+      only_available_utxos: true,
+      filter_address: options?.filter_address,
+    });
+    return utxos.map(u => ({
+      txId: u.txId,
+      index: u.index,
+      address: u.address,
+      authorities: u.authorities,
+    }));
+  }
+
+  async delegateAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    destinationAddress: string,
+    options?: DelegateAuthorityAdapterOptions
+  ): Promise<DelegateAuthorityResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {
+      pinCode: SERVICE_PIN,
+      anotherAuthorityAddress: null,
+      createAnother: options?.createAnother ?? false,
+    });
+    if (!result?.hash) {
+      throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+
+    // The wallet service UTXO index may lag behind tx visibility.
+    // Poll until the delegation tx appears in the authority UTXO list.
+    const delegationTxId = result.hash;
+    await pollUntilCondition(async () => {
+      const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+        many: true,
+        only_available_utxos: true,
+      });
+      return utxos.some(u => u.txId === delegationTxId);
+    }, `authority UTXO index reflects delegation ${delegationTxId}`);
+
+    return { hash: result.hash };
   }
 }
