@@ -289,9 +289,10 @@ const walletApi = {
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
     }
-    throw new WalletRequestError(`Error creating tx proposal. Status: ${response.status}`, {
-      cause: response.data,
-    });
+    throw new WalletRequestError(
+      `Error creating tx proposal. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async updateTxProposal(
@@ -305,9 +306,10 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    throw new WalletRequestError(`Error updating tx proposal. Status: ${response.status}`, {
-      cause: response.data,
-    });
+    throw new WalletRequestError(
+      `Error updating tx proposal. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async deleteTxProposal(
