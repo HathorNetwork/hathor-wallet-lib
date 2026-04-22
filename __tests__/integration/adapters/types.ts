@@ -265,6 +265,8 @@ export interface IWalletTestAdapter {
 export interface SendTransactionOptions {
   token?: string;
   changeAddress?: string;
+  /** If provided, the adapter also waits for the tx on the receiving wallet. */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**

@@ -237,14 +237,18 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     options?: SendTransactionOptions
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
     const result = await sw.sendTransaction(address, amount, {
       pinCode: SERVICE_PIN,
-      ...options,
+      ...txOptions,
     });
     if (!result.hash) {
       throw new Error('sendTransaction: transaction had no hash');
     }
     await pollForTx(sw, result.hash);
+    if (recvWallet) {
+      await this.waitForTx(recvWallet, result.hash);
+    }
     return { hash: result.hash, transaction: result };
   }
 
