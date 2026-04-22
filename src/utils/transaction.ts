@@ -54,7 +54,7 @@ import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import helpers from './helpers';
-import { getAddressType, getAddressFromPubkey } from './address';
+import { getAddressFromPubkey } from './address';
 import txApi from '../api/txApi';
 import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
@@ -86,6 +86,19 @@ const transaction = {
     output: IHistoryOutput | Record<string, any>
   ): output is IShieldedOutputEntry {
     return output != null && (output as { type?: string }).type === 'shielded';
+  },
+
+  /**
+   * Shielded inputs arrive from the fullnode inline in tx.inputs[] with
+   * type='shielded' and only a commitment + range_proof — none of the
+   * token_data/decoded/tx_id fields that transparent inputs carry. Call sites
+   * that read those fields must filter these out first.
+   */
+  isShieldedInputEntry(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    input: Record<string, any>
+  ): boolean {
+    return input != null && (input as { type?: string }).type === 'shielded';
   },
 
   /**
@@ -502,25 +515,42 @@ const transaction = {
     }
 
     for (const input of tx.inputs) {
-      // Shielded inputs don't have value/token/decoded fields
-      if (!input.decoded || input.token === undefined) continue;
-      const { address } = input.decoded;
+      // Shielded inputs arrive without decoded/value/token (hidden in the
+      // commitment on-chain). Recover those fields from the stored origTx's
+      // decoded shielded output at input.index so wallet-owned shielded UTXOs
+      // are debited correctly.
+      let address = input.decoded?.address;
+      let inputToken = input.token;
+      let inputValue = input.value;
+      let inputTokenData = input.token_data;
+
+      if (!address || inputToken === undefined) {
+        // Shielded inputs: decoded value/token/address live on the saved UTXO
+        // (normalizeShieldedOutputs keeps shielded entries out of tx.outputs).
+        const utxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
+        if (!utxo || !utxo.shielded) continue;
+        address = utxo.address;
+        inputToken = utxo.token;
+        inputValue = utxo.value;
+        inputTokenData = 0;
+      }
+
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      if (!balance[input.token]) {
-        balance[input.token] = getEmptyBalance();
+      if (!balance[inputToken]) {
+        balance[inputToken] = getEmptyBalance();
       }
 
-      if (this.isAuthorityOutput({ token_data: input.token_data! })) {
-        if (this.isMint({ value: input.value!, token_data: input.token_data! })) {
-          balance[input.token].authorities.mint.unlocked -= 1n;
+      if (this.isAuthorityOutput({ token_data: inputTokenData! })) {
+        if (this.isMint({ value: inputValue!, token_data: inputTokenData! })) {
+          balance[inputToken].authorities.mint.unlocked -= 1n;
         }
-        if (this.isMelt({ value: input.value!, token_data: input.token_data! })) {
-          balance[input.token].authorities.melt.unlocked -= 1n;
+        if (this.isMelt({ value: inputValue!, token_data: inputTokenData! })) {
+          balance[inputToken].authorities.melt.unlocked -= 1n;
         }
       } else {
-        balance[input.token].tokens.unlocked -= input.value!;
+        balance[inputToken].tokens.unlocked -= inputValue!;
       }
     }
 
@@ -638,20 +668,23 @@ const transaction = {
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
     }
-    if (getAddressType(output.address, network) === 'p2sh') {
-      // P2SH
-      const address = new Address(output.address, { network });
-      // This will throw AddressError in case the address is invalid
-      address.validateAddress();
-      const p2sh = new P2SH(address, { timelock: output.timelock });
+    const addressObj = new Address(output.address, { network });
+    addressObj.validateAddress();
+    const addrType = addressObj.getType();
+    if (addrType === 'p2sh') {
+      const p2sh = new P2SH(addressObj, { timelock: output.timelock });
       return p2sh.createScript();
     }
-    if (getAddressType(output.address, network) === 'p2pkh') {
-      // P2PKH
-      const address = new Address(output.address, { network });
-      // This will throw AddressError in case the address is invalid
-      address.validateAddress();
-      const p2pkh = new P2PKH(address, { timelock: output.timelock });
+    if (addrType === 'p2pkh') {
+      const p2pkh = new P2PKH(addressObj, { timelock: output.timelock });
+      return p2pkh.createScript();
+    }
+    if (addrType === 'shielded') {
+      // Shielded addresses are a recipient-facing encoding of scan + spend
+      // public keys. On-chain, the transparent script is the P2PKH derived
+      // from the spend pubkey — same convention as createOutputScriptFromAddress.
+      const spendAddress = addressObj.getSpendAddress();
+      const p2pkh = new P2PKH(spendAddress, { timelock: output.timelock });
       return p2pkh.createScript();
     }
     throw new Error('Invalid output for creating script.');
@@ -1050,7 +1083,13 @@ const transaction = {
     }
     const { tx, meta } = txResponse;
     const inputs: IHistoryInput[] = tx.inputs.map(i => {
-      const hydratedInput = this.hydrateIOWithToken(i, tx.tokens);
+      if (this.isShieldedInputEntry(i)) {
+        return i as unknown as IHistoryInput;
+      }
+      const hydratedInput = this.hydrateIOWithToken(
+        i as { token_data: number },
+        tx.tokens
+      );
       return hydratedInput as IHistoryInput;
     });
     const outputs: IHistoryOutput[] = tx.outputs.map(o => {

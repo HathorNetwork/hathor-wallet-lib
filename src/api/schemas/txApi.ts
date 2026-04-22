@@ -38,7 +38,7 @@ export const decodedSchema = z.discriminatedUnion('type', [
   unknownDecodedScriptSchema,
 ]);
 
-export const fullnodeTxApiInputSchema = z.object({
+const fullnodeTxApiTransparentInputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
   script: z.string(),
@@ -48,6 +48,22 @@ export const fullnodeTxApiInputSchema = z.object({
   token: z.string().nullish(),
 });
 
+// Shielded inputs expose only a commitment + range proof on the wire; the
+// amount, token and spender are hidden. Additional fields may be added by the
+// fullnode over time, so we passthrough unknown keys instead of rejecting.
+const fullnodeTxApiShieldedInputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    commitment: z.string(),
+    range_proof: z.string(),
+  })
+  .passthrough();
+
+export const fullnodeTxApiInputSchema = z.union([
+  fullnodeTxApiShieldedInputSchema,
+  fullnodeTxApiTransparentInputSchema,
+]);
+
 export const fullnodeTxApiOutputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
@@ -56,6 +72,11 @@ export const fullnodeTxApiOutputSchema = z.object({
   token: z.string().nullish(),
   spent_by: z.string().nullable().default(null),
 });
+
+// Shielded outputs, like shielded inputs, omit plaintext value/script. The
+// shape is open-ended (mode/commitment/range_proof/ephemeral_pubkey/etc.) so
+// we passthrough unknown keys for forward-compatibility.
+export const fullnodeTxApiShieldedOutputSchema = z.object({}).passthrough();
 
 export const fullnodeTxApiTokenSchema = z.object({
   uid: z.string(),
@@ -80,6 +101,8 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_blueprint_id: z.string().nullish(),
   inputs: fullnodeTxApiInputSchema.array(),
   outputs: fullnodeTxApiOutputSchema.array(),
+  shielded_inputs: fullnodeTxApiShieldedInputSchema.array().nullish(),
+  shielded_outputs: fullnodeTxApiShieldedOutputSchema.array().nullish(),
   tokens: fullnodeTxApiTokenSchema.array(),
   token_name: z.string().nullish(),
   token_symbol: z.string().nullish(),

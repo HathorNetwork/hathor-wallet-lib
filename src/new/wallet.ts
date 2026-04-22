@@ -1547,8 +1547,43 @@ class HathorWallet extends EventEmitter {
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
+    // Pre-enrich shielded inputs from the previously-stored tx BEFORE addTx
+    // overwrites them. On a re-delivery, the wire form has stripped the
+    // value/token/token_data off each shielded input, and the UTXO they
+    // reference has already been deleted on first receipt — so without this
+    // step, getTxBalance would read a zero debit for the input and the stored
+    // tx would lose its per-tx delta correctness until the next full reload.
+    if (!isNewTx && storageTx) {
+      for (let i = 0; i < newTx.inputs.length; i += 1) {
+        const input = newTx.inputs[i];
+        if (input.decoded?.address && input.token !== undefined) continue;
+        const storedInput = storageTx.inputs?.find(
+          si => si.tx_id === input.tx_id && si.index === input.index
+        );
+        if (storedInput?.decoded?.address && storedInput.token !== undefined) {
+          input.decoded = storedInput.decoded;
+          input.value = storedInput.value;
+          input.token = storedInput.token;
+          input.token_data = storedInput.token_data ?? 0;
+        }
+      }
+    }
+
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
+
+    // Detect when an "update" event for a known tx is actually delivering
+    // shielded outputs that weren't present on the first receipt. The full
+    // node sometimes sends a tx in two stages — first a bare announcement
+    // with empty `outputs[]`, then a follow-up message carrying the full
+    // shielded data. Without this branch the second message would route to
+    // processMetadataChanged (which doesn't decrypt) and the per-tx delta
+    // would forever read as -input until the next full reload.
+    const storedHasDecodedShielded = (storageTx?.outputs ?? []).some(o =>
+      transactionUtils.isShieldedOutputEntry(o)
+    );
+    const newHasShielded = (newTx.shielded_outputs?.length ?? 0) > 0;
+    const shieldedNewlyAvailable = !isNewTx && newHasShielded && !storedHasDecodedShielded;
 
     // set state to processing and save current state.
     const previousState = this.state;
@@ -1557,9 +1592,10 @@ class HathorWallet extends EventEmitter {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
       await this.storage.processNewTx(newTx, this.pinCode ?? undefined);
-    } else if (storageTx.is_voided !== newTx.is_voided) {
-      // This is a voided transaction update event.
-      // voided transactions require a full history reprocess.
+    } else if (storageTx.is_voided !== newTx.is_voided || shieldedNewlyAvailable) {
+      // Voided change OR shielded data only now arriving — both require
+      // full history reprocess to avoid double-counting from the prior
+      // partial processNewTx.
       await this.storage.processHistory(this.pinCode ?? undefined);
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
@@ -1567,6 +1603,37 @@ class HathorWallet extends EventEmitter {
     }
     // restore previous state
     this.state = previousState;
+
+    // Carry over previously-decoded shielded outputs. The full node's wire
+    // form for any update event re-sends shielded outputs in their hidden
+    // (commitment-only) form. Without this merge, the second addTx below
+    // would overwrite the decoded entries that processNewTx had appended on
+    // first receipt, and getTxBalance would then read the persisted tx
+    // without those credits — showing the full input value as the per-tx
+    // delta until the next processHistory cycle.
+    //
+    // Done here (not before the processing branch above) so that
+    // processMetadataChanged's saveUtxo loop only sees genuine transparent
+    // outputs and doesn't accidentally re-save shielded UTXOs without their
+    // shielded/blindingFactor markers.
+    if (!isNewTx && storageTx) {
+      const previouslyDecoded = (storageTx.outputs ?? []).filter(o =>
+        transactionUtils.isShieldedOutputEntry(o)
+      );
+      const alreadyOnNewTx = newTx.outputs.some(o => transactionUtils.isShieldedOutputEntry(o));
+      if (previouslyDecoded.length > 0 && !alreadyOnNewTx) {
+        newTx.outputs.push(...previouslyDecoded);
+        // Also carry over shielded_outputs so the next addTx's
+        // normalizeShieldedOutputs early-returns (the truthy check is on
+        // tx.shielded_outputs). Otherwise normalize would re-extract the
+        // entries we just merged back out of outputs[], leaving the stored
+        // tx with outputs=[] again — which is exactly the bug being
+        // worked around here.
+        if (!newTx.shielded_outputs && storageTx.shielded_outputs) {
+          newTx.shielded_outputs = storageTx.shielded_outputs;
+        }
+      }
+    }
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage
@@ -3055,7 +3122,11 @@ class HathorWallet extends EventEmitter {
         ? output
         : hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
+    fullTx.tx.inputs = fullTx.tx.inputs.map(input =>
+      transactionUtils.isShieldedInputEntry(input)
+        ? input
+        : hydrateWithTokenUid(input as { token_data: number }, fullTx.tx.tokens)
+    ) as typeof fullTx.tx.inputs;
 
     // Normalize shielded outputs before balance calculation so raw shielded
     // entries are moved to shielded_outputs[] and don't break getTxBalance.
