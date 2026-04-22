@@ -75,14 +75,18 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
 
     // Sends 80n TTS to external wallet
     const externalAddr = (await externalWallet.getAddressAtIndex(0))!;
-    const { hash: externalTxHash } = await adapter.sendTransaction(wallet, externalAddr, 80n, {
+    await adapter.sendTransaction(wallet, externalAddr, 80n, {
       token: tokenUid,
+      recvWallet: externalWallet,
     });
-    await adapter.waitForTx(externalWallet, externalTxHash);
 
     // 20n TTS remaining after sending 80n to external wallet
     const remainingBalance = await wallet.getBalance(tokenUid);
     expect(remainingBalance[0].balance.unlocked).toEqual(20n);
+
+    // External wallet received 80n TTS
+    const externalBalance = await externalWallet.getBalance(tokenUid);
+    expect(externalBalance[0].balance.unlocked).toEqual(80n);
   });
 
   it('should send custom fee token transactions', async () => {

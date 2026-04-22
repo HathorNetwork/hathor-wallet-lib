@@ -72,6 +72,10 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
       'numTransactions',
       1
     );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(3))).toHaveProperty(
+      'numTransactions',
+      0
+    );
 
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
