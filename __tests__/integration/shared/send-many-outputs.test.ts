@@ -47,7 +47,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
         token: NATIVE_TOKEN_UID,
       },
     ]);
-    const decoded1 = await wallet.getTx(tx1.hash);
+    const decoded1 = await adapter.getTx(wallet, tx1.hash);
     expect(decoded1.inputs).toHaveLength(1);
     expect(decoded1.outputs).toHaveLength(1);
 
@@ -64,7 +64,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
         token: NATIVE_TOKEN_UID,
       },
     ]);
-    const decoded2 = await wallet.getTx(tx2.hash);
+    const decoded2 = await adapter.getTx(wallet, tx2.hash);
     expect(decoded2.inputs).toHaveLength(1);
     expect(decoded2.outputs).toHaveLength(2);
     const largerOutputIndex = decoded2.outputs.findIndex(o => o.value === 60n);
@@ -94,7 +94,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
         ],
       }
     );
-    const decoded3 = await wallet.getTx(tx3.hash);
+    const decoded3 = await adapter.getTx(wallet, tx3.hash);
     expect(decoded3.inputs).toHaveLength(1);
     expect(decoded3.outputs).toHaveLength(3);
 
@@ -126,7 +126,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
       },
     ]);
 
-    const sendTx = await wallet.getTx(tx.hash);
+    const sendTx = await adapter.getTx(wallet, tx.hash);
     expect(sendTx.inputs).toHaveLength(2);
     expect(sendTx.outputs).toHaveLength(4);
 
@@ -175,7 +175,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     ]);
 
     // Validate timelocks on outputs
-    const timelockTx = await wallet.getTx(tx.hash);
+    const timelockTx = await adapter.getTx(wallet, tx.hash);
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock1Timestamp)).toBeDefined();
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock2Timestamp)).toBeDefined();
 
@@ -196,9 +196,9 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     expect(htrBalance[0].balance).toEqual({ locked: 3n, unlocked: 7n });
 
     // Confirm that locked balance is unavailable
-    await expect(wallet.sendTransaction((await wallet.getAddressAtIndex(3))!, 8n)).rejects.toThrow(
-      'Insufficient'
-    );
+    await expect(
+      adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(3))!, 8n)
+    ).rejects.toThrow('Insufficient');
 
     // Wait for second timelock to expire
     const waitFor2 = timelock2 - Date.now().valueOf() + 1000;
@@ -212,7 +212,11 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     expect(htrBalance[0].balance).toStrictEqual({ locked: 0n, unlocked: 10n });
 
     // Confirm balance is now available
-    const sendTx = await wallet.sendTransaction((await wallet.getAddressAtIndex(4))!, 8n);
-    expect(sendTx).toHaveProperty('hash');
+    const { hash } = await adapter.sendTransaction(
+      wallet,
+      (await wallet.getAddressAtIndex(4))!,
+      8n
+    );
+    expect(hash).toBeDefined();
   });
 });

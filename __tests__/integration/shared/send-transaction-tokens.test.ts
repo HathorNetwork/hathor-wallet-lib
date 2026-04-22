@@ -18,6 +18,7 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { TokenVersion } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { TOKEN_DATA } from '../configuration/test-constants';
 import FeeHeader from '../../../src/headers/fee';
 import Header from '../../../src/headers/base';
 
@@ -273,7 +274,10 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);
     expect(fullTx.tx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token_data: 1 })
+      expect.objectContaining({ value: 50n, token_data: TOKEN_DATA.TOKEN })
+    );
+    expect(fullTx.tx.outputs).toContainEqual(
+      expect.objectContaining({ token: NATIVE_TOKEN_UID, token_data: TOKEN_DATA.HTR })
     );
   });
 });

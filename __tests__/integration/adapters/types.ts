@@ -9,7 +9,7 @@
 import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
-import type { IStorage, TokenVersion, AuthorityType } from '../../../src/types';
+import type { IHistoryTx, IStorage, TokenVersion, AuthorityType } from '../../../src/types';
 import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
 
 /**
@@ -190,6 +190,12 @@ export interface IWalletTestAdapter {
     amount: bigint,
     options?: SendTransactionOptions
   ): Promise<SendTransactionResult>;
+
+  /**
+   * Retrieves a transaction from the wallet's local history.
+   * Both facades support `getTx()`.
+   */
+  getTx(wallet: FuzzyWalletType, txId: string): Promise<IHistoryTx>;
 
   /**
    * Retrieves the full transaction data from the network node.

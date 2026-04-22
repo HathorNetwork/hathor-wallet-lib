@@ -31,8 +31,10 @@ import {
   stopAllWallets,
   waitForTxReceived,
   waitUntilNextTimestamp,
+  createTokenHelper,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { TokenVersion } from '../../../src/types';
 import SendTransaction from '../../../src/new/sendTransaction';
 import transaction from '../../../src/utils/transaction';
 
@@ -98,6 +100,92 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
       0
     );
   });
+
+  it('should track address usage for custom token transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Send', 'TTS', 100n);
+
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(6),
+    });
+    await waitForTxReceived(hWallet, tx1.hash);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    await waitUntilNextTimestamp(hWallet, tx1.hash);
+    const { hash: tx2Hash } = await hWallet.sendTransaction(
+      await gWallet.getAddressAtIndex(0),
+      80n,
+      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
+    );
+    await waitForTxReceived(hWallet, tx2Hash);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      2
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      2
+    );
+    expect(
+      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
+    ).toHaveProperty('numTransactions', 1);
+  });
+
+  it('should track address usage for fee token transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 8000n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(6),
+    });
+    await waitForTxReceived(hWallet, tx1.hash);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    await waitUntilNextTimestamp(hWallet, tx1.hash);
+    const { hash: tx2Hash } = await hWallet.sendTransaction(
+      await gWallet.getAddressAtIndex(0),
+      82n,
+      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
+    );
+    await waitForTxReceived(hWallet, tx2Hash);
+
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
+      'numTransactions',
+      1
+    );
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
+      'numTransactions',
+      2
+    );
+    expect(
+      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
+    ).toHaveProperty('numTransactions', 1);
+  });
 });
 
 describe('[Fullnode] sendTransaction — multisig', () => {
@@ -154,6 +242,12 @@ describe('[Fullnode] sendTransaction — multisig', () => {
     const historyTx = await mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
       tx_id: partiallyAssembledTx.hash,
+      inputs: [expect.objectContaining({ tx_id: inputTxId, value: 10n })],
+    });
+
+    const fullNodeTx = await mhWallet1.getFullTxById(sentTx.hash);
+    expect(fullNodeTx.tx).toMatchObject({
+      hash: partiallyAssembledTx.hash,
       inputs: [expect.objectContaining({ tx_id: inputTxId, value: 10n })],
     });
   });

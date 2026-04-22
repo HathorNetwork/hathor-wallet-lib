@@ -230,6 +230,14 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return { hash: result.hash, transaction: result };
   }
 
+  async getTx(wallet: FuzzyWalletType, txId: string) {
+    const result = await this.concrete(wallet).getTx(txId);
+    if (!result) {
+      throw new Error(`getTx: transaction ${txId} not found`);
+    }
+    return result;
+  }
+
   async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
     // The fullnode facade returns FullNodeTxApiResponse (zod-inferred), which is structurally
     // compatible with FullNodeTxResponse but has minor nullability differences.

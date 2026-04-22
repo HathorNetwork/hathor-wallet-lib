@@ -89,6 +89,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
         timestamp: expect.any(Number),
         parents: expect.arrayContaining([expect.any(String)]),
         tokens: expect.any(Array),
+        signalBits: expect.any(Number),
       })
     );
 
@@ -152,5 +153,6 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
 
     const changeOutput = fullTx.tx.outputs.find(output => output.decoded?.address === changeAddr);
     expect(changeOutput).toBeDefined();
+    expect(changeOutput!.value).toBe(8n);
   });
 });
