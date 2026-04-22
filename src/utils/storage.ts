@@ -461,8 +461,18 @@ export async function processHistory(
   const tokens = new Set<string>();
   let legacyMaxIndexUsed = -1;
   let shieldedMaxIndexUsed = -1;
-  // Iterate on all txs of the history updating the metadata as we go
+  // Iterate on all txs of the history updating the metadata as we go.
+  // Order chronologically (oldest first) so that a tx spending a previous tx's
+  // shielded UTXO finds that UTXO already saved when the wallet-owned shielded
+  // input is resolved (see the UTXO-lookup branch in processNewTx's input
+  // enrichment). historyIter yields newest-first for UI purposes, so we buffer
+  // and reverse.
+  const orderedTxs: IHistoryTx[] = [];
   for await (const tx of store.historyIter()) {
+    orderedTxs.push(tx);
+  }
+  orderedTxs.reverse();
+  for (const tx of orderedTxs) {
     const processedData = await processNewTx(storage, tx, {
       rewardLock,
       nowTs,
@@ -473,6 +483,35 @@ export async function processHistory(
     shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
     for (const token of processedData.tokens) {
       tokens.add(token);
+    }
+    // After cleanMetadata wipes UTXOs, processNewTx re-saves outputs based on
+    // their `spent_by` flag — but the fullnode doesn't always send spent_by
+    // set on an output before we've seen the spending tx (especially for
+    // shielded txs, where the fullnode updates the origin tx's metadata
+    // asynchronously). So we also have to re-apply the per-tx input
+    // deletion: for each transparent input, find the origin tx's output
+    // that's being spent and delete that UTXO from storage. Without this,
+    // processHistory can resurrect a UTXO that was already spent by a
+    // later tx and the next send picks it, producing "input already spent"
+    // at the fullnode.
+    for (const input of tx.inputs) {
+      const origTx = await storage.getTx(input.tx_id);
+      if (!origTx) continue;
+      if (input.index >= origTx.outputs.length) continue; // shielded branch handled elsewhere
+      const output = origTx.outputs[input.index];
+      if (!output?.decoded?.address) continue;
+      if (!(await storage.isAddressMine(output.decoded.address))) continue;
+      await store.deleteUtxo({
+        txId: input.tx_id,
+        index: input.index,
+        token: output.token,
+        address: output.decoded.address,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+        value: output.value,
+        timelock: output.decoded.timelock ?? null,
+        type: origTx.version,
+        height: origTx.height ?? null,
+      });
     }
   }
 
@@ -518,9 +557,19 @@ export async function processSingleTx(
       throw new Error('Spending an unexistent output');
     }
 
-    // If the index refers to a shielded output that hasn't been decoded yet,
-    // skip it — it will be handled when the decoded output is appended.
+    // Shielded inputs: addTx normalizes shielded entries OUT of origTx.outputs,
+    // so input.index targets a position that's no longer in outputs[]. Look up
+    // the UTXO directly by {tx_id, index} and delete it. Without this, the
+    // wallet's UTXO selector keeps offering the spent shielded UTXO and the
+    // next send fails on-chain ("input has already been spent").
     if (input.index >= origTx.outputs.length) {
+      const shieldedUtxo = await storage.getUtxo({
+        txId: input.tx_id,
+        index: input.index,
+      });
+      if (shieldedUtxo?.shielded) {
+        await store.deleteUtxo(shieldedUtxo);
+      }
       continue;
     }
 
@@ -794,6 +843,34 @@ export async function processNewTx(
   let legacyMaxIndexUsed = -1;
   let shieldedMaxIndexUsed = -1;
 
+  // Hydrate transparent input `token` fields from `token_data` using the tx's
+  // tokens list. Some fullnode ws payloads omit `token` on inputs (the schema
+  // keeps it optional since shielded inputs legitimately don't carry it), and
+  // the balance-update input loop below skips inputs whose `token` is
+  // undefined. Without this hydration the balance drifts upward on every
+  // processHistory cycle: output values get added, input debits get dropped.
+  // For create-token txs, token index 1 is the tx's own hash (the token being
+  // created), and token index 0 is always the native token (HTR).
+  const txTokensArray = tx.version === CREATE_TOKEN_TX_VERSION ? [tx.tx_id] : tx.tokens ?? [];
+  for (const input of tx.inputs) {
+    if (input.token !== undefined) continue;
+    if (input.token_data === undefined) continue;
+    if (input.token_data === 0) {
+      input.token = NATIVE_TOKEN_UID;
+      continue;
+    }
+    const tokenIdx = input.token_data & 0x7f; // strip TOKEN_AUTHORITY_MASK (0x80)
+    if (tokenIdx >= 1 && tokenIdx <= txTokensArray.length) {
+      input.token = txTokensArray[tokenIdx - 1];
+    }
+  }
+
+  // Snapshot the previously-stored copy of this tx (if any) BEFORE any
+  // store.saveTx call below overwrites it. Used later to recover enriched
+  // shielded-input fields (value/token/token_data) on re-delivery, after the
+  // spent UTXO has already been deleted by a prior call.
+  const previouslyStoredTx = await store.getTx(tx.tx_id);
+
   // Decrypt shielded outputs and append decoded entries to tx.outputs BEFORE the main loop.
   // This unifies the processing: the same loop handles transparent + decoded shielded outputs.
   // Skip if already decoded (e.g., processHistory re-processing a previously processed tx).
@@ -969,9 +1046,78 @@ export async function processNewTx(
     await store.editAddressMeta(output.decoded.address, addressMeta);
   }
 
+  // Shielded inputs arrive from the full node without decoded/value/token —
+  // those fields are hidden in the commitment. For inputs that spend a
+  // wallet-owned shielded UTXO, recover the decoded fields from the stored
+  // UTXO before the main input loop runs. processHistory iterates chronologically
+  // (see processHistory in this file) so the origin tx's shielded outputs have
+  // already been decoded and their UTXOs saved by the time we reach a tx that
+  // spends them.
+  //
+  // We also delete the spent shielded UTXO here. The transparent path tracks
+  // spent_by via the on-chain output, so the output loop above naturally skips
+  // saveUtxo for spent outputs (`output.spent_by !== null`). Shielded outputs
+  // don't carry a usable spent_by in the wallet's stored form (the appended
+  // decoded entry hardcodes spent_by:null), so without explicit deletion here
+  // the wallet's selectUtxos would keep offering the spent UTXO and the next
+  // send would fail on-chain with "input has already been spent".
+  // Enrich shielded inputs. On first delivery the spent UTXO still exists in
+  // storage — we read value/token/address off it, delete it, and continue. On
+  // re-delivery the UTXO is gone, so we fall back to the enriched copy we
+  // captured from the pre-save stored tx.
   for (const input of tx.inputs) {
-    // We ignore data inputs and shielded inputs since they do not have an address
-    // Shielded inputs also lack value/token/token_data fields.
+    // Always check for a spent shielded UTXO so we delete it even when the
+    // input is already enriched (e.g., from a prior pre-save step in
+    // wallet.ts that populated decoded/value/token from the stored tx).
+    // Without this, a subsequent re-delivery of the origin tx can re-save
+    // its shielded outputs (processMetadataChanged/processSingleTx) and
+    // resurrect the spent UTXO — leaving a double-spend trap for the next
+    // send.
+    const utxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
+    if (utxo && utxo.shielded) {
+      if (!input.decoded?.address || input.token === undefined) {
+        input.decoded = { address: utxo.address };
+        input.value = utxo.value;
+        input.token = utxo.token;
+        input.token_data = 0;
+      }
+      await store.deleteUtxo(utxo);
+      continue;
+    }
+    if (input.decoded?.address && input.token !== undefined) continue;
+    const storedInput = previouslyStoredTx?.inputs?.find(
+      i => i.tx_id === input.tx_id && i.index === input.index
+    );
+    if (storedInput?.decoded?.address && storedInput.token !== undefined) {
+      input.decoded = storedInput.decoded;
+      input.value = storedInput.value;
+      input.token = storedInput.token;
+      input.token_data = storedInput.token_data ?? 0;
+      continue;
+    }
+    // Last-resort transparent enrichment: some fullnode ws payloads omit
+    // value/token/token_data/decoded on inputs, keeping only {tx_id, index}.
+    // Without enrichment the balance-update input loop below would skip this
+    // input (`continue` on `input.token === undefined`), leaving outputs
+    // credited without a matching debit and causing upward balance drift.
+    // Look up the origin tx (already in wallet storage because processHistory
+    // iterates chronologically) and recover the output being spent.
+    const origTx = await store.getTx(input.tx_id);
+    if (!origTx) continue;
+    if (input.index >= origTx.outputs.length) continue;
+    const origOutput = origTx.outputs[input.index];
+    if (!origOutput?.decoded?.address) continue;
+    if (!(await storage.isAddressMine(origOutput.decoded.address))) continue;
+    input.decoded = origOutput.decoded;
+    input.value = origOutput.value;
+    input.token = origOutput.token;
+    input.token_data = origOutput.token_data ?? 0;
+  }
+
+  for (const input of tx.inputs) {
+    // We ignore data inputs and shielded inputs we don't own. Wallet-owned
+    // shielded inputs are enriched above so their decoded/value/token/token_data
+    // are populated and flow through this loop like transparent inputs.
     if (!input.decoded?.address || input.token === undefined) continue;
 
     const addressInfo = await store.getAddress(input.decoded.address);
