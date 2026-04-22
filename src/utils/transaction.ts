@@ -1085,10 +1085,7 @@ const transaction = {
       if (this.isShieldedInputEntry(i)) {
         return i as unknown as IHistoryInput;
       }
-      const hydratedInput = this.hydrateIOWithToken(
-        i as { token_data: number },
-        tx.tokens
-      );
+      const hydratedInput = this.hydrateIOWithToken(i as { token_data: number }, tx.tokens);
       return hydratedInput as IHistoryInput;
     });
     const outputs: IHistoryOutput[] = tx.outputs.map(o => {
