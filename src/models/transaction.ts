@@ -347,10 +347,11 @@ class Transaction {
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     const amount = sumOutputs / 10 ** DECIMAL_PLACES;
 
-    let weight =
-      constants.txWeightCoefficient * Math.log2(txSize) +
-      4 / (1 + constants.txMinWeightK / amount) +
-      4;
+    // When txMinWeightK is 0, avoid the division-by-zero in `k/amount` —
+    // the term `4 / (1 + 0)` collapses to 4.
+    const kTerm = constants.txMinWeightK === 0 ? 4 : 4 / (1 + constants.txMinWeightK / amount);
+
+    let weight = constants.txWeightCoefficient * Math.log2(txSize) + kTerm + 4;
 
     // Make sure the calculated weight is at least the minimum
     weight = Math.max(weight, constants.txMinWeight);
