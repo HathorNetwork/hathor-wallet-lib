@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.0.1-shielded",
+  "version": "0.0.3-shielded",
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
@@ -14,7 +14,6 @@
     "/lib"
   ],
   "dependencies": {
-    "@hathor/ct-crypto-node": "0.3.0",
     "axios": "1.7.7",
     "bitcore-lib": "8.25.10",
     "bitcore-mnemonic": "8.25.10",
@@ -25,6 +24,9 @@
     "queue-microtask": "1.2.3",
     "ws": "8.17.1",
     "zod": "3.23.8"
+  },
+  "optionalDependencies": {
+    "@hathor/ct-crypto-node": "0.4.0"
   },
   "scripts": {
     "pretest": "patch-package",
