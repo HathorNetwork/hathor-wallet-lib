@@ -337,6 +337,7 @@ export interface AdapterOutput {
   address: string;
   value: bigint;
   token: string;
+  timelock?: number;
 }
 
 /**
