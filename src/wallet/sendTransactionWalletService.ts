@@ -9,6 +9,7 @@
 import { EventEmitter } from 'events';
 import { shuffle } from 'lodash';
 import tokensUtils from '../utils/tokens';
+import transactionUtils from '../utils/transaction';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
@@ -863,7 +864,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
     // Now that the tx is completed with the data of the input
     // we can add the timestamp and calculate the weight
-    this.transaction.prepareToSend();
+    this.transaction.prepareToSend(
+      transactionUtils.getWeightConstantsFromStorage(this.wallet.storage)
+    );
 
     this._currentStep = 'signed';
     this.emit('sign-tx-end', this.transaction);
