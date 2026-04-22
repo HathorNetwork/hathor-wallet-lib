@@ -462,7 +462,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       const addressPathMap = new AddressPathMap();
 
       // ignoreNative=true: HTR inputs will be validated separately below
-      await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true, addressPathMap });
+      await this.validateUtxos(tokensWithoutHtr, addressPathMap, { ignoreNative: true });
 
       // here we should know the fee amount (in case of any fee-based token change output was added)
       const htrAmount = (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount;
@@ -473,7 +473,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
             amount: htrAmount,
           },
         };
-        await this.validateUtxos(htrTokenAmount, { onlyNative: true, addressPathMap });
+        await this.validateUtxos(htrTokenAmount, addressPathMap, { onlyNative: true });
       }
 
       // Rebuild utxosAddressPath in this.inputs order
@@ -574,15 +574,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async validateUtxos(
     tokenAmountMap: TokenMap,
+    addressPathMap: AddressPathMap,
     options: {
       ignoreNative?: boolean;
       onlyNative?: boolean;
-      addressPathMap?: AddressPathMap;
     } = {}
-  ): Promise<string[]> {
-    const { ignoreNative = false, onlyNative = false, addressPathMap } = options;
+  ): Promise<void> {
+    const { ignoreNative = false, onlyNative = false } = options;
     const amountInputMap = {};
-    const utxosAddressPath: string[] = [];
     for (const input of this.inputs) {
       const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
       if (utxo === null) {
@@ -609,10 +608,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         );
       }
 
-      utxosAddressPath.push(utxo.addressPath);
-      if (addressPathMap) {
-        addressPathMap.set(input, utxo.addressPath);
-      }
+      addressPathMap.set(input, utxo.addressPath);
 
       if (utxo.tokenId in amountInputMap) {
         amountInputMap[utxo.tokenId] += utxo.value;
@@ -653,8 +649,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         this.outputs = shuffle(this.outputs);
       }
     }
-
-    return utxosAddressPath;
   }
 
   /**

@@ -2542,3 +2542,267 @@ describe('signTx preconditions', () => {
     );
   });
 });
+
+describe('validateUtxos', () => {
+  let wallet;
+  let sendTransaction;
+
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  // AddressPathMap is file-local to the module under test, so tests pass a
+  // duck-typed stand-in with the same `set(input, path)` / `get(input)`
+  // surface and cast to `any` at the call site.
+  const buildMockMap = () => {
+    const store = new Map<string, string>();
+    return {
+      set(input: { txId: string; index: number }, path: string) {
+        store.set(`${input.txId}:${input.index}`, path);
+      },
+      get(input: { txId: string; index: number }) {
+        return store.get(`${input.txId}:${input.index}`);
+      },
+      size: () => store.size,
+    };
+  };
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+    wallet.getUtxoFromId = jest.fn();
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+  });
+
+  it('populates addressPathMap for custom tokens and skips HTR when ignoreNative=true', async () => {
+    const tokenInput = { txId: 'token-tx', index: 0 };
+    const htrInput = { txId: 'htr-tx', index: 0 };
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 10n,
+          address: 'addr',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: 'm/token',
+        };
+      }
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 5n,
+          address: 'addr',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: 'm/htr',
+        };
+      }
+      return null;
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [tokenInput, htrInput],
+      outputs: [],
+    });
+
+    const map = buildMockMap();
+    const result = await sendTransaction.validateUtxos(
+      { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+      map,
+      { ignoreNative: true }
+    );
+
+    // Post-refactor contract: returns void
+    expect(result).toBeUndefined();
+    expect(map.get(tokenInput)).toBe('m/token');
+    expect(map.get(htrInput)).toBeUndefined();
+  });
+
+  it('populates addressPathMap for HTR and skips custom tokens when onlyNative=true', async () => {
+    const tokenInput = { txId: 'token-tx', index: 0 };
+    const htrInput = { txId: 'htr-tx', index: 0 };
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 10n,
+          address: 'addr',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: 'm/token',
+        };
+      }
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 5n,
+          address: 'addr',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: 'm/htr',
+        };
+      }
+      return null;
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [tokenInput, htrInput],
+      outputs: [],
+    });
+
+    const map = buildMockMap();
+    await sendTransaction.validateUtxos(
+      { [NATIVE_TOKEN_UID]: { version: TokenVersion.NATIVE, amount: 5n } },
+      map,
+      { onlyNative: true }
+    );
+
+    expect(map.get(htrInput)).toBe('m/htr');
+    expect(map.get(tokenInput)).toBeUndefined();
+  });
+
+  it('creates a change output and still populates the map when inputs exceed the required amount', async () => {
+    const input = { txId: 'tx', index: 0 };
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 15n,
+      address: 'addr',
+      tokenId: '01',
+      authorities: 0,
+      addressPath: 'm/change',
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [input],
+      outputs: [],
+    });
+
+    const map = buildMockMap();
+    await sendTransaction.validateUtxos(
+      { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+      map
+    );
+
+    expect(map.get(input)).toBe('m/change');
+    const changeOutputs = sendTransaction.outputs.filter(o => o.token === '01' && o.value === 5n);
+    expect(changeOutputs).toHaveLength(1);
+    expect(changeOutputs[0].address).toBe('WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc');
+  });
+
+  it('increments _feeAmount by FEE_PER_OUTPUT when a fee-tagged token produces change', async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 15n,
+      address: 'addr',
+      tokenId: '02',
+      authorities: 0,
+      addressPath: 'm/fee',
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+    const initialFee = sendTransaction._feeAmount;
+
+    await sendTransaction.validateUtxos(
+      { '02': { version: TokenVersion.FEE, amount: 10n } },
+      buildMockMap()
+    );
+
+    expect(sendTransaction._feeAmount).toBe(initialFee + FEE_PER_OUTPUT);
+  });
+
+  it('throws UtxoError when wallet.getUtxoFromId returns null for an input', async () => {
+    wallet.getUtxoFromId.mockResolvedValue(null);
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'missing', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        buildMockMap()
+      )
+    ).rejects.toThrow('Invalid input selection. Input missing at index 0.');
+  });
+
+  it("throws SendTxError when an input's tokenId is not in the tokenAmountMap", async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 10n,
+      address: 'addr',
+      tokenId: 'wrong',
+      authorities: 0,
+      addressPath: 'm/wrong',
+    });
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        buildMockMap()
+      )
+    ).rejects.toThrow('has token wrong that is not on the outputs');
+  });
+
+  it('throws SendTxError when a token in the amount map has no matching inputs', async () => {
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        buildMockMap()
+      )
+    ).rejects.toThrow('Token 01 is in the outputs but there are no inputs for it.');
+  });
+
+  it('throws SendTxError when summed input value is below the required amount', async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 5n,
+      address: 'addr',
+      tokenId: '01',
+      authorities: 0,
+      addressPath: 'm/short',
+    });
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        buildMockMap()
+      )
+    ).rejects.toThrow('Sum of inputs for token 01 is smaller than the sum of outputs');
+  });
+});
