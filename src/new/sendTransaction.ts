@@ -528,7 +528,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
 
       await transactionUtils.signTransaction(this.transaction, this.storage, pinToUse);
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       this._currentStep = 'signed';
       return this.transaction;
     } catch (e) {
@@ -585,7 +585,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         this.fullTxData,
         this.storage.config.getNetwork()
       );
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       return this.transaction;
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
