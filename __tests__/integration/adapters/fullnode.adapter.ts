@@ -193,9 +193,17 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return result.hash;
   }
 
-  async waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void> {
+  async waitForTx(
+    wallet: FuzzyWalletType,
+    txId: string,
+    recvWallet?: FuzzyWalletType
+  ): Promise<void> {
     const hWallet = this.concrete(wallet);
     await waitForTxReceived(hWallet, txId);
+    if (recvWallet) {
+      const hRecv = this.concrete(recvWallet);
+      await waitForTxReceived(hRecv, txId);
+    }
     await waitUntilNextTimestamp(hWallet, txId);
   }
 
@@ -218,11 +226,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     if (!result || !result.hash) {
       throw new Error('sendTransaction: transaction had no hash');
     }
-    await waitForTxReceived(hWallet, result.hash);
-    if (recvWallet) {
-      await this.waitForTx(recvWallet, result.hash);
-    }
-    await waitUntilNextTimestamp(hWallet, result.hash);
+    await this.waitForTx(wallet, result.hash, recvWallet);
     return { hash: result.hash, transaction: result };
   }
 
@@ -270,15 +274,15 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     options?: SendManyOutputsAdapterOptions
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
     const result = await hWallet.sendManyOutputsTransaction(outputs, {
       pinCode: DEFAULT_PIN_CODE,
-      ...options,
+      ...txOptions,
     });
     if (!result?.hash) {
       throw new Error('sendManyOutputsTransaction: transaction had no hash');
     }
-    await waitForTxReceived(hWallet, result.hash);
-    await waitUntilNextTimestamp(hWallet, result.hash);
+    await this.waitForTx(wallet, result.hash, recvWallet);
     return { hash: result.hash, transaction: result };
   }
 

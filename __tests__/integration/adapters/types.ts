@@ -169,8 +169,8 @@ export interface IWalletTestAdapter {
 
   // --- Tx waiting ---
 
-  /** Waits until a specific tx is visible in the wallet */
-  waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void>;
+  /** Waits until a specific tx is visible in the wallet, and optionally on a receiving wallet. */
+  waitForTx(wallet: FuzzyWalletType, txId: string, recvWallet?: FuzzyWalletType): Promise<void>;
 
   // --- Precalculated data ---
 
@@ -355,6 +355,8 @@ export interface AdapterInput {
 export interface SendManyOutputsAdapterOptions {
   inputs?: AdapterInput[];
   changeAddress?: string;
+  /** If provided, the adapter also waits for the tx on the receiving wallet. */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**

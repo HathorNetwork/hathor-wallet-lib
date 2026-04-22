@@ -222,8 +222,15 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return fundTx.hash;
   }
 
-  async waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void> {
+  async waitForTx(
+    wallet: FuzzyWalletType,
+    txId: string,
+    recvWallet?: FuzzyWalletType
+  ): Promise<void> {
     await pollForTx(this.concrete(wallet), txId);
+    if (recvWallet) {
+      await pollForTx(this.concrete(recvWallet), txId);
+    }
   }
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
@@ -245,10 +252,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     if (!result.hash) {
       throw new Error('sendTransaction: transaction had no hash');
     }
-    await pollForTx(sw, result.hash);
-    if (recvWallet) {
-      await this.waitForTx(recvWallet, result.hash);
-    }
+    await this.waitForTx(wallet, result.hash, recvWallet);
     return { hash: result.hash, transaction: result };
   }
 
@@ -293,14 +297,15 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     options?: SendManyOutputsAdapterOptions
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
     const result = await sw.sendManyOutputsTransaction(outputs, {
       pinCode: SERVICE_PIN,
-      ...options,
+      ...txOptions,
     });
     if (!result?.hash) {
       throw new Error('sendManyOutputsTransaction: transaction had no hash');
     }
-    await pollForTx(sw, result.hash);
+    await this.waitForTx(wallet, result.hash, recvWallet);
     return { hash: result.hash, transaction: result };
   }
 
