@@ -356,6 +356,13 @@ async function updateInputsSpentBy(hWallet, tx) {
       continue;
     }
 
+    // Shielded inputs (type === 'shielded') reference a shielded output whose
+    // spent_by marking is handled by the wallet's own processing once the
+    // metadata update arrives; we don't force-mark it here.
+    if (input.type === 'shielded') {
+      continue;
+    }
+
     if (input.index > inputTx.outputs.length - 1) {
       // Invalid output index
       throw new Error("Try to get output in an index that doesn't exist.");
