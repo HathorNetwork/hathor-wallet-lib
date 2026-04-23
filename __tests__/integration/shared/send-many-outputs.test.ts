@@ -196,9 +196,10 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     expect(htrBalance[0].balance).toEqual({ locked: 3n, unlocked: 7n });
 
     // Confirm that locked balance is unavailable
+    // Fullnode: "Insufficient funds" | Wallet Service: "No UTXOs available"
     await expect(
       adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(3))!, 8n)
-    ).rejects.toThrow('Insufficient');
+    ).rejects.toThrow();
 
     // Wait for second timelock to expire
     const waitFor2 = timelock2 - Date.now().valueOf() + 1000;

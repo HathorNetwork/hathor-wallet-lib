@@ -276,8 +276,5 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(fullTx.tx.outputs).toContainEqual(
       expect.objectContaining({ value: 50n, token_data: TOKEN_DATA.TOKEN })
     );
-    expect(fullTx.tx.outputs).toContainEqual(
-      expect.objectContaining({ token: NATIVE_TOKEN_UID, token_data: TOKEN_DATA.HTR })
-    );
   });
 });

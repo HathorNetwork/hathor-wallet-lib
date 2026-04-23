@@ -7,6 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import config from '../../../src/config';
 import { WalletTracker } from '../utils/wallet-tracker.util';
 import type Transaction from '../../../src/models/transaction';
@@ -19,6 +20,7 @@ import {
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
+import type { IHistoryTx } from '../../../src/types';
 import { AuthorityType } from '../../../src/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import type { FullNodeTxResponse } from '../../../src/wallet/types';
@@ -257,11 +259,24 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   }
 
   async getTx(wallet: FuzzyWalletType, txId: string) {
-    const result = await this.concrete(wallet).getTx(txId);
-    if (!result) {
-      throw new Error(`getTx: transaction ${txId} not found`);
-    }
-    return result;
+    // HathorWalletServiceWallet.getTx() is not implemented — use fullnode API
+    // and map the response to IHistoryTx format (adding token UID to each output/input)
+    const fullNodeResponse = await this.concrete(wallet).getFullTxById(txId);
+    const { tx } = fullNodeResponse;
+    const tokenUids = tx.tokens.map(t => t.uid);
+    const resolveToken = (tokenData: number) =>
+      tokenData === 0 ? NATIVE_TOKEN_UID : tokenUids[tokenData - 1];
+    return {
+      tx_id: tx.hash,
+      version: tx.version,
+      timestamp: tx.timestamp,
+      inputs: tx.inputs.map(i => ({ ...i, token: resolveToken(i.token_data) })),
+      outputs: tx.outputs.map(o => ({ ...o, token: resolveToken(o.token_data) })),
+      parents: tx.parents,
+      tokens: tx.tokens,
+      weight: tx.weight,
+      nonce: Number(tx.nonce),
+    } as unknown as IHistoryTx;
   }
 
   async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
