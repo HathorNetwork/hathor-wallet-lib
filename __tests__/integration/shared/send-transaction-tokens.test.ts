@@ -61,31 +61,31 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   it('should send custom token transactions', async () => {
     // wallet: 10n HTR
     const { wallet, externalWallet } = await createFundedPair(10n);
-    // 100n TTS created, 1n HTR deposit deducted
-    const { hash: tokenUid } = await adapter.createToken(wallet, 'Token to Send', 'TTS', 100n);
+    // 100n DBT created, 1n HTR deposit deducted
+    const { hash: tokenUid } = await adapter.createToken(wallet, 'DepositBasedToken', 'DBT', 100n);
 
-    // Self-send 30n TTS, total TTS unchanged
+    // Self-send 30n DBT, total DBT unchanged
     await adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(5))!, 30n, {
       token: tokenUid,
       changeAddress: (await wallet.getAddressAtIndex(6))!,
     });
 
-    // 100n TTS remaining (self-send doesn't change balance)
+    // 100n DBT remaining (self-send doesn't change balance)
     const tokenBalance = await wallet.getBalance(tokenUid);
     expect(tokenBalance[0].balance.unlocked).toEqual(100n);
 
-    // Sends 80n TTS to external wallet
+    // Sends 80n DBT to external wallet
     const externalAddr = (await externalWallet.getAddressAtIndex(0))!;
     await adapter.sendTransaction(wallet, externalAddr, 80n, {
       token: tokenUid,
       recvWallet: externalWallet,
     });
 
-    // 20n TTS remaining after sending 80n to external wallet
+    // 20n DBT remaining after sending 80n to external wallet
     const remainingBalance = await wallet.getBalance(tokenUid);
     expect(remainingBalance[0].balance.unlocked).toEqual(20n);
 
-    // External wallet received 80n TTS
+    // External wallet received 80n DBT
     const externalBalance = await externalWallet.getBalance(tokenUid);
     expect(externalBalance[0].balance.unlocked).toEqual(80n);
   });

@@ -104,7 +104,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
   it('should track address usage for custom token transactions', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Send', 'TTS', 100n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'DepositBasedToken', 'DBT', 100n);
 
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30n, {
       token: tokenUid,
