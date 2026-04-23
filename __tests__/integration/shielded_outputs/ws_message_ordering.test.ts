@@ -182,7 +182,52 @@ describe('shielded outputs — Group A: WS message ordering', () => {
     expect((await walletB.getTxBalance(after!))[NATIVE_TOKEN_UID]).toBe(50n);
   });
 
-  it('A.8 — Voided shielded tx then unvoided: balance is reversed and then restored', async () => {
+  it('A.9 — Bare announce first, then full: fresh receipt decodes and credits', async () => {
+    // Reproduces the real-time-vs-reload divergence. The fullnode can deliver
+    // a shielded tx in two phases: first a bare announcement (outputs=[], no
+    // shielded_outputs) then a follow-up with the full wire form. With the
+    // bug, processHistory decrypted on the second delivery and saved
+    // outputs=[decoded], but the final addTx(newTx) in onNewTx then clobbered
+    // that back to outputs=[] because newTx carried the empty wire form and
+    // the carry-over block read from the cloned pre-processing storageTx
+    // (also empty). Reload fixed the balance because startup's processHistory
+    // reran and this second-save-from-newTx didn't happen.
+    //
+    // We simulate "fresh wallet that never saw this tx" by taking a wallet
+    // that owns the shielded outputs (via setupReceivedShieldedTx) and then
+    // wiping the tx + shielded UTXOs from its storage before feeding bare
+    // then full through onNewTx.
+    const { walletB, txHash, stored } = await setupReceivedShieldedTx();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { store } = walletB.storage as any;
+
+    // Wipe the tx and its shielded UTXOs so walletB's next onNewTx treats
+    // this as a fresh arrival. Transparent balance metadata is rebuilt by
+    // processHistory, so we don't need to touch it here.
+    store.history.delete(txHash);
+    for (const [key, utxo] of store.utxos.entries()) {
+      if (utxo.txId === txHash) store.utxos.delete(key);
+    }
+
+    const bare = bareWsPayload(stored);
+    const full = fullWsPayload(stored);
+
+    // Phase 1: bare announcement. Wallet can't credit — no shielded data.
+    await walletB.onNewTx({ history: bare });
+
+    // Phase 2: full payload. processHistory decrypts the shielded outputs;
+    // the final addTx(newTx) must not clobber them with the empty outputs[]
+    // from the wire form.
+    await walletB.onNewTx({ history: full });
+
+    const after = await walletB.getTx(txHash);
+    expect(after).not.toBeNull();
+    // The per-tx delta must include the 50n shielded credit; without the
+    // fix, it reads 0n (stored outputs=[] after clobber) on this path.
+    expect((await walletB.getTxBalance(after!))[NATIVE_TOKEN_UID]).toBe(50n);
+  });
+
+  it('A.10 — Voided shielded tx then unvoided: balance is reversed and then restored', async () => {
     // Simulates the ws event shape the fullnode emits when a shielded tx
     // flips to voided (e.g., due to a twin/conflict) and then back. The real
     // void path lives in the fullnode; from the wallet's perspective the
