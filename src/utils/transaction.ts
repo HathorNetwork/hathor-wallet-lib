@@ -54,6 +54,7 @@ import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
+import { parseScript } from './scripts';
 import helpers from './helpers';
 import { getAddressFromPubkey } from './address';
 import txApi from '../api/txApi';
@@ -104,40 +105,105 @@ const transaction = {
 
   /**
    * Normalize a transaction's outputs by extracting shielded entries from outputs[]
-   * into a separate shielded_outputs[] array. Converts base64-encoded fields to hex.
-   * Mutates the tx in place. No-op if shielded_outputs is already populated.
+   * into a separate shielded_outputs[] array AND ensuring base64-encoded fields are
+   * converted to hex. Mutates the tx in place.
+   *
+   * This function is idempotent: running it multiple times on the same tx is a
+   * no-op on the second pass because the base64→hex conversion of an already-hex
+   * string is not valid base64 and would be detected. For that reason we only
+   * convert fields that still look like base64 (contain characters outside the
+   * hex alphabet).
+   *
+   * Two delivery shapes from the fullnode are handled:
+   *   (a) shielded entries nested inside outputs[] with type='shielded' — the
+   *       legacy wire form. Entries are extracted and base64 fields converted.
+   *   (b) shielded entries in a separate shielded_outputs[] field — what most
+   *       recent fullnodes send. No extraction needed, but base64 fields in
+   *       range_proof / surjection_proof / script must still be converted to
+   *       hex so downstream decryption (which uses Buffer.from(value, 'hex'))
+   *       parses them correctly.
+   *
+   * Without this coverage of case (b), shielded outputs delivered by the
+   * websocket real-time path were left with base64 range_proof strings, which
+   * Buffer.from(..., 'hex') parses as garbage — causing the native rewind to
+   * throw "asset commitment verification failed" and the per-tx balance to
+   * read as -input with no credit for the decoded shielded outputs.
    */
   normalizeShieldedOutputs(tx: IHistoryTx): void {
-    if (tx.shielded_outputs) return;
-    const shieldedEntries: IHistoryShieldedOutput[] = [];
-    const transparentOutputs: IHistoryOutput[] = [];
-    for (const output of tx.outputs) {
-      if (this.isShieldedOutputEntry(output)) {
-        shieldedEntries.push({
-          mode: output.asset_commitment
-            ? ShieldedOutputMode.FULLY_SHIELDED
-            : ShieldedOutputMode.AMOUNT_SHIELDED,
-          commitment: output.commitment,
-          range_proof: Buffer.from(output.range_proof, 'base64').toString('hex'),
-          script: Buffer.from(output.script, 'base64').toString('hex'),
-          token_data: output.token_data,
-          ephemeral_pubkey: output.ephemeral_pubkey,
-          decoded: output.decoded,
-          asset_commitment: output.asset_commitment,
-          surjection_proof: output.surjection_proof
-            ? Buffer.from(output.surjection_proof, 'base64').toString('hex')
-            : undefined,
-        });
-      } else {
-        transparentOutputs.push(output);
+    if (!tx.shielded_outputs) {
+      // Case (a): nested in outputs[]. Extract and convert.
+      const shieldedEntries: IHistoryShieldedOutput[] = [];
+      const transparentOutputs: IHistoryOutput[] = [];
+      for (const output of tx.outputs) {
+        if (this.isShieldedOutputEntry(output)) {
+          shieldedEntries.push({
+            mode: output.asset_commitment
+              ? ShieldedOutputMode.FULLY_SHIELDED
+              : ShieldedOutputMode.AMOUNT_SHIELDED,
+            commitment: this.ensureHex(output.commitment),
+            range_proof: this.ensureHex(output.range_proof),
+            script: this.ensureHex(output.script),
+            token_data: output.token_data,
+            ephemeral_pubkey: this.ensureHex(output.ephemeral_pubkey),
+            decoded: output.decoded,
+            asset_commitment: output.asset_commitment
+              ? this.ensureHex(output.asset_commitment)
+              : undefined,
+            surjection_proof: output.surjection_proof
+              ? this.ensureHex(output.surjection_proof)
+              : undefined,
+          });
+        } else {
+          transparentOutputs.push(output);
+        }
+      }
+      if (shieldedEntries.length > 0) {
+        // eslint-disable-next-line no-param-reassign
+        tx.shielded_outputs = shieldedEntries;
+        // eslint-disable-next-line no-param-reassign
+        tx.outputs = transparentOutputs;
+      }
+      return;
+    }
+
+    // Case (b): shielded_outputs already populated. Convert any base64 fields
+    // to hex in place.
+    for (const so of tx.shielded_outputs) {
+      // eslint-disable-next-line no-param-reassign
+      so.commitment = this.ensureHex(so.commitment);
+      // eslint-disable-next-line no-param-reassign
+      so.range_proof = this.ensureHex(so.range_proof);
+      // eslint-disable-next-line no-param-reassign
+      so.script = this.ensureHex(so.script);
+      // eslint-disable-next-line no-param-reassign
+      so.ephemeral_pubkey = this.ensureHex(so.ephemeral_pubkey);
+      if (so.asset_commitment) {
+        // eslint-disable-next-line no-param-reassign
+        so.asset_commitment = this.ensureHex(so.asset_commitment);
+      }
+      if (so.surjection_proof) {
+        // eslint-disable-next-line no-param-reassign
+        so.surjection_proof = this.ensureHex(so.surjection_proof);
       }
     }
-    if (shieldedEntries.length > 0) {
-      // eslint-disable-next-line no-param-reassign
-      tx.shielded_outputs = shieldedEntries;
-      // eslint-disable-next-line no-param-reassign
-      tx.outputs = transparentOutputs;
-    }
+  },
+
+  /**
+   * Return a hex-encoded copy of the input. If the input is already hex, it is
+   * returned unchanged. If it looks like base64 (contains characters outside
+   * 0-9a-fA-F or is padded with '='), it is decoded from base64 and re-encoded
+   * as hex. Idempotent for valid hex strings.
+   *
+   * Detection is character-set based: hex uses only [0-9a-fA-F]. Base64 uses
+   * [A-Za-z0-9+/=]. Any character outside the hex alphabet (e.g. '+', '/', '=',
+   * or lowercase letters g-z, or uppercase G-Z) means the string is base64.
+   */
+  ensureHex(value: string): string {
+    if (value.length === 0) return value;
+    // Fast path: plain hex strings are the expected already-normalized case.
+    if (/^[0-9a-fA-F]+$/.test(value)) return value;
+    // Anything else is treated as base64.
+    return Buffer.from(value, 'base64').toString('hex');
   },
 
   /**
@@ -866,6 +932,31 @@ const transaction = {
       outputs.push(this.hydrateIOWithToken(out, tokensArray));
     }
 
+    // Emit shielded_outputs so the locally-pushed tx carries the same shape
+    // a websocket-delivered tx would. Without this, a shielded self-send
+    // writes a bare history entry (no shielded_outputs), and processNewTx's
+    // decryption gate is skipped entirely (shieldedCount=0) — the wallet
+    // debits the input but never credits back the self-sent shielded outputs,
+    // leaving the per-tx balance stuck at -input_value until a full
+    // processHistory reload. See TODO_FIX_33.
+    const shieldedOutputs: IHistoryShieldedOutput[] | undefined =
+      tx.shieldedOutputs && tx.shieldedOutputs.length > 0
+        ? tx.shieldedOutputs.map(so => {
+            const parsed = parseScript(so.script, storage.config.getNetwork());
+            return {
+              mode: so.mode,
+              commitment: so.commitment.toString('hex'),
+              range_proof: so.rangeProof.toString('hex'),
+              script: so.script.toString('hex'),
+              token_data: so.tokenData,
+              ephemeral_pubkey: so.ephemeralPubkey.toString('hex'),
+              asset_commitment: so.assetCommitment?.toString('hex'),
+              surjection_proof: so.surjectionProof?.toString('hex'),
+              decoded: (parsed?.toData() ?? {}) as IHistoryShieldedOutput['decoded'],
+            };
+          })
+        : undefined;
+
     const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signalBits,
@@ -878,6 +969,7 @@ const transaction = {
       outputs,
       parents: tx.parents,
       tokens: tx.tokens,
+      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
       // The missing fields below are metadata that cannot be inferred from the
       // Transaction instance.
       // height, first_block

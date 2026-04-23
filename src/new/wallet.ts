@@ -1547,13 +1547,20 @@ class HathorWallet extends EventEmitter {
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // Pre-enrich shielded inputs from the previously-stored tx BEFORE addTx
-    // overwrites them. On a re-delivery, the wire form has stripped the
-    // value/token/token_data off each shielded input, and the UTXO they
-    // reference has already been deleted on first receipt — so without this
-    // step, getTxBalance would read a zero debit for the input and the stored
-    // tx would lose its per-tx delta correctness until the next full reload.
+    // On re-delivery, the wire form typically strips previously-enriched data:
+    //   - shielded INPUTS lose value/token/token_data (the UTXO was already
+    //     deleted on first receipt, so the fullnode just sends the reference);
+    //   - shielded OUTPUTS may come back bare — either nested in outputs[]
+    //     with type='shielded' (no `value`/`token`) or omitted entirely if
+    //     the ws event is a metadata-only update.
+    //
+    // The initial `addTx` below unconditionally persists `newTx`, so we must
+    // merge the enriched fields from the previously-stored tx INTO newTx
+    // before that save — otherwise the initial addTx clobbers decoded
+    // shielded outputs with outputs=[] and the downstream processing branch
+    // has nothing to work with on a bare re-delivery.
     if (!isNewTx && storageTx) {
+      // Merge shielded input enrichment (value/token/etc.) from storage.
       for (let i = 0; i < newTx.inputs.length; i += 1) {
         const input = newTx.inputs[i];
         if (input.decoded?.address && input.token !== undefined) continue;
@@ -1566,6 +1573,24 @@ class HathorWallet extends EventEmitter {
           input.token = storedInput.token;
           input.token_data = storedInput.token_data ?? 0;
         }
+      }
+      // Merge previously-decoded shielded outputs so we don't lose the
+      // decrypted state on a bare re-delivery. storageTx.outputs contains
+      // the decoded entries appended by processNewTx's decryption block on
+      // first receipt.
+      const storedDecoded = (storageTx.outputs ?? []).filter(o =>
+        transactionUtils.isShieldedOutputEntry(o)
+      );
+      const alreadyOnNewTx = newTx.outputs.some(o => transactionUtils.isShieldedOutputEntry(o));
+      if (storedDecoded.length > 0 && !alreadyOnNewTx) {
+        newTx.outputs.push(...storedDecoded);
+      }
+      // Merge shielded_outputs so normalize doesn't re-extract the decoded
+      // entries we just pushed to outputs[] on the next normalize pass, and
+      // so downstream logic (shieldedNewlyAvailable check below, processing
+      // branch) sees that shielded data is present.
+      if (!newTx.shielded_outputs && storageTx.shielded_outputs) {
+        newTx.shielded_outputs = storageTx.shielded_outputs;
       }
     }
 
@@ -1588,6 +1613,7 @@ class HathorWallet extends EventEmitter {
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
+    let didProcessHistory = false;
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
@@ -1597,52 +1623,71 @@ class HathorWallet extends EventEmitter {
       // full history reprocess to avoid double-counting from the prior
       // partial processNewTx.
       await this.storage.processHistory(this.pinCode ?? undefined);
+      didProcessHistory = true;
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
     }
+
+    // Safety net: if any stored tx has shielded_outputs but no decoded
+    // entries in outputs[], decryption silently failed at some point
+    // (e.g., the recipient address wasn't in the wallet cache at the moment
+    // processNewTx's decryption loop ran, or a per-output rewind threw).
+    // Trigger a full processHistory to retry decryption with the current
+    // wallet state — the same recovery path a reload takes.
+    //
+    // We check ALL stored txs, not only the current newTx, because:
+    //   (a) a tx received earlier may have failed decryption and been left
+    //       in a stuck state (no later event would re-trigger it);
+    //   (b) a spending tx can correctly process its debit while the origin
+    //       tx's shielded outputs are still undecoded — the per-tx delta
+    //       stays wrong for the origin tx until its outputs are decoded.
+    // Only runs when the wallet has both crypto provider and pinCode
+    // available, and skips if we already reran processHistory above.
+    if (!didProcessHistory && this.storage.shieldedCryptoProvider && this.pinCode) {
+      let needsRetry = false;
+      for await (const storedTx of this.storage.txHistory()) {
+        const hasShielded = (storedTx.shielded_outputs?.length ?? 0) > 0;
+        if (!hasShielded) continue;
+        const hasDecoded = (storedTx.outputs ?? []).some(o =>
+          transactionUtils.isShieldedOutputEntry(o)
+        );
+        if (!hasDecoded) {
+          needsRetry = true;
+          break;
+        }
+      }
+      if (needsRetry) {
+        await this.storage.processHistory(this.pinCode);
+      }
+    }
     // restore previous state
     this.state = previousState;
 
-    // Carry over previously-decoded shielded outputs. The full node's wire
-    // form for any update event re-sends shielded outputs in their hidden
-    // (commitment-only) form. Without this merge, the second addTx below
-    // would overwrite the decoded entries that processNewTx had appended on
-    // first receipt, and getTxBalance would then read the persisted tx
-    // without those credits — showing the full input value as the per-tx
-    // delta until the next processHistory cycle.
+    // Trust storage as the source of truth for the final save. The processing
+    // branches above (processNewTx / processHistory / processMetadataChanged)
+    // have persisted the authoritative post-decryption state — including
+    // decoded shielded outputs appended to tx.outputs, enriched shielded inputs,
+    // saved UTXOs, and updated address/token metadata. The `newTx` object
+    // currently in scope still carries the raw wire form, which may have
+    // outputs=[] (shielded entries hidden in shielded_outputs[] only), inputs
+    // without enriched value/token, etc. If we addTx(newTx) now we would
+    // clobber storage with the raw wire form.
     //
-    // Done here (not before the processing branch above) so that
-    // processMetadataChanged's saveUtxo loop only sees genuine transparent
-    // outputs and doesn't accidentally re-save shielded UTXOs without their
-    // shielded/blindingFactor markers.
-    if (!isNewTx && storageTx) {
-      const previouslyDecoded = (storageTx.outputs ?? []).filter(o =>
-        transactionUtils.isShieldedOutputEntry(o)
-      );
-      const alreadyOnNewTx = newTx.outputs.some(o => transactionUtils.isShieldedOutputEntry(o));
-      if (previouslyDecoded.length > 0 && !alreadyOnNewTx) {
-        newTx.outputs.push(...previouslyDecoded);
-        // Also carry over shielded_outputs so the next addTx's
-        // normalizeShieldedOutputs early-returns (the truthy check is on
-        // tx.shielded_outputs). Otherwise normalize would re-extract the
-        // entries we just merged back out of outputs[], leaving the stored
-        // tx with outputs=[] again — which is exactly the bug being
-        // worked around here.
-        if (!newTx.shielded_outputs && storageTx.shielded_outputs) {
-          newTx.shielded_outputs = storageTx.shielded_outputs;
-        }
-      }
-    }
-
-    newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
-    // Save the transaction in the storage
-    await this.storage.addTx(newTx);
+    // Instead: re-read the persisted tx, update only the processingStatus flag,
+    // and save that. This works for any input/output type combination —
+    // transparent, AmountShielded, FullShielded, or any mix — because we are
+    // not making wire-form-specific assumptions; we are just trusting whatever
+    // the processing branches produced.
+    const persisted = await this.storage.getTx(newTx.tx_id);
+    const txToSave = persisted ?? newTx;
+    txToSave.processingStatus = TxHistoryProcessingStatus.FINISHED;
+    await this.storage.addTx(txToSave);
 
     if (isNewTx) {
-      this.emit('new-tx', newTx);
+      this.emit('new-tx', txToSave);
     } else {
-      this.emit('update-tx', newTx);
+      this.emit('update-tx', txToSave);
     }
   }
 
