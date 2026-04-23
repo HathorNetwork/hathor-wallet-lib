@@ -14,6 +14,7 @@ import {
   buildWalletInstance,
   initializeServiceGlobalConfigs,
   pollForTx,
+  pollForTokenDetails,
   pollUntilCondition,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
@@ -239,6 +240,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       throw new Error('createToken: transaction had no hash');
     }
     await pollForTx(sw, response.hash);
+    await pollForTokenDetails(sw, response.hash);
     return { hash: response.hash };
   }
 
