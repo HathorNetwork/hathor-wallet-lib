@@ -1081,10 +1081,11 @@ describe('prepareTxData', () => {
     expect(changeOutput.address).toBe(customChangeAddress);
   });
 
-  it('should reject an unnecessary HTR input when no HTR is needed', async () => {
-    // When an HTR input is provided but outputs only use custom tokens (no HTR
-    // needed), validateUtxos rejects it because NATIVE_TOKEN_UID is not in the
-    // tokenAmountMap. This validates the existing guard in prepareTxData.
+  it('should reject an HTR input via the token-not-on-outputs guard when outputs have no HTR', async () => {
+    // When an HTR input is provided but outputs only use custom tokens,
+    // prepareTxData / validateUtxos reject it via the generic
+    // token-not-on-outputs guard: NATIVE_TOKEN_UID is not in tokenAmountMap,
+    // so the input fails the membership check.
     wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
       if (txId === 'token-tx' && index === 0) {
         return {
@@ -1126,9 +1127,11 @@ describe('prepareTxData', () => {
 
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
-    await expect(sendTransaction.prepareTxData()).rejects.toThrow(SendTxError);
-    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
-    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    // Reuse a single promise so prepareTxData only runs once — the two
+    // assertions below check the class and message of the same rejection.
+    const promise = sendTransaction.prepareTxData();
+    await expect(promise).rejects.toBeInstanceOf(SendTxError);
+    await expect(promise).rejects.toThrow(
       'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.'
     );
   });
@@ -2488,7 +2491,9 @@ describe('prepareTx - Fee Tokens', () => {
     await sendTransaction.prepareTx();
 
     // utxosAddressPath must follow this.inputs order:
-    // index 0 = HTR input, index 1 = fee token input
+    // index 0 = HTR input, index 1 = fee token input.
+    // Length check first so dropped entries fail the test, not just reorders.
+    expect(sendTransaction.utxosAddressPath).toHaveLength(inputs.length);
     expect(sendTransaction.utxosAddressPath[0]).toBe("m/44'/280'/0'/0/1");
     expect(sendTransaction.utxosAddressPath[1]).toBe("m/44'/280'/0'/0/2");
   });
@@ -2552,7 +2557,8 @@ describe('validateUtxos', () => {
 
   // AddressPathMap is file-local to the module under test, so tests pass a
   // duck-typed stand-in with the same `set(input, path)` / `get(input)`
-  // surface and cast to `any` at the call site.
+  // surface. It type-checks because `sendTransaction` is declared above as
+  // `let sendTransaction` (implicit any), not via call-site casts.
   const buildMockMap = () => {
     const store = new Map<string, string>();
     return {
@@ -2562,7 +2568,6 @@ describe('validateUtxos', () => {
       get(input: { txId: string; index: number }) {
         return store.get(`${input.txId}:${input.index}`);
       },
-      size: () => store.size,
     };
   };
 
@@ -2721,14 +2726,16 @@ describe('validateUtxos', () => {
       inputs: [{ txId: 'tx', index: 0 }],
       outputs: [],
     });
-    const initialFee = sendTransaction._feeAmount;
+    // Constructor initializes _feeAmount to 0n; asserting the absolute value
+    // directly verifies validateUtxos added exactly FEE_PER_OUTPUT.
+    expect(sendTransaction._feeAmount).toBe(0n);
 
     await sendTransaction.validateUtxos(
       { '02': { version: TokenVersion.FEE, amount: 10n } },
       buildMockMap()
     );
 
-    expect(sendTransaction._feeAmount).toBe(initialFee + FEE_PER_OUTPUT);
+    expect(sendTransaction._feeAmount).toBe(FEE_PER_OUTPUT);
   });
 
   it('throws UtxoError when wallet.getUtxoFromId returns null for an input', async () => {
