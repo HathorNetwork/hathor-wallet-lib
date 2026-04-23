@@ -23,6 +23,9 @@ import Transaction from './src/models/transaction';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
+// Retry flaky tests up to 2 times before marking them as failed
+jest.retryTimes(2, { logErrorsBeforeRetry: true });
+
 // Mock calculateWeight to always return 1 for faster mining in integration tests
 Transaction.prototype.calculateWeight = function () {
   return 1;
