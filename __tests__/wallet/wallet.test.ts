@@ -3786,6 +3786,91 @@ describe('validateAndRenewAuthToken', () => {
   });
 });
 
+/**
+ * These tests lock in the contract change introduced by this PR:
+ *
+ *   renewAuthToken() MUST propagate errors instead of silently swallowing them.
+ *
+ * The previous implementation wrapped the body in a try/catch that set
+ * `this.authToken = null` on any failure. That silent catch was the root cause
+ * of the 403 race condition this PR fixes — a background renewal could null a
+ * valid token mid-flight. With every caller now awaiting, suppressing errors
+ * here would only mask bugs. These tests make a future refactor that
+ * reintroduces the catch fail loudly.
+ */
+describe('renewAuthToken contract', () => {
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let wallet: HathorWalletServiceWallet;
+  const fakePrivKey = { xpubkey: 'dummy-xpubkey' } as unknown as Parameters<
+    HathorWalletServiceWallet['renewAuthToken']
+  >[0];
+
+  beforeEach(() => {
+    jest.restoreAllMocks();
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: jest.fn(),
+      seed,
+      network,
+      storage: new Storage(new MemoryStore()),
+    });
+    wallet.walletId = 'test-wallet-id';
+    // signMessage requires a real HDPrivateKey — stub it out; this suite only
+    // cares about the behaviour surrounding the createAuthToken call.
+    jest.spyOn(wallet, 'signMessage').mockReturnValue('fake-signature');
+  });
+
+  it('should set authToken when createAuthToken succeeds', async () => {
+    jest.spyOn(walletApi, 'createAuthToken').mockResolvedValue({
+      success: true,
+      token: 'fresh-token',
+    });
+
+    await wallet.renewAuthToken(fakePrivKey, 1234567890);
+
+    expect(wallet.authToken).toBe('fresh-token');
+  });
+
+  it('should propagate WalletRequestError from createAuthToken', async () => {
+    const apiError = new WalletRequestError('Error requesting auth token.', {
+      cause: { status: 400, data: {} },
+    });
+    jest.spyOn(walletApi, 'createAuthToken').mockRejectedValue(apiError);
+
+    await expect(wallet.renewAuthToken(fakePrivKey, 1234567890)).rejects.toBe(apiError);
+  });
+
+  it('should NOT null out an existing authToken when renewal throws', async () => {
+    // This is the critical regression guard. Prior behaviour set
+    // `this.authToken = null` in the catch block, turning a transient renewal
+    // failure into a permanent 403 for the next authenticated request.
+    wallet.authToken = 'pre-existing-valid-token';
+    jest
+      .spyOn(walletApi, 'createAuthToken')
+      .mockRejectedValue(new WalletRequestError('boom', { cause: { status: 503 } }));
+
+    await expect(wallet.renewAuthToken(fakePrivKey, 1234567890)).rejects.toThrow('boom');
+
+    expect(wallet.authToken).toBe('pre-existing-valid-token');
+  });
+
+  it('should propagate non-WalletRequestError (e.g., programming errors)', async () => {
+    jest.spyOn(walletApi, 'createAuthToken').mockRejectedValue(new TypeError('unexpected'));
+
+    await expect(wallet.renewAuthToken(fakePrivKey, 1234567890)).rejects.toBeInstanceOf(TypeError);
+  });
+
+  it('should throw when called before walletId is set', async () => {
+    wallet.walletId = '';
+    const createSpy = jest.spyOn(walletApi, 'createAuthToken');
+
+    await expect(wallet.renewAuthToken(fakePrivKey, 1234567890)).rejects.toThrow(
+      'Wallet not ready yet.'
+    );
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('HathorWalletServiceWallet start method error conditions', () => {
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
