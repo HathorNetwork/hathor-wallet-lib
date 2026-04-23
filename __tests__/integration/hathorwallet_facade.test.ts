@@ -457,90 +457,7 @@ describe('addresses methods', () => {
   });
 });
 
-describe('getBalance', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('should get the balance for the HTR token', async () => {
-    const hWallet = await generateWalletHelper();
-
-    // Validating that the token uid parameter is mandatory.
-    await expect(hWallet.getBalance()).rejects.toThrow();
-
-    // Validating the return array has one entry on an empty wallet
-    const balance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(balance).toHaveLength(1);
-    expect(balance[0]).toMatchObject({
-      token: { id: NATIVE_TOKEN_UID },
-      balance: { unlocked: 0n, locked: 0n },
-      transactions: 0,
-    });
-
-    // Generating one transaction to validate its effects
-    const injectedValue = BigInt(getRandomInt(10, 2));
-    await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      injectedValue
-    );
-
-    // Validating the transaction effects
-    const balance1 = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(balance1[0]).toMatchObject({
-      balance: { unlocked: injectedValue, locked: 0n },
-      transactions: expect.any(Number),
-      // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
-    });
-
-    // Transferring tokens inside the wallet should not change the balance
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2n);
-    await waitForTxReceived(hWallet, tx1.hash);
-    const balance2 = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(balance2[0].balance).toEqual(balance1[0].balance);
-  });
-
-  it('should get the balance for a custom token', async () => {
-    const hWallet = await generateWalletHelper();
-
-    // Validating results for a nonexistant token
-    const emptyBalance = await hWallet.getBalance(fakeTokenUid);
-    expect(emptyBalance).toHaveLength(1);
-    expect(emptyBalance[0]).toMatchObject({
-      token: { id: fakeTokenUid },
-      balance: { unlocked: 0n, locked: 0n },
-      transactions: 0,
-    });
-
-    // Creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
-    const newTokenAmount = BigInt(getRandomInt(1000, 10));
-    const { hash: tokenUid } = await createTokenHelper(
-      hWallet,
-      'BalanceToken',
-      'BAT',
-      newTokenAmount
-    );
-
-    const tknBalance = await hWallet.getBalance(tokenUid);
-    expect(tknBalance[0]).toMatchObject({
-      balance: { unlocked: newTokenAmount, locked: 0n },
-      transactions: expect.any(Number),
-      // transactions: 1, // TODO: The amount of transactions is often 8 but should be 1. Ref #397
-    });
-
-    // Validating that a different wallet (genesis) has no access to this token
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    const genesisTknBalance = await gWallet.getBalance(tokenUid);
-    expect(genesisTknBalance).toHaveLength(1);
-    expect(genesisTknBalance[0]).toMatchObject({
-      token: { id: tokenUid },
-      balance: { unlocked: 0n, locked: 0n },
-      transactions: 0,
-    });
-  });
-});
+// getBalance tests moved to shared/get-balance.test.ts and fullnode-specific/get-balance.test.ts
 
 describe('getFullHistory', () => {
   afterEach(async () => {
@@ -1192,8 +1109,12 @@ describe('sendTransaction', () => {
     );
 
     // Should have outputs: token output (50) + token change (50) + HTR change
+    // Validate both token identity and token_data in a mixed-token transaction
     expect(decodedTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token: tokenUid })
+      expect.objectContaining({ value: 50n, token: tokenUid, token_data: TOKEN_DATA.TOKEN })
+    );
+    expect(decodedTx.outputs).toContainEqual(
+      expect.objectContaining({ token: NATIVE_TOKEN_UID, token_data: TOKEN_DATA.HTR })
     );
   });
 
@@ -1499,60 +1420,7 @@ describe('sendManyOutputsTransaction', () => {
   });
 });
 
-describe('authority utxo selection', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('getMintAuthority', async () => {
-    // Setting up the custom token
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100n);
-
-    // Mark mint authority as selected_as_input
-    const [mintInput] = await hWallet.getMintAuthority(tokenUid, { many: false });
-    await hWallet.markUtxoSelected(mintInput.txId, mintInput.index, true);
-
-    // getMintAuthority should return even if the utxo is already selected_as_input
-    await expect(hWallet.getMintAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
-      mintInput,
-    ]);
-    await expect(
-      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: false })
-    ).resolves.toStrictEqual([mintInput]);
-
-    // getMintAuthority should not return selected_as_input utxos if only_available_utxos is true
-    await expect(
-      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: true })
-    ).resolves.toStrictEqual([]);
-  });
-
-  it('getMeltAuthority', async () => {
-    // Setting up the custom token
-    const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100n);
-
-    // Mark melt authority as selected_as_input
-    const [meltInput] = await hWallet.getMeltAuthority(tokenUid, { many: false });
-    await hWallet.markUtxoSelected(meltInput.txId, meltInput.index, true);
-
-    // getMeltAuthority should return even if the utxo is already selected_as_input
-    await expect(hWallet.getMeltAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
-      meltInput,
-    ]);
-    await expect(
-      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: false })
-    ).resolves.toStrictEqual([meltInput]);
-
-    // getMeltAuthority should not return selected_as_input utxos if only_available_utxos is true
-    await expect(
-      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: true })
-    ).resolves.toStrictEqual([]);
-  });
-});
+// authority utxo selection tests moved to fullnode-specific/authority-utxos.test.ts
 
 describe('createNewToken', () => {
   afterEach(async () => {
