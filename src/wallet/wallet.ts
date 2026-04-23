@@ -22,6 +22,7 @@ import {
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
+import { retryOnTransientWalletError } from './walletServiceRetry';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -116,6 +117,17 @@ const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
 // Wallet status values returned by the wallet-service API
 const WS_STATUS_READY = 'ready';
 const WS_STATUS_CREATING = 'creating';
+
+// Bounded retry budget for the wallet-service auth-token renewal.
+//
+// Context: right after `createWallet` returns, the `/auth/token` endpoint can
+// briefly respond with a transient error while the wallet-service's internal
+// state settles. The old fire-and-forget renewal happened to mask this
+// because any failure silently nulled the token and the axios interceptor
+// would try again on the next authenticated call. Now that renewal is
+// awaited and errors propagate, we need an explicit bounded retry to keep
+// integration tests (and real clients) tolerant of the same settling race.
+const MAX_AUTH_TOKEN_RENEW_ATTEMPTS = 3;
 
 enum walletState {
   NOT_STARTED = 'Not started',
@@ -1145,14 +1157,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         privKey = bitcore.HDPrivateKey.fromString(await this.storage.getAuthPrivKey(password));
       }
 
-      await this.renewAuthToken(privKey, timestampNow);
+      await retryOnTransientWalletError(() => this.renewAuthToken(privKey, timestampNow), {
+        maxAttempts: MAX_AUTH_TOKEN_RENEW_ATTEMPTS,
+        intervalMs: WALLET_STATUS_POLLING_INTERVAL,
+      });
     } else if (usePassword) {
       // Token is valid but the user provided a PIN — renew proactively.
       const privKey = bitcore.HDPrivateKey.fromString(
         await this.storage.getAuthPrivKey(usePassword)
       );
 
-      await this.renewAuthToken(privKey, timestampNow);
+      await retryOnTransientWalletError(() => this.renewAuthToken(privKey, timestampNow), {
+        maxAttempts: MAX_AUTH_TOKEN_RENEW_ATTEMPTS,
+        intervalMs: WALLET_STATUS_POLLING_INTERVAL,
+      });
     }
   }
 

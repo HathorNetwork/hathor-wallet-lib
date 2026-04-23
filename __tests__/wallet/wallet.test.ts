@@ -3784,6 +3784,35 @@ describe('validateAndRenewAuthToken', () => {
     expect(renewSpy).toHaveBeenCalledTimes(1);
     expect(wallet.storage.getAuthPrivKey).toHaveBeenCalledWith('myPassword');
   });
+
+  it('should retry renewAuthToken on transient WalletRequestError', async () => {
+    // This guards the integration-test failure surfaced by PR CI: on a
+    // pre-existing ready wallet the interceptor's first auth call can hit a
+    // brief wallet-service settling window and fail with a transient error.
+    // The helper should retry within the same validateAndRenewAuthToken call
+    // instead of bubbling the first failure up to the caller.
+    wallet.authToken = null as unknown as string;
+
+    const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+      networkName: 'testnet',
+      password: 'pass',
+      pin: 'pin',
+    });
+    const authKey = decryptData(accessData.authKey!, 'pin');
+
+    const renewSpy = jest
+      .spyOn(wallet, 'renewAuthToken')
+      .mockRejectedValueOnce(new WalletRequestError('transient', { cause: { status: 400 } }))
+      .mockImplementationOnce(async function mockRenew(this: HathorWalletServiceWallet) {
+        this.authToken = 'renewed-after-retry';
+      });
+    jest.spyOn(wallet.storage, 'getAuthPrivKey').mockResolvedValue(authKey);
+
+    await wallet.validateAndRenewAuthToken('myPassword');
+
+    expect(renewSpy).toHaveBeenCalledTimes(2);
+    expect(wallet.authToken).toBe('renewed-after-retry');
+  });
 });
 
 /**
