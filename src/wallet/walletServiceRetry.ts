@@ -41,14 +41,6 @@ export interface RetryOnTransientWalletErrorOptions {
  * consuming retry budget. This keeps fail-fast behaviour for real bugs while
  * tolerating genuine race conditions against the wallet-service.
  *
- * Why this helper exists:
- *   The old fire-and-forget auth-token renewal path silently caught *all*
- *   errors and nulled `this.authToken`, which turned transient server
- *   failures into permanent 403s for the next authenticated request. This
- *   PR removes that silent catch; this helper replaces the implicit retry
- *   that the old catch-and-retry-from-interceptor dance used to provide,
- *   but does so explicitly, with a bounded budget and a clear contract.
- *
  * @param operation - An async function performing a single wallet-service
  *                    call. Must be idempotent (the helper may invoke it
  *                    multiple times).

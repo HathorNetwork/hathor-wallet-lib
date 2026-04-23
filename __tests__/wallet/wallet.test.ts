@@ -3831,10 +3831,9 @@ describe('validateAndRenewAuthToken', () => {
  *
  * The previous implementation wrapped the body in a try/catch that set
  * `this.authToken = null` on any failure. That silent catch was the root cause
- * of the 403 race condition this PR fixes — a background renewal could null a
- * valid token mid-flight. With every caller now awaiting, suppressing errors
- * here would only mask bugs. These tests make a future refactor that
- * reintroduces the catch fail loudly.
+ * of 403 race conditions — a background renewal could null a valid token mid-flight.
+ * With every caller awaiting, suppressing errors would only mask bugs.
+ * These tests make a future refactor that reintroduces the catch fail loudly.
  */
 describe('renewAuthToken contract', () => {
   const network = new Network('testnet');

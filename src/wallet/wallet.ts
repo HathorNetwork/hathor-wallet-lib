@@ -122,11 +122,9 @@ const WS_STATUS_CREATING = 'creating';
 //
 // Context: right after `createWallet` returns, the `/auth/token` endpoint can
 // briefly respond with a transient error while the wallet-service's internal
-// state settles. The old fire-and-forget renewal happened to mask this
-// because any failure silently nulled the token and the axios interceptor
-// would try again on the next authenticated call. Now that renewal is
-// awaited and errors propagate, we need an explicit bounded retry to keep
-// integration tests (and real clients) tolerant of the same settling race.
+// state settles.
+// That renewal is awaited and errors propagate, we need an explicit bounded retry
+// to keep integration tests (and real clients) tolerant of the same settling race.
 const MAX_AUTH_TOKEN_RENEW_ATTEMPTS = 3;
 
 enum walletState {
@@ -746,9 +744,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         // responded but said no — could be a transient 502/503 or a
         // momentary auth endpoint hiccup. Retry until we exhaust attempts.
         lastError = err;
-        await new Promise(resolve => {
-          setTimeout(resolve, WALLET_STATUS_POLLING_INTERVAL);
-        });
+        await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
         continue;
       }
 
@@ -762,9 +758,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new WalletRequestError('Error getting wallet status.', { cause: data.status });
       }
 
-      await new Promise(resolve => {
-        setTimeout(resolve, WALLET_STATUS_POLLING_INTERVAL);
-      });
+      await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
     }
     throw new WalletRequestError('Wallet status polling timed out.', {
       cause: lastError ?? undefined,
@@ -1269,9 +1263,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           throw err;
         }
         lastError = err;
-        await new Promise(resolve => {
-          setTimeout(resolve, WALLET_STATUS_POLLING_INTERVAL);
-        });
+        await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
       }
     }
     if (lastError) {
