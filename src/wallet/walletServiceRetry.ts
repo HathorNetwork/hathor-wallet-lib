@@ -70,7 +70,7 @@ export async function retryOnTransientWalletError<T>(
     );
   }
 
-  let lastTransientError: WalletRequestError | null = null;
+  let lastTransientError: WalletRequestError | undefined;
 
   for (let attempt = 1; attempt <= opts.maxAttempts; attempt++) {
     try {

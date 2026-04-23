@@ -3791,7 +3791,7 @@ describe('validateAndRenewAuthToken', () => {
     // brief wallet-service settling window and fail with a transient error.
     // The helper should retry within the same validateAndRenewAuthToken call
     // instead of bubbling the first failure up to the caller.
-    wallet.authToken = null as unknown as string;
+    wallet.authToken = null;
 
     const accessData = walletUtils.generateAccessDataFromSeed(seed, {
       networkName: 'testnet',
@@ -3808,7 +3808,16 @@ describe('validateAndRenewAuthToken', () => {
       });
     jest.spyOn(wallet.storage, 'getAuthPrivKey').mockResolvedValue(authKey);
 
-    await wallet.validateAndRenewAuthToken('myPassword');
+    jest.useFakeTimers();
+    try {
+      const pending = wallet.validateAndRenewAuthToken('myPassword');
+      // Drain the retry interval (WALLET_STATUS_POLLING_INTERVAL = 1000ms) so
+      // the second attempt fires without burning a real second on the wall clock.
+      await jest.advanceTimersByTimeAsync(1000);
+      await pending;
+    } finally {
+      jest.useRealTimers();
+    }
 
     expect(renewSpy).toHaveBeenCalledTimes(2);
     expect(wallet.authToken).toBe('renewed-after-retry');
