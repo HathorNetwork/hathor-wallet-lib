@@ -13,3 +13,4 @@ tsconfig.tsbuildinfo
 *.leveldb*
 tmp/
 .claude/settings.local.json
+.worktrees
