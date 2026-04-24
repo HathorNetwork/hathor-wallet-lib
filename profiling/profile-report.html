@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HathorWalletServiceWallet — Load Profile (testnet)</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #131823;
+    --panel-2: #1a2030;
+    --ink: #e6edf3;
+    --muted: #8892a6;
+    --accent: #7aa2f7;
+    --good: #9ece6a;
+    --warn: #e0af68;
+    --bad: #f7768e;
+    --grid: #2a3040;
+    --c-crypto: #bb9af7;
+    --c-http-init: #f7768e;
+    --c-http-auth: #e0af68;
+    --c-http-addr: #9ece6a;
+    --c-http-ro: #ff9e64;
+    --c-ws-open: #7aa2f7;
+    --c-ws-join: #7dcfff;
+    --c-setup: #565f89;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 36px 28px 120px; }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 20px;
+    margin: 44px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--grid);
+    letter-spacing: -0.005em;
+  }
+  h3 { font-size: 15px; margin: 24px 0 8px; color: var(--ink); }
+  p, li { color: var(--ink); }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .tag {
+    display: inline-block;
+    background: var(--panel-2);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-right: 6px;
+  }
+  .mode-pill {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .mode-full { background: rgba(247, 118, 142, 0.15); color: var(--bad); }
+  .mode-ro   { background: rgba(255, 158, 100, 0.15); color: var(--c-http-ro); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--grid);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .row-2, .row-3, .row-4 { grid-template-columns: 1fr; } }
+  .stat { padding: 12px 14px; background: var(--panel-2); border-radius: 6px; }
+  .stat .val { font-size: 22px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .stat .lbl { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stat .delta { font-size: 11px; color: var(--good); margin-top: 2px; }
+  .stat .delta.bad { color: var(--bad); }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { text-align: right; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); }
+  .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+  .status-ok { color: var(--good); }
+  .status-warn { color: var(--warn); }
+  .status-bad { color: var(--bad); }
+  a { color: var(--accent); }
+  pre {
+    background: var(--panel-2);
+    padding: 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    background: rgba(122, 162, 247, 0.08);
+    border-radius: 0 6px 6px 0;
+    margin: 14px 0;
+  }
+  .callout.bad { border-color: var(--bad); background: rgba(247, 118, 142, 0.08); }
+  .callout.warn { border-color: var(--warn); background: rgba(224, 175, 104, 0.08); }
+  .callout.good { border-color: var(--good); background: rgba(158, 206, 106, 0.08); }
+  svg text { fill: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  svg .axis text { fill: var(--muted); }
+  svg .grid line { stroke: var(--grid); stroke-dasharray: 2 3; }
+  svg .bar { stroke: rgba(0,0,0,0.25); stroke-width: 0.5; }
+  svg .bar-label { fill: #fff; font-weight: 500; }
+  svg .marker { stroke: #f7768e; stroke-width: 1.2; stroke-dasharray: 3 2; }
+  .toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 12px;
+    margin: 12px 0 4px;
+  }
+  .toc a {
+    padding: 4px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--grid);
+    border-radius: 999px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .toc a:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="small muted">Profile report</div>
+    <h1>HathorWalletServiceWallet &mdash; load profile</h1>
+    <p class="muted">
+      End-to-end timing of <code>HathorWalletServiceWallet.start()</code> <span class="mode-pill mode-full">full (seed)</span>
+      and <code>.startReadOnly()</code> <span class="mode-pill mode-ro">read-only (xpub)</span>
+      against the public Hathor testnet wallet-service, including WebSocket handshake.
+      Instrumentation: <code>perf_hooks</code>, axios interceptor, instance monkey-patches &mdash;
+      no source changes.
+    </p>
+    <div>
+      <span class="tag">network: testnet</span>
+      <span class="tag">wallet-service: wallet-service.testnet.hathor.network</span>
+      <span class="tag">ws: ws.wallet-service.testnet.hathor.network</span>
+      <span class="tag">6 runs (3 per mode)</span>
+    </div>
+    <nav class="toc">
+      <a href="#tldr">TL;DR</a>
+      <a href="#compare">Full vs read-only</a>
+      <a href="#waterfalls-full">Full waterfalls</a>
+      <a href="#waterfalls-ro">Read-only waterfalls</a>
+      <a href="#http">HTTP calls</a>
+      <a href="#findings">Findings</a>
+      <a href="#recs">Recommendations</a>
+      <a href="#method">Methodology</a>
+    </nav>
+  </header>
+
+  <h2 id="tldr">TL;DR</h2>
+  <div class="panel">
+    <h3 style="margin-top: 0;">Full (seed) mode <span class="mode-pill mode-full">full</span></h3>
+    <div class="row-3">
+      <div class="stat"><div class="val">1.6&nbsp;s</div><div class="lbl">cold <code>start()</code> (state=Ready)</div></div>
+      <div class="stat"><div class="val">0.6&nbsp;s</div><div class="lbl">warm <code>start()</code></div></div>
+      <div class="stat"><div class="val">+0.8&ndash;1.4&nbsp;s</div><div class="lbl">extra wait for WS ready</div></div>
+    </div>
+    <h3>Read-only (xpub) mode <span class="mode-pill mode-ro">read-only</span></h3>
+    <div class="row-3">
+      <div class="stat">
+        <div class="val">1.4&nbsp;s</div>
+        <div class="lbl">cold <code>startReadOnly()</code></div>
+        <div class="delta">&minus;0.19&thinsp;s vs full (&minus;12%)</div>
+      </div>
+      <div class="stat">
+        <div class="val">0.55&nbsp;s</div>
+        <div class="lbl">warm <code>startReadOnly()</code></div>
+        <div class="delta">&minus;0.05&thinsp;s vs full (&minus;8%)</div>
+      </div>
+      <div class="stat">
+        <div class="val">+1.1&nbsp;s &hellip; &plus;8.1&nbsp;s</div>
+        <div class="lbl">extra wait for WS ready (one pathological run)</div>
+        <div class="delta bad">same WS bottleneck as full mode</div>
+      </div>
+    </div>
+    <p style="margin-top: 16px;">
+      Read-only buys you <b>a modest 50&ndash;190&thinsp;ms</b> on <code>state=Ready</code>
+      &mdash; mostly from skipping PBKDF2 on the seed. The big structural costs
+      (HTTPS latency to wallet-service, the sequential WebSocket handshake that runs
+      <i>after</i> <code>state=Ready</code>) are <b>unchanged</b>. Read-only does
+      <i>not</i> fix the slow-load complaint.
+    </p>
+    <div class="callout">
+      <b>The single biggest opportunity in either mode:</b> start the WebSocket handshake in
+      parallel with HTTP, not after <code>onWalletReady()</code>. That alone saves
+      <b>~0.8&thinsp;s</b> off cold time-to-fully-ready. Applies to both modes equally.
+    </div>
+  </div>
+
+  <h2 id="compare">Full vs read-only, head to head</h2>
+  <div class="panel">
+    <table id="compare-modes">
+      <thead>
+        <tr>
+          <th>Phase</th>
+          <th class="num">Full cold</th>
+          <th class="num">Full warm (avg&nbsp;2)</th>
+          <th class="num">RO cold</th>
+          <th class="num">RO warm (avg&nbsp;2)</th>
+          <th class="num">RO saves (warm)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <p class="small muted" style="margin: 10px 0 0;">
+      Averages are of the two reopen runs within each mode. Negative &ldquo;RO saves&rdquo; means read-only was slower.
+    </p>
+  </div>
+
+  <h2 id="waterfalls-full">Full mode waterfalls <span class="mode-pill mode-full">full</span></h2>
+  <p class="muted">
+    <code>start()</code> is driven by two parallel ~1&thinsp;s POSTs on cold
+    (<code>/wallet/init</code> and <code>/auth/token</code>), then a serialized
+    GET for new addresses, then the WebSocket.
+  </p>
+  <div class="legend">
+    <span><i class="sw" style="background: var(--c-crypto)"></i>crypto (PBKDF2 / derive)</span>
+    <span><i class="sw" style="background: var(--c-http-init)"></i>POST /wallet/init</span>
+    <span><i class="sw" style="background: var(--c-http-auth)"></i>POST /auth/token</span>
+    <span><i class="sw" style="background: var(--c-http-addr)"></i>GET /wallet/addresses/new</span>
+    <span><i class="sw" style="background: var(--c-ws-open)"></i>WS open (TCP+TLS+upgrade)</span>
+    <span><i class="sw" style="background: var(--c-ws-join)"></i>WS join RTT</span>
+    <span><i class="sw" style="background: var(--c-setup)"></i>sync orchestration</span>
+  </div>
+  <div id="charts-full"></div>
+
+  <h2 id="waterfalls-ro">Read-only mode waterfalls <span class="mode-pill mode-ro">read-only</span></h2>
+  <p class="muted">
+    <code>startReadOnly()</code> skips <code>/wallet/init</code> and uses
+    <code>POST /auth/token/readonly</code> instead of the signed
+    <code>/auth/token</code>. Only one HTTP POST up front, then the addresses GET,
+    then WebSocket &mdash; same as full mode from that point.
+  </p>
+  <div class="legend">
+    <span><i class="sw" style="background: var(--c-crypto)"></i>xpub derive (&sim;6&ndash;18&thinsp;ms)</span>
+    <span><i class="sw" style="background: var(--c-http-ro)"></i>POST /auth/token/readonly</span>
+    <span><i class="sw" style="background: var(--c-http-addr)"></i>GET /wallet/addresses/new</span>
+    <span><i class="sw" style="background: var(--c-ws-open)"></i>WS open</span>
+    <span><i class="sw" style="background: var(--c-ws-join)"></i>WS join RTT</span>
+    <span><i class="sw" style="background: var(--c-setup)"></i>sync orchestration</span>
+  </div>
+  <div id="charts-ro"></div>
+
+  <h2 id="http">HTTP call breakdown</h2>
+  <div class="row-2">
+    <div>
+      <h3>Full mode <span class="mode-pill mode-full">full</span></h3>
+      <div id="http-full"></div>
+    </div>
+    <div>
+      <h3>Read-only mode <span class="mode-pill mode-ro">read-only</span></h3>
+      <div id="http-ro"></div>
+    </div>
+  </div>
+
+  <h2 id="findings">Findings</h2>
+
+  <h3 class="status-bad">1. The WebSocket handshake runs <u>after</u> HTTP, not in parallel &mdash; in both modes</h3>
+  <p>
+    In <code>onWalletReady()</code>, the client awaits <code>getNewAddresses(true)</code>,
+    then calls <code>setupConnection()</code>, then sets <code>state&nbsp;=&nbsp;READY</code>.
+    The <code>state=Ready</code> event fires before the WS has even opened &mdash; clients
+    that rely on the WS for live balance updates wait another <b>~1&thinsp;s on warm and up to
+    ~8&thinsp;s on a bad cold run</b>.
+  </p>
+  <p>Raw WS events from all 6 runs (time relative to <code>setupConnection()</code> call):</p>
+  <pre>Full (seed):
+  Run 1 (fresh): SEND join @ 853 ms   RECV join-success @ 1418 ms   (WS ready: 1.42 s)
+  Run 2 (warm):  SEND join @ 781 ms   RECV join-success @ 1167 ms   (WS ready: 1.17 s)
+  Run 3 (warm):  SEND join @ 799 ms   RECV join-success @ 1225 ms   (WS ready: 1.23 s)
+
+Read-only (xpub):
+  Run 1 (fresh): SEND join @ 3785 ms  RECV join-success @ 8112 ms   (WS ready: 8.11 s)   &larr; pathological
+  Run 2 (warm):  SEND join @ 1113 ms  RECV join-success @ 1463 ms   (WS ready: 1.46 s)
+  Run 3 (warm):  SEND join @  759 ms  RECV join-success @ 1109 ms   (WS ready: 1.11 s)</pre>
+  <p>
+    The ~800&thinsp;ms before <code>SEND</code> is TCP + TLS + WS-upgrade to the
+    <code>ws.wallet-service.testnet.hathor.network</code> host &mdash; a <i>different</i>
+    hostname from the HTTP service, so every wallet load re-handshakes a fresh TLS session
+    here regardless of keep-alive. The remaining latency is the server's join ack.
+  </p>
+  <div class="callout warn">
+    <b>Pathological run:</b> RO Run 1 took 3.8&thinsp;s to open the WS, then 4.3&thinsp;s
+    for the server to ack join, plus a heartbeat ping fired mid-wait at 5&thinsp;s.
+    We've seen similar one-off 5+&thinsp;s loads in full mode too &mdash; testnet WS edge
+    has very bad tail latency and <code>DEFAULT_JOIN_TIMEOUT = 5000</code> masks nothing.
+  </div>
+
+  <h3 class="status-warn">2. Read-only is barely faster than full mode</h3>
+  <p>
+    Read-only eliminates:
+  </p>
+  <ul>
+    <li>The 133&thinsp;ms cold PBKDF2 (<code>generateAccessDataFromSeed</code> &rarr; now just <code>generateAccessDataFromXpub</code>, ~6&ndash;18&thinsp;ms);</li>
+    <li>The <code>POST /wallet/init</code> call.</li>
+  </ul>
+  <p>
+    But <code>/wallet/init</code> was already running <b>in parallel</b> with
+    <code>/auth/token</code> in full mode, so removing it doesn't help wall-clock time much.
+    Only the PBKDF2 saves anything on the critical path. Net: <b>&minus;50 to &minus;190&thinsp;ms</b>
+    depending on cache state.
+  </p>
+  <div class="callout">
+    Put differently: if your read-only consumers are asking &ldquo;why is read-only still slow&rdquo;
+    &mdash; it's because they hit the <i>same</i> ~260&thinsp;ms auth POST, the <i>same</i>
+    ~280&thinsp;ms addresses GET, and the <i>same</i> ~1.2&thinsp;s WebSocket as full mode.
+  </div>
+
+  <h3 class="status-warn">3. <code>POST /auth/token/readonly</code> is NOT faster than <code>POST /auth/token</code></h3>
+  <p>
+    Same hostname, same TLS path, same approximate size. Cold ~1030&thinsp;ms, warm
+    ~260&thinsp;ms. The read-only endpoint only saves the client-side xpubkey signature
+    computation (negligible) &mdash; server-side latency is identical.
+  </p>
+
+  <h3 class="status-warn">4. <code>GET /wallet/addresses/new</code> is serialized and always ~280&thinsp;ms</h3>
+  <p>
+    It can't start until we have a confirmed <code>walletId</code>. In read-only mode, you
+    can pass <code>startReadOnly({ skipAddressFetch: true })</code> to skip it entirely
+    &mdash; that'd shave ~280&thinsp;ms off every load if you don't need gap-limit addresses
+    pre-populated.
+  </p>
+
+  <h3 class="status-ok">5. Suspects that <i>didn't</i> pay out</h3>
+  <ul>
+    <li>
+      <code>WALLET_STATUS_POLLING_INTERVAL = 1000 ms</code>: never fires in any of these
+      runs because the wallet is already loaded server-side. Only matters on a first-ever
+      wallet create (not measured here).
+    </li>
+    <li>
+      <code>validateAndRenewAuthToken</code> awaited per authenticated request: the JWT
+      caches, subsequent calls measure at 0.1&thinsp;ms.
+    </li>
+  </ul>
+
+  <h2 id="recs">Recommendations</h2>
+  <ol>
+    <li>
+      <b>Start WebSocket in parallel with HTTP.</b> Kick <code>setupConnection()</code> as
+      soon as we have <code>walletId</code> (right after the xpub is computed, before the
+      <code>/wallet/init</code> or <code>/auth/token/readonly</code> await).
+      Expected savings: <b>~0.8&ndash;1.4&thinsp;s</b> on cold fully-ready time. Applies to
+      both modes.
+    </li>
+    <li>
+      <b>Pass <code>skipAddressFetch: true</code> to <code>startReadOnly</code></b> for
+      read-only consumers that don't need gap addresses. Expected savings:
+      <b>~280&thinsp;ms</b> on every load. (Not applicable to full mode &mdash; full mode
+      fetches addresses implicitly.)
+    </li>
+    <li>
+      <b>Skip <code>/wallet/init</code> on returning full-mode wallets.</b> If we have a
+      cached walletId, go straight to <code>GET /wallet/status</code>; only fall back to
+      <code>/wallet/init</code> if status is 404. Expected savings: <b>~250&thinsp;ms</b>
+      warm. (Not applicable to read-only &mdash; it already skips <code>/wallet/init</code>.)
+    </li>
+    <li>
+      <b>Shorten <code>DEFAULT_JOIN_TIMEOUT</code></b> from 5000&thinsp;ms to ~1500&thinsp;ms,
+      so the pathological WS-handshake case doesn't hold the user hostage for 8+&thinsp;s.
+    </li>
+    <li>
+      <b>Ask the wallet-service team about HTTP/2 and WS edge latency.</b> Cold
+      <code>POST /auth/token*</code> consistently takes ~1&thinsp;s &mdash; that's
+      infrastructure-level, not client-fixable. Tail latency on the WS edge (3.8&thinsp;s to
+      open in RO Run 1) is even more concerning.
+    </li>
+  </ol>
+
+  <h2>What was <u>not</u> measured</h2>
+  <div class="callout">
+    <b>First-ever wallet creation</b> (server has never seen this seed): <code>/wallet/init</code>
+    returns <code>200 creating</code> and <code>start()</code> enters <code>pollForWalletStatus()</code>,
+    which polls with <code>setInterval(..., 1000)</code> &mdash; the first check fires at
+    <i>t</i>=1&thinsp;s, not <i>t</i>=0. If users complain about slowness on <i>brand-new</i>
+    wallets specifically, that's almost certainly the culprit. Easy follow-up with a fresh seed.
+  </div>
+
+  <h2 id="method">Methodology</h2>
+  <p>
+    Harness at <code>profiling/profile-wallet-load.ts</code>. It:
+  </p>
+  <ul>
+    <li>loads <code>.env.profile</code> (gitignored) for the wallet seed;</li>
+    <li>for read-only mode: derives the account-path xpub from the same seed via
+      <code>getXPrivKeyFromSeed</code> + <code>deriveNonCompliantChild(P2PKH_ACCT_PATH)</code>,
+      constructs the wallet with <code>xpub</code> instead of <code>seed</code>, and calls
+      <code>startReadOnly()</code>;</li>
+    <li>patches <code>axios.create</code> with interceptors that record
+      <code>{method, url, status, startTime, duration, req/resBytes}</code>;</li>
+    <li>monkey-patches <code>walletUtils.generateAccessDataFromSeed</code> /
+      <code>generateAccessDataFromXpub</code> and several instance methods
+      (<code>validateAndRenewAuthToken</code>, <code>renewAuthToken</code>,
+      <code>getReadOnlyAuthToken</code>, <code>generateCreateWalletAuthData</code>,
+      <code>pollForWalletStatus</code>, <code>onWalletReady</code>,
+      <code>getNewAddresses</code>, <code>setupConnection</code>) to emit
+      <code>perf_hooks</code> marks/measures;</li>
+    <li>hooks the internal WS client's <code>sendMessage</code> and <code>join-success</code>
+      event to capture raw handshake timing;</li>
+    <li>writes per-run JSON to <code>profiling/profiles/run-&lt;label&gt;.json</code>.</li>
+  </ul>
+  <p>Mark names are namespaced with a per-run prefix to avoid cross-run pollution.</p>
+  <h3>Reproducing</h3>
+  <pre># Full (seed) mode:
+SCENARIO=both RUNS=3 ENABLE_WS=1 WAIT_WS_READY=1 NETWORK=testnet \
+  npm run profile:wallet
+
+# Read-only (xpub derived from same seed) mode:
+READONLY=1 SCENARIO=both RUNS=3 ENABLE_WS=1 WAIT_WS_READY=1 NETWORK=testnet \
+  npm run profile:wallet</pre>
+
+  <h2>Raw data</h2>
+  <details>
+    <summary style="cursor: pointer; color: var(--muted);">Click to view embedded run JSON (all 6 runs)</summary>
+    <pre id="rawjson" style="max-height: 360px; overflow: auto;"></pre>
+  </details>
+
+  <footer style="margin-top: 60px; color: var(--muted); font-size: 12px;">
+    6 runs total: 3 full-mode + 3 read-only, same seed, same server, back-to-back.
+    Each run drops a JSON file under <code>profiling/profiles/</code>. No secrets included.
+  </footer>
+</main>
+
+<script>
+// ---------- Embedded run data: FULL MODE (seed, wallet.start) ----------
+const RUNS_FULL = [
+  {
+    "label": "fresh run 1/3",
+    "totalMs": 2978.80175,
+    "t0": 603.462584,
+    "phases": [
+      { "name": "phase.start",                                 "startTime": 603.507709,  "duration": 1563.394625 },
+      { "name": "phase.walletUtils.generateAccessDataFromSeed","startTime": 629.278959,  "duration": 134.669875 },
+      { "name": "phase.validateAndRenewAuthToken#1",           "startTime": 784.471417,  "duration": 1066.630167 },
+      { "name": "phase.generateCreateWalletAuthData#1",        "startTime": 784.566084,  "duration": 53.0352079999999 },
+      { "name": "phase.renewAuthToken#1",                      "startTime": 852.878125,  "duration": 998.195375 },
+      { "name": "phase.onWalletReady#1",                       "startTime": 1887.74175,  "duration": 279.138917 },
+      { "name": "phase.getNewAddresses#1",                     "startTime": 1887.783917, "duration": 276.462874 },
+      { "name": "phase.validateAndRenewAuthToken#2",           "startTime": 1887.83025,  "duration": 0.067542 },
+      { "name": "phase.ws.open+join",                          "startTime": 2164.338792, "duration": 1417.816875 },
+      { "name": "phase.setupConnection#1",                     "startTime": 2164.343625, "duration": 2.518584 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/wallet/init",          "startTime": 851.584459,  "duration": 1035.759958, "reqBytes": 552, "status": 400, "resBytes": 505 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token",           "startTime": 878.910959,  "duration": 971.6315,    "reqBytes": 314, "status": 200, "resBytes": 542 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 1888.121584, "duration": 274.673416,  "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 853, "recvJoinSuccessMs": 1418 }
+  },
+  {
+    "label": "reopen run 2/3",
+    "totalMs": 1796.716875,
+    "t0": 3584.824167,
+    "phases": [
+      { "name": "phase.start",                          "startTime": 3584.82875,  "duration": 632.632084 },
+      { "name": "phase.validateAndRenewAuthToken#1",    "startTime": 3607.122917, "duration": 303.786833 },
+      { "name": "phase.generateCreateWalletAuthData#1", "startTime": 3607.14425,  "duration": 53.410292 },
+      { "name": "phase.renewAuthToken#1",               "startTime": 3674.178792, "duration": 236.714875 },
+      { "name": "phase.onWalletReady#1",                "startTime": 3939.596959, "duration": 277.850333 },
+      { "name": "phase.getNewAddresses#1",              "startTime": 3939.604334, "duration": 275.104833 },
+      { "name": "phase.validateAndRenewAuthToken#2",    "startTime": 3939.618,    "duration": 0.030834 },
+      { "name": "phase.ws.open+join",                   "startTime": 4214.7495,   "duration": 1166.621959 },
+      { "name": "phase.setupConnection#1",              "startTime": 4214.755334, "duration": 2.608583 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/wallet/init",          "startTime": 3672.974667, "duration": 266.537208, "reqBytes": 552, "status": 400, "resBytes": 505 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token",           "startTime": 3680.556584, "duration": 230.228375, "reqBytes": 314, "status": 200, "resBytes": 542 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 3939.767417, "duration": 274.167417, "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 781, "recvJoinSuccessMs": 1167 }
+  },
+  {
+    "label": "reopen run 3/3",
+    "totalMs": 1837.160875,
+    "t0": 5387.633542,
+    "phases": [
+      { "name": "phase.start",                          "startTime": 5387.64,     "duration": 612.937 },
+      { "name": "phase.validateAndRenewAuthToken#1",    "startTime": 5406.111917, "duration": 301.416667 },
+      { "name": "phase.generateCreateWalletAuthData#1", "startTime": 5406.129792, "duration": 52.504333 },
+      { "name": "phase.renewAuthToken#1",               "startTime": 5472.562,    "duration": 234.93775 },
+      { "name": "phase.onWalletReady#1",                "startTime": 5724.334125, "duration": 276.235542 },
+      { "name": "phase.getNewAddresses#1",              "startTime": 5724.344459, "duration": 275.170458 },
+      { "name": "phase.validateAndRenewAuthToken#2",    "startTime": 5724.367709, "duration": 0.049583 },
+      { "name": "phase.ws.open+join",                   "startTime": 5999.555167, "duration": 1225.176292 },
+      { "name": "phase.setupConnection#1",              "startTime": 5999.557959, "duration": 1.0035 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/wallet/init",          "startTime": 5471.52425,  "duration": 252.7035,   "reqBytes": 552, "status": 400, "resBytes": 505 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token",           "startTime": 5479.070042, "duration": 228.327,    "reqBytes": 314, "status": 200, "resBytes": 542 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 5724.915417, "duration": 274.26775,  "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 799, "recvJoinSuccessMs": 1225 }
+  }
+];
+
+// ---------- Embedded run data: READ-ONLY MODE (xpub, wallet.startReadOnly) ----------
+const RUNS_RO = [
+  {
+    "label": "ro-fresh run 1/3",
+    "totalMs": 9479.317042,
+    "t0": 682.026708,
+    "phases": [
+      { "name": "phase.start",                                "startTime": 682.089583,  "duration": 1374.370792 },
+      { "name": "phase.walletUtils.generateAccessDataFromXpub","startTime": 682.414333, "duration": 6.261167 },
+      { "name": "phase.getReadOnlyAuthToken#1",               "startTime": 714.533208,  "duration": 1034.236292 },
+      { "name": "phase.onWalletReady#1",                      "startTime": 1748.788916, "duration": 307.658542 },
+      { "name": "phase.getNewAddresses#1",                    "startTime": 1748.825625, "duration": 300.483166 },
+      { "name": "phase.validateAndRenewAuthToken#1",          "startTime": 1748.95525,  "duration": 0.14575 },
+      { "name": "phase.ws.open+join",                         "startTime": 2049.467958, "duration": 8111.644292 },
+      { "name": "phase.setupConnection#1",                    "startTime": 2049.476208, "duration": 6.939375 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token/readonly",  "startTime": 715.565708,  "duration": 1032.601542, "reqBytes": 125, "status": 200, "resBytes": 328 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 1749.417916, "duration": 296.777167,  "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 3785, "recvJoinSuccessMs": 8112 }
+  },
+  {
+    "label": "ro-reopen run 2/3",
+    "totalMs": 2033.775125,
+    "t0": 10165.771291,
+    "phases": [
+      { "name": "phase.start",                                "startTime": 10165.776333, "duration": 573.108417 },
+      { "name": "phase.walletUtils.generateAccessDataFromXpub","startTime": 10165.8895, "duration": 11.08325 },
+      { "name": "phase.getReadOnlyAuthToken#1",               "startTime": 10177.066958, "duration": 278.710833 },
+      { "name": "phase.onWalletReady#1",                      "startTime": 10455.847583, "duration": 282.906958 },
+      { "name": "phase.getNewAddresses#1",                    "startTime": 10455.860583, "duration": 280.77475 },
+      { "name": "phase.validateAndRenewAuthToken#1",          "startTime": 10455.887625, "duration": 0.096791 },
+      { "name": "phase.ws.open+join",                         "startTime": 10736.665583, "duration": 1462.727833 },
+      { "name": "phase.setupConnection#1",                    "startTime": 10736.670583, "duration": 2.065458 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token/readonly",  "startTime": 10177.331333, "duration": 278.043417, "reqBytes": 125, "status": 200, "resBytes": 328 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 10456.599208, "duration": 279.658625, "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 1113, "recvJoinSuccessMs": 1463 }
+  },
+  {
+    "label": "ro-reopen run 3/3",
+    "totalMs": 1636.145041,
+    "t0": 12204.34125,
+    "phases": [
+      { "name": "phase.start",                                "startTime": 12204.348541, "duration": 528.495584 },
+      { "name": "phase.walletUtils.generateAccessDataFromXpub","startTime": 12204.430208,"duration": 17.869167 },
+      { "name": "phase.getReadOnlyAuthToken#1",               "startTime": 12222.325125, "duration": 242.780875 },
+      { "name": "phase.onWalletReady#1",                      "startTime": 12465.156041, "duration": 267.679417 },
+      { "name": "phase.getNewAddresses#1",                    "startTime": 12465.16025,  "duration": 265.980333 },
+      { "name": "phase.validateAndRenewAuthToken#1",          "startTime": 12465.222583, "duration": 0.059625 },
+      { "name": "phase.ws.open+join",                         "startTime": 12731.171375, "duration": 1109.048166 },
+      { "name": "phase.setupConnection#1",                    "startTime": 12731.17575,  "duration": 1.622666 }
+    ],
+    "http": [
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/auth/token/readonly",  "startTime": 12222.521083, "duration": 242.466875, "reqBytes": 125, "status": 200, "resBytes": 328 },
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/addresses/new", "startTime": 12465.556291, "duration": 265.221,    "reqBytes": 0,   "status": 200, "resBytes": 1970 }
+    ],
+    "ws": { "sendJoinMs": 759, "recvJoinSuccessMs": 1109 }
+  }
+];
+
+// ---------- Rendering ----------
+const HTTP_COLOR = (url) => {
+  if (url.includes('/wallet/init')) return 'var(--c-http-init)';
+  if (url.includes('/auth/token/readonly')) return 'var(--c-http-ro)';
+  if (url.includes('/auth/token')) return 'var(--c-http-auth)';
+  if (url.includes('/addresses/new')) return 'var(--c-http-addr)';
+  return 'var(--accent)';
+};
+
+const PHASE_COLOR = (name) => {
+  if (name.includes('generateAccessDataFromSeed') || name.includes('generateCreateWalletAuthData') || name.includes('generateAccessDataFromXpub')) return 'var(--c-crypto)';
+  if (name === 'phase.ws.open+join') return 'var(--c-ws-open)';
+  if (name === 'phase.setupConnection#1') return 'var(--c-setup)';
+  if (name === 'phase.getNewAddresses#1') return 'var(--c-http-addr)';
+  if (name === 'phase.getReadOnlyAuthToken#1') return 'var(--c-http-ro)';
+  if (name.includes('renewAuthToken')) return 'var(--c-http-auth)';
+  if (name === 'phase.onWalletReady#1') return 'var(--c-setup)';
+  if (name === 'phase.start') return 'var(--c-setup)';
+  if (name.includes('validateAndRenewAuthToken')) return 'var(--c-http-auth)';
+  return 'var(--c-setup)';
+};
+
+function phaseLabel(name) {
+  return name
+    .replace('phase.walletUtils.', '')
+    .replace('phase.', '')
+    .replace('#1', '');
+}
+
+function renderWaterfall(run, maxTotalMs) {
+  const t0 = run.t0;
+  const keep = new Set([
+    'phase.walletUtils.generateAccessDataFromSeed',
+    'phase.walletUtils.generateAccessDataFromXpub',
+    'phase.generateCreateWalletAuthData#1',
+    'phase.validateAndRenewAuthToken#1',
+    'phase.renewAuthToken#1',
+    'phase.getReadOnlyAuthToken#1',
+    'phase.onWalletReady#1',
+    'phase.getNewAddresses#1',
+    'phase.ws.open+join',
+  ]);
+  const rows = [];
+  const readyMark = run.phases.find(p => p.name === 'phase.start');
+  const stateReadyMs = readyMark ? readyMark.duration : null;
+  for (const p of run.phases) {
+    if (!keep.has(p.name)) continue;
+    rows.push({ kind: 'phase', name: phaseLabel(p.name), start: p.startTime - t0, dur: p.duration, color: PHASE_COLOR(p.name) });
+  }
+  for (const h of run.http) {
+    rows.push({
+      kind: 'http',
+      name: `${h.method} ${new URL(h.url).pathname}`,
+      start: h.startTime - t0,
+      dur: h.duration,
+      color: HTTP_COLOR(h.url),
+      status: h.status,
+    });
+  }
+  if (run.ws && rows.some(r => r.name === 'ws.open+join')) {
+    const wsBase = rows.find(r => r.name === 'ws.open+join');
+    rows.push({ kind: 'ws', name: 'ws.open (TLS+upgrade)', start: wsBase.start, dur: run.ws.sendJoinMs, color: 'var(--c-ws-open)' });
+    rows.push({ kind: 'ws', name: 'ws.join RTT', start: wsBase.start + run.ws.sendJoinMs, dur: run.ws.recvJoinSuccessMs - run.ws.sendJoinMs, color: 'var(--c-ws-join)' });
+  }
+  rows.sort((a, b) => a.start - b.start);
+
+  const totalEnd = maxTotalMs || Math.max(...rows.map(r => r.start + r.dur));
+  const step = totalEnd > 6000 ? 1000 : (totalEnd > 2500 ? 500 : 250);
+
+  const rowH = 22;
+  const leftPad = 280;
+  const rightPad = 60;
+  const chartW = 900;
+  const width = leftPad + chartW + rightPad;
+  const height = 40 + rows.length * rowH + 24;
+  const xScale = (ms) => leftPad + (ms / totalEnd) * chartW;
+
+  let svg = `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">`;
+  svg += `<g class="grid">`;
+  for (let t = 0; t <= totalEnd; t += step) {
+    const x = xScale(t);
+    svg += `<line x1="${x}" y1="24" x2="${x}" y2="${height - 24}" />`;
+  }
+  svg += `</g>`;
+  svg += `<g class="axis">`;
+  for (let t = 0; t <= totalEnd; t += step) {
+    const x = xScale(t);
+    svg += `<text x="${x}" y="18" text-anchor="middle">${t} ms</text>`;
+  }
+  svg += `</g>`;
+  if (stateReadyMs != null) {
+    const x = xScale(stateReadyMs);
+    svg += `<line class="marker" x1="${x}" y1="24" x2="${x}" y2="${height - 24}" />`;
+    svg += `<text x="${x + 5}" y="${height - 8}" fill="#f7768e">state=Ready @ ${stateReadyMs.toFixed(0)}ms</text>`;
+  }
+  rows.forEach((r, i) => {
+    const y = 32 + i * rowH;
+    const x = xScale(r.start);
+    const w = Math.max(1, xScale(r.start + r.dur) - x);
+    svg += `<text x="${leftPad - 10}" y="${y + 14}" text-anchor="end">${r.name}</text>`;
+    svg += `<rect class="bar" x="${x}" y="${y}" width="${w}" height="16" rx="2" fill="${r.color}" />`;
+    const dlabel = `${r.dur.toFixed(0)}ms`;
+    if (w > 48) {
+      svg += `<text class="bar-label" x="${x + 6}" y="${y + 12}">${dlabel}</text>`;
+    } else {
+      svg += `<text x="${x + w + 6}" y="${y + 12}">${dlabel}</text>`;
+    }
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+function renderHttpTable(run) {
+  const body = run.http.map((h) => {
+    const statusClass = h.status === 200 ? 'status-ok' : (h.status === 400 ? 'status-warn' : 'status-bad');
+    const u = new URL(h.url);
+    return `<tr>
+      <td>${h.method}</td>
+      <td>${u.pathname}</td>
+      <td class="num ${statusClass}">${h.status}</td>
+      <td class="num">${h.duration.toFixed(1)}</td>
+      <td class="num">${(h.startTime - run.t0).toFixed(1)}</td>
+      <td class="num">${h.reqBytes}</td>
+      <td class="num">${h.resBytes}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="panel"><h3>${run.label} &nbsp;<span class="muted small">total = ${run.totalMs.toFixed(0)} ms</span></h3>
+    <table>
+      <thead><tr><th>Method</th><th>Path</th><th class="num">Status</th><th class="num">Dur (ms)</th><th class="num">Start t (ms)</th><th class="num">Req B</th><th class="num">Res B</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+}
+
+function renderCompareModes() {
+  const phasesOfInterest = [
+    { key: '__crypto__', label: 'Crypto setup (PBKDF2 or xpub derive)' },
+    { key: '__authhttp__', label: 'Auth HTTP (init+auth parallel, or auth-RO alone)' },
+    { key: 'phase.getNewAddresses#1', label: 'GET /wallet/addresses/new' },
+    { key: '__start__', label: 'state=Ready at (start duration)' },
+    { key: 'phase.ws.open+join', label: 'WS open + join handshake' },
+    { key: '__total__', label: 'Total incl. WS ready' },
+  ];
+  const crypto = (r) => {
+    const a = r.phases.find(p => p.name === 'phase.walletUtils.generateAccessDataFromSeed');
+    const b = r.phases.find(p => p.name === 'phase.walletUtils.generateAccessDataFromXpub');
+    return (a?.duration ?? 0) + (b?.duration ?? 0);
+  };
+  const authhttp = (r) => {
+    // Wall-clock auth cost = max end - min start of the auth-related HTTP calls
+    const auths = r.http.filter(h => h.url.includes('/auth/token') || h.url.includes('/wallet/init'));
+    if (!auths.length) return NaN;
+    const minS = Math.min(...auths.map(h => h.startTime));
+    const maxE = Math.max(...auths.map(h => h.startTime + h.duration));
+    return maxE - minS;
+  };
+  const valFor = (run, key) => {
+    if (key === '__crypto__') return crypto(run);
+    if (key === '__authhttp__') return authhttp(run);
+    if (key === '__start__') return run.phases.find(p => p.name === 'phase.start')?.duration ?? NaN;
+    if (key === '__total__') return run.totalMs;
+    const p = run.phases.find(x => x.name === key);
+    return p ? p.duration : NaN;
+  };
+  const fmt = (v) => (isFinite(v) && v >= 0) ? `${v.toFixed(0)}` : '&mdash;';
+  const fullCold = RUNS_FULL[0];
+  const fullWarmAvg = (key) => (valFor(RUNS_FULL[1], key) + valFor(RUNS_FULL[2], key)) / 2;
+  const roCold = RUNS_RO[0];
+  const roWarmAvg = (key) => (valFor(RUNS_RO[1], key) + valFor(RUNS_RO[2], key)) / 2;
+
+  const tbody = document.querySelector('#compare-modes tbody');
+  tbody.innerHTML = phasesOfInterest.map((ph) => {
+    const fc = valFor(fullCold, ph.key);
+    const fw = fullWarmAvg(ph.key);
+    const rc = valFor(roCold, ph.key);
+    const rw = roWarmAvg(ph.key);
+    const roSavesWarm = (isFinite(fw) && isFinite(rw)) ? (fw - rw) : NaN;
+    let savesCls = '';
+    if (isFinite(roSavesWarm)) {
+      savesCls = roSavesWarm > 100 ? 'status-ok' : (roSavesWarm < -50 ? 'status-bad' : 'status-warn');
+    }
+    return `<tr>
+      <td>${ph.label}</td>
+      <td class="num">${fmt(fc)}</td>
+      <td class="num">${fmt(fw)}</td>
+      <td class="num">${fmt(rc)}</td>
+      <td class="num">${fmt(rw)}</td>
+      <td class="num ${savesCls}">${isFinite(roSavesWarm) ? (roSavesWarm >= 0 ? '+' : '') + roSavesWarm.toFixed(0) + ' ms' : '&mdash;'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAll() {
+  // Match-axis: use the overall max total for each mode separately so warm charts aren't crushed
+  const fullMax = Math.max(...RUNS_FULL.map(r => Math.max(...r.phases.map(p => p.startTime + p.duration - r.t0))));
+  const roMaxWarm = Math.max(
+    ...RUNS_RO.slice(1).map(r => Math.max(...r.phases.map(p => p.startTime + p.duration - r.t0)))
+  );
+  const roMaxCold = Math.max(...RUNS_RO[0].phases.map(p => p.startTime + p.duration - RUNS_RO[0].t0));
+
+  document.getElementById('charts-full').innerHTML = RUNS_FULL.map(run => `
+    <div class="panel">
+      <h3>${run.label} &nbsp;<span class="muted small">total = ${run.totalMs.toFixed(0)} ms</span> <span class="mode-pill mode-full">full</span></h3>
+      ${renderWaterfall(run, fullMax)}
+    </div>
+  `).join('');
+
+  // For RO, use the cold chart's own scale (it's 10x longer than warm) and shared warm scale.
+  document.getElementById('charts-ro').innerHTML = RUNS_RO.map((run, idx) => `
+    <div class="panel">
+      <h3>${run.label} &nbsp;<span class="muted small">total = ${run.totalMs.toFixed(0)} ms</span> <span class="mode-pill mode-ro">read-only</span>${idx === 0 ? ' <span class="status-bad small">&nbsp;&bull; WS tail-latency outlier</span>' : ''}</h3>
+      ${renderWaterfall(run, idx === 0 ? roMaxCold : roMaxWarm)}
+    </div>
+  `).join('');
+
+  document.getElementById('http-full').innerHTML = RUNS_FULL.map(renderHttpTable).join('');
+  document.getElementById('http-ro').innerHTML = RUNS_RO.map(renderHttpTable).join('');
+
+  renderCompareModes();
+
+  document.getElementById('rawjson').textContent = JSON.stringify({ full: RUNS_FULL, readonly: RUNS_RO }, null, 2);
+}
+
+renderAll();
+</script>
+</body>
+</html>
