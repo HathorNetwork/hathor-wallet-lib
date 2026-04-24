@@ -413,4 +413,169 @@ describe('shielded outputs — Group E: Mixed AS/FS modes', () => {
     const bDelta = await walletB.getTxBalance((await walletB.getTx(fullfull!.hash!))!);
     expect(bDelta[NATIVE_TOKEN_UID]).toBeLessThan(0n);
   });
+
+  it('E.27 — FS→FS send when wallet has 0 transparent HTR must work (FIX-30)', async () => {
+    // TODO_FIX_30: a tx whose only inputs are FullShielded HTR has
+    // transparent_inputs=0; any HTR fee or transparent change would make
+    // the fullnode's transparent balance check fail with "invalid surplus
+    // of HTR". Fix expectation: either (a) the wallet force-selects a
+    // transparent HTR UTXO to cover the fee, or (b) hathor-core's
+    // is_shielded skip correctly zeroes the check and the tx is accepted.
+    //
+    // Setup:
+    //   1. Inject 100 HTR into walletA (transparent).
+    //   2. walletA self-sends 96 HTR as two FS outputs (48 each), paying
+    //      4 HTR of FS fees transparent → walletA has 0 transparent HTR
+    //      and 96 HTR in two FS UTXOs.
+    //   3. walletA FS→FS sends 50 HTR to walletB (2 FS outputs, 4 HTR fee).
+    //      All inputs are FS. Must NOT be rejected by the fullnode.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Fund walletA's FS pool: 96 HTR into 2 FS outputs (48+48), costing
+    // 4 HTR of FS fees paid transparent. After this walletA holds exactly
+    // 0 transparent HTR.
+    const saA0 = await walletA.getAddressAtIndex(1, { legacy: false });
+    const saA1 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const shieldTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: saA0,
+        value: 48n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: saA1,
+        value: 48n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletA, shieldTx!.hash!);
+    await waitUntilNextTimestamp(walletA, shieldTx!.hash!);
+
+    // Sanity: walletA has 0 transparent HTR, 96 HTR FS.
+    const htrBal = await walletA.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBal[0].balance.unlocked).toBe(96n);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyTransparentHtr: any[] = [];
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const u of walletA.storage.selectUtxos({ token: NATIVE_TOKEN_UID })) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      anyTransparentHtr.push(u as any);
+    }
+    for (const u of anyTransparentHtr) {
+      expect(u.shielded).toBe(true);
+    }
+
+    // FS→FS send of 50 HTR to walletB. All inputs are FS (walletA has no
+    // transparent HTR). Outputs = 50 FS + 42 FS change = 92; inputs = 96;
+    // deficit 4 = fee. Transparent side is 0 in / 0 out / 4 fee → is_shielded
+    // skip must apply.
+    const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sbB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const sendTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB0,
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: sbB1,
+        value: 42n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    expect(sendTx).not.toBeNull();
+    await waitForTxReceived(walletA, sendTx!.hash!);
+    await waitForTxReceived(walletB, sendTx!.hash!);
+
+    const balB = await walletB.getBalance(NATIVE_TOKEN_UID);
+    expect(balB[0].balance.unlocked).toBe(92n);
+  });
+
+  it('E.28 — FS → FS → FS across three wallets (FIX-18 surjection domain)', async () => {
+    // TODO_FIX_18: spending a received FullShielded UTXO to create new FS
+    // outputs requires the surjection-proof domain to contain the input's
+    // on-chain `asset_commitment` (blinded generator), NOT the unblinded
+    // `derive_asset_tag(token_uid)`. If the wallet passes ZERO_TWEAK for a
+    // shielded input's blinding factor, the fullnode's verifier reconstructs
+    // a different generator than the one the wallet signed against and the
+    // proof fails — tx rejected.
+    //
+    // walletA → walletB (FS): walletB now owns an FS UTXO with a non-zero
+    //                         asset_blinding_factor.
+    // walletB → walletC (FS): walletB must pass that abf into
+    //                         createShieldedOutputs so the surjection proof
+    //                         uses the blinded generator the fullnode sees.
+    // walletC receives and decrypts correctly.
+    //
+    // E.25 tests AS→FS→AS which indirectly exercises this, but that middle
+    // hop spends AS inputs (unblinded generator is correct for AS). This
+    // test pins the specifically-FS-input case.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 200n);
+
+    // A → B as FS. walletB now owns 2 FS HTR UTXOs with random asset
+    // blinding factors (that's what FullShielded means).
+    const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sbB1 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const tx1 = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: sbB1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletA, tx1!.hash!);
+    await waitForTxReceived(walletB, tx1!.hash!);
+    await waitUntilNextTimestamp(walletA, tx1!.hash!);
+
+    // Give B transparent HTR for the second hop's FS fees.
+    const legacyB = await walletB.getAddressAtIndex(5, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletB, legacyB, 30n);
+
+    // B → C as FS, spending FS UTXOs from tx1. This is the surjection-
+    // domain-sensitive hop: the proof must use walletB's FS-UTXO asset
+    // commitment (blinded) as the domain, reconstructed from the input's
+    // asset_blinding_factor stored alongside the UTXO at receive time.
+    const scC0 = await walletC.getAddressAtIndex(0, { legacy: false });
+    const scC1 = await walletC.getAddressAtIndex(1, { legacy: false });
+    const tx2 = await walletB.sendManyOutputsTransaction([
+      {
+        address: scC0,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: scC1,
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletB, tx2!.hash!);
+    await waitForTxReceived(walletC, tx2!.hash!);
+
+    // C decrypted correctly → received 20 + 15 = 35 HTR via the FS outputs.
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(35n);
+  });
 });

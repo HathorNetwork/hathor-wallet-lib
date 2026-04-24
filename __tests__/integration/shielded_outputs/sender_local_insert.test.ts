@@ -76,6 +76,12 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
       },
     ]);
     const tx = await sendTx.run('sign-tx');
+    // run('sign-tx') stops before mining, so tx.hash is still null. Compute it
+    // from the signed structure directly — convertTransactionToHistoryTx
+    // requires a non-null hash to build its output (the mined nonce would
+    // change the hash, but for this unit-style assertion we only care that
+    // the conversion function accepts the Transaction and emits shielded_outputs).
+    tx.updateHash();
     expect(tx.shieldedOutputs.length).toBe(2);
 
     const historyTx = await transactionUtils.convertTransactionToHistoryTx(tx, walletA.storage);
@@ -129,6 +135,12 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
       },
     ]);
     const tx = await sendTx.run('sign-tx');
+    // run('sign-tx') stops before mining, so tx.hash is still null. Compute it
+    // from the signed structure directly — convertTransactionToHistoryTx
+    // requires a non-null hash to build its output (the mined nonce would
+    // change the hash, but for this unit-style assertion we only care that
+    // the conversion function accepts the Transaction and emits shielded_outputs).
+    tx.updateHash();
     expect(tx.shieldedOutputs.length).toBe(2);
 
     const historyTx = await transactionUtils.convertTransactionToHistoryTx(tx, walletA.storage);
