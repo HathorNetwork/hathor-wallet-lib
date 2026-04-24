@@ -7,5 +7,7 @@
 
 export { default as Header } from './base';
 export { default as FeeHeader } from './fee';
+export { default as ShieldedOutputsHeader } from './shielded_outputs';
+export { default as UnshieldBalanceHeader } from './unshield_balance';
 export * from './parser';
 export * from './types';

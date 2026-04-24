@@ -380,6 +380,63 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       outputs = outputs.filter(out => !phantomOutputs.has(out));
     }
 
+    // Walk every input (user-supplied + HTR-picked) once, regardless of
+    // whether we're building shielded outputs. We need these both for:
+    //   (a) surjection-proof domain construction (shielded-outputs path), and
+    //   (b) excess-blinding-factor computation (full-unshield path).
+    // Collecting once keeps the two paths in sync on input ordering.
+    const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
+    const inputGenerators: InputGeneratorInfo[] = [];
+    const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+    // Transparent non-authority inputs collected separately. Needed only for the
+    // excess-blinding-factor calc on full-unshield txs where the wallet holds a
+    // mix of transparent + shielded UTXOs of the same token: the fullnode's
+    // balance verifier sums ALL inputs (transparent + shielded) against all
+    // outputs, so computeBalancingBlindingFactor must see the transparent
+    // inputs too or it returns a bf that doesn't satisfy the equation (the
+    // fullnode then panics when it tries to build the excess commitment).
+    const transparentInputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+
+    for (const inp of allInputs) {
+      const utxo = await this.storage.getUtxo({
+        txId: inp.txId,
+        index: inp.index,
+      });
+
+      // Build generator info for surjection proof domain
+      if (inp.token) {
+        const genInfo: InputGeneratorInfo = { tokenUid: inp.token as string };
+        // For FullShielded inputs, pass the asset blinding factor so the
+        // surjection proof domain uses the blinded generator (asset_commitment)
+        // matching what the fullnode verifies against.
+        if (utxo?.shielded && utxo.assetBlindingFactor) {
+          genInfo.assetBlindingFactor = Buffer.from(utxo.assetBlindingFactor, 'hex');
+        }
+        inputGenerators.push(genInfo);
+      }
+
+      // Extract blinding factors from shielded inputs for the homomorphic balance equation.
+      if (utxo?.shielded) {
+        if (!utxo.blindingFactor) {
+          throw new SendTxError(
+            `Shielded input ${inp.txId}:${inp.index} is missing blindingFactor — ` +
+              'cannot satisfy the homomorphic balance equation.'
+          );
+        }
+        blindedInputsArr.push({
+          value: utxo.value,
+          vbf: Buffer.from(utxo.blindingFactor, 'hex'),
+          gbf: utxo.assetBlindingFactor ? Buffer.from(utxo.assetBlindingFactor, 'hex') : ZERO_TWEAK,
+        });
+      } else if (utxo && (utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
+        transparentInputEntries.push({
+          value: utxo.value,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+    }
+
     // Create shielded outputs with cryptographic commitments and proofs
     let shieldedOutputs: IDataShieldedOutput[] = [];
     if (shieldedOutputDefs.length > 0) {
@@ -403,50 +460,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
-      // Collect per-input generator info for surjection proof domain and
-      // blinding factors for the homomorphic balance equation.
-      // The fullnode verifies surjection proofs against ALL input generators, so
-      // the wallet must create proofs with the same domain.
-      const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
-      const inputGenerators: InputGeneratorInfo[] = [];
-      const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
-
-      for (const inp of allInputs) {
-        const utxo = await this.storage.getUtxo({
-          txId: inp.txId,
-          index: inp.index,
-        });
-
-        // Build generator info for surjection proof domain
-        if (inp.token) {
-          const genInfo: InputGeneratorInfo = { tokenUid: inp.token as string };
-          // For FullShielded inputs, pass the asset blinding factor so the
-          // surjection proof domain uses the blinded generator (asset_commitment)
-          // matching what the fullnode verifies against.
-          if (utxo?.shielded && utxo.assetBlindingFactor) {
-            genInfo.assetBlindingFactor = Buffer.from(utxo.assetBlindingFactor, 'hex');
-          }
-          inputGenerators.push(genInfo);
-        }
-
-        // Extract blinding factors from shielded inputs for the homomorphic balance equation.
-        if (utxo?.shielded) {
-          if (!utxo.blindingFactor) {
-            throw new SendTxError(
-              `Shielded input ${inp.txId}:${inp.index} is missing blindingFactor — ` +
-                'cannot satisfy the homomorphic balance equation.'
-            );
-          }
-          blindedInputsArr.push({
-            value: utxo.value,
-            vbf: Buffer.from(utxo.blindingFactor, 'hex'),
-            gbf: utxo.assetBlindingFactor
-              ? Buffer.from(utxo.assetBlindingFactor, 'hex')
-              : ZERO_TWEAK,
-          });
-        }
-      }
-
       shieldedOutputs = await createShieldedOutputs(
         shieldedOutputDefs,
         cryptoProvider,
@@ -454,6 +467,60 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         inputGenerators,
         blindedInputsArr
       );
+    }
+
+    // Full-unshield detection: tx has shielded inputs but no shielded outputs.
+    // The fullnode rejects such a tx unless it carries an UnshieldBalanceHeader
+    // with excess = sum(r_in) − sum(r_out). Compute excess using the existing
+    // computeBalancingBlindingFactor primitive: pass value=0, gbf=ZERO, ALL
+    // inputs (shielded with their real blinding factors + transparent with
+    // vbf=0) as `inputs`, and every output + transparent fee entry as
+    // `otherOutputs` with (vbf=0, gbf=0). The function expects sum of input
+    // values to equal sum of other-output values plus the last-output value,
+    // so transparent inputs MUST be included when the wallet pulls from a
+    // mixed transparent+shielded pool — otherwise the function returns a bf
+    // that doesn't satisfy the equation and the fullnode panics trying to
+    // build the excess commitment at verify time.
+    //
+    // Mutually exclusive with shielded outputs (hathor-core enforces this at
+    // verify time). We gate on `shieldedOutputs.length === 0` to skip this
+    // branch on the shielded/partial-unshield path.
+    let excessBlindingFactor: Buffer | undefined;
+    if (shieldedOutputs.length === 0 && blindedInputsArr.length > 0) {
+      const cryptoProvider = this.storage.shieldedCryptoProvider;
+      if (!cryptoProvider) {
+        throw new SendTxError(
+          'Shielded crypto provider is not set. Cannot compute excess blinding ' +
+            'factor for a full-unshield transaction.'
+        );
+      }
+
+      // All transparent outputs contribute (value, vbf=0, gbf=0). Include the
+      // HTR fee amount as a transparent output entry — the scalar must cover
+      // the full output side the verifier sees.
+      const transparentOutputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      for (const out of outputs) {
+        transparentOutputEntries.push({
+          value: out.value,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+      if (totalFee > 0n) {
+        transparentOutputEntries.push({
+          value: totalFee,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+
+      const excess = await cryptoProvider.computeBalancingBlindingFactor(
+        0n,
+        ZERO_TWEAK,
+        [...blindedInputsArr, ...transparentInputEntries],
+        transparentOutputEntries
+      );
+      excessBlindingFactor = excess;
     }
 
     // This new IDataTx should be complete with the requested funds
@@ -464,6 +531,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       tokens: Array.from(tokenMap.keys()),
       headers,
       ...(shieldedOutputs.length > 0 ? { shieldedOutputs } : {}),
+      ...(excessBlindingFactor ? { excessBlindingFactor } : {}),
     };
 
     return this.fullTxData;

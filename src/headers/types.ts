@@ -14,6 +14,7 @@ export const enum VertexHeaderId {
   NANO_HEADER = '10',
   FEE_HEADER = '11',
   SHIELDED_OUTPUTS_HEADER = '12',
+  UNSHIELD_BALANCE_HEADER = '13',
 }
 
 export function getVertexHeaderIdBuffer(id: VertexHeaderId): Buffer {
@@ -29,6 +30,8 @@ export function getVertexHeaderIdFromBuffer(buf: Buffer): VertexHeaderId {
       return VertexHeaderId.FEE_HEADER;
     case VertexHeaderId.SHIELDED_OUTPUTS_HEADER:
       return VertexHeaderId.SHIELDED_OUTPUTS_HEADER;
+    case VertexHeaderId.UNSHIELD_BALANCE_HEADER:
+      return VertexHeaderId.UNSHIELD_BALANCE_HEADER;
     default:
       throw new Error('Invalid VertexHeaderId');
   }
