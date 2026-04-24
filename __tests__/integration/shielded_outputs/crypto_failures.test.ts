@@ -21,7 +21,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
+import {
+  createTokenHelper,
+  generateWalletHelper,
+  stopAllWallets,
+  waitForTxReceived,
+} from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
 import * as constants from '../../../src/constants';
@@ -189,5 +194,83 @@ describe('shielded outputs — Group J: Crypto failures', () => {
     await walletC.onNewTx({ history: forged });
     const balAfterC = (await walletC.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
     expect(balAfterC).toBe(balBeforeC);
+  });
+
+  it('J.43 — Lying token_data on AmountShielded output does not credit', async () => {
+    // TODO_FIX_31: a malicious (or buggy) fullnode could send a shielded
+    // output whose on-chain `token_data` points to a different token than
+    // the one the sender actually committed to. The attack value: the user
+    // sees "you received 50 USDC" when they actually received HTR, opening
+    // up UI-level phishing.
+    //
+    // Defence: the AmountShielded rewind uses `derive_asset_tag(token_uid)`
+    // as the range-proof generator. secp256k1_rangeproof_rewind verifies
+    // the proof against (commitment, generator) — a wrong generator makes
+    // the cryptographic check fail and the rewind throws. The wallet
+    // refuses to credit.
+    //
+    // Simulates the attack: create two tokens, send AS outputs committed to
+    // token-A, then re-deliver a forged copy of the tx with `tokens` and
+    // `token_data` rewritten to claim token-B. Wallet must NOT credit any
+    // balance under the phony token.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Create two custom tokens so we have a well-defined "lied-about" UID.
+    const tokA = await createTokenHelper(walletA, 'TrueTok', 'TRU', 1000n, {
+      address: await walletA.getAddressAtIndex(1),
+    });
+    const tokB = await createTokenHelper(walletA, 'FakeTok', 'FAK', 1000n, {
+      address: await walletA.getAddressAtIndex(2),
+    });
+
+    const sb0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sb1 = await walletB.getAddressAtIndex(1, { legacy: false });
+
+    // Legit AS send of token-A to walletB — the crypto commits to token-A.
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sb0,
+        value: 30n,
+        token: tokA.hash,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sb1,
+        value: 20n,
+        token: tokA.hash,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    const balTrueBefore = (await walletB.getBalance(tokA.hash))[0].balance.unlocked;
+    const balFakeBefore = (await walletB.getBalance(tokB.hash))[0].balance.unlocked;
+    expect(balTrueBefore).toBe(50n); // legit receive worked
+    expect(balFakeBefore).toBe(0n);
+
+    // Forge a copy: same commitments/range-proofs/pubkeys (they commit to
+    // token-A), but rewrite `tokens` so that token_data=1 maps to token-B's
+    // uid. If the wallet honors `token_data` without cryptographic
+    // verification, it credits 50 token-B. If the rewind correctly verifies
+    // against `derive_asset_tag(token_uid)`, the proof won't verify for
+    // token-B's generator and the credit is refused.
+    const stored: any = await walletB.getTx(tx!.hash!);
+    const forged = asFreshDelivery(stored, 'cc'.repeat(32), shielded => shielded);
+    forged.tokens = [tokB.hash]; // swap: token_data=1 now resolves to tokB
+
+    await walletB.onNewTx({ history: forged });
+
+    // Crypto layer must catch the lie: no token-B credit.
+    const balFakeAfter = (await walletB.getBalance(tokB.hash))[0].balance.unlocked;
+    expect(balFakeAfter).toBe(0n);
+
+    // And the legitimate token-A balance must be unaffected by the forgery
+    // (we didn't touch that tx in storage; the forged copy has a different
+    // tx_id so it's treated as a separate tx).
+    const balTrueAfter = (await walletB.getBalance(tokA.hash))[0].balance.unlocked;
+    expect(balTrueAfter).toBe(50n);
   });
 });
