@@ -1893,6 +1893,21 @@ class HathorWallet extends EventEmitter {
         throw new Error('This should never happen');
       }
       await this.storage.saveAccessData(accessData);
+    } else if (pinCode && password) {
+      // Existing wallet — migrate forward if the persisted record predates
+      // shielded support. `migrateShieldedAccessData` is idempotent and a
+      // no-op for xpub-only wallets (nothing to derive from). We only
+      // persist when fields were actually written; see Sentry
+      // WALLET-MOBILE-AT for the bug this fixes.
+      const migrated = walletUtils.migrateShieldedAccessData(accessData, {
+        pin: pinCode,
+        password,
+        passphrase: this.passphrase,
+        networkName: this.conn.getCurrentNetwork(),
+      });
+      if (migrated) {
+        await this.storage.saveAccessData(accessData);
+      }
     }
 
     this.clearSensitiveData();

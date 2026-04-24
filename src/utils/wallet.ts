@@ -731,6 +731,71 @@ const wallet = {
   },
 
   /**
+   * Re-derive the shielded scan/spend keys on an access-data record that was
+   * persisted before shielded support existed. No-op if the record already
+   * has all four shielded fields, or if the record lacks the encrypted seed
+   * (xpub-only wallets have nothing to derive from).
+   *
+   * The derivation MUST exactly match what `generateAccessDataFromSeed`
+   * produces for a fresh wallet (same paths, same encryption) so that a
+   * wallet that migrates and a wallet that was created fresh with the same
+   * seed end up with identical scan/spend keys and, therefore, identical
+   * shielded addresses.
+   *
+   * Mutates `accessData` in place when migration runs. Returns true iff
+   * any fields were written; the caller is expected to `saveAccessData` in
+   * that case.
+   *
+   * Existing wallet users hit this path when they upgrade from a
+   * pre-shielded wallet-lib (e.g. 0.37.0) to a shielded-capable one: the
+   * persisted access-data entry has no scan/spend fields, `loadAddresses`
+   * skips shielded derivation (`deriveShieldedAddressFromStorage` returns
+   * null when `scanXpubkey` is missing), and `getCurrentAddress({legacy:
+   * false})` later throws "Current shielded address is not loaded
+   * (index=-1)". Running this migration on the next `wallet.start()` fixes
+   * the state permanently.
+   */
+  migrateShieldedAccessData(
+    accessData: IWalletAccessData,
+    {
+      pin,
+      password,
+      passphrase = '',
+      networkName,
+    }: { pin: string; password: string; passphrase?: string; networkName: string }
+  ): boolean {
+    const hasAll =
+      !!accessData.scanXpubkey &&
+      !!accessData.scanMainKey &&
+      !!accessData.spendXpubkey &&
+      !!accessData.spendMainKey;
+    if (hasAll) return false;
+    if (!accessData.words) return false;
+
+    // `decryptData` throws InvalidPasswdError / DecryptionError — let it
+    // propagate. We do NOT partially write fields before the throw, so a
+    // failed migration leaves the record untouched.
+    const words = decryptData(accessData.words, password);
+    const code = new Mnemonic(words);
+    const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
+
+    // Paths + encryption must match `generateAccessDataFromSeed` exactly.
+    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+
+    /* eslint-disable no-param-reassign */
+    accessData.scanXpubkey = scanXpriv.xpubkey;
+    accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+    accessData.spendXpubkey = spendXpriv.xpubkey;
+    accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
+    /* eslint-enable no-param-reassign */
+
+    return true;
+  },
+
+  /**
    * Change the encryption pin on the fields that are encrypted using the pin.
    * Will not save the access data, only return the new access data.
    *
