@@ -30,6 +30,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import ShieldedOutput from '../models/shielded_output';
 import ShieldedOutputsHeader from '../headers/shielded_outputs';
+import UnshieldBalanceHeader from '../headers/unshield_balance';
 import Network from '../models/network';
 import {
   IBalance,
@@ -840,6 +841,23 @@ const transaction = {
 
         tx.shieldedOutputs = shieldedModels;
         tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
+      }
+
+      // Attach UnshieldBalanceHeader for pure-unshield txs. The fullnode
+      // requires it when a tx has shielded inputs and no shielded outputs
+      // (full unshield): the excess scalar closes the Pedersen balance
+      // equation. Mutually exclusive with shielded outputs — the caller must
+      // not set both, and we assert that here to surface the bug early
+      // instead of letting the fullnode reject the tx post-PoW.
+      if (txData.excessBlindingFactor) {
+        if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+          throw new Error(
+            'A transaction cannot carry both shielded outputs and an excess ' +
+              'blinding factor (UnshieldBalanceHeader is mutually exclusive with ' +
+              'ShieldedOutputsHeader).'
+          );
+        }
+        tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
       }
 
       return tx;
