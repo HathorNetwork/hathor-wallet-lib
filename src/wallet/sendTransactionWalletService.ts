@@ -45,8 +45,16 @@ type optionsType = {
  * Maps a transaction input (identified by its txId + index) to its
  * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
  * the key format so the read and write sides cannot drift out of sync.
+ *
+ * Re-setting the same `{txId, index}` pair overwrites the previous path:
+ * duplicate inputs collapse to a single entry. This is fine because
+ * duplicate inputs would be rejected later as a double-spend; the map
+ * deliberately does not try to detect or signal duplicates.
+ *
+ * @internal Exported only so unit tests can use the real class instead
+ *   of a duck-typed stand-in. Not part of the public API of this module.
  */
-class AddressPathMap {
+export class AddressPathMap {
   private readonly map = new Map<string, string>();
 
   private static key(input: { txId: string; index: number }): string {
@@ -476,7 +484,17 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         await this.validateUtxos(htrTokenAmount, addressPathMap, { onlyNative: true });
       }
 
-      // Rebuild utxosAddressPath in this.inputs order
+      // Rebuild utxosAddressPath in this.inputs order.
+      //
+      // The only way to reach the guard below today is an HTR input provided
+      // when htrAmount === 0n: `ignoreNative: true` skipped it, the second
+      // pass was elided, and nothing populated the map for it. The hint in
+      // the error message reflects that single root cause. If a third pass
+      // is ever added (or the `ignoreNative`/`onlyNative` filtering changes)
+      // this hint will silently drift out of date — see the test
+      // "should show a helpful error when HTR input is unneeded via prepareTx
+      // path" in __tests__/wallet/sendTransactionWalletService.test.ts which
+      // pins the message and exercises the only path that reaches it.
       utxosAddressPath = this.inputs.map(input => {
         const path = addressPathMap.get(input);
         if (!path) {

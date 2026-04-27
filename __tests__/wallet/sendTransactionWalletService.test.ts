@@ -6,7 +6,9 @@
  */
 
 import { NATIVE_TOKEN_UID, FEE_PER_OUTPUT } from '../../src/constants';
-import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
+import SendTransactionWalletService, {
+  AddressPathMap,
+} from '../../src/wallet/sendTransactionWalletService';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { OutputType } from '../../src/wallet/types';
 import Network from '../../src/models/network';
@@ -2555,21 +2557,9 @@ describe('validateUtxos', () => {
   const seed =
     'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
 
-  // AddressPathMap is file-local to the module under test, so tests pass a
-  // duck-typed stand-in with the same `set(input, path)` / `get(input)`
-  // surface. It type-checks because `sendTransaction` is declared above as
-  // `let sendTransaction` (implicit any), not via call-site casts.
-  const buildMockMap = () => {
-    const store = new Map<string, string>();
-    return {
-      set(input: { txId: string; index: number }, path: string) {
-        store.set(`${input.txId}:${input.index}`, path);
-      },
-      get(input: { txId: string; index: number }) {
-        return store.get(`${input.txId}:${input.index}`);
-      },
-    };
-  };
+  // AddressPathMap is exported with @internal solely so these tests can
+  // exercise validateUtxos against the real implementation rather than a
+  // duck-typed mock. If the class grows, tests stay in sync automatically.
 
   beforeEach(() => {
     wallet = new HathorWalletServiceWallet({
@@ -2623,7 +2613,7 @@ describe('validateUtxos', () => {
       outputs: [],
     });
 
-    const map = buildMockMap();
+    const map = new AddressPathMap();
     const result = await sendTransaction.validateUtxos(
       { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
       map,
@@ -2671,7 +2661,7 @@ describe('validateUtxos', () => {
       outputs: [],
     });
 
-    const map = buildMockMap();
+    const map = new AddressPathMap();
     await sendTransaction.validateUtxos(
       { [NATIVE_TOKEN_UID]: { version: TokenVersion.NATIVE, amount: 5n } },
       map,
@@ -2699,7 +2689,7 @@ describe('validateUtxos', () => {
       outputs: [],
     });
 
-    const map = buildMockMap();
+    const map = new AddressPathMap();
     await sendTransaction.validateUtxos(
       { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
       map
@@ -2732,7 +2722,7 @@ describe('validateUtxos', () => {
 
     await sendTransaction.validateUtxos(
       { '02': { version: TokenVersion.FEE, amount: 10n } },
-      buildMockMap()
+      new AddressPathMap()
     );
 
     expect(sendTransaction._feeAmount).toBe(FEE_PER_OUTPUT);
@@ -2748,7 +2738,7 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        buildMockMap()
+        new AddressPathMap()
       )
     ).rejects.toThrow('Invalid input selection. Input missing at index 0.');
   });
@@ -2771,7 +2761,7 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        buildMockMap()
+        new AddressPathMap()
       )
     ).rejects.toThrow('has token wrong that is not on the outputs');
   });
@@ -2785,7 +2775,7 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        buildMockMap()
+        new AddressPathMap()
       )
     ).rejects.toThrow('Token 01 is in the outputs but there are no inputs for it.');
   });
@@ -2808,8 +2798,29 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        buildMockMap()
+        new AddressPathMap()
       )
     ).rejects.toThrow('Sum of inputs for token 01 is smaller than the sum of outputs');
+  });
+});
+
+describe('AddressPathMap', () => {
+  it('overwrites the path when set is called twice with the same {txId, index}', () => {
+    // Pinned behavior: duplicate-input handling collapses to the last path.
+    // The duplicate is rejected later as a double-spend, so the map does not
+    // try to detect duplicates here.
+    const map = new AddressPathMap();
+    const input = { txId: 'tx', index: 0 };
+    map.set(input, 'm/first');
+    map.set(input, 'm/second');
+    expect(map.get(input)).toBe('m/second');
+  });
+
+  it('treats different indices on the same txId as distinct keys', () => {
+    const map = new AddressPathMap();
+    map.set({ txId: 'tx', index: 0 }, 'm/zero');
+    map.set({ txId: 'tx', index: 1 }, 'm/one');
+    expect(map.get({ txId: 'tx', index: 0 })).toBe('m/zero');
+    expect(map.get({ txId: 'tx', index: 1 })).toBe('m/one');
   });
 });
