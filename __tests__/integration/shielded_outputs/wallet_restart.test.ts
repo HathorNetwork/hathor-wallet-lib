@@ -231,4 +231,73 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
     expect((await walletB2.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(total);
     await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
   });
+
+  /**
+   * F.13 — Sparse-decoded UTXOs survive a wallet restart with the
+   * commitment-match recovery path.
+   *
+   * Scenario: walletA sends an FS tx with outputs to BOTH walletB AND
+   * itself in the same tx. walletA's wallet stores the change as a
+   * sparse-decoded UTXO (only one of the parent's two shielded outputs
+   * is owned). After restart, the wallet re-syncs history; the saveUtxo
+   * loop must reach the commitment-match fallback because the cached
+   * tx.outputs entry from re-decode is freshly produced (and so does
+   * carry `onChainIndex`), but a wallet upgrading from a pre-fix
+   * persisted store WOULDN'T have that field — the fallback walks
+   * tx.shielded_outputs by commitment to recover the right index.
+   *
+   * Pinning the post-restart spend ensures the fallback path is exercised
+   * and the recovered UTXO is truly spendable.
+   */
+  it('F.13 — sparse-decode UTXO is spendable after restart', async () => {
+    const walletDataA = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletA = await generateWalletHelper({
+      seed: walletDataA.words,
+      preCalculatedAddresses: walletDataA.addresses,
+    });
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
+    const saA = await walletA.getAddressAtIndex(2, { legacy: false });
+    const splitTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: saA,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletA, splitTx!.hash!);
+    await waitUntilNextTimestamp(walletA, splitTx!.hash!);
+
+    await walletA.stop({ cleanStorage: true, cleanAddresses: true });
+    const walletA2 = await reloadFromSeed(walletDataA.words);
+
+    // After restart, balance includes both transparent change and FS change.
+    const balA2 = await walletA2.getBalance(NATIVE_TOKEN_UID);
+    expect(balA2[0].balance.unlocked).toBeGreaterThanOrEqual(60n);
+
+    // Force-spend through the FS UTXO: send more than transparent change.
+    const transparentChange = balA2[0].balance.unlocked - 20n;
+    const sendAmount = transparentChange + 10n;
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const finalTx = await walletA2.sendTransaction(addrC, sendAmount);
+    expect(finalTx).not.toBeNull();
+    await waitForTxReceived(walletC, finalTx!.hash!);
+
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(sendAmount);
+
+    await walletA2.stop({ cleanStorage: true, cleanAddresses: true });
+  });
 });
