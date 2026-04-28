@@ -900,6 +900,15 @@ export async function processNewTx(
 
         // Append decoded shielded output to tx.outputs so the main loop processes it
         // alongside transparent outputs (UTXO creation, balance, metadata).
+        //
+        // `onChainIndex` carries the actual absolute index the fullnode uses to
+        // resolve this output (`transparentCount + shielded_idx`). We need it
+        // because the saveUtxo loop iterates `tx.outputs.entries()` positionally
+        // — and when only SOME shielded outputs are owned/decoded, the
+        // appended-at-the-end position no longer matches the on-chain absolute
+        // index. Spending a UTXO indexed by position fails OP_EQUALVERIFY when
+        // the fullnode resolves to a different shielded_outputs slot than the
+        // one we signed for.
         tx.outputs.push({
           type: 'shielded',
           value: result.decrypted.value,
@@ -915,7 +924,8 @@ export async function processNewTx(
           surjection_proof: so?.surjection_proof,
           blindingFactor: result.decrypted.blindingFactor.toString('hex'),
           assetBlindingFactor: result.decrypted.assetBlindingFactor?.toString('hex'),
-        });
+          onChainIndex: result.index,
+        } as IShieldedOutputEntry & { onChainIndex: number });
       }
       if (shieldedResults.length > 0) {
         await store.saveTx(tx);
@@ -1014,9 +1024,33 @@ export async function processNewTx(
     // This is idempotent so it's safe to call it multiple times
     if (output.spent_by === null) {
       const isShielded = transactionUtils.isShieldedOutputEntry(output);
+      // For shielded entries, use the on-chain absolute index. New decodes
+      // record `onChainIndex` directly on the appended entry; older cached
+      // entries (without onChainIndex) require us to recover it by matching
+      // the entry's commitment back to its position in `tx.shielded_outputs`.
+      // For transparent entries, the entries() position IS the on-chain index.
+      let utxoIndex = index;
+      if (isShielded) {
+        const recorded = (output as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex;
+        if (recorded !== undefined) {
+          utxoIndex = recorded;
+        } else {
+          // Older cached entries lack `onChainIndex` — recover it by matching
+          // commitment back to `tx.shielded_outputs` position.
+          const oc = (output as IShieldedOutputEntry).commitment;
+          const shielded = tx.shielded_outputs ?? [];
+          const matchIdx = shielded.findIndex(s => s.commitment === oc);
+          if (matchIdx >= 0) {
+            const transparentLen = tx.outputs.filter(
+              o => !transactionUtils.isShieldedOutputEntry(o)
+            ).length;
+            utxoIndex = transparentLen + matchIdx;
+          }
+        }
+      }
       await store.saveUtxo({
         txId: tx.tx_id,
-        index,
+        index: utxoIndex,
         type: tx.version,
         authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
         address: output.decoded.address,
@@ -1035,7 +1069,7 @@ export async function processNewTx(
       if (isLocked) {
         // We will save this utxo on the index of locked utxos
         // So that later when it becomes unlocked we can update the balances with processUtxoUnlock
-        await store.saveLockedUtxo({ tx, index });
+        await store.saveLockedUtxo({ tx, index: utxoIndex });
       }
     } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
