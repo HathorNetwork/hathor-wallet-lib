@@ -11,7 +11,12 @@
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
+import {
+  generateWalletHelper,
+  stopAllWallets,
+  waitForTxReceived,
+  waitUntilNextTimestamp,
+} from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
 import * as constants from '../../../src/constants';
@@ -122,5 +127,48 @@ describe('shielded outputs — Group I: Edge cases', () => {
         },
       ])
     ).rejects.toThrow();
+  });
+
+  /**
+   * I.10 — Wallet with ONLY shielded HTR doing a transparent send. The
+   * fullnode handles this via the unshield-balance path; wallet-lib
+   * computes the excess scalar. Fee is 0 for plain transparent sends so
+   * there's no AS/FS-fee-needs-transparent-HTR gap to hit here.
+   */
+  it('I.10 — wallet with only shielded HTR can spend transparent (no fee)', async () => {
+    const walletA = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    // Self-shield all HTR. Two FS outputs at A's own shielded addresses.
+    const sa0 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const sa1 = await walletA.getAddressAtIndex(3, { legacy: false });
+    const shieldTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sa0,
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: sa1,
+        value: 46n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletA, shieldTx!.hash!);
+    await waitUntilNextTimestamp(walletA, shieldTx!.hash!);
+
+    // Plain transparent send — must consume shielded UTXOs.
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const tx = await walletA.sendTransaction(addrC, 30n);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletC, tx!.hash!);
+
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(30n);
   });
 });

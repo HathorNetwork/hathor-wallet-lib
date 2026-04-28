@@ -24,6 +24,7 @@ import {
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
   TxWeightConstants,
+  ZERO_TWEAK,
 } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -32,6 +33,9 @@ import Output from '../models/output';
 import ShieldedOutput from '../models/shielded_output';
 import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import UnshieldBalanceHeader from '../headers/unshield_balance';
+import FeeHeader from '../headers/fee';
+import { MintHeader } from '../headers/mint_melt';
+import { MeltHeader } from '../headers/melt_header';
 import Network from '../models/network';
 import {
   IBalance,
@@ -325,8 +329,21 @@ const transaction = {
         continue;
       }
 
-      const spentOut = spentTx.outputs[input.index];
-      if (!spentOut.decoded.address) {
+      // For shielded inputs, input.index points beyond spentTx.outputs (which
+      // only holds transparent + decoded-shielded entries). Fall back to the
+      // stored UTXO record, which carries `address` directly.
+      let spentOut:
+        | { decoded?: { address?: string }; script?: string; value?: bigint }
+        | undefined = spentTx.outputs[input.index];
+      if (!spentOut) {
+        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
+        if (!utxo) {
+          // Truly unknown — caller will surface this as an error elsewhere.
+          continue;
+        }
+        spentOut = { decoded: { address: utxo.address }, value: utxo.value };
+      }
+      if (!spentOut.decoded?.address) {
         // This is not a wallet output
         continue;
       }
@@ -796,74 +813,199 @@ const transaction = {
         ...options,
         tokenVersion: txData.tokenVersion,
       };
-      return new CreateTokenTransaction(
+      const ctTx = new CreateTokenTransaction(
         txData.name!,
         txData.symbol!,
         inputs,
         outputs,
         createTokenOptions
       );
+      // Attach shielded-related headers identically to the regular tx
+      // branch below so a TCT funded by shielded HTR carries the
+      // UnshieldBalanceHeader + MintHeader the fullnode requires
+      // (alpha-v3 lifted the TCT-can't-be-shielded restriction).
+      this._attachShieldedHeaders(ctTx, txData);
+      return ctTx;
     }
     if (options.version === DEFAULT_TX_VERSION) {
       const tx = new Transaction(inputs, outputs, options);
-
-      // Populate shielded outputs as a ShieldedOutputsHeader
-      if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
-        const shieldedModels = txData.shieldedOutputs.map(so => {
-          if (!so.commitment || !so.rangeProof || !so.script || !so.ephemeralPubkey) {
-            throw new Error(
-              'Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)'
-            );
-          }
-          const tokenData = this.getTokenDataFromOutput(
-            {
-              type: 'p2pkh',
-              token: so.token,
-              value: so.value,
-              authorities: 0n,
-              address: so.address,
-              timelock: null,
-            },
-            txData.tokens
-          );
-
-          return new ShieldedOutput(
-            so.mode,
-            so.commitment,
-            so.rangeProof,
-            tokenData,
-            Buffer.from(so.script, 'hex'),
-            so.ephemeralPubkey,
-            so.assetCommitment,
-            so.surjectionProof,
-            so.value
-          );
-        });
-
-        tx.shieldedOutputs = shieldedModels;
-        tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
-      }
-
-      // Attach UnshieldBalanceHeader for pure-unshield txs. The fullnode
-      // requires it when a tx has shielded inputs and no shielded outputs
-      // (full unshield): the excess scalar closes the Pedersen balance
-      // equation. Mutually exclusive with shielded outputs — the caller must
-      // not set both, and we assert that here to surface the bug early
-      // instead of letting the fullnode reject the tx post-PoW.
-      if (txData.excessBlindingFactor) {
-        if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
-          throw new Error(
-            'A transaction cannot carry both shielded outputs and an excess ' +
-              'blinding factor (UnshieldBalanceHeader is mutually exclusive with ' +
-              'ShieldedOutputsHeader).'
-          );
-        }
-        tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
-      }
-
+      this._attachShieldedHeaders(tx, txData);
       return tx;
     }
     throw new ParseError('Invalid transaction version.');
+  },
+
+  /**
+   * Attach the shielded-related headers (ShieldedOutputsHeader,
+   * UnshieldBalanceHeader, MintHeader) onto a freshly-built tx based on
+   * what `txData` carries. Shared by both regular `Transaction` and
+   * `CreateTokenTransaction` paths — alpha-v3 unblocked TCT for shielded
+   * inputs so both flows now need the same headers.
+   *
+   * @param tx The Transaction (or CreateTokenTransaction) to attach to.
+   * @param txData The data the tx was built from.
+   */
+  _attachShieldedHeaders(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    // Populate shielded outputs as a ShieldedOutputsHeader
+    if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+      const shieldedModels = txData.shieldedOutputs.map(so => {
+        if (!so.commitment || !so.rangeProof || !so.script || !so.ephemeralPubkey) {
+          throw new Error(
+            'Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)'
+          );
+        }
+        const tokenData = this.getTokenDataFromOutput(
+          {
+            type: 'p2pkh',
+            token: so.token,
+            value: so.value,
+            authorities: 0n,
+            address: so.address,
+            timelock: null,
+          },
+          txData.tokens
+        );
+
+        return new ShieldedOutput(
+          so.mode,
+          so.commitment,
+          so.rangeProof,
+          tokenData,
+          Buffer.from(so.script, 'hex'),
+          so.ephemeralPubkey,
+          so.assetCommitment,
+          so.surjectionProof,
+          so.value
+        );
+      });
+
+      // eslint-disable-next-line no-param-reassign
+      tx.shieldedOutputs = shieldedModels;
+      tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
+    }
+
+    // Attach UnshieldBalanceHeader for pure-unshield txs. The fullnode
+    // requires it when a tx has shielded inputs and no shielded outputs
+    // (full unshield): the excess scalar closes the Pedersen balance
+    // equation. Mutually exclusive with shielded outputs — the caller must
+    // not set both, and we assert that here to surface the bug early
+    // instead of letting the fullnode reject the tx post-PoW.
+    if (txData.excessBlindingFactor) {
+      if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+        throw new Error(
+          'A transaction cannot carry both shielded outputs and an excess ' +
+            'blinding factor (UnshieldBalanceHeader is mutually exclusive with ' +
+            'ShieldedOutputsHeader).'
+        );
+      }
+      tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
+    }
+
+    // Mint/Melt headers for shielded txs (alpha-v3 protocol, RFC §4.1).
+    // The wallet MUST publicly declare any *real* supply change for a
+    // non-HTR token in a shielded tx. "Real" here means an explicit
+    // mint or melt authority is being exercised — a simple T→F or F→T
+    // shielding move preserves supply (the transparent surplus/deficit
+    // is balanced via Pedersen on the shielded side) and MUST NOT
+    // declare anything; otherwise the verifier's authority check
+    // (`_check_token_permissions`) demands the matching authority
+    // input we don't have and rejects with ForbiddenMint/ForbiddenMelt.
+    //
+    // Detection rule, per non-HTR token in `tokensArray`:
+    //   - createToken (CREATE_TOKEN_TX_VERSION): the tx itself
+    //     authorizes mint for the new token; declare the positive
+    //     transparent delta as MintHeader.
+    //   - regular tx: declare MintHeader iff inputs carry a mint
+    //     authority for the token AND transparent delta > 0;
+    //     symmetric for MeltHeader (melt authority + delta < 0).
+    //   - otherwise: no header.
+    //
+    // Pushed last so the canonical header-id-ascending order holds:
+    // Fee(0x11) ≤ Shielded(0x12) ≤ Unshield(0x13) ≤ Mint(0x14) ≤ Melt(0x15).
+    const isShieldedTx =
+      (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) ||
+      !!txData.excessBlindingFactor;
+    if (isShieldedTx && !tx.headers.some(h => h instanceof MintHeader || h instanceof MeltHeader)) {
+      // For createToken the new token's outputs are
+      // `IDataOutputCreateToken` (no `token` field), and tokensArray
+      // on-chain is `[tx.hash]`. Use a sentinel locally and remap to
+      // tokenIndex=1.
+      const NEW_TOKEN_KEY = '__create_token__';
+      const isCreateToken = txData.version === CREATE_TOKEN_TX_VERSION;
+      const tokensArray: string[] = isCreateToken ? [NEW_TOKEN_KEY] : txData.tokens ?? [];
+      // Outputs from `prepareMintTxData` use `IDataOutputCreateToken`
+      // (no `token` field) for the minted token in BOTH createToken
+      // and mintTokens flows. Resolve "the implicit token" to either
+      // the sentinel new-token key (createToken) or the first entry
+      // of tokensArray (mintTokens).
+      const implicitTokenKey = isCreateToken ? NEW_TOKEN_KEY : tokensArray[0];
+
+      const tokenDelta = new Map<string, bigint>();
+      const mintAuthorityTokens = new Set<string>();
+      const meltAuthorityTokens = new Set<string>();
+      const bumpDelta = (token: string | undefined, delta: bigint) => {
+        if (!token) return;
+        if (token === NATIVE_TOKEN_UID) return;
+        if (tokensArray.indexOf(token) < 0) return;
+        tokenDelta.set(token, (tokenDelta.get(token) ?? 0n) + delta);
+      };
+
+      // Outputs add to amount; inputs subtract. Both transparent AND
+      // shielded sides count: the verifier (`_fold_mint_melt_entry` +
+      // `verify_balance` in hathor-core) injects synthetic unblinded
+      // `(amount, token)` entries from MeltHeader on the OUTPUT side
+      // and from MintHeader on the INPUT side, then sums *all*
+      // commitments — including shielded inputs/outputs that contribute
+      // `value · H_TOKEN + vbf · G`. So per-token net = total_in −
+      // total_out across both sides; positive ⇒ melt, negative ⇒ mint.
+      for (const out of txData.outputs) {
+        if (out.value <= 0n) continue;
+        if ((out.authorities ?? 0n) !== 0n) continue;
+        const token = 'token' in out ? out.token : implicitTokenKey;
+        bumpDelta(token, out.value);
+      }
+      for (const so of txData.shieldedOutputs ?? []) {
+        if (so.value <= 0n) continue;
+        bumpDelta(so.token, so.value);
+      }
+      for (const inp of txData.inputs) {
+        const auth = inp.authorities ?? 0n;
+        if (auth !== 0n) {
+          if ((auth & TOKEN_MINT_MASK) !== 0n) mintAuthorityTokens.add(inp.token);
+          if ((auth & TOKEN_MELT_MASK) !== 0n) meltAuthorityTokens.add(inp.token);
+          continue;
+        }
+        if (inp.value > 0n) bumpDelta(inp.token, -inp.value);
+      }
+
+      const mintEntries: Array<{ tokenIndex: number; amount: bigint }> = [];
+      const meltEntries: Array<{ tokenIndex: number; amount: bigint }> = [];
+      for (const token of tokensArray) {
+        const delta = tokenDelta.get(token) ?? 0n;
+        // For createToken the new token has no authority input (it's
+        // the genesis): the tx version itself authorizes mint, so we
+        // declare unconditionally on positive delta.
+        const canMint = isCreateToken || mintAuthorityTokens.has(token);
+        const canMelt = meltAuthorityTokens.has(token);
+        if (delta > 0n && canMint) {
+          mintEntries.push({
+            tokenIndex: tokensArray.indexOf(token) + 1,
+            amount: delta,
+          });
+        } else if (delta < 0n && canMelt) {
+          meltEntries.push({
+            tokenIndex: tokensArray.indexOf(token) + 1,
+            amount: -delta,
+          });
+        }
+      }
+      if (mintEntries.length > 0) {
+        tx.headers.push(new MintHeader(mintEntries));
+      }
+      if (meltEntries.length > 0) {
+        tx.headers.push(new MeltHeader(meltEntries));
+      }
+    }
   },
 
   /**
@@ -916,10 +1058,27 @@ const transaction = {
         }
       }
 
+      // Shielded inputs reference indices past the parent's transparent
+      // outputs (the wallet's stored copy normalizes shielded entries OUT
+      // of `outputs`). Recover the spent-output info from the wallet's
+      // saved UTXO record instead of erroring.
       if (input.index >= spentTx.outputs.length) {
-        throw new Error(
-          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
-        );
+        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
+        if (!utxo) {
+          throw new Error(
+            `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length}) and no stored UTXO recovery for tx_id=${input.hash}`
+          );
+        }
+        inputs.push({
+          tx_id: input.hash,
+          index: input.index,
+          script: '',
+          decoded: { address: utxo.address, timelock: utxo.timelock ?? null },
+          token_data: 0,
+          token: utxo.token,
+          value: utxo.value,
+        });
+        continue;
       }
 
       const spentOut = spentTx.outputs[input.index];
@@ -1037,6 +1196,93 @@ const transaction = {
       signTx: true,
       ...options,
     };
+
+    // Full-unshield detection for tx paths that don't go through
+    // SendTransaction.prepareTxData (notably `createNewToken` /
+    // `prepareCreateNewToken`, which build txData directly via tokens.ts).
+    // If the inputs include shielded UTXOs and the tx has no shielded
+    // outputs, we must attach an UnshieldBalanceHeader carrying the excess
+    // blinding factor so the fullnode's Pedersen balance check holds — same
+    // logic SendTransaction already runs for the send path. Skip if txData
+    // already carries excess (set upstream) or if there are shielded outputs
+    // (mutually exclusive with the header).
+    if (
+      !txData.excessBlindingFactor &&
+      (!txData.shieldedOutputs || txData.shieldedOutputs.length === 0)
+    ) {
+      const shieldedInputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      const transparentInputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      // The excess scalar in UnshieldBalanceHeader represents
+      // sum(r_in) - sum(r_out), independent of token (it lives on G).
+      // Include shielded inputs of every token so the G-term sum is
+      // correct; transparent inputs (vbf=0) contribute nothing to the
+      // sum but their value matters for the per-token balance the
+      // verifier checks separately.
+      for (const inp of txData.inputs) {
+        const utxo = await storage.getUtxo({ txId: inp.txId, index: inp.index });
+        if (!utxo) continue;
+        if (utxo.shielded) {
+          if (!utxo.blindingFactor) continue;
+          shieldedInputs.push({
+            value: utxo.value,
+            vbf: Buffer.from(utxo.blindingFactor, 'hex'),
+            gbf: utxo.assetBlindingFactor
+              ? Buffer.from(utxo.assetBlindingFactor, 'hex')
+              : ZERO_TWEAK,
+          });
+        } else if ((utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
+          transparentInputs.push({
+            value: utxo.value,
+            vbf: ZERO_TWEAK,
+            gbf: ZERO_TWEAK,
+          });
+        }
+      }
+
+      if (shieldedInputs.length > 0) {
+        const cryptoProvider = storage.shieldedCryptoProvider;
+        if (!cryptoProvider) {
+          throw new Error(
+            'Shielded crypto provider is not set. Cannot compute excess blinding ' +
+              'factor for a tx that spends shielded UTXOs without producing shielded outputs.'
+          );
+        }
+        const transparentOutputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+        // All outputs contribute (value, vbf=0, gbf=0). Authority outputs
+        // are skipped because their `value` field is the authority mask,
+        // not a token amount the verifier sums.
+        for (const out of txData.outputs) {
+          if (out.value > 0n && (out.authorities ?? 0n) === 0n) {
+            transparentOutputEntries.push({
+              value: out.value,
+              vbf: ZERO_TWEAK,
+              gbf: ZERO_TWEAK,
+            });
+          }
+        }
+        // Fee-header amounts (HTR fees + per-token fees) on the output side.
+        for (const header of txData.headers ?? []) {
+          if (header instanceof FeeHeader) {
+            for (const fee of header.entries) {
+              transparentOutputEntries.push({
+                value: fee.amount,
+                vbf: ZERO_TWEAK,
+                gbf: ZERO_TWEAK,
+              });
+            }
+          }
+        }
+        const excess = await cryptoProvider.computeBalancingBlindingFactor(
+          0n,
+          ZERO_TWEAK,
+          [...shieldedInputs, ...transparentInputs],
+          transparentOutputEntries
+        );
+        // eslint-disable-next-line no-param-reassign
+        txData.excessBlindingFactor = excess;
+      }
+    }
+
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
