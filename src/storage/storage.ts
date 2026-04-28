@@ -6,6 +6,7 @@
  */
 
 import { HDPublicKey } from 'bitcore-lib';
+import Address from '../models/address';
 import Input from '../models/input';
 import {
   ApiVersion,
@@ -314,6 +315,20 @@ export class Storage implements IStorage {
     if (changeAddress) {
       if (!(await this.isAddressMine(changeAddress))) {
         throw new Error('Change address is not from the wallet');
+      }
+      // Shielded addresses can't be used directly as an output script type —
+      // `getAddressType` throws on them downstream. But their on-chain
+      // equivalent is the spend-derived P2PKH (same pubkey hash), so resolve
+      // here and hand the P2PKH back. The wallet still tracks the output as
+      // its own because the P2PKH is stored in the address index during
+      // shielded-address derivation (see `deriveShieldedAddressFromStorage`).
+      // `isShielded()` is non-throwing — it returns false on any address
+      // that doesn't decode as shielded under the current network — so a
+      // version-byte mismatch on a legacy address falls through to the
+      // unchanged passthrough below.
+      const addrObj = new Address(changeAddress, { network: this.config.getNetwork() });
+      if (addrObj.isShielded()) {
+        return addrObj.getSpendAddress().base58;
       }
       return changeAddress;
     }

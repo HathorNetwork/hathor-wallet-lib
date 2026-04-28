@@ -62,15 +62,7 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     expect(bal[0].balance.unlocked).toBe(1000n);
   });
 
-  // Skipped: wallet-lib rejects shielded addresses passed as output script
-  // types (src/utils/address.ts:38 — "Shielded addresses cannot be used
-  // directly as output script type"). This has been true since the initial
-  // shielded integration and is unrelated to the new hathor-core image.
-  // To re-enable, wallet-lib would need to accept shielded addresses in
-  // `createNewToken`'s `changeAddress` and internally translate to the
-  // spend-derived P2PKH. Tracked separately.
-  // eslint-disable-next-line jest/no-disabled-tests
-  it.skip('K.2 — Create token with a shielded change address: HTR change is credited back', async () => {
+  it('K.2 — Create token with a shielded change address: HTR change is credited back', async () => {
     // 10 HTR funded, 10n/100 minted ⇒ deposit 0.1 HTR (=1 centi-HTR per 100),
     // so there will be HTR change. Route that change through a shielded
     // address and verify the wallet still sees it.
