@@ -8,7 +8,7 @@ services:
 
   fullnode:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-shielded-outputs-alpha-v1}
+      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-shielded-outputs-alpha-v3-python3.11}
     command: [
       "run_node",
       "--listen", "tcp:40404",
@@ -42,7 +42,7 @@ services:
   tx-mining-service:
     platform: linux/amd64
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service:shielded-outputs-v1}
+      ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service:shielded-outputs-v3}
     depends_on:
       fullnode:
         condition: service_healthy
@@ -159,8 +159,11 @@ services:
       NETWORK: "privatenet"
 #      BLOCK_REWARD_LOCK: 1
     ports:
-      - "8081:8081"
-      - "8082:8082"
+      # 18081/18082 on the host — 8081 conflicts with local Metro bundler
+      # (react-native start). shielded_outputs tests don't hit ws-daemon,
+      # so any free port works here.
+      - "18081:8081"
+      - "18082:8082"
     networks:
       - hathor-privnet
 
