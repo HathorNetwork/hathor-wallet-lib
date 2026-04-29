@@ -5,16 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 /* eslint max-classes-per-file: ["error", 2] */
-import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { HathorWalletServiceWallet } from '../../../src';
+import Transaction from '../../../src/models/transaction';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
-import { loggers } from '../utils/logger.util';
-import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
-import Transaction from '../../../src/models/transaction';
-import { HathorWalletServiceWallet } from '../../../src';
+import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { delay, getGapLimitConfig } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
+
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -80,7 +81,7 @@ export class GenesisWalletHelper {
     destinationWallet: HathorWallet,
     address: string,
     value: OutputValueType,
-    options: InjectFundsOptions = {}
+    options: InjectFundsOptions = {},
   ): Promise<Transaction> {
     try {
       const result = (await this.hWallet.sendTransaction(address, value, {
@@ -135,7 +136,7 @@ export class GenesisWalletHelper {
     destinationWallet: HathorWallet,
     address: string,
     value: OutputValueType,
-    options: InjectFundsOptions = {}
+    options: InjectFundsOptions = {},
   ) {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);
@@ -216,7 +217,7 @@ export class GenesisWalletServiceHelper {
   static async injectFunds(
     address: string,
     amount: bigint,
-    destinationWallet?: HathorWalletServiceWallet
+    destinationWallet?: HathorWalletServiceWallet,
   ): Promise<Transaction> {
     const gWallet = GenesisWalletServiceHelper.getSingleton();
     const fundTx = await gWallet.sendTransaction(address, amount, {

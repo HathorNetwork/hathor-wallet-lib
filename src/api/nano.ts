@@ -6,7 +6,7 @@
  */
 
 import axios, { AxiosError } from 'axios';
-import { createRequestInstance } from './axiosInstance';
+
 import { NanoRequest404Error, NanoRequestError } from '../errors';
 import {
   NanoContractBlueprintInformationAPIResponse,
@@ -18,6 +18,8 @@ import {
   NanoContractStateAPIParameters,
   NanoContractLogsAPIResponse,
 } from '../nano_contracts/types';
+
+import { createRequestInstance } from './axiosInstance';
 
 /**
  * Api calls for nano contracts
@@ -45,7 +47,7 @@ const ncApi = {
     balances: string[],
     calls: string[],
     block_hash: string | null = null,
-    block_height: number | null = null
+    block_height: number | null = null,
   ): Promise<NanoContractStateAPIResponse> {
     const data: NanoContractStateAPIParameters = { id, fields, balances, calls };
 
@@ -93,7 +95,7 @@ const ncApi = {
     id: string,
     count: number | null = null,
     after: string | null = null,
-    before: string | null = null
+    before: string | null = null,
   ): Promise<NanoContractHistoryAPIResponse> {
     const data = { id, count, after, before };
     const axiosInstance = await createRequestInstance();
@@ -159,7 +161,7 @@ const ncApi = {
    * @inner
    */
   async getBlueprintSourceCode(
-    blueprintId: string
+    blueprintId: string,
   ): Promise<NanoContractBlueprintSourceCodeAPIResponse> {
     const data = { blueprint_id: blueprintId };
     const axiosInstance = await createRequestInstance();
@@ -199,7 +201,7 @@ const ncApi = {
     count: number | null = null,
     after: string | null = null,
     before: string | null = null,
-    search: string | null = null
+    search: string | null = null,
   ): Promise<NanoContractBlueprintListAPIResponse> {
     const data = { count, after, before, search };
     const axiosInstance = await createRequestInstance();
@@ -234,7 +236,7 @@ const ncApi = {
     after: string | null = null,
     before: string | null = null,
     search: string | null = null,
-    order: string | null = null
+    order: string | null = null,
   ): Promise<NanoContractBlueprintListAPIResponse> {
     const data = { count, after, before, search, order };
     const axiosInstance = await createRequestInstance();
@@ -271,7 +273,7 @@ const ncApi = {
     after: string | null = null,
     before: string | null = null,
     search: string | null = null,
-    order: string | null = null
+    order: string | null = null,
   ): Promise<NanoContractCreationListAPIResponse> {
     const data = { count, after, before, search, order };
     const axiosInstance = await createRequestInstance();

@@ -6,7 +6,11 @@
  */
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import queueMicrotask from 'queue-microtask';
+
+import Network from '../models/network';
+import Queue from '../models/queue';
 import FullNodeConnection from '../new/connection';
+import { IHistoryTxSchema } from '../schemas';
 import {
   IStorage,
   IHistoryTx,
@@ -15,9 +19,6 @@ import {
   IAddressInfo,
   ILogger,
 } from '../types';
-import Network from '../models/network';
-import Queue from '../models/queue';
-import { IHistoryTxSchema } from '../schemas';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -71,7 +72,7 @@ function isStreamSyncHistoryVertex(data: IStreamSyncHistoryData): data is IStrea
 }
 
 function isStreamSyncHistoryAddress(
-  data: IStreamSyncHistoryData
+  data: IStreamSyncHistoryData,
 ): data is IStreamSyncHistoryAddress {
   return data.type === 'stream:history:address';
 }
@@ -177,7 +178,7 @@ class StreamStatsManager {
   ack(seq: number) {
     this.ackCounter += 1;
     this.logger.debug(
-      `[*] ACKed ${seq} with queue at ${this.q.size()}. Sent ACK ${this.ackCounter} times`
+      `[*] ACKed ${seq} with queue at ${this.q.size()}. Sent ACK ${this.ackCounter} times`,
     );
   }
 
@@ -189,7 +190,7 @@ class StreamStatsManager {
     if (!this.inTimer) {
       this.inTimer = setTimeout(() => {
         this.logger.debug(
-          `[+] => in_rate: ${(1000 * this.recvCounter) / this.sampleInterval} items/s`
+          `[+] => in_rate: ${(1000 * this.recvCounter) / this.sampleInterval} items/s`,
         );
         this.inTimer = undefined;
         this.recvCounter = -1;
@@ -207,7 +208,7 @@ class StreamStatsManager {
     if (!this.outTimer) {
       this.outTimer = setTimeout(() => {
         this.logger.debug(
-          `[+] <= out_rate: ${(1000 * this.procCounter) / this.sampleInterval} items/s`
+          `[+] <= out_rate: ${(1000 * this.procCounter) / this.sampleInterval} items/s`,
         );
         this.outTimer = undefined;
         this.procCounter = -1;
@@ -237,7 +238,7 @@ export function loadAddressesCPUIntensive(
   startIndex: number,
   count: number,
   xpubkey: string,
-  networkName: string
+  networkName: string,
 ): [number, string][] {
   const addresses: [number, string][] = [];
   const stopIndex = startIndex + count;
@@ -261,7 +262,7 @@ export async function xpubStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -276,7 +277,7 @@ export async function xpubStreamSyncHistory(
     firstIndex,
     storage,
     connection,
-    HistorySyncMode.XPUB_STREAM_WS
+    HistorySyncMode.XPUB_STREAM_WS,
   );
   await streamSyncHistory(manager, shouldProcessHistory);
 }
@@ -286,7 +287,7 @@ export async function manualStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -301,7 +302,7 @@ export async function manualStreamSyncHistory(
     firstIndex,
     storage,
     connection,
-    HistorySyncMode.MANUAL_STREAM_WS
+    HistorySyncMode.MANUAL_STREAM_WS,
   );
   await streamSyncHistory(manager, shouldProcessHistory);
 }
@@ -374,7 +375,7 @@ export class StreamManager extends AbortController {
     startIndex: number,
     storage: IStorage,
     connection: FullNodeConnection,
-    mode: HistorySyncMode
+    mode: HistorySyncMode,
   ) {
     super();
     this.streamId = generateStreamId();
@@ -442,7 +443,7 @@ export class StreamManager extends AbortController {
       {
         once: true,
         signal: this.signal,
-      }
+      },
     );
   }
 
@@ -480,7 +481,7 @@ export class StreamManager extends AbortController {
         this.lastLoadedIndex + 1,
         this.ADDRESSES_PER_MESSAGE,
         this.xpubkey,
-        this.network
+        this.network,
       );
       this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
       this.connection.sendManualStreamingHistory(
@@ -488,7 +489,7 @@ export class StreamManager extends AbortController {
         this.lastLoadedIndex + 1,
         batch,
         false,
-        this.gapLimit
+        this.gapLimit,
       );
 
       // Free main loop to run other tasks and queue next batch
@@ -640,7 +641,7 @@ export class StreamManager extends AbortController {
           this.streamId,
           this.lastLoadedIndex + 1,
           this.xpubkey,
-          this.gapLimit
+          this.gapLimit,
         );
         break;
       case HistorySyncMode.MANUAL_STREAM_WS:
@@ -651,10 +652,10 @@ export class StreamManager extends AbortController {
             this.lastLoadedIndex + 1,
             this.ADDRESSES_PER_MESSAGE,
             this.xpubkey,
-            this.network
+            this.network,
           ),
           true,
-          this.gapLimit
+          this.gapLimit,
         );
         this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
         break;
@@ -716,7 +717,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     if (wsData.id !== manager.streamId) {
       // Check that the stream id is the same we sent
       manager.logger.error(
-        `Received stream event for id ${wsData.id} while expecting ${manager.streamId}`
+        `Received stream event for id ${wsData.id} while expecting ${manager.streamId}`,
       );
       return;
     }
@@ -756,7 +757,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
  */
 export async function streamSyncHistory(
   manager: StreamManager,
-  shouldProcessHistory: boolean
+  shouldProcessHistory: boolean,
 ): Promise<void> {
   await manager.setupStream();
 
@@ -776,7 +777,7 @@ export async function streamSyncHistory(
         () => {
           resolve();
         },
-        { once: true }
+        { once: true },
       );
       // If it is already aborted for some reason, just exit
       if (manager.signal.aborted) {
@@ -792,7 +793,7 @@ export async function streamSyncHistory(
         () => {
           manager.connection.removeListener('stream', listener);
         },
-        { once: true }
+        { once: true },
       );
 
       // Send the start message to the fullnode

@@ -6,9 +6,10 @@
  */
 
 import { z } from 'zod';
-import ncFields, { NCFieldBase } from '../fields';
+
 import Network from '../../models/network';
 import { ILogger } from '../../types';
+import ncFields, { NCFieldBase } from '../fields';
 
 const simpleTypes = z.enum([
   'str',
@@ -117,7 +118,7 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
     case 'dict':
       return ncFields.DictField.new(
         fieldFromTypeNode(type.key, network),
-        fieldFromTypeNode(type.value, network)
+        fieldFromTypeNode(type.value, network),
       );
     case 'list':
       return ncFields.ListField.new(fieldFromTypeNode(type.element, network));

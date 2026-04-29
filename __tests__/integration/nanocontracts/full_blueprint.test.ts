@@ -1,12 +1,13 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
-import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+
 import ncApi from '../../../src/api/nano';
+import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
 import { bufferToHex } from '../../../src/utils/buffer';
 import helpersUtils from '../../../src/utils/helpers';
-import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
-import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
 
 describe('Full blueprint basic tests', () => {
   /** @type HathorWallet */
@@ -87,7 +88,7 @@ describe('Full blueprint basic tests', () => {
           attrTuple,
           attrList,
         ],
-      }
+      },
     );
     await checkTxValid(wallet, txInitialize);
     const txInitializeData = await wallet.getFullTxById(txInitialize.hash);
@@ -116,7 +117,7 @@ describe('Full blueprint basic tests', () => {
         'attr_list',
       ],
       [],
-      [attrCall]
+      [attrCall],
     );
 
     expect(ncState.fields.vertex.value).toBe(vertexId);
@@ -164,7 +165,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [address],
-      }
+      },
     );
     await checkTxValid(wallet, txCallerIdAddress);
 
@@ -180,7 +181,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [contractId],
-      }
+      },
     );
     await checkTxValid(wallet, txCallerIdContract);
 
@@ -196,7 +197,7 @@ describe('Full blueprint basic tests', () => {
       'set_caller_id',
       txCallerIdContractData.tx.nc_address,
       network,
-      txCallerIdContractData.tx.nc_args
+      txCallerIdContractData.tx.nc_args,
     );
     await txCallerIdParser.parseArguments();
     expect(txCallerIdParser.address?.base58).toBe(address0);
@@ -220,7 +221,7 @@ describe('Full blueprint basic tests', () => {
       txInitialize.hash,
       ['attr_optional'],
       [],
-      [attrCall]
+      [attrCall],
     );
 
     expect(ncStateOptional.fields.attr_optional.value).toBe(attrOptional);
@@ -233,7 +234,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [address, amount],
-      }
+      },
     );
     await checkTxValid(wallet, txDictAddress);
 
@@ -253,7 +254,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [attrBytes, attrInt],
-      }
+      },
     );
     await checkTxValid(wallet, txDictBytes);
 
@@ -273,7 +274,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: ['test1', 'test2', 2],
-      }
+      },
     );
     await checkTxValid(wallet, txDictStrInt);
 
@@ -293,7 +294,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: ['test1', 'cafecafe', 2],
-      }
+      },
     );
     await checkTxValid(wallet, txDictStrBytesInt);
 
@@ -345,7 +346,7 @@ describe('Full blueprint basic tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-      }
+      },
     );
     await checkTxValid(wallet, txRandom);
 
@@ -361,7 +362,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [['ab', 'cd', 'efg']],
-      }
+      },
     );
     await checkTxValid(wallet, txListAttrs);
 
@@ -387,7 +388,7 @@ describe('Full blueprint basic tests', () => {
       'set_tuple',
       txTupleData.tx.nc_address,
       network,
-      txTupleData.tx.nc_args
+      txTupleData.tx.nc_args,
     );
     await txTupleParser.parseArguments();
     expect(txTupleParser.address?.base58).toBe(address0);
@@ -413,7 +414,7 @@ describe('Full blueprint basic tests', () => {
       'set_list',
       txListData.tx.nc_address,
       network,
-      txListData.tx.nc_args
+      txListData.tx.nc_args,
     );
     await txListParser.parseArguments();
     expect(txListParser.address?.base58).toBe(address0);
@@ -438,7 +439,7 @@ describe('Full blueprint basic tests', () => {
       'set_set',
       txSetData.tx.nc_address,
       network,
-      txSetData.tx.nc_args
+      txSetData.tx.nc_args,
     );
     await txSetParser.parseArguments();
     expect(txSetParser.address?.base58).toBe(address0);
@@ -456,7 +457,7 @@ describe('Full blueprint basic tests', () => {
       txInitialize.hash,
       ['attr_tuple'],
       [],
-      [setCall, listCall]
+      [setCall, listCall],
     );
 
     expect(txContainersState.fields.attr_tuple.value).toStrictEqual(attrTuple);
@@ -482,7 +483,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [argAttrDictListTuple],
-      }
+      },
     );
     await checkTxValid(wallet, txAttrDictListTuple);
     const txAttrDictListTupleData = await wallet.getFullTxById(txAttrDictListTuple.hash);
@@ -492,7 +493,7 @@ describe('Full blueprint basic tests', () => {
       'set_attr_dict_list_tuple',
       txAttrDictListTupleData.tx.nc_address,
       network,
-      txAttrDictListTupleData.tx.nc_args
+      txAttrDictListTupleData.tx.nc_args,
     );
     await txAttrDictListTupleParser.parseArguments();
     expect(txAttrDictListTupleParser.address?.base58).toBe(address0);
@@ -517,7 +518,7 @@ describe('Full blueprint basic tests', () => {
       {
         ncId: txInitialize.hash,
         args: [dictArg],
-      }
+      },
     );
     await checkTxValid(wallet, txAttrDictDictSet);
     const txAttrDictDictSetData = await wallet.getFullTxById(txAttrDictDictSet.hash);
@@ -527,7 +528,7 @@ describe('Full blueprint basic tests', () => {
       'set_attr_dict_dict_set',
       txAttrDictDictSetData.tx.nc_address,
       network,
-      txAttrDictDictSetData.tx.nc_args
+      txAttrDictDictSetData.tx.nc_args,
     );
     await txAttrDictDictSetParser.parseArguments();
     expect(txAttrDictDictSetParser.address?.base58).toBe(address0);
@@ -555,7 +556,7 @@ describe('Full blueprint basic tests', () => {
             },
           ],
         ],
-      }
+      },
     );
     await checkTxValid(wallet, txAttrListDictTuple);
     const txAttrListDictTupleData = await wallet.getFullTxById(txAttrListDictTuple.hash);
@@ -565,7 +566,7 @@ describe('Full blueprint basic tests', () => {
       'set_attr_list_dict_tuple',
       txAttrListDictTupleData.tx.nc_address,
       network,
-      txAttrListDictTupleData.tx.nc_args
+      txAttrListDictTupleData.tx.nc_args,
     );
     await txAttrListDictTupleParser.parseArguments();
     expect(txAttrListDictTupleParser.address?.base58).toBe(address0);
@@ -591,7 +592,7 @@ describe('Full blueprint basic tests', () => {
       txInitialize.hash,
       [],
       [],
-      [dictDictSetCall, tupleDictListCall, dictListDictTupleCall]
+      [dictDictSetCall, tupleDictListCall, dictListDictTupleCall],
     );
 
     expect(callStates.calls[dictDictSetCall].value).toBe(true);

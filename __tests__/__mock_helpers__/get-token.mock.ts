@@ -2,7 +2,7 @@ import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { TokenVersion, ITokenData, ITokenMetadata } from '../../src/types';
 
 export const mockGetToken = async (
-  tokenUid: string
+  tokenUid: string,
 ): Promise<ITokenData & Partial<ITokenMetadata>> => {
   const tokenMap: Record<string, ITokenData> = {
     [NATIVE_TOKEN_UID]: {

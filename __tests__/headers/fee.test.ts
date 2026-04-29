@@ -6,10 +6,10 @@
  */
 
 import FeeHeader from '../../src/headers/fee';
-import Transaction from '../../src/models/transaction';
-import Network from '../../src/models/network';
-import { IFeeEntry } from '../../src/types';
 import { VertexHeaderId, getVertexHeaderIdBuffer } from '../../src/headers/types';
+import Network from '../../src/models/network';
+import Transaction from '../../src/models/transaction';
+import { IFeeEntry } from '../../src/types';
 
 describe('FeeHeader', () => {
   const network = new Network('testnet');

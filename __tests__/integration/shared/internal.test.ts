@@ -6,11 +6,12 @@
  */
 
 import axios from 'axios';
-import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
+
+import Network from '../../../src/models/network';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { FULLNODE_NETWORK_NAME, FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
-import Network from '../../../src/models/network';
 import { loggers } from '../utils/logger.util';
 
 // XXX: onConnectionChangedState has different behavior between facades

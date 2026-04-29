@@ -7,11 +7,13 @@
 
 import { encoding, util } from 'bitcore-lib';
 import _ from 'lodash';
+
 import { AddressError } from '../errors';
+import helpers from '../utils/helpers';
+
 import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
-import helpers from '../utils/helpers';
 
 class Address {
   // String with address as base58
@@ -84,7 +86,7 @@ class Address {
     // Validate address length
     if (addressBytes.length !== 25) {
       throw new AddressError(
-        `${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`
+        `${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`,
       );
     }
 
@@ -94,7 +96,7 @@ class Address {
     const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
       throw new AddressError(
-        `${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`
+        `${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`,
       );
     }
 
@@ -106,7 +108,7 @@ class Address {
     const firstByte = addressBytes[0];
     if (!this.network.isVersionByteValid(firstByte)) {
       throw new AddressError(
-        `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`
+        `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`,
       );
     }
     return true;

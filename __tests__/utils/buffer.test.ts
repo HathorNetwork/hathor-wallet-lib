@@ -1,4 +1,9 @@
 import buffer from 'buffer';
+
+import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../../src/constants';
+import Address from '../../src/models/address';
+import Output from '../../src/models/output';
+import P2PKH from '../../src/models/p2pkh';
 import {
   bigIntToBytes,
   bufferToHex,
@@ -11,10 +16,6 @@ import {
   unpackToFloat,
   unpackToInt,
 } from '../../src/utils/buffer';
-import Output from '../../src/models/output';
-import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../../src/constants';
-import Address from '../../src/models/address';
-import P2PKH from '../../src/models/p2pkh';
 
 test('Buffer to hex', () => {
   const hexString =
@@ -58,35 +59,35 @@ test('bigint to bytes', () => {
   expect(bigIntToBytes(0n, 4)).toStrictEqual(buffer.Buffer.from([0, 0, 0, 0]));
   expect(bigIntToBytes(1n, 4)).toStrictEqual(buffer.Buffer.from([0, 0, 0, 1]));
   expect(bigIntToBytes(2n ** 31n - 1n, 4)).toStrictEqual(
-    buffer.Buffer.from([0x7f, 0xff, 0xff, 0xff])
+    buffer.Buffer.from([0x7f, 0xff, 0xff, 0xff]),
   );
   expect(() => bigIntToBytes(2n ** 31n, 4)).toThrow();
   expect(bigIntToBytes(-(2n ** 31n), 4)).toStrictEqual(
-    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00])
+    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00]),
   );
   expect(() => bigIntToBytes(-(2n ** 31n) - 1n, 4)).toThrow();
 
   expect(bigIntToBytes(0n, 8)).toStrictEqual(buffer.Buffer.from([0, 0, 0, 0, 0, 0, 0, 0]));
   expect(bigIntToBytes(1n, 8)).toStrictEqual(buffer.Buffer.from([0, 0, 0, 0, 0, 0, 0, 1]));
   expect(bigIntToBytes(2n ** 31n - 1n, 8)).toStrictEqual(
-    buffer.Buffer.from([0, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff])
+    buffer.Buffer.from([0, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff]),
   );
   expect(bigIntToBytes(2n ** 31n, 8)).toStrictEqual(
-    buffer.Buffer.from([0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00])
+    buffer.Buffer.from([0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00]),
   );
   expect(bigIntToBytes(-(2n ** 31n), 8)).toStrictEqual(
-    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00])
+    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x80, 0x00, 0x00, 0x00]),
   );
   expect(bigIntToBytes(-(2n ** 31n) - 1n, 8)).toStrictEqual(
-    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x7f, 0xff, 0xff, 0xff])
+    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x7f, 0xff, 0xff, 0xff]),
   );
 
   expect(bigIntToBytes(2n ** 63n - 1n, 8)).toStrictEqual(
-    buffer.Buffer.from([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
+    buffer.Buffer.from([0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]),
   );
   expect(() => bigIntToBytes(2n ** 63n, 8)).toThrow();
   expect(bigIntToBytes(-(2n ** 63n), 8)).toStrictEqual(
-    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
   );
   expect(() => bigIntToBytes(-(2n ** 63n) - 1n, 4)).toThrow();
 });
@@ -98,15 +99,15 @@ test('unpack to bigint', () => {
   expect(unpackToBigInt(8, true, bigIntToBytes(0n, 8))[0]).toStrictEqual(0n);
   expect(unpackToBigInt(8, true, bigIntToBytes(1n, 8))[0]).toStrictEqual(1n);
   expect(unpackToBigInt(8, true, bigIntToBytes(2n ** 31n - 1n, 8))[0]).toStrictEqual(
-    2n ** 31n - 1n
+    2n ** 31n - 1n,
   );
   expect(unpackToBigInt(8, true, bigIntToBytes(2n ** 31n, 8))[0]).toStrictEqual(2n ** 31n);
   expect(unpackToBigInt(8, true, bigIntToBytes(-(2n ** 31n), 8))[0]).toStrictEqual(-(2n ** 31n));
   expect(unpackToBigInt(8, true, bigIntToBytes(-(2n ** 31n) - 1n, 8))[0]).toStrictEqual(
-    -(2n ** 31n) - 1n
+    -(2n ** 31n) - 1n,
   );
   expect(unpackToBigInt(8, true, bigIntToBytes(2n ** 63n - 1n, 8))[0]).toStrictEqual(
-    2n ** 63n - 1n
+    2n ** 63n - 1n,
   );
   expect(unpackToBigInt(8, true, bigIntToBytes(-(2n ** 63n), 8))[0]).toStrictEqual(-(2n ** 63n));
 });

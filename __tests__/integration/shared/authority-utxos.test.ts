@@ -17,11 +17,11 @@
  * - `service-specific/authority-utxos.test.ts`
  */
 
-import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
 import { AuthorityType } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -60,7 +60,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
           index: expect.any(Number),
           address: expect.any(String),
           authorities: expect.any(BigInt),
-        })
+        }),
       );
       expect(authUtxo.authorities & TOKEN_MINT_MASK).toBe(TOKEN_MINT_MASK);
     });
@@ -79,7 +79,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
           index: expect.any(Number),
           address: expect.any(String),
           authorities: expect.any(BigInt),
-        })
+        }),
       );
       expect(authUtxo.authorities & TOKEN_MELT_MASK).toBe(TOKEN_MELT_MASK);
     });
@@ -90,7 +90,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
     const authorities = await adapter.getAuthorityUtxos(
       wallet,
       nonExistentTokenUid,
-      AuthorityType.MINT
+      AuthorityType.MINT,
     );
 
     expect(Array.isArray(authorities)).toBe(true);
@@ -106,12 +106,12 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
     const mintAuthorities = await adapter.getAuthorityUtxos(
       wallet,
       noAuthToken.hash,
-      AuthorityType.MINT
+      AuthorityType.MINT,
     );
     const meltAuthorities = await adapter.getAuthorityUtxos(
       wallet,
       noAuthToken.hash,
-      AuthorityType.MELT
+      AuthorityType.MELT,
     );
 
     expect(mintAuthorities).toHaveLength(0);
@@ -200,7 +200,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
       AuthorityType.MINT,
       {
         filter_address: addr4,
-      }
+      },
     );
     expect(mintAtAddr4).toHaveLength(1);
     expect(mintAtAddr4[0].address).toBe(addr4);
@@ -212,7 +212,7 @@ describe.each(adapters)('[Shared] authority UTXOs — $name', adapter => {
       AuthorityType.MINT,
       {
         filter_address: addr5,
-      }
+      },
     );
     expect(mintAtAddr5).toHaveLength(0);
   });

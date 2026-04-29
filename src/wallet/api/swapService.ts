@@ -6,14 +6,15 @@
  */
 
 import axios, { AxiosRequestConfig } from 'axios';
-import sha256 from 'crypto-js/sha256';
-import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
+import AES from 'crypto-js/aes';
+import sha256 from 'crypto-js/sha256';
 import { isNumber } from 'lodash';
-import { AtomicSwapProposal } from '../../models/types';
-import { PartialTxPrefix } from '../../models/partial_tx';
-import { TIMEOUT } from '../../constants';
+
 import config from '../../config';
+import { TIMEOUT } from '../../constants';
+import { PartialTxPrefix } from '../../models/partial_tx';
+import { AtomicSwapProposal } from '../../models/types';
 
 /**
  * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.

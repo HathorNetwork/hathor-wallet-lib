@@ -20,11 +20,11 @@
  * - `testnetServerUrl`: a real testnet endpoint for validation
  */
 
-import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
-import { delay } from '../utils/core.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { FULLNODE_NETWORK_NAME } from '../configuration/test-constants';
+import { delay } from '../utils/core.util';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),

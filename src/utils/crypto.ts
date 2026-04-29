@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import CryptoJS from 'crypto-js';
 import bitcore from 'bitcore-lib';
-import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from '../errors';
+import CryptoJS from 'crypto-js';
+
 import { HATHOR_MAGIC_BYTES, HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
+import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from '../errors';
 import { IEncryptedData } from '../types';
 
 // Monkey-patch MAGIC_BYTES to use Hathor's
@@ -32,7 +33,7 @@ export function hashData(
     salt,
     iterations = HASH_ITERATIONS,
     pbkdf2Hasher = 'sha1',
-  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {},
 ): { hash: string; salt: string; iterations: number; pbkdf2Hasher: string } {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HasherStatic type is not exported by its lib
   const hashers = new Map<string, any>([
@@ -81,7 +82,7 @@ export function encryptData(
     salt,
     iterations = HASH_ITERATIONS,
     pbkdf2Hasher = 'sha1',
-  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {},
 ): IEncryptedData {
   const encrypted = CryptoJS.AES.encrypt(data, password);
   const hash = hashData(password, { salt, iterations, pbkdf2Hasher });
@@ -148,7 +149,7 @@ export function validateHash(
     salt,
     iterations = HASH_ITERATIONS,
     pbkdf2Hasher = 'sha1',
-  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {},
 ): boolean {
   const hash = hashData(dataToValidate, { salt, iterations, pbkdf2Hasher });
   return hash.hash === hashedData;

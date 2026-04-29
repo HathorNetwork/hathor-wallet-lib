@@ -6,10 +6,10 @@
  */
 
 import { Config } from './config';
-import Transaction from './models/transaction';
-import Input from './models/input';
-import FullNodeConnection from './new/connection';
 import Header from './headers/base';
+import Input from './models/input';
+import Transaction from './models/transaction';
+import FullNodeConnection from './new/connection';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -85,7 +85,7 @@ export enum WalletState {
 export type EcdsaTxSign = (
   tx: Transaction,
   storage: IStorage,
-  pinCode: string
+  pinCode: string,
 ) => Promise<ITxSignatureData>;
 
 export type HistorySyncFunction = (
@@ -93,7 +93,7 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
 ) => Promise<void>;
 
 export interface IAddressInfo {
@@ -421,19 +421,19 @@ export type AddressScanPolicyData =
   | ISingleAddressAddressScanPolicy;
 
 export function isGapLimitScanPolicy(
-  scanPolicyData: AddressScanPolicyData
+  scanPolicyData: AddressScanPolicyData,
 ): scanPolicyData is IGapLimitAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.GAP_LIMIT;
 }
 
 export function isIndexLimitScanPolicy(
-  scanPolicyData: AddressScanPolicyData
+  scanPolicyData: AddressScanPolicyData,
 ): scanPolicyData is IIndexLimitAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.INDEX_LIMIT;
 }
 
 export function isSingleAddressScanPolicy(
-  scanPolicyData: AddressScanPolicyData
+  scanPolicyData: AddressScanPolicyData,
 ): scanPolicyData is ISingleAddressAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.SINGLE_ADDRESS;
 }
@@ -480,7 +480,7 @@ export interface IUtxoFilterOptions {
 export type UtxoSelectionAlgorithm = (
   storage: IStorage,
   token: string,
-  amount: OutputValueType
+  amount: OutputValueType,
 ) => Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }>;
 
 export interface IUtxoSelectionOptions {
@@ -586,7 +586,7 @@ export interface IStore {
   cleanStorage(
     cleanHistory?: boolean,
     cleanAddresses?: boolean,
-    cleanTokens?: boolean
+    cleanTokens?: boolean,
   ): Promise<void>;
   cleanMetadata(): Promise<void>;
 }
@@ -642,7 +642,7 @@ export interface IStorage {
   fillTx(
     token: string,
     tx: IDataTx,
-    options: IFillTxOptions
+    options: IFillTxOptions,
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
   isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean>;
@@ -669,7 +669,7 @@ export interface IStorage {
   cleanStorage(
     cleanHistory?: boolean,
     cleanAddresses?: boolean,
-    cleanTokens?: boolean
+    cleanTokens?: boolean,
   ): Promise<void>;
   handleStop(options: {
     connection?: FullNodeConnection;

@@ -42,7 +42,7 @@ function getLocaleString(value: bigint | number): string {
  */
 export function prettyValue(
   inputValue: bigint | number | string,
-  decimalPlaces: number = DECIMAL_PLACES
+  decimalPlaces: number = DECIMAL_PLACES,
 ): string {
   const value = BigInt(inputValue);
 

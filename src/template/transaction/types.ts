@@ -6,13 +6,15 @@
  */
 
 import { z } from 'zod';
-import { TransactionTemplate } from './instructions';
-import { TxTemplateContext } from './context';
-import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType, TokenVersion } from '../../types';
-import Transaction from '../../models/transaction';
-import Network from '../../models/network';
-import { IHathorWallet, Utxo } from '../../wallet/types';
+
 import CreateTokenTransaction from '../../models/create_token_transaction';
+import Network from '../../models/network';
+import Transaction from '../../models/transaction';
+import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType, TokenVersion } from '../../types';
+import { IHathorWallet, Utxo } from '../../wallet/types';
+
+import { TxTemplateContext } from './context';
+import { TransactionTemplate } from './instructions';
 
 export type TxInstance = Transaction | CreateTokenTransaction;
 

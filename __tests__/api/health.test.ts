@@ -1,5 +1,6 @@
-import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
+import MockAdapter from 'axios-mock-adapter';
+
 import healthApi from '../../src/api/health';
 
 describe('healthApi', () => {

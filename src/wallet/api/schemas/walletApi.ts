@@ -6,10 +6,11 @@
  */
 
 import { z } from 'zod';
+
 import { NATIVE_TOKEN_UID } from '../../../constants';
 import { txIdSchema } from '../../../schemas';
-import { bigIntCoercibleSchema } from '../../../utils/bigint';
 import { TokenVersion } from '../../../types';
+import { bigIntCoercibleSchema } from '../../../utils/bigint';
 
 /**
  * Schema for validating Hathor addresses.
@@ -428,7 +429,7 @@ export const historyResponseSchema = baseResponseSchema.extend({
       timestamp: z.number(),
       voided: z.number().transform(val => val === 1),
       version: z.number(),
-    })
+    }),
   ),
 });
 
@@ -449,7 +450,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
       heightlock: z.number().nullable(),
       locked: z.boolean(),
       addressPath: AddressPathSchema,
-    })
+    }),
   ),
 });
 
@@ -480,7 +481,7 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
       tokenId: z.string(),
       tokenName: z.string(),
       tokenSymbol: z.string(),
-    })
+    }),
   ),
 });
 

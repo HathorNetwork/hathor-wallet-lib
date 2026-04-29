@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
-import WalletConnection from '../../src/wallet/connection';
+
 import { getDefaultLogger } from '../../src/types';
+import WalletConnection from '../../src/wallet/connection';
 
 // Mock the logger to prevent console output during tests
 jest.mock('../../src/types', () => {

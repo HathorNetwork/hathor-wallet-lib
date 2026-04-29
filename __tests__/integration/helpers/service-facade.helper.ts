@@ -1,13 +1,15 @@
 import { isEmpty } from 'lodash';
-import { loggers } from '../utils/logger.util';
-import { delay } from '../utils/core.util';
+
 import { HathorWalletServiceWallet, MemoryStore, Storage, walletUtils } from '../../../src';
+import ncApi from '../../../src/api/nano';
+import config from '../../../src/config';
+import { TxNotFoundError } from '../../../src/errors';
 import Network from '../../../src/models/network';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
-import { TxNotFoundError } from '../../../src/errors';
+import { delay } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
+
 import { precalculationHelpers } from './wallet-precalculation.helper';
-import config from '../../../src/config';
-import ncApi from '../../../src/api/nano';
 
 /** Default pin to simplify the tests */
 const pinCode = '123456';
@@ -105,7 +107,7 @@ export async function pollUntilCondition<T>(
   predicate: () => Promise<T>,
   label: string,
   maxAttempts = 10,
-  delayMs = 500
+  delayMs = 500,
 ): Promise<T> {
   let attempts = 0;
 
@@ -186,7 +188,7 @@ export async function pollForNcState(
   fields: string[],
   requiredField?: string,
   maxAttempts = 10,
-  delayMs = 1000
+  delayMs = 1000,
 ): Promise<unknown> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -220,7 +222,7 @@ export async function pollForTokenDetails(
   wallet: HathorWalletServiceWallet,
   tokenId: string,
   maxAttempts = 20,
-  delayMs = 2000
+  delayMs = 2000,
 ): Promise<void> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
@@ -239,7 +241,7 @@ export async function pollForTokenDetails(
  */
 export async function checkTxNotVoided(
   wallet: HathorWalletServiceWallet,
-  txId: string
+  txId: string,
 ): Promise<void> {
   const txData = await wallet.getFullTxById(txId);
   expect(txData.success).toBe(true);

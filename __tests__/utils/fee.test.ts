@@ -12,10 +12,10 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../../src/constants';
-import { Fee } from '../../src/utils/fee';
 import Output from '../../src/models/output';
 import { MemoryStore, Storage } from '../../src/storage';
 import { IDataInput, IStorage, OutputValueType } from '../../src/types';
+import { Fee } from '../../src/utils/fee';
 import tokens from '../../src/utils/tokens';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';

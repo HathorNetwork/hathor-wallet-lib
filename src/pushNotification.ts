@@ -1,6 +1,6 @@
-import HathorWalletServiceWallet from './wallet/wallet';
-import { axiosInstance } from './wallet/api/walletServiceAxios';
 import { WalletRequestError } from './errors';
+import { axiosInstance } from './wallet/api/walletServiceAxios';
+import HathorWalletServiceWallet from './wallet/wallet';
 
 export class PushNotification {
   /**
@@ -11,7 +11,7 @@ export class PushNotification {
    */
   static async registerDevice(
     wallet: HathorWalletServiceWallet,
-    payload: PushRegisterRequestData
+    payload: PushRegisterRequestData,
   ): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
     const data = await walletServiceClient.pushRegister(wallet, payload);
@@ -26,7 +26,7 @@ export class PushNotification {
    */
   static async updateDevice(
     wallet: HathorWalletServiceWallet,
-    payload: PushUpdateRequestData
+    payload: PushUpdateRequestData,
   ): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
     const data = await walletServiceClient.pushUpdate(wallet, payload);
@@ -41,7 +41,7 @@ export class PushNotification {
    */
   static async unregisterDevice(
     wallet: HathorWalletServiceWallet,
-    deviceId: string
+    deviceId: string,
   ): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
     const data = await walletServiceClient.pushUnregister(wallet, deviceId);
@@ -52,7 +52,7 @@ export class PushNotification {
 const walletServiceClient = {
   async pushRegister(
     wallet: HathorWalletServiceWallet,
-    payload: PushRegisterRequestData
+    payload: PushRegisterRequestData,
   ): Promise<PushRegisterResponseData> {
     const axios = await axiosInstance(wallet, true);
 
@@ -67,7 +67,7 @@ const walletServiceClient = {
 
   async pushUpdate(
     wallet: HathorWalletServiceWallet,
-    payload: PushUpdateRequestData
+    payload: PushUpdateRequestData,
   ): Promise<PushUpdateResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.put<PushUpdateResponseData>('wallet/push/update', payload);
@@ -81,7 +81,7 @@ const walletServiceClient = {
 
   async pushUnregister(
     wallet: HathorWalletServiceWallet,
-    deviceId: string
+    deviceId: string,
   ): Promise<PushUnregisterResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.delete(`wallet/push/unregister/${deviceId}`);

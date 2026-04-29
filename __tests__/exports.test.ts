@@ -506,10 +506,10 @@ describe('exported classes', () => {
 describe('exported nano contract schemas', () => {
   it('should export ActionTypeToActionHeaderType mapping', () => {
     expect(ActionTypeToActionHeaderType[NanoContractActionType.DEPOSIT]).toBe(
-      NanoContractHeaderActionType.DEPOSIT
+      NanoContractHeaderActionType.DEPOSIT,
     );
     expect(ActionTypeToActionHeaderType[NanoContractActionType.WITHDRAWAL]).toBe(
-      NanoContractHeaderActionType.WITHDRAWAL
+      NanoContractHeaderActionType.WITHDRAWAL,
     );
   });
 

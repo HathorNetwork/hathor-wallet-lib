@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axiosWrapperCreateRequestInstance from './axiosWrapper';
-import { TIMEOUT } from '../constants';
 import config from '../config';
+import { TIMEOUT } from '../constants';
+
+import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**
  * Method that creates an axios instance

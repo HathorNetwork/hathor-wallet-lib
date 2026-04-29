@@ -5,10 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { crypto as cryptoBL, util } from 'bitcore-lib';
 import buffer from 'buffer';
-import { clone } from 'lodash';
 import crypto from 'crypto';
+
+import { crypto as cryptoBL, util } from 'bitcore-lib';
+import { clone } from 'lodash';
+
 import {
   BLOCK_VERSION,
   DEFAULT_SIGNAL_BITS,
@@ -21,6 +23,13 @@ import {
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
 } from '../constants';
+import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import type Header from '../headers/base';
+import FeeHeader from '../headers/fee';
+import HeaderParser from '../headers/parser';
+import { getVertexHeaderIdFromBuffer } from '../headers/types';
+import NanoContractHeader from '../nano_contracts/header';
+import { OutputValueType } from '../types';
 import {
   bufferToHex,
   hexToBuffer,
@@ -30,16 +39,10 @@ import {
   intToBytes,
   floatToBytes,
 } from '../utils/buffer';
+
 import Input from './input';
-import Output from './output';
 import Network from './network';
-import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
-import { OutputValueType } from '../types';
-import type Header from '../headers/base';
-import NanoContractHeader from '../nano_contracts/header';
-import FeeHeader from '../headers/fee';
-import HeaderParser from '../headers/parser';
-import { getVertexHeaderIdFromBuffer } from '../headers/types';
+import Output from './output';
 
 enum txType {
   BLOCK = 'Block',
@@ -401,13 +404,13 @@ class Transaction {
   validate() {
     if (this.inputs.length > MAX_INPUTS) {
       throw new MaximumNumberInputsError(
-        `Transaction has ${this.inputs.length} inputs and can have at most ${MAX_INPUTS}.`
+        `Transaction has ${this.inputs.length} inputs and can have at most ${MAX_INPUTS}.`,
       );
     }
 
     if (this.outputs.length > MAX_OUTPUTS) {
       throw new MaximumNumberOutputsError(
-        `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+        `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`,
       );
     }
   }

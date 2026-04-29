@@ -6,13 +6,14 @@
  */
 
 import { HDPrivateKey } from 'bitcore-lib';
+
+import walletApi from '../../src/api/wallet';
 import { GAP_LIMIT } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
-import tx_history from '../__fixtures__/tx_history';
-import walletApi from '../../src/api/wallet';
-import { encryptData } from '../../src/utils/crypto';
 import { TokenVersion, WalletType } from '../../src/types';
+import { encryptData } from '../../src/utils/crypto';
 import { processHistory } from '../../src/utils/storage';
+import tx_history from '../__fixtures__/tx_history';
 
 test('default values', async () => {
   const store = new MemoryStore();
@@ -184,7 +185,7 @@ test('token methods', async () => {
           melt: { locked: 1n, unlocked: 2n },
         },
       },
-    }
+    },
   );
   expect(store.tokens.size).toEqual(2);
   expect(store.tokens.get('02')).toBeDefined();

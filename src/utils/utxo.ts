@@ -48,7 +48,7 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
 export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: OutputValueType
+  amount: OutputValueType,
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0n;
@@ -93,7 +93,7 @@ export async function fastUtxoSelection(
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: OutputValueType
+  amount: OutputValueType,
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0n;

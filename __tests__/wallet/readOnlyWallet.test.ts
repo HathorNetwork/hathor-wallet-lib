@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import { WalletRequestError } from '../../src/errors';
 import Network from '../../src/models/network';
 import walletApi from '../../src/wallet/api/walletApi';
-import { WalletRequestError } from '../../src/errors';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
 
 // Mock walletApi methods
 jest.mock('../../src/wallet/api/walletApi', () => ({
@@ -67,7 +67,7 @@ describe('Read-Only Wallet Access', () => {
       wallet.xpub = null;
 
       await expect(wallet.getReadOnlyAuthToken()).rejects.toThrow(
-        'xpub is required to get read-only auth token.'
+        'xpub is required to get read-only auth token.',
       );
     });
 
@@ -233,7 +233,7 @@ describe('Read-Only Wallet Access', () => {
 
       await expect(wallet.startReadOnly()).rejects.toThrow(WalletRequestError);
       await expect(wallet.startReadOnly()).rejects.toThrow(
-        'Wallet must be initialized and ready before starting in read-only mode.'
+        'Wallet must be initialized and ready before starting in read-only mode.',
       );
     });
 
@@ -248,7 +248,7 @@ describe('Read-Only Wallet Access', () => {
       wallet.xpub = null;
 
       await expect(wallet.startReadOnly()).rejects.toThrow(
-        'xpub is required to start wallet in read-only mode.'
+        'xpub is required to start wallet in read-only mode.',
       );
     });
 

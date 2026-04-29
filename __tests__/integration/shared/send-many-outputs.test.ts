@@ -13,11 +13,11 @@
  * facades.
  */
 
-import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import dateFormatter from '../../../src/utils/date';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import dateFormatter from '../../../src/utils/date';
+import type { IWalletTestAdapter } from '../adapters/types';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 
@@ -92,7 +92,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
             index: largerOutputIndex,
           },
         ],
-      }
+      },
     );
     const decoded3 = await adapter.getTx(wallet, tx3.hash);
     expect(decoded3.inputs).toHaveLength(1);
@@ -110,7 +110,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
       wallet,
       'Multiple Tokens Tk',
       'MTTK',
-      200n
+      200n,
     );
 
     const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, [
@@ -132,19 +132,19 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
 
     // Validate output values
     expect(sendTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 3n, token: NATIVE_TOKEN_UID })
+      expect.objectContaining({ value: 3n, token: NATIVE_TOKEN_UID }),
     );
     expect(sendTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 5n, token: NATIVE_TOKEN_UID })
+      expect.objectContaining({ value: 5n, token: NATIVE_TOKEN_UID }),
     );
     expect(sendTx.outputs).toContainEqual(expect.objectContaining({ value: 90n, token: tokenUid }));
     expect(sendTx.outputs).toContainEqual(
-      expect.objectContaining({ value: 110n, token: tokenUid })
+      expect.objectContaining({ value: 110n, token: tokenUid }),
     );
 
     // Validate input values
     expect(sendTx.inputs).toContainEqual(
-      expect.objectContaining({ value: 8n, token: NATIVE_TOKEN_UID })
+      expect.objectContaining({ value: 8n, token: NATIVE_TOKEN_UID }),
     );
     expect(sendTx.inputs).toContainEqual(expect.objectContaining({ value: 200n, token: tokenUid }));
   });
@@ -198,7 +198,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     // Confirm that locked balance is unavailable
     // Fullnode: "Insufficient funds" | Wallet Service: "No UTXOs available"
     await expect(
-      adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(3))!, 8n)
+      adapter.sendTransaction(wallet, (await wallet.getAddressAtIndex(3))!, 8n),
     ).rejects.toThrow();
 
     // Wait for second timelock to expire
@@ -216,7 +216,7 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     const { hash } = await adapter.sendTransaction(
       wallet,
       (await wallet.getAddressAtIndex(4))!,
-      8n
+      8n,
     );
     expect(hash).toBeDefined();
   });

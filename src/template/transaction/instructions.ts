@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+
 import { NATIVE_TOKEN_UID } from '../../constants';
 import { AuthorityType, TokenVersion } from '../../types';
 

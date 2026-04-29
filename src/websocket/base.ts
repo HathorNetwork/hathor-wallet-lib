@@ -6,7 +6,9 @@
  */
 
 import { EventEmitter } from 'events';
+
 import _WebSocket from 'isomorphic-ws';
+
 import { ILogger, getDefaultLogger } from '../types';
 
 export const DEFAULT_WS_OPTIONS = {

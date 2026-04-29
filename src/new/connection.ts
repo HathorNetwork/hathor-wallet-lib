@@ -6,12 +6,12 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 
-import GenericWebSocket from '../websocket';
-import helpers from '../utils/helpers';
 import BaseConnection, { ConnectionParams } from '../connection';
-import { ConnectionState } from '../wallet/types';
-import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
+import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
+import helpers from '../utils/helpers';
+import { ConnectionState } from '../wallet/types';
+import GenericWebSocket from '../websocket';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
 const CAPABILITIES_WAIT_TIMEOUT = 2000; // 2s
@@ -196,7 +196,7 @@ class WalletConnection extends BaseConnection {
     id: string,
     firstIndex: number,
     xpubkey: string,
-    gapLimit: number = -1
+    gapLimit: number = -1,
   ) {
     if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
@@ -223,7 +223,7 @@ class WalletConnection extends BaseConnection {
     firstIndex: number,
     addresses: [number, string][],
     first: boolean,
-    gapLimit: number = -1
+    gapLimit: number = -1,
   ) {
     if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');

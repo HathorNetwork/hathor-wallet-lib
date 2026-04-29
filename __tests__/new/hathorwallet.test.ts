@@ -6,29 +6,30 @@
  */
 
 import { z } from 'zod';
-import Address from '../../src/models/address';
-import HathorWallet from '../../src/new/wallet';
-import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
-import Network from '../../src/models/network';
-import Transaction from '../../src/models/transaction';
-import Input from '../../src/models/input';
+
+import txApi from '../../src/api/txApi';
+import versionApi from '../../src/api/version';
 import {
   DEFAULT_TX_VERSION,
   P2PKH_ACCT_PATH,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../../src/constants';
-import { MemoryStore, Storage } from '../../src/storage';
+import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import Address from '../../src/models/address';
+import Input from '../../src/models/input';
+import Network from '../../src/models/network';
 import Queue from '../../src/models/queue';
-import { IHistoryTx, WalletType } from '../../src/types';
+import Transaction from '../../src/models/transaction';
 import { WalletWebSocketData } from '../../src/new/types';
-import txApi from '../../src/api/txApi';
+import HathorWallet from '../../src/new/wallet';
+import { MemoryStore, Storage } from '../../src/storage';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
+import { IHistoryTx, WalletType } from '../../src/types';
 import * as addressUtils from '../../src/utils/address';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import * as storageUtils from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
-import versionApi from '../../src/api/version';
-import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
@@ -70,7 +71,7 @@ test('getFullTxById', async () => {
     resolve({
       success: false,
       message: 'Invalid tx',
-    })
+    }),
   );
 
   await expect(hWallet.getFullTxById('tx1')).rejects.toThrow('Invalid transaction tx1');
@@ -92,7 +93,7 @@ test('getFullTxById', async () => {
     resolve({
       success: false,
       message: 'Transaction not found',
-    })
+    }),
   );
 
   await expect(hWallet.getFullTxById('tx1')).rejects.toThrow(TxNotFoundError);
@@ -123,7 +124,7 @@ test('getTxConfirmationData', async () => {
     resolve({
       success: false,
       message: 'Invalid tx',
-    })
+    }),
   );
 
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrow('Invalid transaction tx1');
@@ -132,7 +133,7 @@ test('getTxConfirmationData', async () => {
     resolve({
       success: false,
       message: 'Transaction not found',
-    })
+    }),
   );
 
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrow(TxNotFoundError);
@@ -145,7 +146,7 @@ test('getTxConfirmationData', async () => {
   // Resolve the promise without calling the resolve param
   getConfirmationDataSpy.mockImplementation(() => Promise.resolve());
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrow(
-    'API client did not use the callback'
+    'API client did not use the callback',
   );
 });
 
@@ -171,18 +172,18 @@ test('graphvizNeighborsQuery', async () => {
     resolve({
       success: false,
       message: 'Invalid tx',
-    })
+    }),
   );
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow(
-    'Invalid transaction tx1'
+    'Invalid transaction tx1',
   );
 
   getGraphvizNeighborsSpy.mockImplementation((_tx, _graphType, _maxLevel, resolve) =>
     resolve({
       success: false,
       message: 'Transaction not found',
-    })
+    }),
   );
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow(TxNotFoundError);
@@ -195,7 +196,7 @@ test('graphvizNeighborsQuery', async () => {
   // Resolve the promise without calling the resolve param
   getGraphvizNeighborsSpy.mockImplementation(() => Promise.resolve());
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrow(
-    'API client did not use the callback'
+    'API client did not use the callback',
   );
 });
 
@@ -212,7 +213,7 @@ test('checkAddressesMine', async () => {
     await hWallet.checkAddressesMine([
       'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
       'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-    ])
+    ]),
   ).toStrictEqual({
     WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp: true,
     WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ: false,
@@ -262,7 +263,7 @@ test('getSignatures', async () => {
           addressIndex: 2,
         },
       ],
-    })
+    }),
   );
 
   const hWallet = new FakeHathorWallet();
@@ -306,7 +307,7 @@ test('signTx', async () => {
           addressIndex: 1,
         },
       ],
-    })
+    }),
   );
 
   const hWallet = new FakeHathorWallet();
@@ -345,10 +346,10 @@ test('signTx throws when pinCode is not provided', async () => {
   // Should throw when no pinCode is provided in options and wallet.pinCode is null
   await expect(hWallet.signTx(tx)).rejects.toThrow('Pin code is required to sign a transaction');
   await expect(hWallet.signTx(tx, {})).rejects.toThrow(
-    'Pin code is required to sign a transaction'
+    'Pin code is required to sign a transaction',
   );
   await expect(hWallet.signTx(tx, { pinCode: null })).rejects.toThrow(
-    'Pin code is required to sign a transaction'
+    'Pin code is required to sign a transaction',
   );
 });
 
@@ -376,7 +377,7 @@ test('getWalletInputInfo', async () => {
   jest.spyOn(storage, 'getAddressInfo').mockReturnValue(
     Promise.resolve({
       bip32AddressIndex: 10,
-    })
+    }),
   );
   jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
 
@@ -627,7 +628,7 @@ test('getAddressPrivKey', async () => {
   const address0HDPrivKey = await hWallet.getAddressPrivKey('123', 0);
 
   expect(
-    address0HDPrivKey.privateKey.toAddress(new Network('testnet').getNetwork()).toString()
+    address0HDPrivKey.privateKey.toAddress(new Network('testnet').getNetwork()).toString(),
   ).toStrictEqual(address0);
 });
 
@@ -669,7 +670,7 @@ test('signMessageWithAddress', async () => {
   const signedMessage = await hWallet.signMessageWithAddress(message, addressIndex, '1234');
 
   expect(
-    verifyMessage(message, signedMessage, await hWallet.getAddressAtIndex(addressIndex))
+    verifyMessage(message, signedMessage, await hWallet.getAddressAtIndex(addressIndex)),
   ).toBeTruthy();
 });
 
@@ -713,7 +714,7 @@ test('getWalletType', async () => {
   jest.spyOn(storage, 'getAccessData').mockImplementationOnce(() =>
     Promise.resolve({
       walletType: 'p2pkh',
-    })
+    }),
   );
 
   const hWallet = new FakeHathorWallet();
@@ -729,7 +730,7 @@ test('getMultisigData', async () => {
   const dataSpy = jest.spyOn(storage, 'getAccessData').mockImplementationOnce(() =>
     Promise.resolve({
       walletType: 'p2pkh',
-    })
+    }),
   );
 
   const hWallet = new FakeHathorWallet();
@@ -743,7 +744,7 @@ test('getMultisigData', async () => {
     Promise.resolve({
       walletType: 'multisig',
       multisigData: 'multisig data',
-    })
+    }),
   );
   await expect(hWallet.getMultisigData()).resolves.toEqual('multisig data');
 
@@ -751,7 +752,7 @@ test('getMultisigData', async () => {
   dataSpy.mockImplementationOnce(() =>
     Promise.resolve({
       walletType: 'multisig',
-    })
+    }),
   );
   await expect(hWallet.getMultisigData()).rejects.toThrow('Multisig data not found in storage');
 });
@@ -897,7 +898,7 @@ test('getTxHistory', async () => {
   hWallet.getTxBalance = jest.fn().mockReturnValue(
     Promise.resolve({
       'mock-token-uid': 456,
-    })
+    }),
   );
   jest.spyOn(storage, 'tokenHistory').mockImplementation(historyMock);
 
@@ -1002,7 +1003,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1048,7 +1049,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1096,7 +1097,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
     expect(txData.outputs).toHaveLength(3);
     expect(txData.outputs).toEqual(
@@ -1114,7 +1115,7 @@ describe('prepare transactions without signature', () => {
           tokenData: 129,
           value: 1n,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1151,7 +1152,7 @@ describe('prepare transactions without signature', () => {
         address: fakeAddress.base58,
         pinCode: '1234',
         signTx: false, // skip the signature
-      })
+      }),
     ).rejects.toThrow('Not enough HTR tokens for deposit or fee: 10 required, 1 available');
   });
 
@@ -1207,7 +1208,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1265,7 +1266,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
     // outputs: data + authority
     expect(txData.outputs).toHaveLength(2);
@@ -1280,7 +1281,7 @@ describe('prepare transactions without signature', () => {
           tokenData: 129,
           value: 2n,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1344,7 +1345,7 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           data: null,
         }),
-      ])
+      ]),
     );
     // outputs: data x2 + change + authority
     expect(txData.outputs).toHaveLength(4);
@@ -1368,7 +1369,7 @@ describe('prepare transactions without signature', () => {
           tokenData: 129,
           value: 2n,
         }),
-      ])
+      ]),
     );
   });
 
@@ -1418,7 +1419,7 @@ describe('prepare transactions without signature', () => {
         address: fakeAddress.base58,
         pinCode: '1234',
         signTx: false, // skip the signature
-      })
+      }),
     ).rejects.toThrow('Not enough tokens to melt: 100 requested, 10 available');
   });
 });
@@ -1442,7 +1443,7 @@ test('build transaction template', async () => {
     build: jest
       .fn()
       .mockImplementation(
-        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx,
       ),
   } as unknown as WalletTxTemplateInterpreter;
   hwallet.txTemplateInterpreter = interpreter;
@@ -1453,7 +1454,7 @@ test('build transaction template', async () => {
   expect(interpreter.build).toHaveBeenCalledTimes(1);
   expect(interpreter.build).toHaveBeenCalledWith(
     [expect.objectContaining({ type: 'action/complete' })],
-    true
+    true,
   );
   expect(dataSpy).not.toHaveBeenCalled();
 });
@@ -1472,7 +1473,7 @@ test('build transaction template with signature', async () => {
           addressIndex: 1,
         },
       ],
-    })
+    }),
   );
 
   const input = new Input('d00d', 0);
@@ -1485,7 +1486,7 @@ test('build transaction template with signature', async () => {
     build: jest
       .fn()
       .mockImplementation(
-        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx,
       ),
   } as unknown as WalletTxTemplateInterpreter;
   hwallet.txTemplateInterpreter = interpreter;
@@ -1499,7 +1500,7 @@ test('build transaction template with signature', async () => {
   expect(interpreter.build).toHaveBeenCalledTimes(1);
   expect(interpreter.build).toHaveBeenCalledWith(
     [expect.objectContaining({ type: 'action/complete' })],
-    true
+    true,
   );
   expect(dataSpy).toHaveBeenCalledTimes(1);
 });

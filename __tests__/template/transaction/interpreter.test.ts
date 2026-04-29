@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import FeeHeader from '../../../src/headers/fee';
 import HathorWallet from '../../../src/new/wallet';
 import { TxTemplateContext } from '../../../src/template/transaction/context';
 import { WalletTxTemplateInterpreter } from '../../../src/template/transaction/interpreter';
-import FeeHeader from '../../../src/headers/fee';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { getDefaultLogger } from '../../../src/types';
 
 describe('Wallet tx-template interpreter', () => {

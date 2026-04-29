@@ -6,14 +6,17 @@
  */
 
 import EventEmitter from 'events';
+
 import { shuffle } from 'lodash';
+
 import txApi from '../api/txApi';
 import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
+import Header from '../headers/base';
+import FeeHeader from '../headers/fee';
 import Address from '../models/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
-import { Fee } from '../utils/fee';
 import Transaction from '../models/transaction';
 import {
   IDataInput,
@@ -26,6 +29,7 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
+import { Fee } from '../utils/fee';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
@@ -33,9 +37,8 @@ import transactionUtils from '../utils/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
 import MineTransaction from '../wallet/mineTransaction';
 import { ISendTransaction as ISendTransactionInterface, OutputType } from '../wallet/types';
+
 import HathorWallet from './wallet';
-import Header from '../headers/base';
-import FeeHeader from '../headers/fee';
 
 export interface ISendInput {
   txId: string;
@@ -250,7 +253,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.storage,
       txData,
       tokenMap,
-      this.changeAddress
+      this.changeAddress,
     );
 
     const partialInputs = [...txData.inputs, ...partialTxData.inputs];
@@ -261,7 +264,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const fee = await Fee.calculate(
       partialInputs,
       partialOutputs,
-      await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
+      await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys())),
     );
 
     if (requiresFees.length > 0 && fee === 0n) {
@@ -295,7 +298,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         outputs: partialOutputs,
       },
       options,
-      fee
+      fee,
     );
 
     const shouldShuffleOutputs =
@@ -433,7 +436,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     try {
       this.transaction = transactionUtils.createTransactionFromData(
         this.fullTxData,
-        this.storage.config.getNetwork()
+        this.storage.config.getNetwork(),
       );
       this.transaction.prepareToSend();
       return this.transaction;
@@ -540,7 +543,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
                 // Get the transaction as a history object
                 const historyTx = await transactionUtils.convertTransactionToHistoryTx(
                   transaction,
-                  storage
+                  storage,
                 );
                 // Add token from a create token transaction to the storage
                 // This just returns if the transaction is not a CREATE_TOKEN_TX
@@ -631,7 +634,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    */
   async run(
     until: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null = null,
-    pin: string | null = null
+    pin: string | null = null,
   ): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {
@@ -683,7 +686,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       await this.storage.utxoSelectAsInput(
         { txId: input.hash, index: input.index },
         selected,
-        SELECT_OUTPUTS_TIMEOUT
+        SELECT_OUTPUTS_TIMEOUT,
       );
     }
   }
@@ -724,7 +727,7 @@ export async function prepareSendTokensData(
   storage: IStorage,
   dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
   options: IUtxoSelectionOptions = {},
-  fee: bigint = 0n
+  fee: bigint = 0n,
 ): Promise<Pick<IDataTx, 'inputs' | 'outputs'>> {
   try {
     return await _prepareSendTokensData(storage, dataTx, options, fee);
@@ -751,7 +754,7 @@ async function _prepareSendTokensData(
   storage: IStorage,
   dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
   options: IUtxoSelectionOptions = {},
-  fee: bigint = 0n
+  fee: bigint = 0n,
 ): Promise<Pick<IDataTx, 'inputs' | 'outputs'>> {
   const token = options.token || NATIVE_TOKEN_UID;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
@@ -820,7 +823,7 @@ async function _prepareSendTokensData(
 
       if (!(await transactionUtils.canUseUtxo(input, storage))) {
         throw new Error(
-          `Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`
+          `Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`,
         );
       }
 
@@ -859,7 +862,7 @@ export async function prepareSendManyTokensData(
   storage: IStorage,
   txData: IDataTx,
   tokenMap: Map<string, boolean>,
-  changeAddress: string | null
+  changeAddress: string | null,
 ): Promise<Pick<IDataTx, 'outputs' | 'inputs'>> {
   const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
   for (const [token, chooseInputs] of tokenMap) {
@@ -889,7 +892,7 @@ export async function prepareSendManyTokensData(
 export async function checkUnspentInput(
   storage: IStorage,
   input: IDataInput,
-  selectedToken: string
+  selectedToken: string,
 ): Promise<{ success: boolean; message: string }> {
   const tx = await storage.getTx(input.txId);
   if (tx === null) {

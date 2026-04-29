@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+
 import {
   AddressSchema,
   AuthorityOutputInstruction,
@@ -51,8 +52,8 @@ describe('parsing variable references', () => {
       getVariable(
         '{foo2}',
         { foo2: 'bar' },
-        z.string().transform(o => `${o}1`)
-      )
+        z.string().transform(o => `${o}1`),
+      ),
     ).toBe('bar1');
     expect(getVariable(`{foo3}`, { foo3: 10 }, z.coerce.bigint())).toBe(10n);
     // Validation/refinement should be applied to value
@@ -60,13 +61,13 @@ describe('parsing variable references', () => {
       getVariable(
         'baz',
         {},
-        z.string().transform(o => `${o}1`)
-      )
+        z.string().transform(o => `${o}1`),
+      ),
     ).toBe('baz1');
     expect(getVariable(11, {}, z.coerce.bigint())).toBe(11n);
     // Should work with any schema
     expect(
-      getVariable('{objfoo}', { objfoo: { foo: '10' } }, z.object({ foo: z.coerce.bigint() }))
+      getVariable('{objfoo}', { objfoo: { foo: '10' } }, z.object({ foo: z.coerce.bigint() })),
     ).toStrictEqual({ foo: 10n });
     expect(getVariable('{numfoo}', { numfoo: '12' }, z.coerce.number())).toBe(12);
     expect(getVariable(123, {}, z.coerce.number())).toBe(123);
@@ -140,7 +141,7 @@ describe('should parse template instructions', () => {
         position: 0,
         index: 1,
         txId,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with default, coersion and variable
     expect(
@@ -149,7 +150,7 @@ describe('should parse template instructions', () => {
         index: '10',
         txId: '{foo}',
         foo: 'bar',
-      })
+      }),
     ).toStrictEqual({
       type: 'input/raw',
       position: -1,
@@ -162,21 +163,21 @@ describe('should parse template instructions', () => {
         type: 'output/raw', // wrong type
         index: 1,
         txId,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RawInputInstruction.safeParse({
         type: 'input/raw',
         index: 'a1', // cannot coerce index
         txId,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RawInputInstruction.safeParse({
         type: 'input/raw',
         index: 10,
         txId: '00', // invalid txId string
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RawInputInstruction.safeParse({
@@ -184,7 +185,7 @@ describe('should parse template instructions', () => {
         position: 'abd', // invalid position
         index: 10,
         txId,
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -198,14 +199,14 @@ describe('should parse template instructions', () => {
         address,
         autoChange: false,
         changeAddress: address,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with default
     expect(
       UtxoSelectInstruction.parse({
         type: 'input/utxo',
         fill: 10,
-      })
+      }),
     ).toStrictEqual({
       type: 'input/utxo',
       position: -1,
@@ -221,7 +222,7 @@ describe('should parse template instructions', () => {
         token: '{tokenKey}',
         address: '{addressKey}',
         changeAddress: '{caddr}',
-      })
+      }),
     ).toStrictEqual({
       type: 'input/utxo',
       position: -1,
@@ -235,7 +236,7 @@ describe('should parse template instructions', () => {
     expect(
       UtxoSelectInstruction.safeParse({
         type: 'invalid-type', // wrong type
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -248,7 +249,7 @@ describe('should parse template instructions', () => {
         count: 10,
         position: 0,
         token,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
@@ -256,7 +257,7 @@ describe('should parse template instructions', () => {
         type: 'input/authority',
         authority: 'melt',
         token,
-      })
+      }),
     ).toStrictEqual({
       type: 'input/authority',
       authority: 'melt',
@@ -272,7 +273,7 @@ describe('should parse template instructions', () => {
         count: '{countKey}',
         token: '{tokenKey}',
         address: '{addressKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'input/authority',
       position: -1,
@@ -287,28 +288,28 @@ describe('should parse template instructions', () => {
         type: 'invalid-type', // wrong type
         authority: 'melt',
         token,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthoritySelectInstruction.safeParse({
         // Missing authority
         type: 'input/authority',
         token,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthoritySelectInstruction.safeParse({
         // Missing token
         type: 'input/authority',
         authority: 'melt',
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthoritySelectInstruction.safeParse({
         type: 'input/authority',
         authority: 'melt',
         token: '00', // Cannot use native token with authority
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -322,14 +323,14 @@ describe('should parse template instructions', () => {
         token,
         timelock: 100,
         authority: 'mint',
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
       RawOutputInstruction.parse({
         type: 'output/raw',
         script: 'cafe',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/raw',
       script: 'cafe',
@@ -345,7 +346,7 @@ describe('should parse template instructions', () => {
         amount: '{amountKey}',
         token: '{tokenKey}',
         timelock: '{timelockKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/raw',
       position: -1,
@@ -360,20 +361,20 @@ describe('should parse template instructions', () => {
       RawOutputInstruction.safeParse({
         type: 'invalid-type', // wrong type
         script: 'cafe',
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RawOutputInstruction.safeParse({
         // Missing script
         type: 'output/raw',
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RawOutputInstruction.safeParse({
         type: 'output/raw',
         script: 'cafe',
         authority: 'none', // Invalid authority
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -387,7 +388,7 @@ describe('should parse template instructions', () => {
         address,
         timelock: 100,
         checkAddress: false,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
@@ -395,7 +396,7 @@ describe('should parse template instructions', () => {
         type: 'output/token',
         amount: '5',
         address,
-      })
+      }),
     ).toStrictEqual({
       type: 'output/token',
       position: -1,
@@ -412,7 +413,7 @@ describe('should parse template instructions', () => {
         token: '{tokenKey}',
         address: '{addressKey}',
         timelock: '{timelockKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/token',
       position: -1,
@@ -428,21 +429,21 @@ describe('should parse template instructions', () => {
         type: 'invalid-type', // wrong type
         amount: 10,
         address,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       TokenOutputInstruction.safeParse({
         // Missing amount
         type: 'output/token',
         address,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       TokenOutputInstruction.safeParse({
         // Missing address
         type: 'output/token',
         amount: 10,
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -458,7 +459,7 @@ describe('should parse template instructions', () => {
         timelock: 100,
         checkAddress: false,
         useCreatedToken: false,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
@@ -467,7 +468,7 @@ describe('should parse template instructions', () => {
         token,
         authority: 'mint',
         address,
-      })
+      }),
     ).toStrictEqual({
       type: 'output/authority',
       position: -1,
@@ -486,7 +487,7 @@ describe('should parse template instructions', () => {
         authority: 'melt',
         address: '{addressKey}',
         timelock: '{timelockKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/authority',
       position: -1,
@@ -504,7 +505,7 @@ describe('should parse template instructions', () => {
         token,
         authority: 'mint',
         address,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthorityOutputInstruction.safeParse({
@@ -512,7 +513,7 @@ describe('should parse template instructions', () => {
         token,
         authority: 'none', // Invalid authority
         address,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthorityOutputInstruction.safeParse({
@@ -520,7 +521,7 @@ describe('should parse template instructions', () => {
         type: 'output/authority',
         token,
         address,
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       AuthorityOutputInstruction.safeParse({
@@ -528,7 +529,7 @@ describe('should parse template instructions', () => {
         type: 'output/authority',
         token,
         authority: 'mint',
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -540,14 +541,14 @@ describe('should parse template instructions', () => {
         data: 'foo',
         token,
         useCreatedToken: false,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
       DataOutputInstruction.parse({
         type: 'output/data',
         data: 'foo',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/data',
       position: -1,
@@ -561,7 +562,7 @@ describe('should parse template instructions', () => {
         type: 'output/data',
         data: '{dataKey}',
         token: '{tokenKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'output/data',
       position: -1,
@@ -574,13 +575,13 @@ describe('should parse template instructions', () => {
       DataOutputInstruction.safeParse({
         type: 'invalid-type', // wrong type
         data: 'foo',
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       DataOutputInstruction.safeParse({
         // Missing data
         type: 'output/data',
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -589,38 +590,38 @@ describe('should parse template instructions', () => {
       ShuffleInstruction.safeParse({
         type: 'action/shuffle',
         target: 'all',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       ShuffleInstruction.safeParse({
         type: 'action/shuffle',
         target: 'inputs',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       ShuffleInstruction.safeParse({
         type: 'action/shuffle',
         target: 'outputs',
-      }).success
+      }).success,
     ).toBe(true);
     // error cases
     expect(
       ShuffleInstruction.safeParse({
         type: 'action/shuffle',
         target: 'invalid', // invalid target
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       ShuffleInstruction.safeParse({
         // missing target
         type: 'action/shuffle',
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       ShuffleInstruction.safeParse({
         type: 'invalid-type', // invalid type
         target: 'all',
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -632,13 +633,13 @@ describe('should parse template instructions', () => {
         address,
         changeAddress: address,
         timelock: 456,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
       CompleteTxInstruction.parse({
         type: 'action/complete',
-      })
+      }),
     ).toStrictEqual({
       type: 'action/complete',
       skipSelection: false,
@@ -654,7 +655,7 @@ describe('should parse template instructions', () => {
         address: '{addrKey}',
         changeAddress: '{caddrKey}',
         timelock: '{timelockKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'action/complete',
       token: '{tokenKey}',
@@ -670,7 +671,7 @@ describe('should parse template instructions', () => {
     expect(
       CompleteTxInstruction.safeParse({
         type: 'invalid-type', // wrong type
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -683,13 +684,13 @@ describe('should parse template instructions', () => {
         tokenName: 'foo',
         tokenSymbol: 'bar',
         tokenVersion: TokenVersion.DEPOSIT,
-      }).success
+      }).success,
     ).toBe(true);
     // Parse with defaults
     expect(
       ConfigInstruction.parse({
         type: 'action/config',
-      })
+      }),
     ).toStrictEqual({
       type: 'action/config',
       tokenVersion: TokenVersion.DEPOSIT,
@@ -703,7 +704,7 @@ describe('should parse template instructions', () => {
         tokenName: '{tokenNameKey}',
         tokenSymbol: '{tokenSymbolKey}',
         tokenVersion: '{tokenVersionKey}',
-      })
+      }),
     ).toStrictEqual({
       type: 'action/config',
       version: '{versionKey}',
@@ -716,7 +717,7 @@ describe('should parse template instructions', () => {
     expect(
       ConfigInstruction.safeParse({
         type: 'invalid-type', // wrong type
-      }).success
+      }).success,
     ).toBe(false);
   });
 
@@ -726,7 +727,7 @@ describe('should parse template instructions', () => {
         type: 'action/setvar',
         name: 'foo',
         value: 'anything',
-      }).success
+      }).success,
     ).toBe(true);
 
     expect(
@@ -734,7 +735,7 @@ describe('should parse template instructions', () => {
         type: 'action/setvar',
         name: 'foo',
         call: { method: 'get_wallet_address' },
-      }).success
+      }).success,
     ).toBe(true);
 
     expect(
@@ -742,7 +743,7 @@ describe('should parse template instructions', () => {
         type: 'action/setvar',
         name: 'foo',
         call: { method: 'get_wallet_balance', token },
-      }).success
+      }).success,
     ).toBe(true);
   });
 
@@ -754,7 +755,7 @@ describe('should parse template instructions', () => {
         method: 'any_method',
         caller: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         args: [123, 'foobar', { foo: [1, 2, 3] }],
-      }).success
+      }).success,
     ).toBe(true);
 
     expect(
@@ -764,7 +765,7 @@ describe('should parse template instructions', () => {
         method: 'any_method',
         caller: '{caller_address}',
         args: [123, '{argument_from_vars}'],
-      }).success
+      }).success,
     ).toBe(true);
   });
 });
@@ -780,13 +781,13 @@ describe('Template schemes', () => {
         type: 'input/raw',
         index: 1,
         txId,
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'input/utxo',
         fill: 10,
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
@@ -794,21 +795,21 @@ describe('Template schemes', () => {
         address,
         authority: 'mint',
         token,
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'output/raw',
         amount: '10',
         script: 'cafe',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'output/token',
         amount: '10',
         address,
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
@@ -817,24 +818,24 @@ describe('Template schemes', () => {
         token,
         authority: 'mint',
         address,
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'output/data',
         data: 'foo',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'action/shuffle',
         target: 'all',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'action/complete',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
@@ -842,14 +843,14 @@ describe('Template schemes', () => {
         version: 3,
         tokenName: 'foo',
         tokenSymbol: 'bar',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
         type: 'action/setvar',
         name: 'foo',
         value: 'anything',
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
@@ -857,7 +858,7 @@ describe('Template schemes', () => {
         id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
         method: 'any_method',
         caller: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-      }).success
+      }).success,
     ).toBe(true);
   });
 
@@ -879,7 +880,7 @@ describe('Template schemes', () => {
           amount: '10',
           address,
         },
-      ]).success
+      ]).success,
     ).toBe(true);
   });
 });

@@ -6,7 +6,20 @@
  */
 
 import { HDPublicKey } from 'bitcore-lib';
+
+import config, { Config } from '../config';
+import {
+  NATIVE_TOKEN_UID,
+  MAX_INPUTS,
+  MAX_OUTPUTS,
+  TOKEN_DEPOSIT_PERCENTAGE,
+  DECIMAL_PLACES,
+  DEFAULT_NATIVE_TOKEN_CONFIG,
+} from '../constants';
+import { UninitializedWalletError } from '../errors';
 import Input from '../models/input';
+import Transaction from '../models/transaction';
+import FullNodeConnection from '../new/connection';
 import {
   ApiVersion,
   IStorage,
@@ -41,27 +54,15 @@ import {
   AuthorityType,
   TokenVersion,
 } from '../types';
-import transactionUtils from '../utils/transaction';
+import { getAddressType } from '../utils/address';
+import { decryptData, checkPassword } from '../utils/crypto';
 import {
   processHistory as processHistoryUtil,
   processSingleTx as processSingleTxUtil,
   processUtxoUnlock,
 } from '../utils/storage';
-import config, { Config } from '../config';
-import { decryptData, checkPassword } from '../utils/crypto';
-import FullNodeConnection from '../new/connection';
-import { getAddressType } from '../utils/address';
+import transactionUtils from '../utils/transaction';
 import walletUtils from '../utils/wallet';
-import {
-  NATIVE_TOKEN_UID,
-  MAX_INPUTS,
-  MAX_OUTPUTS,
-  TOKEN_DEPOSIT_PERCENTAGE,
-  DECIMAL_PLACES,
-  DEFAULT_NATIVE_TOKEN_CONFIG,
-} from '../constants';
-import { UninitializedWalletError } from '../errors';
-import Transaction from '../models/transaction';
 
 export const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -214,7 +215,7 @@ export class Storage implements IStorage {
    * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata> & { seqnum: number })|null>} The address info or null if not found
    */
   async getAddressInfo(
-    base58: string
+    base58: string,
   ): Promise<(IAddressInfo & IAddressMetadata & { seqnum: number }) | null> {
     const address = await this.store.getAddress(base58);
     if (address === null) {
@@ -344,7 +345,7 @@ export class Storage implements IStorage {
    * @returns {AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}>}
    */
   async *getSpentTxs(
-    inputs: Input[]
+    inputs: Input[],
   ): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }> {
     for await (const [index, input] of inputs.entries()) {
       const tx = await this.getTx(input.hash);
@@ -475,7 +476,7 @@ export class Storage implements IStorage {
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
   async *selectUtxos(
-    options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
+    options: Omit<IUtxoFilterOptions, 'reward_lock'> = {},
   ): AsyncGenerator<IUtxo, void, void> {
     const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
@@ -520,7 +521,7 @@ export class Storage implements IStorage {
     token: string,
     authorities: OutputValueType,
     changeAddress: string,
-    chooseInputs: boolean
+    chooseInputs: boolean,
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const newInputs: IDataInput[] = [];
     const newOutputs: IDataOutput[] = [];
@@ -541,7 +542,7 @@ export class Storage implements IStorage {
       if (!chooseInputs) {
         // We cannot choose inputs, so we fail
         throw new Error(
-          `Insufficient funds in the given inputs for ${token}, missing ${singleBalance} more tokens.`
+          `Insufficient funds in the given inputs for ${token}, missing ${singleBalance} more tokens.`,
         );
       }
       // We have a surplus of this token on the outputs, so we need to find utxos to match
@@ -624,7 +625,7 @@ export class Storage implements IStorage {
   async matchTokenBalance(
     token: string,
     balance: Record<'funds' | AuthorityType, OutputValueType>,
-    { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}
+    { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {},
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());
     // balance holds the balance of all tokens on the transaction
@@ -636,7 +637,7 @@ export class Storage implements IStorage {
       token,
       0n,
       addressForChange,
-      chooseInputs
+      chooseInputs,
     );
     newInputs.push(...fundsInputs);
     newOutputs.push(...fundsOutputs);
@@ -649,7 +650,7 @@ export class Storage implements IStorage {
         token,
         1n,
         addressForChange,
-        chooseInputs
+        chooseInputs,
       );
       // match melt
       const { inputs: meltInputs, outputs: meltOutputs } = await this.matchBalanceSelection(
@@ -657,7 +658,7 @@ export class Storage implements IStorage {
         token,
         2n,
         addressForChange,
-        chooseInputs
+        chooseInputs,
       );
 
       newInputs.push(...mintInputs, ...meltInputs);
@@ -683,13 +684,13 @@ export class Storage implements IStorage {
   async fillTx(
     token: string,
     tx: IDataTx,
-    options: IFillTxOptions = {}
+    options: IFillTxOptions = {},
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const tokenBalance = await transactionUtils.calculateTxBalanceToFillTx(token, tx);
     const { inputs: newInputs, outputs: newOutputs } = await this.matchTokenBalance(
       token,
       tokenBalance,
-      options
+      options,
     );
 
     // Validate if we will add too many inputs/outputs
@@ -963,7 +964,7 @@ export class Storage implements IStorage {
   async cleanStorage(
     cleanHistory: boolean = false,
     cleanAddresses: boolean = false,
-    cleanTokens: boolean = false
+    cleanTokens: boolean = false,
   ): Promise<void> {
     return this.store.cleanStorage(cleanHistory, cleanAddresses, cleanTokens);
   }
@@ -1030,7 +1031,7 @@ export class Storage implements IStorage {
     const newAccessData = walletUtils.changeEncryptionPassword(
       accessData,
       oldPassword,
-      newPassword
+      newPassword,
     );
 
     // Save the changes made

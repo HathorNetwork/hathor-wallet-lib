@@ -6,8 +6,10 @@
  */
 
 import { z } from 'zod';
-import { createRequestInstance } from './axiosInstance';
+
 import { transformJsonBigIntResponse } from '../utils/bigint';
+
+import { createRequestInstance } from './axiosInstance';
 
 export const featureActivationSchema = z
   .object({
@@ -70,7 +72,7 @@ const featuresApi = {
           },
           res => {
             reject(res);
-          }
+          },
         );
     });
   },
@@ -93,7 +95,7 @@ const featuresApi = {
           },
           res => {
             reject(res);
-          }
+          },
         );
     });
   },

@@ -1,4 +1,18 @@
 import { isEmpty } from 'lodash';
+
+import ncApi from '../../../../src/api/nano';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../../src/constants';
+import SendTransaction from '../../../../src/new/sendTransaction';
+import HathorWallet from '../../../../src/new/wallet';
+import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
+import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
+import dateFormatter from '../../../../src/utils/date';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -7,20 +21,6 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../../helpers/wallet.helper';
-
-import ncApi from '../../../../src/api/nano';
-import HathorWallet from '../../../../src/new/wallet';
-import SendTransaction from '../../../../src/new/sendTransaction';
-import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
-import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import {
-  CREATE_TOKEN_TX_VERSION,
-  NATIVE_TOKEN_UID,
-  TOKEN_AUTHORITY_MASK,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../../../src/constants';
-import dateFormatter from '../../../../src/utils/date';
 
 const DEBUG = true;
 
@@ -84,7 +84,7 @@ describe('Template execution', () => {
     const initializeTx = await interpreter.buildAndSign(
       initializeTemplate,
       DEFAULT_PIN_CODE,
-      DEBUG
+      DEBUG,
     );
     const initializeSendTx = new SendTransaction({
       storage: hWallet.storage,
@@ -207,7 +207,7 @@ describe('Template execution', () => {
     const withdrawalTx = await interpreter.buildAndSign(
       withdrawalTemplate,
       DEFAULT_PIN_CODE,
-      DEBUG
+      DEBUG,
     );
     const withdrawalSendTx = new SendTransaction({
       storage: hWallet.storage,
@@ -283,7 +283,7 @@ describe('Template execution', () => {
           value: expect.anything(), // change output
           tokenData: 0,
         }),
-      ])
+      ]),
     );
   });
 
@@ -348,7 +348,7 @@ describe('Template execution', () => {
           value: 4n,
           tokenData: 0,
         }),
-      ])
+      ]),
     );
 
     // Grant authority
@@ -395,7 +395,7 @@ describe('Template execution', () => {
       contractId,
       [],
       [tokenUID, NATIVE_TOKEN_UID],
-      []
+      [],
     );
     expect(BigInt(ncStateMint.balances[NATIVE_TOKEN_UID].value)).toBe(93n);
     expect(BigInt(ncStateMint.balances[tokenUID].value)).toBe(200n);
@@ -423,7 +423,7 @@ describe('Template execution', () => {
           value: TOKEN_MINT_MASK,
           tokenData: TOKEN_AUTHORITY_MASK | 1,
         }),
-      ])
+      ]),
     );
 
     const revokeTemplate = TransactionTemplateBuilder.new()
@@ -447,7 +447,7 @@ describe('Template execution', () => {
       contractId,
       [],
       [tokenUID, NATIVE_TOKEN_UID],
-      []
+      [],
     );
 
     expect(BigInt(ncStateRevoke.balances[NATIVE_TOKEN_UID].value)).toBe(93n);

@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { createRequestInstance } from './axiosInstance';
 import { ApiVersion } from '../types';
+
+import { createRequestInstance } from './axiosInstance';
 
 /**
  * Api calls for version
@@ -36,7 +37,7 @@ const versionApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -59,7 +60,7 @@ const versionApi = {
           },
           err => {
             reject(err);
-          }
+          },
         );
     });
   },

@@ -13,7 +13,7 @@ describe('Feature api', () => {
         expect.objectContaining({
           name: 'INCREASE_MAX_MERKLE_PATH_LENGTH',
         }),
-      ])
+      ]),
     );
   });
 

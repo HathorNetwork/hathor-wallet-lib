@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Address from '../models/address';
+import { NanoContractAction } from '../nano_contracts/types';
 import {
   IStorage,
   ILogger,
@@ -13,9 +15,8 @@ import {
   OutputValueType,
   TokenVersion,
 } from '../types';
-import { NanoContractAction } from '../nano_contracts/types';
+
 import WalletConnection from './connection';
-import Address from '../models/address';
 
 /**
  * Parameters for HathorWallet constructor

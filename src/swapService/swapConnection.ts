@@ -6,9 +6,10 @@
  */
 
 import { EventEmitter } from 'events';
+
+import { ILogger, getDefaultLogger } from '../types';
 import { ConnectionState } from '../wallet/types';
 import GenericWebSocket from '../websocket';
-import { ILogger, getDefaultLogger } from '../types';
 
 /**
  * This is a Websocket Connection with the Atomic Swap Service

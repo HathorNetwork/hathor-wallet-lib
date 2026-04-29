@@ -5,10 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
-import { HistorySyncMode, WalletType, TokenVersion, SCANNING_POLICY } from '../../src/types';
+import MockAdapter from 'axios-mock-adapter';
+
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import Transaction from '../../src/models/transaction';
 import { MemoryStore, Storage } from '../../src/storage';
+import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
+import { HistorySyncMode, WalletType, TokenVersion, SCANNING_POLICY } from '../../src/types';
 import {
   scanPolicyStartAddresses,
   checkScanningPolicy,
@@ -18,9 +22,6 @@ import {
   apiSyncHistory,
   addCreatedTokenFromTx,
 } from '../../src/utils/storage';
-import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
-import CreateTokenTransaction from '../../src/models/create_token_transaction';
-import Transaction from '../../src/models/transaction';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {
@@ -43,7 +44,7 @@ describe('scanning policy methods', () => {
       Promise.resolve({
         policy: 'gap-limit',
         gapLimit,
-      })
+      }),
     );
     const policyMock = jest.spyOn(storage, 'getScanningPolicy');
 
@@ -273,7 +274,7 @@ describe('_updateTokensData', () => {
     tokensSet.add('mock-token');
     jest.useFakeTimers();
     const promiseObj = _updateTokensData(storage, tokensSet).catch(
-      err => `Catched error: ${err.message}`
+      err => `Catched error: ${err.message}`,
     );
     await jest.advanceTimersToNextTimerAsync();
     await jest.advanceTimersToNextTimerAsync();
@@ -283,7 +284,7 @@ describe('_updateTokensData', () => {
     await jest.advanceTimersToNextTimerAsync();
     await jest.advanceTimersToNextTimerAsync();
     await expect(promiseObj).resolves.toEqual(
-      `Catched error: Too many attempts at fetchTokenData for ${mockToken.uid}`
+      `Catched error: Too many attempts at fetchTokenData for ${mockToken.uid}`,
     );
 
     // Verify
@@ -329,7 +330,7 @@ describe('_updateTokensData', () => {
     let beforeTime;
     let afterTime;
     const promiseObj = _updateTokensData(storage, tokensSet).catch(
-      err => `Catched error: ${err.message}`
+      err => `Catched error: ${err.message}`,
     );
     beforeTime = jest.now();
     await jest.advanceTimersToNextTimerAsync();
@@ -362,7 +363,7 @@ describe('_updateTokensData', () => {
     expect(afterTime - beforeTime).toEqual(16000);
 
     await expect(promiseObj).resolves.toEqual(
-      `Catched error: Too many attempts at fetchTokenData for ${mockToken.uid}`
+      `Catched error: Too many attempts at fetchTokenData for ${mockToken.uid}`,
     );
 
     // Verify

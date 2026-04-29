@@ -6,16 +6,16 @@
  */
 
 import { NATIVE_TOKEN_UID, FEE_PER_OUTPUT } from '../../src/constants';
+import { SendTxError, WalletError } from '../../src/errors';
+import FeeHeader from '../../src/headers/fee';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
+import { TokenVersion } from '../../src/types';
 import SendTransactionWalletService, {
   AddressPathMap,
 } from '../../src/wallet/sendTransactionWalletService';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { OutputType } from '../../src/wallet/types';
-import Network from '../../src/models/network';
-import Address from '../../src/models/address';
-import { TokenVersion } from '../../src/types';
-import FeeHeader from '../../src/headers/fee';
-import { SendTxError, WalletError } from '../../src/errors';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
 
 describe('prepareTxData', () => {
   let wallet;
@@ -143,7 +143,7 @@ describe('prepareTxData', () => {
           token: NATIVE_TOKEN_UID,
           value: 2n,
         }),
-      ])
+      ]),
     );
 
     // Check outputs
@@ -180,7 +180,7 @@ describe('prepareTxData', () => {
           authorities: 0n,
           timelock: null,
         }),
-      ])
+      ]),
     );
   });
 
@@ -271,7 +271,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Invalid input selection. Input non-existent-tx at index 0.'
+      'Invalid input selection. Input non-existent-tx at index 0.',
     );
   });
 
@@ -304,7 +304,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Invalid input selection. Input wrong-token-tx at index 0 has token 02 that is not on the outputs.'
+      'Invalid input selection. Input wrong-token-tx at index 0 has token 02 that is not on the outputs.',
     );
   });
 
@@ -362,7 +362,7 @@ describe('prepareTxData', () => {
 
     // Check change output
     const changeOutput = txData.outputs.find(
-      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc'
+      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
     );
     expect(changeOutput).toBeDefined();
     expect(changeOutput.value).toBe(5n);
@@ -383,7 +383,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'No utxos available to fill the request. Token: 01 - Amount: 10.'
+      'No utxos available to fill the request. Token: 01 - Amount: 10.',
     );
   });
 
@@ -416,7 +416,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Invalid input selection. Sum of inputs for token 01 is smaller than the sum of outputs.'
+      'Invalid input selection. Sum of inputs for token 01 is smaller than the sum of outputs.',
     );
   });
 
@@ -500,7 +500,7 @@ describe('prepareTxData', () => {
         index: 0,
         token: '01',
         value: 10n,
-      })
+      }),
     );
 
     // Verify getUtxoFromId was called only once (during validation, not during final processing)
@@ -550,7 +550,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Output is missing address or token.'
+      'Output is missing address or token.',
     );
   });
 
@@ -615,7 +615,7 @@ describe('prepareTxData', () => {
 
     // Verify change outputs exist for both tokens
     const changeOutputs = txData.outputs.filter(
-      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc'
+      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
     );
     expect(changeOutputs).toHaveLength(2);
     expect(changeOutputs.find(o => o.token === '01' && o.value === 2n)).toBeDefined();
@@ -733,7 +733,7 @@ describe('prepareTxData', () => {
 
     // Verify all tokens have proper change outputs
     const changeOutputs = txData.outputs.filter(
-      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc'
+      o => o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
     );
     expect(changeOutputs).toHaveLength(3);
   });
@@ -995,7 +995,7 @@ describe('prepareTxData', () => {
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Invalid input selection. Input wrong-mapping at index 0 has token 02 that is not on the outputs.'
+      'Invalid input selection. Input wrong-mapping at index 0 has token 02 that is not on the outputs.',
     );
   });
 
@@ -1134,7 +1134,7 @@ describe('prepareTxData', () => {
     const promise = sendTransaction.prepareTxData();
     await expect(promise).rejects.toBeInstanceOf(SendTxError);
     await expect(promise).rejects.toThrow(
-      'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.'
+      'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.',
     );
   });
 
@@ -1191,7 +1191,7 @@ describe('prepareTxData', () => {
     await expect(sendTransaction.prepareTx()).rejects.toThrow(SendTxError);
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
     await expect(sendTransaction.prepareTx()).rejects.toThrow(
-      'an HTR input was provided but no HTR is required'
+      'an HTR input was provided but no HTR is required',
     );
   });
 });
@@ -1307,7 +1307,7 @@ describe('selectUtxosToUse', () => {
     };
 
     await expect(sendTransaction.selectUtxosToUse(tokenAmountMap)).rejects.toThrow(
-      'No utxos available to fill the request. Token: 01 - Amount: 100.'
+      'No utxos available to fill the request. Token: 01 - Amount: 100.',
     );
   });
 
@@ -1883,7 +1883,7 @@ describe('prepareTxData - Fee Tokens', () => {
 
     // Verify change outputs exist for fee token
     const feeTokenChange = txData.outputs.find(
-      o => o.token === FEE_TOKEN_UID && o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc'
+      o => o.token === FEE_TOKEN_UID && o.address === 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
     );
     expect(feeTokenChange).toBeDefined();
     expect(feeTokenChange!.value).toBe(100n);
@@ -1936,7 +1936,7 @@ describe('prepareTxData - Fee Tokens', () => {
 
     // Verify that the error is thrown when no HTR UTXOs are available for fee payment
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'No utxos available to fill the request. Token: 00'
+      'No utxos available to fill the request. Token: 00',
     );
   });
 
@@ -2059,7 +2059,7 @@ describe('prepareTxData - Fee Tokens', () => {
 
     // Should fail: HTR input (2n) < HTR needed (3n = 1n output + 2n fee)
     await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      `Invalid input selection. Sum of inputs for token ${NATIVE_TOKEN_UID} is smaller than the sum of outputs.`
+      `Invalid input selection. Sum of inputs for token ${NATIVE_TOKEN_UID} is smaller than the sum of outputs.`,
     );
   });
 
@@ -2291,7 +2291,7 @@ describe('prepareTx - Fee Tokens', () => {
 
     const htrOutputs = transaction.outputs.filter(o => o.tokenData === 0);
     const feeTokenOutputs = transaction.outputs.filter(
-      o => o.tokenData > 0 && transaction.tokens[o.tokenData - 1] === FEE_TOKEN_UID
+      o => o.tokenData > 0 && transaction.tokens[o.tokenData - 1] === FEE_TOKEN_UID,
     );
 
     expect(feeTokenOutputs).toHaveLength(2);
@@ -2437,7 +2437,7 @@ describe('prepareTx - Fee Tokens', () => {
     // Create new instance to test the message (prepareTx mutates internal state)
     sendTransaction = new SendTransactionWalletService(wallet, { outputs });
     await expect(sendTransaction.prepareTx()).rejects.toThrow(
-      `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
+      `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`,
     );
   });
 
@@ -2518,7 +2518,7 @@ describe('signTx preconditions', () => {
     const sendTransaction = new SendTransactionWalletService(wallet);
     await expect(sendTransaction.signTx('1234')).rejects.toThrow(WalletError);
     await expect(sendTransaction.signTx('1234')).rejects.toThrow(
-      "Can't sign transaction if it's null."
+      "Can't sign transaction if it's null.",
     );
   });
 
@@ -2545,7 +2545,7 @@ describe('signTx preconditions', () => {
     sendTransaction.utxosAddressPath = []; // mismatch: 0 paths vs 1 input
     await expect(sendTransaction.signTx('1234')).rejects.toThrow(SendTxError);
     await expect(sendTransaction.signTx('1234')).rejects.toThrow(
-      'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
+      'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.',
     );
   });
 });
@@ -2617,7 +2617,7 @@ describe('validateUtxos', () => {
     const result = await sendTransaction.validateUtxos(
       { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
       map,
-      { ignoreNative: true }
+      { ignoreNative: true },
     );
 
     // Post-refactor contract: returns void
@@ -2665,7 +2665,7 @@ describe('validateUtxos', () => {
     await sendTransaction.validateUtxos(
       { [NATIVE_TOKEN_UID]: { version: TokenVersion.NATIVE, amount: 5n } },
       map,
-      { onlyNative: true }
+      { onlyNative: true },
     );
 
     expect(map.get(htrInput)).toBe('m/htr');
@@ -2692,7 +2692,7 @@ describe('validateUtxos', () => {
     const map = new AddressPathMap();
     await sendTransaction.validateUtxos(
       { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-      map
+      map,
     );
 
     expect(map.get(input)).toBe('m/change');
@@ -2722,7 +2722,7 @@ describe('validateUtxos', () => {
 
     await sendTransaction.validateUtxos(
       { '02': { version: TokenVersion.FEE, amount: 10n } },
-      new AddressPathMap()
+      new AddressPathMap(),
     );
 
     expect(sendTransaction._feeAmount).toBe(FEE_PER_OUTPUT);
@@ -2738,8 +2738,8 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        new AddressPathMap()
-      )
+        new AddressPathMap(),
+      ),
     ).rejects.toThrow('Invalid input selection. Input missing at index 0.');
   });
 
@@ -2761,8 +2761,8 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        new AddressPathMap()
-      )
+        new AddressPathMap(),
+      ),
     ).rejects.toThrow('has token wrong that is not on the outputs');
   });
 
@@ -2775,8 +2775,8 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        new AddressPathMap()
-      )
+        new AddressPathMap(),
+      ),
     ).rejects.toThrow('Token 01 is in the outputs but there are no inputs for it.');
   });
 
@@ -2798,8 +2798,8 @@ describe('validateUtxos', () => {
     await expect(
       sendTransaction.validateUtxos(
         { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
-        new AddressPathMap()
-      )
+        new AddressPathMap(),
+      ),
     ).rejects.toThrow('Sum of inputs for token 01 is smaller than the sum of outputs');
   });
 });

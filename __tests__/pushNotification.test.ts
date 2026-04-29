@@ -1,7 +1,13 @@
+// Must load before any module that imports walletServiceAxios — the helper
+// registers a module-level jest.mock() and Jest only auto-hoists jest.mock
+// calls in the test file itself, not in transitively-imported helpers.
+// eslint-disable-next-line import/order
 import { mockAxiosAdapter } from './__mock_helpers__/axios-adapter.mock';
-import { buildWalletToAuthenticateApiCall } from './__mock_helpers__/wallet-service.fixtures';
-import { PushNotification, PushNotificationProvider } from '../src/pushNotification';
+
 import config from '../src/config';
+import { PushNotification, PushNotificationProvider } from '../src/pushNotification';
+
+import { buildWalletToAuthenticateApiCall } from './__mock_helpers__/wallet-service.fixtures';
 
 test('registerDevice', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
@@ -80,7 +86,7 @@ test('updateDevice', async () => {
   });
 
   await expect(invalidCall).rejects.toThrow(
-    'Error updating push notification settings for device.'
+    'Error updating push notification settings for device.',
   );
 });
 

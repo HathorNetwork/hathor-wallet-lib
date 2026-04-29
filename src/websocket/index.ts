@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import BaseWebSocket, { WsOptions } from './base';
 import { JSONBigInt } from '../utils/bigint';
+
+import BaseWebSocket, { WsOptions } from './base';
 
 /**
  * Handles websocket connections and message transmission

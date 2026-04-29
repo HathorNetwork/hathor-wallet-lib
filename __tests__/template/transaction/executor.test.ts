@@ -6,6 +6,11 @@
  */
 
 import { cloneDeep } from 'lodash';
+
+import Input from '../../../src/models/input';
+import Network from '../../../src/models/network';
+import Output from '../../../src/models/output';
+import { TxTemplateContext } from '../../../src/template/transaction/context';
 import {
   execAuthorityOutputInstruction,
   execAuthoritySelectInstruction,
@@ -22,8 +27,6 @@ import {
   findInstructionExecution,
   runInstruction,
 } from '../../../src/template/transaction/executor';
-import { TxTemplateContext } from '../../../src/template/transaction/context';
-import { getDefaultLogger } from '../../../src/types';
 import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
@@ -35,9 +38,7 @@ import {
   TokenOutputInstruction,
   UtxoSelectInstruction,
 } from '../../../src/template/transaction/instructions';
-import Network from '../../../src/models/network';
-import Output from '../../../src/models/output';
-import Input from '../../../src/models/input';
+import { getDefaultLogger } from '../../../src/types';
 
 /**
  * This DEBUG constant will enable or disable "build time" debug logs
@@ -84,14 +85,14 @@ describe('findInstructionExecution', () => {
         type: 'input/raw',
         index: 0,
         txId,
-      })
+      }),
     ).toBe(execRawInputInstruction);
 
     expect(
       findInstructionExecution({
         type: 'input/utxo',
         fill: 40,
-      })
+      }),
     ).toBe(execUtxoSelectInstruction);
 
     expect(
@@ -99,7 +100,7 @@ describe('findInstructionExecution', () => {
         type: 'input/authority',
         authority: 'mint',
         token,
-      })
+      }),
     ).toBe(execAuthoritySelectInstruction);
 
     expect(
@@ -107,7 +108,7 @@ describe('findInstructionExecution', () => {
         type: 'output/raw',
         script: 'cafe',
         amount: 10,
-      })
+      }),
     ).toBe(execRawOutputInstruction);
 
     expect(
@@ -115,7 +116,7 @@ describe('findInstructionExecution', () => {
         type: 'output/token',
         amount: 23,
         address,
-      })
+      }),
     ).toBe(execTokenOutputInstruction);
 
     expect(
@@ -124,27 +125,27 @@ describe('findInstructionExecution', () => {
         authority: 'mint',
         token,
         address,
-      })
+      }),
     ).toBe(execAuthorityOutputInstruction);
 
     expect(
       findInstructionExecution({
         type: 'output/data',
         data: 'cafe',
-      })
+      }),
     ).toBe(execDataOutputInstruction);
 
     expect(
       findInstructionExecution({
         type: 'action/shuffle',
         target: 'all',
-      })
+      }),
     ).toBe(execShuffleInstruction);
 
     expect(
       findInstructionExecution({
         type: 'action/complete',
-      })
+      }),
     ).toBe(execCompleteTxInstruction);
 
     expect(
@@ -153,7 +154,7 @@ describe('findInstructionExecution', () => {
         version: 5,
         tokenName: 'foo',
         tokenSymbol: 'bar',
-      })
+      }),
     ).toBe(execConfigInstruction);
 
     expect(
@@ -161,14 +162,14 @@ describe('findInstructionExecution', () => {
         type: 'action/setvar',
         name: 'foo',
         value: 'bar',
-      })
+      }),
     ).toBe(execSetVarInstruction);
 
     expect(
       findInstructionExecution({
         type: 'action/fee',
         amount: 100,
-      })
+      }),
     ).toBe(execFeeInstruction);
   });
 
@@ -178,59 +179,59 @@ describe('findInstructionExecution', () => {
         type: 'input/raw',
         index: 300,
         txId,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'input/utxo',
         fill: '11g',
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'input/authority',
         authority: 'none',
         token,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'output/raw',
         script: 'caf',
         amount: 10,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'output/token',
         amount: '23g',
         address,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'output/authority',
         authority: 'none',
         token,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'output/data',
         data: { foo: 'bar' },
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'action/shuffle',
         target: 'none',
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'action/complete',
         token: 123,
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
@@ -239,12 +240,12 @@ describe('findInstructionExecution', () => {
         signalBits: 8001,
         tokenName: '',
         tokenSymbol: 'foobar',
-      })
+      }),
     ).toThrow();
     expect(() =>
       findInstructionExecution({
         type: 'action/setvar',
-      })
+      }),
     ).toThrow();
   });
 });
@@ -261,7 +262,7 @@ const RawInputExecutorTest = async executor => {
             token_data: 1,
           },
         ],
-      })
+      }),
     ),
   };
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
@@ -617,7 +618,7 @@ const ChargeableInputsTest = async executor => {
             token_data: 1,
           },
         ],
-      })
+      }),
     ),
   };
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
@@ -780,7 +781,7 @@ describe('tokenVersion validation in output instructions', () => {
     });
 
     await expect(execRawOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
-      'Current transaction does not have a token version'
+      'Current transaction does not have a token version',
     );
   });
 
@@ -799,7 +800,7 @@ describe('tokenVersion validation in output instructions', () => {
     });
 
     await expect(execDataOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
-      'Current transaction does not have a token version'
+      'Current transaction does not have a token version',
     );
   });
 
@@ -820,7 +821,7 @@ describe('tokenVersion validation in output instructions', () => {
     });
 
     await expect(execTokenOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
-      'Current transaction does not have a token version'
+      'Current transaction does not have a token version',
     );
   });
 
@@ -841,7 +842,7 @@ describe('tokenVersion validation in output instructions', () => {
     });
 
     await expect(execAuthorityOutputInstruction(interpreter, ctx, ins)).rejects.toThrow(
-      'Current transaction does not have a token version'
+      'Current transaction does not have a token version',
     );
   });
 });

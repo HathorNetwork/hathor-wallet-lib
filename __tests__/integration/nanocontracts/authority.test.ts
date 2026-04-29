@@ -1,16 +1,17 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
+
+import ncApi from '../../../src/api/nano';
 import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
 } from '../../../src/constants';
-import ncApi from '../../../src/api/nano';
+import { NanoContractTransactionError } from '../../../src/errors';
+import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
 import { bufferToHex } from '../../../src/utils/buffer';
 import helpersUtils from '../../../src/utils/helpers';
-import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
-import { NanoContractTransactionError } from '../../../src/errors';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
 
 describe('Authority actions blueprint test', () => {
   /** @type HathorWallet */
@@ -75,7 +76,7 @@ describe('Authority actions blueprint test', () => {
     const txInitialize = await wallet.createAndSendNanoContractTransaction(
       NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
-      initializeData
+      initializeData,
     );
     await checkTxValid(wallet, txInitialize);
     const txInitializeData = await wallet.getFullTxById(txInitialize.hash);
@@ -116,8 +117,8 @@ describe('Authority actions blueprint test', () => {
         createTokenMethod,
         'abc',
         createTokenData,
-        createTokenOptions
-      )
+        createTokenOptions,
+      ),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Error with invalid mint authority address
@@ -129,8 +130,8 @@ describe('Authority actions blueprint test', () => {
         {
           ...createTokenOptions,
           mintAuthorityAddress: 'abc',
-        }
-      )
+        },
+      ),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Error with invalid melt authority address
@@ -142,8 +143,8 @@ describe('Authority actions blueprint test', () => {
         {
           ...createTokenOptions,
           meltAuthorityAddress: 'abc',
-        }
-      )
+        },
+      ),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Create token and execute nano method with withdrawal action
@@ -152,7 +153,7 @@ describe('Authority actions blueprint test', () => {
       createTokenMethod,
       address0,
       createTokenData,
-      createTokenOptions
+      createTokenOptions,
     );
     await checkTxValid(wallet, txCreateToken);
     const txCreateTokenData = await wallet.getFullTxById(txCreateToken.hash);
@@ -183,7 +184,7 @@ describe('Authority actions blueprint test', () => {
     const ncState = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     // Deposit 100 - Withdrawal 30 of HTR
@@ -216,7 +217,7 @@ describe('Authority actions blueprint test', () => {
     const txGrant1 = await wallet.createAndSendNanoContractTransaction(
       'grant_authority',
       address0,
-      grantData1
+      grantData1,
     );
     await checkTxValid(wallet, txGrant1);
     const txGrant1Data = await wallet.getFullTxById(txGrant1.hash);
@@ -232,7 +233,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateGrant1 = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateGrant1.balances[txCreateToken.hash].value)).toBe(0n);
@@ -255,7 +256,7 @@ describe('Authority actions blueprint test', () => {
     const txGrant2 = await wallet.createAndSendNanoContractTransaction(
       'grant_authority',
       address0,
-      grantData2
+      grantData2,
     );
     await checkTxValid(wallet, txGrant2);
     const txGrant2Data = await wallet.getFullTxById(txGrant2.hash);
@@ -275,7 +276,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateGrant2 = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateGrant2.balances[txCreateToken.hash].value)).toBe(0n);
@@ -303,7 +304,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateMint = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateMint.balances[NATIVE_TOKEN_UID].value)).toBe(50n);
@@ -326,7 +327,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateMelt = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateMelt.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
@@ -356,7 +357,7 @@ describe('Authority actions blueprint test', () => {
     const txAcquire = await wallet.createAndSendNanoContractTransaction(
       'acquire_authority',
       address0,
-      acquireData
+      acquireData,
     );
     await checkTxValid(wallet, txAcquire);
     const txAcquireData = await wallet.getFullTxById(txAcquire.hash);
@@ -373,7 +374,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateAcquire = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateAcquire.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
@@ -403,7 +404,7 @@ describe('Authority actions blueprint test', () => {
     const ncStateRevoke = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
-      [txCreateToken.hash, NATIVE_TOKEN_UID]
+      [txCreateToken.hash, NATIVE_TOKEN_UID],
     );
 
     expect(BigInt(ncStateRevoke.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
@@ -456,7 +457,7 @@ describe('Authority actions blueprint test', () => {
       NANO_CONTRACTS_INITIALIZE_METHOD,
       address2,
       newInitializeData,
-      singleUtxoCreateTokenOptions
+      singleUtxoCreateTokenOptions,
     );
     await checkTxValid(wallet, initializeTokenCreate);
     const initializeTokenCreateData = await wallet.getFullTxById(initializeTokenCreate.hash);
@@ -525,18 +526,18 @@ describe('Authority actions blueprint test', () => {
         NANO_CONTRACTS_INITIALIZE_METHOD,
         newAddress0,
         twoUtxosInitializeData,
-        twoUtxosCreateTokenOptions
+        twoUtxosCreateTokenOptions,
       );
     await checkTxValid(newWallet, twoUtxosInitializeTokenCreate);
     const twoUtxosInitializeTokenCreateData = await newWallet.getFullTxById(
-      twoUtxosInitializeTokenCreate.hash
+      twoUtxosInitializeTokenCreate.hash,
     );
 
     expect(twoUtxosInitializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
     expect(twoUtxosInitializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
     expect(twoUtxosInitializeTokenCreateData.tx.token_name).toBe(twoUtxosCreateTokenOptions.name);
     expect(twoUtxosInitializeTokenCreateData.tx.token_symbol).toBe(
-      twoUtxosCreateTokenOptions.symbol
+      twoUtxosCreateTokenOptions.symbol,
     );
     // Two utxos were used
     expect(twoUtxosInitializeTokenCreateData.tx.inputs.length).toBe(2);
@@ -574,7 +575,7 @@ describe('Authority actions blueprint test', () => {
       'create_token_no_deposit',
       address0,
       newCreateTokenData,
-      newCreateTokenOptions
+      newCreateTokenOptions,
     );
     await checkTxValid(wallet, newTxCreateToken);
     const newTxCreateTokenData = await wallet.getFullTxById(newTxCreateToken.hash);
@@ -620,7 +621,7 @@ describe('Authority actions blueprint test', () => {
     const txDepositAndGrant = await wallet.createAndSendNanoContractTransaction(
       'deposit_and_grant',
       address0,
-      depositAndGrantData
+      depositAndGrantData,
     );
     await checkTxValid(wallet, txDepositAndGrant);
     const txDepositAndGrantData = await wallet.getFullTxById(txDepositAndGrant.hash);

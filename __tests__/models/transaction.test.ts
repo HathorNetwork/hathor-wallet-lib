@@ -6,15 +6,7 @@
  */
 
 import lodash from 'lodash';
-import Transaction from '../../src/models/transaction';
-import CreateTokenTransaction from '../../src/models/create_token_transaction';
-import Output from '../../src/models/output';
-import Input from '../../src/models/input';
-import P2PKH from '../../src/models/p2pkh';
-import Address from '../../src/models/address';
-import Network from '../../src/models/network';
-import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
-import helpers from '../../src/utils/helpers';
+
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
 import {
   CreateTokenTxInvalid,
@@ -22,12 +14,21 @@ import {
   MaximumNumberOutputsError,
   ParseError,
 } from '../../src/errors';
-import { nftCreationTx } from '../__fixtures__/sample_txs';
+import Address from '../../src/models/address';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import Input from '../../src/models/input';
+import Network from '../../src/models/network';
+import Output from '../../src/models/output';
+import P2PKH from '../../src/models/p2pkh';
+import Transaction from '../../src/models/transaction';
 import { TokenVersion } from '../../src/types';
+import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
+import helpers from '../../src/utils/helpers';
+import { nftCreationTx } from '../__fixtures__/sample_txs';
 
 const compareTxs = (
   tx: Transaction | CreateTokenTransaction,
-  tx2: Transaction | CreateTokenTransaction
+  tx2: Transaction | CreateTokenTransaction,
 ) => {
   expect(tx2.version).toBe(tx.version);
   expect(tx2.tokens.length).toBe(tx.tokens.length);
@@ -50,10 +51,10 @@ const compareTxs = (
     expect(bufferToHex(tx2.outputs[i].script)).toBe(bufferToHex(tx.outputs[i].script));
     if (tx2.outputs[i].decodedScript) {
       expect(tx2.outputs[i].decodedScript.address.base58).toBe(
-        tx.outputs[i].decodedScript.address.base58
+        tx.outputs[i].decodedScript.address.base58,
       );
       expect(tx2.outputs[i].decodedScript.address.network.name).toBe(
-        tx.outputs[i].decodedScript.address.network.name
+        tx.outputs[i].decodedScript.address.network.name,
       );
     }
   }
@@ -357,7 +358,7 @@ test('Known transactions hash', () => {
   expect(tx.inputs.length).toBe(1);
   expect(tx.outputs.length).toBe(2);
   expect(tx.inputs[0].hash).toBe(
-    '0082c7dd1f0ceb8867219dcca68540abe77222d11bb2dc67a7af1f04640ea1f7'
+    '0082c7dd1f0ceb8867219dcca68540abe77222d11bb2dc67a7af1f04640ea1f7',
   );
   expect(tx.inputs[0].index).toBe(1);
   expect(tx.outputs[0].value).toBe(100n);
@@ -390,7 +391,7 @@ test('Known transactions hash', () => {
   expect(tx2.inputs.length).toBe(1);
   expect(tx2.outputs.length).toBe(4);
   expect(tx2.inputs[0].hash).toBe(
-    '0026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc31'
+    '0026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc31',
   );
   expect(tx2.inputs[0].index).toBe(1);
   expect(tx2.outputs[0].value).toBe(992n);
@@ -432,15 +433,15 @@ test('Known transactions hash', () => {
   expect(tx3.inputs.length).toBe(3);
   expect(tx3.outputs.length).toBe(4);
   expect(tx3.inputs[0].hash).toBe(
-    '0044185239e750d0d7befd7758b377d8f682194fca1614b4ef6e31acbbca5636'
+    '0044185239e750d0d7befd7758b377d8f682194fca1614b4ef6e31acbbca5636',
   );
   expect(tx3.inputs[0].index).toBe(0);
   expect(tx3.inputs[1].hash).toBe(
-    '0028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef'
+    '0028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef',
   );
   expect(tx3.inputs[1].index).toBe(1);
   expect(tx3.inputs[2].hash).toBe(
-    '00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae'
+    '00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae',
   );
   expect(tx3.inputs[2].index).toBe(1);
   expect(tx3.outputs[0].value).toBe(77n);
@@ -525,7 +526,7 @@ describe('NFT Validation', () => {
     // Wrong Token Script
     txInstance.outputs[0].tokenData = 0;
     txInstance.outputs[0].script = Buffer.from(historyTx.outputs[0].script, 'base64').toString(
-      'hex'
+      'hex',
     );
     expect(() => txInstance.validateNft(network)).toThrow('not a DataScript');
   });

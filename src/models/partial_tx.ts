@@ -8,18 +8,6 @@
 // eslint-disable-next-line max-classes-per-file -- These classes are well organized within this file
 import { get } from 'lodash';
 
-import Input from './input';
-import Output from './output';
-import Transaction from './transaction';
-import Network from './network';
-
-import P2PKH from './p2pkh';
-import P2SH from './p2sh';
-
-import transactionUtils from '../utils/transaction';
-import helpers from '../utils/helpers';
-import { IndexOOBError, UnsupportedScriptError } from '../errors';
-
 import txApi from '../api/txApi';
 import {
   DEFAULT_TX_VERSION,
@@ -29,7 +17,17 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
+import { IndexOOBError, UnsupportedScriptError } from '../errors';
 import { IDataInput, IDataOutput, IDataTx, OutputValueType } from '../types';
+import helpers from '../utils/helpers';
+import transactionUtils from '../utils/transaction';
+
+import Input from './input';
+import Network from './network';
+import Output from './output';
+import P2PKH from './p2pkh';
+import P2SH from './p2sh';
+import Transaction from './transaction';
 
 /**
  * Extended version of the Input class with extra data
@@ -55,7 +53,7 @@ export class ProposalInput extends Input {
     }: {
       token?: string;
       authorities?: OutputValueType;
-    } = {}
+    } = {},
   ) {
     super(hash, index);
     this.value = value;
@@ -116,7 +114,7 @@ export class ProposalOutput extends Output {
       token?: string;
       isChange?: boolean;
       authorities?: OutputValueType;
-    } = {}
+    } = {},
   ) {
     let tokenData = 0;
     if (authorities > 0) {
@@ -314,7 +312,7 @@ export class PartialTx {
     }: {
       token?: string;
       authorities?: OutputValueType;
-    } = {}
+    } = {},
   ) {
     this.inputs.push(new ProposalInput(txId, index, value, address, { token, authorities }));
   }
@@ -343,7 +341,7 @@ export class PartialTx {
       token?: string;
       isChange?: boolean;
       authorities?: OutputValueType;
-    } = {}
+    } = {},
   ) {
     this.outputs.push(new ProposalOutput(value, script, { token, authorities, isChange }));
   }
@@ -376,7 +374,7 @@ export class PartialTx {
     });
     const tx = this.getTx();
     const inputArr = this.inputs.map(i =>
-      [i.address, i.token, i.authorities.toString(16), i.value.toString(16)].join(',')
+      [i.address, i.token, i.authorities.toString(16), i.value.toString(16)].join(','),
     );
     const arr = [
       PartialTxPrefix,
@@ -503,7 +501,7 @@ export class PartialTx {
               authorityCheck &&
                 input.token === tokenUid &&
                 input.value === utxo.value &&
-                input.address === utxo.decoded.address
+                input.address === utxo.decoded.address,
             );
           })
           .then(_ => {

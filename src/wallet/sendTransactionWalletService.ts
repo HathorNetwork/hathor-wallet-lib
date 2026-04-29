@@ -7,20 +7,24 @@
 
 /* eslint-disable max-classes-per-file -- AddressPathMap is a private helper tightly coupled to SendTransactionWalletService */
 import { EventEmitter } from 'events';
+
 import { shuffle } from 'lodash';
-import tokensUtils from '../utils/tokens';
-import walletApi from './api/walletApi';
-import MineTransaction from './mineTransaction';
-import HathorWalletServiceWallet from './wallet';
-import helpers from '../utils/helpers';
+
+import { DEFAULT_NATIVE_TOKEN_CONFIG, FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
+import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
+import { FeeHeader, Header } from '../headers';
+import Address from '../models/address';
+import Input from '../models/input';
+import Output from '../models/output';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Transaction from '../models/transaction';
-import Output from '../models/output';
-import Input from '../models/input';
-import Address from '../models/address';
-import { DEFAULT_NATIVE_TOKEN_CONFIG, FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
-import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
+import { IDataInput, IDataOutputWithToken, IDataTx, TokenVersion } from '../types';
+import helpers from '../utils/helpers';
+import tokensUtils from '../utils/tokens';
+
+import walletApi from './api/walletApi';
+import MineTransaction from './mineTransaction';
 import {
   OutputSendTransaction,
   InputRequestObj,
@@ -30,8 +34,7 @@ import {
   OutputType,
   Utxo,
 } from './types';
-import { IDataInput, IDataOutputWithToken, IDataTx, TokenVersion } from '../types';
-import { FeeHeader, Header } from '../headers';
+import HathorWalletServiceWallet from './wallet';
 
 type optionsType = {
   outputs?: OutputSendTransaction[];
@@ -206,13 +209,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
         if (utxo === null) {
           throw new UtxoError(
-            `Invalid input selection. Input ${input.txId} at index ${input.index}.`
+            `Invalid input selection. Input ${input.txId} at index ${input.index}.`,
           );
         }
 
         if (!(utxo.tokenId in tokenAmountMap)) {
           throw new SendTxError(
-            `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`
+            `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`,
           );
         }
 
@@ -252,7 +255,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         userInputData.amount,
         tokenAmountMap[token].amount,
         tokenAmountMap[token].version,
-        finalOutputs
+        finalOutputs,
       );
     }
 
@@ -262,7 +265,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // - Each fee-based token change output increments _feeAmount
     // - We need the final _feeAmount to know how much NATIVE TOKEN is needed
     const customTokens = Array.from(tokenNeedsInputs.keys()).filter(
-      token => token !== NATIVE_TOKEN_UID
+      token => token !== NATIVE_TOKEN_UID,
     );
     await this.selectUtxosForTokens(
       customTokens,
@@ -271,7 +274,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       finalInputs,
       utxosAddressPath,
       utxoDataMap,
-      finalOutputs
+      finalOutputs,
     );
 
     // 3.5. Add the calculated fee to HTR requirements
@@ -300,7 +303,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         userHtrData.amount,
         requiredHtr,
         TokenVersion.NATIVE,
-        finalOutputs
+        finalOutputs,
       );
     } else {
       // No HTR inputs provided - auto-select UTXOs if needed
@@ -311,7 +314,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         finalInputs,
         utxosAddressPath,
         utxoDataMap,
-        finalOutputs
+        finalOutputs,
       );
     }
 
@@ -332,7 +335,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (!utxo) {
         // Should not happen as we cached them before
         throw new UtxoError(
-          `Could not retrieve utxo details for input ${input.txId}:${input.index}`
+          `Could not retrieve utxo details for input ${input.txId}:${input.index}`,
         );
       }
       dataInputs.push({
@@ -501,7 +504,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           throw new SendTxError(
             `Input ${input.txId}:${input.index} was not processed by any validation pass. ` +
               'This usually means an HTR input was provided but no HTR is required ' +
-              '(no HTR outputs and no fee-token fees).'
+              '(no HTR outputs and no fee-token fees).',
           );
         }
         return path;
@@ -596,7 +599,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     options: {
       ignoreNative?: boolean;
       onlyNative?: boolean;
-    } = {}
+    } = {},
   ): Promise<void> {
     const { ignoreNative = false, onlyNative = false } = options;
     const amountInputMap = {};
@@ -604,7 +607,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
       if (utxo === null) {
         throw new UtxoError(
-          `Invalid input selection. Input ${input.txId} at index ${input.index}.`
+          `Invalid input selection. Input ${input.txId} at index ${input.index}.`,
         );
       }
 
@@ -622,7 +625,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
       if (!(utxo.tokenId in tokenAmountMap)) {
         throw new SendTxError(
-          `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`
+          `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`,
         );
       }
 
@@ -638,13 +641,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     for (const t in tokenAmountMap) {
       if (!(t in amountInputMap)) {
         throw new SendTxError(
-          `Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`
+          `Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`,
         );
       }
 
       if (amountInputMap[t] < tokenAmountMap[t].amount) {
         throw new SendTxError(
-          `Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`
+          `Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`,
         );
       }
 
@@ -689,7 +692,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     finalInputs: InputRequestObj[],
     utxosAddressPath: string[],
     utxoDataMap: Map<string, Utxo>,
-    finalOutputs: OutputSendTransaction[]
+    finalOutputs: OutputSendTransaction[],
   ): Promise<void> {
     for (const token of tokensToProcess) {
       const needsInputs = tokenNeedsInputs.get(token);
@@ -699,12 +702,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
       const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(
         tokenAmountMap[token].amount,
-        { token }
+        { token },
       );
 
       if (utxos.length === 0) {
         throw new UtxoError(
-          `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token].amount}.`
+          `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token].amount}.`,
         );
       }
 
@@ -753,11 +756,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     userInputAmount: bigint,
     requiredAmount: bigint,
     tokenVersion: TokenVersion,
-    finalOutputs: OutputSendTransaction[]
+    finalOutputs: OutputSendTransaction[],
   ): void {
     if (userInputAmount < requiredAmount) {
       throw new SendTxError(
-        `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`
+        `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`,
       );
     }
 
@@ -794,11 +797,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         tokenAmountMap[token].amount,
         {
           token,
-        }
+        },
       );
       if (utxos.length === 0) {
         throw new UtxoError(
-          `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token].amount}.`
+          `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token].amount}.`,
         );
       }
 
@@ -844,7 +847,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
     if (this.utxosAddressPath.length !== this.transaction.inputs.length) {
       throw new SendTxError(
-        'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
+        'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.',
       );
     }
     this.emit('sign-tx-start');
@@ -856,7 +859,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         xprivkey,
         dataToSignHash,
         // the wallet service returns the full BIP44 path, but we only need the address path:
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(this.utxosAddressPath[idx])
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(this.utxosAddressPath[idx]),
       );
       inputObj.setData(inputData);
     }
@@ -1020,7 +1023,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async run(
     until: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null = null,
-    pin: string | null = null
+    pin: string | null = null,
   ): Promise<Transaction> {
     try {
       if (this._currentStep === 'idle') {

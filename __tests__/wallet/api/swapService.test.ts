@@ -1,6 +1,7 @@
-import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
+import MockAdapter from 'axios-mock-adapter';
 import AES from 'crypto-js/aes';
+
 import config from '../../../src/config';
 import {
   decryptString,
@@ -50,26 +51,26 @@ describe('hashing and encrypting', () => {
 describe('base url configuration', () => {
   it('should throw when no url parameter was offered', () => {
     expect(() => config.getSwapServiceBaseUrl()).toThrow(
-      'You should either provide a network or call setSwapServiceBaseUrl before calling this.'
+      'You should either provide a network or call setSwapServiceBaseUrl before calling this.',
     );
   });
 
   it('should return mainnet address when requested', () => {
     expect(config.getSwapServiceBaseUrl('mainnet')).toStrictEqual(
-      'https://atomic-swap-service.hathor.network/'
+      'https://atomic-swap-service.hathor.network/',
     );
   });
 
   it('should return testnet address when requested', () => {
     expect(config.getSwapServiceBaseUrl('testnet')).toStrictEqual(
-      'https://atomic-swap-service.testnet.hathor.network/'
+      'https://atomic-swap-service.testnet.hathor.network/',
     );
   });
 
   it('should throw when an invalid network is requested', () => {
     // @ts-expect-error -- Testing invalid inputs
     expect(() => config.getSwapServiceBaseUrl('invalid')).toThrow(
-      `Network invalid doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
+      `Network invalid doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`,
     );
   });
 
@@ -85,7 +86,7 @@ describe('create api', () => {
     await expect(create()).rejects.toThrow('Missing serializedPartialTx');
     await expect(
       // @ts-expect-error -- Testing invalid inputs
-      create('PartialTx|0001000000000000000000000063f78c0e0000000000||')
+      create('PartialTx|0001000000000000000000000063f78c0e0000000000||'),
     ).rejects.toThrow('Missing password');
   });
 
@@ -94,7 +95,7 @@ describe('create api', () => {
 
     mockAxiosAdapter.onPost('/').reply(503);
     await expect(
-      create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc')
+      create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc'),
     ).rejects.toThrow('Request failed with status code 503');
   });
 
@@ -107,7 +108,7 @@ describe('create api', () => {
     };
     mockAxiosAdapter.onPost('/').reply(200, responseData);
     await expect(
-      create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc')
+      create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc'),
     ).resolves.toStrictEqual(responseData);
   });
 });
@@ -125,7 +126,7 @@ describe('get api', () => {
 
     mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(503);
     await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', 'abc')).rejects.toThrow(
-      'Request failed with status code 503'
+      'Request failed with status code 503',
     );
   });
 
@@ -149,7 +150,7 @@ describe('get api', () => {
       throw new Error('Malformed UTF-8 data');
     });
     await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)).rejects.toThrow(
-      'Incorrect password: could not decode the proposal'
+      'Incorrect password: could not decode the proposal',
     );
     decryptMock.mockRestore();
   });
@@ -172,7 +173,7 @@ describe('get api', () => {
     mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody);
     const decryptMock = jest.spyOn(AES, 'decrypt').mockImplementationOnce(() => 'invalid string');
     await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)).rejects.toThrow(
-      'Incorrect password: could not decode the proposal'
+      'Incorrect password: could not decode the proposal',
     );
     decryptMock.mockRestore();
   });
@@ -294,14 +295,14 @@ describe('update api', () => {
       // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
-      })
+      }),
     ).rejects.toThrow('password');
     await expect(
       // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
         password: '123',
-      })
+      }),
     ).rejects.toThrow('partialTx');
     await expect(
       // @ts-expect-error -- Testing invalid inputs
@@ -309,7 +310,7 @@ describe('update api', () => {
         proposalId: 'abc',
         password: '123',
         partialTx: 'abc123',
-      })
+      }),
     ).rejects.toThrow('version');
     await expect(
       update({
@@ -318,7 +319,7 @@ describe('update api', () => {
         partialTx: 'abc123',
         // @ts-expect-error -- Testing invalid inputs
         version: 'a',
-      })
+      }),
     ).rejects.toThrow('Invalid version number');
   });
 
@@ -332,7 +333,7 @@ describe('update api', () => {
         password: 'abc',
         partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
         version: 0,
-      })
+      }),
     ).rejects.toThrow('Request failed with status code 503');
   });
 
@@ -346,7 +347,7 @@ describe('update api', () => {
         password: 'abc',
         partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
         version: 0,
-      })
+      }),
     ).resolves.toStrictEqual({ success: false });
   });
 
@@ -360,7 +361,7 @@ describe('update api', () => {
         password: 'abc',
         partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
         version: 0,
-      })
+      }),
     ).resolves.toStrictEqual({ success: true });
   });
 
@@ -376,7 +377,7 @@ describe('update api', () => {
         version: 0,
         signatures:
           'PartialTxInputData|0001010204002f91917e63ce0f9d21a6b50adc45539f0ffe1d35b|0:4630440220514e0867c310232eb9ab1c18274a10b5bf163b8cd681',
-      })
+      }),
     ).resolves.toStrictEqual({ success: true });
   });
 });

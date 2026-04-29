@@ -6,10 +6,12 @@
  */
 
 import { promises as fs } from 'fs';
+
 import { Address, Script } from 'bitcore-lib';
+
+import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
-import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
 
 /**
@@ -91,7 +93,7 @@ export class WalletPrecalculationHelper {
       addressIntervalStart?: number;
       addressIntervalEnd?: number;
       multisig?: { minSignatures: number; wordsArray: string[] };
-    } = {}
+    } = {},
   ): PrecalculatedWalletData {
     const timeStart = Date.now().valueOf();
     let wordsInput = params.words;
@@ -108,7 +110,7 @@ export class WalletPrecalculationHelper {
         const redeemScript = walletUtils.createP2SHRedeemScript(
           pubkeys,
           params.multisig.minSignatures,
-          i
+          i,
         );
         const address = Address.payingTo(Script.fromBuffer(redeemScript), NETWORK_NAME);
         addressesArray.push(address.toString());
@@ -205,7 +207,7 @@ export class WalletPrecalculationHelper {
     params: {
       commonWallets?: number;
       verbose?: boolean;
-    } = {}
+    } = {},
   ): PrecalculatedWalletData[] {
     const amountOfCommonWallets = params.commonWallets || 100;
 
@@ -229,7 +231,7 @@ export class WalletPrecalculationHelper {
     params: {
       wordsArray: string[];
       minSignatures: number;
-    } = { wordsArray: [], minSignatures: 0 }
+    } = { wordsArray: [], minSignatures: 0 },
   ): PrecalculatedWalletData[] {
     const resultingWallets: PrecalculatedWalletData[] = [];
     for (const walletWords of params.wordsArray) {

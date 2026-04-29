@@ -6,6 +6,7 @@
  */
 
 import winston from 'winston';
+
 import testConfig from '../configuration/test.config';
 
 export const loggers: {

@@ -20,7 +20,7 @@ export interface Leb128DecodeResult {
 export function encodeLeb128(
   value: bigint | number,
   signed: boolean = true,
-  maxBytes: number | null = null
+  maxBytes: number | null = null,
 ) {
   let val = BigInt(value);
   if (!signed && val < 0n) {
@@ -67,7 +67,7 @@ export function encodeLeb128(
 export function decodeLeb128(
   buf: Buffer,
   signed: boolean = true,
-  maxBytes: number | null = null
+  maxBytes: number | null = null,
 ): Leb128DecodeResult {
   const byte_list = Array.from(buf.values()).map(v => BigInt(v));
   let result = 0n;

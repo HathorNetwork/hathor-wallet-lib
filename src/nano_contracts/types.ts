@@ -5,8 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 import { z } from 'zod';
+
 import { IHistoryTx, OutputValueType, TokenVersion } from '../types';
 import { bigIntCoercibleSchema } from '../utils/bigint';
+
 import { NCFieldBase } from './fields';
 
 export interface IArgumentField {

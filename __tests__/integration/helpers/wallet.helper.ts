@@ -6,7 +6,12 @@
  */
 
 import { get, includes } from 'lodash';
+
 import Connection from '../../../src/new/connection';
+import HathorWallet from '../../../src/new/wallet';
+import { MemoryStore, Storage } from '../../../src/storage';
+import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
+import walletUtils from '../../../src/utils/wallet';
 import {
   DEBUG_LOGGING,
   FULLNODE_URL,
@@ -14,13 +19,10 @@ import {
   TX_TIMEOUT_DEFAULT,
   WALLET_CONSTANTS,
 } from '../configuration/test-constants';
-import HathorWallet from '../../../src/new/wallet';
-import walletUtils from '../../../src/utils/wallet';
-import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
-import { MemoryStore, Storage } from '../../../src/storage';
-import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
+
+import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 
 /**
  * @typedef SendTxResponse
@@ -281,7 +283,7 @@ export function waitForWalletReady(hWallet) {
 export async function waitForTxReceived(
   hWallet: HathorWallet,
   txId: string,
-  timeout: number = 0
+  timeout: number = 0,
 ): Promise<IHistoryTx> {
   const startTime = Date.now().valueOf();
   let timeoutReached = false;
@@ -455,7 +457,7 @@ export async function waitNextBlock(storage) {
 export async function waitTxConfirmed(
   hWallet: HathorWallet,
   txId: string,
-  timeout?: number
+  timeout?: number,
 ): Promise<void> {
   let timeoutHandler: ReturnType<typeof setTimeout> | undefined;
   let timeoutErrorFlag = false;

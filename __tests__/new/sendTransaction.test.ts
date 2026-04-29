@@ -75,7 +75,7 @@ test('prepareTxData', async () => {
           token_data: 1,
         },
       ],
-    })
+    }),
   );
   jest.spyOn(storage, 'isAddressMine').mockReturnValue(true);
   const spyGetToken = jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
@@ -222,7 +222,7 @@ test('checkUnspentInput', async () => {
   });
 
   txSpy.mockReturnValueOnce(
-    Promise.resolve({ is_voided: false, outputs: [{ token_data: TOKEN_AUTHORITY_MASK | 1 }] })
+    Promise.resolve({ is_voided: false, outputs: [{ token_data: TOKEN_AUTHORITY_MASK | 1 }] }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: false,
@@ -233,7 +233,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, decoded: { address: 'different-addr' } }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: false,
@@ -246,7 +246,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, decoded: { address: 'addr0' } }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: false,
@@ -257,7 +257,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, decoded: {} }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: false,
@@ -269,7 +269,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, decoded: { address: 'addr0', token: '02' } }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '02')).resolves.toEqual({
     success: false,
@@ -280,7 +280,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, token: '01', decoded: { address: 'addr0' } }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '02')).resolves.toEqual({
     success: false,
@@ -293,7 +293,7 @@ test('checkUnspentInput', async () => {
       outputs: [
         { token_data: 1, token: '01', spent_by: 'another-tx', decoded: { address: 'addr0' } },
       ],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: false,
@@ -304,7 +304,7 @@ test('checkUnspentInput', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [{ token_data: 1, token: '01', decoded: { address: 'addr0' } }],
-    })
+    }),
   );
   await expect(checkUnspentInput(storage, input0, '01')).resolves.toEqual({
     success: true,
@@ -337,14 +337,14 @@ test('prepareSendTokensData', async () => {
     Promise.resolve({
       utxos: [],
       amount: 0n,
-    })
+    }),
   );
 
   await expect(
     prepareSendTokensData(storage, tx, {
       chooseInputs: true,
       utxoSelectionMethod: utxoSelection,
-    })
+    }),
   ).rejects.toThrow('Insufficient amount of tokens');
 
   utxoSelection.mockReturnValue(
@@ -360,7 +360,7 @@ test('prepareSendTokensData', async () => {
         },
       ],
       amount: 3n,
-    })
+    }),
   );
   await expect(
     prepareSendTokensData(storage, tx, {
@@ -368,7 +368,7 @@ test('prepareSendTokensData', async () => {
       chooseInputs: true,
       utxoSelectionMethod: utxoSelection,
       changeAddress: 'addr-change',
-    })
+    }),
   ).resolves.toMatchObject({
     inputs: [
       { txId: 'tx-id', index: 0, address: 'addr-utxo', token: '01', value: 3n, authorities: 0n },
@@ -397,7 +397,7 @@ test('prepareSendTokensData', async () => {
         // Since the last output is skipped we do not need it on the tx
         // { token_data:0, value: 1, decoded: { address: 'addr2', token: '00' } },
       ],
-    })
+    }),
   );
   const tx1 = {
     inputs: [
@@ -417,7 +417,7 @@ test('prepareSendTokensData', async () => {
       token: '01',
       chooseInputs: false,
       changeAddress: 'addr-change',
-    })
+    }),
   ).resolves.toMatchObject({
     // No new inputs since we do not choose inputs
     inputs: [],

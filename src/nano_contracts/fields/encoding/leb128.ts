@@ -14,7 +14,7 @@ export function encode_unsigned(value: bigint | number, maxBytes: number | null 
 
 export function decode_unsigned(
   value: Buffer,
-  maxBytes: number | null = null
+  maxBytes: number | null = null,
 ): BufferROExtract<bigint> {
   return leb128Util.decodeUnsigned(value, maxBytes);
 }
@@ -25,7 +25,7 @@ export function encode_signed(value: bigint | number, maxBytes: number | null = 
 
 export function decode_signed(
   value: Buffer,
-  maxBytes: number | null = null
+  maxBytes: number | null = null,
 ): BufferROExtract<bigint> {
   return leb128Util.decodeSigned(value, maxBytes);
 }

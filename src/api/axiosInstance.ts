@@ -6,6 +6,7 @@
  */
 
 import config from '../config';
+
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**

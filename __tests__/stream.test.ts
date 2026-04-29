@@ -1,9 +1,11 @@
 import { Server, WebSocket } from 'mock-socket';
-import HathorWallet from '../src/new/wallet';
+
 import Connection from '../src/new/connection';
+import HathorWallet from '../src/new/wallet';
 import { MemoryStore, Storage } from '../src/storage';
 import { HistorySyncMode, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
+
 import { getGapLimitConfig } from './integration/utils/core.util';
 
 const mock_tx = {
@@ -66,7 +68,7 @@ function makeServerMock(mockServer, mockType, sendCapabilities = true) {
       JSON.stringify({
         id: streamId,
         type: 'stream:history:begin',
-      })
+      }),
     );
     socket.send(
       JSON.stringify({
@@ -74,14 +76,14 @@ function makeServerMock(mockServer, mockType, sendCapabilities = true) {
         type: 'stream:history:address',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         index: 0,
-      })
+      }),
     );
     socket.send(
       JSONBigInt.stringify({
         id: streamId,
         type: 'stream:history:vertex',
         data: mock_tx,
-      })
+      }),
     );
     if (mockType === SERVER_MOCK_TYPE.simple) {
       socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
@@ -95,7 +97,7 @@ function makeServerMock(mockServer, mockType, sendCapabilities = true) {
           type: 'stream:history:address',
           address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
           index: 0,
-        })
+        }),
       );
       socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
     }
@@ -314,7 +316,7 @@ describe('Websocket stream history sync', () => {
     }
 
     await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(
-      'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
+      'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN',
     );
   }, 10000);
 });

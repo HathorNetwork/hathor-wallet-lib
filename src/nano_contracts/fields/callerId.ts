@@ -6,10 +6,11 @@
  */
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
 
-import { BufferROExtract } from '../types';
-import { NCFieldBase } from './base';
 import Network from '../../models/network';
+import { BufferROExtract } from '../types';
+
 import { AddressField } from './address';
+import { NCFieldBase } from './base';
 import { Bytes32Field, Bytes32Schema } from './bytes32';
 
 /**

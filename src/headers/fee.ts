@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { getVertexHeaderIdBuffer, getVertexHeaderIdFromBuffer, VertexHeaderId } from './types';
-import Header from './base';
+import { MAX_FEE_HEADER_ENTRIES } from '../constants';
 import Network from '../models/network';
 import { IFeeEntry, OutputValueType } from '../types';
 import { bytesToOutputValue, intToBytes, outputValueToBytes, unpackToInt } from '../utils/buffer';
-import { MAX_FEE_HEADER_ENTRIES } from '../constants';
+
+import Header from './base';
+import { getVertexHeaderIdBuffer, getVertexHeaderIdFromBuffer, VertexHeaderId } from './types';
 
 /**
  * FeeHeader represents the fee payment information in a transaction.
@@ -206,7 +207,7 @@ class FeeHeader extends Header {
     // Check maximum number of entries
     if (this.entries.length > MAX_FEE_HEADER_ENTRIES) {
       throw new Error(
-        `Fee header can have at most ${MAX_FEE_HEADER_ENTRIES} entries, got ${this.entries.length}`
+        `Fee header can have at most ${MAX_FEE_HEADER_ENTRIES} entries, got ${this.entries.length}`,
       );
     }
 

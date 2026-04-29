@@ -7,8 +7,10 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
+
 import { NATIVE_TOKEN_UID } from '../../constants';
 import { BufferROExtract } from '../types';
+
 import { NCFieldBase } from './base';
 import { sizedBytes } from './encoding';
 

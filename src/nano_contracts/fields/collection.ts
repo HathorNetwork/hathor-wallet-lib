@@ -7,6 +7,7 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
 
 import { BufferROExtract } from '../types';
+
 import { NCFieldBase } from './base';
 import { leb128 } from './encoding';
 

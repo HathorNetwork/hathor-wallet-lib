@@ -6,7 +6,9 @@
  */
 
 import { get, isNumber } from 'lodash';
-import { axiosInstance } from './walletServiceAxios';
+
+import { WalletRequestError, TxNotFoundError } from '../../errors';
+import { parseSchema } from '../../utils/bigint';
 import {
   CheckAddressesMineResponseData,
   WalletStatusResponseData,
@@ -30,8 +32,7 @@ import {
   HasTxOutsideFirstAddressResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
-import { WalletRequestError, TxNotFoundError } from '../../errors';
-import { parseSchema } from '../../utils/bigint';
+
 import {
   addressesResponseSchema,
   checkAddressesMineResponseSchema,
@@ -53,6 +54,7 @@ import {
   txProposalDeleteResponseSchema,
   hasTxOutsideFirstAddressResponseSchema,
 } from './schemas/walletApi';
+import { axiosInstance } from './walletServiceAxios';
 
 /**
  * Api calls for wallet
@@ -89,7 +91,7 @@ const walletApi = {
     authXpubkey: string,
     authXpubkeySignature: string,
     timestamp: number,
-    firstAddress: string | null = null
+    firstAddress: string | null = null,
   ): Promise<WalletStatusResponseData> {
     const data: {
       authXpubkeySignature: string;
@@ -123,7 +125,7 @@ const walletApi = {
 
   async getAddresses(
     wallet: HathorWalletServiceWallet,
-    index?: number
+    index?: number,
   ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
     const path = isNumber(index) ? `?index=${index}` : '';
@@ -139,7 +141,7 @@ const walletApi = {
 
   async getAddressDetails(
     wallet: HathorWalletServiceWallet,
-    address: string
+    address: string,
   ): Promise<AddressDetailsResponseData> {
     const axios = await axiosInstance(wallet, true);
     const query = `?address=${address}`;
@@ -155,7 +157,7 @@ const walletApi = {
 
   async checkAddressesMine(
     wallet: HathorWalletServiceWallet,
-    addresses: string[]
+    addresses: string[],
   ): Promise<CheckAddressesMineResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.post('wallet/addresses/check_mine', { addresses });
@@ -177,7 +179,7 @@ const walletApi = {
 
   async getTokenDetails(
     wallet: HathorWalletServiceWallet,
-    tokenId: string
+    tokenId: string,
   ): Promise<TokenDetailsResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/tokens/${tokenId}/details`);
@@ -190,7 +192,7 @@ const walletApi = {
 
   async getBalances(
     wallet: HathorWalletServiceWallet,
-    token: string | null = null
+    token: string | null = null,
   ): Promise<BalanceResponseData> {
     const data: { params: { token_id?: string } } = { params: {} };
     if (token) {
@@ -225,7 +227,7 @@ const walletApi = {
 
   async getTxOutputs(
     wallet: HathorWalletServiceWallet,
-    options: GetTxOutputsOptions = {}
+    options: GetTxOutputsOptions = {},
   ): Promise<TxOutputResponseData> {
     const data = { params: options };
     const axios = await axiosInstance(wallet, true);
@@ -238,7 +240,7 @@ const walletApi = {
 
   async createTxProposal(
     wallet: HathorWalletServiceWallet,
-    txHex: string
+    txHex: string,
   ): Promise<TxProposalCreateResponseData> {
     const data = { txHex };
     const axios = await axiosInstance(wallet, true);
@@ -252,7 +254,7 @@ const walletApi = {
   async updateTxProposal(
     wallet: HathorWalletServiceWallet,
     id: string,
-    txHex: string
+    txHex: string,
   ): Promise<TxProposalUpdateResponseData> {
     const data = { txHex };
     const axios = await axiosInstance(wallet, true);
@@ -265,7 +267,7 @@ const walletApi = {
 
   async deleteTxProposal(
     wallet: HathorWalletServiceWallet,
-    id: string
+    id: string,
   ): Promise<TxProposalDeleteResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.delete(`tx/proposal/${id}`);
@@ -279,7 +281,7 @@ const walletApi = {
     wallet: HathorWalletServiceWallet,
     timestamp: number,
     xpub: string,
-    sign: string
+    sign: string,
   ): Promise<AuthTokenResponseData> {
     const data = {
       ts: timestamp,
@@ -298,7 +300,7 @@ const walletApi = {
 
   async createReadOnlyAuthToken(
     wallet: HathorWalletServiceWallet,
-    xpubkey: string
+    xpubkey: string,
   ): Promise<AuthTokenResponseData> {
     const data = {
       xpubkey,
@@ -314,7 +316,7 @@ const walletApi = {
 
   async getTxById(
     wallet: HathorWalletServiceWallet,
-    txId: string
+    txId: string,
   ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
@@ -355,7 +357,7 @@ const walletApi = {
 
   async getFullTxById(
     wallet: HathorWalletServiceWallet,
-    txId: string
+    txId: string,
   ): Promise<FullNodeTxResponse> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}`);
@@ -372,7 +374,7 @@ const walletApi = {
 
   async getTxConfirmationData(
     wallet: HathorWalletServiceWallet,
-    txId: string
+    txId: string,
   ): Promise<FullNodeTxConfirmationDataResponse> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}/confirmation_data`);
@@ -386,7 +388,7 @@ const walletApi = {
       'Error getting transaction confirmation data by its id from the proxied fullnode.',
       {
         cause: response.data,
-      }
+      },
     );
   },
 
@@ -394,11 +396,11 @@ const walletApi = {
     wallet: HathorWalletServiceWallet,
     txId: string,
     graphType: string,
-    maxLevel: number
+    maxLevel: number,
   ): Promise<string> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(
-      `wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`
+      `wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`,
     );
     if (response.status === 200) {
       // The service might answer a status code 200 but output an error message like
@@ -413,7 +415,7 @@ const walletApi = {
           `Error getting neighbors data for ${txId} from the proxied fullnode.`,
           {
             cause: response.data.message,
-          }
+          },
         );
       }
 
@@ -424,12 +426,12 @@ const walletApi = {
       `Error getting neighbors data for ${txId} from the proxied fullnode.`,
       {
         cause: response.data,
-      }
+      },
     );
   },
 
   async getHasTxOutsideFirstAddress(
-    wallet: HathorWalletServiceWallet
+    wallet: HathorWalletServiceWallet,
   ): Promise<HasTxOutsideFirstAddressResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/addresses/has-transactions-outside-first-address');
@@ -437,7 +439,7 @@ const walletApi = {
       return parseSchema(response.data, hasTxOutsideFirstAddressResponseSchema);
     }
     throw new WalletRequestError(
-      'Error checking if wallet has transactions outside first address.'
+      'Error checking if wallet has transactions outside first address.',
     );
   },
 };

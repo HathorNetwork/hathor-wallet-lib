@@ -1,7 +1,7 @@
-import { axiosInstance } from '../../../src/wallet/api/walletServiceAxios';
-import Network from '../../../src/models/network';
-import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import config from '../../../src/config';
+import Network from '../../../src/models/network';
+import { axiosInstance } from '../../../src/wallet/api/walletServiceAxios';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 
 const seed =
   'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';

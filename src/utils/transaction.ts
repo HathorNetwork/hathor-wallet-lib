@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import { cloneDeep } from 'lodash';
-import { Utxo } from '../wallet/types';
-import { UtxoError, ParseError } from '../errors';
-import { HistoryTransactionOutput } from '../models/types';
+import { z } from 'zod';
+
+import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
+import txApi from '../api/txApi';
 import {
   TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
@@ -24,11 +24,18 @@ import {
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
-import Transaction from '../models/transaction';
+import { UtxoError, ParseError } from '../errors';
+import Address from '../models/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
-import Output from '../models/output';
 import Network from '../models/network';
+import Output from '../models/output';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import ScriptData from '../models/script_data';
+import Transaction from '../models/transaction';
+import { HistoryTransactionOutput } from '../models/types';
+import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
 import {
   IBalance,
   IStorage,
@@ -44,16 +51,11 @@ import {
   IHistoryInput,
   AuthorityType,
 } from '../types';
-import Address from '../models/address';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import ScriptData from '../models/script_data';
-import helpers from './helpers';
+import { Utxo } from '../wallet/types';
+
 import { getAddressType, getAddressFromPubkey } from './address';
-import txApi from '../api/txApi';
-import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
+import helpers from './helpers';
 import tokenUtils from './tokens';
-import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
 
 const transaction = {
   /**
@@ -109,7 +111,7 @@ const transaction = {
    */
   isOutputLocked(
     output: Pick<HistoryTransactionOutput, 'decoded'>,
-    options: { refTs?: number } = {}
+    options: { refTs?: number } = {},
   ): boolean {
     // XXX: check reward lock: requires blockHeight, bestBlockHeight and reward_spend_min_blocks
     const refTs = options.refTs || Math.floor(Date.now() / 1000);
@@ -132,7 +134,7 @@ const transaction = {
   isHeightLocked(
     blockHeight: number | undefined | null,
     currentHeight: number | undefined | null,
-    rewardLock: number | undefined | null
+    rewardLock: number | undefined | null,
   ): boolean {
     if (!(blockHeight && currentHeight && rewardLock)) {
       // We do not have the details needed to consider this as locked
@@ -170,7 +172,7 @@ const transaction = {
   async getSignatureForTx(
     tx: Transaction,
     storage: IStorage,
-    pinCode: string
+    pinCode: string,
   ): Promise<ITxSignatureData> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
@@ -303,7 +305,7 @@ const transaction = {
    */
   selectUtxos(
     utxos: Utxo[],
-    totalAmount: OutputValueType
+    totalAmount: OutputValueType,
   ): { utxos: Utxo[]; changeAmount: OutputValueType } {
     if (totalAmount <= 0) {
       throw new UtxoError('Total amount must be a positive integer.');
@@ -356,7 +358,7 @@ const transaction = {
     txId: string,
     index: number,
     txout: HistoryTransactionOutput,
-    { addressPath = '' }: { addressPath?: string }
+    { addressPath = '' }: { addressPath?: string },
   ): Utxo {
     const isAuthority = this.isAuthorityOutput(txout);
 
@@ -471,7 +473,7 @@ const transaction = {
    */
   async calculateTxBalanceToFillTx(
     token: string,
-    tx: IDataTx
+    tx: IDataTx,
   ): Promise<Record<'funds' | AuthorityType, OutputValueType>> {
     const balance = { funds: 0n, mint: 0n, melt: 0n };
     for (const output of tx.outputs) {
@@ -591,7 +593,7 @@ const transaction = {
    */
   createTransactionFromData(
     txData: IDataTx,
-    network: Network
+    network: Network,
   ): Transaction | CreateTokenTransaction {
     const inputs: Input[] = txData.inputs.map(input => {
       const inputObj = new Input(input.txId, input.index);
@@ -625,7 +627,7 @@ const transaction = {
         txData.symbol!,
         inputs,
         outputs,
-        createTokenOptions
+        createTokenOptions,
       );
     }
     if (options.version === DEFAULT_TX_VERSION) {
@@ -641,7 +643,7 @@ const transaction = {
    */
   async convertTransactionToHistoryTx(
     tx: Transaction | CreateTokenTransaction | OnChainBlueprint,
-    storage: IStorage
+    storage: IStorage,
   ): Promise<IHistoryTx> {
     if (!tx.hash) {
       throw new Error('To be a history tx a calculated hash is required');
@@ -686,7 +688,7 @@ const transaction = {
 
       if (input.index >= spentTx.outputs.length) {
         throw new Error(
-          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`,
         );
       }
 
@@ -773,7 +775,7 @@ const transaction = {
     txData: IDataTx,
     pinCode: string,
     storage: IStorage,
-    options?: { signTx?: boolean }
+    options?: { signTx?: boolean },
   ): Promise<Transaction | CreateTokenTransaction> {
     const newOptions = {
       signTx: true,
@@ -889,7 +891,7 @@ const transaction = {
    */
   hydrateIOWithToken<IO extends { token_data: number }, T extends { uid: string }>(
     io: IO,
-    tokens: T[]
+    tokens: T[],
   ): IO & { token: string } {
     const { token_data } = io;
     if (token_data === 0) {

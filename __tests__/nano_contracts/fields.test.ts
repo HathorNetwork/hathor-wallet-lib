@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { getFieldParser } from '../../src/nano_contracts/ncTypes/parser';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
 import Network from '../../src/models/network';
 import ncFields from '../../src/nano_contracts/fields';
-import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { getFieldParser } from '../../src/nano_contracts/ncTypes/parser';
 import leb128 from '../../src/utils/leb128';
 import { DWARF5SignedTestCases, DWARF5UnsignedTestCases } from '../__fixtures__/leb128';
 
@@ -43,7 +43,7 @@ describe('str', () => {
       Buffer.concat([
         Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
         bigUtf8,
-      ])
+      ]),
     );
   });
 });
@@ -338,7 +338,7 @@ describe('SignedData', () => {
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(fieldStr.toBuffer()).toMatchBuffer(
-      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature])
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature]),
     );
 
     const fieldInt = getFieldParser('SignedData[int]', network);
@@ -350,7 +350,7 @@ describe('SignedData', () => {
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(fieldInt.toBuffer()).toMatchBuffer(
-      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature])
+      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature]),
     );
   });
 
@@ -389,7 +389,7 @@ describe('RawSignedData', () => {
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(fieldStr.toBuffer()).toMatchBuffer(
-      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature])
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature]),
     );
 
     const fieldInt = getFieldParser('RawSignedData[int]', network);
@@ -401,7 +401,7 @@ describe('RawSignedData', () => {
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(fieldInt.toBuffer()).toMatchBuffer(
-      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature])
+      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature]),
     );
   });
 
@@ -433,7 +433,7 @@ describe('Tuple', () => {
     field.fromUser(['test', '129']);
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(field.toBuffer()).toMatchBuffer(
-      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])])
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])]),
     );
   });
 
@@ -447,7 +447,7 @@ describe('Tuple', () => {
         Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
         Buffer.from([0x00]), // null
         Buffer.from([1 + 0x80, 1]), // 129
-      ])
+      ]),
     );
   });
 
@@ -455,7 +455,7 @@ describe('Tuple', () => {
     const field = getFieldParser('tuple[str, int]', network);
     expect(field).toBeInstanceOf(ncFields.TupleField);
     field.fromBuffer(
-      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])])
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])]),
     );
     expect(field.toUser()).toStrictEqual(['test', '129']);
   });
@@ -468,7 +468,7 @@ describe('Tuple', () => {
         Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
         Buffer.from([0x00]), // null
         Buffer.from([1 + 0x80, 1]), // 129
-      ])
+      ]),
     );
     expect(field.toUser()).toEqual([['test', null], '129']);
   });
@@ -484,7 +484,7 @@ describe('List', () => {
       Buffer.concat([
         leb128.encodeSigned(DWARF5SignedTestCases.length),
         ...DWARF5SignedTestCases.map(el => el[1]),
-      ])
+      ]),
     );
   });
 
@@ -497,9 +497,9 @@ describe('List', () => {
       Buffer.concat([
         leb128.encodeSigned(DWARF5SignedTestCases.length),
         ...DWARF5SignedTestCases.map(el =>
-          Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), el[1]])
+          Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), el[1]]),
         ),
-      ])
+      ]),
     );
   });
 
@@ -510,7 +510,7 @@ describe('List', () => {
       Buffer.concat([
         leb128.encodeSigned(DWARF5SignedTestCases.length),
         ...DWARF5SignedTestCases.map(el => el[1]),
-      ])
+      ]),
     );
     expect(field.toUser()).toStrictEqual(DWARF5SignedTestCases.map(el => String(el[0])));
   });
@@ -525,9 +525,9 @@ describe('List', () => {
           Buffer.concat([
             Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
             el[1],
-          ])
+          ]),
         ),
-      ])
+      ]),
     );
     expect(field.toUser()).toEqual(DWARF5SignedTestCases.map(el => ['test', String(el[0])]));
   });
@@ -569,7 +569,7 @@ describe('CallerId', () => {
       field.fromUser(testAddress);
       // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
       expect(field.toBuffer()).toMatchBuffer(
-        Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf])
+        Buffer.concat([Buffer.from([ADDRESS_TAG]), addressBuf]),
       );
     });
 
@@ -579,7 +579,7 @@ describe('CallerId', () => {
       field.fromUser(testContractId);
       // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
       expect(field.toBuffer()).toMatchBuffer(
-        Buffer.concat([Buffer.from([CONTRACT_TAG]), contractIdBuf])
+        Buffer.concat([Buffer.from([CONTRACT_TAG]), contractIdBuf]),
       );
     });
   });
@@ -607,7 +607,7 @@ describe('CallerId', () => {
       const field = getFieldParser('CallerId', network);
       expect(field).toBeInstanceOf(ncFields.CallerIdField);
       expect(() => field.fromBuffer(Buffer.alloc(0))).toThrow(
-        'Not enough bytes to read CallerId tag'
+        'Not enough bytes to read CallerId tag',
       );
     });
 
@@ -699,7 +699,7 @@ describe('Dict', () => {
         Buffer.from([0x7e]), // -2
         Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
         Buffer.from([1 + 0x80, 1]), // 129
-      ])
+      ]),
     );
   });
 
@@ -718,7 +718,7 @@ describe('Dict', () => {
         Buffer.from([0x7e, 0x00]), // -2, null
         Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
         Buffer.from([1 + 0x80, 1, 0x00]), // 129, null
-      ])
+      ]),
     );
   });
 
@@ -733,7 +733,7 @@ describe('Dict', () => {
         Buffer.from([0x7e]), // -2
         Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
         Buffer.from([1 + 0x80, 1]), // 129
-      ])
+      ]),
     );
     expect(field.toUser()).toStrictEqual({
       test: '-2',
@@ -751,7 +751,7 @@ describe('Dict', () => {
         Buffer.from([0x7e, 0x00]), // -2, null
         Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
         Buffer.from([1 + 0x80, 1, 0x00]), // 129, null
-      ])
+      ]),
     );
     expect(field.toUser()).toEqual({
       test: ['-2', null],

@@ -8,6 +8,7 @@
  */
 
 import zlib from 'zlib';
+
 import { ON_CHAIN_BLUEPRINTS_INFO_VERSION, ON_CHAIN_BLUEPRINTS_VERSION } from '../constants';
 import Transaction from '../models/transaction';
 import { intToBytes } from '../utils/buffer';

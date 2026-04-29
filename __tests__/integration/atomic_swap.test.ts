@@ -1,3 +1,7 @@
+import { NATIVE_TOKEN_UID } from '../../src/constants';
+import SendTransaction from '../../src/new/sendTransaction';
+import PartialTxProposal from '../../src/wallet/partialTxProposal';
+
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import {
   createTokenHelper,
@@ -7,9 +11,6 @@ import {
   waitForTxReceived,
 } from './helpers/wallet.helper';
 import { loggers } from './utils/logger.util';
-import { NATIVE_TOKEN_UID } from '../../src/constants';
-import SendTransaction from '../../src/new/sendTransaction';
-import PartialTxProposal from '../../src/wallet/partialTxProposal';
 
 describe('partial tx proposal', () => {
   afterEach(async () => {

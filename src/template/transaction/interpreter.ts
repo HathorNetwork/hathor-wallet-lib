@@ -6,10 +6,34 @@
  */
 
 import { z } from 'zod';
+
 import { FullNodeTxApiResponse } from '../../api/schemas/txApi';
-import { TransactionTemplate, NanoAction } from './instructions';
-import { runInstruction } from './executor';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../constants';
+import type Header from '../../headers/base';
+import FeeHeader from '../../headers/fee';
+import Address from '../../models/address';
+import CreateTokenTransaction from '../../models/create_token_transaction';
+import Network from '../../models/network';
+import Transaction from '../../models/transaction';
+import NanoContractHeader from '../../nano_contracts/header';
+import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
+import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
+import HathorWallet from '../../new/wallet';
+import { IFeeEntry, IHistoryTx, OutputValueType } from '../../types';
+import leb128 from '../../utils/leb128';
+import tokensUtils from '../../utils/tokens';
+import transactionUtils from '../../utils/transaction';
+import { IHathorWallet, Utxo } from '../../wallet/types';
+
 import { TxTemplateContext, NanoContractContext } from './context';
+import { runInstruction } from './executor';
+import { TransactionTemplate, NanoAction } from './instructions';
 import {
   ITxTemplateInterpreter,
   IGetUtxosOptions,
@@ -18,28 +42,6 @@ import {
   TxInstance,
   IWalletTokenDetails,
 } from './types';
-import { IFeeEntry, IHistoryTx, OutputValueType } from '../../types';
-import { IHathorWallet, Utxo } from '../../wallet/types';
-import Transaction from '../../models/transaction';
-import Address from '../../models/address';
-import HathorWallet from '../../new/wallet';
-import {
-  CREATE_TOKEN_TX_VERSION,
-  DEFAULT_TX_VERSION,
-  NANO_CONTRACTS_INITIALIZE_METHOD,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../constants';
-import transactionUtils from '../../utils/transaction';
-import leb128 from '../../utils/leb128';
-import tokensUtils from '../../utils/tokens';
-import Network from '../../models/network';
-import CreateTokenTransaction from '../../models/create_token_transaction';
-import NanoContractHeader from '../../nano_contracts/header';
-import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
-import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
-import type Header from '../../headers/base';
-import FeeHeader from '../../headers/fee';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -72,7 +74,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   static mapActionInstructionToAction(
     ctx: TxTemplateContext,
-    action: z.output<typeof NanoAction>
+    action: z.output<typeof NanoAction>,
   ): NanoContractActionHeader {
     const tokens = ctx.tokens.map(t => ({ uid: t, name: '', symbol: '' }));
     const { token } = action;
@@ -131,7 +133,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       blueprintId,
       nanoCtx.method,
       nanoCtx.args,
-      network
+      network,
     );
 
     const arr: Buffer[] = [leb128.encodeUnsigned(args.length)];
@@ -141,7 +143,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     const serializedArgs = Buffer.concat(arr);
     const seqnum = await this.wallet.getNanoHeaderSeqnum(address.base58);
     const nanoHeaderActions = nanoCtx.actions.map(action =>
-      WalletTxTemplateInterpreter.mapActionInstructionToAction(ctx, action)
+      WalletTxTemplateInterpreter.mapActionInstructionToAction(ctx, action),
     );
 
     return new NanoContractHeader(
@@ -151,7 +153,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       nanoHeaderActions,
       seqnum,
       address,
-      null
+      null,
     );
   }
 
@@ -159,7 +161,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     const entries: IFeeEntry[] = Array.from(ctx.fees.entries()).map(([tokenUid, amount]) => ({
       tokenIndex: tokensUtils.getTokenIndex(
         ctx.tokens.map(t => ({ uid: t })),
-        tokenUid
+        tokenUid,
       ),
       amount,
     }));
@@ -168,7 +170,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   async build(
     instructions: z.infer<typeof TransactionTemplate>,
-    debug: boolean = false
+    debug: boolean = false,
   ): Promise<TxInstance> {
     const context = new TxTemplateContext(this.wallet.logger, debug);
 
@@ -207,7 +209,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        { signalBits: context.signalBits, headers, tokenVersion: context.tokenVersion }
+        { signalBits: context.signalBits, headers, tokenVersion: context.tokenVersion },
       );
     }
     throw new Error('Unsupported Version byte provided');
@@ -216,7 +218,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   async buildAndSign(
     instructions: z.infer<typeof TransactionTemplate>,
     pinCode: string,
-    debug: boolean = false
+    debug: boolean = false,
   ): Promise<TxInstance> {
     let tx = await this.build(instructions, debug);
     tx = await transactionUtils.signTransaction(tx, this.wallet.storage, pinCode);

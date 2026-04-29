@@ -5,29 +5,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import PartialTxProposal from '../../src/wallet/partialTxProposal';
-import { Utxo } from '../../src/wallet/types';
-import Network from '../../src/models/network';
-import P2PKH from '../../src/models/p2pkh';
-import P2SH from '../../src/models/p2sh';
-import Transaction from '../../src/models/transaction';
-import Address from '../../src/models/address';
-import dateFormatter from '../../src/utils/date';
-import {
-  ProposalInput,
-  ProposalOutput,
-  PartialTx,
-  PartialTxInputData,
-} from '../../src/models/partial_tx';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
   DEFAULT_TX_VERSION,
 } from '../../src/constants';
-
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
+import P2PKH from '../../src/models/p2pkh';
+import P2SH from '../../src/models/p2sh';
+import {
+  ProposalInput,
+  ProposalOutput,
+  PartialTx,
+  PartialTxInputData,
+} from '../../src/models/partial_tx';
+import Transaction from '../../src/models/transaction';
 import { MemoryStore, Storage } from '../../src/storage';
 import { IUtxo } from '../../src/types';
+import dateFormatter from '../../src/utils/date';
+import PartialTxProposal from '../../src/wallet/partialTxProposal';
+import { Utxo } from '../../src/wallet/types';
 
 // beforeAll(() => {
 //   transaction.updateMaxInputsConstant(MAX_INPUTS);
@@ -67,7 +66,7 @@ test('fromPartialTx', async () => {
     [
       new ProposalOutput(5n, scriptFromAddressP2PKH(ADDR2)),
       new ProposalOutput(10n, scriptFromAddressP2PKH(ADDR3), { token: FAKE_UID }),
-    ]
+    ],
   );
 
   const serialized = partialTx.serialize();
@@ -176,7 +175,7 @@ test('addSend', async () => {
     FAKE_UID,
     6n, // change 10 - 4 = 6
     ADDR3,
-    { isChange: true }
+    { isChange: true },
   );
   expect(spyAddr).not.toHaveBeenCalled();
   expect(spyUtxos).not.toHaveBeenCalled();
@@ -203,7 +202,7 @@ test('addSend', async () => {
     FAKE_UID,
     2n, // change 10 - 8 = 2
     ADDR2,
-    { isChange: true }
+    { isChange: true },
   );
   expect(spyAddr).toHaveBeenCalled();
 
@@ -382,7 +381,7 @@ test('setSignatures', async () => {
   // Ensure it doesn't allow adding signatures for the wrong tx hash
   spyComplete.mockImplementationOnce(() => true);
   expect(() => proposal.setSignatures(serializedSignatures)).toThrow(
-    'Signatures do not match tx hash'
+    'Signatures do not match tx hash',
   );
 
   // Adds the serialized signatures on a complete partialTx for the correct tx
@@ -473,7 +472,7 @@ test('calculateBalance', async () => {
         token: fakeUid2,
         authorities: TOKEN_MELT_MASK,
       }),
-    ]
+    ],
   );
   /**
    * Summary of the test fixture

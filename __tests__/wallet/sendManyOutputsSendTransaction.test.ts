@@ -6,12 +6,12 @@
  */
 
 import { NATIVE_TOKEN_UID } from '../../src/constants';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import { WalletFromXPubGuard } from '../../src/errors';
+import Network from '../../src/models/network';
+import helpers from '../../src/utils/helpers';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import { OutputType } from '../../src/wallet/types';
-import Network from '../../src/models/network';
-import { WalletFromXPubGuard } from '../../src/errors';
-import helpers from '../../src/utils/helpers';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
 
 // Mock the helpers module
 jest.mock('../../src/utils/helpers');
@@ -94,7 +94,7 @@ describe('sendManyOutputsSendTransaction', () => {
     expect(sendTx).toBeInstanceOf(SendTransactionWalletService);
     expect(mockHelpers.getOutputTypeFromAddress).toHaveBeenCalledWith(
       'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
-      wallet.network
+      wallet.network,
     );
 
     // Validate transaction outputs
@@ -159,7 +159,7 @@ describe('sendManyOutputsSendTransaction', () => {
     ];
 
     await expect(wallet.sendManyOutputsSendTransaction(outputs)).rejects.toThrow(
-      WalletFromXPubGuard
+      WalletFromXPubGuard,
     );
   });
 
@@ -177,7 +177,7 @@ describe('sendManyOutputsSendTransaction', () => {
     ];
 
     await expect(wallet.sendManyOutputsSendTransaction(outputs)).rejects.toThrow(
-      'Wallet not ready'
+      'Wallet not ready',
     );
   });
 
@@ -193,7 +193,7 @@ describe('sendManyOutputsSendTransaction', () => {
     ];
 
     await expect(wallet.sendManyOutputsSendTransaction(outputs)).rejects.toThrow(
-      'Pin is required.'
+      'Pin is required.',
     );
   });
 

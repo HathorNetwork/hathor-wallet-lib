@@ -1,6 +1,15 @@
 import { cloneDeep, reverse } from 'lodash';
+
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { AddressError } from '../../src/errors';
+import HathorWallet from '../../src/new/wallet';
+import { MemoryStore } from '../../src/storage';
+import { IHistoryTx } from '../../src/types';
+import dateFormatter from '../../src/utils/date';
+
+import { WALLET_CONSTANTS } from './configuration/test-constants';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay } from './utils/core.util';
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -8,14 +17,7 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { WALLET_CONSTANTS } from './configuration/test-constants';
-import dateFormatter from '../../src/utils/date';
-import { AddressError } from '../../src/errors';
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
-import HathorWallet from '../../src/new/wallet';
-import { MemoryStore } from '../../src/storage';
-import { IHistoryTx } from '../../src/types';
+import { delay } from './utils/core.util';
 
 describe('processing transaction metadata changes', () => {
   let hWallet: HathorWallet;
@@ -30,7 +32,7 @@ describe('processing transaction metadata changes', () => {
 
   function findLastCallFor(
     txId: string,
-    wsSpy: jest.SpiedFunction<typeof HathorWallet.prototype.onNewTx>
+    wsSpy: jest.SpiedFunction<typeof HathorWallet.prototype.onNewTx>,
   ): { history: IHistoryTx } | undefined {
     for (const call of reverse(cloneDeep(wsSpy.mock.calls))) {
       if (call[0].history.tx_id === txId) {
@@ -47,7 +49,7 @@ describe('processing transaction metadata changes', () => {
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
-      'processHistory'
+      'processHistory',
     );
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
@@ -114,7 +116,7 @@ describe('processing transaction metadata changes', () => {
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
-      'processHistory'
+      'processHistory',
     );
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
@@ -231,7 +233,7 @@ describe('processing transaction metadata changes', () => {
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
-      'processHistory'
+      'processHistory',
     );
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
@@ -341,7 +343,7 @@ describe('processing transaction metadata changes', () => {
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
-      'processHistory'
+      'processHistory',
     );
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
@@ -535,7 +537,7 @@ describe('getAddressInfo', () => {
 
   it('should throw for an address outside the wallet', async () => {
     await expect(hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).rejects.toThrow(
-      AddressError
+      AddressError,
     );
   });
 
@@ -595,7 +597,7 @@ describe('getAddressInfo', () => {
       {
         total_amount_available: 7n,
         total_amount_locked: 3n,
-      }
+      },
     );
   });
 
@@ -612,7 +614,7 @@ describe('getAddressInfo', () => {
       'getAddressInfo Token',
       'GAIT',
       100n,
-      { address: addr0Custom }
+      { address: addr0Custom },
     );
 
     // Validating address information both in HTR and in custom token
@@ -625,7 +627,7 @@ describe('getAddressInfo', () => {
       index: 0,
     });
     await expect(
-      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })
+      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid }),
     ).resolves.toMatchObject({
       total_amount_received: 100n,
       total_amount_sent: 0n,
@@ -639,7 +641,7 @@ describe('getAddressInfo', () => {
     const tx = await hWalletCustom.sendTransaction(addr1Custom, 40n, { token: tokenUid });
     await waitForTxReceived(hWalletCustom, tx.hash);
     await expect(
-      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })
+      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid }),
     ).resolves.toMatchObject({
       total_amount_received: 100n,
       total_amount_sent: 100n,
@@ -648,7 +650,7 @@ describe('getAddressInfo', () => {
       index: 0,
     });
     await expect(
-      hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })
+      hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid }),
     ).resolves.toMatchObject({
       total_amount_received: 40n,
       total_amount_sent: 0n,
@@ -673,7 +675,7 @@ describe('getTxAddresses', () => {
       ],
       {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
-      }
+      },
     );
     await waitForTxReceived(hWallet, tx.hash);
     await waitForTxReceived(gWallet, tx.hash);
@@ -685,12 +687,12 @@ describe('getTxAddresses', () => {
         await hWallet.getAddressAtIndex(1),
         await hWallet.getAddressAtIndex(3),
         await hWallet.getAddressAtIndex(5),
-      ])
+      ]),
     );
 
     // By convention, only the address 0 of the genesis wallet is used on the integration tests
     await expect(gWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(
-      new Set([WALLET_CONSTANTS.genesis.addresses[0]])
+      new Set([WALLET_CONSTANTS.genesis.addresses[0]]),
     );
   });
 });
@@ -704,7 +706,7 @@ describe('checkAddressesMine', () => {
     const address3 = await hWallet.getAddressAtIndex(3);
 
     expect(
-      await hWallet.checkAddressesMine([address1, address2, address3, 'invalid-address'])
+      await hWallet.checkAddressesMine([address1, address2, address3, 'invalid-address']),
     ).toStrictEqual({
       [address1]: true,
       [address2]: true,
@@ -735,7 +737,7 @@ describe('getAvailableUtxos', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
 
     // Get correct results for a single transaction
@@ -769,12 +771,12 @@ describe('getAvailableUtxos', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
     const tx2 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(1),
-      5n
+      5n,
     );
 
     // Validate that on the address that received tx1, the UTXO is listed
@@ -816,7 +818,7 @@ describe('getAvailableUtxos', () => {
       hWallet,
       'getAvailableUtxos Token',
       'GAUT',
-      100n
+      100n,
     );
 
     /*
@@ -849,7 +851,7 @@ describe('getAvailableUtxos', () => {
           value: 100n,
           authorities: 0n, // The custom token balance itself
         }),
-      ])
+      ]),
     );
 
     // List all authorities
@@ -873,7 +875,7 @@ describe('getAvailableUtxos', () => {
           value: TOKEN_MELT_MASK,
           authorities: TOKEN_MELT_MASK,
         }),
-      ])
+      ]),
     );
   });
 });
@@ -945,7 +947,7 @@ describe('getUtxosForAmount', () => {
       utxos: [expect.anything()],
     });
     await expect(hWallet.getUtxosForAmount(10n, { filter_address: addr1 })).rejects.toThrow(
-      'utxos to fill total amount'
+      'utxos to fill total amount',
     );
 
     // Should throw for an amount higher than available funds
@@ -1028,7 +1030,7 @@ describe('getUtxosForAmount', () => {
       'getUtxosForAmount Test Token',
       'GUFAT',
       200n,
-      { address: addr2 }
+      { address: addr2 },
     );
 
     // Should work only with the token filter
@@ -1047,7 +1049,7 @@ describe('getUtxosForAmount', () => {
       {
         changeAmount: expect.any(BigInt),
         utxos: [expect.objectContaining({ tokenId: NATIVE_TOKEN_UID })],
-      }
+      },
     );
     // Implicitly filtering for HTR
     await expect(hWallet.getUtxosForAmount(6n)).resolves.toStrictEqual({
@@ -1057,7 +1059,7 @@ describe('getUtxosForAmount', () => {
 
     // The token filter should work combined with the address filter
     await expect(
-      hWallet.getUtxosForAmount(6n, { token: tokenUid, filter_address: addr2 })
+      hWallet.getUtxosForAmount(6n, { token: tokenUid, filter_address: addr2 }),
     ).resolves.toStrictEqual({
       changeAmount: 194n,
       utxos: [
@@ -1068,7 +1070,7 @@ describe('getUtxosForAmount', () => {
       ],
     });
     await expect(
-      hWallet.getUtxosForAmount(6n, { token: tokenUid, filter_address: addr3 })
+      hWallet.getUtxosForAmount(6n, { token: tokenUid, filter_address: addr3 }),
     ).rejects.toThrow('utxos to fill');
   });
 
@@ -1083,7 +1085,7 @@ describe('getUtxosForAmount', () => {
 
     // Validate that it will not be retrieved on getUtxosForAmount
     await expect(hWallet.getUtxosForAmount(50n, { filter_address: addr })).rejects.toThrow(
-      'utxos to fill'
+      'utxos to fill',
     );
   });
 });
@@ -1112,7 +1114,7 @@ describe('consolidateUtxos', () => {
       1000n,
       {
         address: await hWallet2.getAddressAtIndex(0),
-      }
+      },
     );
     tokenHash = tokenUid;
   });
@@ -1137,7 +1139,7 @@ describe('consolidateUtxos', () => {
     const cleanTx = await hWallet1.sendTransaction(
       await hWallet2.getAddressAtIndex(0),
       tokenBalance,
-      { token }
+      { token },
     );
     await waitForTxReceived(hWallet1, cleanTx.hash);
     await waitForTxReceived(hWallet2, cleanTx.hash);
@@ -1146,7 +1148,7 @@ describe('consolidateUtxos', () => {
 
   it('should throw when consolidating on an empty wallet', async () => {
     await expect(hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(0))).rejects.toThrow(
-      'available utxo'
+      'available utxo',
     );
   });
 
@@ -1159,7 +1161,7 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0))).rejects.toThrow(
-      'not owned by this wallet'
+      'not owned by this wallet',
     );
 
     await waitUntilNextTimestamp(hWallet1, fundTx.hash);
@@ -1459,7 +1461,7 @@ describe('consolidateUtxos', () => {
     // We should now have 4 utxos on wallet1 for this custom token
     expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty(
       'total_utxos_available',
-      4n
+      4n,
     );
 
     // Reducing the amount of maximum inputs allowed for the lib (not the fullnode)
@@ -1482,7 +1484,7 @@ describe('consolidateUtxos', () => {
     // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 2 remaining )
     expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty(
       'total_utxos_available',
-      3n
+      3n,
     );
   });
 });

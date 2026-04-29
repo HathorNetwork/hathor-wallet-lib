@@ -5,11 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { util } from 'bitcore-lib';
 import buffer from 'buffer';
+
+import { util } from 'bitcore-lib';
+
 import { OP_CHECKSIG } from '../opcodes';
-import helpers from '../utils/helpers';
 import { IHistoryOutputDecoded } from '../types';
+import helpers from '../utils/helpers';
 
 class ScriptData {
   // String of data to store on the script

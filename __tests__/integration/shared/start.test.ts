@@ -7,15 +7,16 @@
  */
 
 import type { EventEmitter } from 'events';
-import type { AddressInfoObject } from '../../../src/wallet/types';
-import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
+
+import { WalletAddressMode } from '../../../src';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { delay, deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
-import { loggers } from '../utils/logger.util';
+import { HasTxOutsideFirstAddressError } from '../../../src/errors';
+import type { AddressInfoObject } from '../../../src/wallet/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import { WalletAddressMode } from '../../../src';
-import { HasTxOutsideFirstAddressError } from '../../../src/errors';
+import type { ConcreteWalletType, FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
+import { delay, deriveXpubFromSeed, getRandomInt } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -57,7 +58,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
         adapter.startWallet(wallet, {
           pinCode: undefined,
           password: adapter.defaultPassword,
-        })
+        }),
       ).rejects.toThrow(/pin/i);
     });
 
@@ -70,7 +71,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
         adapter.startWallet(wallet, {
           pinCode: adapter.defaultPinCode,
           password: undefined,
-        })
+        }),
       ).rejects.toThrow(/password/i);
     });
   });
@@ -407,7 +408,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
         await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
         await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
-          HasTxOutsideFirstAddressError
+          HasTxOutsideFirstAddressError,
         );
         await expect(wallet.getAddressMode()).resolves.toEqual(WalletAddressMode.MULTI);
       } finally {

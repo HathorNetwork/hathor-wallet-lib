@@ -5,24 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import path from 'path';
 import buffer from 'buffer';
+import path from 'path';
+
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
-import { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { OP_PUSHDATA1 } from '../opcodes';
+
+import config from '../config';
 import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
-import Transaction from '../models/transaction';
-import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import ScriptData from '../models/script_data';
-import CreateTokenTransaction from '../models/create_token_transaction';
-import Input from '../models/input';
-import Output from '../models/output';
-import Network from '../models/network';
-import Address from '../models/address';
-import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
+import { ErrorMessages } from '../errorMessages';
 import {
   AddressError,
   OutputValueError,
@@ -32,11 +24,21 @@ import {
   MaximumNumberOutputsError,
   ParseError,
 } from '../errors';
-
-import { ErrorMessages } from '../errorMessages';
-import config from '../config';
+import Address from '../models/address';
+import CreateTokenTransaction from '../models/create_token_transaction';
+import Input from '../models/input';
+import Network from '../models/network';
+import Output from '../models/output';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import ScriptData from '../models/script_data';
+import Transaction from '../models/transaction';
+import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
+import { OP_PUSHDATA1 } from '../opcodes';
 import { IDataInput, IUtxo } from '../types';
 import { Utxo } from '../wallet/types';
+
+import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
 
 /**
  * Helper methods
@@ -199,7 +201,7 @@ const helpers = {
     const calcChecksum = decoded.subarray(21);
     if (!calcChecksum.equals(recvChecksum)) {
       throw new Error(
-        `Generated checksum(${calcChecksum.toString('hex')}) does not match received checksum(${recvChecksum.toString('hex')})`
+        `Generated checksum(${calcChecksum.toString('hex')}) does not match received checksum(${recvChecksum.toString('hex')})`,
       );
     }
 
@@ -290,7 +292,7 @@ const helpers = {
       return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
     }
     throw new ParseError(
-      'We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.'
+      'We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.',
     );
   },
 
@@ -400,7 +402,7 @@ const helpers = {
         data.symbol,
         inputs,
         outputs,
-        createTokenOptions
+        createTokenOptions,
       );
     }
     if (data.version === DEFAULT_TX_VERSION) {
@@ -439,7 +441,7 @@ const helpers = {
         historyTx.token_symbol!,
         inputs,
         outputs,
-        { ...historyTx }
+        { ...historyTx },
       );
     }
     return new Transaction(inputs, outputs, { ...historyTx });

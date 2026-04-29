@@ -6,13 +6,15 @@
  */
 
 import { get, has } from 'lodash';
-import Address from '../models/address';
-import Network from '../models/network';
+
 import ncApi from '../api/nano';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo, IParsedArgument } from './types';
+import Address from '../models/address';
+import Network from '../models/network';
 import leb128 from '../utils/leb128';
+
 import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
+import { MethodArgInfo, IParsedArgument } from './types';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -32,7 +34,7 @@ class NanoContractTransactionParser {
     method: string,
     address: string,
     network: Network,
-    args: string | null
+    args: string | null,
   ) {
     this.blueprintId = blueprintId;
     this.method = method;
@@ -59,14 +61,14 @@ class NanoContractTransactionParser {
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {
       // If this.method is not in the blueprint information public methods, then there's an error
       throw new NanoContractTransactionParseError(
-        'Failed to parse nano contract transaction. Method not found.'
+        'Failed to parse nano contract transaction. Method not found.',
       );
     }
 
     const methodArgs = get(
       blueprintInformation,
       `public_methods.${this.method}.args`,
-      []
+      [],
     ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
 
@@ -95,7 +97,7 @@ class NanoContractTransactionParser {
         size = result.bytesRead;
       } catch (err: unknown) {
         throw new NanoContractTransactionParseError(
-          `Failed to deserialize argument ${normalizedType}.`
+          `Failed to deserialize argument ${normalizedType}.`,
         );
       }
       parsedArgs.push(parsed);

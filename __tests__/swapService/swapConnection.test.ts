@@ -81,13 +81,13 @@ describe('proposal handling', () => {
       JSON.stringify({
         type: 'subscribe_proposal',
         proposalId: 'abc',
-      })
+      }),
     );
     expect(sendMessageSpy).toHaveBeenCalledWith(
       JSON.stringify({
         type: 'subscribe_proposal',
         proposalId: '123',
-      })
+      }),
     );
   });
 
@@ -99,7 +99,7 @@ describe('proposal handling', () => {
       JSON.stringify({
         type: 'unsubscribe_proposal',
         proposalId: '123',
-      })
+      }),
     );
   });
 });

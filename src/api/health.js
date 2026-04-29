@@ -31,7 +31,7 @@ const healthApi = {
           },
           err => {
             reject(err);
-          }
+          },
         );
     });
   },

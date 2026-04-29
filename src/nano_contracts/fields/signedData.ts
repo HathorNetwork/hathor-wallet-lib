@@ -7,7 +7,9 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
 
 import { z } from 'zod';
+
 import { BufferROExtract } from '../types';
+
 import { NCFieldBase } from './base';
 import { BytesField } from './bytes';
 

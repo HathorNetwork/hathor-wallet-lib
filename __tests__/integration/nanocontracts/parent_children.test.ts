@@ -1,11 +1,12 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+
 import ncApi from '../../../src/api/nano';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
 import { bufferToHex } from '../../../src/utils/buffer';
 import helpersUtils from '../../../src/utils/helpers';
-import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
 
 describe('Parent - children tests', () => {
   /** @type HathorWallet */
@@ -51,7 +52,7 @@ describe('Parent - children tests', () => {
       {
         blueprintId: blueprintParentId,
         args: [],
-      }
+      },
     );
     await checkTxValid(wallet, txInitialize);
     const txInitializeData = await wallet.getFullTxById(txInitialize.hash);
@@ -76,7 +77,7 @@ describe('Parent - children tests', () => {
       txInitialize.hash,
       [],
       [NATIVE_TOKEN_UID],
-      []
+      [],
     );
 
     expect(ncStateDeposit.balances[NATIVE_TOKEN_UID].value).toBe('500');
@@ -89,7 +90,7 @@ describe('Parent - children tests', () => {
         ncId: txInitialize.hash,
         args: ['Test token', 'TKN', 200n, true, true],
         actions: [],
-      }
+      },
     );
     await checkTxValid(wallet, txCreateToken);
 
@@ -98,7 +99,7 @@ describe('Parent - children tests', () => {
       txInitialize.hash,
       ['last_created_token'],
       [],
-      []
+      [],
     );
 
     const createTokenUid = ncStateCreateToken.fields.last_created_token.value;
@@ -107,7 +108,7 @@ describe('Parent - children tests', () => {
       txInitialize.hash,
       [],
       [NATIVE_TOKEN_UID, createTokenUid],
-      []
+      [],
     );
 
     expect(ncStateCreateTokenBalance.balances[NATIVE_TOKEN_UID].value).toBe('498');
@@ -121,7 +122,7 @@ describe('Parent - children tests', () => {
         ncId: txInitialize.hash,
         args: [blueprintChildrenId, 'cafecafe', 'Test contract'],
         actions: [],
-      }
+      },
     );
     await checkTxValid(wallet, txCreateContract);
 
@@ -130,7 +131,7 @@ describe('Parent - children tests', () => {
       txInitialize.hash,
       ['last_created_contract'],
       [],
-      []
+      [],
     );
 
     const createContractId = ncStateCreateContract.fields.last_created_contract.value;
@@ -140,7 +141,7 @@ describe('Parent - children tests', () => {
       createContractId,
       ['name', 'attr'],
       [],
-      []
+      [],
     );
 
     expect(ncStateChildInitial.fields.name.value).toBe('Test contract');
@@ -158,7 +159,7 @@ describe('Parent - children tests', () => {
       createContractId,
       ['name', 'attr'],
       [],
-      []
+      [],
     );
 
     expect(ncStateChild.fields.name.value).toBe('Test contract');

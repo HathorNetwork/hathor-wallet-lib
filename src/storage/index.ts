@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Storage } from './storage';
 import { MemoryStore } from './memory_store';
+import { Storage } from './storage';
 
 const store = new MemoryStore();
 const storage = new Storage(store);
 
-export { Storage };
 export { MemoryStore };
+export { Storage };
 
 export default storage;

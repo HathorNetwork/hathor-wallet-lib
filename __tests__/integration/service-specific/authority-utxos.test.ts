@@ -15,10 +15,10 @@
  */
 
 import type { HathorWalletServiceWallet } from '../../../src';
-import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
+import { AuthorityType } from '../../../src/types';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
-import { AuthorityType } from '../../../src/types';
+import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -88,7 +88,7 @@ describe('[Service] getAuthorityUtxo', () => {
 
   it('should throw error for invalid authority type', async () => {
     await expect(utxosTestWallet.getAuthorityUtxo(createdTokenUid, 'invalid')).rejects.toThrow(
-      'Invalid authority value.'
+      'Invalid authority value.',
     );
   });
 
@@ -100,7 +100,7 @@ describe('[Service] getAuthorityUtxo', () => {
       AuthorityType.MINT,
       {
         many: true,
-      }
+      },
     );
 
     expect(Array.isArray(multipleAuthorities)).toBe(true);
@@ -115,7 +115,7 @@ describe('[Service] getAuthorityUtxo', () => {
       AuthorityType.MINT,
       {
         many: false,
-      }
+      },
     );
 
     expect(Array.isArray(singleAuthority)).toBe(true);
@@ -130,7 +130,7 @@ describe('[Service] getAuthorityUtxo', () => {
       AuthorityType.MINT,
       {
         only_available_utxos: true,
-      }
+      },
     );
 
     expect(Array.isArray(availableAuthorities)).toBe(true);
@@ -141,7 +141,7 @@ describe('[Service] getAuthorityUtxo', () => {
           index: expect.any(Number),
           address: expect.any(String),
           authorities: expect.any(BigInt),
-        })
+        }),
       );
     });
   });

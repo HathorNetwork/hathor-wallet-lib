@@ -7,6 +7,16 @@
 /* eslint max-classes-per-file: ["error", 3] */
 
 import { z } from 'zod';
+
+import {
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  FEE_PER_OUTPUT,
+  FEE_DIVISOR,
+} from '../../constants';
+import Input from '../../models/input';
+import Output from '../../models/output';
 import {
   TokenVersion,
   IHistoryTx,
@@ -15,16 +25,8 @@ import {
   getDefaultLogger,
   AuthorityType,
 } from '../../types';
-import Input from '../../models/input';
-import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
-import {
-  CREATE_TOKEN_TX_VERSION,
-  DEFAULT_TX_VERSION,
-  NATIVE_TOKEN_UID,
-  FEE_PER_OUTPUT,
-  FEE_DIVISOR,
-} from '../../constants';
+
 import { NanoAction } from './instructions';
 import { ITxTemplateInterpreter, IWalletTokenDetails } from './types';
 
@@ -205,7 +207,7 @@ export class TxBalance {
   addCreatedTokenOutputAuthority(
     count: number,
     authority: AuthorityType,
-    tokenVersion: TokenVersion
+    tokenVersion: TokenVersion,
   ) {
     const balance = this.getCreatedTokenBalance(tokenVersion);
     if (authority === AuthorityType.MINT) {
@@ -257,7 +259,7 @@ export class NanoContractContext {
     method: string,
     caller: string,
     args: unknown[],
-    actions: z.output<typeof NanoAction>[]
+    actions: z.output<typeof NanoAction>[],
   ) {
     this.id = id;
     this.method = method;
@@ -345,7 +347,7 @@ export class TxTemplateContext {
   useCreateTokenTxContext() {
     if (this.tokens.length !== 0) {
       throw new Error(
-        `Trying to build a create token tx with ${this.tokens.length} tokens on the array`
+        `Trying to build a create token tx with ${this.tokens.length} tokens on the array`,
       );
     }
     this.version = CREATE_TOKEN_TX_VERSION;
@@ -360,7 +362,7 @@ export class TxTemplateContext {
     method: string,
     caller: string,
     args: unknown[],
-    actions: z.output<typeof NanoAction>[]
+    actions: z.output<typeof NanoAction>[],
   ) {
     if (this.nanoContext) {
       throw new Error('Already building a nano contract tx.');
@@ -463,7 +465,7 @@ export class TxTemplateContext {
       throw new Error(
         `Token version not found for token ${token}. ` +
           `Call cacheTokenDetails or addToken first. ` +
-          `Currently cached tokens: [${cachedTokens.join(', ') || 'none'}]`
+          `Currently cached tokens: [${cachedTokens.join(', ') || 'none'}]`,
       );
     }
     return tokenDetails.tokenInfo.version;
@@ -501,7 +503,7 @@ export class TxTemplateContext {
   addFee(token: string, amount: bigint) {
     if (token !== NATIVE_TOKEN_UID && amount % BigInt(FEE_DIVISOR)) {
       throw new Error(
-        `Invalid fee amount for token ${token}: ${amount}. Must be a multiple of ${FEE_DIVISOR}`
+        `Invalid fee amount for token ${token}: ${amount}. Must be a multiple of ${FEE_DIVISOR}`,
       );
     }
     const fee = this._fees.get(token) || 0n;

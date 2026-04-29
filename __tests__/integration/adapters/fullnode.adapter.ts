@@ -6,15 +6,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import type Transaction from '../../../src/models/transaction';
+import type { WalletStopOptions } from '../../../src/new/types';
 import HathorWallet from '../../../src/new/wallet';
-import { WalletTracker } from '../utils/wallet-tracker.util';
 import {
   AddressScanPolicyData,
   AuthorityType,
   SCANNING_POLICY,
   WalletState,
 } from '../../../src/types';
-import type Transaction from '../../../src/models/transaction';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
+import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import {
   generateConnection,
   waitForWalletReady,
@@ -23,11 +28,9 @@ import {
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
 } from '../helpers/wallet.helper';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
-import type { WalletStopOptions } from '../../../src/new/types';
-import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
-import type { FullNodeTxResponse } from '../../../src/wallet/types';
+import { getGapLimitConfig } from '../utils/core.util';
+import { WalletTracker } from '../utils/wallet-tracker.util';
+
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
@@ -47,8 +50,6 @@ import type {
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
 } from './types';
-import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
-import { getGapLimitConfig } from '../utils/core.util';
 
 /** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true, cleanAddresses: true };
@@ -147,7 +148,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   async startWallet(
     wallet: FuzzyWalletType,
-    options?: { pinCode?: string; password?: string }
+    options?: { pinCode?: string; password?: string },
   ): Promise<void> {
     await this.concrete(wallet).start({
       pinCode: options?.pinCode,
@@ -172,7 +173,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async injectFunds(
     destWallet: FuzzyWalletType,
     address: string,
-    amount: bigint
+    amount: bigint,
   ): Promise<Transaction> {
     return GenesisWalletHelper.injectFunds(this.concrete(destWallet), address, amount);
   }
@@ -196,7 +197,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async waitForTx(
     wallet: FuzzyWalletType,
     txId: string,
-    recvWallet?: FuzzyWalletType
+    recvWallet?: FuzzyWalletType,
   ): Promise<void> {
     const hWallet = this.concrete(wallet);
     await waitForTxReceived(hWallet, txId);
@@ -215,7 +216,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     address: string,
     amount: bigint,
-    options?: SendTransactionOptions
+    options?: SendTransactionOptions,
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
@@ -249,7 +250,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     name: string,
     symbol: string,
     amount: bigint,
-    options?: CreateTokenOptions
+    options?: CreateTokenOptions,
   ): Promise<CreateTokenResult> {
     const hWallet = this.concrete(wallet);
     const result = await hWallet.createNewToken(name, symbol, amount, {
@@ -266,7 +267,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   async getUtxos(
     wallet: FuzzyWalletType,
-    options?: GetUtxosAdapterOptions
+    options?: GetUtxosAdapterOptions,
   ): Promise<GetUtxosResult> {
     const result = await this.concrete(wallet).getUtxos(options);
     return {
@@ -279,7 +280,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async sendManyOutputsTransaction(
     wallet: FuzzyWalletType,
     outputs: AdapterOutput[],
-    options?: SendManyOutputsAdapterOptions
+    options?: SendManyOutputsAdapterOptions,
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
@@ -298,7 +299,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     tokenUid: string,
     type: AuthorityType,
-    options?: GetAuthorityUtxosOptions
+    options?: GetAuthorityUtxosOptions,
   ): Promise<AuthorityUtxoResult[]> {
     const hWallet = this.concrete(wallet);
     const utxos = await hWallet.getAuthorityUtxo(tokenUid, type, {
@@ -318,7 +319,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options?: DelegateAuthorityAdapterOptions
+    options?: DelegateAuthorityAdapterOptions,
   ): Promise<DelegateAuthorityResult> {
     const hWallet = this.concrete(wallet);
     const result = await hWallet.delegateAuthority(tokenUid, type, destinationAddress, {
@@ -358,7 +359,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   private buildConfig(
     walletData: { words?: string; addresses?: string[] },
-    options?: CreateWalletOptions
+    options?: CreateWalletOptions,
   ) {
     // xpub/xpriv and seed are mutually exclusive in HathorWallet's constructor.
     // When both are provided (e.g. shared readonly tests pass seed for service

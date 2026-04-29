@@ -1,6 +1,6 @@
-import networkInstance from './network';
-import Network from './models/network';
 import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
+import Network from './models/network';
+import networkInstance from './network';
 
 // Default server and network user will connect when none have been chosen
 export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
@@ -66,7 +66,7 @@ export class Config {
       return TX_MINING_TESTNET_URL;
     }
     throw new Error(
-      `Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`
+      `Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`,
     );
   }
 
@@ -131,7 +131,7 @@ export class Config {
 
     if (!network) {
       throw new Error(
-        'You should either provide a network or call setSwapServiceBaseUrl before calling this.'
+        'You should either provide a network or call setSwapServiceBaseUrl before calling this.',
       );
     }
 
@@ -143,7 +143,7 @@ export class Config {
       return SWAP_SERVICE_TESTNET_BASE_URL;
     }
     throw new Error(
-      `Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
+      `Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`,
     );
   }
 
@@ -206,7 +206,7 @@ export class Config {
 
     if (!network) {
       throw new Error(
-        'You should either provide a network or call setExplorerServiceBaseUrl before calling this.'
+        'You should either provide a network or call setExplorerServiceBaseUrl before calling this.',
       );
     }
 
@@ -218,7 +218,7 @@ export class Config {
       return EXPLORER_SERVICE_TESTNET_BASE_URL;
     }
     throw new Error(
-      `Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`
+      `Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`,
     );
   }
 

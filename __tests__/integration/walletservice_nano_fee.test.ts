@@ -1,3 +1,7 @@
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
+import { TokenVersion } from '../../src/types';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
+
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 import {
   buildWalletInstance,
@@ -7,9 +11,6 @@ import {
   pollForTokenDetails,
   pollForTx,
 } from './helpers/service-facade.helper';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
-import { TokenVersion } from '../../src/types';
 
 const pinCode = '123456';
 const password = 'testpass';
@@ -54,7 +55,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
           },
         ],
       },
-      { pinCode }
+      { pinCode },
     );
     await pollForTx(wsWallet, initTx.hash!);
     contractId = initTx.hash!;
@@ -75,7 +76,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
           },
         ],
       },
-      { pinCode }
+      { pinCode },
     );
     await pollForTx(wsWallet, createFbtTx.hash!);
 
@@ -116,7 +117,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
           },
         ],
       },
-      { pinCode }
+      { pinCode },
     );
     await pollForTx(wsWallet, withdrawTx.hash!);
     await checkTxNotVoided(wsWallet, withdrawTx.hash!);
@@ -140,7 +141,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
           },
         ],
       },
-      { signTx: false }
+      { signTx: false },
     );
 
     const txBeforeChangeCaller = sendTransaction.transaction!;
@@ -163,7 +164,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
       expect.arrayContaining([
         expect.objectContaining({ tokenData: 1 }), // FBT
         expect.objectContaining({ tokenData: 0 }), // HTR
-      ])
+      ]),
     );
 
     // 4. Edit caller: change address AND seqnum for the new caller
@@ -218,7 +219,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
         createMelt: true,
         meltAuthorityAddress: address0,
       },
-      { signTx: false }
+      { signTx: false },
     );
 
     const txBeforeChangeCaller = sendTransaction.transaction!;
@@ -243,7 +244,7 @@ describe('WalletService Nano Contract Fee Tests', () => {
         expect.objectContaining({
           tokenData: 0, // HTR change
         }),
-      ])
+      ]),
     );
 
     // 3. Edit caller: change address AND seqnum for the new caller

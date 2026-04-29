@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Mnemonic from 'bitcore-mnemonic';
 import { crypto, util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
-import wallet from '../../src/utils/wallet';
+import Mnemonic from 'bitcore-mnemonic';
+
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
 import {
   XPubError,
   InvalidWords,
@@ -15,10 +16,10 @@ import {
   InvalidPasswdError,
 } from '../../src/errors';
 import Network from '../../src/models/network';
-import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
-import { hexToBuffer } from '../../src/utils/buffer';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
+import { hexToBuffer } from '../../src/utils/buffer';
 import { checkPassword } from '../../src/utils/crypto';
+import wallet from '../../src/utils/wallet';
 
 test('Words', () => {
   const words = wallet.generateWalletWords();
@@ -90,13 +91,13 @@ test('Xpriv and xpub', () => {
     derivedXpriv.publicKey.toBuffer(),
     chainCode,
     fingerprint,
-    'testnet'
+    'testnet',
   );
   expect(derivedXpub).toBe(derivedXpriv.xpubkey);
 
   // getPublicKeyFromXpub without an index will return the public key at the current derivation level
   expect(wallet.getPublicKeyFromXpub(derivedXpriv.xpubkey).toString()).toEqual(
-    derivedXpriv.publicKey.toString()
+    derivedXpriv.publicKey.toString(),
   );
 
   // To pubkey compressed
@@ -109,7 +110,7 @@ test('Xpriv and xpub', () => {
 
   // Invalid uncompressed public key must throw error
   expect(() => wallet.toPubkeyCompressed(hexToBuffer(`${uncompressedPubKeyHex}ab`))).toThrow(
-    UncompressedPubKeyError
+    UncompressedPubKeyError,
   );
 });
 
@@ -361,13 +362,13 @@ test('createP2SHRedeemScript', () => {
   const redeemScript0 =
     '5221027105a304d7f3935b64824303687cf96a2400a29a9a69fcfc286a090e71f5acf92102374bba4d4a3d19222db84b5334527fe49e746e3aeac7d18ae14c9ac5a1c1bd0721027892436f6b36eb31edaee157cfa029b1735525626cf7247eb17de5a3db2427ad53ae';
   expect(wallet.createP2SHRedeemScript(xpubs, numSignatures, 0).toString('hex')).toBe(
-    redeemScript0
+    redeemScript0,
   );
 
   const redeemScript1 =
     '522103483dd29818452ddcc11eaa04e00a84f0d733102caa1b124b349c7d4e8f6226972103262d9d3d2339298a0fdee45553ca60765a3486c872271dd1b56e6224ee7ec0d621027af464c0c85f656544bb0b34b3e3e525b7b76a9ab9faa3bbec8d0ceeed62647b53ae';
   expect(wallet.createP2SHRedeemScript(xpubs, numSignatures, 1).toString('hex')).toBe(
-    redeemScript1
+    redeemScript1,
   );
 });
 
@@ -384,7 +385,7 @@ test('getP2SHInputData', () => {
   expect(
     wallet
       .getP2SHInputData([signature, signature], Buffer.from(redeemScript0, 'hex'))
-      .toString('hex')
+      .toString('hex'),
   ).toBe(sig0);
 
   // Create a valid input data with another script
@@ -395,7 +396,7 @@ test('getP2SHInputData', () => {
   expect(
     wallet
       .getP2SHInputData([signature, signature], Buffer.from(redeemScript1, 'hex'))
-      .toString('hex')
+      .toString('hex'),
   ).toBe(sig1);
 
   // The script is a Multisig 2/3
@@ -405,8 +406,8 @@ test('getP2SHInputData', () => {
   expect(() =>
     wallet.getP2SHInputData(
       [signature, signature, signature, signature],
-      Buffer.from(redeemScript0, 'hex')
-    )
+      Buffer.from(redeemScript0, 'hex'),
+    ),
   ).toThrow();
 });
 
@@ -460,7 +461,7 @@ test('access data from xpub', () => {
   expect(
     wallet.generateAccessDataFromXpub(xpubkeyAcct, {
       multisig: { numSignatures: 2, pubkeys: [xpubkeyAcct, xpubkeyChange] },
-    })
+    }),
   ).toMatchObject({
     xpubkey: xpubAcct.derive(0).xpubkey,
     walletType: WalletType.MULTISIG,
@@ -538,7 +539,7 @@ test('access data from xpriv', () => {
         numSignatures: 2,
         pubkeys: [xpubkeyRoot, xpubkeyAcct, xpubkeyChange],
       },
-    })
+    }),
   ).toMatchObject({
     xpubkey: xprivRoot.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`).xpubkey,
     walletType: WalletType.MULTISIG,
@@ -579,7 +580,11 @@ test('access data from seed', () => {
 
   // P2PKH from seed
   expect(
-    wallet.generateAccessDataFromSeed(seed, { pin: '123', password: '456', networkName: 'testnet' })
+    wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    }),
   ).toMatchObject({
     xpubkey: xpubChange.xpubkey,
     mainKey: expect.objectContaining({
@@ -613,7 +618,7 @@ test('access data from seed', () => {
         numSignatures: 2,
         pubkeys: [xpubkeyAcct, xpubkeyChange],
       },
-    })
+    }),
   ).toMatchObject({
     xpubkey: xprivRoot.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`).xpubkey,
     walletType: WalletType.MULTISIG,
@@ -643,10 +648,10 @@ test('change pin and password', async () => {
   expect(checkPassword(accessData.authKey, '123')).toEqual(true);
 
   expect(() => wallet.changeEncryptionPin(accessData, 'invalid-pin', '321')).toThrow(
-    InvalidPasswdError
+    InvalidPasswdError,
   );
   expect(() => wallet.changeEncryptionPassword(accessData, 'invalid-passwd', '456')).toThrow(
-    InvalidPasswdError
+    InvalidPasswdError,
   );
 
   const pinChangedAccessData = wallet.changeEncryptionPin(accessData, '123', '321');
@@ -683,7 +688,7 @@ test('getXprivFromData', () => {
     buffers.parentFingerPrint,
     buffers.depth,
     buffers.childIndex,
-    'testnet'
+    'testnet',
   );
   expect(xpriv).toEqual(hdPrivKey.xprivkey);
 });

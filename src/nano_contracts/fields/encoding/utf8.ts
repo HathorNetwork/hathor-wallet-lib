@@ -6,6 +6,7 @@
  */
 
 import { BufferROExtract } from '../../types';
+
 import * as bytes from './bytes';
 
 export function encode(value: string) {

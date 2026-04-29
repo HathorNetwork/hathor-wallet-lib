@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OutputValueType } from '../../types';
 import { NATIVE_TOKEN_UID } from '../../constants';
-import { TxTemplateContext } from './context';
-import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
-import { createOutputScriptFromAddress } from '../../utils/address';
 import Input from '../../models/input';
 import Output from '../../models/output';
+import { OutputValueType } from '../../types';
+import { createOutputScriptFromAddress } from '../../utils/address';
+
+import { TxTemplateContext } from './context';
+import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
 
 /**
  * Select tokens from interpreter and modify context as required by the tokens found.
@@ -23,7 +24,7 @@ export async function selectTokens(
   options: IGetUtxosOptions,
   autoChange: boolean,
   changeAddress: string,
-  position: number = -1
+  position: number = -1,
 ) {
   const token = options.token ?? NATIVE_TOKEN_UID;
   await ctx.cacheTokenDetails(interpreter, token);
@@ -64,7 +65,7 @@ export async function selectAuthorities(
   ctx: TxTemplateContext,
   options: IGetUtxosOptions,
   count: number = 1,
-  position: number = -1
+  position: number = -1,
 ) {
   const token = options.token ?? NATIVE_TOKEN_UID;
   // Only cache the token version (no outputs created here)

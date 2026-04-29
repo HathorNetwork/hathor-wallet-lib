@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import tokens from '../../src/utils/tokens';
-import { NATIVE_TOKEN_UID } from '../../src/constants';
 import walletApi from '../../src/api/wallet';
-import { MemoryStore, Storage } from '../../src/storage';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { TokenValidationError } from '../../src/errors';
+import { MemoryStore, Storage } from '../../src/storage';
 import { TokenVersion } from '../../src/types';
+import tokens from '../../src/utils/tokens';
 
 test('Validate configuration string', async () => {
   const uid = '0000360f5e95c492352a6f1cab81b33d56694299f1da2b437107b2b1edde9687';
@@ -25,33 +25,33 @@ test('Validate configuration string', async () => {
 
   // Invalid config string should throw
   await expect(tokens.validateTokenToAddByConfigurationString('invalid-string')).rejects.toThrow(
-    'Invalid configuration string'
+    'Invalid configuration string',
   );
   await expect(tokens.validateTokenToAddByConfigurationString('invalid-string')).rejects.toThrow(
-    TokenValidationError
+    TokenValidationError,
   );
   await expect(
-    tokens.validateTokenToAddByConfigurationString('invalid-string', storage)
+    tokens.validateTokenToAddByConfigurationString('invalid-string', storage),
   ).rejects.toThrow(TokenValidationError);
 
   // Should throw if uid does not match the expected uid
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, undefined, 'expected-uid')
+    tokens.validateTokenToAddByConfigurationString(configString, undefined, 'expected-uid'),
   ).rejects.toThrow('Configuration string uid does not match');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, undefined, 'expected-uid')
+    tokens.validateTokenToAddByConfigurationString(configString, undefined, 'expected-uid'),
   ).rejects.toThrow(TokenValidationError);
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage, 'expected-uid')
+    tokens.validateTokenToAddByConfigurationString(configString, storage, 'expected-uid'),
   ).rejects.toThrow(TokenValidationError);
 
   // should throw if token is already registered
   await store.registerToken({ uid, name, symbol, version: TokenVersion.DEPOSIT });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('You already have this token');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
   await store.unregisterToken(uid);
 
@@ -63,10 +63,10 @@ test('Validate configuration string', async () => {
     version: TokenVersion.DEPOSIT,
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('You already have a token with this name');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
   await store.unregisterToken(uid2);
 
@@ -77,10 +77,10 @@ test('Validate configuration string', async () => {
     version: TokenVersion.DEPOSIT,
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('You already have a token with this symbol');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
   await store.unregisterToken(uid2);
 
@@ -89,30 +89,30 @@ test('Validate configuration string', async () => {
     cb({ success: false, message: 'boom!' });
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('boom!');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
 
   apiSpy.mockImplementation((_, cb) => {
     cb({ success: true, name: 'Another name', symbol });
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('Token name does not match');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
 
   apiSpy.mockImplementation((_, cb) => {
     cb({ success: true, name, symbol: 'Another symbol' });
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow('Token symbol does not match');
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).rejects.toThrow(TokenValidationError);
 
   // With no conflicts in storage and the api confirming the token is valid
@@ -121,7 +121,7 @@ test('Validate configuration string', async () => {
     cb({ success: true, name, symbol, version: TokenVersion.DEPOSIT });
   });
   await expect(
-    tokens.validateTokenToAddByConfigurationString(configString, storage)
+    tokens.validateTokenToAddByConfigurationString(configString, storage),
   ).resolves.toEqual({ uid, name, symbol });
 
   apiSpy.mockRestore();

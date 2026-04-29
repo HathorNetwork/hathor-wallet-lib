@@ -1,7 +1,9 @@
 import buffer from 'buffer';
+
+import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../constants';
 import { OutputValueError, ParseError } from '../errors';
 import { OutputValueType } from '../types';
-import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../constants';
+
 import { prettyValue } from './numbers';
 
 const isHexa = (value: string): boolean => {
@@ -123,7 +125,7 @@ export const hexToBuffer = (value: string): Buffer => {
 const validateLenToUnpack = (n: number, buff: Buffer) => {
   if (buff.length < n) {
     throw new ParseError(
-      `Don't have enough bytes to unpack. Requested ${n} and buffer has ${buff.length}`
+      `Don't have enough bytes to unpack. Requested ${n} and buffer has ${buff.length}`,
     );
   }
 };
