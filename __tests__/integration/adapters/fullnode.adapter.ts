@@ -27,14 +27,21 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  SendTransactionOptions,
+  SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  GetUtxosAdapterOptions,
+  GetUtxosResult,
+  AdapterOutput,
+  SendManyOutputsAdapterOptions,
   AuthorityUtxoResult,
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
@@ -186,14 +193,55 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return result.hash;
   }
 
-  async waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void> {
+  async waitForTx(
+    wallet: FuzzyWalletType,
+    txId: string,
+    recvWallet?: FuzzyWalletType
+  ): Promise<void> {
     const hWallet = this.concrete(wallet);
     await waitForTxReceived(hWallet, txId);
+    if (recvWallet) {
+      const hRecv = this.concrete(recvWallet);
+      await waitForTxReceived(hRecv, txId);
+    }
     await waitUntilNextTimestamp(hWallet, txId);
   }
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult> {
+    const hWallet = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
+    const result = await hWallet.sendTransaction(address, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...txOptions,
+    });
+    if (!result || !result.hash) {
+      throw new Error('sendTransaction: transaction had no hash');
+    }
+    await this.waitForTx(wallet, result.hash, recvWallet);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getTx(wallet: FuzzyWalletType, txId: string) {
+    const result = await this.concrete(wallet).getTx(txId);
+    if (!result) {
+      throw new Error(`getTx: transaction ${txId} not found`);
+    }
+    return result;
+  }
+
+  async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
+    // The fullnode facade returns FullNodeTxApiResponse (zod-inferred), which is structurally
+    // compatible with FullNodeTxResponse but has minor nullability differences.
+    return this.concrete(wallet).getFullTxById(txId) as Promise<FullNodeTxResponse>;
   }
 
   async createToken(
@@ -204,13 +252,46 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult> {
     const hWallet = this.concrete(wallet);
-    const response = await hWallet.createNewToken(name, symbol, amount, {
+    const result = await hWallet.createNewToken(name, symbol, amount, {
       pinCode: DEFAULT_PIN_CODE,
       ...options,
     });
-    await waitForTxReceived(hWallet, response.hash);
-    await waitUntilNextTimestamp(hWallet, response.hash);
-    return { hash: response.hash };
+    if (!result?.hash) {
+      throw new Error('createToken: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getUtxos(
+    wallet: FuzzyWalletType,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosResult> {
+    const result = await this.concrete(wallet).getUtxos(options);
+    return {
+      total_amount_available: result.total_amount_available,
+      total_utxos_available: result.total_utxos_available,
+      utxos: result.utxos,
+    };
+  }
+
+  async sendManyOutputsTransaction(
+    wallet: FuzzyWalletType,
+    outputs: AdapterOutput[],
+    options?: SendManyOutputsAdapterOptions
+  ): Promise<SendTransactionResult> {
+    const hWallet = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
+    const result = await hWallet.sendManyOutputsTransaction(outputs, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...txOptions,
+    });
+    if (!result?.hash) {
+      throw new Error('sendManyOutputsTransaction: transaction had no hash');
+    }
+    await this.waitForTx(wallet, result.hash, recvWallet);
+    return { hash: result.hash, transaction: result };
   }
 
   async getAuthorityUtxos(
