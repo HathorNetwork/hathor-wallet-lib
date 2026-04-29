@@ -895,7 +895,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       return this.transaction;
     } catch (err) {
       if (err instanceof WalletRequestError) {
-        const errMessage = 'Error sending tx proposal.';
+        const errMessage = `Error sending tx proposal: ${err.message}`;
         this.emit('send-error', errMessage);
         throw new SendTxError(errMessage);
       } else {

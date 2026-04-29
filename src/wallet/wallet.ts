@@ -102,6 +102,7 @@ import {
   WalletType,
   ITokenData,
   TokenVersion,
+  getDefaultLogger,
   SCANNING_POLICY,
   WalletAddressMode,
 } from '../types';
@@ -1214,7 +1215,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.authToken = data.token;
     } catch (err) {
       // We should not throw here since this method is called in a fire-and-forget manner
-      // TODO: When this wallet has a logger, we should log this error to help with debugging
+      // DIAGNOSTIC: log when token renewal silently fails
+      const safeMsg =
+        err && (err as Error).message ? (err as Error).message : String(err ?? 'unknown error');
+      getDefaultLogger().warn(
+        `[DIAG] renewAuthToken failed silently, setting authToken=null. Error: ${safeMsg}`
+      );
       this.authToken = null;
     }
   }
