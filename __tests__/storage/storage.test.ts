@@ -7,11 +7,8 @@
 
 import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
+
 import walletApi from '../../src/api/wallet';
-import { MemoryStore, Storage } from '../../src/storage';
-import tx_history from '../__fixtures__/tx_history';
-import { processHistory, loadAddresses } from '../../src/utils/storage';
-import walletUtils from '../../src/utils/wallet';
 import {
   P2PKH_ACCT_PATH,
   TOKEN_DEPOSIT_PERCENTAGE,
@@ -22,9 +19,9 @@ import {
   DEFAULT_NATIVE_TOKEN_CONFIG,
   NATIVE_TOKEN_UID,
 } from '../../src/constants';
-import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
+import { MemoryStore, Storage } from '../../src/storage';
 import {
   IHistoryTx,
   ILockedUtxo,
@@ -35,6 +32,10 @@ import {
   TokenVersion,
   ApiVersion,
 } from '../../src/types';
+import * as cryptoUtils from '../../src/utils/crypto';
+import { processHistory, loadAddresses } from '../../src/utils/storage';
+import walletUtils from '../../src/utils/wallet';
+import tx_history from '../__fixtures__/tx_history';
 
 describe('handleStop', () => {
   const PIN = '0000';
@@ -337,7 +338,7 @@ test('store fetch methods', async () => {
       bip32AddressIndex: 0,
       numTransactions: 2,
       balance: expect.anything(),
-    }
+    },
   );
   await expect(storage.getAddressAtIndex(1)).resolves.toMatchObject({
     base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
@@ -355,7 +356,7 @@ test('store fetch methods', async () => {
   expect(historySpy).toHaveBeenCalled();
 
   await expect(
-    storage.getTx('0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e')
+    storage.getTx('0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e'),
   ).resolves.toBeDefined();
 
   const tokenSpy = jest.spyOn(store, 'historyIter').mockImplementation(emptyIter);
@@ -478,7 +479,7 @@ describe('process locked utxos', () => {
     height,
     value: OutputValueType,
     token,
-    token_data
+    token_data,
   ): ILockedUtxo {
     return {
       index: 0,
@@ -554,7 +555,7 @@ describe('process locked utxos', () => {
         undefined,
         100n, // value
         '00', // token
-        0 // token_data
+        0, // token_data
       ),
       // timelocked
       getLockedUtxo(
@@ -564,7 +565,7 @@ describe('process locked utxos', () => {
         undefined,
         100n, // value
         '00', // token
-        0 // token_data
+        0, // token_data
       ),
       // utxo to be unlocked by height
       getLockedUtxo(
@@ -574,7 +575,7 @@ describe('process locked utxos', () => {
         5,
         100n, // value
         '01', // token
-        0 // token_data
+        0, // token_data
       ),
       // heightlocked
       getLockedUtxo(
@@ -584,7 +585,7 @@ describe('process locked utxos', () => {
         100,
         TOKEN_MINT_MASK, // value, mint
         '01', // token
-        TOKEN_AUTHORITY_MASK | 1 // token_data
+        TOKEN_AUTHORITY_MASK | 1, // token_data
       ),
     ];
     await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
@@ -726,7 +727,7 @@ describe('getChangeAddress', () => {
     await expect(storage.getChangeAddress({ changeAddress: addr1 })).resolves.toEqual(addr1);
     // Should throw if the provided address is not from the wallet
     await expect(storage.getChangeAddress({ changeAddress: 'invalid' })).rejects.toThrow(
-      'Change address'
+      'Change address',
     );
     // If one is not provided we get the current address
     await expect(storage.getChangeAddress()).resolves.toEqual(addr0);
@@ -833,7 +834,7 @@ test('change pin and password', async () => {
 
   await expect(() => storage.changePin('invalid-pin', '321')).rejects.toThrow(InvalidPasswdError);
   await expect(() => storage.changePassword('invalid-passwd', '456')).rejects.toThrow(
-    InvalidPasswdError
+    InvalidPasswdError,
   );
 
   await storage.changePin('123', '321');
@@ -903,28 +904,28 @@ test('isHardware', async () => {
   accessDataSpy.mockReturnValue(
     Promise.resolve({
       walletFlags: WALLET_FLAGS.HARDWARE,
-    })
+    }),
   );
   await expect(storage.isHardwareWallet()).resolves.toBe(true);
 
   accessDataSpy.mockReturnValue(
     Promise.resolve({
       walletFlags: WALLET_FLAGS.HARDWARE | WALLET_FLAGS.READONLY,
-    })
+    }),
   );
   await expect(storage.isHardwareWallet()).resolves.toBe(true);
 
   accessDataSpy.mockReturnValue(
     Promise.resolve({
       walletFlags: 0,
-    })
+    }),
   );
   await expect(storage.isHardwareWallet()).resolves.toBe(false);
 
   accessDataSpy.mockReturnValue(
     Promise.resolve({
       walletFlags: WALLET_FLAGS.READONLY,
-    })
+    }),
   );
   await expect(storage.isHardwareWallet()).resolves.toBe(false);
 });
@@ -1069,7 +1070,7 @@ describe('utxo selection in all stores', () => {
         index: 2,
         version: 0,
         outputs: [{}, {}, { spent_by: null }],
-      })
+      }),
     );
     await storage.utxoSelectAsInput({ txId: 'tx01', index: 2 }, true);
     buf = [];

@@ -7,9 +7,11 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
-import { BufferROExtract } from '../types';
-import { NCFieldBase } from './base';
+
 import { signedIntToBytes, unpackToInt } from '../../utils/buffer';
+import { BufferROExtract } from '../types';
+
+import { NCFieldBase } from './base';
 
 export class TimestampField extends NCFieldBase<number, number> {
   value: number;

@@ -1,3 +1,10 @@
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { InvalidPasswdError, SendTxError } from '../../../src/errors';
+import SendTransaction from '../../../src/new/sendTransaction';
+import HathorWallet from '../../../src/new/wallet';
+import { MemoryStore, Storage } from '../../../src/storage';
+import transactionUtils from '../../../src/utils/transaction';
+import { IHathorWallet } from '../../../src/wallet/types';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import {
@@ -9,15 +16,8 @@ import {
   waitForWalletReady,
   waitForTxReceived,
 } from '../helpers/wallet.helper';
-import { InvalidPasswdError, SendTxError } from '../../../src/errors';
-import HathorWallet from '../../../src/new/wallet';
-import { loggers } from '../utils/logger.util';
-import SendTransaction from '../../../src/new/sendTransaction';
-import { MemoryStore, Storage } from '../../../src/storage';
-import transactionUtils from '../../../src/utils/transaction';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { IHathorWallet } from '../../../src/wallet/types';
 import { getGapLimitConfig } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
 
 const startedWallets = [];
 

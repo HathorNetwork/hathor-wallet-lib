@@ -1,4 +1,11 @@
 import { isEmpty } from 'lodash';
+
+import ncApi from '../../../src/api/nano';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import CreateTokenTransaction from '../../../src/models/create_token_transaction';
+import { NanoContractHeaderActionType } from '../../../src/nano_contracts/types';
+import HathorWallet from '../../../src/new/wallet';
+import { TokenVersion } from '../../../src/types';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateWalletHelper,
@@ -6,13 +13,6 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-
-import ncApi from '../../../src/api/nano';
-import HathorWallet from '../../../src/new/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
-import { TokenVersion } from '../../../src/types';
-import CreateTokenTransaction from '../../../src/models/create_token_transaction';
-import { NanoContractHeaderActionType } from '../../../src/nano_contracts/types';
 
 describe('FeeBlueprint nano contract operations', () => {
   let hWallet: HathorWallet;
@@ -64,7 +64,7 @@ describe('FeeBlueprint nano contract operations', () => {
             changeAddress: address0,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, tx);
 
@@ -92,7 +92,7 @@ describe('FeeBlueprint nano contract operations', () => {
             changeAddress: address0,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, tx);
 
@@ -100,7 +100,7 @@ describe('FeeBlueprint nano contract operations', () => {
       contractId,
       ['dbt_uid'],
       [NATIVE_TOKEN_UID],
-      []
+      [],
     );
     expect(ncState.fields.dbt_uid.value).toBeDefined();
     dbtUid = ncState.fields.dbt_uid.value;
@@ -129,7 +129,7 @@ describe('FeeBlueprint nano contract operations', () => {
       contractId,
       ['fbt_uid'],
       [NATIVE_TOKEN_UID],
-      []
+      [],
     );
     expect(ncState.fields.fbt_uid.value).toBeDefined();
     fbtUid = ncState.fields.fbt_uid.value;
@@ -165,8 +165,8 @@ describe('FeeBlueprint nano contract operations', () => {
           mintAddress: address0,
           tokenVersion: TokenVersion.FEE,
         },
-        { maxFee: 0n }
-      )
+        { maxFee: 0n },
+      ),
     ).rejects.toThrow(/exceeds maximum fee/);
   });
 
@@ -196,7 +196,7 @@ describe('FeeBlueprint nano contract operations', () => {
         amount: 1000n,
         mintAddress: address0,
         tokenVersion: TokenVersion.FEE,
-      }
+      },
     );
     await checkTxValid(hWallet, tx);
 
@@ -264,7 +264,7 @@ describe('FeeBlueprint nano contract operations', () => {
         mintAddress: address0,
         tokenVersion: TokenVersion.FEE,
       },
-      { contractPaysFees: true }
+      { contractPaysFees: true },
     );
     await checkTxValid(hWallet, tx);
 
@@ -331,7 +331,7 @@ describe('FeeBlueprint nano contract operations', () => {
           },
         ],
       },
-      { contractPaysFees: true }
+      { contractPaysFees: true },
     );
     await checkTxValid(hWallet, tx);
 
@@ -383,8 +383,8 @@ describe('FeeBlueprint nano contract operations', () => {
             // No HTR withdrawal - fee cannot be deducted
           ],
         },
-        { contractPaysFees: true }
-      )
+        { contractPaysFees: true },
+      ),
     ).rejects.toThrow('No available HTR output to deduct fee from.');
   });
 
@@ -414,7 +414,7 @@ describe('FeeBlueprint nano contract operations', () => {
         mintAddress: address0,
         tokenVersion: TokenVersion.FEE,
       },
-      { contractPaysFees: true }
+      { contractPaysFees: true },
     );
     await checkTxValid(hWallet, createTx);
     const fbt2Uid = createTx.hash!;
@@ -450,8 +450,8 @@ describe('FeeBlueprint nano contract operations', () => {
             },
           ],
         },
-        { contractPaysFees: true }
-      )
+        { contractPaysFees: true },
+      ),
     ).rejects.toThrow(/HTR withdrawal amount insufficient to cover fee/);
   });
 
@@ -481,8 +481,8 @@ describe('FeeBlueprint nano contract operations', () => {
           mintAddress: address0,
           contractPaysTokenDeposit: true,
           tokenVersion: TokenVersion.DEPOSIT,
-        }
-      )
+        },
+      ),
     ).rejects.toThrow('Withdrawal amount -100 for token 00 is less than 0.');
   });
 
@@ -536,8 +536,8 @@ describe('FeeBlueprint nano contract operations', () => {
             },
           ],
         },
-        { maxFee: 0n } // Calculated fee (1n) exceeds this
-      )
+        { maxFee: 0n }, // Calculated fee (1n) exceeds this
+      ),
     ).rejects.toThrow('Calculated fee (1) exceeds maximum fee (0)');
   });
 
@@ -619,7 +619,7 @@ describe('FeeBlueprint nano contract operations', () => {
             address: address0,
           },
         ],
-      })
+      }),
     ).rejects.toThrow('Not enough HTR utxos to pay the fee.');
   });
 
@@ -711,7 +711,7 @@ describe('FeeBlueprint nano contract operations', () => {
             changeAddress: address0,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, tx);
 
@@ -800,7 +800,7 @@ describe('FeeBlueprint nano contract operations', () => {
         createMint: true,
         createMelt: true,
         tokenVersion: TokenVersion.FEE,
-      }
+      },
     );
     await checkTxValid(hWallet, createTokenTx);
 
@@ -915,7 +915,7 @@ describe('FeeBlueprint nano contract operations', () => {
         mintAddress: address0,
         tokenVersion: TokenVersion.FEE,
         data: ['data1', 'data2'],
-      }
+      },
     );
     await checkTxValid(hWallet, tx);
 
@@ -974,7 +974,7 @@ describe('FeeBlueprint nano contract operations', () => {
         tokenVersion: TokenVersion.FEE,
         data: ['data1', 'data2'],
       },
-      { contractPaysFees: true }
+      { contractPaysFees: true },
     );
     await checkTxValid(hWallet, tx);
 

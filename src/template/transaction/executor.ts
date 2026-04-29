@@ -5,8 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { z } from 'zod';
 import { clone, shuffle } from 'lodash';
+import { z } from 'zod';
+
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../constants';
+import Input from '../../models/input';
+import Output from '../../models/output';
+import ScriptData from '../../models/script_data';
+import { AuthorityType, isAuthorityType, OutputValueType, TokenVersion } from '../../types';
+import { createOutputScriptFromAddress } from '../../utils/address';
+import { JSONBigInt } from '../../utils/bigint';
+
+import { TxTemplateContext } from './context';
 import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
@@ -33,27 +48,14 @@ import {
   TxTemplateInstruction,
   UtxoSelectInstruction,
 } from './instructions';
-import { TxTemplateContext } from './context';
-import { IGetUtxosOptions, ITxTemplateInterpreter } from './types';
-import Input from '../../models/input';
-import Output from '../../models/output';
-import {
-  NATIVE_TOKEN_UID,
-  TOKEN_AUTHORITY_MASK,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../constants';
-import { createOutputScriptFromAddress } from '../../utils/address';
-import { JSONBigInt } from '../../utils/bigint';
-import ScriptData from '../../models/script_data';
 import {
   getOracleScript,
   getOracleSignedData,
   getWalletAddress,
   getWalletBalance,
 } from './setvarcommands';
+import { IGetUtxosOptions, ITxTemplateInterpreter } from './types';
 import { selectAuthorities, selectTokens } from './utils';
-import { AuthorityType, isAuthorityType, OutputValueType, TokenVersion } from '../../types';
 
 /**
  * Find and run the executor function for the instruction.
@@ -61,7 +63,7 @@ import { AuthorityType, isAuthorityType, OutputValueType, TokenVersion } from '.
 export async function runInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof TxTemplateInstruction>
+  ins: z.infer<typeof TxTemplateInstruction>,
 ) {
   const instructionExecutor = findInstructionExecution(ins);
   await instructionExecutor(interpreter, ctx, ins);
@@ -72,7 +74,7 @@ export async function runInstruction(
  * Since we parse the instruction we can guarantee the validity.
  */
 export function findInstructionExecution(
-  ins: unknown
+  ins: unknown,
   /* eslint-disable @typescript-eslint/no-explicit-any */
 ): (interpreter: ITxTemplateInterpreter, ctx: TxTemplateContext, ins: any) => Promise<void> {
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -114,7 +116,7 @@ export function findInstructionExecution(
 export async function execFeeInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof FeeInstruction>
+  ins: z.infer<typeof FeeInstruction>,
 ) {
   ctx.log(`Begin FeeInstruction: ${JSONBigInt.stringify(ins)}`);
   const { token, amount } = ins;
@@ -136,7 +138,7 @@ export async function execFeeInstruction(
 export async function execRawInputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof RawInputInstruction>
+  ins: z.infer<typeof RawInputInstruction>,
 ) {
   ctx.log(`Begin RawInputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position } = ins;
@@ -162,7 +164,7 @@ export async function execRawInputInstruction(
 export async function execUtxoSelectInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof UtxoSelectInstruction>
+  ins: z.infer<typeof UtxoSelectInstruction>,
 ) {
   ctx.log(`Begin UtxoSelectInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position } = ins;
@@ -171,7 +173,7 @@ export async function execUtxoSelectInstruction(
   const address = getVariable<string | undefined>(
     ins.address,
     ctx.vars,
-    UtxoSelectInstruction.shape.address
+    UtxoSelectInstruction.shape.address,
   );
   ctx.log(`fill(${fill}), address(${address}), token(${token})`);
 
@@ -187,7 +189,7 @@ export async function execUtxoSelectInstruction(
     getVariable<string | undefined>(
       ins.changeAddress,
       ctx.vars,
-      UtxoSelectInstruction.shape.changeAddress
+      UtxoSelectInstruction.shape.changeAddress,
     ) ?? (await interpreter.getChangeAddress(ctx));
 
   await selectTokens(interpreter, ctx, fill, options, autoChange, changeAddress, position);
@@ -199,7 +201,7 @@ export async function execUtxoSelectInstruction(
 export async function execAuthoritySelectInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof AuthoritySelectInstruction>
+  ins: z.infer<typeof AuthoritySelectInstruction>,
 ) {
   ctx.log(`Begin AuthoritySelectInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position ?? -1;
@@ -209,7 +211,7 @@ export async function execAuthoritySelectInstruction(
   const address = getVariable<string | undefined>(
     ins.address,
     ctx.vars,
-    AuthoritySelectInstruction.shape.address
+    AuthoritySelectInstruction.shape.address,
   );
   ctx.log(`count(${count}), address(${address}), token(${token})`);
 
@@ -238,7 +240,7 @@ export async function execAuthoritySelectInstruction(
 export async function execRawOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof RawOutputInstruction>
+  ins: z.infer<typeof RawOutputInstruction>,
 ) {
   ctx.log(`Begin RawOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position, authority, useCreatedToken } = ins;
@@ -248,12 +250,12 @@ export async function execRawOutputInstruction(
   const timelock = getVariable<number | undefined>(
     ins.timelock,
     ctx.vars,
-    RawOutputInstruction.shape.timelock
+    RawOutputInstruction.shape.timelock,
   );
   let amount = getVariable<bigint | undefined>(
     ins.amount,
     ctx.vars,
-    RawOutputInstruction.shape.amount
+    RawOutputInstruction.shape.amount,
   );
   ctx.log(`amount(${amount}) timelock(${timelock}) script(${script}) token(${token})`);
   if (!(authority || amount)) {
@@ -324,7 +326,7 @@ export async function execRawOutputInstruction(
 export async function execDataOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof DataOutputInstruction>
+  ins: z.infer<typeof DataOutputInstruction>,
 ) {
   ctx.log(`Begin DataOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position, useCreatedToken } = ins;
@@ -364,7 +366,7 @@ export async function execDataOutputInstruction(
 export async function execTokenOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof TokenOutputInstruction>
+  ins: z.infer<typeof TokenOutputInstruction>,
 ) {
   ctx.log(`Begin TokenOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position, useCreatedToken } = ins;
@@ -373,7 +375,7 @@ export async function execTokenOutputInstruction(
   const timelock = getVariable<number | undefined>(
     ins.timelock,
     ctx.vars,
-    TokenOutputInstruction.shape.timelock
+    TokenOutputInstruction.shape.timelock,
   );
   const amount = getVariable<bigint>(ins.amount, ctx.vars, TokenOutputInstruction.shape.amount);
   ctx.log(`Creating token output with amount(${amount}) address(${address}) timelock(${timelock})`);
@@ -409,28 +411,28 @@ export async function execTokenOutputInstruction(
 export async function execAuthorityOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof AuthorityOutputInstruction>
+  ins: z.infer<typeof AuthorityOutputInstruction>,
 ) {
   ctx.log(`Begin AuthorityOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { authority, position, useCreatedToken } = ins;
   const token = getVariable<string | undefined>(
     ins.token,
     ctx.vars,
-    AuthorityOutputInstruction.shape.token
+    AuthorityOutputInstruction.shape.token,
   );
   const address = getVariable<string>(
     ins.address,
     ctx.vars,
-    AuthorityOutputInstruction.shape.address
+    AuthorityOutputInstruction.shape.address,
   );
   const timelock = getVariable<number | undefined>(
     ins.timelock,
     ctx.vars,
-    AuthorityOutputInstruction.shape.timelock
+    AuthorityOutputInstruction.shape.timelock,
   );
   const count = getVariable<number>(ins.count, ctx.vars, AuthorityOutputInstruction.shape.count);
   ctx.log(
-    `Creating count(${count}) "${authority}" authority outputs with address(${address}) timelock(${timelock})`
+    `Creating count(${count}) "${authority}" authority outputs with address(${address}) timelock(${timelock})`,
   );
 
   let tokenData: number;
@@ -483,7 +485,7 @@ export async function execAuthorityOutputInstruction(
 export async function execShuffleInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof ShuffleInstruction>
+  ins: z.infer<typeof ShuffleInstruction>,
 ) {
   ctx.log(`Begin ShuffleInstruction: ${JSONBigInt.stringify(ins)}`);
   const { target } = ins;
@@ -580,33 +582,33 @@ async function completeTokenInputAndOutputs(params: ICompleteTokenInputAndOutput
 export async function execCompleteTxInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof CompleteTxInstruction>
+  ins: z.infer<typeof CompleteTxInstruction>,
 ) {
   ctx.log(`Begin CompleteTxInstruction: ${JSONBigInt.stringify(ins)}`);
   const token = getVariable<string | undefined>(
     ins.token,
     ctx.vars,
-    CompleteTxInstruction.shape.token
+    CompleteTxInstruction.shape.token,
   );
   const changeAddress =
     getVariable<string | undefined>(
       ins.changeAddress,
       ctx.vars,
-      CompleteTxInstruction.shape.changeAddress
+      CompleteTxInstruction.shape.changeAddress,
     ) ?? (await interpreter.getChangeAddress(ctx));
   const address = getVariable<string | undefined>(
     ins.address,
     ctx.vars,
-    CompleteTxInstruction.shape.address
+    CompleteTxInstruction.shape.address,
   );
   const timelock = getVariable<number | undefined>(
     ins.timelock,
     ctx.vars,
-    CompleteTxInstruction.shape.timelock
+    CompleteTxInstruction.shape.timelock,
   );
   const { skipSelection, skipAuthorities, skipChange, calculateFee } = ins;
   ctx.log(
-    `changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token}), calculateFee(${calculateFee}), skipSelection(${skipSelection}), skipChange(${skipChange}), skipAuthorities(${skipAuthorities})`
+    `changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token}), calculateFee(${calculateFee}), skipSelection(${skipSelection}), skipChange(${skipChange}), skipAuthorities(${skipAuthorities})`,
   );
 
   const tokensToCheck: Set<string> = new Set();
@@ -780,41 +782,41 @@ export async function execCompleteTxInstruction(
 export async function execConfigInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof ConfigInstruction>
+  ins: z.infer<typeof ConfigInstruction>,
 ) {
   ctx.log(`Begin ConfigInstruction: ${JSONBigInt.stringify(ins)}`);
   const version = getVariable<number | undefined>(
     ins.version,
     ctx.vars,
-    ConfigInstruction.shape.version
+    ConfigInstruction.shape.version,
   );
   const signalBits = getVariable<number | undefined>(
     ins.signalBits,
     ctx.vars,
-    ConfigInstruction.shape.signalBits
+    ConfigInstruction.shape.signalBits,
   );
   const tokenName = getVariable<string | undefined>(
     ins.tokenName,
     ctx.vars,
-    ConfigInstruction.shape.tokenName
+    ConfigInstruction.shape.tokenName,
   );
   const tokenSymbol = getVariable<string | undefined>(
     ins.tokenSymbol,
     ctx.vars,
-    ConfigInstruction.shape.tokenSymbol
+    ConfigInstruction.shape.tokenSymbol,
   );
   const tokenVersion = getVariable<TokenVersion | undefined>(
     ins.tokenVersion,
     ctx.vars,
-    ConfigInstruction.shape.tokenVersion
+    ConfigInstruction.shape.tokenVersion,
   );
   const createToken = getVariable<boolean | undefined>(
     ins.createToken,
     ctx.vars,
-    ConfigInstruction.shape.createToken
+    ConfigInstruction.shape.createToken,
   );
   ctx.log(
-    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) tokenVersion(${tokenVersion}) createToken(${createToken})`
+    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) tokenVersion(${tokenVersion}) createToken(${createToken})`,
   );
 
   if (version) {
@@ -843,7 +845,7 @@ export async function execConfigInstruction(
 export async function execSetVarInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof SetVarInstruction>
+  ins: z.infer<typeof SetVarInstruction>,
 ) {
   ctx.log(`Begin SetVarInstruction: ${JSONBigInt.stringify(ins)}`);
   if (!ins.call) {
@@ -867,7 +869,7 @@ export async function execSetVarInstruction(
     const token = getVariable<string>(
       callArgs.token,
       ctx.vars,
-      SetVarGetWalletBalanceOpts.shape.token
+      SetVarGetWalletBalanceOpts.shape.token,
     );
     const newOptions = clone(callArgs);
     newOptions.token = token;
@@ -900,19 +902,19 @@ export async function execSetVarInstruction(
 async function validateDepositNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoDepositAction>
+  action: z.infer<typeof NanoDepositAction>,
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoDepositAction.shape.token);
   await ctx.addToken(interpreter, token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
-    NanoDepositAction.shape.amount
+    NanoDepositAction.shape.amount,
   );
   const address = getVariable<string | undefined>(
     action.address,
     ctx.vars,
-    NanoDepositAction.shape.address
+    NanoDepositAction.shape.address,
   );
 
   // This is the action without variables, which will be used to create the header
@@ -938,7 +940,7 @@ async function validateDepositNanoAction(
     getVariable<string | undefined>(
       action.changeAddress,
       ctx.vars,
-      NanoDepositAction.shape.changeAddress
+      NanoDepositAction.shape.changeAddress,
     ) ?? (await interpreter.getChangeAddress(ctx));
 
   await selectTokens(interpreter, ctx, amount, options, action.autoChange, changeAddress);
@@ -952,14 +954,14 @@ async function validateDepositNanoAction(
 async function validateWithdrawalNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoWithdrawalAction>
+  action: z.infer<typeof NanoWithdrawalAction>,
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoWithdrawalAction.shape.token);
   await ctx.addToken(interpreter, token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
-    NanoWithdrawalAction.shape.amount
+    NanoWithdrawalAction.shape.amount,
   );
   const address =
     getVariable<string | undefined>(action.address, ctx.vars, NanoWithdrawalAction.shape.address) ??
@@ -989,7 +991,7 @@ async function validateWithdrawalNanoAction(
 async function validateGrantAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoGrantAuthorityAction>
+  action: z.infer<typeof NanoGrantAuthorityAction>,
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoGrantAuthorityAction.shape.token);
   await ctx.addToken(interpreter, token);
@@ -997,7 +999,7 @@ async function validateGrantAuthorityNanoAction(
   const address = getVariable<string | undefined>(
     action.address,
     ctx.vars,
-    NanoGrantAuthorityAction.shape.address
+    NanoGrantAuthorityAction.shape.address,
   );
 
   // This is the action without variables, which will be used to create the header
@@ -1039,7 +1041,7 @@ async function validateGrantAuthorityNanoAction(
 async function validateAcquireAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoAcquireAuthorityAction>
+  action: z.infer<typeof NanoAcquireAuthorityAction>,
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoAcquireAuthorityAction.shape.token);
   await ctx.addToken(interpreter, token);
@@ -1047,7 +1049,7 @@ async function validateAcquireAuthorityNanoAction(
     getVariable<string | undefined>(
       action.address,
       ctx.vars,
-      NanoAcquireAuthorityAction.shape.address
+      NanoAcquireAuthorityAction.shape.address,
     ) ?? (await interpreter.getAddress());
 
   // This is the action without variables, which will be used to create the header
@@ -1083,7 +1085,7 @@ async function validateAcquireAuthorityNanoAction(
 export async function execNanoMethodInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: z.infer<typeof NanoMethodInstruction>
+  ins: z.infer<typeof NanoMethodInstruction>,
 ) {
   ctx.log(`Begin NanoMethodInstruction: ${JSONBigInt.stringify(ins)}`);
 

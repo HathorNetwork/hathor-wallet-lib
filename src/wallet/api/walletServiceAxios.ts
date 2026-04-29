@@ -6,9 +6,10 @@
  */
 
 import axios from 'axios';
+
+import config from '../../config';
 import { TIMEOUT } from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
-import config from '../../config';
 
 /**
  * Method that creates an axios instance
@@ -26,7 +27,7 @@ import config from '../../config';
 export const axiosInstance = async (
   wallet: HathorWalletServiceWallet,
   needsAuth: boolean,
-  timeout: number = TIMEOUT
+  timeout: number = TIMEOUT,
 ) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions: {

@@ -39,7 +39,7 @@ const txMiningApi = {
         },
         error => {
           return Promise.reject(error);
-        }
+        },
       );
   },
 
@@ -62,7 +62,7 @@ const txMiningApi = {
         },
         error => {
           return Promise.reject(error);
-        }
+        },
       );
   },
 
@@ -85,7 +85,7 @@ const txMiningApi = {
         },
         error => {
           return Promise.reject(error);
-        }
+        },
       );
   },
 
@@ -106,7 +106,7 @@ const txMiningApi = {
           },
           err => {
             reject(err);
-          }
+          },
         );
     });
   },

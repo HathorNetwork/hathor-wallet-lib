@@ -7,6 +7,7 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
 
 import { BufferROExtract } from '../types';
+
 import { NCFieldBase } from './base';
 
 export class OptionalField extends NCFieldBase<unknown | null, unknown | null> {

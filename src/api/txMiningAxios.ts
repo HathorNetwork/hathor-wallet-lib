@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axiosWrapperCreateRequestInstance from './axiosWrapper';
 import config from '../config';
+
+import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**
  * Create axios instance settings base URL and content type

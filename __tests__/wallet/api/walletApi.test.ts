@@ -1,9 +1,10 @@
 import { AxiosInstance, AxiosResponse } from 'axios';
-import walletApi from '../../../src/wallet/api/walletApi';
-import Network from '../../../src/models/network';
-import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+
 import config from '../../../src/config';
 import { WalletRequestError } from '../../../src/errors';
+import Network from '../../../src/models/network';
+import walletApi from '../../../src/wallet/api/walletApi';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 
 const seed =
   'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
@@ -46,7 +47,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrow(
-      'Error getting wallet addresses.'
+      'Error getting wallet addresses.',
     );
 
     // Should fail if response data success attribute is false
@@ -58,7 +59,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrow(
-      'Error getting wallet addresses.'
+      'Error getting wallet addresses.',
     );
 
     // Should return with data on success
@@ -434,7 +435,7 @@ describe('walletApi', () => {
       'xpubsig',
       'authxpub',
       'authxpubsig',
-      Date.now()
+      Date.now(),
     );
 
     expect(result).toEqual(mockWalletStatus);
@@ -462,7 +463,7 @@ describe('walletApi', () => {
     });
 
     await expect(
-      walletApi.createWallet(wallet, 'xpubkey', 'xpubsig', 'authxpub', 'authxpubsig', Date.now())
+      walletApi.createWallet(wallet, 'xpubkey', 'xpubsig', 'authxpub', 'authxpubsig', Date.now()),
     ).rejects.toThrow();
   });
 
@@ -702,7 +703,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
-      'Error requesting read-only auth token.'
+      'Error requesting read-only auth token.',
     );
 
     // Should throw on success: false
@@ -712,7 +713,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.createReadOnlyAuthToken(wallet, xpubkey)).rejects.toThrow(
-      'Error requesting read-only auth token.'
+      'Error requesting read-only auth token.',
     );
   });
 
@@ -739,7 +740,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow(
-      'Error deleting tx proposal.'
+      'Error deleting tx proposal.',
     );
 
     // Should throw on invalid schema
@@ -769,7 +770,7 @@ describe('walletApi', () => {
     const resultTrue = await walletApi.getHasTxOutsideFirstAddress(wallet);
     expect(resultTrue).toEqual(mockResponseTrue);
     expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-      'wallet/addresses/has-transactions-outside-first-address'
+      'wallet/addresses/has-transactions-outside-first-address',
     );
 
     // Test successful response with hasTransactions: false
@@ -793,7 +794,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow(
-      'Error checking if wallet has transactions outside first address.'
+      'Error checking if wallet has transactions outside first address.',
     );
 
     // Should throw on success: false
@@ -803,7 +804,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow(
-      'Error checking if wallet has transactions outside first address.'
+      'Error checking if wallet has transactions outside first address.',
     );
 
     // Should throw on invalid schema (missing hasTransactions)

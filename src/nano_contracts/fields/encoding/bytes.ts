@@ -7,6 +7,7 @@
 
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../../../constants';
 import { BufferROExtract } from '../../types';
+
 import * as leb128 from './leb128';
 
 export function encode(buf: Buffer) {

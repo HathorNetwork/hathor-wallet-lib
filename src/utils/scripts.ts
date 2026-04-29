@@ -1,13 +1,15 @@
-import _ from 'lodash';
 import { Script, HDPublicKey } from 'bitcore-lib';
+import _ from 'lodash';
+
+import { ParseError, ParseScriptError, XPubError } from '../errors';
+import Network from '../models/network';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
-import Network from '../models/network';
-import helpers from './helpers';
-import { unpackLen, unpackToInt } from './buffer';
-import { ParseError, ParseScriptError, XPubError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
+
+import { unpackLen, unpackToInt } from './buffer';
+import helpers from './helpers';
 
 /**
  * Parse P2PKH output script
@@ -107,7 +109,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   if (expectedLen !== scriptBuf.length) {
     // The script has different qty of bytes than expected
     throw new ParseScriptError(
-      `Invalid output script. Expected len ${expectedLen} and received len ${scriptBuf.length}.`
+      `Invalid output script. Expected len ${expectedLen} and received len ${scriptBuf.length}.`,
     );
   }
 
@@ -174,7 +176,7 @@ export const getPushData = (buff: Buffer): Buffer => {
 export function createP2SHRedeemScript(
   xpubs: string[],
   numSignatures: number,
-  index: number
+  index: number,
 ): Buffer {
   let sortedXpubs: HDPublicKey[];
   try {
@@ -182,7 +184,7 @@ export function createP2SHRedeemScript(
       xpubs.map(xp => new HDPublicKey(xp)),
       (xpub: HDPublicKey) => {
         return xpub.publicKey.toString('hex');
-      }
+      },
     );
   } catch (e) {
     throw new XPubError('Invalid xpub');

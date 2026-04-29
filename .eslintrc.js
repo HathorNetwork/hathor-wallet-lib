@@ -24,6 +24,17 @@ module.exports = {
     'arrow-parens': ['error', 'as-needed'],
     'import/no-named-as-default': 0,
     'import/prefer-default-export': 0,
+    'import/order': [
+      'error',
+      {
+        groups: ['builtin', 'external', 'internal', 'parent', 'sibling', 'index'],
+        'newlines-between': 'always',
+        alphabetize: { order: 'asc', caseInsensitive: true },
+      },
+    ],
+    'import/first': 'error',
+    'import/newline-after-import': 'error',
+    'import/no-duplicates': 'error',
     quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
     'comma-dangle': 0,
     'object-curly-newline': 'off', // This rule is better handled by prettier

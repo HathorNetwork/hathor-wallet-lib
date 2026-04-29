@@ -7,11 +7,13 @@
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
 
 import { z } from 'zod';
-import { BufferROExtract } from '../types';
-import { NCFieldBase } from './base';
+
 import Address from '../../models/address';
 import Network from '../../models/network';
 import helpersUtils from '../../utils/helpers';
+import { BufferROExtract } from '../types';
+
+import { NCFieldBase } from './base';
 
 export const AddressSchema = z
   .string()
@@ -65,7 +67,7 @@ export class AddressField extends NCFieldBase<string, Address> {
     // Check network version
     if (decoded[0] !== buf[0]) {
       throw new Error(
-        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`,
       );
     }
     // Check checksum bytes
@@ -74,7 +76,7 @@ export class AddressField extends NCFieldBase<string, Address> {
     if (!calcChecksum.equals(recvChecksum)) {
       // Checksum value generated does not match value from fullnode
       throw new Error(
-        `When parsing and Address(${address.base58}) we calculated checksum(${calcChecksum.toString('hex')}) but it does not match the checksum it came with ${recvChecksum.toString('hex')}.`
+        `When parsing and Address(${address.base58}) we calculated checksum(${calcChecksum.toString('hex')}) but it does not match the checksum it came with ${recvChecksum.toString('hex')}.`,
       );
     }
     this.value = address;

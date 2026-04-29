@@ -7,10 +7,15 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import config from '../../../src/config';
-import { WalletTracker } from '../utils/wallet-tracker.util';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import type Transaction from '../../../src/models/transaction';
+import type { WalletStopOptions } from '../../../src/new/types';
+import type { IHistoryTx } from '../../../src/types';
+import { AuthorityType } from '../../../src/types';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
+import { NETWORK_NAME } from '../configuration/test-constants';
+import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import {
   buildWalletInstance,
   initializeServiceGlobalConfigs,
@@ -18,13 +23,10 @@ import {
   pollForTokenDetails,
   pollUntilCondition,
 } from '../helpers/service-facade.helper';
-import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
-import type { WalletStopOptions } from '../../../src/new/types';
-import type { IHistoryTx } from '../../../src/types';
-import { AuthorityType } from '../../../src/types';
-import { NETWORK_NAME } from '../configuration/test-constants';
-import type { FullNodeTxResponse } from '../../../src/wallet/types';
+import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+import { WalletTracker } from '../utils/wallet-tracker.util';
+
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
@@ -44,7 +46,6 @@ import type {
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
 } from './types';
-import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
 const SERVICE_PIN = '123456';
 const SERVICE_PASSWORD = 'testpass';
@@ -168,7 +169,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   async startWallet(
     wallet: FuzzyWalletType,
-    options?: { pinCode?: string; password?: string }
+    options?: { pinCode?: string; password?: string },
   ): Promise<void> {
     const sw = this.concrete(wallet);
 
@@ -204,7 +205,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async injectFunds(
     destWallet: FuzzyWalletType,
     address: string,
-    amount: bigint
+    amount: bigint,
   ): Promise<Transaction> {
     return GenesisWalletServiceHelper.injectFunds(address, amount, this.concrete(destWallet));
   }
@@ -228,7 +229,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async waitForTx(
     wallet: FuzzyWalletType,
     txId: string,
-    recvWallet?: FuzzyWalletType
+    recvWallet?: FuzzyWalletType,
   ): Promise<void> {
     await pollForTx(this.concrete(wallet), txId);
     if (recvWallet) {
@@ -244,7 +245,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     address: string,
     amount: bigint,
-    options?: SendTransactionOptions
+    options?: SendTransactionOptions,
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
@@ -289,7 +290,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     name: string,
     symbol: string,
     amount: bigint,
-    options?: CreateTokenOptions
+    options?: CreateTokenOptions,
   ): Promise<CreateTokenResult> {
     const sw = this.concrete(wallet);
     const result = await sw.createNewToken(name, symbol, amount, {
@@ -306,7 +307,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   async getUtxos(
     wallet: FuzzyWalletType,
-    options?: GetUtxosAdapterOptions
+    options?: GetUtxosAdapterOptions,
   ): Promise<GetUtxosResult> {
     const result = await this.concrete(wallet).getUtxos(options);
     return {
@@ -319,7 +320,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async sendManyOutputsTransaction(
     wallet: FuzzyWalletType,
     outputs: AdapterOutput[],
-    options?: SendManyOutputsAdapterOptions
+    options?: SendManyOutputsAdapterOptions,
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
@@ -338,7 +339,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     tokenUid: string,
     type: AuthorityType,
-    options?: GetAuthorityUtxosOptions
+    options?: GetAuthorityUtxosOptions,
   ): Promise<AuthorityUtxoResult[]> {
     const sw = this.concrete(wallet);
     const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
@@ -359,7 +360,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options?: DelegateAuthorityAdapterOptions
+    options?: DelegateAuthorityAdapterOptions,
   ): Promise<DelegateAuthorityResult> {
     const sw = this.concrete(wallet);
     const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {

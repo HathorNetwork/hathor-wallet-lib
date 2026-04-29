@@ -6,8 +6,8 @@
  */
 
 import { PrivateKey, crypto, HDPrivateKey } from 'bitcore-lib';
-import transaction from '../../src/utils/transaction';
-import { UtxoError } from '../../src/errors';
+
+import txApi from '../../src/api/txApi';
 import {
   BLOCK_VERSION,
   CREATE_TOKEN_TX_VERSION,
@@ -19,15 +19,16 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../../src/constants';
-import txApi from '../../src/api/txApi';
-import { MemoryStore, Storage } from '../../src/storage';
+import { UtxoError } from '../../src/errors';
+import Address from '../../src/models/address';
 import Input from '../../src/models/input';
-import Transaction from '../../src/models/transaction';
 import Output from '../../src/models/output';
 import P2PKH from '../../src/models/p2pkh';
-import Address from '../../src/models/address';
+import Transaction from '../../src/models/transaction';
 import NanoContractHeader from '../../src/nano_contracts/header';
+import { MemoryStore, Storage } from '../../src/storage';
 import { TokenVersion } from '../../src/types';
+import transaction from '../../src/utils/transaction';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
@@ -41,16 +42,16 @@ test('isAuthorityOutput', () => {
 test('isMint', () => {
   expect(transaction.isMint({ value: 0n, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
   expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
-    true
+    true,
   );
   expect(
     transaction.isMint({
       value: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
       token_data: TOKEN_AUTHORITY_MASK,
-    })
+    }),
   ).toBe(true);
   expect(
-    transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 })
+    transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 }),
   ).toBe(true);
 
   expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: 0 })).toBe(false);
@@ -61,16 +62,16 @@ test('isMint', () => {
 test('isMelt', () => {
   expect(transaction.isMelt({ value: 0n, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
   expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
-    true
+    true,
   );
   expect(
     transaction.isMelt({
       value: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
       token_data: TOKEN_AUTHORITY_MASK,
-    })
+    }),
   ).toBe(true);
   expect(
-    transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 })
+    transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 }),
   ).toBe(true);
 
   expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: 0 })).toBe(false);
@@ -88,7 +89,7 @@ test('getSignature', () => {
 
   // A signature made with this util matches the public key
   expect(
-    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(signatureDER), privkey.toPublicKey())
+    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(signatureDER), privkey.toPublicKey()),
   ).toBe(true);
 });
 
@@ -129,7 +130,7 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     Buffer.from('cafe', 'hex'),
     [],
     1,
-    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp')
+    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'),
   );
   const tx = new Transaction([input], [], { headers: [nano] });
   expect(tx.isNanoContract()).toBeTruthy();
@@ -152,8 +153,8 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     crypto.ECDSA.verify(
       hashdata,
       crypto.Signature.fromDER(sigData.inputSignatures[0].signature),
-      xpriv.deriveChild(10).publicKey
-    )
+      xpriv.deriveChild(10).publicKey,
+    ),
   ).toBe(true);
 });
 
@@ -206,7 +207,7 @@ test('signTransaction', async () => {
   expect(input0.data).toEqual(null);
   const sig1 = input1.data.slice(1, 1 + input1.data[0]);
   expect(
-    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(sig1), xpriv.deriveChild(10).publicKey)
+    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(sig1), xpriv.deriveChild(10).publicKey),
   ).toBe(true);
   expect(input2.data).toEqual(null);
   expect(input3.data).toEqual(Buffer.from('010203', 'hex'));
@@ -231,41 +232,41 @@ test('Utxo selection', () => {
   const selectedUtxos = transaction.selectUtxos(utxos, 3n);
   expect(selectedUtxos.utxos.length).toBe(1);
   expect(selectedUtxos.utxos[0].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
   );
   expect(selectedUtxos.changeAmount).toBe(2n);
 
   const selectedUtxos2 = transaction.selectUtxos(utxos, 5n);
   expect(selectedUtxos2.utxos.length).toBe(1);
   expect(selectedUtxos2.utxos[0].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
   );
   expect(selectedUtxos2.changeAmount).toBe(0n);
 
   const selectedUtxos3 = transaction.selectUtxos(utxos, 6n);
   expect(selectedUtxos3.utxos.length).toBe(1);
   expect(selectedUtxos3.utxos[0].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d',
   );
   expect(selectedUtxos3.changeAmount).toBe(4n);
 
   const selectedUtxos4 = transaction.selectUtxos(utxos, 11n);
   expect(selectedUtxos4.utxos.length).toBe(2);
   expect(selectedUtxos4.utxos[0].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d',
   );
   expect(selectedUtxos4.utxos[1].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
   );
   expect(selectedUtxos4.changeAmount).toBe(4n);
 
   const selectedUtxos5 = transaction.selectUtxos(utxos, 15n);
   expect(selectedUtxos5.utxos.length).toBe(2);
   expect(selectedUtxos5.utxos[0].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d',
   );
   expect(selectedUtxos5.utxos[1].txId).toBe(
-    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
   );
   expect(selectedUtxos5.changeAmount).toBe(0n);
 
@@ -309,7 +310,7 @@ test('utxo from history output', () => {
       authorities: 0n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
-    }
+    },
   );
 
   // Custom token without timelock
@@ -334,7 +335,7 @@ test('utxo from history output', () => {
       authorities: 0n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
-    }
+    },
   );
 
   // Custom token authority
@@ -359,7 +360,7 @@ test('utxo from history output', () => {
       authorities: 2n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
-    }
+    },
   );
 });
 
@@ -384,11 +385,11 @@ test('getTokenDataFromOutput', () => {
   expect(transaction.getTokenDataFromOutput(utxoCustom, ['02', '01', '03'])).toEqual(2);
   const utxoCustomAuth = { type: 'p2pkh', token: '01', authorities: 1n };
   expect(transaction.getTokenDataFromOutput(utxoCustomAuth, ['03', '02', '01'])).toEqual(
-    3 | TOKEN_AUTHORITY_MASK
+    3 | TOKEN_AUTHORITY_MASK,
   );
   const utxoCustomAuth2 = { type: 'p2pkh', token: '01', authorities: 2n };
   expect(transaction.getTokenDataFromOutput(utxoCustomAuth2, ['02', '01'])).toEqual(
-    2 | TOKEN_AUTHORITY_MASK
+    2 | TOKEN_AUTHORITY_MASK,
   );
 });
 
@@ -526,14 +527,14 @@ test('getTxType', () => {
   expect(transaction.getTxType({ version: BLOCK_VERSION })).toBe('Block');
   expect(transaction.getTxType({ version: DEFAULT_TX_VERSION })).toBe('Transaction');
   expect(transaction.getTxType({ version: CREATE_TOKEN_TX_VERSION })).toBe(
-    'Create Token Transaction'
+    'Create Token Transaction',
   );
   expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe(
-    'Merged Mining Block'
+    'Merged Mining Block',
   );
   expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
   expect(transaction.getTxType({ version: ON_CHAIN_BLUEPRINTS_VERSION })).toBe(
-    'On-Chain Blueprint'
+    'On-Chain Blueprint',
   );
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });
@@ -663,12 +664,12 @@ test('convertTransactionToHistoryTx', async () => {
     tx.hash = 'resolve-fail-case';
     tx.inputs = [new Input('resolve-fail', 0)];
     await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow(
-      'failed api call'
+      'failed api call',
     );
     tx.hash = 'no-outputs-case';
     tx.inputs = [new Input('no-outputs', 0)];
     await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow(
-      'Index outside of tx output array bounds'
+      'Index outside of tx output array bounds',
     );
 
     tx.hash = 'fail-case';

@@ -8,6 +8,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { BufferROExtract } from '../types';
+
 import { NCFieldBase } from './base';
 import { leb128 } from './encoding';
 

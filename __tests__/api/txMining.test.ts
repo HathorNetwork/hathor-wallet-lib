@@ -1,5 +1,6 @@
-import MockAdapter from 'axios-mock-adapter';
 import axios, { AxiosError } from 'axios';
+import MockAdapter from 'axios-mock-adapter';
+
 import txMiningApi from '../../src/api/txMining';
 
 describe('txMiningApi', () => {
@@ -132,7 +133,7 @@ describe('txMiningApi', () => {
           propagate: true,
           add_parents: true,
           timeout: 10,
-        })
+        }),
       );
     });
 

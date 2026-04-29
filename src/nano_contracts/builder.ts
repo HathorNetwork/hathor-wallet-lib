@@ -6,11 +6,7 @@
  */
 
 import { concat, uniq } from 'lodash';
-import Transaction from '../models/transaction';
-import CreateTokenTransaction from '../models/create_token_transaction';
-import { getAddressType } from '../utils/address';
-import tokensUtils from '../utils/tokens';
-import transactionUtils from '../utils/transaction';
+
 import {
   DEFAULT_TX_VERSION,
   FEE_PER_OUTPUT,
@@ -20,8 +16,28 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../constants';
-import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError, UtxoError } from '../errors';
+import { Header } from '../headers';
+import FeeHeader from '../headers/fee';
+import Address from '../models/address';
+import CreateTokenTransaction from '../models/create_token_transaction';
+import Transaction from '../models/transaction';
+import HathorWallet from '../new/wallet';
+import {
+  AuthorityType,
+  IDataInput,
+  IDataOutput,
+  IDataOutputWithToken,
+  TokenVersion,
+} from '../types';
+import { getAddressType } from '../utils/address';
+import { Fee } from '../utils/fee';
+import leb128 from '../utils/leb128';
+import tokensUtils from '../utils/tokens';
+import transactionUtils from '../utils/transaction';
+import { Utxo } from '../wallet/types';
+
+import NanoContractHeader from './header';
 import {
   NanoContractActionHeader,
   NanoContractActionType,
@@ -36,20 +52,6 @@ import {
   mapActionToActionHeader,
   validateAndParseBlueprintMethodArgs,
 } from './utils';
-import {
-  AuthorityType,
-  IDataInput,
-  IDataOutput,
-  IDataOutputWithToken,
-  TokenVersion,
-} from '../types';
-import NanoContractHeader from './header';
-import Address from '../models/address';
-import leb128 from '../utils/leb128';
-import FeeHeader from '../headers/fee';
-import { Fee } from '../utils/fee';
-import { Utxo } from '../wallet/types';
-import { Header } from '../headers';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -145,7 +147,7 @@ class NanoContractTransactionBuilder {
     const parseResult = INanoContractActionSchema.array().safeParse(actions);
     if (!parseResult.success) {
       throw new NanoContractTransactionError(
-        `Invalid actions. Error: ${parseResult.error.message}.`
+        `Invalid actions. Error: ${parseResult.error.message}.`,
       );
     }
     this.actions = parseResult.data;
@@ -270,7 +272,7 @@ class NanoContractTransactionBuilder {
   async calculateFee(
     inputs: IDataInput[],
     outputs: IDataOutput[],
-    tokens: string[]
+    tokens: string[],
   ): Promise<{ fee: bigint; dataOutputFee: bigint }> {
     this.assertWallet();
 
@@ -281,7 +283,7 @@ class NanoContractTransactionBuilder {
       inputs,
       outputs as IDataOutputWithToken[],
       tokens,
-      this.actions ?? undefined
+      this.actions ?? undefined,
     );
     fee += calculatedFee;
 
@@ -305,7 +307,7 @@ class NanoContractTransactionBuilder {
    */
   setVertexType(
     vertexType: NanoContractVertexType,
-    createTokenOptions: NanoContractBuilderCreateTokenOptions | null = null
+    createTokenOptions: NanoContractBuilderCreateTokenOptions | null = null,
   ) {
     this.vertexType = vertexType;
     this.createTokenOptions = createTokenOptions;
@@ -322,12 +324,12 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async executeDeposit(
-    action: NanoContractAction
+    action: NanoContractAction,
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     this.assertWallet();
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
-        "Can't execute a deposit with an action which type is different than deposit."
+        "Can't execute a deposit with an action which type is different than deposit.",
       );
     }
 
@@ -359,7 +361,7 @@ class NanoContractTransactionBuilder {
         htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
           this.createTokenOptions!.amount,
           dataArray.length,
-          this.wallet.storage
+          this.wallet.storage,
         );
       }
       amount += htrToCreateToken;
@@ -430,13 +432,13 @@ class NanoContractTransactionBuilder {
     this.assertWallet();
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
-        "Can't execute a withdrawal with an action which type is different than withdrawal."
+        "Can't execute a withdrawal with an action which type is different than withdrawal.",
       );
     }
 
     if (!action.amount || !action.token) {
       throw new NanoContractTransactionError(
-        'Amount and token are required for withdrawal action.'
+        'Amount and token are required for withdrawal action.',
       );
     }
 
@@ -446,7 +448,7 @@ class NanoContractTransactionBuilder {
     if (this.isCreateTokenTransaction) {
       if (this.createTokenOptions === null) {
         throw new NanoContractTransactionError(
-          'For a token creation transaction we must have the options defined.'
+          'For a token creation transaction we must have the options defined.',
         );
       }
 
@@ -460,7 +462,7 @@ class NanoContractTransactionBuilder {
         const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
           this.createTokenOptions!.amount,
           dataArray.length,
-          this.wallet.storage
+          this.wallet.storage,
         );
         withdrawalAmount -= htrToCreateToken;
       }
@@ -473,13 +475,13 @@ class NanoContractTransactionBuilder {
 
     if (withdrawalAmount < 0n) {
       throw new NanoContractTransactionError(
-        `Withdrawal amount ${withdrawalAmount} for token ${action.token} is less than 0.`
+        `Withdrawal amount ${withdrawalAmount} for token ${action.token} is less than 0.`,
       );
     }
 
     if (!action.address) {
       throw new NanoContractTransactionError(
-        'Address is required for withdrawal action that creates outputs.'
+        'Address is required for withdrawal action that creates outputs.',
       );
     }
 
@@ -504,18 +506,18 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async executeGrantAuthority(
-    action: NanoContractAction
+    action: NanoContractAction,
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     this.assertWallet();
     if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
       throw new NanoContractTransactionError(
-        "Can't execute a grant authority with an action which type is different than grant authority."
+        "Can't execute a grant authority with an action which type is different than grant authority.",
       );
     }
 
     if (!action.authority || !action.token) {
       throw new NanoContractTransactionError(
-        'Authority and token are required for grant authority action.'
+        'Authority and token are required for grant authority action.',
       );
     }
 
@@ -532,12 +534,12 @@ class NanoContractTransactionBuilder {
         many: false,
         only_available_utxos: true,
         filter_address: action.address,
-      }
+      },
     );
 
     if (!utxos || utxos.length === 0) {
       throw new NanoContractTransactionError(
-        'Not enough authority utxos to execute the grant authority.'
+        'Not enough authority utxos to execute the grant authority.',
       );
     }
 
@@ -582,13 +584,13 @@ class NanoContractTransactionBuilder {
     this.assertWallet();
     if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
       throw new NanoContractTransactionError(
-        "Can't execute an acquire authority with an action which type is different than acquire authority."
+        "Can't execute an acquire authority with an action which type is different than acquire authority.",
       );
     }
 
     if (!action.address || !action.authority || !action.token) {
       throw new NanoContractTransactionError(
-        'Address, authority, and token are required for acquire authority action.'
+        'Address, authority, and token are required for acquire authority action.',
       );
     }
 
@@ -622,7 +624,7 @@ class NanoContractTransactionBuilder {
       // Get the blueprint id from the nano transaction in the full node
       if (!this.ncId) {
         throw new NanoContractTransactionError(
-          `Nano contract ID cannot be null for method ${this.method}`
+          `Nano contract ID cannot be null for method ${this.method}`,
         );
       }
 
@@ -645,7 +647,7 @@ class NanoContractTransactionBuilder {
       this.blueprintId,
       this.method,
       this.args,
-      this.wallet.getNetworkObject()
+      this.wallet.getNetworkObject(),
     );
   }
 
@@ -661,7 +663,7 @@ class NanoContractTransactionBuilder {
   async serializeArgs() {
     if (!this.parsedArgs) {
       throw new NanoContractTransactionError(
-        'Arguments should be parsed and validated before serialization.'
+        'Arguments should be parsed and validated before serialization.',
       );
     }
     const serializedArray: Buffer[] = [leb128.encodeUnsigned(this.parsedArgs?.length ?? 0)];
@@ -812,7 +814,7 @@ class NanoContractTransactionBuilder {
     inputs: IDataInput[],
     outputs: IDataOutput[],
     tokens: string[],
-    headers: Header[] = []
+    headers: Header[] = [],
   ): Promise<Transaction | CreateTokenTransaction> {
     this.assertWallet();
     if (this.vertexType === NanoContractVertexType.TRANSACTION) {
@@ -823,14 +825,14 @@ class NanoContractTransactionBuilder {
           outputs,
           tokens,
         },
-        this.wallet.getNetworkObject()
+        this.wallet.getNetworkObject(),
       );
     }
 
     if (this.isCreateTokenTransaction) {
       if (this.createTokenOptions === null) {
         throw new NanoContractTransactionError(
-          'Create token options cannot be null when creating a create token transaction.'
+          'Create token options cannot be null when creating a create token transaction.',
         );
       }
 
@@ -857,7 +859,7 @@ class NanoContractTransactionBuilder {
             this.contractPaysFees,
           skipFeeCalculation: this.isCreatingFeeToken || this.contractPaysFees,
           tokenVersion: this.createTokenOptions.tokenVersion,
-        }
+        },
       );
 
       data.inputs = concat(data.inputs, inputs);
@@ -908,7 +910,7 @@ class NanoContractTransactionBuilder {
       // Validate against maxFee if set
       if (this.maxFee !== null && totalFee > this.maxFee) {
         throw new NanoContractTransactionError(
-          `Calculated fee (${totalFee}) exceeds maximum fee (${this.maxFee}).`
+          `Calculated fee (${totalFee}) exceeds maximum fee (${this.maxFee}).`,
         );
       }
 
@@ -923,7 +925,7 @@ class NanoContractTransactionBuilder {
       // to build a more complex tx.
       if (totalFee > 0n && this.contractPaysFees) {
         const htrOutputIndex = outputs.findIndex(
-          output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities
+          output => 'token' in output && output.token === NATIVE_TOKEN_UID && !output.authorities,
         );
         if (htrOutputIndex === -1) {
           throw new NanoContractTransactionError('No available HTR output to deduct fee from.');
@@ -932,7 +934,7 @@ class NanoContractTransactionBuilder {
         htrOutput.value -= totalFee;
         if (htrOutput.value < 0n) {
           throw new NanoContractTransactionError(
-            `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${totalFee}`
+            `HTR withdrawal amount insufficient to cover fee. Withdrawal: ${htrOutput.value}, Fee: ${totalFee}`,
           );
         }
         if (htrOutput.value === 0n) {
@@ -960,7 +962,7 @@ class NanoContractTransactionBuilder {
         nanoHeaderActions,
         seqnum,
         this.caller!,
-        null
+        null,
       );
 
       tx.headers.push(nanoHeader);

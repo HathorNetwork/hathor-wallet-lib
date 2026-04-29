@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { selectTokens, selectAuthorities } from '../../../src/template/transaction/utils';
-import { TxTemplateContext } from '../../../src/template/transaction/context';
-import { getDefaultLogger } from '../../../src/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import Network from '../../../src/models/network';
+import { TxTemplateContext } from '../../../src/template/transaction/context';
 import { ITxTemplateInterpreter } from '../../../src/template/transaction/types';
+import { selectTokens, selectAuthorities } from '../../../src/template/transaction/utils';
+import { getDefaultLogger } from '../../../src/types';
 
 const DEBUG = false;
 
@@ -65,7 +65,7 @@ describe('selectTokens', () => {
         90n,
         { token },
         true, // autoChange
-        address
+        address,
       );
 
       // Token should be in array because a change output was created
@@ -87,7 +87,7 @@ describe('selectTokens', () => {
         90n,
         { token },
         false, // autoChange = false
-        address
+        address,
       );
 
       // Token should NOT be in array because no output was created
@@ -109,7 +109,7 @@ describe('selectTokens', () => {
         100n, // exact amount, no change needed
         { token },
         true, // autoChange
-        address
+        address,
       );
 
       // Token should NOT be in array because no change output was created

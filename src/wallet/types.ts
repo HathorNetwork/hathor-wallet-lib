@@ -6,6 +6,13 @@
  */
 
 import bitcore from 'bitcore-lib';
+
+import CreateTokenTransaction from '../models/create_token_transaction';
+import Input from '../models/input';
+import Output from '../models/output';
+import Transaction from '../models/transaction';
+import NanoContractHeader from '../nano_contracts/header';
+import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import {
   TokenVersion,
   IStorage,
@@ -14,13 +21,8 @@ import {
   IDataTx,
   WalletAddressMode,
 } from '../types';
-import Transaction from '../models/transaction';
-import CreateTokenTransaction from '../models/create_token_transaction';
+
 import SendTransactionWalletService from './sendTransactionWalletService';
-import Input from '../models/input';
-import Output from '../models/output';
-import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
-import NanoContractHeader from '../nano_contracts/header';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -351,12 +353,12 @@ export interface IHathorWallet {
   }): Promise<GetHistoryObject[]>;
   sendManyOutputsTransaction(
     outputs: OutputRequestObj[],
-    options: { inputs?: InputRequestObj[]; changeAddress?: string }
+    options: { inputs?: InputRequestObj[]; changeAddress?: string },
   ): Promise<Transaction>;
   sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { token?: string; changeAddress?: string }
+    options: { token?: string; changeAddress?: string },
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
@@ -371,20 +373,20 @@ export interface IHathorWallet {
     name: string,
     symbol: string,
     amount: OutputValueType,
-    options
+    options,
   ): Promise<CreateTokenTransaction>;
   createNewToken(
     name: string,
     symbol: string,
     amount: OutputValueType,
-    options
+    options,
   ): Promise<Transaction>;
   createNFT(
     name: string,
     symbol: string,
     amount: OutputValueType,
     data: string,
-    options
+    options,
   ): Promise<Transaction>;
   prepareMintTokensData(token: string, amount: OutputValueType, options): Promise<Transaction>;
   mintTokens(token: string, amount: OutputValueType, options): Promise<Transaction>;
@@ -394,25 +396,25 @@ export interface IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: WalletServiceDelegateAuthorityOptions
+    options: WalletServiceDelegateAuthorityOptions,
   ): Promise<Transaction>;
   delegateAuthority(
     token: string,
     type: string,
     address: string,
-    options: WalletServiceDelegateAuthorityOptions
+    options: WalletServiceDelegateAuthorityOptions,
   ): Promise<Transaction>;
   prepareDestroyAuthorityData(
     token: string,
     type: string,
     count: number,
-    options: WalletServiceDestroyAuthorityOptions
+    options: WalletServiceDestroyAuthorityOptions,
   ): Promise<Transaction>;
   destroyAuthority(
     token: string,
     type: string,
     count: number,
-    options: WalletServiceDestroyAuthorityOptions
+    options: WalletServiceDestroyAuthorityOptions,
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[] | Promise<unknown>; // FIXME: Should have a single return type;
   getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
@@ -432,33 +434,33 @@ export interface IHathorWallet {
   getAddressPathForIndex(index: number): Promise<string>;
   sendManyOutputsSendTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
-    options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string }
+    options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string },
   ): Promise<SendTransactionWalletService>;
   createNanoContractTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: CreateNanoTxOptions
+    options?: CreateNanoTxOptions,
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
-    options?: CreateNanoTxOptions
+    options?: CreateNanoTxOptions,
   ): Promise<Transaction>;
   createNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: CreateNanoTxOptions,
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: CreateNanoTxOptions,
   ): Promise<Transaction>;
   getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;
@@ -467,7 +469,7 @@ export interface IHathorWallet {
     options?: {
       token?: string;
       filter_address?: string;
-    }
+    },
   ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }>;
   getUtxos(options?: {
     token?: string;
@@ -506,7 +508,7 @@ export interface IHathorWallet {
 export interface ISendTransaction {
   run(
     until?: 'prepare-tx' | 'sign-tx' | 'mine-tx' | null,
-    pin?: string | null
+    pin?: string | null,
   ): Promise<Transaction>;
   runFromMining(until?: 'mine-tx' | null): Promise<Transaction>;
   prepareTx(): Promise<Transaction>;

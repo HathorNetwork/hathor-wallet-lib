@@ -6,6 +6,11 @@
  */
 
 import { isEmpty } from 'lodash';
+
+import { SendTransaction } from '../../../src';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import { NanoContractTransactionError } from '../../../src/errors';
+import HathorWallet from '../../../src/new/wallet';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateWalletHelper,
@@ -13,10 +18,6 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import HathorWallet from '../../../src/new/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
-import { NanoContractTransactionError } from '../../../src/errors';
-import { SendTransaction } from '../../../src';
 
 describe('Nano contract UTXO lock/unlock lifecycle', () => {
   let hWallet: HathorWallet;
@@ -52,7 +53,7 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
             changeAddress: address,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, initTx);
     contractId = initTx.hash!;
@@ -91,7 +92,7 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
             },
           ],
         },
-        { signTx: false }
+        { signTx: false },
       );
       activeSendTx = sendTx1;
 
@@ -115,8 +116,8 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
               },
             ],
           },
-          { signTx: false }
-        )
+          { signTx: false },
+        ),
       ).rejects.toThrow(NanoContractTransactionError);
 
       // Step 3: Release locked UTXOs
@@ -139,7 +140,7 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
             },
           ],
         },
-        { signTx: false }
+        { signTx: false },
       );
       activeSendTx = sendTx3;
 

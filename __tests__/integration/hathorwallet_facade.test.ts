@@ -1,5 +1,22 @@
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  TOKEN_AUTHORITY_MASK,
+} from '../../src/constants';
+import { NftValidationError, TxNotFoundError } from '../../src/errors';
+import Header from '../../src/headers/base';
+import FeeHeader from '../../src/headers/fee';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import SendTransaction from '../../src/new/sendTransaction';
+import { TransactionTemplateBuilder } from '../../src/template/transaction';
+import { WalletType, TokenVersion } from '../../src/types';
+import { verifyMessage } from '../../src/utils/crypto';
+import { parseScriptData } from '../../src/utils/scripts';
+import transaction from '../../src/utils/transaction';
+
+import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
-import { delay, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
   DEFAULT_PIN_CODE,
@@ -10,23 +27,7 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import {
-  NATIVE_TOKEN_UID,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-  TOKEN_AUTHORITY_MASK,
-} from '../../src/constants';
-import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
-import { verifyMessage } from '../../src/utils/crypto';
-import { NftValidationError, TxNotFoundError } from '../../src/errors';
-import SendTransaction from '../../src/new/sendTransaction';
-import transaction from '../../src/utils/transaction';
-import { WalletType, TokenVersion } from '../../src/types';
-import { parseScriptData } from '../../src/utils/scripts';
-import { TransactionTemplateBuilder } from '../../src/template/transaction';
-import FeeHeader from '../../src/headers/fee';
-import Header from '../../src/headers/base';
-import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import { delay, getRandomInt } from './utils/core.util';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
@@ -97,7 +98,7 @@ describe('template methods', () => {
           value: 9n,
           tokenData: 0,
         }),
-      ])
+      ]),
     );
   });
 });
@@ -183,7 +184,7 @@ describe('getTxById', () => {
     const firstTokenDetails = result.txTokens[0];
     const tokenDetailsKeys = Object.keys(firstTokenDetails);
     expect(tokenDetailsKeys.join(',')).toStrictEqual(
-      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance'
+      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
     );
 
     expect(firstTokenDetails.txId).toStrictEqual(tx1.hash);
@@ -206,7 +207,7 @@ describe('getTxById', () => {
       },
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
-      'Invalid token_data undefined, token not found in tokens list'
+      'Invalid token_data undefined, token not found in tokens list',
     );
     jest.spyOn(hWallet, 'getFullTxById').mockRestore();
 
@@ -215,7 +216,7 @@ describe('getTxById', () => {
       'unknown-token': 10n,
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
-      'Token unknown-token not found in tx'
+      'Token unknown-token not found in tx',
     );
     jest.spyOn(hWallet, 'getTxBalance').mockRestore();
   });
@@ -223,7 +224,7 @@ describe('getTxById', () => {
   it('should throw an error tx id is invalid', async () => {
     const hWallet = await generateWalletHelper();
     await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrow(
-      'Invalid transaction invalid-tx-hash'
+      'Invalid transaction invalid-tx-hash',
     );
   });
 
@@ -252,7 +253,7 @@ describe('getTxById', () => {
       hWallet,
       'BalanceToken',
       'BAT',
-      newTokenAmount
+      newTokenAmount,
     );
     // Get the balance of the new token
     await delay(1000);
@@ -284,7 +285,7 @@ describe('getTxById', () => {
           tokenId: tokenUid,
           balance: newTokenAmount,
         }),
-      ])
+      ]),
     );
 
     // Test case: non-accessible token for another wallet (genesis)
@@ -394,7 +395,7 @@ describe('addresses methods', () => {
       const addressHDPrivKey = await hWallet.getAddressPrivKey(DEFAULT_PIN_CODE, i);
       // Validate that it's from the same address:
       expect(
-        addressHDPrivKey.privateKey.toAddress(hWallet.getNetworkObject().bitcoreNetwork).toString()
+        addressHDPrivKey.privateKey.toAddress(hWallet.getNetworkObject().bitcoreNetwork).toString(),
       ).toStrictEqual(await hWallet.getAddressAtIndex(i));
     }
   });
@@ -409,7 +410,7 @@ describe('addresses methods', () => {
       const signedMessage = await hWallet.signMessageWithAddress(
         messageToSign,
         i,
-        DEFAULT_PIN_CODE
+        DEFAULT_PIN_CODE,
       );
 
       expect(verifyMessage(messageToSign, signedMessage, address)).toStrictEqual(true);
@@ -421,12 +422,12 @@ describe('addresses methods', () => {
 
     // We will assume the wallet never received txs, which is to be expected for the addresses test
     expect((await mshWallet.getCurrentAddress()).address).toStrictEqual(
-      WALLET_CONSTANTS.multisig.addresses[0]
+      WALLET_CONSTANTS.multisig.addresses[0],
     );
 
     for (let i = 0; i < 21; ++i) {
       expect(await mshWallet.getAddressAtIndex(i)).toStrictEqual(
-        WALLET_CONSTANTS.multisig.addresses[i]
+        WALLET_CONSTANTS.multisig.addresses[i],
       );
     }
   });
@@ -474,7 +475,7 @@ describe('getFullHistory', () => {
     const { hash: fundTxId } = await GenesisWalletHelper.injectFunds(
       hWallet,
       fundDestinationAddress,
-      10n
+      10n,
     );
 
     // Validating the full history increased in one
@@ -618,7 +619,7 @@ describe('getTxBalance', () => {
     const { hash: tx1Hash } = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
 
     // Validating tx balance for a transaction with a single token (htr)
@@ -648,7 +649,7 @@ describe('getTxBalance', () => {
     const { hash: delegateTxHash } = await hWallet.delegateAuthority(
       tokenUid,
       'mint',
-      await hWallet.getAddressAtIndex(0)
+      await hWallet.getAddressAtIndex(0),
     );
 
     // By default this tx will not have a balance
@@ -703,7 +704,7 @@ describe('getFullTxById', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
 
     const fullTx = await hWallet.getFullTxById(tx1.hash);
@@ -718,13 +719,13 @@ describe('getFullTxById', () => {
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      `Invalid transaction invalid-tx-hash`,
     );
   });
 
   it('should throw an error on valid but not found transaction', async () => {
     await expect(
-      gWallet.getFullTxById('0011371a7c07f7e8017c52c0a4f5293ccf30c865d96255d1b515f96f7a6a6299')
+      gWallet.getFullTxById('0011371a7c07f7e8017c52c0a4f5293ccf30c865d96255d1b515f96f7a6a6299'),
     ).rejects.toThrow(TxNotFoundError);
   });
 });
@@ -747,7 +748,7 @@ describe('getTxConfirmationData', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
 
     const confirmationData = await hWallet.getTxConfirmationData(tx1.hash);
@@ -763,15 +764,15 @@ describe('getTxConfirmationData', () => {
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      `Invalid transaction invalid-tx-hash`,
     );
   });
 
   it('should throw TxNotFoundError on valid hash but not found transaction', async () => {
     await expect(
       gWallet.getTxConfirmationData(
-        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
-      )
+        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc',
+      ),
     ).rejects.toThrow(TxNotFoundError);
   });
 });
@@ -793,7 +794,7 @@ describe('graphvizNeighborsQuery', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
     const neighborsData = await hWallet.graphvizNeighborsQuery(tx1.hash, 'funds', 1);
 
@@ -805,25 +806,25 @@ describe('graphvizNeighborsQuery', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
 
     await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrow(
-      'Request failed with status code 500'
+      'Request failed with status code 500',
     );
   });
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      `Invalid transaction invalid-tx-hash`,
     );
   });
 
   it('should throw TxNotFoundError on valid but not found transaction', async () => {
     await expect(
       gWallet.graphvizNeighborsQuery(
-        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
-      )
+        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc',
+      ),
     ).rejects.toThrow(TxNotFoundError);
   });
 });
@@ -843,7 +844,7 @@ const validateFeeAmount = (headers: Header[], amount: bigint) => {
           amount,
         }),
       ]),
-    })
+    }),
   );
 };
 
@@ -983,15 +984,15 @@ describe('createNewToken', () => {
     const { utxos: utxosDbt } = await hWallet.getUtxos({ token: dbtUid });
     const { utxos: utxosFbt } = await hWallet.getUtxos({ token: fbtUid });
     expect(utxosDbt).toContainEqual(
-      expect.objectContaining({ address: destinationAddress, amount: 100n })
+      expect.objectContaining({ address: destinationAddress, amount: 100n }),
     );
     expect(utxosFbt).toContainEqual(
-      expect.objectContaining({ address: destinationAddress, amount: 8582n })
+      expect.objectContaining({ address: destinationAddress, amount: 8582n }),
     );
 
     const { utxos: utxosHtr } = await hWallet.getUtxos();
     expect(utxosHtr).toContainEqual(
-      expect.objectContaining({ address: changeAddress, amount: 8n })
+      expect.objectContaining({ address: changeAddress, amount: 8n }),
     );
   });
 
@@ -1056,11 +1057,11 @@ describe('createNewToken', () => {
 
     const validateAuthorityOutputs = async (
       response: CreateTokenTransaction,
-      expectedAmount: bigint
+      expectedAmount: bigint,
     ) => {
       // Validating a new mint authority was created by default
       const authorityOutputs = response.outputs.filter(o =>
-        transaction.isAuthorityOutput({ token_data: o.tokenData })
+        transaction.isAuthorityOutput({ token_data: o.tokenData }),
       );
       expect(authorityOutputs).toHaveLength(2);
       const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
@@ -1096,14 +1097,14 @@ describe('createNewToken', () => {
       hWallet.createNewToken('New Token', 'NTKN', 100n, {
         createMint: true,
         mintAuthorityAddress: addr2_0,
-      })
+      }),
     ).rejects.toThrow('must belong to your wallet');
 
     await expect(
       hWallet.createNewToken('New Token', 'NTKN', 100n, {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
-      })
+      }),
     ).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
@@ -1123,7 +1124,7 @@ describe('createNewToken', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs = newTokenResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(2);
     const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
@@ -1160,16 +1161,16 @@ describe('mintTokens', () => {
       'FeeBasedToken',
       'FBT',
       8582n,
-      options
+      options,
     );
     await waitForTxReceived(hWallet, fbtUid);
 
     // Should not mint more tokens than the HTR funds allow
     await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/
+      /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/,
     );
     await expect(hWallet.mintTokens(fbtUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit or fee: 1 required, \d+ available$/
+      /^Not enough HTR tokens for deposit or fee: 1 required, \d+ available$/,
     );
 
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 9n);
@@ -1186,7 +1187,7 @@ describe('mintTokens', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs = mintResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(1);
     expect(authorityOutputs[0]).toHaveProperty('value', TOKEN_MINT_MASK);
@@ -1211,7 +1212,7 @@ describe('mintTokens', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs2 = mintResponse2.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs2).toHaveLength(1);
     const authorityOutput = authorityOutputs2[0];
@@ -1230,7 +1231,7 @@ describe('mintTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(
-      hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress })
+      hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress }),
     ).rejects.toThrow('must belong to your wallet');
 
     // Mint tokens with external address but allowing it
@@ -1248,7 +1249,7 @@ describe('mintTokens', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs4 = mintResponse4.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs4).toHaveLength(1);
     const authorityOutput4 = authorityOutputs4[0];
@@ -1380,7 +1381,7 @@ describe('mintTokens', () => {
           tokenData: TOKEN_AUTHORITY_MASK + 1,
           value: TOKEN_MINT_MASK,
         }),
-      ])
+      ]),
     );
     expect(mintResponse.headers).toEqual(
       expect.arrayContaining([
@@ -1392,7 +1393,7 @@ describe('mintTokens', () => {
             }),
           ]),
         }),
-      ])
+      ]),
     );
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
@@ -1411,7 +1412,7 @@ describe('mintTokens', () => {
           tokenData: TOKEN_AUTHORITY_MASK + 1,
           value: TOKEN_MINT_MASK,
         }),
-      ])
+      ]),
     );
     validateFeeAmount(mintResponse.headers, 1n);
     expectedHtrFunds -= 1n;
@@ -1435,7 +1436,7 @@ describe('meltTokens', () => {
 
     // Should not melt more than there is available
     await expect(hWallet.meltTokens(tokenUid, 999n)).rejects.toThrow(
-      'Not enough tokens to melt: 999 requested, 500 available'
+      'Not enough tokens to melt: 999 requested, 500 available',
     );
 
     // Melting some tokens
@@ -1457,7 +1458,7 @@ describe('meltTokens', () => {
 
     // Validating a new melt authority was created by default
     const authorityOutputs = meltResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(1);
     const authorityOutput = authorityOutputs[0];
@@ -1476,7 +1477,7 @@ describe('meltTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(
-      hWallet.meltTokens(tokenUid, 100n, { meltAuthorityAddress: externalAddress })
+      hWallet.meltTokens(tokenUid, 100n, { meltAuthorityAddress: externalAddress }),
     ).rejects.toThrow('must belong to your wallet');
 
     // Melt tokens with external address but allowing it
@@ -1489,7 +1490,7 @@ describe('meltTokens', () => {
 
     // Validating a new melt authority was created by default
     const authorityOutputs3 = meltResponse3.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs3).toHaveLength(1);
     const authorityOutput3 = authorityOutputs3[0];
@@ -1553,7 +1554,7 @@ describe('meltTokens', () => {
     await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      expectedHtrAmount
+      expectedHtrAmount,
     );
 
     // Creating the token
@@ -1567,7 +1568,7 @@ describe('meltTokens', () => {
 
     // Should not melt more than there is available
     await expect(hWallet.meltTokens(fbtUid, 99999n)).rejects.toThrow(
-      'Not enough tokens to melt: 99999 requested, 8582 available'
+      'Not enough tokens to melt: 99999 requested, 8582 available',
     );
 
     htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
@@ -1602,7 +1603,7 @@ describe('meltTokens', () => {
 
     // Validating a new melt authority was created by default
     const authorityOutputs = meltResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(1);
     const authorityOutput = authorityOutputs[0];
@@ -1621,7 +1622,7 @@ describe('meltTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(
-      hWallet.meltTokens(fbtUid, 100n, { meltAuthorityAddress: externalAddress })
+      hWallet.meltTokens(fbtUid, 100n, { meltAuthorityAddress: externalAddress }),
     ).rejects.toThrow('must belong to your wallet');
 
     // Melt tokens with external address but allowing it
@@ -1639,7 +1640,7 @@ describe('meltTokens', () => {
 
     // Validating a new melt authority was created by default
     const authorityOutputs3 = meltResponse3.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs3).toHaveLength(1);
     const authorityOutput3 = authorityOutputs3[0];
@@ -1801,14 +1802,14 @@ describe('delegateAuthority', () => {
 
     // Should handle trying to delegate without the authority
     await expect(
-      hWallet1.delegateAuthority(fakeTokenUid, 'mint', await hWallet2.getAddressAtIndex(0))
+      hWallet1.delegateAuthority(fakeTokenUid, 'mint', await hWallet2.getAddressAtIndex(0)),
     ).rejects.toThrow();
 
     // Delegating mint authority to wallet 2
     const { hash: delegateMintTxId } = await hWallet1.delegateAuthority(
       tokenUid,
       'mint',
-      await hWallet2.getAddressAtIndex(0)
+      await hWallet2.getAddressAtIndex(0),
     );
     await waitForTxReceived(hWallet1, delegateMintTxId);
     await waitForTxReceived(hWallet2, delegateMintTxId);
@@ -1833,7 +1834,7 @@ describe('delegateAuthority', () => {
     const { hash: delegateMeltTxId } = await hWallet1.delegateAuthority(
       tokenUid,
       'melt',
-      await hWallet2.getAddressAtIndex(0)
+      await hWallet2.getAddressAtIndex(0),
     );
     await waitForTxReceived(hWallet1, delegateMeltTxId);
     await waitForTxReceived(hWallet2, delegateMeltTxId);
@@ -1864,7 +1865,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'mint',
       await hWallet2.getAddressAtIndex(0),
-      { createAnother: false }
+      { createAnother: false },
     );
     await waitForTxReceived(hWallet1, giveAwayMintTx);
     await waitForTxReceived(hWallet2, giveAwayMintTx);
@@ -1885,7 +1886,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'melt',
       await hWallet2.getAddressAtIndex(0),
-      { createAnother: false }
+      { createAnother: false },
     );
     await waitForTxReceived(hWallet1, giveAwayMeltTx);
     await waitForTxReceived(hWallet2, giveAwayMeltTx);
@@ -1908,7 +1909,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'mint',
       await hWallet1.getAddressAtIndex(1),
-      { createAnother: true }
+      { createAnother: true },
     );
     await waitForTxReceived(hWallet1, duplicateMintAuth);
 
@@ -1934,7 +1935,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'mint',
       await hWallet2.getAddressAtIndex(1),
-      { createAnother: false }
+      { createAnother: false },
     );
     await waitForTxReceived(hWallet1, delegateMintAuth);
     await waitForTxReceived(hWallet2, delegateMintAuth);
@@ -1972,7 +1973,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'melt',
       await hWallet1.getAddressAtIndex(1),
-      { createAnother: true }
+      { createAnother: true },
     );
     await waitForTxReceived(hWallet1, duplicateMeltAuth);
 
@@ -1998,7 +1999,7 @@ describe('delegateAuthority', () => {
       tokenUid,
       'melt',
       await hWallet2.getAddressAtIndex(1),
-      { createAnother: false }
+      { createAnother: false },
     );
     await waitForTxReceived(hWallet1, delegateMintAuth);
     await waitForTxReceived(hWallet2, delegateMintAuth);
@@ -2040,14 +2041,14 @@ describe('destroyAuthority', () => {
       hWallet,
       'Token for MintDestroy',
       'DMINT',
-      100n
+      100n,
     );
 
     // Adding another mint authority
     const { hash: newMintTx } = await hWallet.delegateAuthority(
       tokenUid,
       'mint',
-      await hWallet.getAddressAtIndex(0)
+      await hWallet.getAddressAtIndex(0),
     );
     await waitForTxReceived(hWallet, newMintTx);
 
@@ -2084,14 +2085,14 @@ describe('destroyAuthority', () => {
       hWallet,
       'Token for MeltDestroy',
       'DMELT',
-      100n
+      100n,
     );
 
     // Adding another melt authority
     const { hash: newMeltTx } = await hWallet.delegateAuthority(
       tokenUid,
       'melt',
-      await hWallet.getAddressAtIndex(0)
+      await hWallet.getAddressAtIndex(0),
     );
     await waitForTxReceived(hWallet, newMeltTx);
 
@@ -2262,7 +2263,7 @@ describe('createNFT', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs = newTokenResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(2);
     const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
@@ -2295,14 +2296,14 @@ describe('createNFT', () => {
       hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
         createMint: true,
         mintAuthorityAddress: addr2_0,
-      })
+      }),
     ).rejects.toThrow('must belong to your wallet');
 
     await expect(
       hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
-      })
+      }),
     ).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
@@ -2322,7 +2323,7 @@ describe('createNFT', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs = newTokenResponse.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
+      transaction.isAuthorityOutput({ token_data: o.tokenData }),
     );
     expect(authorityOutputs).toHaveLength(2);
     const mintOutput = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
@@ -2485,7 +2486,7 @@ describe('getTxHistory', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10n
+      10n,
     );
     txHistory = await hWallet.getTxHistory();
     expect(txHistory).toStrictEqual([
@@ -2544,7 +2545,7 @@ describe('getTxHistory', () => {
     const { hash: tx1Hash } = await hWallet.sendTransaction(
       await hWallet.getAddressAtIndex(0),
       10n,
-      { token: tokenUid }
+      { token: tokenUid },
     );
     await waitForTxReceived(hWallet, tx1Hash);
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });
@@ -2555,7 +2556,7 @@ describe('getTxHistory', () => {
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
       10n,
-      { token: tokenUid }
+      { token: tokenUid },
     );
     await waitForTxReceived(hWallet, tx2Hash);
     await waitForTxReceived(gWallet, tx2Hash);

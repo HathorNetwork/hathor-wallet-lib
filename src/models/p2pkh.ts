@@ -6,6 +6,7 @@
  */
 
 import { util } from 'bitcore-lib';
+
 import {
   OP_GREATERTHAN_TIMESTAMP,
   OP_DUP,
@@ -13,10 +14,11 @@ import {
   OP_EQUALVERIFY,
   OP_CHECKSIG,
 } from '../opcodes';
+import { IHistoryOutputDecoded } from '../types';
 import { intToBytes } from '../utils/buffer';
 import helpers from '../utils/helpers';
+
 import Address from './address';
-import { IHistoryOutputDecoded } from '../types';
 
 type optionsType = {
   timelock?: number | null | undefined;

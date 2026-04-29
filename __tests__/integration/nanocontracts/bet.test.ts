@@ -1,7 +1,34 @@
 import fs from 'fs';
+
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+
+import ncApi from '../../../src/api/nano';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+} from '../../../src/constants';
+import {
+  NanoContractTransactionError,
+  NanoRequest404Error,
+  NanoRequestError,
+  PinRequiredError,
+} from '../../../src/errors';
+import Address from '../../../src/models/address';
+import P2PKH from '../../../src/models/p2pkh';
+import P2SH from '../../../src/models/p2sh';
+import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import {
+  getOracleSignedDataFromUser,
+  getOracleBuffer,
+  isNanoContractCreateTx,
+} from '../../../src/nano_contracts/utils';
+import { bufferToHex } from '../../../src/utils/buffer';
+import dateFormatter from '../../../src/utils/date';
+import helpersUtils from '../../../src/utils/helpers';
+import { OutputType } from '../../../src/wallet/types';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateMultisigWalletHelper,
   generateWalletHelper,
@@ -9,31 +36,6 @@ import {
   waitTxConfirmed,
   waitNextBlock,
 } from '../helpers/wallet.helper';
-import {
-  CREATE_TOKEN_TX_VERSION,
-  NATIVE_TOKEN_UID,
-  NANO_CONTRACTS_INITIALIZE_METHOD,
-} from '../../../src/constants';
-import ncApi from '../../../src/api/nano';
-import dateFormatter from '../../../src/utils/date';
-import { bufferToHex } from '../../../src/utils/buffer';
-import helpersUtils from '../../../src/utils/helpers';
-import Address from '../../../src/models/address';
-import P2PKH from '../../../src/models/p2pkh';
-import P2SH from '../../../src/models/p2sh';
-import {
-  getOracleSignedDataFromUser,
-  getOracleBuffer,
-  isNanoContractCreateTx,
-} from '../../../src/nano_contracts/utils';
-import {
-  NanoContractTransactionError,
-  NanoRequest404Error,
-  NanoRequestError,
-  PinRequiredError,
-} from '../../../src/errors';
-import { OutputType } from '../../../src/wallet/types';
-import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
 let fundsTx;
 
@@ -47,7 +49,7 @@ describe('full cycle of bet nano contract', () => {
     fundsTx = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      1000n
+      1000n,
     );
 
     mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
@@ -104,7 +106,7 @@ describe('full cycle of bet nano contract', () => {
       {
         blueprintId,
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
-      }
+      },
     );
     await checkTxValid(wallet, tx1);
     const tx1Data = await wallet.getFullTxById(tx1.hash);
@@ -119,7 +121,7 @@ describe('full cycle of bet nano contract', () => {
       NANO_CONTRACTS_INITIALIZE_METHOD,
       tx1Data.tx.nc_address,
       network,
-      tx1Data.tx.nc_args
+      tx1Data.tx.nc_args,
     );
     await tx1Parser.parseArguments();
     expect(tx1Parser.address?.base58).toBe(address0);
@@ -162,7 +164,7 @@ describe('full cycle of bet nano contract', () => {
             changeAddress: address0,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid address
@@ -178,7 +180,7 @@ describe('full cycle of bet nano contract', () => {
             changeAddress: address0,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Not enough funds for the deposit
@@ -194,7 +196,7 @@ describe('full cycle of bet nano contract', () => {
             changeAddress: address0,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Bet 100 to address 2
@@ -227,7 +229,7 @@ describe('full cycle of bet nano contract', () => {
       'bet',
       txBetData.tx.nc_address,
       network,
-      txBetData.tx.nc_args
+      txBetData.tx.nc_args,
     );
     await txBetParser.parseArguments();
     expect(txBetParser.address?.base58).toBe(address2);
@@ -281,7 +283,7 @@ describe('full cycle of bet nano contract', () => {
       'bet',
       txBet2Data.tx.nc_address,
       network,
-      txBet2Data.tx.nc_args
+      txBet2Data.tx.nc_args,
     );
     await txBet2Parser.parseArguments();
     expect(txBet2Parser.address?.base58).toBe(address3);
@@ -351,7 +353,7 @@ describe('full cycle of bet nano contract', () => {
       tx1.hash,
       'SignedData[str]',
       result,
-      wallet
+      wallet,
     );
 
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
@@ -372,7 +374,7 @@ describe('full cycle of bet nano contract', () => {
       'set_result',
       txSetResultData.tx.nc_address,
       network,
-      txSetResultData.tx.nc_args
+      txSetResultData.tx.nc_args,
     );
     await txSetResultParser.parseArguments();
     expect(txSetResultParser.address?.base58).toBe(address1);
@@ -424,8 +426,8 @@ describe('full cycle of bet nano contract', () => {
         'withdraw',
         'abc',
         withdrawalData,
-        withdrawalCreateTokenOptions
-      )
+        withdrawalCreateTokenOptions,
+      ),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Error with invalid mint authority address
@@ -433,7 +435,7 @@ describe('full cycle of bet nano contract', () => {
       wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
         ...withdrawalCreateTokenOptions,
         mintAuthorityAddress: 'abc',
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Error with invalid melt authority address
@@ -441,7 +443,7 @@ describe('full cycle of bet nano contract', () => {
       wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
         ...withdrawalCreateTokenOptions,
         meltAuthorityAddress: 'abc',
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Try to withdraw to address 2, success
@@ -449,7 +451,7 @@ describe('full cycle of bet nano contract', () => {
       'withdraw',
       address2,
       withdrawalData,
-      withdrawalCreateTokenOptions
+      withdrawalCreateTokenOptions,
     );
     await checkTxValid(wallet, txWithdrawal);
     txIds.push(txWithdrawal.hash);
@@ -480,7 +482,7 @@ describe('full cycle of bet nano contract', () => {
       'withdraw',
       txWithdrawalData.tx.nc_address,
       network,
-      txWithdrawalData.tx.nc_args
+      txWithdrawalData.tx.nc_args,
     );
     await txWithdrawalParser.parseArguments();
     expect(txWithdrawalParser.address?.base58).toBe(address2);
@@ -553,7 +555,7 @@ describe('full cycle of bet nano contract', () => {
       ],
       [],
       [],
-      firstBlock
+      firstBlock,
     );
 
     expect(ncStateFirstBlock.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
@@ -593,13 +595,13 @@ describe('full cycle of bet nano contract', () => {
       [],
       [],
       null,
-      firstBlockHeight
+      firstBlockHeight,
     );
 
     expect(ncStateFirstBlockHeight.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
     expect(ncStateFirstBlockHeight.fields.date_last_bet.value).toBe(dateLastBet);
     expect(ncStateFirstBlockHeight.fields.oracle_script.value).toBe(
-      bufferToHex(outputScriptBuffer1)
+      bufferToHex(outputScriptBuffer1),
     );
     expect(ncStateFirstBlockHeight.fields.final_result.value).toBeNull();
     expect(ncStateFirstBlockHeight.fields.total.value).toBe(300);
@@ -684,7 +686,7 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Args as null
@@ -692,7 +694,7 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
         args: null,
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Address selected to sign does not belong to the wallet
@@ -705,8 +707,8 @@ describe('full cycle of bet nano contract', () => {
         {
           blueprintId,
           args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
-        }
-      )
+        },
+      ),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Oracle data is expected to be a hexa
@@ -714,7 +716,7 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
         args: ['error', NATIVE_TOKEN_UID, dateLastBet],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Date last bet is expected to be an integer
@@ -722,7 +724,7 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
         args: ['123', NATIVE_TOKEN_UID, 'error'],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
   };
 
@@ -750,7 +752,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid blueprint id
@@ -758,7 +760,7 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId: '1234',
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
-      })
+      }),
     ).rejects.toThrow(NanoRequest404Error);
 
     // Missing ncId for bet
@@ -773,7 +775,7 @@ describe('full cycle of bet nano contract', () => {
             amount: 100n,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid ncId for bet
@@ -788,7 +790,7 @@ describe('full cycle of bet nano contract', () => {
             amount: 100n,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid ncId for bet again
@@ -803,18 +805,18 @@ describe('full cycle of bet nano contract', () => {
             amount: 100n,
           },
         ],
-      })
+      }),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // If we remove the pin from the wallet object, it should throw error
     const oldPin = hWallet.pinCode;
     hWallet.pinCode = '';
     await expect(
-      hWallet.createAndSendNanoContractTransaction('withdraw', address2, {})
+      hWallet.createAndSendNanoContractTransaction('withdraw', address2, {}),
     ).rejects.toThrow(PinRequiredError);
 
     await expect(
-      hWallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, {}, {})
+      hWallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, {}, {}),
     ).rejects.toThrow(PinRequiredError);
     // Add the pin back for the other tests
     hWallet.pinCode = oldPin;
@@ -826,14 +828,14 @@ describe('full cycle of bet nano contract', () => {
     const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
     // Use an address that is not from the ocbWallet
     await expect(
-      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
+      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0),
     ).rejects.toThrow(NanoContractTransactionError);
 
     // If we remove the pin from the wallet object, it should throw error
     const oldOcbPin = ocbWallet.pinCode;
     ocbWallet.pinCode = '';
     await expect(
-      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
+      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0),
     ).rejects.toThrow(PinRequiredError);
 
     // Add the pin back in case there are more tests here

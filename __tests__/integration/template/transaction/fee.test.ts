@@ -1,4 +1,10 @@
 import { isEmpty } from 'lodash';
+
+import ncApi from '../../../../src/api/nano';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
+import { NanoContractHeaderActionType } from '../../../../src/nano_contracts/types';
+import HathorWallet from '../../../../src/new/wallet';
+import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -7,12 +13,6 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../../helpers/wallet.helper';
-
-import ncApi from '../../../../src/api/nano';
-import HathorWallet from '../../../../src/new/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../../src/constants';
-import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
-import { NanoContractHeaderActionType } from '../../../../src/nano_contracts/types';
 
 describe('FeeBlueprint Template execution', () => {
   let hWallet: HathorWallet;
@@ -44,7 +44,7 @@ describe('FeeBlueprint Template execution', () => {
             changeAddress: address0,
           },
         ],
-      }
+      },
     );
     await waitForTxReceived(hWallet, initTx.hash);
     await waitTxConfirmed(hWallet, initTx.hash, null);
@@ -69,7 +69,7 @@ describe('FeeBlueprint Template execution', () => {
             changeAddress: address0,
           },
         ],
-      }
+      },
     );
     await waitForTxReceived(hWallet, dbtTx.hash);
     await waitTxConfirmed(hWallet, dbtTx.hash, null);
@@ -148,7 +148,7 @@ describe('FeeBlueprint Template execution', () => {
       contractId,
       [],
       [fbtUid, NATIVE_TOKEN_UID],
-      []
+      [],
     );
     const fbtBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
     const htrBalanceBefore = BigInt(ncStateBefore.balances[NATIVE_TOKEN_UID].value);
@@ -213,13 +213,13 @@ describe('FeeBlueprint Template execution', () => {
       contractId,
       [],
       [fbtUid, NATIVE_TOKEN_UID],
-      []
+      [],
     );
     // FBT balance should increase by deposit amount
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore + depositAmount);
     // HTR balance should decrease by fee amount (withdrawn to pay fee)
     expect(BigInt(ncStateAfter.balances[NATIVE_TOKEN_UID].value)).toBe(
-      htrBalanceBefore - feeAmount
+      htrBalanceBefore - feeAmount,
     );
   });
 
@@ -407,7 +407,7 @@ describe('FeeBlueprint Template execution', () => {
     // Verify contract balance decreased by total withdrawal
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(
-      fbtBalanceBefore - withdrawal1 - withdrawal2
+      fbtBalanceBefore - withdrawal1 - withdrawal2,
     );
   });
 

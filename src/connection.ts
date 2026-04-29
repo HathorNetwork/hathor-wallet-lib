@@ -6,12 +6,13 @@
  */
 
 import { EventEmitter } from 'events';
-import networkInstance from './network';
+
 import config from './config';
-import GenericWebSocket from './websocket';
-import WalletServiceWebSocket from './wallet/websocket';
-import { ConnectionState } from './wallet/types';
+import networkInstance from './network';
 import { ILogger, getDefaultLogger } from './types';
+import { ConnectionState } from './wallet/types';
+import WalletServiceWebSocket from './wallet/websocket';
+import GenericWebSocket from './websocket';
 
 export const DEFAULT_PARAMS = {
   network: 'mainnet',

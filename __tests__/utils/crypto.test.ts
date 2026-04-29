@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import CryptoJS from 'crypto-js';
 import bitcore from 'bitcore-lib';
+import CryptoJS from 'crypto-js';
+
 import { DecryptionError, InvalidPasswdError } from '../../src/errors';
 import {
   hashData,
@@ -27,7 +28,7 @@ test('validateHash', () => {
       salt: hashedData.salt,
       iterations: hashedData.iterations,
       pbkdf2Hasher: hashedData.pbkdf2Hasher,
-    })
+    }),
   ).toBe(true);
 
   const wrongSalt = CryptoJS.lib.WordArray.random(128 / 8).toString();
@@ -36,7 +37,7 @@ test('validateHash', () => {
       salt: wrongSalt,
       iterations: hashedData.iterations,
       pbkdf2Hasher: hashedData.pbkdf2Hasher,
-    })
+    }),
   ).toBe(false);
 });
 
@@ -51,7 +52,7 @@ test('encryption test', () => {
       salt: encrypted.salt,
       iterations: encrypted.iterations,
       pbkdf2Hasher: encrypted.pbkdf2Hasher,
-    })
+    }),
   ).toBe(true);
 
   // Decryption should only work with the correct password and data
@@ -84,7 +85,7 @@ test('check password', () => {
 test('sign message', () => {
   const message = 'please sign me';
   const xpriv = new bitcore.HDPrivateKey(
-    'tnpr4nfUjEyefVuczz8pYwkHUDD9Q96mP3q7jc3oDgdV6FEkTArttdZLrMWhCvRmvJ48jnKR5dHDrA13sk1qFwUujnzZt2ry9EgDzty3UjdhFsD'
+    'tnpr4nfUjEyefVuczz8pYwkHUDD9Q96mP3q7jc3oDgdV6FEkTArttdZLrMWhCvRmvJ48jnKR5dHDrA13sk1qFwUujnzZt2ry9EgDzty3UjdhFsD',
   );
   const firstAddressHDPrivKey = xpriv.derive("m/44'/280'/0'/0/0"); // first address
   const { privateKey } = firstAddressHDPrivKey;

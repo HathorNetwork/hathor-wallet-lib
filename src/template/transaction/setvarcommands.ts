@@ -6,7 +6,10 @@
  */
 
 import { z } from 'zod';
-import { ITxTemplateInterpreter } from './types';
+
+import { IUserSignedData } from '../../nano_contracts/fields/signedData';
+import { getOracleBuffer, getOracleSignedDataFromUser } from '../../nano_contracts/utils';
+
 import { TxTemplateContext } from './context';
 import {
   SetVarGetOracleScriptOpts,
@@ -15,13 +18,12 @@ import {
   SetVarGetWalletBalanceOpts,
   getVariable,
 } from './instructions';
-import { getOracleBuffer, getOracleSignedDataFromUser } from '../../nano_contracts/utils';
-import { IUserSignedData } from '../../nano_contracts/fields/signedData';
+import { ITxTemplateInterpreter } from './types';
 
 export async function getWalletAddress(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetWalletAddressOpts>
+  options: z.infer<typeof SetVarGetWalletAddressOpts>,
 ): Promise<string> {
   if (options.index != null) {
     return interpreter.getAddressAtIndex(options.index);
@@ -32,7 +34,7 @@ export async function getWalletAddress(
 export async function getWalletBalance(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetWalletBalanceOpts>
+  options: z.infer<typeof SetVarGetWalletBalanceOpts>,
 ): Promise<number | bigint> {
   const data = await interpreter.getBalance(options.token);
   switch (options.authority) {
@@ -48,7 +50,7 @@ export async function getWalletBalance(
 export async function getOracleScript(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetOracleScriptOpts>
+  options: z.infer<typeof SetVarGetOracleScriptOpts>,
 ): Promise<string> {
   const address = await interpreter.getAddressAtIndex(options.index);
   const oracle = getOracleBuffer(address, interpreter.getNetwork());
@@ -58,7 +60,7 @@ export async function getOracleScript(
 export async function getOracleSignedData(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetOracleSignedDataOpts>
+  options: z.infer<typeof SetVarGetOracleSignedDataOpts>,
 ): Promise<IUserSignedData> {
   const address = await interpreter.getAddressAtIndex(options.index);
   const oracle = getOracleBuffer(address, interpreter.getNetwork());
@@ -66,12 +68,12 @@ export async function getOracleSignedData(
   const data = getVariable<unknown>(
     options.data,
     _ctx.vars,
-    SetVarGetOracleSignedDataOpts.shape.data
+    SetVarGetOracleSignedDataOpts.shape.data,
   );
   const ncId = getVariable<string>(
     options.ncId,
     _ctx.vars,
-    SetVarGetOracleSignedDataOpts.shape.ncId
+    SetVarGetOracleSignedDataOpts.shape.ncId,
   );
 
   return getOracleSignedDataFromUser(oracle, ncId, options.type, data, interpreter.getWallet());

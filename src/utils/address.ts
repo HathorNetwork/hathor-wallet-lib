@@ -11,12 +11,14 @@ import {
   Script,
   HDPublicKey,
 } from 'bitcore-lib';
+
 import Address from '../models/address';
+import Network from '../models/network';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
-import Network from '../models/network';
-import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
+
+import { hexToBuffer } from './buffer';
 import { createP2SHRedeemScript } from './scripts';
 
 /**
@@ -35,7 +37,7 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 export function deriveAddressFromXPubP2PKH(
   xpubkey: string,
   index: number,
-  networkName: string
+  networkName: string,
 ): IAddressInfo {
   const network = new Network(networkName);
   const hdpubkey = new HDPublicKey(xpubkey);
@@ -58,18 +60,18 @@ export async function deriveAddressP2PKH(index: number, storage: IStorage): Prom
 export function deriveAddressFromDataP2SH(
   multisigData: IMultisigData,
   index: number,
-  networkName: string
+  networkName: string,
 ): IAddressInfo {
   const network = new Network(networkName);
   const redeemScript = createP2SHRedeemScript(
     multisigData.pubkeys,
     multisigData.numSignatures,
-    index
+    index,
   );
   // eslint-disable-next-line new-cap -- Cannot change the dependency method name
   const address = new BitcoreAddress.payingTo(
     Script.fromBuffer(redeemScript),
-    network.bitcoreNetwork
+    network.bitcoreNetwork,
   );
   return {
     base58: address.toString(),
@@ -135,7 +137,7 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
   const pubkeyBuffer = hexToBuffer(pubkey);
   const base58 = new BitcoreAddress(
     bitcorePublicKey(pubkeyBuffer),
-    network.bitcoreNetwork
+    network.bitcoreNetwork,
   ).toString();
   return new Address(base58, { network });
 }

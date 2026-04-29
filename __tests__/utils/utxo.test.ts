@@ -6,8 +6,8 @@
  */
 
 import { MemoryStore, Storage } from '../../src/storage';
-import { bestUtxoSelection, fastUtxoSelection } from '../../src/utils/utxo';
 import { IStore } from '../../src/types';
+import { bestUtxoSelection, fastUtxoSelection } from '../../src/utils/utxo';
 
 describe('bestUtxoSelection', () => {
   const utxos = [

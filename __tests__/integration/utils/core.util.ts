@@ -6,6 +6,7 @@
  */
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
+
 import { P2PKH_ACCT_PATH } from '../../../src/constants';
 import Network from '../../../src/models/network';
 import { AddressScanPolicyData, SCANNING_POLICY } from '../../../src/types';

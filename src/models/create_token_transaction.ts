@@ -6,23 +6,26 @@
  */
 
 import buffer from 'buffer';
+
 import { clone } from 'lodash';
+
 import {
   CREATE_TOKEN_TX_VERSION,
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
   DEFAULT_SIGNAL_BITS,
 } from '../constants';
-import { unpackToInt, unpackLen, intToBytes } from '../utils/buffer';
-import Input from './input';
-import Output from './output';
-import Transaction from './transaction';
-import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
-import ScriptData from './script_data';
-import { OutputType } from '../wallet/types';
-import { TokenVersion } from '../types';
 import type Header from '../headers/base';
+import { TokenVersion } from '../types';
+import { unpackToInt, unpackLen, intToBytes } from '../utils/buffer';
+import { OutputType } from '../wallet/types';
+
+import Input from './input';
+import Network from './network';
+import Output from './output';
+import ScriptData from './script_data';
+import Transaction from './transaction';
 
 type optionsType = {
   signalBits?: number;
@@ -48,7 +51,7 @@ class CreateTokenTransaction extends Transaction {
     symbol: string,
     inputs: Input[],
     outputs: Output[],
-    options: optionsType = {}
+    options: optionsType = {},
   ) {
     const defaultOptions: optionsType = {
       signalBits: DEFAULT_SIGNAL_BITS,
@@ -109,19 +112,19 @@ class CreateTokenTransaction extends Transaction {
 
     if (!this.name || !this.symbol) {
       throw new CreateTokenTxInvalid(
-        'Token name and symbol are required when creating a new token'
+        'Token name and symbol are required when creating a new token',
       );
     }
 
     if (this.name.length > MAX_TOKEN_NAME_SIZE) {
       throw new CreateTokenTxInvalid(
-        `Token name size is ${this.name.length} but maximum size is ${MAX_TOKEN_NAME_SIZE}`
+        `Token name size is ${this.name.length} but maximum size is ${MAX_TOKEN_NAME_SIZE}`,
       );
     }
 
     if (this.symbol.length > MAX_TOKEN_SYMBOL_SIZE) {
       throw new CreateTokenTxInvalid(
-        `Token symbol size is ${this.symbol.length} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`
+        `Token symbol size is ${this.symbol.length} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`,
       );
     }
 
@@ -162,7 +165,7 @@ class CreateTokenTransaction extends Transaction {
 
     if (lenName > MAX_TOKEN_NAME_SIZE) {
       throw new CreateTokenTxInvalid(
-        `Token name size is ${lenName} but maximum size is ${MAX_TOKEN_NAME_SIZE}`
+        `Token name size is ${lenName} but maximum size is ${MAX_TOKEN_NAME_SIZE}`,
       );
     }
 
@@ -173,7 +176,7 @@ class CreateTokenTransaction extends Transaction {
 
     if (lenSymbol > MAX_TOKEN_SYMBOL_SIZE) {
       throw new CreateTokenTxInvalid(
-        `Token symbol size is ${lenSymbol} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`
+        `Token symbol size is ${lenSymbol} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`,
       );
     }
 

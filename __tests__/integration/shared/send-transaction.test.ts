@@ -17,10 +17,10 @@
  * live in `fullnode-specific/send-transaction.test.ts`.
  */
 
-import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 
 const adapters: IWalletTestAdapter[] = [
@@ -90,7 +90,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
         parents: expect.arrayContaining([expect.any(String)]),
         tokens: expect.any(Array),
         signalBits: expect.any(Number),
-      })
+      }),
     );
 
     expect(tx.hash).toHaveLength(64);
@@ -114,7 +114,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
         hash: expect.any(String),
         inputs: expect.any(Array),
         outputs: expect.any(Array),
-      })
+      }),
     );
 
     const fullTx = await adapter.getFullTxById(wallet, hash);
@@ -137,7 +137,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
       freshWallet,
       recipientAddr,
       2n,
-      { changeAddress: changeAddr }
+      { changeAddress: changeAddr },
     );
 
     expect(tx.outputs.length).toBe(2);
@@ -146,7 +146,7 @@ describe.each(adapters)('[Shared] sendTransaction — $name', adapter => {
     expect(fullTx.success).toBe(true);
 
     const recipientOutput = fullTx.tx.outputs.find(
-      output => output.decoded?.address === recipientAddr
+      output => output.decoded?.address === recipientAddr,
     );
     expect(recipientOutput).toBeDefined();
     expect(recipientOutput!.value).toBe(2n);

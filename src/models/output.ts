@@ -6,6 +6,7 @@
  */
 
 import _ from 'lodash';
+
 import {
   TOKEN_AUTHORITY_MASK,
   TOKEN_INDEX_MASK,
@@ -13,10 +14,7 @@ import {
   TOKEN_MINT_MASK,
 } from '../constants';
 import { OutputValueError } from '../errors';
-import P2PKH from './p2pkh';
-import P2SH from './p2sh';
-import ScriptData from './script_data';
-import Network from './network';
+import { OutputValueType } from '../types';
 import {
   bytesToOutputValue,
   unpackLen,
@@ -25,7 +23,11 @@ import {
   outputValueToBytes,
 } from '../utils/buffer';
 import { parseScript as utilsParseScript } from '../utils/scripts';
-import { OutputValueType } from '../types';
+
+import Network from './network';
+import P2PKH from './p2pkh';
+import P2SH from './p2sh';
+import ScriptData from './script_data';
 
 type optionsType = {
   tokenData?: number | undefined;

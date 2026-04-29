@@ -5,22 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { StrField } from './str';
-import { IntField } from './int';
+import { AddressField } from './address';
+import { AmountField } from './amount';
+import { NCFieldBase } from './base';
+import { BoolField } from './bool';
 import { BytesField } from './bytes';
 import { Bytes32Field } from './bytes32';
-import { BoolField } from './bool';
-import { AddressField } from './address';
 import { CallerIdField } from './callerId';
-import { TimestampField } from './timestamp';
-import { AmountField } from './amount';
-import { TokenUidField } from './token';
-import { OptionalField } from './optional';
-import { TupleField } from './tuple';
-import { SignedDataField } from './signedData';
-import { NCFieldBase } from './base';
-import { DictField } from './dict';
 import { CollectionField } from './collection';
+import { DictField } from './dict';
+import { IntField } from './int';
+import { OptionalField } from './optional';
+import { SignedDataField } from './signedData';
+import { StrField } from './str';
+import { TimestampField } from './timestamp';
+import { TokenUidField } from './token';
+import { TupleField } from './tuple';
 
 export { NCFieldBase } from './base';
 

@@ -15,16 +15,22 @@
  */
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
-import HathorWallet from '../../../src/new/wallet';
+
 import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
-import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
-import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
+import WalletConnection from '../../../src/new/connection';
+import HathorWallet from '../../../src/new/wallet';
 import { MemoryStore, Storage } from '../../../src/storage';
-import { WalletTracker } from '../utils/wallet-tracker.util';
-import { deriveXpubFromSeed, getGapLimitConfig } from '../utils/core.util';
+import { AuthorityType, TokenVersion } from '../../../src/types';
+import { ConnectionState } from '../../../src/wallet/types';
+import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import {
+  multisigWalletsData,
+  precalculationHelpers,
+} from '../helpers/wallet-precalculation.helper';
 import {
   createTokenHelper,
   DEFAULT_PASSWORD,
@@ -33,13 +39,8 @@ import {
   generateWalletHelper,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
-import {
-  multisigWalletsData,
-  precalculationHelpers,
-} from '../helpers/wallet-precalculation.helper';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import WalletConnection from '../../../src/new/connection';
-import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
+import { deriveXpubFromSeed, getGapLimitConfig } from '../utils/core.util';
+import { WalletTracker } from '../utils/wallet-tracker.util';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -80,7 +81,7 @@ describe('[Fullnode-specific] start', () => {
           seed: walletData.words,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
-        })
+        }),
     ).toThrow('provide a connection');
 
     // Missing seed/xpub/xpriv
@@ -90,7 +91,7 @@ describe('[Fullnode-specific] start', () => {
           connection,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
-        })
+        }),
     ).toThrow('seed');
 
     // Both seed and xpriv
@@ -102,7 +103,7 @@ describe('[Fullnode-specific] start', () => {
           connection,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
-        })
+        }),
     ).toThrow('seed and an xpriv');
 
     // xpriv with passphrase
@@ -113,7 +114,7 @@ describe('[Fullnode-specific] start', () => {
           connection,
           passphrase: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
-        })
+        }),
     ).toThrow('xpriv with passphrase');
 
     // Already-connected connection
@@ -130,7 +131,7 @@ describe('[Fullnode-specific] start', () => {
           } as Partial<WalletConnection>,
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
-        })
+        }),
     ).toThrow('share connections');
 
     // Invalid multisig config (empty)
@@ -143,7 +144,7 @@ describe('[Fullnode-specific] start', () => {
           pinCode: DEFAULT_PIN_CODE,
           // @ts-expect-error -- Deliberately passing empty config to test rejection
           multisig: {},
-        })
+        }),
     ).toThrow('pubkeys and numSignatures');
 
     // Invalid multisig config (numSignatures > pubkeys.length)
@@ -155,7 +156,7 @@ describe('[Fullnode-specific] start', () => {
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
           multisig: { pubkeys: ['abc'], numSignatures: 2 },
-        })
+        }),
     ).toThrow('configuration invalid');
   });
 
@@ -242,7 +243,7 @@ describe('[Fullnode-specific] start', () => {
       hWallet,
       'Dedicated Wallet Token',
       'DWT',
-      100n
+      100n,
     );
 
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
@@ -321,7 +322,7 @@ describe('[Fullnode-specific] start', () => {
     await expect(w.signTx()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createAndSendNanoContractTransaction()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createAndSendNanoContractCreateTokenTransaction()).rejects.toThrow(
-      WalletFromXPubGuard
+      WalletFromXPubGuard,
     );
     await expect(w.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createOnChainBlueprintTransaction()).rejects.toThrow(WalletFromXPubGuard);
@@ -387,7 +388,7 @@ describe('[Fullnode-specific] start', () => {
     await expect(
       hWallet.sendManyOutputsTransaction([
         { address: await hWallet.getAddressAtIndex(1), value: 1n, token: NATIVE_TOKEN_UID },
-      ])
+      ]),
     ).rejects.toThrow('Pin');
 
     await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100n)).rejects.toThrow('Pin');
@@ -400,12 +401,12 @@ describe('[Fullnode-specific] start', () => {
       hWallet.delegateAuthority(
         fakeTokenUid,
         AuthorityType.MINT,
-        await hWallet.getAddressAtIndex(1)
-      )
+        await hWallet.getAddressAtIndex(1),
+      ),
     ).rejects.toThrow('Pin');
 
     await expect(hWallet.destroyAuthority(fakeTokenUid, AuthorityType.MINT, 1)).rejects.toThrow(
-      'Pin'
+      'Pin',
     );
 
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });

@@ -6,8 +6,9 @@
  */
 
 import _ from 'lodash';
-import { hexToBuffer, unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
+
 import { TX_HASH_SIZE_BYTES } from '../constants';
+import { hexToBuffer, unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
 
 type optionsType = {
   data?: Buffer | null | undefined;

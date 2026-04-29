@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
-import Transaction from '../models/transaction';
 import Input from '../models/input';
-import HathorWalletServiceWallet from './wallet';
-import { FullNodeTxResponse } from './types';
+import Transaction from '../models/transaction';
+import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
 import transactionUtils from '../utils/transaction';
+
+import { FullNodeTxResponse } from './types';
+import HathorWalletServiceWallet from './wallet';
 
 /**
  * Storage proxy that implements missing storage methods for wallet service
@@ -85,7 +86,7 @@ export class WalletServiceStorageProxy {
    * Get address information including BIP32 index
    */
   private async getAddressInfo(
-    address: string
+    address: string,
   ): Promise<(IAddressInfo & IAddressMetadata & { seqnum: number }) | null> {
     const addressDetails = await this.wallet.getAddressDetails(address);
 

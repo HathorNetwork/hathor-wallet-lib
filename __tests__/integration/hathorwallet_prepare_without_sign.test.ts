@@ -1,4 +1,11 @@
 import { isEmpty } from 'lodash';
+
+import { SendTransaction } from '../../src';
+import ncApi from '../../src/api/nano';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
+import HathorWallet from '../../src/new/wallet';
+import { TokenVersion } from '../../src/types';
+
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -7,12 +14,6 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from './helpers/wallet.helper';
-
-import ncApi from '../../src/api/nano';
-import HathorWallet from '../../src/new/wallet';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
-import { TokenVersion } from '../../src/types';
-import { SendTransaction } from '../../src';
 
 describe('HathorWallet prepare transaction without signing', () => {
   let hWallet: HathorWallet;
@@ -39,7 +40,7 @@ describe('HathorWallet prepare transaction without signing', () => {
             changeAddress: address,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, initTx);
     contractId = initTx.hash!;
@@ -59,7 +60,7 @@ describe('HathorWallet prepare transaction without signing', () => {
             changeAddress: address,
           },
         ],
-      }
+      },
     );
     await checkTxValid(hWallet, createFbtTx);
 
@@ -67,7 +68,7 @@ describe('HathorWallet prepare transaction without signing', () => {
       contractId,
       ['fbt_uid'],
       [NATIVE_TOKEN_UID],
-      []
+      [],
     );
     fbtUid = ncState.fields.fbt_uid.value;
   });
@@ -126,7 +127,7 @@ describe('HathorWallet prepare transaction without signing', () => {
           },
         ],
       },
-      { signTx: false }
+      { signTx: false },
     );
 
     const txBeforeChangeCaller = sendTransaction.transaction;
@@ -153,7 +154,7 @@ describe('HathorWallet prepare transaction without signing', () => {
         expect.objectContaining({
           tokenData: 0,
         }),
-      ])
+      ]),
     );
 
     // 3. Edit caller: change address AND seqnum for the new caller
@@ -205,7 +206,7 @@ describe('HathorWallet prepare transaction without signing', () => {
         mintAddress: address0,
         tokenVersion: TokenVersion.FEE,
       },
-      { signTx: false }
+      { signTx: false },
     );
     const txBeforeChangeCaller = sendTransaction.transaction;
 
@@ -228,7 +229,7 @@ describe('HathorWallet prepare transaction without signing', () => {
         expect.objectContaining({
           tokenData: 0, // HTR change
         }),
-      ])
+      ]),
     );
 
     // 3. Edit caller: change address AND seqnum for the new caller

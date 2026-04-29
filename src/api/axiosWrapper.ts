@@ -6,8 +6,9 @@
  */
 
 import axios from 'axios';
-import { TIMEOUT } from '../constants';
+
 import config from '../config';
+import { TIMEOUT } from '../constants';
 
 /**
  * Method that creates an axios instance
@@ -27,7 +28,7 @@ export const axiosWrapperCreateRequestInstance = (
   url: string,
   _resolve?: undefined | null, // XXX: We should remove or use this parameter
   timeout?: number | null,
-  additionalHeaders = {}
+  additionalHeaders = {},
 ) => {
   let timeoutRef;
   const additionalHeadersObj = { ...additionalHeaders };

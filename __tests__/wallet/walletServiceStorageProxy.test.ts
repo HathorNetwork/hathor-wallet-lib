@@ -6,14 +6,14 @@
  */
 
 // Mock the transaction utils before importing
-import { WalletServiceStorageProxy } from '../../src/wallet/walletServiceStorageProxy';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import Network from '../../src/models/network';
-import { IStorage } from '../../src/types';
-import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
+import Network from '../../src/models/network';
+import Transaction from '../../src/models/transaction';
+import { IStorage } from '../../src/types';
 import transactionUtils from '../../src/utils/transaction';
 import { AddressInfoObject } from '../../src/wallet/types';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import { WalletServiceStorageProxy } from '../../src/wallet/walletServiceStorageProxy';
 
 jest.mock('../../src/utils/transaction', () => ({
   getSignatureForTx: jest.fn(),
@@ -183,7 +183,7 @@ describe('WalletServiceStorageProxy', () => {
       (wallet.getAddressDetails as jest.Mock).mockRejectedValue(new Error('Address not found'));
 
       await expect(proxiedStorage.getAddressInfo('invalid-address')).rejects.toThrow(
-        'Address not found'
+        'Address not found',
       );
     });
   });
@@ -539,11 +539,11 @@ describe('WalletServiceStorageProxy', () => {
 
     it('should handle errors from getCurrentAddress', async () => {
       (wallet.getCurrentAddress as jest.Mock).mockRejectedValue(
-        new Error('Address loading failed')
+        new Error('Address loading failed'),
       );
 
       await expect(proxiedStorage.getCurrentAddress()).rejects.toThrow(
-        'Current address is not loaded'
+        'Current address is not loaded',
       );
     });
   });
@@ -561,7 +561,7 @@ describe('WalletServiceStorageProxy', () => {
       expect(transactionUtils.getSignatureForTx).toHaveBeenCalledWith(
         mockTransaction,
         proxiedStorage,
-        'pin123'
+        'pin123',
       );
     });
   });

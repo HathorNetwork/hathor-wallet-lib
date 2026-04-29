@@ -6,10 +6,12 @@
  */
 
 import { AxiosError } from 'axios';
-import explorerServiceAxios from './explorerServiceAxios';
-import helpers from '../utils/helpers';
+
 import { METADATA_RETRY_LIMIT, DOWNLOAD_METADATA_RETRY_INTERVAL } from '../constants';
 import { GetDagMetadataApiError } from '../errors';
+import helpers from '../utils/helpers';
+
+import explorerServiceAxios from './explorerServiceAxios';
 
 type MetadataApiResponse = {
   id: string;
@@ -32,7 +34,7 @@ const metadataApi = {
   async getDagMetadata(
     id: string,
     network: string,
-    options: { retries?: number; retryInterval?: number } = {}
+    options: { retries?: number; retryInterval?: number } = {},
   ) {
     type optionsType = {
       retries: number;

@@ -1,5 +1,4 @@
 import Network from '../../src/models/network';
-
 import helpers from '../../src/utils/helpers';
 import MineTransaction from '../../src/wallet/mineTransaction';
 

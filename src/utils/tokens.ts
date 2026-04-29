@@ -6,8 +6,8 @@
  */
 
 import buffer from 'buffer';
-import FeeHeader from '../headers/fee';
-import Header from '../headers/base';
+
+import walletApi from '../api/wallet';
 import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
@@ -16,7 +16,14 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-import helpers from './helpers';
+import {
+  InsufficientFundsError,
+  SendTxError,
+  TokenNotFoundError,
+  TokenValidationError,
+} from '../errors';
+import Header from '../headers/base';
+import FeeHeader from '../headers/fee';
 import {
   AuthorityType,
   IDataInput,
@@ -29,16 +36,11 @@ import {
   TokenVersion,
   UtxoSelectionAlgorithm,
 } from '../types';
+
 import { getAddressType } from './address';
-import {
-  InsufficientFundsError,
-  SendTxError,
-  TokenNotFoundError,
-  TokenValidationError,
-} from '../errors';
-import { bestUtxoSelection } from './utxo';
-import walletApi from '../api/wallet';
 import { Fee } from './fee';
+import helpers from './helpers';
+import { bestUtxoSelection } from './utxo';
 
 const tokens = {
   /**
@@ -52,7 +54,7 @@ const tokens = {
   async validateTokenToAddByConfigurationString(
     config: string,
     storage?: IStorage,
-    uid?: string
+    uid?: string,
   ): Promise<ITokenData> {
     const tokenData = this.getTokenFromConfigurationString(config);
     if (!tokenData) {
@@ -60,7 +62,7 @@ const tokens = {
     }
     if (uid && tokenData.uid !== uid) {
       throw new TokenValidationError(
-        `Configuration string uid does not match: ${uid} != ${tokenData.uid}`
+        `Configuration string uid does not match: ${uid} != ${tokenData.uid}`,
       );
     }
 
@@ -83,14 +85,14 @@ const tokens = {
     if (storage) {
       if (await storage.isTokenRegistered(tokenData.uid)) {
         throw new TokenValidationError(
-          `You already have this token: ${tokenData.uid} (${tokenData.name})`
+          `You already have this token: ${tokenData.uid} (${tokenData.name})`,
         );
       }
 
       const isDuplicate = await this.checkDuplicateTokenInfo(tokenData, storage);
       if (isDuplicate) {
         throw new TokenValidationError(
-          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`
+          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`,
         );
       }
     }
@@ -111,12 +113,12 @@ const tokens = {
 
     if (response.name !== tokenData.name) {
       throw new TokenValidationError(
-        `Token name does not match with the real one. Added: ${tokenData.name}. Real: ${response.name}`
+        `Token name does not match with the real one. Added: ${tokenData.name}. Real: ${response.name}`,
       );
     }
     if (response.symbol !== tokenData.symbol) {
       throw new TokenValidationError(
-        `Token symbol does not match with the real one. Added: ${tokenData.symbol}. Real: ${response.symbol}`
+        `Token symbol does not match with the real one. Added: ${tokenData.symbol}. Real: ${response.symbol}`,
       );
     }
   },
@@ -130,7 +132,7 @@ const tokens = {
    */
   async checkDuplicateTokenInfo(
     tokenData: ITokenData,
-    storage: IStorage
+    storage: IStorage,
   ): Promise<null | { token: ITokenData; key: string }> {
     const cleanName = helpers.cleanupString(tokenData.name);
     const cleanSymbol = helpers.cleanupString(tokenData.symbol);
@@ -311,7 +313,7 @@ const tokens = {
    */
   getDepositAmount(
     mintAmount: OutputValueType,
-    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE,
   ): OutputValueType {
     // This conversion from mintAmount to Number may cause loss of precision for large amounts,
     // but this is fully equivalent to the reference Python implementation, which does the same.
@@ -341,7 +343,7 @@ const tokens = {
    */
   getWithdrawAmount(
     meltAmount: OutputValueType,
-    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE,
   ): OutputValueType {
     return BigInt(Math.floor(depositPercent * Number(meltAmount)));
   },
@@ -394,7 +396,7 @@ const tokens = {
       skipDepositFee?: boolean;
       skipFeeCalculation?: boolean;
       tokenVersion?: TokenVersion;
-    }
+    },
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
@@ -486,7 +488,7 @@ const tokens = {
       if (foundAmount < requiredAmount) {
         const availableAmount = selectedUtxos.available ?? 0;
         throw new InsufficientFundsError(
-          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${availableAmount} available`
+          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${availableAmount} available`,
         );
       }
 
@@ -583,7 +585,7 @@ const tokens = {
       unshiftData?: boolean | null;
       data?: string[] | null;
       utxoSelection?: UtxoSelectionAlgorithm;
-    } = {}
+    } = {},
   ): Promise<IDataTx> {
     if (authorityMeltInput.token !== token || authorityMeltInput.authorities !== 2n) {
       throw new Error('Melt authority input is not valid');
@@ -635,7 +637,7 @@ const tokens = {
     if (foundAmount < amount) {
       const availableAmount = selectedUtxos.available ?? 0;
       throw new InsufficientFundsError(
-        `Not enough tokens to melt: ${amount} requested, ${availableAmount} available`
+        `Not enough tokens to melt: ${amount} requested, ${availableAmount} available`,
       );
     }
 
@@ -696,7 +698,7 @@ const tokens = {
 
       if (htrFoundAmount < requiredAmount) {
         throw new InsufficientFundsError(
-          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${htrFoundAmount} available`
+          `Not enough HTR tokens for deposit or fee: ${requiredAmount} required, ${htrFoundAmount} available`,
         );
       }
 
@@ -789,7 +791,7 @@ const tokens = {
       skipDepositFee?: boolean;
       skipFeeCalculation?: boolean;
       tokenVersion?: TokenVersion;
-    } = {}
+    } = {},
   ): Promise<IDataTx> {
     const mintOptions = {
       createAnotherMint: createMint,
@@ -849,7 +851,7 @@ const tokens = {
     authorityInput: IDataInput, // Authority input
     address: string,
     storage: IStorage,
-    createAnother: boolean = true
+    createAnother: boolean = true,
   ): Promise<IDataTx> {
     const outputs: IDataOutput[] = [
       {
@@ -888,7 +890,7 @@ const tokens = {
    * @returns {IDataTx} Transaction data
    */
   prepareDestroyAuthorityTxData(
-    authorityInputs: IDataInput[] // Authority inputs
+    authorityInputs: IDataInput[], // Authority inputs
   ): IDataTx {
     return {
       inputs: authorityInputs,
@@ -904,7 +906,7 @@ const tokens = {
   getTransactionHTRDeposit(
     mintAmount: OutputValueType,
     dataLen: number,
-    storage: IStorage
+    storage: IStorage,
   ): OutputValueType {
     let mintDeposit = this.getMintDeposit(mintAmount, storage);
     mintDeposit += this.getDataFee(dataLen);
@@ -981,14 +983,14 @@ const tokens = {
         ({
           ...output,
           token: mintingTokenUid,
-        }) satisfies IDataOutputWithToken
+        }) satisfies IDataOutputWithToken,
     );
     // since we control the inputs, we can assume we don't have any melt operation that should be charged at this point.
     // so we can pass an empty array for inputs
     feeAmount = await Fee.calculate(
       [],
       mappedOutputs,
-      await tokens.getTokensByManyIds(storage, new Set(tokensArray))
+      await tokens.getTokensByManyIds(storage, new Set(tokensArray)),
     );
 
     return { feeAmount, depositAmount };

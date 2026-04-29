@@ -6,10 +6,11 @@
  */
 
 import buffer from 'buffer';
-import ScriptData from '../../src/models/script_data';
+
 import { ParseScriptError } from '../../src/errors';
-import { parseScriptData } from '../../src/utils/scripts';
+import ScriptData from '../../src/models/script_data';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
+import { parseScriptData } from '../../src/utils/scripts';
 
 test('Script data', () => {
   const data = 'test';

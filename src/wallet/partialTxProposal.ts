@@ -5,21 +5,20 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PartialTx, PartialTxInputData } from '../models/partial_tx';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
+import { AddressError, InvalidPartialTxError } from '../errors';
 import Address from '../models/address';
-import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import { PartialTx, PartialTxInputData } from '../models/partial_tx';
 import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
-import { AddressError, InvalidPartialTxError } from '../errors';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
-
-import transactionUtils from '../utils/transaction';
-import dateFormatter from '../utils/date';
-
-import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
 import { IStorage, OutputValueType } from '../types';
+import dateFormatter from '../utils/date';
+import transactionUtils from '../utils/transaction';
+
+import { OutputType, Utxo } from './types';
 
 class PartialTxProposal {
   public partialTx: PartialTx;
@@ -76,7 +75,7 @@ class PartialTxProposal {
       utxos = [],
       changeAddress = null,
       markAsSelected = true,
-    }: { utxos?: Utxo[] | null; changeAddress?: string | null; markAsSelected?: boolean } = {}
+    }: { utxos?: Utxo[] | null; changeAddress?: string | null; markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
@@ -105,7 +104,7 @@ class PartialTxProposal {
     // Filter pool of utxos for only utxos from the token and not already in the partial tx
     const currentUtxos = this.partialTx.inputs.map(input => `${input.hash}-${input.index}`);
     const utxosToUse = allUtxos.filter(
-      utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`)
+      utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`),
     );
 
     const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
@@ -138,7 +137,7 @@ class PartialTxProposal {
   async addReceive(
     token: string,
     value: OutputValueType,
-    { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {}
+    { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {},
   ) {
     this.resetSignatures();
 
@@ -172,7 +171,7 @@ class PartialTxProposal {
       token?: string;
       authorities?: OutputValueType;
       markAsSelected?: boolean;
-    } = {}
+    } = {},
   ) {
     this.resetSignatures();
 
@@ -204,7 +203,7 @@ class PartialTxProposal {
       timelock = null,
       isChange = false,
       authorities = 0n,
-    }: { timelock?: number | null; isChange?: boolean; authorities?: OutputValueType } = {}
+    }: { timelock?: number | null; isChange?: boolean; authorities?: OutputValueType } = {},
   ) {
     this.resetSignatures();
 

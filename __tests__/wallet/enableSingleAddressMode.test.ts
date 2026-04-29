@@ -1,7 +1,7 @@
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import Network from '../../src/models/network';
 import { SCANNING_POLICY } from '../../src/types';
 import walletApi from '../../src/wallet/api/walletApi';
-import Network from '../../src/models/network';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { defaultWalletSeed } from '../__mock_helpers__/wallet-service.fixtures';
 
 describe('enableSingleAddressMode', () => {
@@ -42,7 +42,7 @@ describe('enableSingleAddressMode', () => {
     });
 
     await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
-      'Cannot enable single-address policy: wallet has transactions on addresses other than the first'
+      'Cannot enable single-address policy: wallet has transactions on addresses other than the first',
     );
   });
 

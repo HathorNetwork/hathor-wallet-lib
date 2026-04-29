@@ -23,6 +23,10 @@
  * indexed, making `numTransactions` assertions impossible.
  */
 
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import SendTransaction from '../../../src/new/sendTransaction';
+import { TokenVersion } from '../../../src/types';
+import transaction from '../../../src/utils/transaction';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -33,10 +37,6 @@ import {
   waitUntilNextTimestamp,
   createTokenHelper,
 } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { TokenVersion } from '../../../src/types';
-import SendTransaction from '../../../src/new/sendTransaction';
-import transaction from '../../../src/utils/transaction';
 
 describe('[Fullnode] sendTransaction — address tracking', () => {
   afterEach(async () => {
@@ -64,19 +64,19 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty(
       'numTransactions',
-      2
+      2,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(1))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(2))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(3))).toHaveProperty(
       'numTransactions',
-      0
+      0,
     );
 
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
@@ -84,7 +84,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
       8n,
-      { changeAddress: await hWallet.getAddressAtIndex(5) }
+      { changeAddress: await hWallet.getAddressAtIndex(5) },
     );
     await waitForTxReceived(hWallet, tx2Hash);
 
@@ -93,11 +93,11 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
-      0
+      0,
     );
   });
 
@@ -114,11 +114,11 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
 
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
@@ -126,20 +126,20 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
       80n,
-      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
+      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) },
     );
     await waitForTxReceived(hWallet, tx2Hash);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
-      2
+      2,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
-      2
+      2,
     );
     expect(
-      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
+      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12)),
     ).toHaveProperty('numTransactions', 1);
   });
 
@@ -158,11 +158,11 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
 
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
@@ -170,20 +170,20 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
       82n,
-      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
+      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) },
     );
     await waitForTxReceived(hWallet, tx2Hash);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
-      1
+      1,
     );
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty(
       'numTransactions',
-      2
+      2,
     );
     expect(
-      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12))
+      await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(12)),
     ).toHaveProperty('numTransactions', 1);
   });
 });
@@ -214,7 +214,7 @@ describe('[Fullnode] sendTransaction — multisig', () => {
     });
     const tx = transaction.createTransactionFromData(
       { version: 1, ...(await sendTransaction.prepareTxData()) },
-      network
+      network,
     );
     const txHex = tx.toHex();
 

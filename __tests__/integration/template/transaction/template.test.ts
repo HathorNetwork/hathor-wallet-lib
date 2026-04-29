@@ -1,3 +1,15 @@
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../../src/constants';
+import SendTransaction from '../../../../src/new/sendTransaction';
+import HathorWallet from '../../../../src/new/wallet';
+import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
+import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
+import { TokenVersion } from '../../../../src/types';
+import transactionUtils from '../../../../src/utils/transaction';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -5,19 +17,6 @@ import {
   stopAllWallets,
   waitForTxReceived,
 } from '../../helpers/wallet.helper';
-
-import HathorWallet from '../../../../src/new/wallet';
-import SendTransaction from '../../../../src/new/sendTransaction';
-import transactionUtils from '../../../../src/utils/transaction';
-import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
-import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import {
-  NATIVE_TOKEN_UID,
-  TOKEN_AUTHORITY_MASK,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../../../src/constants';
-import { TokenVersion } from '../../../../src/types';
 
 const DEBUG = true;
 
@@ -329,7 +328,7 @@ describe('Template execution', () => {
           tokenData: TOKEN_AUTHORITY_MASK + 1,
           value: TOKEN_MELT_MASK,
         }),
-      ])
+      ]),
     );
   });
 
@@ -360,7 +359,7 @@ describe('Template execution', () => {
           tokenData: 1,
           value: 100n,
         }),
-      ])
+      ]),
     );
   });
 
@@ -403,7 +402,7 @@ describe('Template execution', () => {
           tokenData: 1,
           value: 500n,
         }),
-      ])
+      ]),
     );
 
     /**
@@ -440,7 +439,7 @@ describe('Template execution', () => {
           tokenData: TOKEN_AUTHORITY_MASK | 1,
           value: TOKEN_MINT_MASK,
         }),
-      ])
+      ]),
     );
   });
 });
@@ -508,7 +507,7 @@ describe('Template execution with fee tokens', () => {
 
     // Expecting the transaction to fail validation with negative HTR balance
     await expect(sendTx.runFromMining()).rejects.toThrow(
-      'full validation failed: Fee amount is different than expected. (amount=0, expected=4)'
+      'full validation failed: Fee amount is different than expected. (amount=0, expected=4)',
     );
 
     // Check the wallet balance to verify nothing was spent from the wallet

@@ -5,24 +5,31 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
 import { crypto } from 'bitcore-lib';
+import { get } from 'lodash';
 import { z } from 'zod';
-import transactionUtils from '../utils/transaction';
-import tokensUtils from '../utils/tokens';
-import SendTransaction from '../new/sendTransaction';
-import Network from '../models/network';
-import ScriptData from '../models/script_data';
+
 import ncApi from '../api/nano';
-import { hexToBuffer } from '../utils/buffer';
+import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
+import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
+import Address from '../models/address';
+import Network from '../models/network';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
-import Address from '../models/address';
+import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
-import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
-import { FullNodeTxResponse, OutputType, IHathorWallet } from '../wallet/types';
+import SendTransaction from '../new/sendTransaction';
+import HathorWallet from '../new/wallet';
 import { IHistoryTx, IStorage, ITokenData, OutputValueType } from '../types';
+import { hexToBuffer } from '../utils/buffer';
 import { parseScript } from '../utils/scripts';
+import tokensUtils from '../utils/tokens';
+import transactionUtils from '../utils/transaction';
+import { FullNodeTxResponse, OutputType, IHathorWallet } from '../wallet/types';
+
+import { isSignedDataField } from './fields';
+import NanoContractHeader from './header';
+import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
 import {
   MethodArgInfo,
   ActionTypeToActionHeaderType,
@@ -31,11 +38,6 @@ import {
   NanoContractActionType,
   IArgumentField,
 } from './types';
-import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
-import { getFieldParser, normalizeTypeString } from './ncTypes/parser';
-import { isSignedDataField } from './fields';
-import HathorWallet from '../new/wallet';
-import NanoContractHeader from './header';
 
 /**
  * Set the caller address and seqnum on a nano contract header.
@@ -48,7 +50,7 @@ import NanoContractHeader from './header';
 export const setNanoHeaderCallerFromWallet = async (
   nanoHeader: NanoContractHeader,
   address: string,
-  wallet: IHathorWallet
+  wallet: IHathorWallet,
 ): Promise<void> => {
   const newAddress = new Address(address, { network: wallet.getNetworkObject() });
   newAddress.validateAddress();
@@ -70,7 +72,7 @@ export const setNanoHeaderCallerFromWallet = async (
 export const prepareNanoSendTransaction = async (
   tx: Transaction,
   pin: string,
-  storage: IStorage
+  storage: IStorage,
 ): Promise<SendTransaction> => {
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
@@ -131,7 +133,7 @@ export async function getOracleSignedDataFromUser(
   argType: string,
   value: unknown,
   wallet: IHathorWallet,
-  options: { pinCode?: string } = {}
+  options: { pinCode?: string } = {},
 ) {
   const field = getFieldParser(argType, wallet.getNetworkObject());
   if (!isSignedDataField(field)) {
@@ -165,7 +167,7 @@ export const getOracleInputData = async (
   contractId: string,
   resultSerialized: Buffer,
   wallet: IHathorWallet,
-  options: { pinCode?: string } = {}
+  options: { pinCode?: string } = {},
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
   const actualValue = Buffer.concat([ncId, resultSerialized]);
@@ -184,7 +186,7 @@ export const unsafeGetOracleInputData = async (
   oracleData: Buffer,
   resultSerialized: Buffer,
   wallet: IHathorWallet,
-  options: { pinCode?: string } = {}
+  options: { pinCode?: string } = {},
 ): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
@@ -202,7 +204,7 @@ export const unsafeGetOracleInputData = async (
 
     const signatureOracle = transactionUtils.getSignature(
       crypto.Hash.sha256(resultSerialized),
-      oracleKey
+      oracleKey,
     );
     const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
@@ -228,7 +230,7 @@ export const validateAndParseBlueprintMethodArgs = async (
   blueprintId: string,
   method: string,
   args: unknown[] | null,
-  network: Network
+  network: Network,
 ): Promise<IArgumentField[]> => {
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
@@ -236,7 +238,7 @@ export const validateAndParseBlueprintMethodArgs = async (
   const methodArgs = get(
     blueprintInformation,
     `public_methods.${method}.args`,
-    []
+    [],
   ) as MethodArgInfo[];
   if (!methodArgs) {
     throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
@@ -249,7 +251,7 @@ export const validateAndParseBlueprintMethodArgs = async (
   const argsLen = args.length;
   if (argsLen !== methodArgs.length) {
     throw new NanoContractTransactionError(
-      `Method needs ${methodArgs.length} parameters but data has ${args.length}.`
+      `Method needs ${methodArgs.length} parameters but data has ${args.length}.`,
     );
   }
 
@@ -294,7 +296,7 @@ export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
  */
 export const mapActionToActionHeader = (
   action: NanoContractAction,
-  tokens: string[]
+  tokens: string[],
 ): NanoContractActionHeader => {
   const headerActionType = ActionTypeToActionHeaderType[action.type];
 
@@ -332,7 +334,7 @@ export const mapActionToActionHeader = (
  * @returns A promise resolving to [null, result] on success or [error, null] on failure.
  */
 export const getResultHelper = async <T>(
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
 ): Promise<[Error | null, T | null]> => {
   try {
     const result = await fn();
@@ -368,11 +370,11 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
   }
 
   const [stateError, stateResponse] = await getResultHelper(() =>
-    ncApi.getNanoContractState(ncId!, [], [], [])
+    ncApi.getNanoContractState(ncId!, [], [], []),
   );
   if (stateError || !stateResponse?.blueprint_id) {
     throw new NanoContractTransactionError(
-      `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
+      `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`,
     );
   }
 

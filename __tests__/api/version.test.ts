@@ -1,5 +1,6 @@
-import MockAdapter from 'axios-mock-adapter';
 import axios, { AxiosError } from 'axios';
+import MockAdapter from 'axios-mock-adapter';
+
 import versionApi from '../../src/api/version';
 
 describe('versionApi', () => {

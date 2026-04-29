@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import P2SH from '../../src/models/p2sh';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
+import P2SH from '../../src/models/p2sh';
 
 test('createScript', () => {
   const testnet = new Network('testnet');

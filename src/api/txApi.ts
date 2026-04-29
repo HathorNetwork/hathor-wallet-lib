@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { createRequestInstance } from './axiosInstance';
 import { transformJsonBigIntResponse } from '../utils/bigint';
+
+import { createRequestInstance } from './axiosInstance';
 import {
   FullNodeTxApiResponse,
   GraphvizNeighboursResponse,
@@ -43,7 +44,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -104,7 +105,7 @@ const txApi = {
         },
         res => {
           Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -128,7 +129,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -152,7 +153,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -177,7 +178,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -201,7 +202,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -221,7 +222,7 @@ const txApi = {
     tx: string,
     graphType: string,
     maxLevel: number,
-    resolve: (response: GraphvizNeighboursResponse) => void
+    resolve: (response: GraphvizNeighboursResponse) => void,
   ): Promise<void> {
     // TODO: This method uses a callback pattern but also returns a Promise, which is an anti-pattern
     // NOTE: createRequestInstance has legacy typing (resolve?: null) that doesn't match actual usage.
@@ -234,7 +235,7 @@ const txApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 

@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IHathorWallet, TokenInfo, Utxo } from '../wallet/types';
 import { FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
-import { IDataInput, IDataOutputWithToken, ITokenData, IUtxo, TokenVersion } from '../types';
 import Output from '../models/output';
-import HathorWallet from '../new/wallet';
 import { NanoContractAction, NanoContractActionType } from '../nano_contracts/types';
+import HathorWallet from '../new/wallet';
+import { IDataInput, IDataOutputWithToken, ITokenData, IUtxo, TokenVersion } from '../types';
+import { IHathorWallet, TokenInfo, Utxo } from '../wallet/types';
 
 type TokenElement = IDataInput | Utxo | IUtxo | IDataInput | IDataOutputWithToken | Output;
 
@@ -38,7 +38,7 @@ export class Fee {
     inputs: (IDataInput | Utxo | IUtxo)[],
     outputs: (IDataOutputWithToken | Output)[],
     tokens: Map<string, ITokenData | TokenInfo>,
-    actions?: NanoContractAction[]
+    actions?: NanoContractAction[],
   ): Promise<bigint> {
     const nonAuthorityInputs = Fee.groupTokenElementsByTokenUid(inputs);
     const nonAuthorityOutputs = Fee.groupTokenElementsByTokenUid(outputs);
@@ -106,7 +106,7 @@ export class Fee {
     inputs: (IDataInput | Utxo | IUtxo)[],
     outputs: (IDataOutputWithToken | Output)[],
     tokens: string[],
-    actions?: NanoContractAction[]
+    actions?: NanoContractAction[],
   ): Promise<{ fee: bigint; tokensMap: Map<string, ITokenData> }> {
     const tokensMap = new Map<string, ITokenData>();
 
@@ -150,7 +150,7 @@ export class Fee {
    * @static
    */
   static getNonAuthorityTokenElement(
-    outputs: (TokenElement | Omit<TokenElement, 'token'>)[]
+    outputs: (TokenElement | Omit<TokenElement, 'token'>)[],
   ): (TokenElement | Omit<TokenElement, 'token'>)[] {
     return outputs.filter(output => !Fee.isAuthorityTokenElement(output as never)); // casting to never since we don't need the token property here.
   }

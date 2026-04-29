@@ -16,15 +16,16 @@
  */
 
 import Mnemonic from 'bitcore-mnemonic';
+
 import { HathorWalletServiceWallet, Storage } from '../../../src';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../../src/constants';
 import { WalletFromXPubGuard } from '../../../src/errors';
+import Network from '../../../src/models/network';
 import { decryptData } from '../../../src/utils/crypto';
 import walletUtils from '../../../src/utils/wallet';
-import Network from '../../../src/models/network';
+import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { NETWORK_NAME } from '../configuration/test-constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
-import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { deriveXpubFromSeed } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 

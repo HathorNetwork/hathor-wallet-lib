@@ -5,20 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PartialTx, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
-import Network from '../../src/models/network';
-import Address from '../../src/models/address';
-import dateFormatter from '../../src/utils/date';
-
-import { UnsupportedScriptError } from '../../src/errors';
+import txApi from '../../src/api/txApi';
 import {
   NATIVE_TOKEN_UID,
   DEFAULT_TX_VERSION,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../../src/constants';
-import txApi from '../../src/api/txApi';
+import { UnsupportedScriptError } from '../../src/errors';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
 import P2PKH from '../../src/models/p2pkh';
+import { PartialTx, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
+import dateFormatter from '../../src/utils/date';
 import transaction from '../../src/utils/transaction';
 
 describe('PartialTx.getTxData', () => {
@@ -56,7 +55,7 @@ describe('PartialTx.getTxData', () => {
         outputs: [],
         tokens: [],
         version: DEFAULT_TX_VERSION,
-      })
+      }),
     );
   });
 
@@ -80,7 +79,7 @@ describe('PartialTx.getTxData', () => {
       expect.objectContaining({
         inputs: [0, 1, 2, 3, 4],
         outputs: [10, 9, 8],
-      })
+      }),
     );
   });
 });
@@ -204,7 +203,7 @@ describe('PartialTx.addInput', () => {
         authorities: 0n,
         value: 1n,
         address: 'W123',
-      })
+      }),
     );
     partialTx.addInput('hash1', 0, 1n, 'W123', { token: '1', authorities: 0n });
     expect(partialTx.inputs).toEqual(expected);
@@ -218,7 +217,7 @@ describe('PartialTx.addInput', () => {
         authorities: 0n,
         value: 27n,
         address: 'Wabc',
-      })
+      }),
     );
     partialTx.addInput('hash2', 1, 27n, 'Wabc');
     expect(partialTx.inputs).toEqual(expected);
@@ -232,7 +231,7 @@ describe('PartialTx.addInput', () => {
         authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
         value: 1056n,
         address: 'W1b3',
-      })
+      }),
     );
     partialTx.addInput('hash3', 10, 1056n, 'W1b3', {
       token: '1',
@@ -258,7 +257,7 @@ describe('PartialTx.addOutput', () => {
         value: 27n,
         script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
         authorities: TOKEN_MELT_MASK,
-      })
+      }),
     );
     partialTx.addOutput(27n, Buffer.from([230, 148, 32]), {
       token: '1',
@@ -274,7 +273,7 @@ describe('PartialTx.addOutput', () => {
         value: 72n,
         script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
         authorities: 0n,
-      })
+      }),
     );
     partialTx.addOutput(72n, Buffer.from([1, 2, 3]), { token: '2' });
     expect(partialTx.outputs).toEqual(expected);

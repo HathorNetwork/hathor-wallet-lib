@@ -5,9 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PartialTxInputData } from '../../src/models/partial_tx';
-
 import { IndexOOBError } from '../../src/errors';
+import { PartialTxInputData } from '../../src/models/partial_tx';
 
 describe('PartialTxInputData.addData', () => {
   it('should throw OOB error when index is OOB', () => {

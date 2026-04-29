@@ -6,6 +6,7 @@
  */
 
 import { HDPublicKey } from 'bitcore-lib';
+
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';

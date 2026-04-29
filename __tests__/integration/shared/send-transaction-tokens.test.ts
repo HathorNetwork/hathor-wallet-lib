@@ -13,14 +13,14 @@
  * ({@link HathorWalletServiceWallet}) facades.
  */
 
-import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import Header from '../../../src/headers/base';
+import FeeHeader from '../../../src/headers/fee';
 import { TokenVersion } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { IWalletTestAdapter } from '../adapters/types';
 import { TOKEN_DATA } from '../configuration/test-constants';
-import FeeHeader from '../../../src/headers/fee';
-import Header from '../../../src/headers/base';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -102,7 +102,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       wallet,
       (await wallet.getAddressAtIndex(5))!,
       8000n,
-      { token: tokenUid, changeAddress: (await wallet.getAddressAtIndex(6))! }
+      { token: tokenUid, changeAddress: (await wallet.getAddressAtIndex(6))! },
     );
     validateFeeAmount(tx1.headers, 2n);
 
@@ -115,7 +115,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       wallet,
       (await externalWallet.getAddressAtIndex(0))!,
       82n,
-      { token: tokenUid }
+      { token: tokenUid },
     );
     validateFeeAmount(tx2.headers, 2n);
 
@@ -141,14 +141,14 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       wallet,
       (await wallet.getAddressAtIndex(5))!,
       200n,
-      { token: tokenUid }
+      { token: tokenUid },
     );
     validateFeeAmount(tx.headers, 1n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     // Exactly one token output (destination, no change)
     const tokenOutputs = fullTx.tx.outputs.filter(
-      (o: { token_data: number }) => o.token_data !== 0
+      (o: { token_data: number }) => o.token_data !== 0,
     );
     expect(tokenOutputs).toHaveLength(1);
     expect(tokenOutputs[0].value).toBe(200n);
@@ -172,7 +172,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
         address: (await wallet.getAddressAtIndex(i))!,
         value: 100n,
         token: tokenUid,
-      }))
+      })),
     );
 
     // 5 token outputs × 1n HTR each = 5n HTR fee, 4n HTR remaining
@@ -181,7 +181,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     const tokenOutputs = fullTx.tx.outputs.filter(
-      (o: { token_data: number }) => o.token_data !== 0
+      (o: { token_data: number }) => o.token_data !== 0,
     );
     expect(tokenOutputs).toHaveLength(5);
     tokenOutputs.forEach((o: { value: bigint }) => expect(o.value).toBe(100n));
@@ -202,7 +202,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       100n,
       {
         tokenVersion: TokenVersion.FEE,
-      }
+      },
     );
 
     const { utxos: utxosHtr } = await adapter.getUtxos(wallet, { token: NATIVE_TOKEN_UID });
@@ -220,14 +220,14 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
           { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
           { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
         ],
-      }
+      },
     );
     validateFeeAmount(tx.headers, 2n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);
     expect(fullTx.tx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token_data: 1 })
+      expect.objectContaining({ value: 50n, token_data: 1 }),
     );
   });
 
@@ -244,7 +244,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       100n,
       {
         tokenVersion: TokenVersion.FEE,
-      }
+      },
     );
 
     const { utxos: utxosHtr } = await adapter.getUtxos(wallet, { token: NATIVE_TOKEN_UID });
@@ -262,14 +262,14 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
           { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
           { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
         ],
-      }
+      },
     );
     validateFeeAmount(tx.headers, 2n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);
     expect(fullTx.tx.outputs).toContainEqual(
-      expect.objectContaining({ value: 50n, token_data: TOKEN_DATA.TOKEN })
+      expect.objectContaining({ value: 50n, token_data: TOKEN_DATA.TOKEN }),
     );
   });
 });

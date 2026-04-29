@@ -8,6 +8,7 @@
 import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import _ from 'lodash';
+
 import {
   HD_WALLET_ENTROPY,
   HATHOR_BIP44_CODE,
@@ -15,11 +16,9 @@ import {
   P2PKH_ACCT_PATH,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
-import { OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
-import helpers from './helpers';
-
+import { OP_0 } from '../opcodes';
 import {
   IEncryptedData,
   IMultisigData,
@@ -27,7 +26,9 @@ import {
   WalletType,
   WALLET_FLAGS,
 } from '../types';
+
 import { encryptData, decryptData } from './crypto';
+import helpers from './helpers';
 
 const wallet = {
   /**
@@ -136,7 +137,7 @@ const wallet = {
     pubkey: Buffer,
     chainCode: Buffer,
     fingerprint: Buffer,
-    networkName: string = 'mainnet'
+    networkName: string = 'mainnet',
   ): string {
     const network = new Network(networkName);
     const hdpubkey = new HDPublicKey({
@@ -172,7 +173,7 @@ const wallet = {
     fingerprint: number,
     depth: number,
     childIndex: number,
-    networkName: string
+    networkName: string,
   ): string {
     const network = new Network(networkName);
     const hdprivkey = new HDPrivateKey({
@@ -267,7 +268,7 @@ const wallet = {
    */
   getXPubKeyFromSeed(
     seed: string,
-    options: { passphrase?: string; networkName?: string; accountDerivationIndex?: string } = {}
+    options: { passphrase?: string; networkName?: string; accountDerivationIndex?: string } = {},
   ): string {
     const methodOptions = {
       passphrase: '',
@@ -298,7 +299,7 @@ const wallet = {
    */
   getXPrivKeyFromSeed(
     seed: string,
-    options: { passphrase?: string; networkName?: string } = {}
+    options: { passphrase?: string; networkName?: string } = {},
   ): HDPrivateKey {
     const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const { passphrase, networkName } = methodOptions;
@@ -381,13 +382,13 @@ const wallet = {
       xpubs.map(xp => new HDPublicKey(xp)),
       (xpub: HDPublicKey) => {
         return xpub.publicKey.toString('hex');
-      }
+      },
     );
 
     // xpub comes derived to m/45'/280'/0'
     // Derive to m/45'/280'/0'/0/index
     const pubkeys = sortedXpubs.map(
-      (xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey
+      (xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey,
     );
 
     // bitcore-lib sorts the public keys by default before building the script
@@ -446,7 +447,7 @@ const wallet = {
    */
   getMultiSigXPubFromWords(
     seed: string,
-    options: { passphrase?: string; networkName?: string } = {}
+    options: { passphrase?: string; networkName?: string } = {},
   ): string {
     const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
@@ -473,7 +474,7 @@ const wallet = {
    */
   generateAccessDataFromXpub(
     xpubkey: string,
-    { multisig, hardware = false }: { multisig?: IMultisigData; hardware?: boolean } = {}
+    { multisig, hardware = false }: { multisig?: IMultisigData; hardware?: boolean } = {},
   ): IWalletAccessData {
     let walletFlags = 0 | WALLET_FLAGS.READONLY;
     if (hardware) {
@@ -562,7 +563,7 @@ const wallet = {
       seed?: string;
       password?: string;
       authXpriv?: string;
-    }
+    },
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -651,7 +652,7 @@ const wallet = {
       password: string;
       passphrase?: string;
       networkName: string;
-    }
+    },
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -714,7 +715,7 @@ const wallet = {
   changeEncryptionPin(
     accessData: IWalletAccessData,
     oldPin: string,
-    newPin: string
+    newPin: string,
   ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
     if (!(data.mainKey || data.authKey || data.acctPathKey)) {
@@ -754,7 +755,7 @@ const wallet = {
   changeEncryptionPassword(
     accessData: IWalletAccessData,
     oldPassword: string,
-    newPassword: string
+    newPassword: string,
   ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
     if (!data.words) {

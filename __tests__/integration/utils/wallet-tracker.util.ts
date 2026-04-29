@@ -6,6 +6,7 @@
  */
 
 import type { WalletStopOptions } from '../../../src/new/types';
+
 import { loggers } from './logger.util';
 
 interface Stoppable {

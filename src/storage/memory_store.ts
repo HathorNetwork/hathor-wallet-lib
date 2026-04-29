@@ -6,6 +6,8 @@
  */
 
 import { orderBy, cloneDeep } from 'lodash';
+
+import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import {
   IStore,
   IAddressInfo,
@@ -26,7 +28,6 @@ import {
   INcData,
   TokenVersion,
 } from '../types';
-import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -328,7 +329,7 @@ export class MemoryStore implements IStore {
     if (markAsUsed) {
       // Will move the address index only if we have not reached the gap limit
       await this.setCurrentAddressIndex(
-        Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1)
+        Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1),
       );
     }
     return addressInfo.base58;
@@ -467,7 +468,7 @@ export class MemoryStore implements IStore {
     }
     if (this.walletData.currentAddressIndex < maxIndex) {
       await this.setCurrentAddressIndex(
-        Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex)
+        Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex),
       );
     }
     this.walletData.lastUsedAddressIndex = maxIndex;
@@ -927,7 +928,7 @@ export class MemoryStore implements IStore {
   async cleanStorage(
     cleanHistory: boolean = false,
     cleanAddresses: boolean = false,
-    cleanTokens: boolean = false
+    cleanTokens: boolean = false,
   ): Promise<void> {
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();

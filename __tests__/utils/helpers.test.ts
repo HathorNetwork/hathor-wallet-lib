@@ -6,18 +6,9 @@
  */
 
 import buffer from 'buffer';
-import helpers from '../../src/utils/helpers';
-import Network from '../../src/models/network';
-import dateFormatter from '../../src/utils/date';
-import Address from '../../src/models/address';
-import P2PKH from '../../src/models/p2pkh';
-import P2SH from '../../src/models/p2sh';
-import ScriptData from '../../src/models/script_data';
-import { OP_PUSHDATA1 } from '../../src/opcodes';
-import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../../src/constants';
-import Transaction from '../../src/models/transaction';
-import CreateTokenTransaction from '../../src/models/create_token_transaction';
+
 import config from '../../src/config';
+import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../../src/constants';
 import {
   AddressError,
   OutputValueError,
@@ -26,6 +17,16 @@ import {
   MaximumNumberInputsError,
   MaximumNumberOutputsError,
 } from '../../src/errors';
+import Address from '../../src/models/address';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import Network from '../../src/models/network';
+import P2PKH from '../../src/models/p2pkh';
+import P2SH from '../../src/models/p2sh';
+import ScriptData from '../../src/models/script_data';
+import Transaction from '../../src/models/transaction';
+import { OP_PUSHDATA1 } from '../../src/opcodes';
+import dateFormatter from '../../src/utils/date';
+import helpers from '../../src/utils/helpers';
 
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
@@ -122,7 +123,7 @@ test('createTxFromBytes and Hex', () => {
   // Testing fromBytes
   expect(helpers.createTxFromBytes(defaulttxbytes, testnet)).toEqual('default-transaction');
   expect(helpers.createTxFromBytes(createTokentxbytes, testnet)).toEqual(
-    'create-token-transaction'
+    'create-token-transaction',
   );
   expect(() => {
     helpers.createTxFromBytes(errorTxBytes, testnet);
@@ -130,10 +131,10 @@ test('createTxFromBytes and Hex', () => {
 
   // Testing fromHex
   expect(helpers.createTxFromHex(defaulttxbytes.toString('hex'), testnet)).toEqual(
-    'default-transaction'
+    'default-transaction',
   );
   expect(helpers.createTxFromHex(createTokentxbytes.toString('hex'), testnet)).toEqual(
-    'create-token-transaction'
+    'create-token-transaction',
   );
   expect(() => {
     helpers.createTxFromHex(errorTxBytes.toString('hex'), testnet);
@@ -335,7 +336,7 @@ test('fixAxiosConfig', () => {
 
 test('getShortHash', () => {
   expect(helpers.getShortHash(`123456123456${Array(40).fill(0).join('')}654321654321`)).toEqual(
-    '123456123456...654321654321'
+    '123456123456...654321654321',
   );
 });
 

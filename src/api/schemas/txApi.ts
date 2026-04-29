@@ -6,8 +6,9 @@
  */
 
 import { z } from 'zod';
-import { bigIntCoercibleSchema } from '../../utils/bigint';
+
 import { IHistoryNanoContractContextSchema } from '../../schemas';
+import { bigIntCoercibleSchema } from '../../utils/bigint';
 
 const p2pkhDecodedScriptSchema = z.object({
   type: z.literal('P2PKH'),

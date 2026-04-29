@@ -16,8 +16,8 @@
 
 import type { HathorWalletServiceWallet } from '../../../src';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 
 const adapter = new ServiceWalletTestAdapter();
 

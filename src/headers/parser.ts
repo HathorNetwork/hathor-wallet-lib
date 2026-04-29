@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { VertexHeaderId } from './types';
-import { HeaderStaticType } from './base';
 import NanoContractHeader from '../nano_contracts/header';
+
+import { HeaderStaticType } from './base';
 import FeeHeader from './fee';
+import { VertexHeaderId } from './types';
 
 export default class HeaderParser {
   static getSupportedHeaders(): Record<VertexHeaderId, HeaderStaticType> {

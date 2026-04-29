@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 import EventEmitter from 'events';
+
 import PriorityQueue from './priority_queue';
 
 type TaskOptions = { signal?: AbortSignal };
@@ -188,7 +189,7 @@ export default class PromiseQueue extends EventEmitter {
         () => {
           reject(signal.reason);
         },
-        { once: true }
+        { once: true },
       );
     });
   }
@@ -233,7 +234,7 @@ export default class PromiseQueue extends EventEmitter {
             this.emit('finished_job');
             this.#next();
           }
-        })
+        }),
       );
       // Try to start the job we enqueued and any other we can start
       this.processQueue();

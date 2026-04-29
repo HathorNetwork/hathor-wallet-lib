@@ -5,8 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NanoContractActionHeader } from './types';
+import Header from '../headers/base';
+import {
+  getVertexHeaderIdBuffer,
+  getVertexHeaderIdFromBuffer,
+  VertexHeaderId,
+} from '../headers/types';
+import Address from '../models/address';
+import Network from '../models/network';
 import type Transaction from '../models/transaction';
+import { OutputValueType } from '../types';
 import {
   bytesToOutputValue,
   hexToBuffer,
@@ -17,15 +25,8 @@ import {
 } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
 import leb128Util from '../utils/leb128';
-import {
-  getVertexHeaderIdBuffer,
-  getVertexHeaderIdFromBuffer,
-  VertexHeaderId,
-} from '../headers/types';
-import Header from '../headers/base';
-import Address from '../models/address';
-import Network from '../models/network';
-import { OutputValueType } from '../types';
+
+import { NanoContractActionHeader } from './types';
 
 class NanoContractHeader extends Header {
   // It's the blueprint id when this header is calling a initialize method
@@ -60,7 +61,7 @@ class NanoContractHeader extends Header {
     actions: NanoContractActionHeader[],
     seqnum: number,
     address: Address,
-    script: Buffer | null = null
+    script: Buffer | null = null,
   ) {
     super();
     this.id = id;

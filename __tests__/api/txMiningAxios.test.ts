@@ -1,6 +1,6 @@
 import txMiningRequestClient from '../../src/api/txMiningAxios';
-import networkIntance from '../../src/network';
 import config from '../../src/config';
+import networkIntance from '../../src/network';
 
 let previousNetwork;
 

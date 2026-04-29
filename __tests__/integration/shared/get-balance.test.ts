@@ -17,11 +17,11 @@
  * - `service-specific/get-balance.test.ts`
  */
 
-import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { getRandomInt } from '../utils/core.util';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import type { IWalletTestAdapter } from '../adapters/types';
+import { getRandomInt } from '../utils/core.util';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),

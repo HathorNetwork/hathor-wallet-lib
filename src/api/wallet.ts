@@ -6,9 +6,11 @@
  */
 
 import { AxiosResponse } from 'axios';
-import { createRequestInstance } from './axiosInstance';
+
 import { SEND_TOKENS_TIMEOUT } from '../constants';
 import { transformJsonBigIntResponse } from '../utils/bigint';
+
+import { createRequestInstance } from './axiosInstance';
 import {
   AddressHistorySchema,
   addressHistorySchema,
@@ -51,7 +53,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -130,7 +132,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -157,7 +159,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -193,7 +195,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -215,7 +217,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -237,7 +239,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -260,7 +262,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 
@@ -298,7 +300,7 @@ const walletApi = {
         },
         res => {
           return Promise.reject(res);
-        }
+        },
       );
   },
 

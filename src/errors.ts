@@ -7,6 +7,7 @@
 
 // eslint-disable-next-line max-classes-per-file -- This file is supposed to export classes
 import { AxiosResponse } from 'axios';
+
 import { ErrorMessages } from './errorMessages';
 
 /**
@@ -341,7 +342,7 @@ export class NanoRequestError extends RequestError {
   constructor(
     message: string,
     originError: unknown | null = null,
-    response: AxiosResponse | null = null
+    response: AxiosResponse | null = null,
   ) {
     super(message);
     this.originError = originError;

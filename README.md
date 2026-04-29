@@ -14,6 +14,29 @@ const hathorLib = require('@hathor/wallet-lib');
 hathorLib.storage.setStore(storageFactory);
 ```
 
+## Contributing
+
+### Pre-commit hooks
+
+The repository uses `husky` + `lint-staged` to run `eslint --fix` and
+`prettier --write` on staged JS/TS files before each commit. Setup is
+automatic — running `npm install` triggers the `prepare` script which
+wires the hooks. To skip the hook for a one-off commit, use
+`git commit --no-verify`.
+
+### Bulk reformat history
+
+Import ordering and trailing-comma style were rolled out in a single
+mass-reformat commit recorded in `.git-blame-ignore-revs`. To make
+local `git blame` skip that commit and surface real authors, run once
+per clone:
+
+```sh
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+GitHub's web blame view honors this file automatically.
+
 ## Release Process (Claude Code)
 
 This project includes a Claude Code skill for managing releases. Available commands:

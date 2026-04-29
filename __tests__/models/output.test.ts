@@ -6,12 +6,7 @@
  */
 
 import buffer from 'buffer';
-import Output from '../../src/models/output';
-import Address from '../../src/models/address';
-import P2PKH from '../../src/models/p2pkh';
-import Network from '../../src/models/network';
-import { OutputValueError, ParseScriptError } from '../../src/errors';
-import { parseP2PKH } from '../../src/utils/scripts';
+
 import {
   AUTHORITY_TOKEN_DATA,
   TOKEN_MINT_MASK,
@@ -19,6 +14,12 @@ import {
   MAX_OUTPUT_VALUE,
   MAX_OUTPUT_VALUE_32,
 } from '../../src/constants';
+import { OutputValueError, ParseScriptError } from '../../src/errors';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
+import Output from '../../src/models/output';
+import P2PKH from '../../src/models/p2pkh';
+import { parseP2PKH } from '../../src/utils/scripts';
 
 const address = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
 const p2pkh = new P2PKH(address);
@@ -48,19 +49,19 @@ test('Validate value', () => {
   // Value greater than 32 bytes max
   const o5 = new Output(MAX_OUTPUT_VALUE_32 + 1n, p2pkhScript);
   expect(o5.valueToBytes()).toStrictEqual(
-    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x80, 0x0, 0x0, 0x0])
+    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x80, 0x0, 0x0, 0x0]),
   );
 
   // Value smaller than max
   const o6 = new Output(MAX_OUTPUT_VALUE - 1n, p2pkhScript);
   expect(o6.valueToBytes()).toStrictEqual(
-    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01])
+    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01]),
   );
 
   // Value equal to max
   const o7 = new Output(MAX_OUTPUT_VALUE, p2pkhScript);
   expect(o7.valueToBytes()).toStrictEqual(
-    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    buffer.Buffer.from([0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]),
   );
 
   // Value bigger than the max is invalid

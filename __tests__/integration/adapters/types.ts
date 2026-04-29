@@ -6,11 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
-import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
 import type Transaction from '../../../src/models/transaction';
 import type { IHistoryTx, IStorage, TokenVersion, AuthorityType } from '../../../src/types';
-import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
+import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
+import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
 /**
  * The codebase has three overlapping wallet types: the {@link IHathorWallet} interface
@@ -138,7 +138,7 @@ export interface IWalletTestAdapter {
    */
   startWallet(
     wallet: FuzzyWalletType,
-    options?: { pinCode?: string; password?: string }
+    options?: { pinCode?: string; password?: string },
   ): Promise<void>;
 
   /**
@@ -188,7 +188,7 @@ export interface IWalletTestAdapter {
     wallet: FuzzyWalletType,
     address: string,
     amount: bigint,
-    options?: SendTransactionOptions
+    options?: SendTransactionOptions,
   ): Promise<SendTransactionResult>;
 
   /**
@@ -214,7 +214,7 @@ export interface IWalletTestAdapter {
     name: string,
     symbol: string,
     amount: bigint,
-    options?: CreateTokenOptions
+    options?: CreateTokenOptions,
   ): Promise<CreateTokenResult>;
 
   // --- UTXO queries ---
@@ -234,7 +234,7 @@ export interface IWalletTestAdapter {
   sendManyOutputsTransaction(
     wallet: FuzzyWalletType,
     outputs: AdapterOutput[],
-    options?: SendManyOutputsAdapterOptions
+    options?: SendManyOutputsAdapterOptions,
   ): Promise<SendTransactionResult>;
 
   // --- Authority UTXOs ---
@@ -247,7 +247,7 @@ export interface IWalletTestAdapter {
     wallet: FuzzyWalletType,
     tokenUid: string,
     type: AuthorityType,
-    options?: GetAuthorityUtxosOptions
+    options?: GetAuthorityUtxosOptions,
   ): Promise<AuthorityUtxoResult[]>;
 
   // --- Authority delegation ---
@@ -261,7 +261,7 @@ export interface IWalletTestAdapter {
     tokenUid: string,
     type: AuthorityType,
     destinationAddress: string,
-    options?: DelegateAuthorityAdapterOptions
+    options?: DelegateAuthorityAdapterOptions,
   ): Promise<DelegateAuthorityResult>;
 }
 

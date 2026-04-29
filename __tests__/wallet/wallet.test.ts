@@ -5,23 +5,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// Must load before any module that imports walletServiceAxios — the helper
+// registers a module-level jest.mock() and Jest only auto-hoists jest.mock
+// calls in the test file itself, not in transitively-imported helpers.
+// eslint-disable-next-line import/order
+import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
+
+// Must load before SendTransactionWalletService to avoid a circular-import
+// race when the jest.mock factory below calls requireActual: the cycle leaves
+// the SendTransactionWalletService default export undefined if loaded first.
+// eslint-disable-next-line import/order
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
+
 import { Message } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
-import Network from '../../src/models/network';
-import {
-  GetAddressesObject,
-  WsTransaction,
-  CreateWalletAuthData,
-  AddressInfoObject,
-} from '../../src/wallet/types';
+
 import config from '../../src/config';
 import {
-  buildSuccessTxByIdTokenDataResponse,
-  buildWalletToAuthenticateApiCall,
-  defaultWalletSeed,
-} from '../__mock_helpers__/wallet-service.fixtures';
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  NATIVE_TOKEN_UID,
+} from '../../src/constants';
 import {
   TxNotFoundError,
   SendTxError,
@@ -29,27 +34,33 @@ import {
   WalletRequestError,
   UtxoError,
 } from '../../src/errors';
-import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
-import transaction from '../../src/utils/transaction';
-import {
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-  WALLET_SERVICE_AUTH_DERIVATION_PATH,
-  NATIVE_TOKEN_UID,
-} from '../../src/constants';
+import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
-import walletApi from '../../src/wallet/api/walletApi';
-import walletUtils from '../../src/utils/wallet';
-import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { AuthorityType, IHistoryTx, IWalletAccessData, TokenVersion } from '../../src/types';
-import { mockGetToken } from '../__mock_helpers__/get-token.mock';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { Fee } from '../../src/utils/fee';
+import transaction from '../../src/utils/transaction';
+import walletUtils from '../../src/utils/wallet';
+import walletApi from '../../src/wallet/api/walletApi';
+import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
+import {
+  GetAddressesObject,
+  WsTransaction,
+  CreateWalletAuthData,
+  AddressInfoObject,
+} from '../../src/wallet/types';
+import { mockGetToken } from '../__mock_helpers__/get-token.mock';
+import {
+  buildSuccessTxByIdTokenDataResponse,
+  buildWalletToAuthenticateApiCall,
+  defaultWalletSeed,
+} from '../__mock_helpers__/wallet-service.fixtures';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
 jest.mock('../../src/wallet/sendTransactionWalletService', () => {
   const ActualSendTransactionWalletService = jest.requireActual(
-    '../../src/wallet/sendTransactionWalletService'
+    '../../src/wallet/sendTransactionWalletService',
   ).default;
 
   return jest.fn().mockImplementation((...args) => {
@@ -110,7 +121,7 @@ const setupFeeTokenMocks = {
     tokenId: string,
     authorityMask: bigint,
     tokenName = 'Fee Token',
-    tokenSymbol = 'FBT'
+    tokenSymbol = 'FBT',
   ) => {
     mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
       success: true,
@@ -173,7 +184,7 @@ const setupFeeTokenMocks = {
     authorityType: AuthorityType,
     addresses: string[],
     tokenName = 'Fee Token',
-    tokenSymbol = 'FBT'
+    tokenSymbol = 'FBT',
   ) => {
     const code = new Mnemonic(seed);
     const xpriv = code.toHDPrivateKey('', network.getNetwork());
@@ -234,7 +245,7 @@ const setupFeeTokenMocks = {
     network: Network,
     tokenId: string,
     authorityType: AuthorityType,
-    addresses: string[]
+    addresses: string[],
   ) => {
     const authorityMask = authorityType === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
     setupFeeTokenMocks.setupApiMocks(addresses, tokenId, authorityMask);
@@ -268,7 +279,7 @@ test('getAddressAtIndex', async () => {
     Promise.resolve({
       success: true,
       addresses: [address],
-    })
+    }),
   );
 
   const addressAtIndex = await wallet.getAddressAtIndex(0);
@@ -279,7 +290,7 @@ test('getAddressAtIndex', async () => {
     Promise.resolve({
       success: false,
       addresses: [],
-    })
+    }),
   );
 
   await expect(wallet.getAddressAtIndex(0)).rejects.toThrow('Error getting wallet addresses.');
@@ -718,7 +729,7 @@ test('checkAddressesMine', async () => {
   });
 
   await expect(wallet.checkAddressesMine([addr1, addr2, addr3])).rejects.toThrow(
-    'Error checking wallet addresses.'
+    'Error checking wallet addresses.',
   );
 });
 
@@ -769,7 +780,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
 
   const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
   const authXpubMessage = new Message(
-    String(timestampNow).concat(walletId).concat(authXpubAddress)
+    String(timestampNow).concat(walletId).concat(authXpubAddress),
   );
 
   expect(authData.xpub).toBe(xpub);
@@ -799,7 +810,7 @@ test('generateCreateWalletAuthData should derive correct auth data from the seed
 
   const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(
     {} as IWalletAccessData,
-    pin
+    pin,
   );
   const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
@@ -815,7 +826,7 @@ test('generateCreateWalletAuthData should derive correct auth data from the seed
 
   const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
   const authXpubMessage = new Message(
-    String(timestampNow).concat(walletId).concat(authXpubAddress)
+    String(timestampNow).concat(walletId).concat(authXpubAddress),
   );
 
   expect(authData.xpub).toBe(xpub);
@@ -997,7 +1008,7 @@ test('prepareMintTokens', async () => {
       createAnotherMint: true,
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
@@ -1008,7 +1019,7 @@ test('prepareMintTokens', async () => {
       mintAuthorityAddress: 'abc',
       allowExternalMintAuthorityAddress: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // mint data without sign the transaction
@@ -1046,7 +1057,7 @@ test('prepareMintTokens', async () => {
   expect(mintData.outputs).toHaveLength(2);
 
   const authorityOutputs = mintData.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   expect(authorityOutputs).toHaveLength(1);
@@ -1171,7 +1182,7 @@ test('prepareMintTokensData - fee token without enough HTR', async () => {
       createAnotherMint: true,
       mintAuthorityAddress: addresses[2],
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(UtxoError);
 
   _spyGetUtxos.mockRestore();
@@ -1299,7 +1310,7 @@ test('prepareMintTokensData - fee token with change, mint, and melt authority ou
 
   expect(result.outputs).toHaveLength(3);
   const authorityOutputs = result.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
   expect(authorityOutputs).toHaveLength(1);
   expect(authorityOutputs[0].value).toEqual(TOKEN_MINT_MASK);
@@ -1425,7 +1436,7 @@ test('prepareMeltTokens', async () => {
       createAnotherMelt: true,
       meltAuthorityAddress: 'abc',
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
@@ -1436,7 +1447,7 @@ test('prepareMeltTokens', async () => {
       meltAuthorityAddress: 'abc',
       allowExternalMeltAuthorityAddress: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // melt data without sign the transaction
@@ -1474,7 +1485,7 @@ test('prepareMeltTokens', async () => {
   expect(meltData.outputs).toHaveLength(1);
 
   const authorityOutputs = meltData.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   expect(authorityOutputs).toHaveLength(1);
@@ -1622,7 +1633,7 @@ test('prepareMeltTokensData - fee token without enough HTR', async () => {
       createAnotherMint: true,
       meltAuthorityAddress: addresses[2],
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(UtxoError);
 
   _spyGetUtxos.mockRestore();
@@ -1770,7 +1781,7 @@ test('prepareMeltTokensData - fee token with change and melt authority outputs',
   });
 
   const code = new Mnemonic(
-    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff'
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff',
   );
   const xpriv = code.toHDPrivateKey('', network.getNetwork());
 
@@ -1821,7 +1832,7 @@ test('prepareMeltTokensData - fee token with change and melt authority outputs',
 
   expect(result.outputs).toHaveLength(3);
   const authorityOutputs = result.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
   expect(authorityOutputs).toHaveLength(1);
   expect(authorityOutputs[0].value).toEqual(TOKEN_MELT_MASK);
@@ -1935,7 +1946,7 @@ test('prepareDelegateAuthorityData', async () => {
       anotherAuthorityAddress: 'invalid-address',
       createAnother: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow('Address invalid-address is not valid.');
 
   await expect(
@@ -1943,7 +1954,7 @@ test('prepareDelegateAuthorityData', async () => {
       anotherAuthorityAddress: addresses[2],
       createAnother: false,
       pinCode: null,
-    })
+    }),
   ).rejects.toThrow('PIN not specified in prepareDelegateAuthorityData options');
 
   // Clear mocks
@@ -1974,7 +1985,7 @@ test('prepareDelegateAuthorityData should fail if type is invalid', async () => 
       anotherAuthorityAddress: 'addr2',
       createAnother: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow('Type options are mint and melt for delegate authority method.');
 });
 
@@ -1997,7 +2008,7 @@ test('delegateAuthority should throw if wallet is not ready', async () => {
       createAnother: false,
       anotherAuthorityAddress: null,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow('Wallet not ready');
 });
 
@@ -2091,7 +2102,7 @@ test('prepareDestroyAuthority', async () => {
   expect(delegate1.outputs).toHaveLength(0);
   expect(delegate1.inputs).toHaveLength(1);
   expect(delegate1.inputs[0].hash).toStrictEqual(
-    '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f'
+    '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
   );
 
   // Clear mocks
@@ -2117,7 +2128,7 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
   await expect(
     wallet.destroyAuthority('00', 'mint', 1, {
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow('Wallet not ready');
 });
 
@@ -2178,7 +2189,7 @@ test('getFullTxById', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx2').reply(400, {});
   await expect(wallet.getFullTxById('tx2')).rejects.toThrow(
-    'Error getting transaction by its id from the proxied fullnode.'
+    'Error getting transaction by its id from the proxied fullnode.',
   );
 
   mockAxiosAdapter
@@ -2220,7 +2231,7 @@ test('getTxConfirmationData', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
   await expect(wallet.getTxConfirmationData('tx1')).rejects.toThrow(
-    'Error getting transaction confirmation data by its id from the proxied fullnode.'
+    'Error getting transaction confirmation data by its id from the proxied fullnode.',
   );
 
   mockAxiosAdapter
@@ -2261,7 +2272,7 @@ test('graphvizNeighborsQuery', async () => {
     .reply(500, '');
   // Axios will throw on 500 status code
   await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrow(
-    'Request failed with status code 500'
+    'Request failed with status code 500',
   );
 
   mockAxiosAdapter
@@ -2419,7 +2430,7 @@ test('createTokens', async () => {
       createMint: true,
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
@@ -2429,7 +2440,7 @@ test('createTokens', async () => {
       createMelt: true,
       meltAuthorityAddress: 'abc',
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of invalid external authority output address
@@ -2440,7 +2451,7 @@ test('createTokens', async () => {
       mintAuthorityAddress: 'abc',
       allowExternalMintAuthorityAddress: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of invalid external authority output address
@@ -2451,7 +2462,7 @@ test('createTokens', async () => {
       meltAuthorityAddress: 'abc',
       allowExternalMeltAuthorityAddress: true,
       pinCode: '123456',
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // create token without sign the transaction
@@ -2483,7 +2494,7 @@ test('createTokens', async () => {
   expect(tokenData.outputs).toHaveLength(3);
 
   const authorityOutputs = tokenData.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   const mintAuthority = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
@@ -2506,7 +2517,7 @@ test('createTokens', async () => {
   expect(tokenData2.outputs).toHaveLength(2);
 
   const authorityOutputs2 = tokenData2.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   expect(authorityOutputs2).toHaveLength(1);
@@ -2583,7 +2594,7 @@ test('prepareCreateNewToken - fee token with mint authority and change outputs',
     }));
 
   const code = new Mnemonic(
-    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff'
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff',
   );
   const xpriv = code.toHDPrivateKey('', network.getNetwork());
 
@@ -2607,7 +2618,7 @@ test('prepareCreateNewToken - fee token with mint authority and change outputs',
   expect(result.outputs).toHaveLength(4);
 
   const authorityOutputs = result.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
   expect(authorityOutputs).toHaveLength(2);
 
@@ -2668,7 +2679,7 @@ test('prepareCreateNewToken - fee token without enough HTR for fee', async () =>
       mintAuthorityAddress: addresses[2],
       pinCode: '123456',
       tokenVersion: TokenVersion.FEE,
-    })
+    }),
   ).rejects.toThrow('No utxos available to fill the request. Token: HTR - Amount: 1000.');
 
   _spyGetUtxos.mockRestore();
@@ -2750,7 +2761,7 @@ test('createNFTs', async () => {
       pinCode: '123456',
       data: ['data'],
       isCreateNFT: true,
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
@@ -2762,7 +2773,7 @@ test('createNFTs', async () => {
       pinCode: '123456',
       data: ['data'],
       isCreateNFT: true,
-    })
+    }),
   ).rejects.toThrow(SendTxError);
 
   // create token with correct address for authority output
@@ -2780,7 +2791,7 @@ test('createNFTs', async () => {
   expect(tokenData.outputs).toHaveLength(3);
 
   const authorityOutputs = tokenData.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   const authorityOutput = authorityOutputs[0];
@@ -2806,7 +2817,7 @@ test('createNFTs', async () => {
   expect(tokenData2.outputs).toHaveLength(3);
 
   const authorityOutputs2 = tokenData2.outputs.filter(o =>
-    transaction.isAuthorityOutput({ token_data: o.tokenData })
+    transaction.isAuthorityOutput({ token_data: o.tokenData }),
   );
 
   expect(authorityOutputs2).toHaveLength(1);
@@ -2853,7 +2864,7 @@ test('start', async () => {
         createdAt: 0,
         readyAt: 0,
       },
-    })
+    }),
   );
 
   let wallet = new HathorWalletServiceWallet({
@@ -2950,7 +2961,7 @@ test('getAddressPrivKey', async () => {
         createdAt: 0,
         readyAt: 0,
       },
-    })
+    }),
   );
 
   const wallet = new HathorWalletServiceWallet({
@@ -2968,7 +2979,7 @@ test('getAddressPrivKey', async () => {
       await wallet.getAddressPrivKey('1234', 3),
       await wallet.getAddressPrivKey('1234', 4),
       // We need to pass the network because bitcore-lib forces bitcoin network
-    ].map(hdPrivKey => hdPrivKey.privateKey.toAddress(network.getNetwork()).toString())
+    ].map(hdPrivKey => hdPrivKey.privateKey.toAddress(network.getNetwork()).toString()),
   ).toStrictEqual([
     'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG',
     'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7',
@@ -3002,7 +3013,7 @@ test('signMessageWithAddress', async () => {
         createdAt: 0,
         readyAt: 0,
       },
-    })
+    }),
   );
 
   const wallet = new HathorWalletServiceWallet({
@@ -3332,13 +3343,13 @@ describe('getUtxos', () => {
 
   it('should throw error for negative amount', async () => {
     await expect(wallet.getUtxosForAmount(-10n, {})).rejects.toThrow(
-      'Total amount must be a positive integer.'
+      'Total amount must be a positive integer.',
     );
   });
 
   it('should throw error for zero amount', async () => {
     await expect(wallet.getUtxosForAmount(0n, {})).rejects.toThrow(
-      'Total amount must be a positive integer.'
+      'Total amount must be a positive integer.',
     );
   });
 
@@ -3348,7 +3359,7 @@ describe('getUtxos', () => {
     });
 
     await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
-      "Don't have enough utxos to fill total amount."
+      "Don't have enough utxos to fill total amount.",
     );
   });
 
@@ -3370,7 +3381,7 @@ describe('getUtxos', () => {
     });
 
     await expect(wallet.getUtxosForAmount(100n, {})).rejects.toThrow(
-      "Don't have enough utxos to fill total amount."
+      "Don't have enough utxos to fill total amount.",
     );
   });
 });
@@ -3538,7 +3549,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
 
   it('should throw error if pinCode is not provided', async () => {
     await expect(wallet.start({})).rejects.toThrow(
-      'Pin code is required when starting the wallet.'
+      'Pin code is required when starting the wallet.',
     );
   });
 
@@ -3548,7 +3559,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
       .mockRejectedValueOnce(new UninitializedWalletError('Wallet not initialized'));
 
     await expect(wallet.start({ pinCode: '123' })).rejects.toThrow(
-      'Password is required when starting the wallet from the seed.'
+      'Password is required when starting the wallet from the seed.',
     );
   });
 
@@ -3566,7 +3577,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     jest.spyOn(walletApi, 'createWallet').mockRejectedValue(new Error('Test error'));
 
     await expect(walletWithoutSeed.start({ pinCode: '123', password: '123' })).rejects.toThrow(
-      'WalletService facade initialized without seed or xprivkey'
+      'WalletService facade initialized without seed or xprivkey',
     );
   });
 
@@ -3588,7 +3599,7 @@ describe('HathorWalletServiceWallet start method error conditions', () => {
     });
 
     await expect(wallet.start({ pinCode: '123', password: '123' })).rejects.toThrow(
-      WalletRequestError
+      WalletRequestError,
     );
   });
 
@@ -4221,7 +4232,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(true);
 
       await expect(wallet.getPrivateKeyFromAddress('address')).rejects.toThrow(
-        'getPrivateKeyFromAddress'
+        'getPrivateKeyFromAddress',
       );
     });
 
@@ -4230,7 +4241,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(null);
 
       await expect(wallet.getPrivateKeyFromAddress('WInvalidAddress')).rejects.toThrow(
-        'Address WInvalidAddress does not belong to this wallet'
+        'Address WInvalidAddress does not belong to this wallet',
       );
     });
 
@@ -4274,7 +4285,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       // Access the private method through bracket notation for testing
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await expect((wallet as any).getAddressIndexIfOwned('WInvalidAddress')).rejects.toThrow(
-        'Address used to sign the transaction (WInvalidAddress) does not belong to the wallet.'
+        'Address used to sign the transaction (WInvalidAddress) does not belong to the wallet.',
       );
     });
 
@@ -4368,7 +4379,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
         expect.objectContaining({
           data: ['nft-data'],
           isCreateNFT: true,
-        })
+        }),
       );
       expect(wallet.handleSendPreparedTransaction).toHaveBeenCalledWith(mockPreparedTx);
     });
@@ -4399,7 +4410,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       jest.spyOn(wallet, 'isReady').mockReturnValue(false);
 
       await expect(
-        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
+        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] }),
       ).rejects.toThrow('Wallet not ready');
     });
 
@@ -4408,7 +4419,7 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(true);
 
       await expect(
-        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
+        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] }),
       ).rejects.toThrow('createNanoContractTransaction');
     });
   });
@@ -4448,11 +4459,13 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       jest
         .spyOn(walletApi, 'getHasTxOutsideFirstAddress')
         .mockRejectedValue(
-          new WalletRequestError('Error checking if wallet has transactions outside first address.')
+          new WalletRequestError(
+            'Error checking if wallet has transactions outside first address.',
+          ),
         );
 
       await expect(wallet.hasTxOutsideFirstAddress()).rejects.toThrow(
-        'Error checking if wallet has transactions outside first address.'
+        'Error checking if wallet has transactions outside first address.',
       );
     });
   });

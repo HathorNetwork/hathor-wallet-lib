@@ -1,16 +1,17 @@
 import { HDPrivateKey } from 'bitcore-lib';
-import HathorWallet from '../../src/new/wallet';
-import txHistoryFixture from '../__fixtures__/tx_history';
-import { MemoryStore, Storage } from '../../src/storage';
+
+import walletApi from '../../src/api/wallet';
 import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
   TX_WEIGHT_CONSTANTS,
 } from '../../src/constants';
-import { encryptData } from '../../src/utils/crypto';
+import HathorWallet from '../../src/new/wallet';
+import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';
-import walletApi from '../../src/api/wallet';
+import { encryptData } from '../../src/utils/crypto';
+import txHistoryFixture from '../__fixtures__/tx_history';
 
 class FakeHathorWallet {
   constructor() {
@@ -185,13 +186,13 @@ describe('UTXO Consolidation', () => {
 
   test('throw error when there is no utxo to consolidade', async () => {
     await expect(
-      hathorWallet.consolidateUtxos(destinationAddress, { token: '05' })
+      hathorWallet.consolidateUtxos(destinationAddress, { token: '05' }),
     ).rejects.toEqual(new Error('No available utxo to consolidate.'));
   });
 
   test('throw error for invalid destinationAddress', async () => {
     await expect(hathorWallet.consolidateUtxos(invalidDestinationAddress)).rejects.toEqual(
-      new Error("Utxo consolidation to an address not owned by this wallet isn't allowed.")
+      new Error("Utxo consolidation to an address not owned by this wallet isn't allowed."),
     );
   });
 });

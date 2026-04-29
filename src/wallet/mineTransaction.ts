@@ -6,10 +6,12 @@
  */
 
 import { EventEmitter } from 'events';
+
+import txMiningApi from '../api/txMining';
 import { MIN_POLLING_INTERVAL } from '../constants';
 import { MineTxError } from '../errors';
 import Transaction from '../models/transaction';
-import txMiningApi from '../api/txMining';
+
 import { MineTxSuccessData } from './types';
 
 // Error to be shown in case of no miners connected

@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
+import { MemoryStore, Storage } from '../../src/storage';
 import {
   ILockedUtxo,
   IStore,
@@ -60,7 +60,7 @@ describe('locked utxo methods', () => {
     height,
     value: OutputValueType,
     token,
-    token_data
+    token_data,
   ): ILockedUtxo {
     return {
       index: 0,
@@ -121,7 +121,7 @@ describe('locked utxo methods', () => {
         undefined,
         100n, // value
         '00', // token
-        0 // token_data
+        0, // token_data
       ),
       // timelocked
       getLockedUtxo(
@@ -131,7 +131,7 @@ describe('locked utxo methods', () => {
         undefined,
         100n, // value
         '00', // token
-        0 // token_data
+        0, // token_data
       ),
       // utxo to be unlocked by height
       getLockedUtxo(
@@ -141,7 +141,7 @@ describe('locked utxo methods', () => {
         undefined,
         100n, // value
         '01', // token
-        0 // token_data
+        0, // token_data
       ),
       // heightlocked
       getLockedUtxo(
@@ -151,7 +151,7 @@ describe('locked utxo methods', () => {
         undefined,
         TOKEN_MINT_MASK, // value, mint
         '01', // token
-        TOKEN_AUTHORITY_MASK | 1 // token_data
+        TOKEN_AUTHORITY_MASK | 1, // token_data
       ),
     ];
     for (const lutxo of lockedUtxos) {

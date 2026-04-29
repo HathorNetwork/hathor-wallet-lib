@@ -15,6 +15,9 @@
  * Shared authority UTXO tests live in `shared/authority-utxos.test.ts`.
  */
 
+import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
+import HathorWallet from '../../../src/new/wallet';
+import { AuthorityType } from '../../../src/types';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   createTokenHelper,
@@ -22,9 +25,6 @@ import {
   stopAllWallets,
   waitForTxReceived,
 } from '../helpers/wallet.helper';
-import { TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../../../src/constants';
-import HathorWallet from '../../../src/new/wallet';
-import { AuthorityType } from '../../../src/types';
 
 describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
   let hWallet: HathorWallet;
@@ -37,7 +37,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
       hWallet,
       'getAuthorityUtxos Token',
       'GAUT',
-      100n
+      100n,
     );
     tokenHash = tokenUid;
   });
@@ -77,7 +77,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
 
   it('should throw on invalid authority type', async () => {
     await expect(hWallet.getAuthorityUtxos(tokenHash, 'invalid' as AuthorityType)).rejects.toThrow(
-      'This should never happen.'
+      'This should never happen.',
     );
   });
 
@@ -88,7 +88,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
       tokenHash,
       AuthorityType.MELT,
       await hWallet.getAddressAtIndex(1),
-      { createAnother: true }
+      { createAnother: true },
     );
     await waitForTxReceived(hWallet, meltDelegationTx!.hash!);
 
@@ -115,7 +115,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
       tokenHash,
       AuthorityType.MINT,
       await hWallet.getAddressAtIndex(2),
-      { createAnother: true }
+      { createAnother: true },
     );
     await waitForTxReceived(hWallet, mintDelegationTx!.hash!);
 
@@ -150,12 +150,12 @@ describe('[Fullnode] authority utxo selection', () => {
       mintInput,
     ]);
     await expect(
-      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: false })
+      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: false }),
     ).resolves.toStrictEqual([mintInput]);
 
     // getMintAuthority should not return selected_as_input utxos if only_available_utxos is true
     await expect(
-      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: true })
+      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: true }),
     ).resolves.toStrictEqual([]);
   });
 
@@ -173,12 +173,12 @@ describe('[Fullnode] authority utxo selection', () => {
       meltInput,
     ]);
     await expect(
-      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: false })
+      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: false }),
     ).resolves.toStrictEqual([meltInput]);
 
     // getMeltAuthority should not return selected_as_input utxos if only_available_utxos is true
     await expect(
-      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: true })
+      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: true }),
     ).resolves.toStrictEqual([]);
   });
 });

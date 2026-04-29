@@ -1,4 +1,3 @@
-import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import {
   CreateTokenTransaction,
   MemoryStore,
@@ -8,18 +7,20 @@ import {
   Network,
   transactionUtils,
 } from '../../src';
-import { WALLET_CONSTANTS } from './configuration/test-constants';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { SendTxError, UtxoError, WalletRequestError } from '../../src/errors';
+import { TokenVersion, WalletAddressMode } from '../../src/types';
+import { GetAddressesObject } from '../../src/wallet/types';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
+
+import { WALLET_CONSTANTS } from './configuration/test-constants';
+import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 import {
   buildWalletInstance,
   emptyWallet,
   initializeServiceGlobalConfigs,
   pollForTx,
 } from './helpers/service-facade.helper';
-import { SendTxError, UtxoError, WalletRequestError } from '../../src/errors';
-import { GetAddressesObject } from '../../src/wallet/types';
-import { TokenVersion, WalletAddressMode } from '../../src/types';
-import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 
 // Set base URL for the wallet service API inside the privatenet test container
 initializeServiceGlobalConfigs();
@@ -280,7 +281,7 @@ describe('empty wallet address methods', () => {
 
   it('getPrivateKeyFromAddress throws for unknown address', async () => {
     await expect(wallet.getPrivateKeyFromAddress(unknownAddress, { pinCode })).rejects.toThrow(
-      /does not belong to this wallet/
+      /does not belong to this wallet/,
     );
   });
 });
@@ -305,7 +306,7 @@ describe('basic transaction methods', () => {
       await wallet.start({ pinCode, password });
 
       await expect(
-        wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, { pinCode })
+        wallet.createNewToken(tokenName, tokenSymbol, tokenAmount, { pinCode }),
       ).rejects.toThrow(UtxoError);
     });
 
@@ -349,7 +350,7 @@ describe('basic transaction methods', () => {
 
           // Headers
           headers: expect.any(Array), // May be empty
-        })
+        }),
       );
 
       // Deep validate the Outputs array
@@ -360,7 +361,7 @@ describe('basic transaction methods', () => {
             script: expect.any(Buffer),
             tokenData: expect.any(Number),
           }),
-        ])
+        ]),
       );
 
       // Additional validations
@@ -396,7 +397,7 @@ describe('basic transaction methods', () => {
           value: tokenAmount,
           tokenData: 1,
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Validate mint authority output (default behavior creates mint authority)
@@ -406,7 +407,7 @@ describe('basic transaction methods', () => {
           value: 1n, // TOKEN_MINT_MASK
           tokenData: 129, // AUTHORITY_TOKEN_DATA + mint bit
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Validate melt authority output (default behavior creates melt authority)
@@ -416,7 +417,7 @@ describe('basic transaction methods', () => {
           value: 2n, // TOKEN_MELT_MASK
           tokenData: 129, // AUTHORITY_TOKEN_DATA + melt bit
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Verify the transaction can be found after creation
@@ -430,7 +431,7 @@ describe('basic transaction methods', () => {
           id: tokenUid,
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
       expect(tokenDetails.totalSupply).toBe(tokenAmount);
       expect(tokenDetails.totalTransactions).toBe(1);
@@ -470,14 +471,14 @@ describe('basic transaction methods', () => {
           address: recipientAddress,
           value: 10n,
           tokenId: tokenUid,
-        })
+        }),
       );
       const changeUtxo = await wallet.getUtxoFromId(sendTransaction.hash!, changeIndex);
       expect(changeUtxo).toStrictEqual(
         expect.objectContaining({
           value: 90n,
           tokenId: tokenUid,
-        })
+        }),
       );
     });
 
@@ -502,7 +503,7 @@ describe('basic transaction methods', () => {
           // Token creation specific properties
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
 
       // Validate specific output types for token creation with no authorities
@@ -526,7 +527,7 @@ describe('basic transaction methods', () => {
           value: tokenAmount,
           tokenData: 1,
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Validate that no authority outputs were created
@@ -543,7 +544,7 @@ describe('basic transaction methods', () => {
           id: noAuthTokenUid,
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
       expect(tokenDetails.totalSupply).toBe(tokenAmount);
       expect(tokenDetails.totalTransactions).toBe(1);
@@ -579,7 +580,7 @@ describe('basic transaction methods', () => {
           hash: expect.any(String),
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
 
       // Verify the transaction can be found after creation
@@ -617,33 +618,33 @@ describe('basic transaction methods', () => {
           address: destinationAddress,
           value: tokenAmount,
           tokenId: specificAddressTokenUid,
-        })
+        }),
       );
 
       // Verify mint authority output went to mint authority address
       const mintAuthorityUtxo = await wallet.getUtxoFromId(
         specificAddressTokenUid,
-        mintAuthorityOutputIndex
+        mintAuthorityOutputIndex,
       );
       expect(mintAuthorityUtxo).toStrictEqual(
         expect.objectContaining({
           address: mintAuthorityAddress,
           value: 0n,
           tokenId: specificAddressTokenUid,
-        })
+        }),
       );
 
       // Verify melt authority output went to melt authority address
       const meltAuthorityUtxo = await wallet.getUtxoFromId(
         specificAddressTokenUid,
-        meltAuthorityOutputIndex
+        meltAuthorityOutputIndex,
       );
       expect(meltAuthorityUtxo).toStrictEqual(
         expect.objectContaining({
           address: meltAuthorityAddress,
           value: 0n,
           tokenId: specificAddressTokenUid,
-        })
+        }),
       );
 
       // Verify change output went to change address (if exists)
@@ -655,7 +656,7 @@ describe('basic transaction methods', () => {
           expect.objectContaining({
             address: changeAddress,
             tokenId: NATIVE_TOKEN_UID,
-          })
+          }),
         );
       }
 
@@ -666,7 +667,7 @@ describe('basic transaction methods', () => {
           id: specificAddressTokenUid,
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
       expect(tokenDetails.totalSupply).toBe(tokenAmount);
       expect(tokenDetails.totalTransactions).toBe(1);
@@ -699,7 +700,7 @@ describe('basic transaction methods', () => {
           mintAuthorityAddress,
           createMelt: true,
           meltAuthorityAddress,
-        })
+        }),
       ).rejects.toThrow(); // Should throw because external addresses are not allowed without flags
 
       // Second test: Pass the correct flags to allow external addresses - should succeed
@@ -742,7 +743,7 @@ describe('basic transaction methods', () => {
 
           // Headers
           headers: expect.any(Array), // May be empty
-        })
+        }),
       );
 
       // Deep validate the Outputs array
@@ -753,7 +754,7 @@ describe('basic transaction methods', () => {
             script: expect.any(Buffer),
             tokenData: expect.any(Number),
           }),
-        ])
+        ]),
       );
 
       // Additional validations
@@ -791,7 +792,7 @@ describe('basic transaction methods', () => {
           value: tokenAmount,
           tokenData: 1,
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Validate mint authority output
@@ -801,7 +802,7 @@ describe('basic transaction methods', () => {
           value: 1n, // TOKEN_MINT_MASK
           tokenData: 129, // AUTHORITY_TOKEN_DATA + token_data
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Validate melt authority output
@@ -811,7 +812,7 @@ describe('basic transaction methods', () => {
           value: 2n, // TOKEN_MELT_MASK
           tokenData: 129, // AUTHORITY_TOKEN_DATA + token_data
           script: expect.any(Buffer),
-        })
+        }),
       );
 
       // Verify the transaction can be found after creation
@@ -854,7 +855,7 @@ describe('basic transaction methods', () => {
           id: externalWalletTokenUid,
           name: tokenName,
           symbol: tokenSymbol,
-        })
+        }),
       );
       expect(tokenDetails.totalSupply).toBe(tokenAmount);
       expect(tokenDetails.totalTransactions).toBe(1);
@@ -884,7 +885,7 @@ describe('basic transaction methods', () => {
           }),
           transactions: 0,
           lockExpires: null,
-        })
+        }),
       );
 
       const { wallet: destinationWallet } = buildWalletInstance({
@@ -963,7 +964,7 @@ describe('address management methods', () => {
         expect.objectContaining({
           index: expect.any(Number),
           address: expect.any(String),
-        })
+        }),
       );
 
       expect(currentAddress.index).toBeGreaterThanOrEqual(0);
@@ -1023,7 +1024,7 @@ describe('address management methods', () => {
             index: i,
             transactions: 0,
             seqnum: 0,
-          })
+          }),
         );
       }
     });
@@ -1091,7 +1092,7 @@ describe('getUtxos, getUtxosForAmount', () => {
           total_amount_locked: expect.any(BigInt),
           total_utxos_locked: expect.any(BigInt),
           utxos: expect.any(Array),
-        })
+        }),
       );
 
       // Should have at least some UTXOs from our funding transactions
@@ -1108,7 +1109,7 @@ describe('getUtxos, getUtxosForAmount', () => {
             tx_id: expect.any(String),
             locked: expect.any(Boolean),
             index: expect.any(Number),
-          })
+          }),
         );
         expect(utxo.amount).toBeGreaterThan(0n);
         expect(utxosWallet.addresses).toContain(utxo.address);
@@ -1277,7 +1278,7 @@ describe('Fee-based tokens', () => {
 
     // Validate no authority outputs
     const authorityOutputs = createTokenTx.outputs.filter(
-      o => o.tokenData === 129 // AUTHORITY_TOKEN_DATA + 1
+      o => o.tokenData === 129, // AUTHORITY_TOKEN_DATA + 1
     );
     expect(authorityOutputs).toHaveLength(0);
 
@@ -1507,7 +1508,7 @@ describe('Fee-based tokens', () => {
       emptyWalletInstance.createNewToken('NoFundsFeeToken', 'NFFT', 1000n, {
         pinCode,
         tokenVersion: TokenVersion.FEE,
-      })
+      }),
     ).rejects.toThrow(UtxoError);
   });
 
@@ -1539,7 +1540,7 @@ describe('Fee-based tokens', () => {
       const drainTx = await feeWallet.sendTransaction(
         WALLET_CONSTANTS.genesis.addresses[0],
         remainingHtr,
-        { pinCode }
+        { pinCode },
       );
       await pollForTx(feeWallet, drainTx.hash!);
     }
@@ -1557,7 +1558,7 @@ describe('Fee-based tokens', () => {
       feeWallet.sendTransaction(feeTokenWallet.addresses[5], 100n, {
         token: tokenUid,
         pinCode,
-      })
+      }),
     ).rejects.toThrow(SendTxError);
   });
 
@@ -1588,7 +1589,7 @@ describe('Fee-based tokens', () => {
       {
         pinCode,
         tokenVersion: TokenVersion.FEE,
-      }
+      },
     )) as CreateTokenTransaction;
     await pollForTx(feeWallet, createTokenTx.hash!);
     const tokenUid = createTokenTx.hash!;
@@ -1835,7 +1836,7 @@ describe('single-address mode', () => {
     await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);
 
     await expect(wallet.enableSingleAddressMode()).rejects.toThrow(
-      'Cannot enable single-address policy'
+      'Cannot enable single-address policy',
     );
   });
 

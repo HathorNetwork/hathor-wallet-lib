@@ -5,10 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { chunk } from 'lodash';
 
+import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import walletApi from '../api/wallet';
+import {
+  NATIVE_TOKEN_UID,
+  MAX_ADDRESSES_GET,
+  LOAD_WALLET_MAX_RETRY,
+  LOAD_WALLET_RETRY_SLEEP,
+  CREATE_TOKEN_TX_VERSION,
+  ON_CHAIN_BLUEPRINTS_VERSION,
+} from '../constants';
+import CreateTokenTransaction from '../models/create_token_transaction';
 import FullnodeConnection from '../new/connection';
+import { DEFAULT_ADDRESS_META } from '../storage/storage';
+import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   IStorage,
   IAddressInfo,
@@ -26,22 +39,10 @@ import {
   ITokenData,
   TokenVersion,
 } from '../types';
-import walletApi from '../api/wallet';
+
+import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
-import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
-import {
-  NATIVE_TOKEN_UID,
-  MAX_ADDRESSES_GET,
-  LOAD_WALLET_MAX_RETRY,
-  LOAD_WALLET_RETRY_SLEEP,
-  CREATE_TOKEN_TX_VERSION,
-  ON_CHAIN_BLUEPRINTS_VERSION,
-} from '../constants';
-import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
-import CreateTokenTransaction from '../models/create_token_transaction';
-import { DEFAULT_ADDRESS_META } from '../storage/storage';
 
 /**
  * Get history sync method for a given mode
@@ -85,7 +86,7 @@ export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySy
 export async function loadAddresses(
   startIndex: number,
   count: number,
-  storage: IStorage
+  storage: IStorage,
 ): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
@@ -125,7 +126,7 @@ export async function apiSyncHistory(
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory: boolean = false,
 ) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -173,7 +174,7 @@ export async function apiSyncHistory(
 export async function* loadAddressHistory(
   addresses: string[],
   storage: IStorage,
-  saveTxs: boolean = true
+  saveTxs: boolean = true,
 ): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
@@ -257,7 +258,7 @@ export async function* loadAddressHistory(
  * @returns {Promise<IScanPolicyLoadAddresses>}
  */
 export async function scanPolicyStartAddresses(
-  storage: IStorage
+  storage: IStorage,
 ): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
   let limits;
@@ -293,7 +294,7 @@ export async function scanPolicyStartAddresses(
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
 export async function checkScanningPolicy(
-  storage: IStorage
+  storage: IStorage,
 ): Promise<IScanPolicyLoadAddresses | null> {
   const scanPolicy = await storage.getScanningPolicy();
   switch (scanPolicy) {
@@ -322,7 +323,7 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
   if (!isIndexLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
     throw new Error(
-      'Wallet is configured to use index-limit but the scan policy data is not configured as index-limit'
+      'Wallet is configured to use index-limit but the scan policy data is not configured as index-limit',
     );
   }
 
@@ -360,7 +361,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   if (!isGapLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
     throw new Error(
-      'Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit'
+      'Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit',
     );
   }
   const { gapLimit } = scanPolicyData;
@@ -387,7 +388,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  */
 export async function processHistory(
   storage: IStorage,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock }: { rewardLock?: number } = {},
 ): Promise<void> {
   const { store } = storage;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
@@ -414,7 +415,7 @@ export async function processHistory(
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock }: { rewardLock?: number } = {},
 ): Promise<void> {
   const { store } = storage;
   const nowTs = Math.floor(Date.now() / 1000);
@@ -518,7 +519,7 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
  */
 export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
   async function fetchTokenData(
-    uid: string
+    uid: string,
   ): Promise<
     GeneralTokenInfoSchema | { success: true; name: string; symbol: string; version?: TokenVersion }
   > {
@@ -587,7 +588,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
  */
 async function updateWalletMetadataFromProcessedTxData(
   storage: IStorage,
-  { maxIndexUsed, tokens }: { maxIndexUsed: number; tokens: Set<string> }
+  { maxIndexUsed, tokens }: { maxIndexUsed: number; tokens: Set<string> },
 ): Promise<void> {
   const { store } = storage;
   // Update wallet data
@@ -597,7 +598,7 @@ async function updateWalletMetadataFromProcessedTxData(
     if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
       if (walletData.currentAddressIndex <= maxIndexUsed) {
         await store.setCurrentAddressIndex(
-          Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex)
+          Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex),
         );
       }
       await store.setLastUsedAddressIndex(maxIndexUsed);
@@ -630,7 +631,7 @@ export async function processNewTx(
     rewardLock,
     nowTs,
     currentHeight,
-  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {}
+  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {},
 ): Promise<{
   maxAddressIndex: number;
   tokens: Set<string>;
@@ -912,7 +913,7 @@ export async function processUtxoUnlock(
     rewardLock,
     nowTs,
     currentHeight,
-  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {}
+  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {},
 ): Promise<void> {
   function getEmptyBalance(): IBalance {
     return {
@@ -1003,7 +1004,7 @@ export async function processUtxoUnlock(
  */
 export async function addCreatedTokenFromTx(
   tx: CreateTokenTransaction,
-  storage: IStorage
+  storage: IStorage,
 ): Promise<void> {
   if (tx.version !== CREATE_TOKEN_TX_VERSION) {
     return;
