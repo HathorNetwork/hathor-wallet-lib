@@ -281,9 +281,10 @@ describe('Read-Only Wallet Access', () => {
         const error = await caught;
         expect(error).toBeInstanceOf(WalletRequestError);
         expect(error.message).toContain('Read-only wallet startup timed out');
-        // The root cause should be preserved
-        expect(error.cause).toBeInstanceOf(WalletRequestError);
-        expect((error.cause as Error).message).toBe('Wallet not ready');
+        // The root cause should be preserved under cause.source
+        const cause = (error as WalletRequestError).cause as { source: WalletRequestError };
+        expect(cause.source).toBeInstanceOf(WalletRequestError);
+        expect(cause.source.message).toBe('Wallet not ready');
       } finally {
         jest.useRealTimers();
       }
