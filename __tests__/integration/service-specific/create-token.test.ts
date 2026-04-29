@@ -1,0 +1,218 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/**
+ * Service-facade createNewToken tests.
+ *
+ * Tests for behavior that depends on wallet-service-only APIs
+ * (`getUtxoFromId`, `tokenAuthorities` shape on `getBalance`).
+ *
+ * Shared createNewToken tests live in `shared/create-token.test.ts`.
+ */
+
+import type { HathorWalletServiceWallet, CreateTokenTransaction, Output } from '../../../src';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
+import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+
+const adapter = new ServiceWalletTestAdapter();
+
+const TOKEN_NAME = 'TestToken';
+const TOKEN_SYMBOL = 'TST';
+const TOKEN_AMOUNT = 100n;
+
+beforeAll(async () => {
+  await adapter.suiteSetup();
+});
+
+afterAll(async () => {
+  await adapter.suiteTeardown();
+});
+
+describe('[Service] createNewToken', () => {
+  it('should create token with specific addresses', async () => {
+    const { wallet, addresses } = await adapter.createWallet();
+    const sw = wallet as unknown as HathorWalletServiceWallet;
+    try {
+      await adapter.injectFunds(wallet, addresses![0], 10n);
+
+      // Assign specific addresses for each component (last indices, going backwards)
+      const destinationAddress = addresses![9];
+      const mintAuthorityAddress = addresses![8];
+      const meltAuthorityAddress = addresses![7];
+      const changeAddress = addresses![6];
+
+      const createTokenTx = (await sw.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_AMOUNT, {
+        pinCode: adapter.defaultPinCode,
+        address: destinationAddress,
+        changeAddress,
+        createMint: true,
+        mintAuthorityAddress,
+        createMelt: true,
+        meltAuthorityAddress,
+      })) as CreateTokenTransaction;
+
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          hash: expect.any(String),
+          name: TOKEN_NAME,
+          symbol: TOKEN_SYMBOL,
+        })
+      );
+
+      const tokenUid = createTokenTx.hash!;
+      await adapter.waitForTx(wallet, tokenUid);
+
+      // Locate output indices by tokenData/value
+      let tokenOutputIndex = -1;
+      let mintAuthorityOutputIndex = -1;
+      let meltAuthorityOutputIndex = -1;
+      let changeOutputIndex = -1;
+
+      createTokenTx.outputs.forEach((output: Output, index: number) => {
+        if (output.tokenData === 1) {
+          tokenOutputIndex = index;
+        } else if (output.tokenData === 129) {
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutputIndex = index;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutputIndex = index;
+          }
+        } else if (
+          output.tokenData === 0 &&
+          output.value !== TOKEN_MINT_MASK &&
+          output.value !== TOKEN_MELT_MASK
+        ) {
+          changeOutputIndex = index;
+        }
+      });
+
+      // Verify token output went to destination address
+      const tokenUtxo = await sw.getUtxoFromId(tokenUid, tokenOutputIndex);
+      expect(tokenUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: destinationAddress,
+          value: TOKEN_AMOUNT,
+          tokenId: tokenUid,
+        })
+      );
+
+      // Verify mint authority went to mint authority address
+      const mintUtxo = await sw.getUtxoFromId(tokenUid, mintAuthorityOutputIndex);
+      expect(mintUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: mintAuthorityAddress,
+          value: 0n,
+          tokenId: tokenUid,
+        })
+      );
+
+      // Verify melt authority went to melt authority address
+      const meltUtxo = await sw.getUtxoFromId(tokenUid, meltAuthorityOutputIndex);
+      expect(meltUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: meltAuthorityAddress,
+          value: 0n,
+          tokenId: tokenUid,
+        })
+      );
+
+      // Verify change output (if present) went to change address
+      expect(changeOutputIndex).toBeGreaterThanOrEqual(0);
+      const changeUtxo = await sw.getUtxoFromId(tokenUid, changeOutputIndex);
+      expect(changeUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: changeAddress,
+          tokenId: NATIVE_TOKEN_UID,
+        })
+      );
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('should create token with all outputs to another wallet', async () => {
+    const sourceCreated = await adapter.createWallet();
+    const externalCreated = await adapter.createWallet();
+    const sourceWallet = sourceCreated.wallet as unknown as HathorWalletServiceWallet;
+    const externalWallet = externalCreated.wallet as unknown as HathorWalletServiceWallet;
+
+    try {
+      await adapter.injectFunds(sourceCreated.wallet, sourceCreated.addresses![0], 10n);
+
+      const destinationAddress = externalCreated.addresses![9];
+      const mintAuthorityAddress = externalCreated.addresses![8];
+      const meltAuthorityAddress = externalCreated.addresses![7];
+      const changeAddress = externalCreated.addresses![6];
+
+      // Without the external-address flags the call should fail
+      await expect(
+        sourceWallet.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_AMOUNT, {
+          pinCode: adapter.defaultPinCode,
+          address: destinationAddress,
+          changeAddress,
+          createMint: true,
+          mintAuthorityAddress,
+          createMelt: true,
+          meltAuthorityAddress,
+        })
+      ).rejects.toThrow();
+
+      // With the flags set, the token is created successfully
+      const createTokenTx = (await sourceWallet.createNewToken(
+        TOKEN_NAME,
+        TOKEN_SYMBOL,
+        TOKEN_AMOUNT,
+        {
+          pinCode: adapter.defaultPinCode,
+          address: destinationAddress,
+          changeAddress,
+          createMint: true,
+          mintAuthorityAddress,
+          createMelt: true,
+          meltAuthorityAddress,
+          allowExternalMintAuthorityAddress: true,
+          allowExternalMeltAuthorityAddress: true,
+        }
+      )) as CreateTokenTransaction;
+
+      expect(createTokenTx).toEqual(
+        expect.objectContaining({
+          hash: expect.any(String),
+          name: TOKEN_NAME,
+          symbol: TOKEN_SYMBOL,
+        })
+      );
+
+      const tokenUid = createTokenTx.hash!;
+      await adapter.waitForTx(sourceCreated.wallet, tokenUid, externalCreated.wallet);
+
+      // The creating wallet doesn't see the token outputs since they went to external addresses
+      const creatorBalance = await sourceWallet.getBalance(tokenUid);
+      expect(creatorBalance).toHaveLength(1);
+      expect(creatorBalance[0]).toEqual(
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 0n, locked: 0n }),
+          tokenAuthorities: expect.objectContaining({
+            unlocked: expect.objectContaining({ mint: false, melt: false }),
+            locked: expect.objectContaining({ mint: false, melt: false }),
+          }),
+          transactions: 0,
+        })
+      );
+
+      // Receiving wallet sees both the token and the authorities
+      const destBalance = await externalWallet.getBalance(tokenUid);
+      expect(destBalance).toHaveLength(1);
+      expect(destBalance[0].balance.unlocked).toBe(TOKEN_AMOUNT);
+      expect(destBalance[0].tokenAuthorities.unlocked.mint).toBe(true);
+      expect(destBalance[0].tokenAuthorities.unlocked.melt).toBe(true);
+    } finally {
+      await adapter.stopWallet(sourceCreated.wallet);
+      await adapter.stopWallet(externalCreated.wallet);
+    }
+  });
+});
