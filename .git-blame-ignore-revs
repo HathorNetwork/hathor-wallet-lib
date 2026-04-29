@@ -1,0 +1,7 @@
+# Commits in this file are skipped by `git blame` so they don't obscure
+# real authorship. Enable per-clone with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# GitHub's web blame view honors this file automatically.
+
+# Bulk import-order + trailing-comma reformat
+0188a36c320563525d22fe7435e715e0bc9d8412
