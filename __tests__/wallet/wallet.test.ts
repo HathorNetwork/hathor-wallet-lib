@@ -3698,8 +3698,9 @@ describe('pollForWalletStatus', () => {
       const error = await caught;
       expect(error).toBeInstanceOf(WalletRequestError);
       expect(error.message).toContain('Wallet status polling timed out');
-      expect(error.cause).toBeInstanceOf(WalletRequestError);
-      expect((error.cause as Error).message).toBe('Persistent server error');
+      const cause = (error as WalletRequestError).cause as { source: WalletRequestError };
+      expect(cause.source).toBeInstanceOf(WalletRequestError);
+      expect(cause.source.message).toBe('Persistent server error');
     } finally {
       jest.useRealTimers();
     }

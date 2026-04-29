@@ -498,7 +498,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // At this stage, if the wallet is not 'ready' or 'creating' we should
       // throw an error as there are only three states: 'ready', 'creating' or 'error'
       throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {
-        cause: data.status,
+        cause: { state: data.status },
       });
     }
 
@@ -731,7 +731,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async pollForWalletStatus(): Promise<void> {
-    let lastError: Error | null = null;
+    let lastError: WalletRequestError | undefined;
+    let lastState: unknown;
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
       let data;
       try {
@@ -748,20 +749,23 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         continue;
       }
 
-      lastError = null;
+      lastError = undefined;
+      lastState = data.status;
       if (data.status.status === WS_STATUS_READY) {
         return;
       }
       // Only possible states are 'ready', 'creating' and 'error'. If status
       // is not ready or creating, we should throw an error.
       if (data.status.status !== WS_STATUS_CREATING) {
-        throw new WalletRequestError('Error getting wallet status.', { cause: data.status });
+        throw new WalletRequestError('Error getting wallet status.', {
+          cause: { state: data.status },
+        });
       }
 
       await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
     }
     throw new WalletRequestError('Wallet status polling timed out.', {
-      cause: lastError ?? undefined,
+      cause: lastError ? { source: lastError } : { state: lastState },
     });
   }
 
@@ -1246,11 +1250,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // returns 400 while the wallet is still 'creating'. We retry WalletRequestError
     // (server responded but said no) until it succeeds or we time out.
     // Non-WalletRequestError (network failures, timeouts) propagate immediately.
-    let lastError: Error | null = null;
+    let lastError: WalletRequestError | undefined;
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
       try {
         await this.getReadOnlyAuthToken();
-        lastError = null;
+        lastError = undefined;
         break;
       } catch (err) {
         if (!(err instanceof WalletRequestError)) {
@@ -1258,8 +1262,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         }
         // Only retry on HTTP 400 (wallet may still be creating).
         // Other status codes (401, 403, 404, etc.) are permanent failures.
-        const cause = err.cause as { status?: number } | undefined;
-        if (cause && typeof cause.status === 'number' && cause.status !== 400) {
+        const { cause } = err;
+        if (cause && 'status' in cause && cause.status !== 400) {
           throw err;
         }
         lastError = err;
@@ -1269,7 +1273,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (lastError) {
       throw new WalletRequestError(
         'Read-only wallet startup timed out. The wallet may not be initialized or is in an error state.',
-        { cause: lastError }
+        { cause: { source: lastError } }
       );
     }
     await this.onWalletReady(skipAddressFetch);

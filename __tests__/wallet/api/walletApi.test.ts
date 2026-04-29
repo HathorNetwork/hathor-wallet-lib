@@ -716,6 +716,27 @@ describe('walletApi', () => {
     );
   });
 
+  test('createAuthToken attaches { status, data } to cause on non-2xx', async () => {
+    const errorBody = { success: false, error: 'invalid-signature' };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: errorBody,
+    } as AxiosResponse);
+
+    let caught: unknown;
+    try {
+      await walletApi.createAuthToken(wallet, 1234, 'xpub-stub', 'sig-stub');
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(WalletRequestError);
+    const err = caught as WalletRequestError;
+    expect(err.message).toBe('Error requesting auth token.');
+    expect(err.cause).toEqual({ status: 400, data: errorBody });
+  });
+
   test('deleteTxProposal', async () => {
     const txProposalId = 'proposal-id';
     const mockResponse = {
