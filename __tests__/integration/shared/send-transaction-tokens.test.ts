@@ -191,11 +191,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(htrBalance[0].balance.unlocked).toEqual(4n);
   });
 
-  // Skipped: SendTransactionWalletService.prepareTx() builds utxosAddressPath
-  // in [token, htr] order regardless of this.inputs order, causing wrong
-  // signatures when HTR inputs come before token inputs. See #1057.
-  // eslint-disable-next-line jest/no-disabled-tests
-  it.skip('should send fee token with manually provided HTR input — HTR first (broken signing)', async () => {
+  it('should send fee token with manually provided HTR input — HTR first', async () => {
     // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
     // Spends 1n HTR as fee, 9n HTR remaining. 100n FTMI created
@@ -236,9 +232,8 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
   });
 
   it('should send fee token with manually provided inputs (token before HTR)', async () => {
-    // Inputs are listed token-first to match the internal processing order
-    // of SendTransactionWalletService.prepareTx(), which builds address
-    // paths as [custom_tokens..., htr...]. See #1057 for the underlying bug.
+    // Companion to the HTR-first case above; covers the symmetric ordering
+    // to guard against regressions in input-order-dependent signing.
     // wallet: 10n HTR
     const { wallet } = await createFundedPair(10n);
     // Spends 1n HTR as fee, 9n HTR remaining. 100n FTMI created
