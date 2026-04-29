@@ -37,6 +37,7 @@ import type {
   CreateTokenResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
   AuthorityUtxoResult,
@@ -308,11 +309,32 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     options?: GetUtxosAdapterOptions
   ): Promise<GetUtxosResult> {
-    const result = await this.concrete(wallet).getUtxos(options);
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxos({
+      token: tokenId,
+      filter_address: options?.address,
+      max_utxos: options?.max_utxos,
+      amount_smaller_than: options?.amount_smaller_than
+        ? Number(options.amount_smaller_than)
+        : undefined,
+      amount_bigger_than: options?.amount_bigger_than
+        ? Number(options.amount_bigger_than)
+        : undefined,
+    });
+
+    const utxos: AdapterUtxo[] = result.utxos.map(u => ({
+      txId: u.tx_id,
+      index: u.index,
+      value: u.amount,
+      address: u.address,
+      tokenId,
+      locked: u.locked,
+    }));
+
     return {
       total_amount_available: result.total_amount_available,
       total_utxos_available: result.total_utxos_available,
-      utxos: result.utxos,
+      utxos,
     };
   }
 
