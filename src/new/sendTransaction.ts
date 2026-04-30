@@ -120,6 +120,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
   changeAddress: string | null;
 
+  /**
+   * If set, the HTR fee-change output that `prepareSendTokensData` would
+   * have emitted as transparent is rewritten as a shielded HTR output in
+   * the given mode (FullShielded or AmountShielded). Defaults to `null`,
+   * which preserves the long-standing transparent-change behavior.
+   *
+   * Used by callers that also pass shielded recipient outputs and want
+   * the HTR change for the per-shielded-output fee to match the same
+   * privacy mode the user selected — otherwise the transparent HTR
+   * change would correlate the sender with an otherwise-private send.
+   */
+  changeShieldedMode: ShieldedOutputMode | null;
+
   pin: string | null;
 
   fullTxData: IDataTx | null;
@@ -137,6 +150,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
+   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set, the HTR fee-change is emitted shielded in this mode instead of transparent
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -147,6 +161,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     outputs = [],
     inputs = [],
     changeAddress = null,
+    changeShieldedMode = null,
     pin = null,
   }: {
     wallet?: HathorWallet | null;
@@ -155,6 +170,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     inputs?: ISendInput[];
     outputs?: ISendOutput[];
     changeAddress?: string | null;
+    changeShieldedMode?: ShieldedOutputMode | null;
     pin?: string | null;
   } = {}) {
     super();
@@ -169,6 +185,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     this.outputs = outputs;
     this.inputs = inputs;
     this.changeAddress = changeAddress;
+    this.changeShieldedMode = changeShieldedMode;
     this.pin = pin;
     this.fullTxData = null;
   }
@@ -334,15 +351,15 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
     }
 
-    const totalFee = fee + shieldedFee;
+    let totalFee = fee + shieldedFee;
 
-    const headers: Header[] = [];
-    if (totalFee > 0) {
-      headers.push(new FeeHeader([{ tokenIndex: 0, amount: totalFee }]));
-      // if the token map doesn't have HTR, it means that the user didn't provide any HTR input or output, so we need to choose inputs for HTR to pay fees
-      if (!tokenMapHasHTR) {
-        shouldChooseHTRInputs = true;
-      }
+    // Decide whether to auto-pick HTR inputs based on the original
+    // totalFee (the value `prepareSendTokensData` is about to use for
+    // selection). The post-conversion fee bump done below is funded
+    // entirely from the would-be transparent change, so inputs picked
+    // here remain sufficient.
+    if (totalFee > 0n && !tokenMapHasHTR) {
+      shouldChooseHTRInputs = true;
     }
 
     const options: IUtxoSelectionOptions = {
@@ -363,6 +380,31 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       options,
       totalFee
     );
+
+    // If the caller opted in to shielded HTR change, rewrite the
+    // transparent change emitted above as a shielded HTR output. The
+    // helper mutates both `partialHtrTxData.outputs` (removing the
+    // transparent change) and `shieldedOutputDefs` (appending the
+    // shielded replacement), and returns the extra shielded-output
+    // fee we now owe — funded by reducing the change by the same
+    // amount, so inputs already picked are still sufficient.
+    const { addedFee } = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      shieldedOutputDefs,
+      this.changeShieldedMode,
+      this.wallet,
+      network
+    );
+    totalFee += addedFee;
+
+    // FeeHeader is pushed AFTER the conversion so it carries the final
+    // total. The header gates on `totalFee > 0`; that's still
+    // monotonically increasing through the conversion (addedFee >= 0n)
+    // so the gate's outcome can't flip from true to false.
+    const headers: Header[] = [];
+    if (totalFee > 0n) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: totalFee }]));
+    }
 
     const shouldShuffleOutputs =
       partialTxData.outputs.length > 0 || partialHtrTxData.outputs.length > 0;
@@ -523,12 +565,40 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       excessBlindingFactor = excess;
     }
 
+    // Privacy guard: a non-HTR token MUST appear in `tokens[]` only when
+    // at least one output in the FINAL tx references it via `token_data`
+    // — i.e. a transparent (including downstream-added change) or
+    // AmountShielded output. FullShielded outputs commit the token UID
+    // under `asset_commitment` instead; listing the token publicly in
+    // `tokens[]` would defeat that privacy guarantee. Inputs don't carry
+    // `token_data` in the wire format, so they don't pull a token in.
+    //
+    // Computed AFTER `outputs` is finalized (phantoms removed, change
+    // outputs added by prepareSendManyTokensData included) — populating
+    // earlier from `this.outputs` alone misses transparent change and
+    // breaks balance verification when the same token has both FS user
+    // outputs and a transparent change.
+    const tokensWithVisibleOutput = new Set<string>();
+    for (const out of outputs) {
+      const tokenUid = (out as { token?: string }).token;
+      if (!tokenUid || tokenUid === HTR_UID) continue;
+      if ((out.authorities ?? 0n) !== 0n) continue;
+      tokensWithVisibleOutput.add(tokenUid);
+    }
+    for (const so of shieldedOutputs) {
+      if (so.mode !== ShieldedOutputMode.FULLY_SHIELDED) {
+        tokensWithVisibleOutput.add(so.token);
+      }
+    }
+
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       outputs,
       inputs: [...partialInputs, ...partialHtrTxData.inputs],
-      // We already removed HTR from the tokenMap
-      tokens: Array.from(tokenMap.keys()),
+      // We already removed HTR from the tokenMap. Filter out any token
+      // whose only references are FullShielded outputs (see the privacy
+      // guard above).
+      tokens: Array.from(tokenMap.keys()).filter(t => tokensWithVisibleOutput.has(t)),
       headers,
       ...(shieldedOutputs.length > 0 ? { shieldedOutputs } : {}),
       ...(excessBlindingFactor ? { excessBlindingFactor } : {}),
@@ -952,6 +1022,81 @@ export async function prepareSendTokensData(
     }
     throw e;
   }
+}
+
+/**
+ * If `mode` is set and `prepareSendTokensData` emitted a transparent
+ * HTR change output, rewrite that change as a shielded HTR output in
+ * `shieldedOutputDefs`. Mutates both `partialHtrTxData.outputs` (to
+ * remove the transparent change) and `shieldedOutputDefs` (to append
+ * the shielded one). Returns the additional shielded-output fee that
+ * the caller must add to `totalFee`, or `0n` when no conversion was
+ * performed.
+ *
+ * No-ops in any of these cases:
+ *   - `mode` is null/undefined (caller did not opt in).
+ *   - `wallet` is null (no shielded address derivation available).
+ *   - `shieldedOutputDefs` is empty (a pure-transparent tx has no
+ *     shielded fee context; converting the change here would silently
+ *     break the `>= 2 shielded outputs` invariant downstream).
+ *   - No HTR change output exists in `partialHtrTxData.outputs` (the
+ *     selected HTR UTXO covered the fee exactly).
+ *   - The transparent change value is `<= additionalFee` — converting
+ *     would zero-out or negate the change. Keeping the transparent
+ *     change is the safe, value-preserving choice.
+ */
+export async function convertHtrChangeIfRequested(
+  partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
+  shieldedOutputDefs: ISendShieldedOutput[],
+  mode: ShieldedOutputMode | null,
+  wallet: HathorWallet | null,
+  network: ReturnType<IStorage['config']['getNetwork']>
+): Promise<{ addedFee: bigint }> {
+  if (!mode) return { addedFee: 0n };
+  if (!wallet) return { addedFee: 0n };
+  if (shieldedOutputDefs.length === 0) return { addedFee: 0n };
+
+  const additionalFee =
+    mode === ShieldedOutputMode.FULLY_SHIELDED
+      ? FEE_PER_FULL_SHIELDED_OUTPUT
+      : FEE_PER_AMOUNT_SHIELDED_OUTPUT;
+
+  const HTR_UID = NATIVE_TOKEN_UID;
+  const changeIdx = partialHtrTxData.outputs.findIndex(o => {
+    const withToken = o as IDataOutputWithToken & { isChange?: boolean };
+    return withToken.token === HTR_UID && withToken.isChange === true;
+  });
+  if (changeIdx === -1) return { addedFee: 0n };
+
+  const transparentChange = partialHtrTxData.outputs[changeIdx];
+  if (transparentChange.value <= additionalFee) {
+    // Conversion would produce a zero or negative shielded value —
+    // keep the transparent change so we don't silently drop funds.
+    return { addedFee: 0n };
+  }
+
+  const { address: shieldedAddress } = await wallet.getCurrentAddress({}, { legacy: false });
+  const addressObj = new Address(shieldedAddress, { network });
+  if (!addressObj.isShielded()) {
+    throw new SendTxError('Wallet did not return a shielded address for HTR change conversion.');
+  }
+  const spendAddress = addressObj.getSpendAddress();
+
+  // Remove the transparent change output before appending the shielded
+  // replacement so any later iteration over `partialHtrTxData.outputs`
+  // sees the post-conversion shape.
+  partialHtrTxData.outputs.splice(changeIdx, 1);
+
+  shieldedOutputDefs.push({
+    type: OutputType.P2PKH,
+    address: spendAddress.base58,
+    value: transparentChange.value - additionalFee,
+    token: HTR_UID,
+    scanPubkey: addressObj.getScanPubkey().toString('hex'),
+    shieldedMode: mode,
+  });
+
+  return { addedFee: additionalFee };
 }
 
 async function getOutputTypeFromWallet(storage: IStorage): Promise<'p2pkh' | 'p2sh'> {

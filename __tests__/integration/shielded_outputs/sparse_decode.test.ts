@@ -358,4 +358,83 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     const balD = await walletD.getBalance(NATIVE_TOKEN_UID);
     expect(balD[0].balance.unlocked).toBe(12n);
   });
+
+  /**
+   * N.6 — Sender's balance counter is correctly debited after spending a
+   * sparse-decoded self-change UTXO.
+   *
+   * The N.1–N.5 tests above all assert recipient-side balance, which is
+   * correct on-chain regardless of the sender's bookkeeping bug — the
+   * fullnode resolves inputs by absolute index, signs are checked, and
+   * the recipient gets what was sent. The bug this test pins is in the
+   * SENDER's `processNewTx` input-enrichment loop: when walletA processes
+   * the spending tx it just broadcast, the FS input cites the parent's
+   * on-chain absolute index, which is past `origTx.outputs.length` for
+   * sparse-decoded parents (the wallet only owns one of the parent's two
+   * shielded outputs, so origTx.outputs holds just the transparent change
+   * + the one decoded shielded entry — length 2, not 3).
+   *
+   * Without the `onChainIndex` lookup fallback at
+   * `src/utils/storage.ts` (~ line 1204), that input falls through every
+   * enrichment branch and reaches `continue` un-enriched. The balance
+   * input loop then skips it (`input.token === undefined`) and the FS
+   * UTXO's value is never debited — walletA's balance stays inflated by
+   * exactly the spent FS UTXO's value.
+   */
+  it("N.6 — sender's balance correctly debits the sparse-decoded UTXO after spending", async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    // Same sparse-trigger setup as N.1: 30 FS to B, 20 FS back to self.
+    const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
+    const saA = await walletA.getAddressAtIndex(2, { legacy: false });
+    const splitTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: saA,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    expect(splitTx).not.toBeNull();
+    await waitForTxReceived(walletA, splitTx!.hash!);
+    await waitForTxReceived(walletB, splitTx!.hash!);
+    await waitUntilNextTimestamp(walletA, splitTx!.hash!);
+
+    const balABefore = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balABefore).toBeGreaterThanOrEqual(60n);
+
+    // Force consumption of the FS-to-self UTXO by sending more than the
+    // transparent change alone could cover.
+    const transparentChange = balABefore - 20n;
+    const sendAmount = transparentChange + 10n;
+
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const finalTx = await walletA.sendTransaction(addrC, sendAmount);
+    expect(finalTx).not.toBeNull();
+    await waitForTxReceived(walletA, finalTx!.hash!);
+    await waitForTxReceived(walletC, finalTx!.hash!);
+
+    // On-chain ground truth: walletC received exactly `sendAmount`.
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(sendAmount);
+
+    // Regression assertion: walletA's balance counter dropped by EXACTLY
+    // `sendAmount` (transparent send has no fee — recipient gets the full
+    // amount, sender loses the same). If the FS input's enrichment had
+    // failed, the FS UTXO value (20n) would not be debited and the delta
+    // would be `sendAmount - 20n` instead.
+    const balAAfter = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balABefore - balAAfter).toBe(sendAmount);
+  });
 });

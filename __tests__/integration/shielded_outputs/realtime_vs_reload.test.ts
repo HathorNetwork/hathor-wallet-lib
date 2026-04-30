@@ -43,6 +43,7 @@ import {
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
+  waitTxConfirmed,
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
@@ -621,5 +622,82 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
     await assertRealtimeMatchesReload(walletB, walletDataB.words, tx!.hash!, [NATIVE_TOKEN_UID]);
+  });
+
+  /**
+   * R.12 — Receive shielded HTR, wait for first_block confirmation, then
+   * unshield. Reproduces the mobile bug where `processMetadataChanged`
+   * (triggered by the WS metadata update on first_block) overwrote the
+   * shielded UTXO with a record stripped of `shielded:true` and
+   * `blindingFactor`. Subsequent unshielding then built a tx with no
+   * `UnshieldBalanceHeader` and the fullnode rejected it with
+   * "full-unshield tx (shielded inputs, no shielded outputs) must carry
+   * an unshield balance header".
+   *
+   * Existing R.* tests don't catch this because they spend the shielded
+   * UTXO inside the same second they receive it — before the fullnode's
+   * confirmation update has had time to fire. Here we explicitly
+   * `waitTxConfirmed` between the receive and the spend so the metadata
+   * update is guaranteed to have arrived and been processed.
+   */
+  it('R.12 — confirmed shielded receive can still unshield (processMetadataChanged regression)', async () => {
+    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletB = await generateWalletHelper({
+      seed: walletDataB.words,
+      preCalculatedAddresses: walletDataB.addresses,
+    });
+    const walletA = await generateWalletHelper();
+
+    // walletB receives 100 HTR transparent, then shields it onto its own
+    // shielded addresses. The shielding tx itself doesn't trigger the bug
+    // (it's a SEND, not a receive of a shielded output it now owns), but
+    // it does create the shielded UTXOs we need.
+    const addrB0 = await walletB.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletB, addrB0, 100n);
+    const sb0 = await walletB.getAddressAtIndex(1, { legacy: false });
+    const sb1 = await walletB.getAddressAtIndex(2, { legacy: false });
+    const shieldTx = await walletB.sendManyOutputsTransaction([
+      {
+        address: sb0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sb1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletB, shieldTx!.hash!);
+    await waitUntilNextTimestamp(walletB, shieldTx!.hash!);
+
+    // Critical step: WAIT FOR FIRST_BLOCK. This is what every other R.*
+    // test omits. Once first_block is set on the fullnode, the WS
+    // metadata update fires, onNewTx routes it to processMetadataChanged,
+    // and that's the call that re-saves the shielded UTXO. Without the
+    // fix the re-save corrupts it.
+    await waitTxConfirmed(walletB, shieldTx!.hash!, 30000);
+
+    // Give the WS a beat to push the metadata update to the wallet and
+    // for processMetadataChanged to finish writing through to storage.
+    // 500ms is plenty against a privnet that mines blocks ~1s apart.
+    // eslint-disable-next-line no-promise-executor-return
+    await new Promise(r => setTimeout(r, 500));
+
+    // Unshielding send: shielded UTXOs in, transparent output out. This
+    // is the exact `prepareTxData` path where excessBlindingFactor is
+    // computed iff `blindedInputsArr.length > 0`, which in turn requires
+    // `utxo.shielded === true` on the picked UTXOs. If the metadata
+    // update corrupted that flag, the fullnode rejects.
+    const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
+    const tx = await walletB.sendTransaction(addrA, 40n);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    // Recipient receives the unshielded HTR.
+    await waitForTxReceived(walletA, tx!.hash!);
+    expect((await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(40n);
   });
 });
