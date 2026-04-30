@@ -135,7 +135,7 @@ describe('Read-Only Wallet Access', () => {
       expect(mockGetWalletStatus).not.toHaveBeenCalled();
     });
 
-    it('should poll for wallet status when wallet is creating', async () => {
+    it('should retry getReadOnlyAuthToken when wallet is still creating', async () => {
       const wallet = new HathorWalletServiceWallet({
         requestPassword,
         xpub,
@@ -146,40 +146,14 @@ describe('Read-Only Wallet Access', () => {
       const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
       const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
 
-      // First call to getReadOnlyAuthToken fails because wallet is not ready
+      // First two calls fail (wallet still creating), third succeeds
       mockCreateReadOnlyAuthToken
         .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
-        // Second call succeeds after polling
+        .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
         .mockResolvedValueOnce({
           success: true,
           token: mockToken,
         });
-
-      // First call returns 'creating' status
-      mockGetWalletStatus.mockResolvedValueOnce({
-        success: true,
-        status: {
-          walletId: mockWalletId,
-          xpubkey: xpub,
-          status: 'creating',
-          maxGap: 20,
-          createdAt: 123456789,
-          readyAt: null,
-        },
-      });
-
-      // Subsequent polling calls return 'ready' status
-      mockGetWalletStatus.mockResolvedValue({
-        success: true,
-        status: {
-          walletId: mockWalletId,
-          xpubkey: xpub,
-          status: 'ready',
-          maxGap: 20,
-          createdAt: 123456789,
-          readyAt: 123456790,
-        },
-      });
 
       mockGetNewAddresses.mockResolvedValueOnce({
         success: true,
@@ -192,20 +166,19 @@ describe('Read-Only Wallet Access', () => {
         ],
       });
 
-      // Mock the connection setup
       // @ts-expect-error - Accessing private method for testing
       jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
       await wallet.startReadOnly();
 
       expect(wallet.isReady()).toBe(true);
-      // getWalletStatus should be called at least twice (initial check + polling)
-      expect(mockGetWalletStatus).toHaveBeenCalledTimes(2);
-      // getReadOnlyAuthToken should be called twice (failed + succeeded after poll)
-      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(2);
+      // No getWalletStatus calls — we retry the RO token endpoint directly
+      expect(mockGetWalletStatus).not.toHaveBeenCalled();
+      // Three attempts: 2 failures + 1 success
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(3);
     });
 
-    it('should throw error if wallet is not ready', async () => {
+    it('should propagate non-WalletRequestError immediately without retrying', async () => {
       const wallet = new HathorWalletServiceWallet({
         requestPassword,
         xpub,
@@ -213,28 +186,142 @@ describe('Read-Only Wallet Access', () => {
       });
 
       const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
-      const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
 
-      // getReadOnlyAuthToken fails because wallet is not ready
-      mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
+      // Simulate a network error (not a WalletRequestError)
+      const networkError = new Error('ECONNREFUSED');
+      mockCreateReadOnlyAuthToken.mockRejectedValue(networkError);
 
-      // getWalletStatus returns error state
-      mockGetWalletStatus.mockResolvedValue({
-        success: true,
-        status: {
-          walletId: mockWalletId,
-          xpubkey: xpub,
-          status: 'error',
-          maxGap: 20,
-          createdAt: 123456789,
-          readyAt: null,
-        },
+      // Should fail immediately with the original error — no 60s timeout
+      await expect(wallet.startReadOnly()).rejects.toThrow('ECONNREFUSED');
+      // Only one attempt — did not retry
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fail immediately on non-400 WalletRequestError (permanent failure)', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
       });
 
-      await expect(wallet.startReadOnly()).rejects.toThrow(WalletRequestError);
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+
+      // 401 is a permanent failure — should NOT be retried
+      const error = new WalletRequestError('Error requesting read-only auth token.', {
+        cause: { status: 401, data: { error: 'unauthorized' } },
+      });
+      mockCreateReadOnlyAuthToken.mockRejectedValue(error);
+
       await expect(wallet.startReadOnly()).rejects.toThrow(
-        'Wallet must be initialized and ready before starting in read-only mode.'
+        'Error requesting read-only auth token.'
       );
+      // Only one attempt — did not retry
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry on 400 WalletRequestError (wallet still creating)', async () => {
+      const wallet = new HathorWalletServiceWallet({
+        requestPassword,
+        xpub,
+        network,
+      });
+
+      const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+      const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
+
+      // 400 is transient (wallet still creating) — should be retried
+      const error400 = new WalletRequestError('Error requesting read-only auth token.', {
+        cause: { status: 400, data: { error: 'wallet-not-ready' } },
+      });
+      mockCreateReadOnlyAuthToken
+        .mockRejectedValueOnce(error400)
+        .mockResolvedValueOnce({ success: true, token: mockToken });
+
+      mockGetNewAddresses.mockResolvedValueOnce({
+        success: true,
+        addresses: [
+          {
+            address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+            index: 0,
+            addressPath: "m/44'/280'/0'/0/0",
+          },
+        ],
+      });
+
+      // @ts-expect-error - Accessing private method for testing
+      jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
+
+      await wallet.startReadOnly();
+
+      expect(wallet.isReady()).toBe(true);
+      // Two attempts: 1 failure (400) + 1 success
+      expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(2);
+    });
+
+    it('should include last retry error as cause when timing out', async () => {
+      jest.useFakeTimers();
+      try {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+
+        mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
+
+        const promise = wallet.startReadOnly();
+        const caught = promise.catch((err: Error) => err);
+
+        for (let i = 0; i < 60; i++) {
+          await jest.advanceTimersByTimeAsync(1000);
+        }
+
+        const error = await caught;
+        expect(error).toBeInstanceOf(WalletRequestError);
+        expect(error.message).toContain('Read-only wallet startup timed out');
+        // The root cause should be preserved
+        expect(error.cause).toBeInstanceOf(WalletRequestError);
+        expect((error.cause as Error).message).toBe('Wallet not ready');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should time out if getReadOnlyAuthToken never succeeds', async () => {
+      jest.useFakeTimers();
+
+      try {
+        const wallet = new HathorWalletServiceWallet({
+          requestPassword,
+          xpub,
+          network,
+        });
+
+        const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
+        const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
+
+        // Always fail — simulates wallet stuck in error or creating state
+        mockCreateReadOnlyAuthToken.mockRejectedValue(new WalletRequestError('Wallet not ready'));
+
+        const promise = wallet.startReadOnly();
+        // Catch the rejection early to prevent unhandled rejection during timer advancement
+        const caught = promise.catch((err: Error) => err);
+
+        // Advance through all 60 polling intervals
+        for (let i = 0; i < 60; i++) {
+          await jest.advanceTimersByTimeAsync(1000);
+        }
+
+        const error = await caught;
+        expect(error).toBeInstanceOf(WalletRequestError);
+        expect(error.message).toContain('Read-only wallet startup timed out');
+        // Should never call getWalletStatus (no authenticated fallback)
+        expect(mockGetWalletStatus).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should throw error if xpub is not set', async () => {
@@ -460,7 +547,7 @@ describe('Read-Only Wallet Access', () => {
         expect(mockGetNewAddresses).toHaveBeenCalledTimes(1);
       });
 
-      it('should skip address fetching when skipAddressFetch is true with polling', async () => {
+      it('should skip address fetching when skipAddressFetch is true with retries', async () => {
         const wallet = new HathorWalletServiceWallet({
           requestPassword,
           xpub,
@@ -471,58 +558,30 @@ describe('Read-Only Wallet Access', () => {
         const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
         const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
 
-        // Clear any previous mock implementations
         mockCreateReadOnlyAuthToken.mockReset();
-        mockGetWalletStatus.mockReset();
 
-        // First call to getReadOnlyAuthToken fails because wallet is not ready
+        // First call fails (wallet creating), second succeeds
         mockCreateReadOnlyAuthToken
           .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
-          // Second call succeeds after polling
           .mockResolvedValueOnce({
             success: true,
             token: mockToken,
           });
 
-        // First call returns 'creating' status, subsequent calls return 'ready'
-        mockGetWalletStatus
-          .mockResolvedValueOnce({
-            success: true,
-            status: {
-              walletId: mockWalletId,
-              xpubkey: xpub,
-              status: 'creating',
-              maxGap: 20,
-              createdAt: 123456789,
-              readyAt: null,
-            },
-          })
-          .mockResolvedValue({
-            success: true,
-            status: {
-              walletId: mockWalletId,
-              xpubkey: xpub,
-              status: 'ready',
-              maxGap: 20,
-              createdAt: 123456789,
-              readyAt: 123456790,
-            },
-          });
-
-        // Mock the connection setup
         // @ts-expect-error - Accessing private method for testing
         jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
         await wallet.startReadOnly({ skipAddressFetch: true });
 
         expect(wallet.isReady()).toBe(true);
-        // Polling should have been triggered
-        expect(mockGetWalletStatus).toHaveBeenCalledTimes(2);
-        // Even with polling, addresses should not be fetched when skipAddressFetch is true
+        // Retries go through getReadOnlyAuthToken, not getWalletStatus
+        expect(mockGetWalletStatus).not.toHaveBeenCalled();
+        expect(mockCreateReadOnlyAuthToken).toHaveBeenCalledTimes(2);
+        // Addresses should not be fetched when skipAddressFetch is true
         expect(mockGetNewAddresses).not.toHaveBeenCalled();
       });
 
-      it('should fetch addresses with polling when skipAddressFetch is false', async () => {
+      it('should fetch addresses with retries when skipAddressFetch is false', async () => {
         const wallet = new HathorWalletServiceWallet({
           requestPassword,
           xpub,
@@ -530,43 +589,15 @@ describe('Read-Only Wallet Access', () => {
         });
 
         const mockCreateReadOnlyAuthToken = walletApi.createReadOnlyAuthToken as jest.Mock;
-        const mockGetWalletStatus = walletApi.getWalletStatus as jest.Mock;
         const mockGetNewAddresses = walletApi.getNewAddresses as jest.Mock;
 
-        // First call to getReadOnlyAuthToken fails because wallet is not ready
+        // First call fails (wallet creating), second succeeds
         mockCreateReadOnlyAuthToken
           .mockRejectedValueOnce(new WalletRequestError('Wallet not ready'))
-          // Second call succeeds after polling
           .mockResolvedValueOnce({
             success: true,
             token: mockToken,
           });
-
-        // First call returns 'creating' status
-        mockGetWalletStatus.mockResolvedValueOnce({
-          success: true,
-          status: {
-            walletId: mockWalletId,
-            xpubkey: xpub,
-            status: 'creating',
-            maxGap: 20,
-            createdAt: 123456789,
-            readyAt: null,
-          },
-        });
-
-        // Subsequent polling calls return 'ready' status
-        mockGetWalletStatus.mockResolvedValue({
-          success: true,
-          status: {
-            walletId: mockWalletId,
-            xpubkey: xpub,
-            status: 'ready',
-            maxGap: 20,
-            createdAt: 123456789,
-            readyAt: 123456790,
-          },
-        });
 
         mockGetNewAddresses.mockResolvedValueOnce({
           success: true,
@@ -579,15 +610,13 @@ describe('Read-Only Wallet Access', () => {
           ],
         });
 
-        // Mock the connection setup
         // @ts-expect-error - Accessing private method for testing
         jest.spyOn(wallet, 'isWsEnabled').mockReturnValue(false);
 
         await wallet.startReadOnly({ skipAddressFetch: false });
 
         expect(wallet.isReady()).toBe(true);
-        // Addresses should be fetched even with polling
-        expect(mockGetNewAddresses).toHaveBeenCalled();
+        // Addresses should be fetched even after retries
         expect(mockGetNewAddresses).toHaveBeenCalledTimes(1);
       });
     });
