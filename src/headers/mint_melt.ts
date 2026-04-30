@@ -60,9 +60,15 @@ export function serializeMintMeltEntries(entries: IMintMeltEntry[]): Buffer {
     const idxBuf = Buffer.alloc(1);
     idxBuf.writeUInt8(entry.tokenIndex, 0);
     buffers.push(idxBuf);
-    const amountBuf = Buffer.alloc(8);
-    amountBuf.writeBigUInt64BE(entry.amount, 0);
-    buffers.push(amountBuf);
+    // React Native's `buffer` polyfill omits `writeBigUInt64BE` (a
+    // Node 12+ Buffer extension), so we go through `DataView` —
+    // `setBigUint64` is a standard TypedArray method available in
+    // Hermes and JavaScriptCore. Big-endian (the second arg `false`
+    // means non-little-endian) matches the on-chain layout the
+    // verifier expects.
+    const amountArr = new ArrayBuffer(8);
+    new DataView(amountArr).setBigUint64(0, entry.amount, false);
+    buffers.push(Buffer.from(amountArr));
   }
   return Buffer.concat(buffers);
 }
