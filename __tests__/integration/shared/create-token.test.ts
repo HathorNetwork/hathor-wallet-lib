@@ -57,11 +57,18 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
     const { wallet } = await adapter.createWallet();
 
     try {
+      // Pin to a fund-shortage error rather than any rejection. The two
+      // facades phrase it differently:
+      //   - fullnode throws InsufficientFundsError ("Not enough HTR tokens
+      //     for deposit or fee: ... required, ... available")
+      //   - wallet-service throws UtxoError ("No utxos available to fill
+      //     the request. Token: HTR - Amount: ...")
+      // The regex below covers both without overfitting to either string.
       await expect(
         wallet.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, 100n, {
           pinCode: adapter.defaultPinCode,
         })
-      ).rejects.toThrow();
+      ).rejects.toThrow(/(not enough|no utxos|insufficient)/i);
     } finally {
       await adapter.stopWallet(wallet);
     }
@@ -247,6 +254,17 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
 
       const htrAfter = (await wallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
       expect(htrAfter).toBe(expectedHtrAfter);
+
+      // Verify the HTR change actually landed on the configured changeAddress.
+      // The matcher above only checks the amount because tokenData differs
+      // between facades; this UTXO query confirms the routing.
+      const { utxos } = await adapter.getUtxos(wallet, {
+        token: NATIVE_TOKEN_UID,
+        filter_address: addr,
+      });
+      expect(utxos).toContainEqual(
+        expect.objectContaining({ address: addr, amount: expectedHtrAfter })
+      );
     } finally {
       await adapter.stopWallet(wallet);
     }
