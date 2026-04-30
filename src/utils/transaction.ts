@@ -157,6 +157,12 @@ const transaction = {
             surjection_proof: output.surjection_proof
               ? this.ensureHex(output.surjection_proof)
               : undefined,
+            // hathor-core's `_shielded_output_to_json` (base_transaction.py)
+            // sets spent_by on shielded entries the same way it does for
+            // transparent outputs. Preserve it through the normalize so the
+            // wallet can use the canonical `output.spent_by !== null` check
+            // for both kinds of outputs.
+            spent_by: output.spent_by ?? null,
           });
         } else {
           transparentOutputs.push(output);

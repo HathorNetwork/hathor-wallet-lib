@@ -171,4 +171,190 @@ describe('shielded outputs — Group Q: multi-token shielded txs', () => {
     const balCTok = await walletC.getBalance(tokenResp.hash);
     expect(balCTok[0].balance.unlocked).toBe(350n);
   });
+
+  // Helpers shared by Q.3–Q.5: count this wallet's UNLOCKED shielded
+  // and transparent HTR UTXOs by value. The split is the same
+  // private-vs-public split the mobile UI shows.
+  // eslint-disable-next-line jest/no-export
+  const sumHtrByPool = async (wallet: Awaited<ReturnType<typeof generateWalletHelper>>) => {
+    let shielded = 0n;
+    let transparent = 0n;
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const u of wallet.storage.selectUtxos({
+      token: NATIVE_TOKEN_UID,
+      shielded: true,
+      only_available_utxos: true,
+    })) {
+      if ((u.authorities ?? 0n) !== 0n) continue;
+      shielded += u.value;
+    }
+    // eslint-disable-next-line no-restricted-syntax
+    for await (const u of wallet.storage.selectUtxos({
+      token: NATIVE_TOKEN_UID,
+      shielded: false,
+      only_available_utxos: true,
+    })) {
+      if ((u.authorities ?? 0n) !== 0n) continue;
+      transparent += u.value;
+    }
+    return { shielded, transparent };
+  };
+
+  /**
+   * Q.3 — Custom-token FS send with `changeShieldedMode: FULLY_SHIELDED`
+   * routes the HTR fee-change into the shielded pool. Pre-fix the change
+   * was emitted transparent regardless of the user-selected privacy
+   * mode, leaking the sender alongside an otherwise-private send.
+   */
+  it('Q.3 — custom-token FS send produces FS HTR fee change', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const mintAddr = await walletA.getAddressAtIndex(1, { legacy: true });
+    const tokenResp = await createTokenHelper(walletA, 'FsChangeTok', 'FCT', 1000n, {
+      address: mintAddr,
+    });
+    await waitUntilNextTimestamp(walletA, tokenResp.hash!);
+
+    const beforeHtr = await sumHtrByPool(walletA);
+    expect(beforeHtr.shielded).toBe(0n);
+    expect(beforeHtr.transparent).toBeGreaterThan(0n);
+
+    // Mobile flow for a custom-token FS send: recipient + self-change
+    // both shielded (mobile builds them) and `changeShieldedMode: FS`
+    // tells wallet-lib to also shield the HTR fee change.
+    const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const saA0 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const tx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB0,
+          value: 200n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: saA0,
+          value: 800n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED }
+    );
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletA, tx!.hash!);
+
+    const afterHtr = await sumHtrByPool(walletA);
+    // Conversion should have moved walletA's HTR from transparent to
+    // shielded (minus the per-shielded-output fees burned).
+    expect(afterHtr.shielded).toBeGreaterThan(0n);
+    expect(afterHtr.transparent).toBe(0n);
+    // Total balance dropped only by the fees, never by the change value.
+    const balA = await walletA.getBalance(NATIVE_TOKEN_UID);
+    expect(balA[0].balance.unlocked).toBeGreaterThan(0n);
+    expect(balA[0].balance.unlocked).toBeLessThan(beforeHtr.transparent);
+    // The unlocked total equals the shielded sum (everything moved).
+    expect(balA[0].balance.unlocked).toBe(afterHtr.shielded);
+  });
+
+  /**
+   * Q.4 — Mirror of Q.3 with AmountShielded mode. AS uses the same
+   * `shielded_outputs[]` array on-chain but a smaller per-output fee
+   * constant; the conversion must pick the AS fee, not the FS one.
+   */
+  it('Q.4 — custom-token AS send produces AS HTR fee change', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const mintAddr = await walletA.getAddressAtIndex(1, { legacy: true });
+    const tokenResp = await createTokenHelper(walletA, 'AsChangeTok', 'ACT', 1000n, {
+      address: mintAddr,
+    });
+    await waitUntilNextTimestamp(walletA, tokenResp.hash!);
+
+    const beforeHtr = await sumHtrByPool(walletA);
+    expect(beforeHtr.shielded).toBe(0n);
+    expect(beforeHtr.transparent).toBeGreaterThan(0n);
+
+    const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const saA0 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const tx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB0,
+          value: 200n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: saA0,
+          value: 800n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED }
+    );
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletA, tx!.hash!);
+
+    const afterHtr = await sumHtrByPool(walletA);
+    expect(afterHtr.shielded).toBeGreaterThan(0n);
+    expect(afterHtr.transparent).toBe(0n);
+    const balA = await walletA.getBalance(NATIVE_TOKEN_UID);
+    expect(balA[0].balance.unlocked).toBe(afterHtr.shielded);
+  });
+
+  /**
+   * Q.5 — Default behavior (no `changeShieldedMode`) keeps the HTR
+   * change transparent. Regression guard: existing callers that don't
+   * opt in must see no change in behavior.
+   */
+  it('Q.5 — without changeShieldedMode, HTR fee change stays transparent', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const mintAddr = await walletA.getAddressAtIndex(1, { legacy: true });
+    const tokenResp = await createTokenHelper(walletA, 'NoOptTok', 'NOT', 1000n, {
+      address: mintAddr,
+    });
+    await waitUntilNextTimestamp(walletA, tokenResp.hash!);
+
+    const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const saA0 = await walletA.getAddressAtIndex(2, { legacy: false });
+    // Same outputs as Q.3 but no `changeShieldedMode` option. Pre-fix
+    // and post-fix behavior must match here — a regression in this
+    // path would either populate the shielded HTR pool or break the
+    // default flow.
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB0,
+        value: 200n,
+        token: tokenResp.hash,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: saA0,
+        value: 800n,
+        token: tokenResp.hash,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(walletA, tx!.hash!);
+
+    const afterHtr = await sumHtrByPool(walletA);
+    expect(afterHtr.shielded).toBe(0n);
+    expect(afterHtr.transparent).toBeGreaterThan(0n);
+  });
 });

@@ -238,6 +238,16 @@ export interface IHistoryTx {
   nc_seqnum?: number; // For nano contract
   first_block?: string | null;
   shielded_outputs?: IHistoryShieldedOutput[]; // For confidential transactions
+  /**
+   * Tx-level headers persisted from the wire payload (FeeHeader,
+   * UnshieldBalanceHeader, ...). The wallet keeps them as the original
+   * untyped on-chain shape (each entry has `id` + header-specific
+   * fields like `entries[]` for FeeHeader); reconstructing the typed
+   * `Header` instance here would force `processNewTx` to call into the
+   * tx parser unnecessarily. Display layers can read the entries and
+   * compute network fees directly.
+   */
+  headers?: { id?: number; entries?: { tokenIndex?: number; amount?: bigint }[] }[];
 }
 
 // Equivalent to IShieldedOutput in shielded/types.ts but uses IHistoryOutputDecoded
@@ -252,6 +262,14 @@ export interface IHistoryShieldedOutput {
   decoded: IHistoryOutputDecoded;
   asset_commitment?: string; // hex (FullShielded only)
   surjection_proof?: string; // hex (FullShielded only)
+  // Set by the fullnode when the shielded output is spent by another tx.
+  // Null when the slot is still unspent. Mirrors the transparent
+  // `IHistoryOutput.spent_by` semantics — see hathor-core's
+  // `_shielded_output_to_json` + `meta.get_output_spent_by` in
+  // `base_transaction.py`. Threaded through normalizeShieldedOutputs and
+  // the processNewTx decryption append so the wallet treats shielded
+  // and transparent outputs identically when checking spend status.
+  spent_by?: string | null;
 }
 
 export enum TxHistoryProcessingStatus {

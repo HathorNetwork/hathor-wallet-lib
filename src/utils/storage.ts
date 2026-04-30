@@ -562,12 +562,20 @@ export async function processSingleTx(
     // the UTXO directly by {tx_id, index} and delete it. Without this, the
     // wallet's UTXO selector keeps offering the spent shielded UTXO and the
     // next send fails on-chain ("input has already been spent").
+    //
+    // Delete unconditionally when a UTXO exists at this slot. The
+    // structural check above (input.index >= origTx.outputs.length AND
+    // totalOutputs > input.index) already proves the slot falls inside
+    // parent.shielded_outputs[], so it IS a shielded input regardless of
+    // how the local UTXO record happens to be flagged. A previous
+    // version gated on `shieldedUtxo?.shielded`, which silently leaked
+    // legacy/corrupted records back to the selector.
     if (input.index >= origTx.outputs.length) {
       const shieldedUtxo = await storage.getUtxo({
         txId: input.tx_id,
         index: input.index,
       });
-      if (shieldedUtxo?.shielded) {
+      if (shieldedUtxo) {
         await store.deleteUtxo(shieldedUtxo);
       }
       continue;
@@ -631,9 +639,35 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
     }
 
     if (output.spent_by === null) {
+      // Preserve shielded fields and use the on-chain absolute index for
+      // shielded entries — same logic as the saveUtxo loop in processNewTx.
+      // Without this, a metadata update (first_block confirmation, height
+      // change, etc.) overwrites a correctly-saved shielded UTXO with a
+      // bare record missing `shielded: true` / `blindingFactor`. The next
+      // send then can't compute the excess blinding factor for the
+      // unshield path and the fullnode rejects with
+      // "full-unshield tx … must carry an unshield balance header".
+      const isShielded = transactionUtils.isShieldedOutputEntry(output);
+      let utxoIndex = index;
+      if (isShielded) {
+        const recorded = (output as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex;
+        if (recorded !== undefined) {
+          utxoIndex = recorded;
+        } else {
+          const oc = (output as IShieldedOutputEntry).commitment;
+          const shielded = tx.shielded_outputs ?? [];
+          const matchIdx = shielded.findIndex(s => s.commitment === oc);
+          if (matchIdx >= 0) {
+            const transparentLen = tx.outputs.filter(
+              o => !transactionUtils.isShieldedOutputEntry(o)
+            ).length;
+            utxoIndex = transparentLen + matchIdx;
+          }
+        }
+      }
       await store.saveUtxo({
         txId: tx.tx_id,
-        index,
+        index: utxoIndex,
         type: tx.version,
         authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
         address: output.decoded.address,
@@ -641,6 +675,13 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
         value: output.value,
         timelock: output.decoded.timelock || null,
         height: tx.height || null,
+        ...(isShielded
+          ? {
+              shielded: true,
+              blindingFactor: (output as IShieldedOutputEntry).blindingFactor,
+              assetBlindingFactor: (output as IShieldedOutputEntry).assetBlindingFactor,
+            }
+          : {}),
       });
     } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
@@ -916,7 +957,14 @@ export async function processNewTx(
           script: so?.script ?? '',
           decoded: { ...so?.decoded, address: result.address },
           token: walletTokenUid,
-          spent_by: null,
+          // Preserve the spent_by the fullnode reported on the parent
+          // shielded output. hathor-core's _shielded_output_to_json
+          // populates this exactly the same way it does for transparent
+          // outputs. Falling back to null when the field is absent
+          // (e.g. on sender-local insert before any spend update has
+          // arrived) so downstream `output.spent_by !== null` works
+          // identically for shielded and transparent.
+          spent_by: so?.spent_by ?? null,
           commitment: so?.commitment ?? '',
           range_proof: so?.range_proof ?? '',
           ephemeral_pubkey: so?.ephemeral_pubkey ?? '',
@@ -1088,13 +1136,17 @@ export async function processNewTx(
   // already been decoded and their UTXOs saved by the time we reach a tx that
   // spends them.
   //
-  // We also delete the spent shielded UTXO here. The transparent path tracks
-  // spent_by via the on-chain output, so the output loop above naturally skips
-  // saveUtxo for spent outputs (`output.spent_by !== null`). Shielded outputs
-  // don't carry a usable spent_by in the wallet's stored form (the appended
-  // decoded entry hardcodes spent_by:null), so without explicit deletion here
-  // the wallet's selectUtxos would keep offering the spent UTXO and the next
-  // send would fail on-chain with "input has already been spent".
+  // We also delete the spent shielded UTXO here as defense-in-depth. The
+  // transparent path tracks spent_by via the on-chain output, so the output
+  // loop above naturally skips saveUtxo for spent outputs
+  // (`output.spent_by !== null`). Shielded outputs now thread spent_by
+  // through the same way (see processNewTx output decode and
+  // normalizeShieldedOutputs), so in steady state the same skip applies.
+  // But shielded inputs cite their absolute on-chain index and we can't
+  // always rely on the parent's spent_by update arriving in the same
+  // websocket batch as the spending tx — so the explicit delete below
+  // guarantees the spent UTXO is gone before selectUtxos runs again,
+  // avoiding the "input has already been spent" failure on the next send.
   // Enrich shielded inputs. On first delivery the spent UTXO still exists in
   // storage — we read value/token/address off it, delete it, and continue. On
   // re-delivery the UTXO is gone, so we fall back to the enriched copy we
@@ -1108,7 +1160,18 @@ export async function processNewTx(
     // resurrect the spent UTXO — leaving a double-spend trap for the next
     // send.
     const utxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
-    if (utxo && utxo.shielded) {
+    // Detect shielded slot structurally: input.index is shielded iff it
+    // points beyond the parent's transparent outputs into the parent's
+    // shielded_outputs[] array. This is independent of the local UTXO's
+    // `shielded` flag, which a buggy/legacy save might have stripped.
+    let isShieldedSlot = !!utxo?.shielded;
+    if (!isShieldedSlot) {
+      const parentTx = await store.getTx(input.tx_id);
+      if (parentTx && input.index >= parentTx.outputs.length) {
+        isShieldedSlot = true;
+      }
+    }
+    if (utxo && isShieldedSlot) {
       if (!input.decoded?.address || input.token === undefined) {
         input.decoded = { address: utxo.address };
         input.value = utxo.value;
@@ -1138,7 +1201,30 @@ export async function processNewTx(
     // iterates chronologically) and recover the output being spent.
     const origTx = await store.getTx(input.tx_id);
     if (!origTx) continue;
-    if (input.index >= origTx.outputs.length) continue;
+    if (input.index >= origTx.outputs.length) {
+      // Sparse-decode shielded case: when origTx has multiple shielded outputs
+      // but only some are owned/decoded, the appended decoded entry sits at a
+      // lower position than its on-chain index. Look it up by `onChainIndex`.
+      // Without this, a shielded input pointing to e.g. on-chain index 1 in a
+      // tx where only one entry was decoded (at position 0) would be skipped —
+      // the spending tx wouldn't subtract its input, inflating balance by the
+      // value of that shielded UTXO.
+      const sparseDecoded = (origTx.outputs ?? []).find(
+        o =>
+          transactionUtils.isShieldedOutputEntry(o) &&
+          (o as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex === input.index
+      );
+      if (
+        sparseDecoded?.decoded?.address &&
+        (await storage.isAddressMine(sparseDecoded.decoded.address))
+      ) {
+        input.decoded = sparseDecoded.decoded;
+        input.value = sparseDecoded.value;
+        input.token = sparseDecoded.token;
+        input.token_data = sparseDecoded.token_data ?? 0;
+      }
+      continue;
+    }
     const origOutput = origTx.outputs[input.index];
     if (!origOutput?.decoded?.address) continue;
     if (!(await storage.isAddressMine(origOutput.decoded.address))) continue;

@@ -182,6 +182,7 @@ const IHistoryShieldedOutputSchema = z
     decoded: IHistoryOutputDecodedSchema,
     asset_commitment: z.string().optional(),
     surjection_proof: z.string().optional(),
+    spent_by: z.string().nullable().optional(),
   })
   .passthrough();
 

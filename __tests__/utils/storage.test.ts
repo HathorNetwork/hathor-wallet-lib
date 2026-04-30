@@ -17,7 +17,10 @@ import {
   getHistorySyncMethod,
   apiSyncHistory,
   addCreatedTokenFromTx,
+  processMetadataChanged,
 } from '../../src/utils/storage';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
@@ -417,4 +420,174 @@ test('addCreatedTokenFromTx', async () => {
     version: 1,
   });
   await expect(storage.getToken('d00d')).resolves.not.toBeNull();
+});
+
+describe('processMetadataChanged — shielded UTXO preservation', () => {
+  // Regression test for the bug that caused mobile sends to fail with
+  // "full-unshield tx (shielded inputs, no shielded outputs) must carry an
+  // unshield balance header". Sequence: receive a shielded HTR tx →
+  // processNewTx saves the UTXO with shielded:true + blindingFactor at the
+  // on-chain index → fullnode confirms the tx in a block and pushes a
+  // metadata update → onNewTx routes the update to processMetadataChanged →
+  // before the fix, the function re-saved the UTXO with the bare schema
+  // (no shielded flag, no blinding factors), corrupting the record. The
+  // wallet's selectUtxos picked it for a later send, prepareTxData treated
+  // it as transparent, and skipped the excess-blinding-factor computation.
+  // Fullnode rejected the tx because it could see the input was a shielded
+  // slot in the parent's shielded_outputs[].
+  //
+  // The integration suite did not catch this: existing tests spend the
+  // shielded UTXO inside the same second they receive it, before the
+  // fullnode's metadata update for first_block has had time to fire. The
+  // unit-level coverage here pins the function's contract directly so a
+  // future refactor can't reintroduce the gap.
+  const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566778899';
+  const TRANSPARENT_OUTPUT_COUNT = 0;
+  const SHIELDED_SLOT = 0;
+  const ON_CHAIN_INDEX = TRANSPARENT_OUTPUT_COUNT + SHIELDED_SLOT;
+  const COMMITMENT = 'deadbeef'.repeat(8);
+  const BLINDING_FACTOR = 'aabbccdd'.repeat(8);
+  const ASSET_BLINDING_FACTOR = '11223344'.repeat(8);
+
+  // Mirrors the shape produced by processNewTx after decrypting a shielded
+  // output: type='shielded' is appended to tx.outputs, the entry carries
+  // commitment, blindingFactor, assetBlindingFactor, and onChainIndex.
+  const buildTxWithDecodedShielded = () => ({
+    tx_id: TX_ID,
+    version: 1,
+    timestamp: 1,
+    is_voided: false,
+    nonce: 0,
+    weight: 1,
+    parents: [],
+    inputs: [],
+    height: 100,
+    tokens: [],
+    outputs: [
+      {
+        type: 'shielded',
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        token_data: 0,
+        script: '',
+        commitment: COMMITMENT,
+        range_proof: '',
+        ephemeral_pubkey: '',
+        decoded: { address: SHIELDED_ADDR, timelock: null },
+        spent_by: null,
+        blindingFactor: BLINDING_FACTOR,
+        assetBlindingFactor: ASSET_BLINDING_FACTOR,
+        onChainIndex: ON_CHAIN_INDEX,
+      },
+    ],
+    shielded_outputs: [
+      {
+        mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        commitment: COMMITMENT,
+        range_proof: '',
+        script: '',
+        token_data: 0,
+        ephemeral_pubkey: '',
+        decoded: { address: SHIELDED_ADDR, timelock: null },
+      },
+    ],
+  });
+
+  // The wallet only re-saves UTXOs whose address is registered as ours.
+  // Stub isAddressMine so processMetadataChanged enters the saveUtxo branch
+  // for our shielded entry.
+  const seedStorage = async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    await store.saveUtxo({
+      txId: TX_ID,
+      index: ON_CHAIN_INDEX,
+      type: 1,
+      authorities: 0n,
+      address: SHIELDED_ADDR,
+      token: NATIVE_TOKEN_UID,
+      value: 50n,
+      timelock: null,
+      height: 100,
+      shielded: true,
+      blindingFactor: BLINDING_FACTOR,
+      assetBlindingFactor: ASSET_BLINDING_FACTOR,
+    });
+    return { store, storage };
+  };
+
+  it('preserves shielded:true and blindingFactors when re-saving via metadata update', async () => {
+    const { store, storage } = await seedStorage();
+
+    // Sanity: the seeded UTXO is shielded.
+    const before = await store.getUtxo({ txId: TX_ID, index: ON_CHAIN_INDEX });
+    expect(before?.shielded).toBe(true);
+    expect(before?.blindingFactor).toBe(BLINDING_FACTOR);
+
+    await processMetadataChanged(storage, buildTxWithDecodedShielded());
+
+    // Post-fix: the record is still flagged shielded with intact blinding
+    // factors. Pre-fix this assertion would have failed because the bare
+    // saveUtxo overwrote the record without the shielded fields.
+    const after = await store.getUtxo({ txId: TX_ID, index: ON_CHAIN_INDEX });
+    expect(after?.shielded).toBe(true);
+    expect(after?.blindingFactor).toBe(BLINDING_FACTOR);
+    expect(after?.assetBlindingFactor).toBe(ASSET_BLINDING_FACTOR);
+    expect(after?.value).toBe(50n);
+    expect(after?.token).toBe(NATIVE_TOKEN_UID);
+  });
+
+  it('uses the on-chain absolute index, not the entries() position', async () => {
+    // Transparent output ahead of the shielded entry: positional index 1,
+    // on-chain absolute index also 1 in this case (one transparent + one
+    // shielded). With sparse-decode we'd have a drift, but the simpler
+    // case is enough to pin the index path: the saveUtxo MUST use the
+    // entry's recorded `onChainIndex` (or commitment-match recovery), not
+    // the array position alone.
+    const { store, storage } = await seedStorage();
+
+    // Replace the seeded tx with a tx that has a transparent output AND
+    // a shielded entry, and pre-populate the shielded UTXO at the right
+    // absolute index (1, since transparent comes first).
+    await store.saveUtxo({
+      txId: TX_ID,
+      index: 1,
+      type: 1,
+      authorities: 0n,
+      address: SHIELDED_ADDR,
+      token: NATIVE_TOKEN_UID,
+      value: 50n,
+      timelock: null,
+      height: 100,
+      shielded: true,
+      blindingFactor: BLINDING_FACTOR,
+      assetBlindingFactor: ASSET_BLINDING_FACTOR,
+    });
+
+    const tx = buildTxWithDecodedShielded();
+    tx.outputs.unshift({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type: 'p2pkh' as any,
+      value: 1n,
+      token: NATIVE_TOKEN_UID,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      token_data: 0 as any,
+      script: '',
+      decoded: { address: SHIELDED_ADDR, timelock: null },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      spent_by: null as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (tx.outputs[1] as any).onChainIndex = 1;
+
+    await processMetadataChanged(storage, tx);
+
+    // Shielded UTXO at on-chain index 1 stays correct.
+    const shieldedAfter = await store.getUtxo({ txId: TX_ID, index: 1 });
+    expect(shieldedAfter?.shielded).toBe(true);
+    expect(shieldedAfter?.blindingFactor).toBe(BLINDING_FACTOR);
+  });
 });

@@ -1025,7 +1025,7 @@ class HathorWallet extends EventEmitter {
         break;
       }
       const txbalance = await this.getTxBalance(tx);
-      const txHistory = {
+      const txHistory: GetTxHistoryFullnodeFacadeReturnType = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
@@ -1036,6 +1036,15 @@ class HathorWallet extends EventEmitter {
         ncCaller: (tx.nc_address &&
           new Address(tx.nc_address, { network: this.getNetworkObject() })) as Address,
         firstBlock: tx.first_block as string | undefined,
+        // Pass-through fields needed by display layers that compute
+        // fees per-tx (network fee from FeeHeader entries, privacy
+        // fee from per-shielded-output mode). Cheap to copy and lets
+        // the consumer skip a second round-trip via `getTx`. Both are
+        // optional on `IHistoryTx`; spread-conditionally so the
+        // returned shape doesn't carry explicit `undefined` keys when
+        // the upstream payload didn't include them.
+        ...(tx.headers ? { headers: tx.headers } : {}),
+        ...(tx.shielded_outputs ? { shielded_outputs: tx.shielded_outputs } : {}),
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
         txHistory.ncCaller = (tx.nc_pubkey &&
@@ -1145,6 +1154,13 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
+        // hathor-core surfaces `spent_by` on both transparent and
+        // shielded outputs (see `_shielded_output_to_json` in
+        // base_transaction.py and `meta.get_output_spent_by`).
+        // normalizeShieldedOutputs + the processNewTx decryption block
+        // thread the field through onto the decoded shielded entries
+        // appended to tx.outputs, so the canonical "is this UTXO
+        // spent" check is the same regardless of output type.
         const is_spent = output.spent_by !== null;
         const is_time_locked = transactionUtils.isOutputLocked(output);
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
@@ -1762,6 +1778,7 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       startMiningTx: true,
       pinCode: null,
+      changeShieldedMode: null,
       ...options,
     };
 
@@ -1769,7 +1786,7 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress, changeShieldedMode } = newOptions;
 
     // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
     const network = this.storage.config.getNetwork();
@@ -1805,6 +1822,7 @@ class HathorWallet extends EventEmitter {
       outputs: sendOutputs,
       inputs,
       changeAddress,
+      changeShieldedMode,
       pin,
     });
   }
