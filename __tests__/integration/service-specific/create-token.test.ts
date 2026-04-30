@@ -90,6 +90,10 @@ describe('[Service] createNewToken', () => {
         }
       });
 
+      expect(tokenOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(mintAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(meltAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+
       // Verify token output went to destination address
       const tokenUtxo = await sw.getUtxoFromId(tokenUid, tokenOutputIndex);
       expect(tokenUtxo).toStrictEqual(

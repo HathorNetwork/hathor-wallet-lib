@@ -24,7 +24,6 @@ import transaction from '../../src/utils/transaction';
 import { WalletType, TokenVersion } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { TransactionTemplateBuilder } from '../../src/template/transaction';
-import FeeHeader from '../../src/headers/fee';
 import Header from '../../src/headers/base';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
@@ -847,92 +846,8 @@ const validateFeeAmount = (headers: Header[], amount: bigint) => {
 };
 
 // authority utxo selection tests moved to fullnode-specific/authority-utxos.test.ts
-
-describe('createNewToken', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('should create a new token fee token', async () => {
-    // Creating the wallet with the funds
-    const hWallet = await generateWalletHelper();
-    const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
-
-    // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('TokenName', 'TKN', 8582n, {
-      tokenVersion: TokenVersion.FEE,
-    });
-
-    // Validating the creation tx
-    expect(newTokenResponse).toMatchObject({
-      hash: expect.any(String),
-      name: 'TokenName',
-      symbol: 'TKN',
-      version: 2,
-      tokenVersion: TokenVersion.FEE,
-      headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
-    });
-    const tokenUid = newTokenResponse.hash;
-
-    // Validating wallet balance is updated with this new token
-    await waitForTxReceived(hWallet, tokenUid);
-    const tknBalance = await hWallet.getBalance(tokenUid);
-    expect(tknBalance[0].token.version).toBe(TokenVersion.FEE);
-    expect(tknBalance[0].balance.unlocked).toBe(8582n);
-  });
-
-  it('should create a fee token with data outputs', async () => {
-    // Creating the wallet with the funds
-    const hWallet = await generateWalletHelper();
-    const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
-
-    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    const previousHtrBalance = htrBalance[0].balance.unlocked;
-
-    const tx = await hWallet.createNewToken('TokenName', 'TKN', 9999n, {
-      changeAddress: addr0,
-      createMint: false,
-      createMelt: false,
-      data: ['Test Fee Data 01'],
-      tokenVersion: TokenVersion.FEE,
-    });
-
-    const expectedHtrBalance = previousHtrBalance - 2n;
-
-    // Validating the creation tx
-    expect(tx).toMatchObject({
-      hash: expect.any(String),
-      name: 'TokenName',
-      symbol: 'TKN',
-      version: 2,
-      tokenVersion: TokenVersion.FEE,
-      headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
-      outputs: expect.arrayContaining([
-        expect.objectContaining({ value: 1n, tokenData: 0 }),
-        // this validation is important to check if the data output is being discounted correctly
-        expect.objectContaining({ value: expectedHtrBalance, tokenData: 0 }),
-        expect.objectContaining({ value: 9999n, tokenData: 1 }),
-      ]),
-    });
-
-    const feeHeader = tx?.getFeeHeader();
-    expect(feeHeader).not.toBeNull();
-    // in addition to the previous htr validation, 1 HTR should be declared as fee for the token creation
-    expect(feeHeader!.entries[0].amount).toBe(1n); // HTR
-
-    // Validating wallet balance is updated with this new token
-    await waitForTxReceived(hWallet, tx!.hash!);
-    const tknBalance = await hWallet.getBalance(tx!.hash!);
-    expect(tknBalance[0].token.version).toBe(TokenVersion.FEE);
-    expect(tknBalance[0].balance.unlocked).toBe(9999n);
-
-    const htrBalanceAfter = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalanceAfter[0].balance.unlocked).toBe(expectedHtrBalance);
-  });
-});
+// createNewToken tests moved to shared/create-token.test.ts and
+// fullnode-specific/create-token.test.ts (including the FEE-token variants)
 
 describe('mintTokens', () => {
   afterEach(async () => {

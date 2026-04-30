@@ -15,12 +15,26 @@
  * Facade-specific tests live in:
  * - `fullnode-specific/create-token.test.ts`
  * - `service-specific/create-token.test.ts`
+ *
+ * Why those tests are not shared here:
+ * Both facades create tokens identically; what differs is how the resulting
+ * state is *observed*. Sharing them would require new adapter methods that
+ * paper over real API asymmetry (script parsing vs. service lookup), which
+ * is more abstraction than is justified for the current test count.
+ *   - Fullnode reads authority addresses by calling `parseScript` on raw
+ *     `Output` buffers using `wallet.getNetworkObject()`.
+ *   - Wallet-service reads them by calling `getUtxoFromId(txId, index)`,
+ *     a method that has no fullnode equivalent.
+ *   - Wallet-service `getBalance()` returns a `tokenAuthorities` field that
+ *     fullnode `getBalance()` does not expose at all.
  */
 
 import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { TokenVersion } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import FeeHeader from '../../../src/headers/fee';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -149,6 +163,113 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       // Native token balance was reduced by the deposit (1% of token amount = 1 HTR for 100n)
       const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
       expect(htrBalance[0].balance.unlocked).toBe(9n);
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  // FEE-token creation tests are co-located here (rather than in the dedicated
+  // fee-token suites) because createNewToken cannot be exhaustively validated
+  // without exercising the FEE token version alongside the deposit-based one.
+
+  it('should create a FEE token with default options', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const addr = (await wallet.getAddressAtIndex(0))!;
+      await adapter.injectFunds(wallet, addr, 10n);
+
+      const tokenAmount = 8582n;
+      const created = await adapter.createToken(wallet, TOKEN_NAME, TOKEN_SYMBOL, tokenAmount, {
+        tokenVersion: TokenVersion.FEE,
+      });
+
+      expect(created.transaction).toMatchObject({
+        hash: created.hash,
+        name: TOKEN_NAME,
+        symbol: TOKEN_SYMBOL,
+        version: 2,
+        tokenVersion: TokenVersion.FEE,
+        headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
+      });
+
+      const tokenBalance = await wallet.getBalance(created.hash);
+      expect(tokenBalance[0].token.version).toBe(TokenVersion.FEE);
+      expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('should create a FEE token with data outputs', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const addr = (await wallet.getAddressAtIndex(0))!;
+      await adapter.injectFunds(wallet, addr, 10n);
+
+      const htrBefore = (await wallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+
+      const tokenAmount = 9999n;
+      // 1n HTR for the data output + 1n HTR fee for the token creation
+      const expectedHtrAfter = htrBefore - 2n;
+
+      const created = await adapter.createToken(wallet, TOKEN_NAME, TOKEN_SYMBOL, tokenAmount, {
+        changeAddress: addr,
+        createMint: false,
+        createMelt: false,
+        data: ['Test Fee Data 01'],
+        tokenVersion: TokenVersion.FEE,
+      });
+
+      expect(created.transaction).toMatchObject({
+        hash: created.hash,
+        name: TOKEN_NAME,
+        symbol: TOKEN_SYMBOL,
+        version: 2,
+        tokenVersion: TokenVersion.FEE,
+        headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
+        outputs: expect.arrayContaining([
+          expect.objectContaining({ value: 1n, tokenData: 0 }),
+          expect.objectContaining({ value: expectedHtrAfter, tokenData: 0 }),
+          expect.objectContaining({ value: tokenAmount, tokenData: 1 }),
+        ]),
+      });
+
+      const tknBalance = await wallet.getBalance(created.hash);
+      expect(tknBalance[0].token.version).toBe(TokenVersion.FEE);
+      expect(tknBalance[0].balance.unlocked).toBe(tokenAmount);
+
+      const htrAfter = (await wallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+      expect(htrAfter).toBe(expectedHtrAfter);
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('should create a FEE token without authorities and charge the fee', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const addr = (await wallet.getAddressAtIndex(0))!;
+      // Just enough to cover the fee — no excess HTR change
+      await adapter.injectFunds(wallet, addr, 1n);
+
+      const created = await adapter.createToken(wallet, TOKEN_NAME, TOKEN_SYMBOL, 8582n, {
+        createMint: false,
+        createMelt: false,
+        tokenVersion: TokenVersion.FEE,
+      });
+
+      expect(created.transaction.headers).toEqual([new FeeHeader([{ tokenIndex: 0, amount: 1n }])]);
+
+      // No authority outputs were created
+      const authorityOutputs = created.transaction.outputs.filter(o => o.tokenData === 129);
+      expect(authorityOutputs).toHaveLength(0);
+
+      // The 1n HTR fee consumed all available HTR
+      const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(htrBalance[0].balance.unlocked).toBe(0n);
     } finally {
       await adapter.stopWallet(wallet);
     }
