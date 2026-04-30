@@ -24,6 +24,18 @@ const TOKEN_NAME = 'TestToken';
 const TOKEN_SYMBOL = 'TST';
 const TOKEN_AMOUNT = 100n;
 
+/**
+ * Identifies HTR (native-token) outputs in a `createNewToken` response.
+ *
+ * The wallet-service facade sets `tokenData` to `undefined` on the HTR
+ * change output it constructs, while still emitting `tokenData: 0` for HTR
+ * data outputs. The fullnode facade uses `0` for both. Treat either value
+ * as HTR so the same filter works regardless of which facade produced it.
+ */
+function isHtrOutput(output: Output): boolean {
+  return output.tokenData === 0 || output.tokenData == null;
+}
+
 beforeAll(async () => {
   await adapter.suiteSetup();
 });
@@ -88,11 +100,7 @@ describe('[Service] createNewToken', () => {
           } else if (output.value === TOKEN_MELT_MASK) {
             meltAuthorityOutputIndex = index;
           }
-        } else if (
-          output.tokenData === 0 &&
-          output.value !== TOKEN_MINT_MASK &&
-          output.value !== TOKEN_MELT_MASK
-        ) {
+        } else if (isHtrOutput(output)) {
           changeOutputIndex = index;
         }
       });
@@ -149,15 +157,17 @@ describe('[Service] createNewToken', () => {
     const { wallet, addresses } = await adapter.createWallet();
     const sw = wallet as unknown as HathorWalletServiceWallet;
     try {
-      // Inject exactly the deposit (1% of 100n = 1n). The wallet consumes
-      // the entire input and emits no HTR change output.
-      await adapter.injectFunds(wallet, addresses![0], 1n);
+      // Inject exactly the deposit (1% of 1000n = 10n). A single 10n UTXO
+      // is fully consumed by the deposit so the wallet has no remainder
+      // to emit as change — guarantees the no-change scenario.
+      const tokenAmount = 1000n;
+      await adapter.injectFunds(wallet, addresses![0], 10n);
 
       const destinationAddress = addresses![9];
       const mintAuthorityAddress = addresses![8];
       const meltAuthorityAddress = addresses![7];
 
-      const createTokenTx = (await sw.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_AMOUNT, {
+      const createTokenTx = (await sw.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, tokenAmount, {
         pinCode: adapter.defaultPinCode,
         address: destinationAddress,
         createMint: true,
@@ -169,10 +179,8 @@ describe('[Service] createNewToken', () => {
       const tokenUid = createTokenTx.hash!;
       await adapter.waitForTx(wallet, tokenUid);
 
-      // No HTR (tokenData=0, value !== authority mask) output should exist
-      const htrOutputs = createTokenTx.outputs.filter(
-        o => o.tokenData === 0 && o.value !== TOKEN_MINT_MASK && o.value !== TOKEN_MELT_MASK
-      );
+      // No HTR output should exist — the entire input was consumed as deposit
+      const htrOutputs = createTokenTx.outputs.filter(isHtrOutput);
       expect(htrOutputs).toHaveLength(0);
 
       // The token + mint + melt outputs should still be present and routed correctly
@@ -198,7 +206,7 @@ describe('[Service] createNewToken', () => {
       expect(tokenUtxo).toStrictEqual(
         expect.objectContaining({
           address: destinationAddress,
-          value: TOKEN_AMOUNT,
+          value: tokenAmount,
           tokenId: tokenUid,
         })
       );
