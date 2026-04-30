@@ -33,11 +33,18 @@ afterAll(async () => {
 });
 
 describe('[Service] createNewToken', () => {
-  it('should create token with specific addresses', async () => {
+  // Two address-routing tests with deterministic HTR funding:
+  // - "with HTR change" funds well above the deposit, so a change output
+  //   is guaranteed and routing to changeAddress can be asserted strictly.
+  // - "without HTR change" funds exactly the deposit, so no HTR output is
+  //   produced and that absence is what the test asserts.
+
+  it('should create token with specific addresses (with HTR change)', async () => {
     const { wallet, addresses } = await adapter.createWallet();
     const sw = wallet as unknown as HathorWalletServiceWallet;
     try {
-      await adapter.injectFunds(wallet, addresses![0], 10n);
+      // 100n HTR funds a 100n token (1% deposit = 1n) → 99n change is guaranteed.
+      await adapter.injectFunds(wallet, addresses![0], 100n);
 
       // Assign specific addresses for each component (last indices, going backwards)
       const destinationAddress = addresses![9];
@@ -93,6 +100,7 @@ describe('[Service] createNewToken', () => {
       expect(tokenOutputIndex).toBeGreaterThanOrEqual(0);
       expect(mintAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
       expect(meltAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(changeOutputIndex).toBeGreaterThanOrEqual(0);
 
       // Verify token output went to destination address
       const tokenUtxo = await sw.getUtxoFromId(tokenUid, tokenOutputIndex);
@@ -124,14 +132,85 @@ describe('[Service] createNewToken', () => {
         })
       );
 
-      // Verify change output (if present) went to change address
-      expect(changeOutputIndex).toBeGreaterThanOrEqual(0);
+      // Verify HTR change went to the configured changeAddress
       const changeUtxo = await sw.getUtxoFromId(tokenUid, changeOutputIndex);
       expect(changeUtxo).toStrictEqual(
         expect.objectContaining({
           address: changeAddress,
           tokenId: NATIVE_TOKEN_UID,
         })
+      );
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('should create token with specific addresses (no HTR change)', async () => {
+    const { wallet, addresses } = await adapter.createWallet();
+    const sw = wallet as unknown as HathorWalletServiceWallet;
+    try {
+      // Inject exactly the deposit (1% of 100n = 1n). The wallet consumes
+      // the entire input and emits no HTR change output.
+      await adapter.injectFunds(wallet, addresses![0], 1n);
+
+      const destinationAddress = addresses![9];
+      const mintAuthorityAddress = addresses![8];
+      const meltAuthorityAddress = addresses![7];
+
+      const createTokenTx = (await sw.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_AMOUNT, {
+        pinCode: adapter.defaultPinCode,
+        address: destinationAddress,
+        createMint: true,
+        mintAuthorityAddress,
+        createMelt: true,
+        meltAuthorityAddress,
+      })) as CreateTokenTransaction;
+
+      const tokenUid = createTokenTx.hash!;
+      await adapter.waitForTx(wallet, tokenUid);
+
+      // No HTR (tokenData=0, value !== authority mask) output should exist
+      const htrOutputs = createTokenTx.outputs.filter(
+        o => o.tokenData === 0 && o.value !== TOKEN_MINT_MASK && o.value !== TOKEN_MELT_MASK
+      );
+      expect(htrOutputs).toHaveLength(0);
+
+      // The token + mint + melt outputs should still be present and routed correctly
+      let tokenOutputIndex = -1;
+      let mintAuthorityOutputIndex = -1;
+      let meltAuthorityOutputIndex = -1;
+      createTokenTx.outputs.forEach((output: Output, index: number) => {
+        if (output.tokenData === 1) {
+          tokenOutputIndex = index;
+        } else if (output.tokenData === 129) {
+          if (output.value === TOKEN_MINT_MASK) {
+            mintAuthorityOutputIndex = index;
+          } else if (output.value === TOKEN_MELT_MASK) {
+            meltAuthorityOutputIndex = index;
+          }
+        }
+      });
+      expect(tokenOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(mintAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+      expect(meltAuthorityOutputIndex).toBeGreaterThanOrEqual(0);
+
+      const tokenUtxo = await sw.getUtxoFromId(tokenUid, tokenOutputIndex);
+      expect(tokenUtxo).toStrictEqual(
+        expect.objectContaining({
+          address: destinationAddress,
+          value: TOKEN_AMOUNT,
+          tokenId: tokenUid,
+        })
+      );
+
+      const mintUtxo = await sw.getUtxoFromId(tokenUid, mintAuthorityOutputIndex);
+      expect(mintUtxo).toStrictEqual(
+        expect.objectContaining({ address: mintAuthorityAddress, tokenId: tokenUid })
+      );
+
+      const meltUtxo = await sw.getUtxoFromId(tokenUid, meltAuthorityOutputIndex);
+      expect(meltUtxo).toStrictEqual(
+        expect.objectContaining({ address: meltAuthorityAddress, tokenId: tokenUid })
       );
     } finally {
       await adapter.stopWallet(wallet);
