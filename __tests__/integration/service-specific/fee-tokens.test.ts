@@ -25,7 +25,6 @@ import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
-import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -45,8 +44,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
   let feeWalletAddresses: string[];
 
   beforeEach(() => {
-    const precalc = precalculationHelpers.test!.getPrecalculatedWallet();
-    const built = buildWalletInstance({ words: precalc.words });
+    const built = buildWalletInstance();
     feeWallet = built.wallet;
     feeWalletAddresses = built.addresses;
   });
@@ -58,12 +56,8 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
   });
 
   it('should fail to send fee tokens when wallet has no HTR to pay the fee', async () => {
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(feeWalletAddresses[0], 1n, { pinCode });
-    await pollForTx(gWallet, fundTx.hash!);
-
     await feeWallet.start({ pinCode, password });
-    await pollForTx(feeWallet, fundTx.hash!);
+    await GenesisWalletServiceHelper.injectFunds(feeWalletAddresses[0], 1n, feeWallet);
 
     // Create fee token first (1n fee).
     const tokenAmount = 1000n;
@@ -74,7 +68,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     await pollForTx(feeWallet, createTokenTx.hash!);
     const tokenUid = createTokenTx.hash!;
 
-    // Drain any remaining HTR by sending it to the genesis wallet.
+    // Drain any remaining HTR by sending it to a known external address.
     let htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
     const remainingHtr = htrBalance[0]?.balance.unlocked ?? 0n;
     if (remainingHtr > 0n) {
@@ -107,12 +101,8 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     //   2. Fee token input exceeds output (generates change)
     //   3. Fee token change increments the fee
     // ...the HTR change is correctly calculated considering the updated fee.
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(feeWalletAddresses[0], 20n, { pinCode });
-    await pollForTx(gWallet, fundTx.hash!);
-
     await feeWallet.start({ pinCode, password });
-    await pollForTx(feeWallet, fundTx.hash!);
+    await GenesisWalletServiceHelper.injectFunds(feeWalletAddresses[0], 20n, feeWallet);
 
     // Create FBT (1n fee).
     const tokenAmount = 200n;
@@ -142,15 +132,15 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     ];
 
     // External wallet to receive the outputs (so the FBT actually leaves).
-    const externalPrecalc = precalculationHelpers.test!.getPrecalculatedWallet();
+    const { addresses: externalAddresses } = buildWalletInstance();
 
     // Outputs:
     // - 50n FBT to external (1n fee) -> generates FBT change (+1n fee = 2n total fee)
     // - 1n HTR to external
     // HTR cost: 1n output + 2n fee = 3n
     const outputs = [
-      { address: externalPrecalc.addresses[1], value: 50n, token: tokenUid },
-      { address: externalPrecalc.addresses[0], value: 1n, token: NATIVE_TOKEN_UID },
+      { address: externalAddresses[1], value: 50n, token: tokenUid },
+      { address: externalAddresses[0], value: 1n, token: NATIVE_TOKEN_UID },
     ];
 
     const sendTx = await feeWallet.sendManyOutputsTransaction(outputs, {
@@ -173,11 +163,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     // Same scenario as the test above, but exercises the
     // prepareTxData / sendManyOutputsSendTransaction service helpers directly.
     await feeWallet.start({ pinCode, password });
-
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(feeWalletAddresses[0], 20n, { pinCode });
-    await pollForTx(gWallet, fundTx.hash!);
-    await pollForTx(feeWallet, fundTx.hash!);
+    await GenesisWalletServiceHelper.injectFunds(feeWalletAddresses[0], 20n, feeWallet);
 
     const htrBeforeTokenCreation = (await feeWallet.getBalance(NATIVE_TOKEN_UID))[0].balance
       .unlocked;
@@ -211,10 +197,10 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
       { txId: htrUtxo!.tx_id, index: htrUtxo!.index },
     ];
 
-    const externalPrecalc = precalculationHelpers.test!.getPrecalculatedWallet();
+    const { addresses: externalAddresses } = buildWalletInstance();
     const outputs = [
-      { address: externalPrecalc.addresses[1], value: 50n, token: tokenUid },
-      { address: externalPrecalc.addresses[0], value: 1n, token: NATIVE_TOKEN_UID },
+      { address: externalAddresses[1], value: 50n, token: tokenUid },
+      { address: externalAddresses[0], value: 1n, token: NATIVE_TOKEN_UID },
     ];
 
     const sendTx = await feeWallet.sendManyOutputsSendTransaction(outputs, {
