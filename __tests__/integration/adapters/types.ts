@@ -35,8 +35,8 @@ export interface CreateWalletOptions {
   xpub?: string;
   xpriv?: string;
   passphrase?: string;
-  password?: string | null;
-  pinCode?: string | null;
+  password?: string;
+  pinCode?: string;
   preCalculatedAddresses?: string[];
   multisig?: {
     pubkeys: string[];

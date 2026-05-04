@@ -33,13 +33,15 @@ const adapters: IWalletTestAdapter[] = [
 ];
 
 /**
- * Asserts that the headers list has exactly one fee header with the given amount.
+ * Asserts that the headers list has exactly one fee header charging the given
+ * amount on the native token (tokenIndex 0 — fee-based tokens always pay fees in HTR).
  */
 function expectFeeAmount(headers: Header[], expectedFee: bigint) {
   const feeHeaders = headers.filter(h => h instanceof FeeHeader);
   expect(feeHeaders).toHaveLength(1);
   const { entries } = feeHeaders[0] as FeeHeader;
   expect(entries).toHaveLength(1);
+  expect(entries[0].tokenIndex).toBe(0);
   expect(entries[0].amount).toBe(expectedFee);
 }
 

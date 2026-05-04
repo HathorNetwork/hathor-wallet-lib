@@ -35,13 +35,15 @@ import FeeHeader from '../../../src/headers/fee';
 import Header from '../../../src/headers/base';
 
 /**
- * Asserts that the headers list has exactly one fee header with the given amount.
+ * Asserts that the headers list has exactly one fee header charging the given
+ * amount on the native token (tokenIndex 0 — fee-based tokens always pay fees in HTR).
  */
 function validateFeeAmount(headers: Header[], expectedFee: bigint) {
   const feeHeaders = headers.filter(h => h instanceof FeeHeader);
   expect(feeHeaders).toHaveLength(1);
   const { entries } = feeHeaders[0] as FeeHeader;
   expect(entries).toHaveLength(1);
+  expect(entries[0].tokenIndex).toBe(0);
   expect(entries[0].amount).toBe(expectedFee);
 }
 
@@ -142,14 +144,14 @@ describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
 
     // Minting any large amount still consumes only 1 HTR fee.
     await waitUntilNextTimestamp(wallet, mintResponse.hash);
-    const randomMintAmount = BigInt(Math.floor(Math.random() * (1_000_000_000 - 2 + 1)) + 2);
-    mintResponse = await wallet.mintTokens(fbtUid, randomMintAmount);
+    const largeMintAmount = 1_000_000_000n;
+    mintResponse = await wallet.mintTokens(fbtUid, largeMintAmount);
     expect(mintResponse.tokens.length).toBe(1);
     expect(mintResponse.outputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           tokenData: 1,
-          value: randomMintAmount,
+          value: largeMintAmount,
         }),
         expect.objectContaining({
           tokenData: TOKEN_AUTHORITY_MASK + 1,
