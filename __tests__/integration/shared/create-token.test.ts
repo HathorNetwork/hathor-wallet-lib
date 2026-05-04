@@ -192,6 +192,35 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
     }
   });
 
+  it('should charge a proportional deposit (>1n) on larger deposit-based tokens', async () => {
+    // The other deposit-based tests use 100n tokens (1% deposit = 1n HTR),
+    // which coincides with the flat 1n fee charged by FEE-tokens. A 100n
+    // assertion alone cannot tell the two charge models apart — a regression
+    // that swapped the formulas would still pass. This test pins the
+    // proportional behavior using a token amount where the deposit clearly
+    // exceeds 1n.
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      const addr = (await wallet.getAddressAtIndex(0))!;
+      await adapter.injectFunds(wallet, addr, 15n);
+
+      // 1% of 1000n = 10n HTR deposit
+      const tokenAmount = 1000n;
+      const created = await adapter.createToken(wallet, TOKEN_NAME, TOKEN_SYMBOL, tokenAmount);
+
+      const tokenBalance = await wallet.getBalance(created.hash);
+      expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+
+      // 15n injected − 10n deposit = 5n change. A flat-1n charge would
+      // leave 14n here, so this assertion catches the deposit/fee mix-up.
+      const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(htrBalance[0].balance.unlocked).toBe(5n);
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
   // FEE-token creation tests are co-located here (rather than in the dedicated
   // fee-token suites) because createNewToken cannot be exhaustively validated
   // without exercising the FEE token version alongside the deposit-based one.

@@ -8,10 +8,24 @@
 /**
  * Service-facade createNewToken tests.
  *
- * Tests for behavior that depends on wallet-service-only APIs
- * (`getUtxoFromId`, `tokenAuthorities` shape on `getBalance`).
+ * Shared createNewToken tests live in `shared/create-token.test.ts` and run
+ * against both facades via `describe.each(adapters)`.
  *
- * Shared createNewToken tests live in `shared/create-token.test.ts`.
+ * Why these tests are NOT shared:
+ *   1. They drive `getUtxoFromId(txId, index)` — a wallet-service-only
+ *      method that has no equivalent on the fullnode facade. The fullnode
+ *      side reads UTXO routing through `parseScript` on raw `Output`
+ *      buffers via `wallet.getNetworkObject()` instead, which is a
+ *      different code path altogether (its tests live in
+ *      `fullnode-specific/create-token.test.ts`).
+ *   2. They assert on the `tokenAuthorities` field of `getBalance()`,
+ *      which the wallet-service facade exposes but the fullnode facade
+ *      does not surface at all.
+ *   3. The cross-wallet propagation test at the bottom uses
+ *      `adapter.waitForTx(srcWallet, txId, otherWallet)` to confirm both
+ *      wallets observe the tx via the wallet-service websocket; the
+ *      fullnode facade has its own propagation semantics that don't
+ *      benefit from this exact wait shape.
  */
 
 import type { HathorWalletServiceWallet, CreateTokenTransaction, Output } from '../../../src';

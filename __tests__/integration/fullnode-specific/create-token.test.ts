@@ -8,10 +8,21 @@
 /**
  * Fullnode-facade createNewToken tests.
  *
- * Tests for behavior that depends on fullnode-only APIs (UTXO inspection,
- * `parseScript` on output buffers, multi-wallet propagation guarantees).
+ * Shared createNewToken tests live in `shared/create-token.test.ts` and run
+ * against both facades via `describe.each(adapters)`.
  *
- * Shared createNewToken tests live in `shared/create-token.test.ts`.
+ * Why these tests are NOT shared:
+ * The address-routing tests below verify that mint/melt authority outputs
+ * land on the requested addresses by calling `parseScript` on raw `Output`
+ * buffers and reading `.address.base58`. The wallet-service facade has no
+ * equivalent path — it returns authority routing information through
+ * `getUtxoFromId(txId, index)`, which returns `null` on the fullnode side.
+ *
+ * Sharing them would require a new adapter method that papers over a real
+ * API asymmetry (script parsing vs. service lookup) for very few tests,
+ * which is more abstraction than is justified at the current count. The
+ * service-side equivalents live in `service-specific/create-token.test.ts`
+ * and assert the same routing through `getUtxoFromId` directly.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
