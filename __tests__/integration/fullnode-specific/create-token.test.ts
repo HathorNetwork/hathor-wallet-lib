@@ -16,7 +16,7 @@
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
-import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
 import transaction from '../../../src/utils/transaction';
 import CreateTokenTransaction from '../../../src/models/create_token_transaction';
 import { TokenVersion } from '../../../src/types';
@@ -48,6 +48,11 @@ describe('[Fullnode] createNewToken', () => {
     expect(htrUtxos).toContainEqual(
       expect.objectContaining({ address: changeAddress, amount: 9n })
     );
+
+    // Defense-in-depth alongside the UTXO check above: a balance mismatch
+    // would catch silent double-counting that a per-UTXO assertion can miss.
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toBe(9n);
   });
 
   it('should create a token with mint and melt authority addresses', async () => {
@@ -81,6 +86,10 @@ describe('[Fullnode] createNewToken', () => {
 
     const tokenBalance = await hWallet.getBalance(response.hash);
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', 100n);
+
+    // 2n injected − 1n deposit = 1n HTR remaining
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toBe(1n);
   });
 
   it('should reject external mint/melt addresses unless explicitly allowed', async () => {
@@ -169,6 +178,9 @@ describe('[Fullnode] createNewToken', () => {
     expect(htrUtxos).toContainEqual(
       expect.objectContaining({ address: changeAddress, amount: 9n })
     );
+
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toBe(9n);
   });
 
   it('should create a FEE token with mint and melt authority addresses', async () => {

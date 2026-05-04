@@ -140,12 +140,14 @@ describe('[Service] createNewToken', () => {
         })
       );
 
-      // Verify HTR change went to the configured changeAddress
+      // Verify HTR change went to the configured changeAddress with the
+      // expected amount: 100n injected − 1% deposit on 100n token = 99n change.
       const changeUtxo = await sw.getUtxoFromId(tokenUid, changeOutputIndex);
       expect(changeUtxo).toStrictEqual(
         expect.objectContaining({
           address: changeAddress,
           tokenId: NATIVE_TOKEN_UID,
+          value: 99n,
         })
       );
     } finally {

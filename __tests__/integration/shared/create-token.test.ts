@@ -117,6 +117,10 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       expect(tokenBalance[0]).toMatchObject({
         balance: { unlocked: tokenAmount, locked: 0n },
       });
+
+      // 1% deposit on 100n = 1n HTR consumed; 10n injected → 9n change.
+      const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(htrBalance[0].balance.unlocked).toBe(9n);
     } finally {
       await adapter.stopWallet(wallet);
     }
@@ -147,6 +151,12 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
 
       const details = await adapter.getTokenDetails(wallet, created.hash);
       expect(details.authorities).toEqual({ mint: false, melt: false });
+      expect(details.totalSupply).toBe(tokenAmount);
+      expect(details.totalTransactions).toBe(1);
+
+      // 1% deposit on 100n = 1n HTR consumed; 10n injected → 9n change.
+      const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(htrBalance[0].balance.unlocked).toBe(9n);
     } finally {
       await adapter.stopWallet(wallet);
     }
@@ -207,9 +217,17 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
         headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
       });
 
+      // Default options should produce both mint and melt authority outputs
+      const authorityOutputs = created.transaction.outputs.filter(o => o.tokenData === 129);
+      expect(authorityOutputs).toHaveLength(2);
+
       const tokenBalance = await wallet.getBalance(created.hash);
       expect(tokenBalance[0].token.version).toBe(TokenVersion.FEE);
       expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+
+      // FEE-token creation charges a flat 1n HTR; 10n injected → 9n change.
+      const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(htrBalance[0].balance.unlocked).toBe(9n);
     } finally {
       await adapter.stopWallet(wallet);
     }
