@@ -32,6 +32,7 @@
 import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { TokenVersion } from '../../../src/types';
+import { InsufficientFundsError, UtxoError } from '../../../src/errors';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import FeeHeader from '../../../src/headers/fee';
@@ -57,18 +58,24 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
     const { wallet } = await adapter.createWallet();
 
     try {
-      // Pin to a fund-shortage error rather than any rejection. The two
-      // facades phrase it differently:
-      //   - fullnode throws InsufficientFundsError ("Not enough HTR tokens
-      //     for deposit or fee: ... required, ... available")
-      //   - wallet-service throws UtxoError ("No utxos available to fill
-      //     the request. Token: HTR - Amount: ...")
-      // The regex below covers both without overfitting to either string.
-      await expect(
-        wallet.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, 100n, {
+      // Pin to a fund-shortage error class rather than any rejection.
+      // The two facades raise different concrete errors:
+      //   - fullnode: InsufficientFundsError (from src/utils/tokens.ts)
+      //   - wallet-service: UtxoError (from selectUtxos in
+      //     src/utils/transaction.ts, before the inline check in
+      //     wallet.ts can run)
+      // Both classes extend Error without overriding `.name`, so we
+      // assert by `instanceof` instead of matching error names/messages.
+      const err = await wallet
+        .createNewToken(TOKEN_NAME, TOKEN_SYMBOL, 100n, {
           pinCode: adapter.defaultPinCode,
         })
-      ).rejects.toThrow(/(not enough|no utxos|insufficient)/i);
+        .then(
+          () => undefined,
+          (e: unknown) => e
+        );
+      expect(err).toBeInstanceOf(Error);
+      expect(err instanceof UtxoError || err instanceof InsufficientFundsError).toBe(true);
     } finally {
       await adapter.stopWallet(wallet);
     }
