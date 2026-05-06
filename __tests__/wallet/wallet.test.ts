@@ -32,6 +32,7 @@ import {
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import transaction from '../../src/utils/transaction';
 import {
+  DECIMAL_PLACES,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
@@ -2928,6 +2929,144 @@ test('start', async () => {
   }).toThrow('authxpriv parameter is an invalid hd privatekey');
 
   expect(wallet.getServerUrl()).toBe(config.getServerUrl());
+});
+
+describe('start populates storage.version', () => {
+  /**
+   * Pins the behavior of `HathorWalletServiceWallet.populateStorageVersion()`
+   * (added in PR #1082). Without it, `prepareToSend` falls back to the
+   * hardcoded mainnet `TX_WEIGHT_CONSTANTS` instead of the network's
+   * reported `min_tx_weight*` values.
+   */
+
+  // Distinct, non-default values so a transposition bug surfaces as a
+  // failed assertion rather than a coincidental match.
+  const mockVersionData = {
+    timestamp: 1700000000000,
+    version: '0.99.0',
+    network: 'privnet',
+    minWeight: 7,
+    minTxWeight: 1,
+    minTxWeightCoefficient: 0,
+    minTxWeightK: 0,
+    tokenDepositPercentage: 0.01,
+    rewardSpendMinBlocks: 5,
+    maxNumberInputs: 200,
+    maxNumberOutputs: 300,
+  };
+
+  function setupStartMocks() {
+    jest
+      .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
+      .mockImplementation(() => Promise.resolve());
+    jest
+      .spyOn(HathorWalletServiceWallet.prototype, 'setupConnection')
+      .mockImplementation(jest.fn());
+    jest
+      .spyOn(HathorWalletServiceWallet.prototype, 'renewAuthToken')
+      .mockImplementation(async function mockRenew(this: HathorWalletServiceWallet) {
+        this.authToken = 'mocked-token';
+      });
+    jest
+      .spyOn(walletApi, 'getNewAddresses')
+      .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+    jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
+      Promise.resolve({
+        success: true,
+        status: {
+          walletId: 'id',
+          xpubkey: 'xpub',
+          status: 'creating',
+          maxGap: 20,
+          createdAt: 0,
+          readyAt: 0,
+        },
+      })
+    );
+  }
+
+  function buildWallet(): HathorWalletServiceWallet {
+    return new HathorWalletServiceWallet({
+      requestPassword: jest.fn(),
+      seed: defaultWalletSeed,
+      network: new Network('testnet'),
+      storage: new Storage(new MemoryStore()),
+    });
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('populates storage.version with the network constants on default startup', async () => {
+    setupStartMocks();
+    jest.spyOn(walletApi, 'getVersionData').mockResolvedValue(mockVersionData);
+
+    const wallet = buildWallet();
+    await wallet.start({ pinCode: '1234', password: '1234' });
+
+    expect(wallet.storage.version).not.toBeNull();
+    expect(wallet.storage.version).toMatchObject({
+      version: mockVersionData.version,
+      network: mockVersionData.network,
+      min_weight: mockVersionData.minWeight,
+      min_tx_weight: mockVersionData.minTxWeight,
+      min_tx_weight_coefficient: mockVersionData.minTxWeightCoefficient,
+      min_tx_weight_k: mockVersionData.minTxWeightK,
+      token_deposit_percentage: mockVersionData.tokenDepositPercentage,
+      reward_spend_min_blocks: mockVersionData.rewardSpendMinBlocks,
+      max_number_inputs: mockVersionData.maxNumberInputs,
+      max_number_outputs: mockVersionData.maxNumberOutputs,
+      // FullNodeVersionData has no `decimal_places`/`native_token`; the impl
+      // backfills with safe defaults so storage.getDecimalPlaces /
+      // getNativeTokenData keep working.
+      decimal_places: DECIMAL_PLACES,
+      native_token: null,
+    });
+
+    await wallet.stop();
+  });
+
+  it('also populates storage.version when waitReady is false', async () => {
+    // Regression test for the inline ordering comment in
+    // src/wallet/wallet.ts (`Run this BEFORE the waitReady === false early
+    // return`). If a future change moves populateStorageVersion() after the
+    // early return, non-blocking-startup callers silently fall back to
+    // TX_WEIGHT_CONSTANTS — this assertion catches that.
+    setupStartMocks();
+    jest.spyOn(walletApi, 'getVersionData').mockResolvedValue(mockVersionData);
+
+    const wallet = buildWallet();
+    await wallet.start({ pinCode: '1234', password: '1234', waitReady: false });
+
+    expect(wallet.storage.version).not.toBeNull();
+    expect(wallet.storage.version?.min_tx_weight).toBe(mockVersionData.minTxWeight);
+    expect(wallet.storage.version?.min_tx_weight_coefficient).toBe(
+      mockVersionData.minTxWeightCoefficient
+    );
+    expect(wallet.storage.version?.min_tx_weight_k).toBe(mockVersionData.minTxWeightK);
+
+    await wallet.stop();
+  });
+
+  it('does not throw and leaves storage.version null when getVersionData rejects', async () => {
+    // The try/catch in populateStorageVersion is load-bearing: a transient
+    // /version failure must not break wallet startup. The wallet keeps
+    // working — prepareToSend just falls back to TX_WEIGHT_CONSTANTS.
+    setupStartMocks();
+    jest.spyOn(walletApi, 'getVersionData').mockRejectedValue(new Error('boom'));
+
+    const wallet = buildWallet();
+    const warnSpy = jest.spyOn(wallet.storage.logger, 'warn').mockImplementation(jest.fn());
+
+    await expect(wallet.start({ pinCode: '1234', password: '1234' })).resolves.not.toThrow();
+
+    expect(wallet.storage.version).toBeNull();
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toMatch(/wallet-service \/version fetch failed/);
+
+    await wallet.stop();
+  });
 });
 
 test('getAddressPrivKey', async () => {
