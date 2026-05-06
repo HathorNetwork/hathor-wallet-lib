@@ -30,6 +30,7 @@
 
 import type { HathorWalletServiceWallet, CreateTokenTransaction, Output } from '../../../src';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
+import { SendTxError } from '../../../src/errors';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
 const adapter = new ServiceWalletTestAdapter();
@@ -255,7 +256,10 @@ describe('[Service] createNewToken', () => {
       const meltAuthorityAddress = externalCreated.addresses![7];
       const changeAddress = externalCreated.addresses![6];
 
-      // Without the external-address flags the call should fail
+      // Without the external-address flags the call should fail with the
+      // wallet-service's specific external-authority guard. Pin to the
+      // SendTxError class so an unrelated failure (network, auth) doesn't
+      // mask the rejection path this test claims to exercise.
       await expect(
         sourceWallet.createNewToken(TOKEN_NAME, TOKEN_SYMBOL, TOKEN_AMOUNT, {
           pinCode: adapter.defaultPinCode,
@@ -266,7 +270,7 @@ describe('[Service] createNewToken', () => {
           createMelt: true,
           meltAuthorityAddress,
         })
-      ).rejects.toThrow();
+      ).rejects.toThrow(SendTxError);
 
       // With the flags set, the token is created successfully
       const createTokenTx = (await sourceWallet.createNewToken(
