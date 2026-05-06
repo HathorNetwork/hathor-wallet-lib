@@ -11,6 +11,7 @@ import assert from 'assert';
 import Header from '../headers/base';
 import FeeHeader from '../headers/fee';
 import {
+  DECIMAL_PLACES,
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
@@ -94,6 +95,7 @@ import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
 import {
+  ApiVersion,
   IStorage,
   IWalletAccessData,
   OutputValueType,
@@ -500,6 +502,41 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {
         cause: data.status,
       });
+    }
+
+    // Populate `storage.version` with the fullnode network constants.
+    // Without this `prepareToSend` would always fall back to the hardcoded
+    // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's
+    // reported `min_tx_weight*` values — see HathorWallet.start in
+    // src/new/wallet.ts where the equivalent setApiVersion call lives.
+    //
+    // walletApi.getVersionData returns FullNodeVersionData (camelCase,
+    // and without `decimal_places` / `native_token`). Map back to the
+    // snake_case ApiVersion shape that storage expects, defaulting the
+    // missing fields — `decimal_places` to the constant default and
+    // `native_token` to null (storage's getDecimalPlaces /
+    // getNativeTokenData paths already fall back to constants when
+    // those fields are missing).
+    try {
+      const v = await walletApi.getVersionData(this);
+      const apiVersion: ApiVersion = {
+        version: v.version,
+        network: v.network,
+        min_weight: v.minWeight,
+        min_tx_weight: v.minTxWeight,
+        min_tx_weight_coefficient: v.minTxWeightCoefficient,
+        min_tx_weight_k: v.minTxWeightK,
+        token_deposit_percentage: v.tokenDepositPercentage,
+        reward_spend_min_blocks: v.rewardSpendMinBlocks,
+        max_number_inputs: v.maxNumberInputs,
+        max_number_outputs: v.maxNumberOutputs,
+        decimal_places: DECIMAL_PLACES,
+        native_token: null,
+      };
+      this.storage.setApiVersion(apiVersion);
+    } catch (_e) {
+      // Non-fatal: if /version fails the wallet still works, prepareToSend
+      // just falls back to TX_WEIGHT_CONSTANTS as it did before this change.
     }
 
     // Auth token renewal is NOT called explicitly here. The axios interceptor
