@@ -27,10 +27,10 @@
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
-import transaction from '../../../src/utils/transaction';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import CreateTokenTransaction from '../../../src/models/create_token_transaction';
 import { TokenVersion } from '../../../src/types';
+import { expectAuthoritiesRoutedTo } from '../utils/authority-utxos.util';
 
 describe('[Fullnode] createNewToken', () => {
   afterEach(async () => {
@@ -82,18 +82,10 @@ describe('[Fullnode] createNewToken', () => {
     expect(response).toHaveProperty('hash');
     await waitForTxReceived(hWallet, response.hash);
 
-    const authorityOutputs = response.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
-    );
-    expect(authorityOutputs).toHaveLength(2);
-
-    const [mintOutput] = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
-    const mintP2pkh = mintOutput.parseScript(hWallet.getNetworkObject());
-    expect(mintP2pkh.address.base58).toEqual(mintAuthorityAddress);
-
-    const [meltOutput] = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
-    const meltP2pkh = meltOutput.parseScript(hWallet.getNetworkObject());
-    expect(meltP2pkh.address.base58).toEqual(meltAuthorityAddress);
+    expectAuthoritiesRoutedTo(response.outputs, hWallet.getNetworkObject(), {
+      mintAddress: mintAuthorityAddress,
+      meltAddress: meltAuthorityAddress,
+    });
 
     const tokenBalance = await hWallet.getBalance(response.hash);
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', 100n);
@@ -143,18 +135,10 @@ describe('[Fullnode] createNewToken', () => {
     await waitForTxReceived(hWallet, response.hash);
     await waitForTxReceived(externalWallet, response.hash);
 
-    const authorityOutputs = response.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
-    );
-    expect(authorityOutputs).toHaveLength(2);
-
-    const [mintOutput] = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
-    const mintP2pkh = mintOutput.parseScript(hWallet.getNetworkObject());
-    expect(mintP2pkh.address.base58).toEqual(externalMintAddr);
-
-    const [meltOutput] = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
-    const meltP2pkh = meltOutput.parseScript(hWallet.getNetworkObject());
-    expect(meltP2pkh.address.base58).toEqual(externalMeltAddr);
+    expectAuthoritiesRoutedTo(response.outputs, hWallet.getNetworkObject(), {
+      mintAddress: externalMintAddr,
+      meltAddress: externalMeltAddr,
+    });
 
     const tokenBalance = await hWallet.getBalance(response.hash);
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', 100n);
@@ -211,18 +195,10 @@ describe('[Fullnode] createNewToken', () => {
     expect(response).toHaveProperty('hash');
     await waitForTxReceived(hWallet, response.hash);
 
-    const authorityOutputs = response.outputs.filter(o =>
-      transaction.isAuthorityOutput({ token_data: o.tokenData })
-    );
-    expect(authorityOutputs).toHaveLength(2);
-
-    const [mintOutput] = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
-    const mintP2pkh = mintOutput.parseScript(hWallet.getNetworkObject());
-    expect(mintP2pkh.address.base58).toEqual(mintAuthorityAddress);
-
-    const [meltOutput] = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
-    const meltP2pkh = meltOutput.parseScript(hWallet.getNetworkObject());
-    expect(meltP2pkh.address.base58).toEqual(meltAuthorityAddress);
+    expectAuthoritiesRoutedTo(response.outputs, hWallet.getNetworkObject(), {
+      mintAddress: mintAuthorityAddress,
+      meltAddress: meltAuthorityAddress,
+    });
 
     const tokenBalance = await hWallet.getBalance(response.hash);
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', 8582n);
