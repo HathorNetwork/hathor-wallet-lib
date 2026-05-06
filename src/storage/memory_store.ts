@@ -441,12 +441,21 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {AsyncGenerator<IHistoryTx>}
    */
-  async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx> {
+  async *historyIter(
+    tokenUid?: string | undefined,
+    options: { order?: 'asc' | 'desc' } = {}
+  ): AsyncGenerator<IHistoryTx> {
     /**
-     * We iterate in reverse order so the most recent transactions are yielded first.
-     * This is to maintain the behavior in the wallets and allow the user to see the most recent transactions first.
+     * Default `desc` walks `historyTs` from the newest entry back to the
+     * oldest — this is what the wallet UI consumes (most-recent-first).
+     * Pass `order: 'asc'` for the chronological replay used by
+     * `processHistory`, where a tx spending a previous tx's UTXO needs
+     * the parent already saved when its own input loop runs.
      */
-    for (let i = this.historyTs.length - 1; i >= 0; i -= 1) {
+    const order = options.order ?? 'desc';
+    const len = this.historyTs.length;
+    for (let n = 0; n < len; n += 1) {
+      const i = order === 'asc' ? n : len - 1 - n;
       const orderKey = this.historyTs[i];
       const { txId } = getPartsFromOrderingKey(orderKey);
       const tx = this.history.get(txId);

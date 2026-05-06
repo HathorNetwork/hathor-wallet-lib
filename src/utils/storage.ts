@@ -465,14 +465,10 @@ export async function processHistory(
   // Order chronologically (oldest first) so that a tx spending a previous tx's
   // shielded UTXO finds that UTXO already saved when the wallet-owned shielded
   // input is resolved (see the UTXO-lookup branch in processNewTx's input
-  // enrichment). historyIter yields newest-first for UI purposes, so we buffer
-  // and reverse.
-  const orderedTxs: IHistoryTx[] = [];
-  for await (const tx of store.historyIter()) {
-    orderedTxs.push(tx);
-  }
-  orderedTxs.reverse();
-  for (const tx of orderedTxs) {
+  // enrichment). The store yields newest-first by default for UI purposes;
+  // pass `order: 'asc'` so we walk the timeline forward without buffering
+  // the entire history into an array first.
+  for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
     const processedData = await processNewTx(storage, tx, {
       rewardLock,
       nowTs,
