@@ -31,7 +31,6 @@ import {
 } from '../../../src/constants';
 import transaction from '../../../src/utils/transaction';
 import { TokenVersion } from '../../../src/types';
-import FeeHeader from '../../../src/headers/fee';
 import { expectFeeAmount } from '../utils/fee-headers.util';
 
 afterEach(async () => {
@@ -64,7 +63,6 @@ describe('[Fullnode] fee tokens — createNewToken with data outputs', () => {
       symbol: 'FBT',
       version: 2,
       tokenVersion: TokenVersion.FEE,
-      headers: [new FeeHeader([{ tokenIndex: 0, amount: 1n }])],
       outputs: expect.arrayContaining([
         expect.objectContaining({ value: 1n, tokenData: 0 }),
         // Confirms the data output is being discounted from change calculation.
@@ -72,10 +70,7 @@ describe('[Fullnode] fee tokens — createNewToken with data outputs', () => {
         expect.objectContaining({ value: 9999n, tokenData: 1 }),
       ]),
     });
-
-    const feeHeader = tx?.getFeeHeader();
-    expect(feeHeader).not.toBeNull();
-    expect(feeHeader!.entries[0].amount).toBe(1n);
+    expectFeeAmount(tx!.headers, 1n);
 
     await waitForTxReceived(wallet, tx!.hash!);
     const fbtBalance = await wallet.getBalance(tx!.hash!);
