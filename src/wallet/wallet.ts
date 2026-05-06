@@ -486,6 +486,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.walletId = data.status.walletId;
 
+    // Populate `storage.version` with the fullnode network constants.
+    // Without this, `prepareToSend` would always fall back to the hardcoded
+    // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's reported
+    // `min_tx_weight*` values — see HathorWallet.start in src/new/wallet.ts
+    // where the equivalent setApiVersion call lives.
+    //
+    // Run this BEFORE the `waitReady === false` early return so both
+    // public startup paths (waitReady=true and waitReady=false) populate
+    // the field. Otherwise non-blocking-startup callers would silently
+    // fall back to TX_WEIGHT_CONSTANTS forever, defeating the purpose of
+    // this feature.
+    await this.populateStorageVersion();
+
     // If waitReady is false, return immediately after wallet creation
     if (!waitReady) {
       this.clearSensitiveData();
@@ -504,21 +517,38 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       });
     }
 
-    // Populate `storage.version` with the fullnode network constants.
-    // Without this `prepareToSend` would always fall back to the hardcoded
-    // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's
-    // reported `min_tx_weight*` values — see HathorWallet.start in
-    // src/new/wallet.ts where the equivalent setApiVersion call lives.
-    //
-    // walletApi.getVersionData returns FullNodeVersionData (camelCase,
-    // and without `decimal_places` / `native_token`). Map back to the
-    // snake_case ApiVersion shape that storage expects, defaulting the
-    // missing fields — `decimal_places` to the constant default and
-    // `native_token` to null (storage's getDecimalPlaces /
-    // getNativeTokenData paths already fall back to constants when
-    // those fields are missing).
+    // Auth token renewal is NOT called explicitly here. The axios interceptor
+    // in walletServiceAxios.ts handles it on-demand: any authenticated API
+    // call (including getWalletStatus during polling) triggers
+    // validateAndRenewAuthToken() automatically when the token is missing or
+    // expired. By this point, authPrivKey and walletId are both set, so the
+    // interceptor can obtain a token without needing the PIN.
+    await this.onWalletReady();
+    this.clearSensitiveData();
+  }
+
+  /**
+   * Fetch the connected wallet-service's /version response and write it to
+   * `storage.version` so internal callers (notably `prepareToSend` via
+   * `transactionUtils.getWeightConstantsFromStorage`) consume the network's
+   * actual weight constants instead of the hardcoded mainnet defaults.
+   *
+   * `walletApi.getVersionData` returns `FullNodeVersionData` (camelCase, and
+   * without `decimal_places` / `native_token`). We map to the snake_case
+   * `ApiVersion` shape that storage expects, defaulting the missing fields:
+   * `decimal_places` to the constant default and `native_token` to null
+   * (storage.getDecimalPlaces / getNativeTokenData already fall back to
+   * constants when those fields are missing).
+   *
+   * Non-fatal: any failure is logged via the storage logger and swallowed.
+   * The wallet still works — `prepareToSend` simply falls back to
+   * `TX_WEIGHT_CONSTANTS` as it did before this method existed. We emit a
+   * warning rather than silently dropping the error so a regression here is
+   * visible in logs instead of producing surprisingly-mined transactions.
+   */
+  private async populateStorageVersion(): Promise<void> {
     try {
-      const v = await walletApi.getVersionData(this);
+      const v = await this.getVersionData();
       const apiVersion: ApiVersion = {
         version: v.version,
         network: v.network,
@@ -534,19 +564,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         native_token: null,
       };
       this.storage.setApiVersion(apiVersion);
-    } catch (_e) {
-      // Non-fatal: if /version fails the wallet still works, prepareToSend
-      // just falls back to TX_WEIGHT_CONSTANTS as it did before this change.
+    } catch (e) {
+      this.storage.logger.warn(
+        `wallet-service /version fetch failed during start(): ${e instanceof Error ? e.message : String(e)}`
+      );
     }
-
-    // Auth token renewal is NOT called explicitly here. The axios interceptor
-    // in walletServiceAxios.ts handles it on-demand: any authenticated API
-    // call (including getWalletStatus during polling) triggers
-    // validateAndRenewAuthToken() automatically when the token is missing or
-    // expired. By this point, authPrivKey and walletId are both set, so the
-    // interceptor can obtain a token without needing the PIN.
-    await this.onWalletReady();
-    this.clearSensitiveData();
   }
 
   /**

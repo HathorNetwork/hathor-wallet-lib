@@ -8,17 +8,23 @@
 /**
  * Verifies that, after a real wallet `start()`, the storage's version
  * data is populated AND `transactionUtils.getWeightConstantsFromStorage`
- * resolves to the privnet's reported `(min_tx_weight,
- * min_tx_weight_coefficient, min_tx_weight_k)` rather than the
- * hardcoded {@link TX_WEIGHT_CONSTANTS} mainnet defaults.
+ * resolves to whatever the connected network reports for
+ * `(min_tx_weight, min_tx_weight_coefficient, min_tx_weight_k)`.
  *
  * This is the only weight-constants assertion that genuinely exercises
  * the wallet/fullnode integration: without `start()` actually fetching
  * /version and writing it to storage, the helper would return
- * undefined and the wallet would silently fall back to the hardcoded
- * defaults — the behaviour we're protecting against. Both facades go
- * through this path: `HathorWallet.start()` (src/new/wallet.ts:1712)
- * and `HathorWalletServiceWallet.start()` (src/wallet/wallet.ts).
+ * `undefined` and the wallet would silently fall back to the hardcoded
+ * `TX_WEIGHT_CONSTANTS` — the behaviour we're protecting against. Both
+ * facades go through this path: `HathorWallet.start()`
+ * (src/new/wallet.ts) and `HathorWalletServiceWallet.start()`
+ * (src/wallet/wallet.ts).
+ *
+ * The assertion deliberately does NOT require the network's reported
+ * constants to differ from `TX_WEIGHT_CONSTANTS`. The unit under test
+ * is the storage→version mapping, not the value of the privnet's
+ * configuration; if the integration network ever adopts the mainnet
+ * defaults, this test should still pass.
  *
  * Pure-unit assertions about `getWeightConstantsFromStorage` and
  * `prepareToSend` argument threading live in
@@ -29,7 +35,6 @@ import type { FuzzyWalletType, IWalletTestAdapter } from '../adapters/types';
 import type { IStorage } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import { TX_WEIGHT_CONSTANTS } from '../../../src/constants';
 import transactionUtils from '../../../src/utils/transaction';
 
 const adapters: IWalletTestAdapter[] = [
@@ -54,12 +59,6 @@ describe.each(adapters)('[Shared] tx weight constants — $name', adapter => {
 
   it('exposes the network constants via getWeightConstantsFromStorage', async () => {
     const versionData = await wallet.getVersionData();
-
-    // Sanity: this test is only meaningful if the privnet's reported
-    // values actually diverge from the hardcoded defaults.
-    expect(versionData.minTxWeight).not.toBe(TX_WEIGHT_CONSTANTS.txMinWeight);
-    expect(versionData.minTxWeightCoefficient).not.toBe(TX_WEIGHT_CONSTANTS.txWeightCoefficient);
-    expect(versionData.minTxWeightK).not.toBe(TX_WEIGHT_CONSTANTS.txMinWeightK);
 
     const networkConstants = transactionUtils.getWeightConstantsFromStorage(storage);
     expect(networkConstants).toEqual({

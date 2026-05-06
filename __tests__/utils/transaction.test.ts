@@ -736,6 +736,30 @@ test('convertTransactionToHistoryTx', async () => {
   }
 });
 
+/**
+ * Reusable `ApiVersion` literal for tests that need a populated
+ * `storage.version`. Defaults match a privnet-shaped configuration so
+ * the values diverge from `TX_WEIGHT_CONSTANTS` and any "did the
+ * override get threaded through?" assertions land at observable
+ * differences. Pass `overrides` to tweak individual fields (e.g.
+ * `decimal_places` for tests that exercise that path).
+ */
+const sampleApiVersion = (overrides: Partial<ApiVersion> = {}): ApiVersion => ({
+  version: '0.0.0-test',
+  network: 'unittest',
+  min_weight: 1,
+  min_tx_weight: 1,
+  min_tx_weight_coefficient: 0,
+  min_tx_weight_k: 0,
+  token_deposit_percentage: 0.01,
+  reward_spend_min_blocks: 1,
+  max_number_inputs: 255,
+  max_number_outputs: 255,
+  decimal_places: 2,
+  native_token: null,
+  ...overrides,
+});
+
 describe('getWeightConstantsFromStorage', () => {
   it('returns undefined when the storage version data is not yet populated', () => {
     // Until the wallet's `start()` finishes its /version round-trip,
@@ -749,25 +773,12 @@ describe('getWeightConstantsFromStorage', () => {
 
   it('mirrors storage.version into the calculateWeight constants shape', () => {
     // When version data is populated the helper exposes a shape that
-    // calculateWeight can consume directly. Use values that diverge
-    // from TX_WEIGHT_CONSTANTS so the mapping is observable.
+    // calculateWeight can consume directly. The sample's (1, 0, 0)
+    // weight constants diverge from TX_WEIGHT_CONSTANTS so the mapping
+    // is observable.
     const store = new MemoryStore();
     const storage = new Storage(store);
-    const version: ApiVersion = {
-      version: '0.0.0-test',
-      network: 'unittest',
-      min_weight: 1,
-      min_tx_weight: 1,
-      min_tx_weight_coefficient: 0,
-      min_tx_weight_k: 0,
-      token_deposit_percentage: 0.01,
-      reward_spend_min_blocks: 1,
-      max_number_inputs: 255,
-      max_number_outputs: 255,
-      decimal_places: 2,
-      native_token: null,
-    };
-    storage.setApiVersion(version);
+    storage.setApiVersion(sampleApiVersion());
     expect(transaction.getWeightConstantsFromStorage(storage)).toEqual({
       txMinWeight: 1,
       txWeightCoefficient: 0,
@@ -820,22 +831,7 @@ describe('prepareTransaction threads weight constants from storage', () => {
   const buildStorageWithVersion = (overrides?: Partial<ApiVersion>): IStorage => {
     const store = new MemoryStore();
     const storage = new Storage(store);
-    const version: ApiVersion = {
-      version: '0.0.0-test',
-      network: 'unittest',
-      min_weight: 1,
-      min_tx_weight: 1,
-      min_tx_weight_coefficient: 0,
-      min_tx_weight_k: 0,
-      token_deposit_percentage: 0.01,
-      reward_spend_min_blocks: 1,
-      max_number_inputs: 255,
-      max_number_outputs: 255,
-      decimal_places: 2,
-      native_token: null,
-      ...overrides,
-    };
-    storage.setApiVersion(version);
+    storage.setApiVersion(sampleApiVersion(overrides));
     return storage;
   };
 
