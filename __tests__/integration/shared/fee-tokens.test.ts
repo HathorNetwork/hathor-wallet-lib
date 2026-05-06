@@ -21,7 +21,7 @@
 
 import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { TokenVersion } from '../../../src/types';
+import { AuthorityType, TokenVersion } from '../../../src/types';
 import { InsufficientFundsError, UtxoError } from '../../../src/errors';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
@@ -97,6 +97,10 @@ describe.each(adapters)('[Shared] fee tokens — $name', adapter => {
 
     const tokenBalance = await wallet.getBalance(fbtUid);
     expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
+
+    // Verify the facade actually honored createMint:false / createMelt:false.
+    expect(await adapter.getAuthorityUtxos(wallet, fbtUid, AuthorityType.MINT)).toHaveLength(0);
+    expect(await adapter.getAuthorityUtxos(wallet, fbtUid, AuthorityType.MELT)).toHaveLength(0);
   });
 
   it('should mint fee tokens charging a flat fee instead of a deposit', async () => {
