@@ -73,10 +73,46 @@ export const fullnodeTxApiOutputSchema = z.object({
   spent_by: z.string().nullable().default(null),
 });
 
-// Shielded outputs, like shielded inputs, omit plaintext value/script. The
-// shape is open-ended (mode/commitment/range_proof/ephemeral_pubkey/etc.) so
-// we passthrough unknown keys for forward-compatibility.
-export const fullnodeTxApiShieldedOutputSchema = z.object({}).passthrough();
+// Shielded outputs hide their value behind a Pedersen commitment, so the
+// `decoded` block carries only address-side fields (no `value` /
+// `token_data` like transparent outputs). Matches `IShieldedOutputDecoded`
+// in src/shielded/types.ts and what `_shielded_output_to_json` in
+// hathor-core's base_transaction.py emits.
+const shieldedDecodedSchema = z
+  .object({
+    type: z.string().optional(),
+    address: z.string().optional(),
+    timelock: z.number().nullish(),
+  })
+  .passthrough();
+
+// Shielded outputs as emitted by the fullnode's tx API. Mirrors
+// `IShieldedOutput` (src/shielded/types.ts) plus the optional FullShielded
+// extensions and the `spent_by` flag that the fullnode populates the same
+// way it does for transparent outputs (see hathor-core
+// `_shielded_output_to_json` in base_transaction.py and
+// `meta.get_output_spent_by`). `.passthrough()` keeps any new
+// forward-compat fields the fullnode might add without rejecting the tx.
+export const fullnodeTxApiShieldedOutputSchema = z
+  .object({
+    // 1 = AmountShielded, 2 = FullShielded (matches ShieldedOutputMode).
+    mode: z.number(),
+    commitment: z.string(), // hex, 33 bytes
+    range_proof: z.string(), // hex, variable
+    script: z.string(), // hex, P2PKH/P2SH script template
+    token_data: z.number(), // token-index byte (AmountShielded only carries token info here)
+    ephemeral_pubkey: z.string(), // hex, 33 bytes; used for ECDH decryption
+    decoded: shieldedDecodedSchema,
+    // FullShielded only — present when `mode === 2`.
+    asset_commitment: z.string().optional(), // hex, 33 bytes
+    surjection_proof: z.string().optional(), // hex, variable
+    // Set by the fullnode when this slot has been spent in another tx.
+    // Null when unspent. Same semantics as transparent
+    // `IHistoryOutput.spent_by`; missing on older fullnode builds that
+    // don't yet emit it, hence `.optional()`.
+    spent_by: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 export const fullnodeTxApiTokenSchema = z.object({
   uid: z.string(),
