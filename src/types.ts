@@ -654,7 +654,17 @@ export interface IStore {
   editSeqnumMeta(base58: string, seqnum: number): Promise<void>;
 
   // tx history methods
-  historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
+  /**
+   * Yield txs from the local history.
+   *
+   * @param tokenUid Optional. If set, only yield txs that involve this token
+   *   on a wallet-owned address (input or output).
+   * @param options.order `'desc'` (default) yields newest-first — the order
+   *   the wallet UI consumes. `'asc'` yields oldest-first, used by
+   *   `processHistory` to replay txs chronologically so a tx that spends a
+   *   previous tx's UTXO finds it already saved.
+   */
+  historyIter(tokenUid?: string, options?: { order?: 'asc' | 'desc' }): AsyncGenerator<IHistoryTx>;
   saveTx(tx: IHistoryTx): Promise<void>;
   getTx(txId: string): Promise<IHistoryTx | null>;
   historyCount(): Promise<number>;
