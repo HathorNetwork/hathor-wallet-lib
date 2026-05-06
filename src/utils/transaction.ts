@@ -783,10 +783,28 @@ const transaction = {
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
       await this.signTransaction(tx, storage, pinCode);
-      tx.prepareToSend();
+      tx.prepareToSend(this.getWeightConstantsFromStorage(storage));
     }
 
     return tx;
+  },
+
+  /**
+   * Build a weight-constants object from the network's reported values
+   * (`storage.version.min_tx_weight*`). Falls back to undefined when the
+   * version data hasn't been fetched yet, in which case callers will use
+   * the hardcoded {@link TX_WEIGHT_CONSTANTS}.
+   */
+  getWeightConstantsFromStorage(
+    storage: IStorage
+  ): { txMinWeight: number; txWeightCoefficient: number; txMinWeightK: number } | undefined {
+    const { version } = storage;
+    if (!version) return undefined;
+    return {
+      txMinWeight: version.min_tx_weight,
+      txWeightCoefficient: version.min_tx_weight_coefficient,
+      txMinWeightK: version.min_tx_weight_k,
+    };
   },
 
   /**

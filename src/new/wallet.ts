@@ -2775,7 +2775,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const signedTx = await transactionUtils.signTransaction(tx, this.storage, pinCode);
-    signedTx.prepareToSend();
+    signedTx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }
 
@@ -3388,7 +3388,7 @@ class HathorWallet extends EventEmitter {
         throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
       }
       await transactionUtils.signTransaction(tx, this.storage, pin);
-      tx.prepareToSend();
+      tx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     }
     return tx;
   }

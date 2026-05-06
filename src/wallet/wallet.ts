@@ -1963,7 +1963,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2279,7 +2279,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2483,7 +2483,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2644,7 +2644,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
     inputsObj[0].setData(inputData);
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
 
     return tx;
   }
@@ -2725,7 +2725,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -3174,7 +3174,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       storageProxy.createProxy(),
       options.pinCode
     );
-    signedTx.prepareToSend();
+    signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }
 }
