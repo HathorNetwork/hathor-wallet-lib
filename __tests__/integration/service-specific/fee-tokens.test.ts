@@ -17,14 +17,15 @@
  */
 
 import type { HathorWalletServiceWallet } from '../../../src';
-import { FeeHeader, transactionUtils } from '../../../src';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { SendTxError } from '../../../src/errors';
+import transactionUtils from '../../../src/utils/transaction';
 import { TokenVersion } from '../../../src/types';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
+import { expectFeeAmount } from '../utils/fee-headers.util';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -87,6 +88,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
 
     // Sending fee tokens without HTR is rejected by the wallet-service builder.
+    // feeWalletAddresses[5] is an arbitrary empty address — any non-genesis target works.
     await expect(
       feeWallet.sendTransaction(feeWalletAddresses[5], 100n, {
         token: tokenUid,
@@ -149,8 +151,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     });
     await pollForTx(feeWallet, sendTx.hash!);
 
-    expect(sendTx.headers).toHaveLength(1);
-    expect((sendTx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
+    expectFeeAmount(sendTx.headers, 2n);
 
     const htrAfter = (await feeWallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
     expect(htrBefore - htrAfter).toBe(3n);
@@ -212,15 +213,13 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     const txData = await sendTx.prepareTxData();
     sendTx.transaction = transactionUtils.createTransactionFromData(txData, feeWallet.network);
 
-    expect(txData.headers).toHaveLength(1);
-    expect((txData.headers![0] as FeeHeader).entries[0].amount).toBe(2n);
+    expectFeeAmount(txData.headers!, 2n);
 
     await sendTx.signTx();
     const tx = await sendTx.runFromMining();
     await pollForTx(feeWallet, tx.hash!);
 
-    expect(tx.headers).toHaveLength(1);
-    expect((tx.headers[0] as FeeHeader).entries[0].amount).toBe(2n);
+    expectFeeAmount(tx.headers, 2n);
 
     const htrAfter = (await feeWallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
     expect(htrBefore - htrAfter).toBe(3n);

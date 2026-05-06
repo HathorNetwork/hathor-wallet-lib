@@ -10,12 +10,7 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import {
-  NATIVE_TOKEN_UID,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-  TOKEN_AUTHORITY_MASK,
-} from '../../src/constants';
+import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import { verifyMessage } from '../../src/utils/crypto';
 import { NftValidationError, TxNotFoundError } from '../../src/errors';
@@ -1074,22 +1069,12 @@ describe('mintTokens', () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
-    const options = { tokenVersion: TokenVersion.FEE };
-    const { hash: fbtUid } = await createTokenHelper(
-      hWallet,
-      'FeeBasedToken',
-      'FBT',
-      8582n,
-      options
-    );
-    await waitForTxReceived(hWallet, fbtUid);
 
-    // Should not mint more tokens than the HTR funds allow
+    // Should not mint more tokens than the HTR funds allow.
+    // (Fee-token equivalent is covered by `shared/fee-tokens.test.ts`:
+    //  "should fail to mint a fee token when wallet has no HTR for the fee".)
     await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow(
       /^Not enough HTR tokens for deposit or fee: 90 required, \d+ available$/
-    );
-    await expect(hWallet.mintTokens(fbtUid, 9000n)).rejects.toThrow(
-      /^Not enough HTR tokens for deposit or fee: 1 required, \d+ available$/
     );
 
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 9n);
@@ -1241,10 +1226,7 @@ describe('mintTokens', () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 13n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
-    const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
-      tokenVersion: TokenVersion.FEE,
-    });
-    let expectedHtrFunds = 11n;
+    let expectedHtrFunds = 12n;
 
     // Minting less than 1.00 tokens consumes 0.01 HTR
     let mintResponse;
@@ -1281,62 +1263,9 @@ describe('mintTokens', () => {
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // fee token minting
-    // minting less than 1.00 tokens consumes 0.01 HTR based in the outputs length
-    mintResponse = await hWallet.mintTokens(fbtUid, 1n);
-    expectedHtrFunds -= 1n;
-    expect(mintResponse.tokens.length).toBe(1);
-    expect(mintResponse.outputs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          tokenData: 0,
-          value: expectedHtrFunds,
-        }),
-        expect.objectContaining({
-          tokenData: 1,
-          value: 1n,
-        }),
-        expect.objectContaining({
-          tokenData: TOKEN_AUTHORITY_MASK + 1,
-          value: TOKEN_MINT_MASK,
-        }),
-      ])
-    );
-    expect(mintResponse.headers).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          entries: expect.arrayContaining([
-            expect.objectContaining({
-              tokenIndex: 0,
-              amount: 1n,
-            }),
-          ]),
-        }),
-      ])
-    );
-    await waitForTxReceived(hWallet, mintResponse.hash);
-    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
-
-    // minting any amount of tokens should consume 0.01 HTR
-    const randomMintAmount = BigInt(Math.floor(Math.random() * (1_000_000_000 - 2 + 1)) + 2);
-    mintResponse = await hWallet.mintTokens(fbtUid, randomMintAmount);
-    expect(mintResponse.tokens.length).toBe(1);
-    expect(mintResponse.outputs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          tokenData: 1,
-          value: randomMintAmount,
-        }),
-        expect.objectContaining({
-          tokenData: TOKEN_AUTHORITY_MASK + 1,
-          value: TOKEN_MINT_MASK,
-        }),
-      ])
-    );
-    validateFeeAmount(mintResponse.headers, 1n);
-    expectedHtrFunds -= 1n;
-    await waitForTxReceived(hWallet, mintResponse.hash);
-    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+    // Fee-token minting (flat 1n HTR fee per mint regardless of amount) is covered
+    // by `fullnode-specific/fee-tokens.test.ts`:
+    // "[Fullnode] fee tokens — mintTokens detailed bookkeeping".
   });
 });
 

@@ -22,28 +22,15 @@
 import type { IWalletTestAdapter } from '../adapters/types';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { TokenVersion } from '../../../src/types';
+import { InsufficientFundsError, UtxoError } from '../../../src/errors';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import FeeHeader from '../../../src/headers/fee';
-import Header from '../../../src/headers/base';
+import { expectFeeAmount } from '../utils/fee-headers.util';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
   new ServiceWalletTestAdapter(),
 ];
-
-/**
- * Asserts that the headers list has exactly one fee header charging the given
- * amount on the native token (tokenIndex 0 — fee-based tokens always pay fees in HTR).
- */
-function expectFeeAmount(headers: Header[], expectedFee: bigint) {
-  const feeHeaders = headers.filter(h => h instanceof FeeHeader);
-  expect(feeHeaders).toHaveLength(1);
-  const { entries } = feeHeaders[0] as FeeHeader;
-  expect(entries).toHaveLength(1);
-  expect(entries[0].tokenIndex).toBe(0);
-  expect(entries[0].amount).toBe(expectedFee);
-}
 
 describe.each(adapters)('[Shared] fee tokens — $name', adapter => {
   beforeAll(async () => {
@@ -163,16 +150,77 @@ describe.each(adapters)('[Shared] fee tokens — $name', adapter => {
     expect(tokenBalance[0].balance.unlocked).toBe(1000n - meltAmount);
   });
 
+  it('should melt all fee tokens with no token output, charging only the minimum 1n fee', async () => {
+    const { wallet } = await adapter.createWallet();
+    const addr0 = (await wallet.getAddressAtIndex(0))!;
+    await adapter.injectFunds(wallet, addr0, 10n);
+
+    // 1n HTR fee for token creation.
+    const tokenAmount = 500n;
+    const { hash: fbtUid } = await adapter.createToken(
+      wallet,
+      'MeltAllFeeToken',
+      'MAFT',
+      tokenAmount,
+      { tokenVersion: TokenVersion.FEE }
+    );
+    const htrAfterCreate = (await wallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+
+    // Melt the entire balance — leaves no token output, only authority + HTR change.
+    const { transaction: meltTx } = await adapter.meltTokens(wallet, fbtUid, tokenAmount);
+
+    // Even with no token output, the flat 1n fee still applies (minimum fee).
+    expectFeeAmount(meltTx.headers, 1n);
+
+    const htrAfterMelt = (await wallet.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(htrAfterCreate - htrAfterMelt).toBe(1n);
+
+    const tokenBalance = await wallet.getBalance(fbtUid);
+    expect(tokenBalance[0]?.balance.unlocked ?? 0n).toBe(0n);
+  });
+
   it('should fail to create a fee token when wallet has no HTR for the fee', async () => {
     const { wallet } = await adapter.createWallet();
 
     const balance = await wallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance[0]?.balance.unlocked ?? 0n).toBe(0n);
 
-    await expect(
-      adapter.createToken(wallet, 'NoFundsFeeToken', 'NFFT', 1000n, {
+    // The two facades raise different concrete errors on fund shortage:
+    //   - fullnode: InsufficientFundsError (from src/utils/tokens.ts)
+    //   - wallet-service: UtxoError (from selectUtxos in src/utils/transaction.ts)
+    // Both extend Error without overriding `.name`, so we assert by `instanceof`
+    // instead of matching error names/messages.
+    const err = await adapter
+      .createToken(wallet, 'NoFundsFeeToken', 'NFFT', 1000n, {
         tokenVersion: TokenVersion.FEE,
       })
-    ).rejects.toThrow();
+      .then(
+        () => undefined,
+        (e: unknown) => e
+      );
+    expect(err).toBeInstanceOf(Error);
+    expect(err instanceof UtxoError || err instanceof InsufficientFundsError).toBe(true);
+  });
+
+  it('should fail to mint a fee token when wallet has no HTR for the fee', async () => {
+    const { wallet } = await adapter.createWallet();
+    const addr0 = (await wallet.getAddressAtIndex(0))!;
+    // Inject only enough HTR to create the token (1n fee), leaving 0 for the mint.
+    await adapter.injectFunds(wallet, addr0, 1n);
+
+    const { hash: fbtUid } = await adapter.createToken(wallet, 'NoMintFeeToken', 'NMFT', 100n, {
+      tokenVersion: TokenVersion.FEE,
+    });
+
+    const balance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(balance[0]?.balance.unlocked ?? 0n).toBe(0n);
+
+    // Same instanceof pattern as above — both facades raise different concrete errors.
+    const err = await adapter.mintTokens(wallet, fbtUid, 9000n).then(
+      () => undefined,
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(Error);
+    expect(err instanceof UtxoError || err instanceof InsufficientFundsError).toBe(true);
   });
 });

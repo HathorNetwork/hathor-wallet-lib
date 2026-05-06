@@ -32,26 +32,13 @@ import {
 import transaction from '../../../src/utils/transaction';
 import { TokenVersion } from '../../../src/types';
 import FeeHeader from '../../../src/headers/fee';
-import Header from '../../../src/headers/base';
+import { expectFeeAmount } from '../utils/fee-headers.util';
 
-/**
- * Asserts that the headers list has exactly one fee header charging the given
- * amount on the native token (tokenIndex 0 — fee-based tokens always pay fees in HTR).
- */
-function validateFeeAmount(headers: Header[], expectedFee: bigint) {
-  const feeHeaders = headers.filter(h => h instanceof FeeHeader);
-  expect(feeHeaders).toHaveLength(1);
-  const { entries } = feeHeaders[0] as FeeHeader;
-  expect(entries).toHaveLength(1);
-  expect(entries[0].tokenIndex).toBe(0);
-  expect(entries[0].amount).toBe(expectedFee);
-}
+afterEach(async () => {
+  await stopAllWallets();
+});
 
 describe('[Fullnode] fee tokens — createNewToken with data outputs', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-  });
-
   it('should create a fee token with data outputs and discount data HTR correctly', async () => {
     const wallet = await generateWalletHelper();
     const addr0 = await wallet.getAddressAtIndex(0);
@@ -101,10 +88,6 @@ describe('[Fullnode] fee tokens — createNewToken with data outputs', () => {
 });
 
 describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-  });
-
   it('should charge 1 HTR fee per fee-token mint regardless of amount', async () => {
     async function getHtrBalance() {
       const [htrBalance] = await wallet.getBalance(NATIVE_TOKEN_UID);
@@ -138,7 +121,7 @@ describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
         }),
       ])
     );
-    validateFeeAmount(mintResponse.headers, 1n);
+    expectFeeAmount(mintResponse.headers, 1n);
     await waitForTxReceived(wallet, mintResponse.hash);
     expect(await getHtrBalance()).toBe(expectedHtrFunds);
 
@@ -159,7 +142,7 @@ describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
         }),
       ])
     );
-    validateFeeAmount(mintResponse.headers, 1n);
+    expectFeeAmount(mintResponse.headers, 1n);
     expectedHtrFunds -= 1n;
     await waitForTxReceived(wallet, mintResponse.hash);
     expect(await getHtrBalance()).toBe(expectedHtrFunds);
@@ -167,10 +150,6 @@ describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
 });
 
 describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data outputs', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-  });
-
   it('should melt fee based tokens', async () => {
     const wallet = await generateWalletHelper();
     let expectedHtrAmount = 15n;
@@ -200,7 +179,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
     const meltAmount = 50n;
     const { hash, headers } = await wallet.meltTokens(fbtUid, meltAmount);
     await waitForTxReceived(wallet, hash);
-    validateFeeAmount(headers, 1n);
+    expectFeeAmount(headers, 1n);
     expectedHtrAmount -= 1n; // 13
 
     htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
@@ -215,7 +194,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
     const meltResponse = await wallet.meltTokens(fbtUid, 1000n, {
       meltAuthorityAddress: address0,
     });
-    validateFeeAmount(meltResponse.headers, 1n);
+    expectFeeAmount(meltResponse.headers, 1n);
     await waitForTxReceived(wallet, meltResponse.hash);
     expectedHtrAmount -= 1n; // 12
 
@@ -247,7 +226,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
       meltAuthorityAddress: externalAddress,
       allowExternalMeltAuthorityAddress: true,
     });
-    validateFeeAmount(meltResponse3.headers, 1n);
+    expectFeeAmount(meltResponse3.headers, 1n);
     await waitForTxReceived(wallet, meltResponse3.hash);
     await waitForTxReceived(externalWallet, meltResponse3.hash);
     expectedHtrAmount -= 1n; // 11
@@ -275,7 +254,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
 
     // Melt with appended data output - 1 fee + 1 HTR for data output.
     const meltResponse4 = await wallet.meltTokens(fbtUid, 100n, { data: ['foobar'] });
-    validateFeeAmount(meltResponse4.headers, 1n);
+    expectFeeAmount(meltResponse4.headers, 1n);
     expect(meltResponse4.hash).toBeDefined();
     await waitForTxReceived(wallet, meltResponse4.hash);
     expectedHtrAmount -= 2n; // 9
@@ -299,7 +278,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
       unshiftData: true,
       data: ['foobar'],
     });
-    validateFeeAmount(meltResponse5.headers, 1n);
+    expectFeeAmount(meltResponse5.headers, 1n);
     expect(meltResponse5.hash).toBeDefined();
     await waitForTxReceived(wallet, meltResponse5.hash);
     expectedHtrAmount -= 2n; // 7
@@ -318,19 +297,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
     expect(dataOutput5).toHaveProperty('value', 1n);
     expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
 
-    // Melting all remaining tokens with no token output still charges 1 fee.
-    const meltResponse6 = await wallet.meltTokens(fbtUid, expectedAmount5);
-    validateFeeAmount(meltResponse6.headers, 1n);
-    expect(meltResponse6.hash).toBeDefined();
-    expect(meltResponse6.outputs).toHaveLength(2);
-    expect(meltResponse6.outputs.filter(o => o.tokenData === 1).length).toBe(0);
-    await waitForTxReceived(wallet, meltResponse6.hash);
-    expectedHtrAmount -= 1n; // 6
-
-    htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0]).toHaveProperty('balance.unlocked', expectedHtrAmount);
-
-    const fbtBalance6 = await wallet.getBalance(fbtUid);
-    expect(fbtBalance6[0]).toHaveProperty('balance.unlocked', 0n);
+    // Melt-all-with-no-token-output is covered by `shared/fee-tokens.test.ts`
+    // ("should melt all fee tokens with no token output, charging only the minimum 1n fee").
   });
 });
