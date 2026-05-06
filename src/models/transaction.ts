@@ -20,6 +20,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
+  TxWeightConstants,
 } from '../constants';
 import {
   bufferToHex,
@@ -318,11 +319,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  calculateWeight(weightConstants?: {
-    txMinWeight: number;
-    txWeightCoefficient: number;
-    txMinWeightK: number;
-  }): number {
+  calculateWeight(weightConstants?: TxWeightConstants): number {
     const constants = weightConstants ?? TX_WEIGHT_CONSTANTS;
     let txSize = this.toBytes().length;
 
@@ -481,11 +478,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  prepareToSend(weightConstants?: {
-    txMinWeight: number;
-    txWeightCoefficient: number;
-    txMinWeightK: number;
-  }) {
+  prepareToSend(weightConstants?: TxWeightConstants) {
     this.updateTimestamp();
     this.weight = this.calculateWeight(weightConstants);
   }

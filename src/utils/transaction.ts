@@ -23,6 +23,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
+  TxWeightConstants,
 } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -795,9 +796,7 @@ const transaction = {
    * version data hasn't been fetched yet, in which case callers will use
    * the hardcoded {@link TX_WEIGHT_CONSTANTS}.
    */
-  getWeightConstantsFromStorage(
-    storage: IStorage
-  ): { txMinWeight: number; txWeightCoefficient: number; txMinWeightK: number } | undefined {
+  getWeightConstantsFromStorage(storage: IStorage): TxWeightConstants | undefined {
     const { version } = storage;
     if (!version) return undefined;
     return {
