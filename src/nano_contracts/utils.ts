@@ -73,7 +73,7 @@ export const prepareNanoSendTransaction = async (
   storage: IStorage
 ): Promise<SendTransaction> => {
   await transactionUtils.signTransaction(tx, storage, pin);
-  tx.prepareToSend();
+  tx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(storage));
 
   // Create and return a send transaction object
   return new SendTransaction({
