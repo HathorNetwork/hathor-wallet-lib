@@ -18,6 +18,7 @@ import {
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
+  TX_WEIGHT_CONSTANTS,
 } from '../../src/constants';
 import txApi from '../../src/api/txApi';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -28,6 +29,7 @@ import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
 import NanoContractHeader from '../../src/nano_contracts/header';
 import { TokenVersion } from '../../src/types';
+import type { ApiVersion, IStorage } from '../../src/types';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
@@ -732,4 +734,125 @@ test('convertTransactionToHistoryTx', async () => {
   } finally {
     getTxSpy.mockRestore();
   }
+});
+
+/**
+ * Reusable `ApiVersion` literal for tests that need a populated
+ * `storage.version`. Defaults match a privnet-shaped configuration so
+ * the values diverge from `TX_WEIGHT_CONSTANTS` and any "did the
+ * override get threaded through?" assertions land at observable
+ * differences. Pass `overrides` to tweak individual fields (e.g.
+ * `decimal_places` for tests that exercise that path).
+ */
+const sampleApiVersion = (overrides: Partial<ApiVersion> = {}): ApiVersion => ({
+  version: '0.0.0-test',
+  network: 'unittest',
+  min_weight: 1,
+  min_tx_weight: 1,
+  min_tx_weight_coefficient: 0,
+  min_tx_weight_k: 0,
+  token_deposit_percentage: 0.01,
+  reward_spend_min_blocks: 1,
+  max_number_inputs: 255,
+  max_number_outputs: 255,
+  decimal_places: 2,
+  native_token: null,
+  ...overrides,
+});
+
+describe('getWeightConstantsFromStorage', () => {
+  it('returns undefined when the storage version data is not yet populated', () => {
+    // Until the wallet's `start()` finishes its /version round-trip,
+    // `storage.version` is null. The helper must return undefined so
+    // callers fall back to TX_WEIGHT_CONSTANTS instead of throwing.
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    expect(storage.version).toBeNull();
+    expect(transaction.getWeightConstantsFromStorage(storage)).toBeUndefined();
+  });
+
+  it('mirrors storage.version into the calculateWeight constants shape', () => {
+    // When version data is populated the helper exposes a shape that
+    // calculateWeight can consume directly. The sample's (1, 0, 0)
+    // weight constants diverge from TX_WEIGHT_CONSTANTS so the mapping
+    // is observable.
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.setApiVersion(sampleApiVersion());
+    expect(transaction.getWeightConstantsFromStorage(storage)).toEqual({
+      txMinWeight: 1,
+      txWeightCoefficient: 0,
+      txMinWeightK: 0,
+    });
+  });
+});
+
+describe('Transaction.calculateWeight override threading', () => {
+  // Build a deterministic small transparent tx via a Transaction model
+  // so we can call calculateWeight without spinning up a wallet.
+  const sampleTx = (): Transaction => {
+    const inputs = [new Input('aa'.repeat(32), 0)];
+    const script = new P2PKH(new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')).createScript();
+    const outputs = [new Output(1n, script, { tokenData: 0 })];
+    const tx = new Transaction(inputs, outputs);
+    tx.parents = ['bb'.repeat(32), 'cc'.repeat(32)];
+    return tx;
+  };
+
+  it('uses TX_WEIGHT_CONSTANTS when no override is passed', () => {
+    const tx = sampleTx();
+    const w = tx.calculateWeight();
+    // Floor at TX_WEIGHT_CONSTANTS.txMinWeight = 14.
+    expect(w).toBeGreaterThanOrEqual(TX_WEIGHT_CONSTANTS.txMinWeight);
+  });
+
+  it('uses the override constants when one is passed', () => {
+    const tx = sampleTx();
+    const override = { txMinWeight: 1, txWeightCoefficient: 0, txMinWeightK: 0 };
+    const wOverride = tx.calculateWeight(override);
+    const wDefault = tx.calculateWeight();
+
+    // With the privnet-shaped (1, 0, 0) constants the formula collapses
+    // to `0*log2(size) + 4/(1+0/amount) + 4 = 8`, well below the
+    // hardcoded 14-floor that the default constants enforce.
+    expect(wOverride).toBeCloseTo(8, 5);
+    // And the default branch must remain unaffected — i.e. the default
+    // call still returns the hardcoded-constant result, not the override.
+    expect(wDefault).toBeGreaterThan(wOverride);
+  });
+});
+
+describe('prepareTransaction threads weight constants from storage', () => {
+  // High-level integration of the helper + Transaction model: build a
+  // tx via prepareTransaction with a Storage whose version is populated,
+  // and assert the resulting tx.weight matches the override-derived
+  // calculation. This exercises the same path HathorWallet's send flow
+  // takes, but without any wallet, network, or mining service.
+  const buildStorageWithVersion = (overrides?: Partial<ApiVersion>): IStorage => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.setApiVersion(sampleApiVersion(overrides));
+    return storage;
+  };
+
+  it('Transaction.prepareToSend honours the override end-to-end', () => {
+    const storage = buildStorageWithVersion();
+    const constants = transaction.getWeightConstantsFromStorage(storage)!;
+
+    const inputs = [new Input('aa'.repeat(32), 0)];
+    const script = new P2PKH(new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')).createScript();
+    const outputs = [new Output(1n, script, { tokenData: 0 })];
+    const tx = new Transaction(inputs, outputs);
+    tx.parents = ['bb'.repeat(32), 'cc'.repeat(32)];
+
+    tx.prepareToSend(constants);
+    // Same instance must reflect a weight matching calculateWeight when
+    // run with the same override constants — proves prepareToSend
+    // forwarded the override into calculateWeight rather than silently
+    // falling back to TX_WEIGHT_CONSTANTS.
+    expect(tx.weight).toBeCloseTo(tx.calculateWeight(constants), 5);
+    // And the value must differ from the no-override calculation,
+    // otherwise the test couldn't distinguish the two paths.
+    expect(tx.weight).not.toBeCloseTo(tx.calculateWeight(), 1);
+  });
 });

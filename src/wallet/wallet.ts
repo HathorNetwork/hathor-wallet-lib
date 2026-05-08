@@ -11,6 +11,7 @@ import assert from 'assert';
 import Header from '../headers/base';
 import FeeHeader from '../headers/fee';
 import {
+  DECIMAL_PLACES,
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
@@ -94,6 +95,7 @@ import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
 import {
+  ApiVersion,
   IStorage,
   IWalletAccessData,
   OutputValueType,
@@ -484,6 +486,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.walletId = data.status.walletId;
 
+    // Populate `storage.version` with the fullnode network constants.
+    // Without this, `prepareToSend` would always fall back to the hardcoded
+    // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's reported
+    // `min_tx_weight*` values — see HathorWallet.start in src/new/wallet.ts
+    // where the equivalent setApiVersion call lives.
+    //
+    // Run this BEFORE the `waitReady === false` early return so both
+    // public startup paths (waitReady=true and waitReady=false) populate
+    // the field. Otherwise non-blocking-startup callers would silently
+    // fall back to TX_WEIGHT_CONSTANTS forever, defeating the purpose of
+    // this feature.
+    await this.populateStorageVersion();
+
     // If waitReady is false, return immediately after wallet creation
     if (!waitReady) {
       this.clearSensitiveData();
@@ -510,6 +525,50 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // interceptor can obtain a token without needing the PIN.
     await this.onWalletReady();
     this.clearSensitiveData();
+  }
+
+  /**
+   * Fetch the connected wallet-service's /version response and write it to
+   * `storage.version` so internal callers (notably `prepareToSend` via
+   * `transactionUtils.getWeightConstantsFromStorage`) consume the network's
+   * actual weight constants instead of the hardcoded mainnet defaults.
+   *
+   * `walletApi.getVersionData` returns `FullNodeVersionData` (camelCase, and
+   * without `decimal_places` / `native_token`). We map to the snake_case
+   * `ApiVersion` shape that storage expects, defaulting the missing fields:
+   * `decimal_places` to the constant default and `native_token` to null
+   * (storage.getDecimalPlaces / getNativeTokenData already fall back to
+   * constants when those fields are missing).
+   *
+   * Non-fatal: any failure is logged via the storage logger and swallowed.
+   * The wallet still works — `prepareToSend` simply falls back to
+   * `TX_WEIGHT_CONSTANTS` as it did before this method existed. We emit a
+   * warning rather than silently dropping the error so a regression here is
+   * visible in logs instead of producing surprisingly-mined transactions.
+   */
+  private async populateStorageVersion(): Promise<void> {
+    try {
+      const v = await this.getVersionData();
+      const apiVersion: ApiVersion = {
+        version: v.version,
+        network: v.network,
+        min_weight: v.minWeight,
+        min_tx_weight: v.minTxWeight,
+        min_tx_weight_coefficient: v.minTxWeightCoefficient,
+        min_tx_weight_k: v.minTxWeightK,
+        token_deposit_percentage: v.tokenDepositPercentage,
+        reward_spend_min_blocks: v.rewardSpendMinBlocks,
+        max_number_inputs: v.maxNumberInputs,
+        max_number_outputs: v.maxNumberOutputs,
+        decimal_places: DECIMAL_PLACES,
+        native_token: null,
+      };
+      this.storage.setApiVersion(apiVersion);
+    } catch (e) {
+      this.storage.logger.warn(
+        `wallet-service /version fetch failed during start(): ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
   }
 
   /**
@@ -1967,7 +2026,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2283,7 +2342,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2487,7 +2546,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2648,7 +2707,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
     inputsObj[0].setData(inputData);
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
 
     return tx;
   }
@@ -2729,7 +2788,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -3178,7 +3237,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       storageProxy.createProxy(),
       options.pinCode
     );
-    signedTx.prepareToSend();
+    signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }
 }
