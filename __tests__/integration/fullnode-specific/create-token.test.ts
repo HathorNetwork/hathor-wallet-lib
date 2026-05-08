@@ -202,5 +202,8 @@ describe('[Fullnode] createNewToken', () => {
 
     const tokenBalance = await hWallet.getBalance(response.hash);
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', 8582n);
+
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toBe(1n);
   });
 });
