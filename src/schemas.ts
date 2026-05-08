@@ -173,11 +173,21 @@ export const IHistoryNanoContractContextSchema = z
 
 const IHistoryShieldedOutputSchema = z
   .object({
-    mode: z.number(),
+    // `mode` was added to hathor-core's `_shielded_output_to_json` after
+    // 0.0.6-shielded; older fullnodes (still common on testnet) omit it.
+    // Downstream readers (e.g. explorer's `TxData.isFullShielded`) fall
+    // back to detecting FullShielded via the presence of
+    // `asset_commitment`, so we accept the missing-`mode` shape rather
+    // than fail-closed on every tx returned by an un-upgraded node.
+    mode: z.number().optional(),
     commitment: z.string(),
     range_proof: z.string(),
     script: z.string(),
-    token_data: z.number(),
+    // FullShielded outputs sometimes ship without `token_data` (the
+    // token UID is hidden behind `asset_commitment`, so the field has no
+    // meaningful value). Default to 0 (native-token slot) so the
+    // existing token-symbol resolution path doesn't NPE on lookups.
+    token_data: z.number().optional().default(0),
     ephemeral_pubkey: z.string(),
     decoded: IHistoryOutputDecodedSchema,
     asset_commitment: z.string().optional(),

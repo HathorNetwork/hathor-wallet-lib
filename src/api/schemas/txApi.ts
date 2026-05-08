@@ -96,11 +96,20 @@ const shieldedDecodedSchema = z
 export const fullnodeTxApiShieldedOutputSchema = z
   .object({
     // 1 = AmountShielded, 2 = FullShielded (matches ShieldedOutputMode).
-    mode: z.number(),
+    // Optional because hathor-core nodes pre-`_shielded_output_to_json`
+    // mode-field addition still send shielded outputs without it.
+    // Downstream readers fall back to detecting FullShielded via the
+    // presence of `asset_commitment`. Once every node consumers care
+    // about has shipped the field this can be tightened back.
+    mode: z.number().optional(),
     commitment: z.string(), // hex, 33 bytes
     range_proof: z.string(), // hex, variable
     script: z.string(), // hex, P2PKH/P2SH script template
-    token_data: z.number(), // token-index byte (AmountShielded only carries token info here)
+    // FullShielded outputs may omit `token_data` (the token UID is
+    // hidden behind `asset_commitment`, so the field carries no
+    // meaningful value). Defaulting to 0 (native-token slot) matches
+    // the AmountShielded-when-uncertain fallback used elsewhere.
+    token_data: z.number().optional().default(0),
     ephemeral_pubkey: z.string(), // hex, 33 bytes; used for ECDH decryption
     decoded: shieldedDecodedSchema,
     // FullShielded only — present when `mode === 2`.

@@ -31,7 +31,11 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
         'token UID is recovered from the range proof during rewind, not from token_data'
     );
   }
-  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data);
+  // `token_data` is optional on the wire — older fullnodes may omit it
+  // for FullShielded outputs (where it has no meaning). Default to 0
+  // (native-token slot) for the AmountShielded path; this is only
+  // reached when the caller has already routed away from FullShielded.
+  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data ?? 0);
   if (tokenIndex === 0) {
     return NATIVE_TOKEN_UID_HEX;
   }
@@ -118,7 +122,13 @@ export async function processShieldedOutputs(
     const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
     const commitment = Buffer.from(shieldedOutput.commitment, 'hex');
     const rangeProof = Buffer.from(shieldedOutput.range_proof, 'hex');
-    const isFullShielded = shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED;
+    // `mode` is optional on the wire (see IShieldedOutput). Fall back to
+    // `asset_commitment` presence — only FullShielded outputs carry it —
+    // so wallets sync correctly against fullnodes that haven't shipped
+    // the `_shielded_output_to_json` mode-field change yet.
+    const isFullShielded =
+      shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED ||
+      (shieldedOutput.mode === undefined && !!shieldedOutput.asset_commitment);
 
     try {
       let recoveredValue: bigint;

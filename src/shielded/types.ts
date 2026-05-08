@@ -18,11 +18,18 @@ export enum ShieldedOutputMode {
  * This is the on-chain data before decryption.
  */
 export interface IShieldedOutput {
-  mode: ShieldedOutputMode;
+  // Optional because hathor-core nodes pre-`_shielded_output_to_json`
+  // mode-field addition still send shielded outputs without `mode`.
+  // Readers must fall back to detecting FullShielded via the presence
+  // of `asset_commitment` (the same pattern already used in the
+  // explorer's `TxData.isFullShielded`).
+  mode?: ShieldedOutputMode;
   commitment: string; // hex, 33 bytes
   range_proof: string; // hex, variable (~675 bytes)
   script: string; // hex, output script (P2PKH/P2SH)
-  token_data: number; // token index (AmountShielded only)
+  // FullShielded outputs may omit `token_data` (the token UID is hidden
+  // behind `asset_commitment`, so the field has no meaningful value).
+  token_data?: number; // token index (AmountShielded only)
   ephemeral_pubkey: string; // hex, 33 bytes
   decoded: IShieldedOutputDecoded;
   // FullShielded only:
@@ -163,6 +170,42 @@ export interface IShieldedCryptoProvider {
    * ECDH shared secret derivation (for scanning optimization).
    */
   deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer | Promise<Buffer>;
+
+  /**
+   * Recompute the AmountShielded value commitment from the cleartext
+   * `value`, `vbf`, and the (public) `tokenUid`. Equivalent to
+   * `createCommitment(value, vbf, deriveAssetTag(tokenUid))`. Used by
+   * verifier-only consumers (e.g. the explorer's "view tx unblinded"
+   * path) to confirm a shared opening matches the on-chain commitment
+   * without needing a range proof or ephemeral key.
+   *
+   * Returns the 33-byte serialized Pedersen commitment.
+   */
+  openAmountShieldedCommitment(
+    value: bigint,
+    vbf: Buffer,
+    tokenUid: Buffer
+  ): Buffer | Promise<Buffer>;
+
+  /**
+   * Recompute both the value and asset commitments for a FullShielded
+   * output from cleartext `value`, `vbf`, `tokenUid` and `abf`.
+   * Equivalent to:
+   *   tag = deriveTag(tokenUid)
+   *   assetCommitment = createAssetCommitment(tag, abf)
+   *   valueCommitment = createCommitment(value, vbf, assetCommitment)
+   *
+   * Returns both 33-byte serialized commitments. Verifier compares
+   * each to the on-chain bytes.
+   */
+  openFullShieldedCommitment(
+    value: bigint,
+    vbf: Buffer,
+    tokenUid: Buffer,
+    abf: Buffer
+  ):
+    | { valueCommitment: Buffer; assetCommitment: Buffer }
+    | Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }>;
 }
 
 /**

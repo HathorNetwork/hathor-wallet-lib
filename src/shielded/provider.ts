@@ -153,5 +153,27 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
     deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer {
       return ct.deriveEcdhSharedSecret(privkey, pubkey);
     },
+
+    openAmountShieldedCommitment(value: bigint, vbf: Buffer, tokenUid: Buffer): Buffer {
+      // AmountShielded: token is public, so the value commitment uses
+      // the unblinded asset tag as its generator.
+      const generator = ct.deriveAssetTag(tokenUid);
+      return ct.createCommitment(value, vbf, generator);
+    },
+
+    openFullShieldedCommitment(
+      value: bigint,
+      vbf: Buffer,
+      tokenUid: Buffer,
+      abf: Buffer
+    ): { valueCommitment: Buffer; assetCommitment: Buffer } {
+      // FullShielded: token is hidden, so the asset is committed first
+      // (`Tag * G + abf * H`) and the value commitment uses that
+      // blinded asset commitment as its generator.
+      const tag = ct.deriveTag(tokenUid);
+      const assetCommitment = ct.createAssetCommitment(tag, abf);
+      const valueCommitment = ct.createCommitment(value, vbf, assetCommitment);
+      return { valueCommitment, assetCommitment };
+    },
   };
 }
