@@ -18,4 +18,6 @@ export type {
 
 export { createDefaultShieldedCryptoProvider } from './provider';
 
+export { createBrowserShieldedCryptoProvider } from './provider.browser';
+
 export { processShieldedOutputs } from './processing';

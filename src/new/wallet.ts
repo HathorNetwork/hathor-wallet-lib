@@ -1084,6 +1084,137 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Get the unblinding factors for shielded outputs in a transaction.
+   *
+   * Returns one entry per shielded output **the wallet owns** (received +
+   * change). Outputs the wallet generated for other recipients are not in
+   * scope — even though the wallet knows their blinding factors at signing
+   * time, disclosing them would leak the recipient's amount/token to a third
+   * party. The same is true of any shielded output decoded with a different
+   * wallet's scan key.
+   *
+   * Each entry carries the on-chain absolute output index the explorer / a
+   * fullnode uses to identify the output (`len(transparent_outputs) +
+   * shielded_index`). The viewer can recompute the Pedersen commitment from
+   * `{value, token, vbf, abf?}` and confirm it matches the on-chain
+   * commitment at that index.
+   *
+   * Used by the mobile/desktop "View in Explorer unblinded" / "Copy
+   * unblinding values" surfaces. The wallet stores `blindingFactor` /
+   * `assetBlindingFactor` on the appended `tx.outputs[]` entries during
+   * `processSingleTx`'s decryption pass, so this works for spent outputs
+   * too — UTXO deletion on spend doesn't drop the history record.
+   */
+  async getShieldedUnblindingForTx(txId: string): Promise<{
+    outputs: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }>;
+    inputs: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }>;
+  }> {
+    const tx = await this.storage.getTx(txId);
+    if (!tx) return { outputs: [], inputs: [] };
+
+    const ownedOutputsOf = (
+      target: IHistoryTx
+    ): Map<number, { value: bigint; token: string; vbf: string; abf?: string }> => {
+      // Build a lookup keyed by on-chain absolute output index for
+      // shielded outputs the wallet owns (decoded). Same shape used by
+      // both the outputs path (this tx's outputs) and the inputs path
+      // (each input's parent tx's outputs). Entries the fullnode
+      // delivered but we couldn't decode never get appended to
+      // `tx.outputs[]`, so the `blindingFactor` filter is the
+      // ownership gate.
+      const transparentCount = target.outputs.filter(
+        o => !transactionUtils.isShieldedOutputEntry(o)
+      ).length;
+      const out = new Map<number, { value: bigint; token: string; vbf: string; abf?: string }>();
+      for (const output of target.outputs) {
+        if (!transactionUtils.isShieldedOutputEntry(output)) continue;
+        if (!output.blindingFactor) continue;
+        // Prefer the recorded on-chain index. Older cached entries
+        // (written before `onChainIndex` was added) need recovery by
+        // matching `commitment` back to the
+        // `tx.shielded_outputs[]` position; mirrors the fallback in
+        // `utils/storage.ts:processSingleTxUtil`.
+        let absIdx: number;
+        if (output.onChainIndex !== undefined) {
+          absIdx = output.onChainIndex;
+        } else {
+          const shielded = target.shielded_outputs ?? [];
+          const matchIdx = shielded.findIndex(s => s.commitment === output.commitment);
+          if (matchIdx < 0) continue;
+          absIdx = transparentCount + matchIdx;
+        }
+        out.set(absIdx, {
+          value: BigInt(output.value),
+          token: output.token,
+          vbf: output.blindingFactor,
+          ...(output.assetBlindingFactor ? { abf: output.assetBlindingFactor } : {}),
+        });
+      }
+      return out;
+    };
+
+    const outputsResult: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }> = [];
+    for (const [absIdx, opening] of ownedOutputsOf(tx).entries()) {
+      outputsResult.push({ index: absIdx, ...opening });
+    }
+
+    // Inputs: a shielded input references a previous shielded output
+    // by `tx_id` + `index`. If the wallet owned that previous output
+    // (it's in the wallet's history with `blindingFactor` populated),
+    // the same opening unblinds the input. Inputs the wallet doesn't
+    // own the parent of stay opaque — the wallet has no business
+    // disclosing someone else's blinding factors.
+    const inputsResult: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }> = [];
+    const parentTxCache = new Map<
+      string,
+      Map<number, { value: bigint; token: string; vbf: string; abf?: string }>
+    >();
+    for (const [inputIdx, input] of (tx.inputs ?? []).entries()) {
+      // Only shielded inputs need unblinding; transparent inputs
+      // already render in cleartext.
+      if ((input as { type?: string }).type !== 'shielded') continue;
+      const parentTxId = (input as { tx_id?: string }).tx_id;
+      const parentOutputIndex = (input as { index?: number }).index;
+      if (!parentTxId || parentOutputIndex === undefined) continue;
+      let parentOwned = parentTxCache.get(parentTxId);
+      if (parentOwned === undefined) {
+        const parent = await this.storage.getTx(parentTxId);
+        parentOwned = parent ? ownedOutputsOf(parent) : new Map();
+        parentTxCache.set(parentTxId, parentOwned);
+      }
+      const opening = parentOwned.get(parentOutputIndex);
+      if (!opening) continue;
+      inputsResult.push({ index: inputIdx, ...opening });
+    }
+
+    return { outputs: outputsResult, inputs: inputsResult };
+  }
+
+  /**
    * @typedef AddressInfoOptions
    * @property {string} token Optionally filter transactions by this token uid (Default: HTR)
    */

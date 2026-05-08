@@ -253,11 +253,17 @@ export interface IHistoryTx {
 // Equivalent to IShieldedOutput in shielded/types.ts but uses IHistoryOutputDecoded
 // (which includes the extra `data?` field). Keep both in sync when modifying.
 export interface IHistoryShieldedOutput {
-  mode: ShieldedOutputMode;
+  // Optional because hathor-core nodes pre-`_shielded_output_to_json`
+  // mode-field addition still send shielded outputs without `mode`.
+  // Readers fall back to inferring FullShielded vs AmountShielded from
+  // the presence of `asset_commitment`.
+  mode?: ShieldedOutputMode;
   commitment: string; // hex
   range_proof: string; // hex
   script: string; // hex
-  token_data: number;
+  // Optional + defaults to 0 in the parser. FullShielded outputs may
+  // omit `token_data` (the token UID is hidden behind asset_commitment).
+  token_data?: number;
   ephemeral_pubkey: string; // hex
   decoded: IHistoryOutputDecoded;
   asset_commitment?: string; // hex (FullShielded only)
@@ -330,6 +336,13 @@ export interface IShieldedOutputEntry {
   surjection_proof?: string;
   blindingFactor?: string; // hex, 32 bytes — value blinding factor (populated after decryption)
   assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
+  // The fullnode-canonical absolute output index (`transparentCount + s_index`).
+  // Recorded when the wallet decodes a shielded output and appends it to
+  // `tx.outputs[]` (see `utils/storage.ts:processSingleTxUtil`). Older cached
+  // history entries written before this field existed don't carry it; readers
+  // must recover the index by matching `commitment` back to its position in
+  // `tx.shielded_outputs[]` and adding the transparent count.
+  onChainIndex?: number;
 }
 
 export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;
