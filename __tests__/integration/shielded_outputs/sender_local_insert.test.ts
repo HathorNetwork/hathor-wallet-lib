@@ -215,4 +215,69 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     expect(storedTx!.shielded_outputs![0].mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
     expect(storedTx!.shielded_outputs![1].mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
   });
+
+  /**
+   * L.4 — `convertTransactionToHistoryTx` must stamp `type: 'shielded'`
+   * on inputs that spend shielded outputs.
+   *
+   * Regression: before the fix, the sender-local insert produced inputs
+   * indistinguishable from transparent ones (no `type` field, value/
+   * token/decoded all populated from the spent shielded output). The
+   * primary symptom was that `getShieldedUnblindingForTx` early-skipped
+   * every input on a self-sent tx (`input.type !== 'shielded'`),
+   * so the share-unblinding URL the mobile wallet built carried only
+   * `outputs[]` and the explorer rendered all inputs as Confidential.
+   */
+  it('L.4 — convertTransactionToHistoryTx tags type=shielded on inputs spending shielded UTXOs', async () => {
+    const walletA: HathorWallet = await generateWalletHelper();
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Step 1: create a shielded UTXO the wallet owns. Without this, the
+    // spend tx in step 2 has no shielded parent to reference and the
+    // test trivially passes against transparent inputs.
+    const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
+    const fundShieldedTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddr0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(fundShieldedTx).not.toBeNull();
+    await waitForTxReceived(walletA, fundShieldedTx!.hash!);
+
+    // Step 2: build a second tx that spends the shielded UTXO we just
+    // created. `sign-tx` stops before mining so we can inspect the
+    // history-tx shape from the signed structure directly, before any
+    // websocket delivery has a chance to overwrite it.
+    const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
+    const spendTx = await walletA.sendManyOutputsSendTransaction([
+      {
+        address: shieldedAddr1,
+        value: 20n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    const tx = await spendTx.run('sign-tx');
+    tx.updateHash();
+
+    const historyTx = await transactionUtils.convertTransactionToHistoryTx(tx, walletA.storage);
+
+    // At least one input must be flagged as shielded — the one
+    // referencing the shielded UTXO from step 1.
+    const shieldedInputs = historyTx.inputs.filter(
+      i => (i as { type?: string }).type === 'shielded'
+    );
+    expect(shieldedInputs.length).toBeGreaterThanOrEqual(1);
+
+    // Each shielded input must still reference its parent so
+    // `getShieldedUnblindingForTx` can perform the parent-opening lookup.
+    for (const input of shieldedInputs) {
+      expect(input.tx_id).toBeDefined();
+      expect(typeof input.index).toBe('number');
+    }
+  });
 });

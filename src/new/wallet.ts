@@ -1194,9 +1194,18 @@ class HathorWallet extends EventEmitter {
       Map<number, { value: bigint; token: string; vbf: string; abf?: string }>
     >();
     for (const [inputIdx, input] of (tx.inputs ?? []).entries()) {
-      // Only shielded inputs need unblinding; transparent inputs
-      // already render in cleartext.
-      if ((input as { type?: string }).type !== 'shielded') continue;
+      // We don't gate this loop on `input.type === 'shielded'` because
+      // the sender-local insert path (utils/transaction.ts's
+      // `convertTransactionToHistoryTx`) builds the IHistoryTx without
+      // setting `type` on inputs that spend shielded parents — so a
+      // tx the wallet itself sent would have all its inputs skipped
+      // until a WebSocket re-delivery overwrote the shape. Instead,
+      // attempt the parent-opening lookup on every input: only inputs
+      // whose parent tx has a decoded shielded entry at the referenced
+      // index will produce a hit, which is precisely the ownership
+      // gate we want. Transparent inputs naturally miss this lookup
+      // (parents have no shielded entry at that absolute index) and
+      // fall through.
       const parentTxId = (input as { tx_id?: string }).tx_id;
       const parentOutputIndex = (input as { index?: number }).index;
       if (!parentTxId || parentOutputIndex === undefined) continue;

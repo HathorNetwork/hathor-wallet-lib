@@ -1075,7 +1075,19 @@ const transaction = {
             `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length}) and no stored UTXO recovery for tx_id=${input.hash}`
           );
         }
+        // Reaching this branch means the parent tx had at least one
+        // shielded output decoded out of `outputs[]` in storage — only
+        // shielded-output decoding produces UTXOs with on-chain
+        // absolute indices past `outputs.length`. So the input we're
+        // building has a shielded parent and must carry the
+        // `type: 'shielded'` discriminator. Without it,
+        // `getShieldedUnblindingForTx` (which gates on the type
+        // before looking up parent openings) would skip this input on
+        // a sender-local insert, dropping the input opening from the
+        // unblinding payload until a WebSocket re-delivery overwrote
+        // the shape.
         inputs.push({
+          type: 'shielded',
           tx_id: input.hash,
           index: input.index,
           script: '',
@@ -1088,7 +1100,13 @@ const transaction = {
       }
 
       const spentOut = spentTx.outputs[input.index];
+      // Same rationale as above for the case where the parent's
+      // decoded shielded entry sits inside `spentTx.outputs[]` at the
+      // input's absolute index — preserve the `type: 'shielded'`
+      // flag through the sender-local insert.
+      const isShieldedSpend = this.isShieldedOutputEntry(spentOut);
       inputs.push({
+        ...(isShieldedSpend ? { type: 'shielded' } : {}),
         tx_id: input.hash,
         index: input.index,
         script: spentOut.script,
