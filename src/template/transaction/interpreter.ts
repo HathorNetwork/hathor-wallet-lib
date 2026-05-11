@@ -220,7 +220,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   ): Promise<TxInstance> {
     let tx = await this.build(instructions, debug);
     tx = await transactionUtils.signTransaction(tx, this.wallet.storage, pinCode);
-    tx.prepareToSend();
+    tx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.wallet.storage));
     return tx;
   }
 
