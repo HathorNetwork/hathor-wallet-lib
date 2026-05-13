@@ -1673,10 +1673,25 @@ class HathorWallet extends EventEmitter {
   /**
    * Enqueue the call for onNewTx with the given data.
    *
+   * The `.catch` is load-bearing — without it, one rejection inside
+   * onNewTx (or any of its downstream awaits: `addTx`, `processNewTx`,
+   * the shielded decryption loop, `processHistory`, etc.) would leave
+   * `newTxPromise` in a rejected state, and every subsequent
+   * `.then(() => onNewTx(...))` would propagate the rejection without
+   * invoking the handler. The wallet would silently stop processing
+   * websocket events for the rest of the session. Logging the error and
+   * swallowing the rejection preserves the queue contract for follow-up
+   * messages while keeping the underlying failure visible.
+   *
    * @param wsData WebSocket message data containing transaction history
    */
   enqueueOnNewTx(wsData: WalletWebSocketData): void {
-    this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
+    this.newTxPromise = this.newTxPromise
+      .then(() => this.onNewTx(wsData))
+      .catch(err => {
+        const txId = wsData?.history?.tx_id ?? '<unknown>';
+        this.logger.error(`enqueueOnNewTx: onNewTx failed for tx ${txId}: ${err?.stack ?? err}`);
+      });
   }
 
   /**
