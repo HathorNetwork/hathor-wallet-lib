@@ -68,20 +68,27 @@ export interface ICreatedShieldedOutput {
 }
 
 /**
- * Swappable crypto provider interface.
+ * Swappable crypto provider for shielded output operations.
+ *
  * Function names follow the SHIELDED-OUTPUTS-CLIENT-GUIDE.md specification.
  *
  * Implementations:
  * - Node.js: @hathor/ct-crypto-node (napi-rs, default)
  * - iOS: Swift wrapper via UniFFI
  * - Android: Kotlin wrapper via UniFFI
+ *
+ * Every method returns `Promise<T>`. Some implementations (e.g. the Node
+ * native addon) compute results synchronously, but the interface uniformly
+ * returns Promises so callers don't have to defend against a `T | Promise<T>`
+ * union at every call site. Sync implementations should declare their methods
+ * `async` or wrap the return in `Promise.resolve(...)`.
  */
 export interface IShieldedCryptoProvider {
   /**
    * Generate a random 32-byte blinding factor (valid secp256k1 scalar).
    * MUST use the Rust crypto RNG — never use JS crypto.randomBytes.
    */
-  generateRandomBlindingFactor(): Buffer | Promise<Buffer>;
+  generateRandomBlindingFactor(): Promise<Buffer>;
 
   /**
    * Create an AmountShielded output (amount hidden, token visible).
@@ -93,7 +100,7 @@ export interface IShieldedCryptoProvider {
     recipientPubkey: Buffer,
     tokenUid: Buffer,
     valueBlindingFactor: Buffer
-  ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
+  ): Promise<ICreatedShieldedOutput>;
 
   /**
    * Create a FullShielded output (amount AND token hidden).
@@ -105,7 +112,7 @@ export interface IShieldedCryptoProvider {
     tokenUid: Buffer,
     valueBlindingFactor: Buffer,
     assetBlindingFactor: Buffer
-  ): ICreatedShieldedOutput | Promise<ICreatedShieldedOutput>;
+  ): Promise<ICreatedShieldedOutput>;
 
   /**
    * Rewind an AmountShielded output to recover value and blinding factor.
@@ -117,7 +124,7 @@ export interface IShieldedCryptoProvider {
     commitment: Buffer,
     rangeProof: Buffer,
     tokenUid: Buffer
-  ): IRewoundAmountShieldedOutput | Promise<IRewoundAmountShieldedOutput>;
+  ): Promise<IRewoundAmountShieldedOutput>;
 
   /**
    * Rewind a FullShielded output to recover value, blinding factor, token UID,
@@ -129,7 +136,7 @@ export interface IShieldedCryptoProvider {
     commitment: Buffer,
     rangeProof: Buffer,
     assetCommitment: Buffer
-  ): IRewoundFullShieldedOutput | Promise<IRewoundFullShieldedOutput>;
+  ): Promise<IRewoundFullShieldedOutput>;
 
   /**
    * Compute the balancing blinding factor for the last shielded output.
@@ -145,17 +152,17 @@ export interface IShieldedCryptoProvider {
     generatorBlindingFactor: Buffer,
     inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
     otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>
-  ): Buffer | Promise<Buffer>;
+  ): Promise<Buffer>;
 
   /**
    * Derive a raw Tag from a token UID (for surjection proofs and cross-checks).
    */
-  deriveTag(tokenUid: Buffer): Buffer | Promise<Buffer>;
+  deriveTag(tokenUid: Buffer): Promise<Buffer>;
 
   /**
    * Derive a blinded asset generator from a raw tag and blinding factor.
    */
-  createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Buffer | Promise<Buffer>;
+  createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Promise<Buffer>;
 
   /**
    * Create a surjection proof proving the output asset derives from one of the input assets.
@@ -164,12 +171,12 @@ export interface IShieldedCryptoProvider {
     codomainTag: Buffer,
     codomainBlindingFactor: Buffer,
     domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>
-  ): Buffer | Promise<Buffer>;
+  ): Promise<Buffer>;
 
   /**
    * ECDH shared secret derivation (for scanning optimization).
    */
-  deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer | Promise<Buffer>;
+  deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Promise<Buffer>;
 
   /**
    * Recompute the AmountShielded value commitment from the cleartext
@@ -181,11 +188,7 @@ export interface IShieldedCryptoProvider {
    *
    * Returns the 33-byte serialized Pedersen commitment.
    */
-  openAmountShieldedCommitment(
-    value: bigint,
-    vbf: Buffer,
-    tokenUid: Buffer
-  ): Buffer | Promise<Buffer>;
+  openAmountShieldedCommitment(value: bigint, vbf: Buffer, tokenUid: Buffer): Promise<Buffer>;
 
   /**
    * Recompute both the value and asset commitments for a FullShielded
@@ -203,9 +206,7 @@ export interface IShieldedCryptoProvider {
     vbf: Buffer,
     tokenUid: Buffer,
     abf: Buffer
-  ):
-    | { valueCommitment: Buffer; assetCommitment: Buffer }
-    | Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }>;
+  ): Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }>;
 }
 
 /**

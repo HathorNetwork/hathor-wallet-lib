@@ -772,10 +772,27 @@ const wallet = {
     if (hasAll) return false;
     if (!accessData.words) return false;
 
-    // `decryptData` throws InvalidPasswdError / DecryptionError — let it
-    // propagate. We do NOT partially write fields before the throw, so a
+    // `decryptData` throws InvalidPasswdError / DecryptionError. We wrap it
+    // here so the operator sees the *specific* failure mode — the wallet
+    // password (not the PIN) is required to decrypt the seed during shielded
+    // migration. Without context, "InvalidPasswdError" during wallet.start
+    // looks like a generic password problem and operators commonly retry
+    // with the PIN. We do NOT partially write fields before the throw, so a
     // failed migration leaves the record untouched.
-    const words = decryptData(accessData.words, password);
+    let words: string;
+    try {
+      words = decryptData(accessData.words, password);
+    } catch (e) {
+      // Project tsconfig predates ES2022 ErrorOptions; attach `cause` via
+      // property assignment so the original InvalidPasswdError/DecryptionError
+      // is still recoverable from `(err as Error & { cause? }).cause`.
+      const wrapped = new Error(
+        'Shielded migration requires the wallet password (not PIN) to decrypt the seed. ' +
+          'Ensure you provided the password and not the PIN, then retry wallet.start.'
+      );
+      (wrapped as Error & { cause?: unknown }).cause = e;
+      throw wrapped;
+    }
     const code = new Mnemonic(words);
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
 

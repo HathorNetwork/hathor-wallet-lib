@@ -21,17 +21,22 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
   // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require, import/no-unresolved, import/no-extraneous-dependencies
   const ct = require('@hathor/ct-crypto-node');
 
+  // Methods are declared `async` so the returned provider satisfies the
+  // uniformly-Promise-typed IShieldedCryptoProvider interface even though the
+  // underlying native addon (ct) is synchronous. Returning `Promise<T>` at the
+  // interface level lets every caller `await` without defending against a
+  // `T | Promise<T>` union.
   return {
-    generateRandomBlindingFactor(): Buffer {
+    async generateRandomBlindingFactor(): Promise<Buffer> {
       return ct.generateRandomBlindingFactor();
     },
 
-    createAmountShieldedOutput(
+    async createAmountShieldedOutput(
       value: bigint,
       recipientPubkey: Buffer,
       tokenUid: Buffer,
       valueBlindingFactor: Buffer
-    ): ICreatedShieldedOutput {
+    ): Promise<ICreatedShieldedOutput> {
       const result = ct.createAmountShieldedOutput(
         value,
         recipientPubkey,
@@ -46,13 +51,13 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    createShieldedOutputWithBothBlindings(
+    async createShieldedOutputWithBothBlindings(
       value: bigint,
       recipientPubkey: Buffer,
       tokenUid: Buffer,
       vbf: Buffer,
       abf: Buffer
-    ): ICreatedShieldedOutput {
+    ): Promise<ICreatedShieldedOutput> {
       const result = ct.createShieldedOutputWithBothBlindings(
         value,
         recipientPubkey,
@@ -70,13 +75,13 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    rewindAmountShieldedOutput(
+    async rewindAmountShieldedOutput(
       privateKey: Buffer,
       ephemeralPubkey: Buffer,
       commitment: Buffer,
       rangeProof: Buffer,
       tokenUid: Buffer
-    ): IRewoundAmountShieldedOutput {
+    ): Promise<IRewoundAmountShieldedOutput> {
       const result = ct.rewindAmountShieldedOutput(
         privateKey,
         ephemeralPubkey,
@@ -90,13 +95,13 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    rewindFullShieldedOutput(
+    async rewindFullShieldedOutput(
       privateKey: Buffer,
       ephemeralPubkey: Buffer,
       commitment: Buffer,
       rangeProof: Buffer,
       assetCommitment: Buffer
-    ): IRewoundFullShieldedOutput {
+    ): Promise<IRewoundFullShieldedOutput> {
       const result = ct.rewindFullShieldedOutput(
         privateKey,
         ephemeralPubkey,
@@ -112,12 +117,12 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       };
     },
 
-    computeBalancingBlindingFactor(
+    async computeBalancingBlindingFactor(
       value: bigint,
       generatorBlindingFactor: Buffer,
       inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
       otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>
-    ): Buffer {
+    ): Promise<Buffer> {
       return ct.computeBalancingBlindingFactor(
         value,
         generatorBlindingFactor,
@@ -134,39 +139,43 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       );
     },
 
-    deriveTag(tokenUid: Buffer): Buffer {
+    async deriveTag(tokenUid: Buffer): Promise<Buffer> {
       return ct.deriveTag(tokenUid);
     },
 
-    createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Buffer {
+    async createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Promise<Buffer> {
       return ct.createAssetCommitment(tag, blindingFactor);
     },
 
-    createSurjectionProof(
+    async createSurjectionProof(
       codomainTag: Buffer,
       codomainBlindingFactor: Buffer,
       domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>
-    ): Buffer {
+    ): Promise<Buffer> {
       return ct.createSurjectionProof(codomainTag, codomainBlindingFactor, domain);
     },
 
-    deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Buffer {
+    async deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Promise<Buffer> {
       return ct.deriveEcdhSharedSecret(privkey, pubkey);
     },
 
-    openAmountShieldedCommitment(value: bigint, vbf: Buffer, tokenUid: Buffer): Buffer {
+    async openAmountShieldedCommitment(
+      value: bigint,
+      vbf: Buffer,
+      tokenUid: Buffer
+    ): Promise<Buffer> {
       // AmountShielded: token is public, so the value commitment uses
       // the unblinded asset tag as its generator.
       const generator = ct.deriveAssetTag(tokenUid);
       return ct.createCommitment(value, vbf, generator);
     },
 
-    openFullShieldedCommitment(
+    async openFullShieldedCommitment(
       value: bigint,
       vbf: Buffer,
       tokenUid: Buffer,
       abf: Buffer
-    ): { valueCommitment: Buffer; assetCommitment: Buffer } {
+    ): Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }> {
       // FullShielded: token is hidden, so the asset is committed first
       // (`Tag * G + abf * H`) and the value commitment uses that
       // blinded asset commitment as its generator.

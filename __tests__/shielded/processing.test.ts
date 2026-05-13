@@ -115,7 +115,7 @@ describe('processShieldedOutputs', () => {
     const tx = makeHistoryTx();
     const storage = {
       getAddressInfo: jest.fn(),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
     const provider = makeMockProvider();
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
@@ -127,7 +127,7 @@ describe('processShieldedOutputs', () => {
     const tx = makeHistoryTx({ shielded_outputs: [so] });
     const storage = {
       getAddressInfo: jest.fn(),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
     const provider = makeMockProvider();
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
@@ -140,7 +140,7 @@ describe('processShieldedOutputs', () => {
     const tx = makeHistoryTx({ shielded_outputs: [so] });
     const storage = {
       getAddressInfo: jest.fn().mockResolvedValue(null),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
     const provider = makeMockProvider();
     const result = await processShieldedOutputs(storage, tx, provider, 'pin');
@@ -182,7 +182,7 @@ describe('processShieldedOutputs', () => {
     const storage = {
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
 
     const provider = makeMockProvider({
@@ -225,7 +225,7 @@ describe('processShieldedOutputs', () => {
         return null;
       }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
 
     // addr1 rewind succeeds, addr3 rewind fails
@@ -271,7 +271,7 @@ describe('processShieldedOutputs', () => {
     const storage = {
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
-      logger: { warn: jest.fn(), debug: jest.fn() },
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
 
     const provider = makeMockProvider({
@@ -291,7 +291,15 @@ describe('processShieldedOutputs', () => {
     expect(result).toEqual([]);
     // rewind WAS called (key derivation succeeded)
     expect(provider.rewindFullShieldedOutput).toHaveBeenCalled();
-    // cross-check failure was logged
-    expect(storage.logger.warn).toHaveBeenCalledWith(expect.stringContaining('cross-check failed'));
+    // cross-check failure was logged at error level (this branch indicates
+    // either a bug in tag/commitment construction or active forgery — both
+    // warrant error-level visibility, not warn).
+    expect(storage.logger.error).toHaveBeenCalledWith(expect.stringContaining('cross-check failed'));
+    // The error message must carry enough context to debug from logs alone:
+    // the recovered token UID and the on-chain assetCommitment hex.
+    const errorMsg = (storage.logger.error as jest.Mock).mock.calls[0][0] as string;
+    expect(errorMsg).toMatch(/recovered tokenUid=[0-9a-f]+/);
+    expect(errorMsg).toMatch(/on-chain assetCommitment=[0-9a-f]+/);
+    expect(errorMsg).toMatch(/expected assetCommitment=[0-9a-f]+/);
   });
 });

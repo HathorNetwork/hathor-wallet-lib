@@ -798,13 +798,22 @@ describe('migrateShieldedAccessData', () => {
 
   test('M.5 — wrong password throws and leaves the record untouched', () => {
     const record = makePreShieldedRecord();
-    expect(() =>
+    let caught: unknown;
+    try {
       wallet.migrateShieldedAccessData(record, {
         pin: '123',
         password: 'wrong-password',
         networkName: 'testnet',
-      })
-    ).toThrow(InvalidPasswdError);
+      });
+    } catch (e) {
+      caught = e;
+    }
+    // We wrap decryptData's failure in a specific message so operators
+    // know to provide the wallet password (not PIN). The original
+    // InvalidPasswdError stays available via .cause.
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/wallet password \(not PIN\)/);
+    expect((caught as Error & { cause?: unknown }).cause).toBeInstanceOf(InvalidPasswdError);
     // Critical: no fields should have been assigned before the throw. If
     // decryptData throws, we must not leave a half-migrated record.
     expect(record.scanXpubkey).toBeUndefined();

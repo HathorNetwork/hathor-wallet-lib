@@ -41,7 +41,9 @@ export async function createBrowserShieldedCryptoProvider(): Promise<IShieldedCr
     await wasm.default();
   }
 
-  const unsupported = (name: string) => () => {
+  // Async-throwing factory: callers awaiting the method get a rejected Promise
+  // rather than a synchronous throw, matching the uniformly-Promise interface.
+  const unsupported = (name: string) => async (): Promise<never> => {
     throw new Error(
       `${name} is not supported by the browser shielded crypto provider — ` +
         'this provider only exposes the verifier-only commitment surface. ' +
@@ -59,18 +61,22 @@ export async function createBrowserShieldedCryptoProvider(): Promise<IShieldedCr
     createSurjectionProof: unsupported('createSurjectionProof'),
     deriveEcdhSharedSecret: unsupported('deriveEcdhSharedSecret'),
 
-    deriveTag(tokenUid: Buffer): Buffer {
+    async deriveTag(tokenUid: Buffer): Promise<Buffer> {
       // wasm-bindgen serializes Vec<u8> as Uint8Array; coerce to Buffer
       // so the rest of wallet-lib (which uses Buffer everywhere) sees a
       // uniform shape.
       return Buffer.from(wasm.deriveTag(tokenUid));
     },
 
-    createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Buffer {
+    async createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Promise<Buffer> {
       return Buffer.from(wasm.createAssetCommitment(tag, blindingFactor));
     },
 
-    openAmountShieldedCommitment(value: bigint, vbf: Buffer, tokenUid: Buffer): Buffer {
+    async openAmountShieldedCommitment(
+      value: bigint,
+      vbf: Buffer,
+      tokenUid: Buffer
+    ): Promise<Buffer> {
       // Compose the verify primitive client-side from the same building
       // blocks the Node provider uses, so the two stay in sync without a
       // dedicated open* export in the WASM surface.
@@ -79,12 +85,12 @@ export async function createBrowserShieldedCryptoProvider(): Promise<IShieldedCr
       return Buffer.from(wasm.createCommitment(value, vbf, generator));
     },
 
-    openFullShieldedCommitment(
+    async openFullShieldedCommitment(
       value: bigint,
       vbf: Buffer,
       tokenUid: Buffer,
       abf: Buffer
-    ): { valueCommitment: Buffer; assetCommitment: Buffer } {
+    ): Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }> {
       const tag = wasm.deriveTag(tokenUid);
       const assetCommitment = wasm.createAssetCommitment(tag, abf);
       const valueCommitment = wasm.createCommitment(value, vbf, assetCommitment);

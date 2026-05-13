@@ -163,9 +163,19 @@ export async function processShieldedOutputs(
           result.assetBlindingFactor
         );
         if (!assetCommitment.equals(expectedAc)) {
-          storage.logger.warn(
+          // Drop the output AND log loudly: this branch indicates either a bug
+          // in tag/commitment construction (ours or hathor-core's) or active
+          // forgery — someone constructing an `asset_commitment` that doesn't
+          // match the recovered `tokenUid`. Either way, an operator needs to
+          // see this, so route to `error` and include the recovered tokenUid +
+          // on-chain assetCommitment hex so the failure is debuggable from
+          // logs alone.
+          storage.logger.error(
             `FullShielded token UID cross-check failed for tx ${tx.tx_id} ` +
-              `output ${transparentCount + idx} — asset commitment mismatch`
+              `output ${transparentCount + idx} — asset commitment mismatch. ` +
+              `recovered tokenUid=${result.tokenUid.toString('hex')}, ` +
+              `on-chain assetCommitment=${assetCommitment.toString('hex')}, ` +
+              `expected assetCommitment=${expectedAc.toString('hex')}`
           );
           continue;
         }
