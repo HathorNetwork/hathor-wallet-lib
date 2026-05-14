@@ -334,7 +334,7 @@ export async function waitForTxReceived(
     // so after the transaction arrives, all the metadata involved on it is updated and we can
     // continue running the tests to correctly check balances, addresses, and everyting else
     await updateInputsSpentBy(hWallet, storageTx);
-    await hWallet.storage.processHistory();
+    await hWallet.storage.processHistory(hWallet.pinCode ?? undefined);
   }
 
   return storageTx;
@@ -353,6 +353,13 @@ async function updateInputsSpentBy(hWallet, tx) {
     const inputTx = await hWallet.getTx(input.tx_id);
     if (!inputTx) {
       // This input is not spending an output from this wallet
+      continue;
+    }
+
+    // Shielded inputs (type === 'shielded') reference a shielded output whose
+    // spent_by marking is handled by the wallet's own processing once the
+    // metadata update arrives; we don't force-mark it here.
+    if (input.type === 'shielded') {
       continue;
     }
 

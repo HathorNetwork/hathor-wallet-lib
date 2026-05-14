@@ -29,10 +29,28 @@ REWARD_SPEND_MIN_BLOCKS: 1
 
 CHECKPOINTS: []
 
-ENABLE_NANO_CONTRACTS: enabled
+ENABLE_NANO_CONTRACTS: feature_activation
 ENABLE_FEE_BASED_TOKENS: enabled
+ENABLE_SHIELDED_TRANSACTIONS: enabled
 NC_ON_CHAIN_BLUEPRINT_RESTRICTED: false
 AVG_TIME_BETWEEN_BLOCKS: 1
 FEE_PER_OUTPUT: 1
+
+# alpha-v2 added a strict validator: if FEATURE_ACTIVATION has criteria for a
+# feature, its ENABLE_X toggle must be `feature_activation` (not a static
+# `enabled` / `disabled`). The only user-controllable one is NANO_CONTRACTS
+# (INCREASE_MAX_MERKLE_PATH_LENGTH / COUNT_CHECKDATASIG_OP / FAILED_FEE_TOKENS
+# / FAILED_OPCODES_V2 are hardcoded to FEATURE_ACTIVATION in the feature
+# service), so we switch it to feature_activation and override the criteria
+# below so it activates at genesis (height 0) on privnet.
+FEATURE_ACTIVATION:
+  evaluation_interval: 4
+  default_threshold: 1
+  features:
+    NANO_CONTRACTS:
+      start_height: 0
+      minimum_activation_height: 0
+      timeout_height: 100
+      lock_in_on_timeout: true
 
 extends: mainnet.yml
