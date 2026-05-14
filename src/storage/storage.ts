@@ -6,6 +6,7 @@
  */
 
 import { HDPublicKey } from 'bitcore-lib';
+import Address from '../models/address';
 import Input from '../models/input';
 import {
   ApiVersion,
@@ -40,7 +41,9 @@ import {
   getDefaultLogger,
   AuthorityType,
   TokenVersion,
+  IAddressChainOptions,
 } from '../types';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -79,6 +82,8 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
+  shieldedCryptoProvider?: IShieldedCryptoProvider;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -98,6 +103,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.shieldedCryptoProvider = undefined;
     this.logger = getDefaultLogger();
   }
 
@@ -168,6 +174,14 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Set the shielded crypto provider for confidential transaction support.
+   * @param provider The crypto provider, or undefined to clear it
+   */
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
+    this.shieldedCryptoProvider = provider;
+  }
+
+  /**
    * Sign the transaction
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
@@ -232,8 +246,11 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<IAddressInfo|null>} The address info or null if not found
    */
-  async getAddressAtIndex(index: number): Promise<IAddressInfo | null> {
-    return this.store.getAddressAtIndex(index);
+  async getAddressAtIndex(
+    index: number,
+    opts?: IAddressChainOptions
+  ): Promise<IAddressInfo | null> {
+    return this.store.getAddressAtIndex(index, opts);
   }
 
   /**
@@ -280,8 +297,8 @@ export class Storage implements IStorage {
    * @param {boolean|undefined} markAsUsed If we should set the next address as current
    * @returns {Promise<string>} The address in base58 encoding
    */
-  async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
-    return this.store.getCurrentAddress(markAsUsed);
+  async getCurrentAddress(markAsUsed?: boolean, opts?: IAddressChainOptions): Promise<string> {
+    return this.store.getCurrentAddress(markAsUsed, opts);
   }
 
   /**
@@ -298,6 +315,20 @@ export class Storage implements IStorage {
     if (changeAddress) {
       if (!(await this.isAddressMine(changeAddress))) {
         throw new Error('Change address is not from the wallet');
+      }
+      // Shielded addresses can't be used directly as an output script type —
+      // `getAddressType` throws on them downstream. But their on-chain
+      // equivalent is the spend-derived P2PKH (same pubkey hash), so resolve
+      // here and hand the P2PKH back. The wallet still tracks the output as
+      // its own because the P2PKH is stored in the address index during
+      // shielded-address derivation (see `deriveShieldedAddressFromStorage`).
+      // `isShielded()` is non-throwing — it returns false on any address
+      // that doesn't decode as shielded under the current network — so a
+      // version-byte mismatch on a legacy address falls through to the
+      // unchanged passthrough below.
+      const addrObj = new Address(changeAddress, { network: this.config.getNetwork() });
+      if (addrObj.isShielded()) {
+        return addrObj.getSpendAddress().base58;
       }
       return changeAddress;
     }
@@ -361,6 +392,9 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
+    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
+    // converting base64 fields to hex.
+    transactionUtils.normalizeShieldedOutputs(tx);
     await this.store.saveTx(tx);
   }
 
@@ -368,20 +402,23 @@ export class Storage implements IStorage {
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processHistory(): Promise<void> {
+  async processHistory(pinCode?: string): Promise<void> {
     await this.store.preProcessHistory();
-    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
+    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks, pinCode });
   }
 
   /**
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processNewTx(tx: IHistoryTx): Promise<void> {
+  async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
     // Keep tx-timestamp index sorted
     await this.store.preProcessHistory();
     // Process the single tx we received
-    await processSingleTxUtil(this, tx, { rewardLock: this.version?.reward_spend_min_blocks });
+    await processSingleTxUtil(this, tx, {
+      rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
+    });
   }
 
   /**
@@ -474,6 +511,13 @@ export class Storage implements IStorage {
    * @param {Omit<IUtxoFilterOptions, 'reward_lock'>} [options={}] Options to filter utxos and stop when the target is found.
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
+  /**
+   * Look up a specific UTXO by txId and index.
+   */
+  async getUtxo(utxoId: IUtxoId): Promise<IUtxo | null> {
+    return this.store.getUtxo(utxoId);
+  }
+
   async *selectUtxos(
     options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
   ): AsyncGenerator<IUtxo, void, void> {
@@ -901,6 +945,50 @@ export class Storage implements IStorage {
 
     // decryptData handles pin validation
     return decryptData(accessData.acctPathKey, pinCode);
+  }
+
+  /**
+   * Get the scan chain xprivkey for shielded ECDH.
+   * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
+   */
+  async getScanXPrivKey(pinCode: string): Promise<string> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.scanMainKey) {
+      throw new Error('Scan private key is not present on this wallet.');
+    }
+    return decryptData(accessData.scanMainKey, pinCode);
+  }
+
+  /**
+   * Get the spend chain xprivkey for shielded UTXO signing.
+   * Uses account 2' (m/44'/280'/2'/0).
+   */
+  async getSpendXPrivKey(pinCode: string): Promise<string> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.spendMainKey) {
+      throw new Error('Spend private key is not present on this wallet.');
+    }
+    return decryptData(accessData.spendMainKey, pinCode);
+  }
+
+  /**
+   * Get the scan chain xpubkey for shielded address derivation.
+   * Uses account 1' (m/44'/280'/1'/0).
+   * Returns undefined if wallet was created before shielded feature.
+   */
+  async getScanXPubKey(): Promise<string | undefined> {
+    const accessData = await this._getValidAccessData();
+    return accessData.scanXpubkey;
+  }
+
+  /**
+   * Get the spend chain xpubkey for shielded address derivation.
+   * Uses account 2' (m/44'/280'/2'/0).
+   * Returns undefined if wallet was created before shielded feature.
+   */
+  async getSpendXPubKey(): Promise<string | undefined> {
+    const accessData = await this._getValidAccessData();
+    return accessData.spendXpubkey;
   }
 
   /**

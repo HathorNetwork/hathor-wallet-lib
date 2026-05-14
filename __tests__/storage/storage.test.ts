@@ -94,7 +94,7 @@ describe('handleStop', () => {
     await storage.registerNanoContract('abc', testNano);
     // We have 1 transaction
     await expect(store.historyCount()).resolves.toEqual(1);
-    // 20 addresses
+    // addressCount returns only legacy addresses (shielded/shielded-spend are filtered)
     await expect(store.addressCount()).resolves.toEqual(20);
     // And 1 registered token
     let tokens = await toArray(storage.getRegisteredTokens());
@@ -134,7 +134,7 @@ describe('handleStop', () => {
 
     // handleStop with cleanStorage = true
     await storage.handleStop({ cleanStorage: true });
-    // Will clean the history bit not addresses or registered tokens
+    // Will clean the history but not addresses or registered tokens
     await expect(store.historyCount()).resolves.toEqual(0);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
@@ -177,7 +177,7 @@ describe('handleStop', () => {
     // handleStop with cleanAddresses = true
     await loadAddresses(0, 20, storage);
     await storage.handleStop({ cleanTokens: true });
-    // Will clean the history bit not addresses
+    // Will clean the tokens but not addresses
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeFalsy();

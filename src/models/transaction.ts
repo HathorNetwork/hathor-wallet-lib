@@ -17,6 +17,7 @@ import {
   DEFAULT_TX_VERSION,
   MAX_INPUTS,
   MAX_OUTPUTS,
+  MAX_SHIELDED_OUTPUTS,
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
@@ -33,6 +34,7 @@ import {
 } from '../utils/buffer';
 import Input from './input';
 import Output from './output';
+import ShieldedOutput from './shielded_output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
@@ -40,6 +42,7 @@ import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
 import FeeHeader from '../headers/fee';
 import HeaderParser from '../headers/parser';
+import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
 enum txType {
@@ -74,6 +77,8 @@ class Transaction {
   inputs: Input[];
 
   outputs: Output[];
+
+  shieldedOutputs: ShieldedOutput[];
 
   signalBits: number;
 
@@ -113,6 +118,7 @@ class Transaction {
 
     this.inputs = inputs;
     this.outputs = outputs;
+    this.shieldedOutputs = [];
     this.signalBits = signalBits!;
     this.version = version!;
     this.weight = weight!;
@@ -220,7 +226,7 @@ class Transaction {
     // Len inputs
     array.push(intToBytes(this.inputs.length, 1));
 
-    // Len outputs
+    // Len outputs (transparent only; shielded go in the ShieldedOutputsHeader)
     array.push(intToBytes(this.outputs.length, 1));
   }
 
@@ -238,6 +244,7 @@ class Transaction {
     for (const outputTx of this.outputs) {
       array.push(...outputTx.serialize());
     }
+    // Shielded outputs are serialized in the ShieldedOutputsHeader, not here.
   }
 
   /**
@@ -340,10 +347,11 @@ class Transaction {
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     const amount = sumOutputs / 10 ** DECIMAL_PLACES;
 
-    let weight =
-      constants.txWeightCoefficient * Math.log2(txSize) +
-      4 / (1 + constants.txMinWeightK / amount) +
-      4;
+    // When txMinWeightK is 0, avoid the division-by-zero in `k/amount` —
+    // the term `4 / (1 + 0)` collapses to 4.
+    const kTerm = constants.txMinWeightK === 0 ? 4 : 4 / (1 + constants.txMinWeightK / amount);
+
+    let weight = constants.txWeightCoefficient * Math.log2(txSize) + kTerm + 4;
 
     // Make sure the calculated weight is at least the minimum
     weight = Math.max(weight, constants.txMinWeight);
@@ -366,6 +374,10 @@ class Transaction {
         continue;
       }
       sumOutputs += output.value;
+    }
+    // Shielded outputs also contribute to the weight calculation
+    for (const shieldedOut of this.shieldedOutputs) {
+      sumOutputs += shieldedOut.value;
     }
     return sumOutputs;
   }
@@ -415,6 +427,12 @@ class Transaction {
     if (this.outputs.length > MAX_OUTPUTS) {
       throw new MaximumNumberOutputsError(
         `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+      );
+    }
+
+    if (this.shieldedOutputs.length > MAX_SHIELDED_OUTPUTS) {
+      throw new MaximumNumberOutputsError(
+        `Transaction has ${this.shieldedOutputs.length} shielded outputs and can have at most ${MAX_SHIELDED_OUTPUTS}.`
       );
     }
   }
@@ -655,6 +673,15 @@ class Transaction {
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
     tx.getHeadersFromBytes(txBuffer, network);
+
+    // Hydrate shieldedOutputs from the ShieldedOutputsHeader (if present)
+    // so validate() and weight calculations use the correct count.
+    for (const header of tx.headers) {
+      if (header instanceof ShieldedOutputsHeader) {
+        tx.shieldedOutputs = header.shieldedOutputs;
+        break;
+      }
+    }
 
     tx.updateHash();
 

@@ -18,6 +18,7 @@ import Network from '../models/network';
 import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
+import { deriveShieldedAddress } from './shieldedAddress';
 
 /**
  * Parse address and return the address type.
@@ -163,4 +164,48 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
     network.bitcoreNetwork
   ).toString();
   return new Address(base58, { network });
+}
+
+/**
+ * Derive shielded address and its on-chain spend address from storage at a given index.
+ *
+ * Returns two IAddressInfo entries:
+ * 1. The shielded address (user-facing, 71-byte format)
+ * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
+ *
+ * Returns null if the wallet doesn't have shielded key material.
+ */
+export async function deriveShieldedAddressFromStorage(
+  index: number,
+  storage: IStorage
+): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  if (!scanXpub || !spendXpub) {
+    return null;
+  }
+
+  const networkName = storage.config.getNetwork().name;
+  const info = deriveShieldedAddress(scanXpub, spendXpub, index, networkName);
+
+  // The user-facing shielded address encodes both scan and spend pubkeys.
+  // This is what users share with senders to receive shielded outputs.
+  const shieldedAddress: IAddressInfo = {
+    base58: info.base58,
+    bip32AddressIndex: index,
+    publicKey: info.scanPubkey,
+    addressType: 'shielded',
+  };
+
+  // The on-chain P2PKH derived from the spend pubkey (spend_pubkey → HASH160 → P2PKH).
+  // Stored separately so the wallet can match incoming transactions by decoded.address,
+  // since on-chain scripts reference this P2PKH, not the shielded address.
+  const spendAddress: IAddressInfo = {
+    base58: info.spendAddress,
+    bip32AddressIndex: index,
+    publicKey: info.spendPubkey,
+    addressType: 'shielded-spend',
+  };
+
+  return { shieldedAddress, spendAddress };
 }

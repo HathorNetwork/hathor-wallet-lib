@@ -48,7 +48,7 @@ test('addresses methods', async () => {
   await expect(store.getAddressMeta('b')).resolves.toEqual(5);
   await expect(store.addressCount()).resolves.toEqual(3);
 
-  await expect(store.getCurrentAddress()).rejects.toThrow('Current address is not loaded');
+  await expect(store.getCurrentAddress()).rejects.toThrow('Current legacy address is not loaded');
   expect(store.walletData.currentAddressIndex).toEqual(-1);
   expect(store.walletData.lastLoadedAddressIndex).toEqual(0);
   await store.saveAddress({
@@ -283,6 +283,46 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx02');
+
+  // Add a shielded UTXO
+  await store.saveUtxo({
+    txId: 'tx03',
+    index: 0,
+    token: '00',
+    address: 'addr3',
+    value: 30n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'aa'.repeat(32),
+  });
+
+  // Default (no shielded filter) returns all including shielded
+  buf = [];
+  for await (const u of store.selectUtxos({})) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(2); // tx01 (HTR) + tx03 (HTR shielded)
+
+  // shielded: true returns only shielded
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: true })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx03');
+  expect(buf[0].shielded).toBe(true);
+
+  // shielded: false returns only transparent
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: false })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx01');
+  expect(buf[0].shielded).toBeUndefined();
 });
 
 test('access data methods', async () => {
