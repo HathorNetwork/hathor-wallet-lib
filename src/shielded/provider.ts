@@ -128,7 +128,11 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
       return {
         value: result.value,
         blindingFactor: result.blindingFactor,
-        tokenUid: result.tokenUid,
+        // ct-crypto-node returns the recovered token UID as a Buffer; convert
+        // to hex at this boundary so the rest of wallet-lib sees a single
+        // canonical encoding for token UIDs (matches IUtxo.token,
+        // IHistoryShieldedOutput, etc.).
+        tokenUid: result.tokenUid.toString('hex'),
         assetBlindingFactor: result.assetBlindingFactor,
       };
     },
