@@ -616,14 +616,45 @@ const transaction = {
       let inputTokenData = input.token_data;
 
       if (!address || inputToken === undefined) {
-        // Shielded inputs: decoded value/token/address live on the saved UTXO
-        // (normalizeShieldedOutputs keeps shielded entries out of tx.outputs).
+        // First try: the shielded UTXO is still in storage (e.g. processNewTx
+        // has not yet run on this tx, or the tx was loaded before its spend
+        // was processed).
         const utxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
-        if (!utxo || !utxo.shielded) continue;
-        address = utxo.address;
-        inputToken = utxo.token;
-        inputValue = utxo.value;
-        inputTokenData = 0;
+        if (utxo && utxo.shielded) {
+          address = utxo.address;
+          inputToken = utxo.token;
+          inputValue = utxo.value;
+          inputTokenData = 0;
+        } else {
+          // Fallback: the UTXO has already been deleted (processNewTx deletes
+          // the spent shielded UTXO right after enriching the input). Look up
+          // the parent tx's decoded shielded outputs and match by absolute
+          // on-chain index. Without this fallback, a tx that spent a
+          // wallet-owned shielded UTXO whose enriched inputs weren't
+          // persisted reads back as `{tx_id, index}`-only here, the input
+          // gets silently skipped, and the per-tx delta credits outputs
+          // (change) without debiting the input — showing e.g. +8.5M on a
+          // tx that actually sent 500K.
+          const parentTx = await storage.getTx(input.tx_id);
+          if (!parentTx) continue;
+          const decoded = (parentTx.outputs ?? []).find(
+            o =>
+              this.isShieldedOutputEntry(o) &&
+              ((o as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex ===
+                input.index ||
+                // Older entries written before onChainIndex existed: fall back
+                // to matching directly by array position. Safe when the parent
+                // tx has been decoded with full coverage (one decoded entry
+                // per shielded output), and a no-op otherwise.
+                parentTx.outputs.indexOf(o) === input.index)
+          ) as IShieldedOutputEntry | undefined;
+          if (!decoded?.decoded?.address) continue;
+          if (!(await storage.isAddressMine(decoded.decoded.address))) continue;
+          address = decoded.decoded.address;
+          inputToken = decoded.token;
+          inputValue = decoded.value;
+          inputTokenData = decoded.token_data ?? 0;
+        }
       }
 
       if (!(address && (await storage.isAddressMine(address)))) {

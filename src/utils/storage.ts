@@ -1230,6 +1230,17 @@ export async function processNewTx(
     input.token_data = origOutput.token_data ?? 0;
   }
 
+  // Persist the enriched inputs. The earlier saveTx (after shielded-output
+  // decryption) ran BEFORE the input enrichment loop above, so the stored
+  // copy still had bare `{tx_id, index}` shielded inputs. Without re-saving
+  // here, `getTxBalance` reads those bare inputs back, tries the UTXO-by-
+  // (txId, index) fallback, finds nothing (the UTXO was deleted at line 1177
+  // when this tx spent it), and silently `continue`s past the input. Result:
+  // the per-tx history delta credits outputs (shielded change) without
+  // debiting the wallet's shielded input — showing a positive delta on a
+  // tx that actually sent funds out.
+  await store.saveTx(tx);
+
   for (const input of tx.inputs) {
     // We ignore data inputs and shielded inputs we don't own. Wallet-owned
     // shielded inputs are enriched above so their decoded/value/token/token_data
