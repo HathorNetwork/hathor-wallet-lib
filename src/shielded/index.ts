@@ -17,3 +17,7 @@ export type {
   IRewoundAmountShieldedOutput,
   IRewoundFullShieldedOutput,
 } from './types';
+
+export { createDefaultShieldedCryptoProvider } from './provider';
+
+export { createBrowserShieldedCryptoProvider } from './provider.browser';
