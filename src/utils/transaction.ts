@@ -879,9 +879,8 @@ const transaction = {
           tokenData,
           Buffer.from(so.script, 'hex'),
           so.ephemeralPubkey,
-          so.assetCommitment,
-          so.surjectionProof,
-          so.value
+          so.value,
+          { assetCommitment: so.assetCommitment, surjectionProof: so.surjectionProof }
         );
       });
 

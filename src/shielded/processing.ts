@@ -135,7 +135,7 @@ export async function processShieldedOutputs(
       let recoveredBf: Buffer;
       let recoveredTokenUid: string;
       let recoveredAbf: Buffer | undefined;
-      let outputType: ShieldedOutputMode;
+      let mode: ShieldedOutputMode;
 
       if (isFullShielded) {
         // FullShielded: rewind recovers token UID and asset blinding factor
@@ -151,13 +151,13 @@ export async function processShieldedOutputs(
         recoveredValue = result.value;
         recoveredBf = result.blindingFactor;
         recoveredAbf = result.assetBlindingFactor;
-        recoveredTokenUid = result.tokenUid.toString('hex');
-        outputType = ShieldedOutputMode.FULLY_SHIELDED;
+        recoveredTokenUid = result.tokenUid;
+        mode = ShieldedOutputMode.FULLY_SHIELDED;
 
         // Cross-check token UID (Section 4.3 of the client guide):
         // https://github.com/HathorNetwork/hathor-core/blob/feat/ct-amount-token-privacy/hathor-ct-crypto/SHIELDED-OUTPUTS-CLIENT-GUIDE.md
         // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
-        const expectedTag = await cryptoProvider.deriveTag(result.tokenUid);
+        const expectedTag = await cryptoProvider.deriveTag(Buffer.from(recoveredTokenUid, 'hex'));
         const expectedAc = await cryptoProvider.createAssetCommitment(
           expectedTag,
           result.assetBlindingFactor
@@ -173,7 +173,7 @@ export async function processShieldedOutputs(
           storage.logger.error(
             `FullShielded token UID cross-check failed for tx ${tx.tx_id} ` +
               `output ${transparentCount + idx} — asset commitment mismatch. ` +
-              `recovered tokenUid=${result.tokenUid.toString('hex')}, ` +
+              `recovered tokenUid=${recoveredTokenUid}, ` +
               `on-chain assetCommitment=${assetCommitment.toString('hex')}, ` +
               `expected assetCommitment=${expectedAc.toString('hex')}`
           );
@@ -192,7 +192,7 @@ export async function processShieldedOutputs(
         recoveredValue = result.value;
         recoveredBf = result.blindingFactor;
         recoveredTokenUid = tokenUid;
-        outputType = ShieldedOutputMode.AMOUNT_SHIELDED;
+        mode = ShieldedOutputMode.AMOUNT_SHIELDED;
       }
 
       // Validate recovered value — a corrupted rewind could return garbage
@@ -212,7 +212,7 @@ export async function processShieldedOutputs(
           blindingFactor: recoveredBf,
           tokenUid: recoveredTokenUid,
           assetBlindingFactor: recoveredAbf,
-          outputType,
+          mode,
         },
         address,
         tokenUid: recoveredTokenUid,
