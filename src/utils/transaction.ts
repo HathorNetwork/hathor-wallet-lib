@@ -109,6 +109,54 @@ const transaction = {
   },
 
   /**
+   * Look up the on-chain output of a parent tx that is spent by an input
+   * with absolute on-chain index `inputIndex`.
+   *
+   * Sparse-decode handling: when the wallet decodes only some of a parent
+   * tx's shielded outputs (the rest belong to other wallets and can't be
+   * decrypted), the decoded entries are appended to `parentTx.outputs[]`
+   * and their position in that array does NOT necessarily match their
+   * on-chain absolute index. Each decoded entry carries the true on-chain
+   * index in `onChainIndex`. Callers that need to resolve "what does this
+   * input spend" must NOT do `parentTx.outputs[inputIndex]` positionally
+   * for those entries — they'd get a different output, with a different
+   * value/token/address, leading to:
+   *   - wrong token-meta debit (per-tx balance off by an input's value)
+   *   - wrong UTXO deletion key (spent UTXO leaks in storage)
+   *   - signing with the wrong spend key (fullnode rejects with
+   *     "Failed to verify if elements are equal")
+   *
+   * This helper first looks for any shielded entry whose recorded
+   * `onChainIndex` equals `inputIndex` — that's the genuine spent output.
+   * When no shielded entry claims that index, the input must reference a
+   * transparent output of the parent (transparent outputs occupy their
+   * on-chain positions exactly), so positional `outputs[inputIndex]` is
+   * correct and used as a fallback. Returns `undefined` when no output
+   * matches (e.g. the parent has fewer outputs than the input claims to
+   * spend, or the parent has shielded outputs but none claim this index
+   * and there's no transparent at this position either).
+   */
+  findSpentOutput(parentTx: IHistoryTx, inputIndex: number): IHistoryOutput | undefined {
+    const outputs = parentTx.outputs ?? [];
+    // Prefer a shielded entry whose recorded on-chain index matches.
+    const shieldedMatch = outputs.find(
+      o =>
+        this.isShieldedOutputEntry(o) &&
+        (o as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex === inputIndex
+    );
+    if (shieldedMatch) return shieldedMatch;
+    if (inputIndex < 0 || inputIndex >= outputs.length) return undefined;
+    const positional = outputs[inputIndex];
+    // Positional fallback is only valid for transparent outputs. If the
+    // entry at the requested position is a shielded entry but no shielded
+    // entry has a matching onChainIndex, the input refers to a shielded
+    // slot the wallet doesn't have locally — returning the positional
+    // shielded entry would silently substitute the wrong output.
+    if (this.isShieldedOutputEntry(positional)) return undefined;
+    return positional;
+  },
+
+  /**
    * Normalize a transaction's outputs by extracting shielded entries from outputs[]
    * into a separate shielded_outputs[] array AND ensuring base64-encoded fields are
    * converted to hex. Mutates the tx in place.
@@ -335,12 +383,14 @@ const transaction = {
         continue;
       }
 
-      // For shielded inputs, input.index points beyond spentTx.outputs (which
-      // only holds transparent + decoded-shielded entries). Fall back to the
-      // stored UTXO record, which carries `address` directly.
+      // Resolve the spent output via the sparse-decode-aware helper. A
+      // positional `spentTx.outputs[input.index]` would return the wrong
+      // entry on a sparse-decoded parent and the signature would be
+      // computed for the wrong pubkey, failing OP_EQUALVERIFY at the
+      // fullnode with "Failed to verify if elements are equal".
       let spentOut:
         | { decoded?: { address?: string }; script?: string; value?: bigint }
-        | undefined = spentTx.outputs[input.index];
+        | undefined = this.findSpentOutput(spentTx, input.index);
       if (!spentOut) {
         const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
         if (!utxo) {
@@ -1094,28 +1144,45 @@ const transaction = {
         }
       }
 
-      // Shielded inputs reference indices past the parent's transparent
-      // outputs (the wallet's stored copy normalizes shielded entries OUT
-      // of `outputs`). Recover the spent-output info from the wallet's
-      // saved UTXO record instead of erroring.
-      if (input.index >= spentTx.outputs.length) {
+      // Detect whether the input references a shielded slot of the parent.
+      // The on-chain absolute index for a shielded output is
+      // `transparent_count + shielded_array_idx`, which may or may not equal
+      // its position in the wallet's stored `spentTx.outputs[]` (sparse
+      // decode shifts decoded entries DOWN when the wallet doesn't own
+      // every shielded output of the parent). Two cases produce a shielded
+      // slot:
+      //   (a) input.index >= spentTx.outputs.length — index is past the
+      //       wallet's stored entries (full-decode of fewer outputs than
+      //       actually exist on-chain).
+      //   (b) input.index < spentTx.outputs.length AND some shielded entry
+      //       claims this on-chain index (the sparse-decode case where the
+      //       wallet's outputs[] has room at this position but positional
+      //       lookup returns the wrong entry).
+      // In both cases, build the input from the saved UTXO (which carries
+      // the correct on-chain `index`, address, value, and token) so we sign
+      // with the right spend key and the fullnode resolves to the right
+      // output.
+      // A shielded slot is one where (a) input.index points past the
+      // wallet's stored outputs (full-decode of fewer than the on-chain
+      // count) OR (b) some decoded shielded entry's onChainIndex equals
+      // input.index (sparse-decode within the wallet's range). The helper
+      // returns the decoded shielded entry in case (b), so we use its
+      // result to detect both cases.
+      const resolvedSpent = this.findSpentOutput(spentTx, input.index);
+      const isShieldedSlot =
+        input.index >= spentTx.outputs.length ||
+        (resolvedSpent !== undefined && this.isShieldedOutputEntry(resolvedSpent));
+      if (isShieldedSlot) {
         const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
         if (!utxo) {
           throw new Error(
             `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length}) and no stored UTXO recovery for tx_id=${input.hash}`
           );
         }
-        // Reaching this branch means the parent tx had at least one
-        // shielded output decoded out of `outputs[]` in storage — only
-        // shielded-output decoding produces UTXOs with on-chain
-        // absolute indices past `outputs.length`. So the input we're
-        // building has a shielded parent and must carry the
-        // `type: 'shielded'` discriminator. Without it,
-        // `getShieldedUnblindingForTx` (which gates on the type
-        // before looking up parent openings) would skip this input on
-        // a sender-local insert, dropping the input opening from the
-        // unblinding payload until a WebSocket re-delivery overwrote
-        // the shape.
+        // The `type: 'shielded'` discriminator is required so the rest of
+        // wallet-lib (e.g. `getShieldedUnblindingForTx`, the WS-driven
+        // tx-history view, the signing key chain selection) routes this
+        // input through the shielded code paths.
         inputs.push({
           type: 'shielded',
           tx_id: input.hash,
@@ -1129,12 +1196,11 @@ const transaction = {
         continue;
       }
 
-      const spentOut = spentTx.outputs[input.index];
-      // Same rationale as above for the case where the parent's
-      // decoded shielded entry sits inside `spentTx.outputs[]` at the
-      // input's absolute index — preserve the `type: 'shielded'`
-      // flag through the sender-local insert.
-      const isShieldedSpend = this.isShieldedOutputEntry(spentOut);
+      // Non-shielded slot: `resolvedSpent` is already the transparent
+      // output (helper returns undefined or transparent — never a
+      // shielded entry without onChainIndex match — by design).
+      const spentOut = resolvedSpent!;
+      const isShieldedSpend = false;
       inputs.push({
         ...(isShieldedSpend ? { type: 'shielded' } : {}),
         tx_id: input.hash,
@@ -1406,11 +1472,18 @@ const transaction = {
     const rewardLock = storage.version?.reward_spend_min_blocks || 0;
     const nowTs = Math.floor(Date.now() / 1000);
     const tx = await storage.getTx(utxo.txId);
-    if (tx === null || (tx.outputs && tx.outputs.length <= utxo.index)) {
+    if (tx === null) {
       // This is not our utxo, so we cannot spend it.
       return false;
     }
-    const output = tx.outputs[utxo.index];
+    // Sparse-decode-aware lookup. Positional outputs[utxo.index] would
+    // return the wrong entry on a parent whose shielded outputs were only
+    // partially decoded, and `isOutputLocked` would check the wrong
+    // entry's timelock.
+    const output = this.findSpentOutput(tx, utxo.index);
+    if (!output) {
+      return false;
+    }
     const isTimelocked = this.isOutputLocked(output, { refTs: nowTs });
     const isHeightLocked = this.isHeightLocked(tx.height, currentHeight, rewardLock);
     const isSelectedAsInput = await storage.isUtxoSelectedAsInput(utxo);

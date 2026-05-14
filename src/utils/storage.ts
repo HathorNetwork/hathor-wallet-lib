@@ -494,7 +494,11 @@ export async function processHistory(
       const origTx = await storage.getTx(input.tx_id);
       if (!origTx) continue;
       if (input.index >= origTx.outputs.length) continue; // shielded branch handled elsewhere
-      const output = origTx.outputs[input.index];
+      // Resolve the spent output via the sparse-decode-aware helper so the
+      // positional `origTx.outputs[input.index]` doesn't mistakenly return
+      // a different decoded shielded entry whose `onChainIndex` doesn't
+      // match the input's index.
+      const output = transactionUtils.findSpentOutput(origTx, input.index);
       if (!output?.decoded?.address) continue;
       if (!(await storage.isAddressMine(output.decoded.address))) continue;
       await store.deleteUtxo({
@@ -566,7 +570,20 @@ export async function processSingleTx(
     // how the local UTXO record happens to be flagged. A previous
     // version gated on `shieldedUtxo?.shielded`, which silently leaked
     // legacy/corrupted records back to the selector.
-    if (input.index >= origTx.outputs.length) {
+    // Shielded inputs may reference a slot whose position in
+    // origTx.outputs[] differs from the on-chain absolute index (sparse
+    // decode). Try an onChainIndex match first; if any shielded entry
+    // claims this on-chain index, the input is shielded — delete the
+    // shielded UTXO by (txId, on-chain idx). The previous gate
+    // `input.index >= origTx.outputs.length` only caught the case where
+    // the wallet decoded EVERY shielded output of the parent, missing the
+    // sparse-decode case where the wallet's outputs[] still has room at
+    // position `input.index` but the entry there isn't the right one.
+    const resolved = transactionUtils.findSpentOutput(origTx, input.index);
+    const isShieldedSpend =
+      input.index >= origTx.outputs.length ||
+      (resolved !== undefined && transactionUtils.isShieldedOutputEntry(resolved));
+    if (isShieldedSpend) {
       const shieldedUtxo = await storage.getUtxo({
         txId: input.tx_id,
         index: input.index,
@@ -577,7 +594,8 @@ export async function processSingleTx(
       continue;
     }
 
-    const output = origTx.outputs[input.index];
+    const output = resolved;
+    if (!output) continue;
     if (!output.decoded?.address) {
       // Tx is ours but output is not from an address.
       continue;
@@ -1197,31 +1215,12 @@ export async function processNewTx(
     // iterates chronologically) and recover the output being spent.
     const origTx = await store.getTx(input.tx_id);
     if (!origTx) continue;
-    if (input.index >= origTx.outputs.length) {
-      // Sparse-decode shielded case: when origTx has multiple shielded outputs
-      // but only some are owned/decoded, the appended decoded entry sits at a
-      // lower position than its on-chain index. Look it up by `onChainIndex`.
-      // Without this, a shielded input pointing to e.g. on-chain index 1 in a
-      // tx where only one entry was decoded (at position 0) would be skipped —
-      // the spending tx wouldn't subtract its input, inflating balance by the
-      // value of that shielded UTXO.
-      const sparseDecoded = (origTx.outputs ?? []).find(
-        o =>
-          transactionUtils.isShieldedOutputEntry(o) &&
-          (o as IShieldedOutputEntry & { onChainIndex?: number }).onChainIndex === input.index
-      );
-      if (
-        sparseDecoded?.decoded?.address &&
-        (await storage.isAddressMine(sparseDecoded.decoded.address))
-      ) {
-        input.decoded = sparseDecoded.decoded;
-        input.value = sparseDecoded.value;
-        input.token = sparseDecoded.token;
-        input.token_data = sparseDecoded.token_data ?? 0;
-      }
-      continue;
-    }
-    const origOutput = origTx.outputs[input.index];
+    // Sparse-decode-aware lookup. Positional outputs[input.index] would
+    // return the wrong entry when the parent has shielded outputs that
+    // were only partially decoded — the input would be enriched with the
+    // wrong value/token/address and the spending tx's token-meta debit
+    // would be off (per-tx delta off by an input's value).
+    const origOutput = transactionUtils.findSpentOutput(origTx, input.index);
     if (!origOutput?.decoded?.address) continue;
     if (!(await storage.isAddressMine(origOutput.decoded.address))) continue;
     input.decoded = origOutput.decoded;
@@ -1405,10 +1404,12 @@ export async function processUtxoUnlock(
   const { store } = storage;
 
   const { tx } = lockedUtxo;
-  const output = tx.outputs[lockedUtxo.index];
+  // Sparse-decode-aware lookup. Positional tx.outputs[lockedUtxo.index]
+  // could return the wrong entry on a sparse-decoded parent.
+  const output = transactionUtils.findSpentOutput(tx, lockedUtxo.index);
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case
-  if (!output.decoded.address) return;
+  if (!output?.decoded.address) return;
 
   const isTimelocked = transactionUtils.isOutputLocked(output, { refTs: nowTs });
   const isHeightLocked = transactionUtils.isHeightLocked(tx.height, currentHeight, rewardLock);
