@@ -133,9 +133,8 @@ class ShieldedOutputsHeader extends Header {
           tokenData,
           script,
           ephemeralPubkey,
-          assetCommitment,
-          surjectionProof,
-          0n // value is not stored on-chain; it's recovered via rewind
+          0n, // value is not stored on-chain; it's recovered via rewind
+          { assetCommitment, surjectionProof }
         )
       );
     }
