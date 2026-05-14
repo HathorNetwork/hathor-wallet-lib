@@ -74,17 +74,19 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
 
 export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   .object({
-    value: bigIntCoercibleSchema,
-    token_data: z.number(),
-    script: z.string(),
-    decoded: IHistoryOutputDecodedSchema,
-    token: z.string(),
+    // These fields may be absent for shielded inputs (spent output value/token hidden)
+    value: bigIntCoercibleSchema.optional(),
+    token_data: z.number().optional(),
+    script: z.string().optional(),
+    decoded: IHistoryOutputDecodedSchema.optional(),
+    token: z.string().optional(),
+    // Always present:
     tx_id: txIdSchema,
     index: z.number(),
   })
-  .passthrough();
+  .passthrough() as ZodSchema<IHistoryInput>;
 
-export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
+const TransparentOutputSchema = z
   .object({
     value: bigIntCoercibleSchema,
     token_data: z.number(),
@@ -95,6 +97,33 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
     selected_as_input: z.boolean().optional(),
   })
   .passthrough();
+
+const AmountShieldedOutputSchema = z
+  .object({
+    type: z.string(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    ephemeral_pubkey: z.string(),
+    token_data: z.number(),
+  })
+  .passthrough();
+
+const FullShieldedOutputSchema = z
+  .object({
+    type: z.string(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    ephemeral_pubkey: z.string(),
+    asset_commitment: z.string(),
+    surjection_proof: z.string(),
+  })
+  .passthrough();
+
+export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z.union([
+  TransparentOutputSchema,
+  AmountShieldedOutputSchema,
+  FullShieldedOutputSchema,
+]) as ZodSchema<IHistoryOutput>;
 
 export const IHistoryNanoContractBaseAction = z.object({
   token_uid: z.string(),
@@ -142,6 +171,31 @@ export const IHistoryNanoContractContextSchema = z
   })
   .passthrough();
 
+const IHistoryShieldedOutputSchema = z
+  .object({
+    // `mode` was added to hathor-core's `_shielded_output_to_json` after
+    // 0.0.6-shielded; older fullnodes (still common on testnet) omit it.
+    // Downstream readers (e.g. explorer's `TxData.isFullShielded`) fall
+    // back to detecting FullShielded via the presence of
+    // `asset_commitment`, so we accept the missing-`mode` shape rather
+    // than fail-closed on every tx returned by an un-upgraded node.
+    mode: z.number().optional(),
+    commitment: z.string(),
+    range_proof: z.string(),
+    script: z.string(),
+    // FullShielded outputs sometimes ship without `token_data` (the
+    // token UID is hidden behind `asset_commitment`, so the field has no
+    // meaningful value). Default to 0 (native-token slot) so the
+    // existing token-symbol resolution path doesn't NPE on lookups.
+    token_data: z.number().optional().default(0),
+    ephemeral_pubkey: z.string(),
+    decoded: IHistoryOutputDecodedSchema,
+    asset_commitment: z.string().optional(),
+    surjection_proof: z.string().optional(),
+    spent_by: z.string().nullable().optional(),
+  })
+  .passthrough();
+
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
     tx_id: txIdSchema,
@@ -158,6 +212,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     token_symbol: z.string().optional(),
     tokens: z.string().array().optional(),
     height: z.number().optional(),
+    shielded_outputs: IHistoryShieldedOutputSchema.array().optional(),
     processingStatus: z.nativeEnum(TxHistoryProcessingStatus).optional(),
     nc_id: z.string().optional(),
     nc_blueprint_id: z.string().optional(),

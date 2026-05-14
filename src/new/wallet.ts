@@ -30,6 +30,7 @@ import {
   ON_CHAIN_BLUEPRINTS_VERSION,
   P2PKH_ACCT_PATH,
   P2SH_ACCT_PATH,
+  SHIELDED_SPEND_ACCT_PATH,
   GAP_LIMIT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -75,6 +76,7 @@ import {
   WalletState,
   WalletType,
   WalletAddressMode,
+  IAddressChainOptions,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
@@ -88,7 +90,12 @@ import {
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
-import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
+import {
+  deriveAddressP2PKH,
+  deriveAddressP2SH,
+  deriveShieldedAddressFromStorage,
+  getAddressFromPubkey,
+} from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -101,7 +108,14 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
-import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
+import type { IShieldedCryptoProvider } from '../shielded/types';
+import {
+  ConnectionState,
+  FullNodeVersionData,
+  IHathorWallet,
+  OutputType,
+  Utxo,
+} from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -638,7 +652,12 @@ class HathorWallet extends EventEmitter {
             }
           }
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+          await this.syncHistory(
+            addressesToLoad.nextIndex,
+            addressesToLoad.count,
+            false,
+            this.pinCode ?? undefined
+          );
         } else {
           if (this.beforeReloadCallback) {
             this.beforeReloadCallback();
@@ -804,15 +823,27 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressAtIndex(index: number): Promise<string> {
-    let address = await this.storage.getAddressAtIndex(index);
+  async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    let address = await this.storage.getAddressAtIndex(index, opts);
 
     if (address === null) {
+      if (opts?.legacy === false) {
+        // Shielded address not yet derived at this index — derive and save
+        const result = await deriveShieldedAddressFromStorage(index, this.storage);
+        if (!result) {
+          throw new Error('Shielded keys not available');
+        }
+        await this.storage.saveAddress(result.shieldedAddress);
+        await this.storage.saveAddress(result.spendAddress);
+        return result.shieldedAddress.base58;
+      }
+      // Legacy address derivation
       if ((await this.storage.getWalletType()) === 'p2pkh') {
         address = await deriveAddressP2PKH(index, this.storage);
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
+      await this.storage.saveAddress(address);
     }
     return address.base58;
   }
@@ -826,7 +857,13 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAddressPathForIndex(index: number): Promise<string> {
+  async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    if (opts?.legacy === false) {
+      // Shielded addresses are formed by scanPubkey (account 1') + spendPubkey (account 2').
+      // We return the spend path since it's used for on-chain scripts and signing.
+      return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
+    }
+
     const walletType = await this.storage.getWalletType();
     if (walletType === WalletType.MULTISIG) {
       // P2SH
@@ -846,14 +883,18 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getCurrentAddress({ markAsUsed = false } = {}): Promise<{
+  async getCurrentAddress(
+    // eslint-disable-next-line default-param-last
+    { markAsUsed = false } = {},
+    opts?: IAddressChainOptions
+  ): Promise<{
     address: string;
     index: number | null;
     addressPath: string;
   }> {
-    const address = await this.storage.getCurrentAddress(markAsUsed);
+    const address = await this.storage.getCurrentAddress(markAsUsed, opts);
     const index = await this.getAddressIndex(address);
-    const addressPath = await this.getAddressPathForIndex(index!);
+    const addressPath = await this.getAddressPathForIndex(index!, opts);
 
     return { address, index, addressPath };
   }
@@ -861,10 +902,12 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the next address after the current available
    */
-  async getNextAddress(): Promise<{ address: string; index: number | null; addressPath: string }> {
+  async getNextAddress(
+    opts?: IAddressChainOptions
+  ): Promise<{ address: string; index: number | null; addressPath: string }> {
     // First we mark the current address as used, then return the next
-    await this.getCurrentAddress({ markAsUsed: true });
-    return this.getCurrentAddress();
+    await this.getCurrentAddress({ markAsUsed: true }, opts);
+    return this.getCurrentAddress({}, opts);
   }
 
   /**
@@ -875,8 +918,7 @@ class HathorWallet extends EventEmitter {
   handleWebsocketMsg(wsData: WalletWebSocketData): void {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
-        // Cannot process new transactions from ws when the wallet is not ready.
-        // So we will enqueue this message to be processed later
+        // Not ready yet — queue for processTxQueue during startup
         this.wsTxQueue.enqueue(wsData);
       } else {
         this.enqueueOnNewTx(wsData);
@@ -983,7 +1025,7 @@ class HathorWallet extends EventEmitter {
         break;
       }
       const txbalance = await this.getTxBalance(tx);
-      const txHistory = {
+      const txHistory: GetTxHistoryFullnodeFacadeReturnType = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
@@ -994,6 +1036,15 @@ class HathorWallet extends EventEmitter {
         ncCaller: (tx.nc_address &&
           new Address(tx.nc_address, { network: this.getNetworkObject() })) as Address,
         firstBlock: tx.first_block as string | undefined,
+        // Pass-through fields needed by display layers that compute
+        // fees per-tx (network fee from FeeHeader entries, privacy
+        // fee from per-shielded-output mode). Cheap to copy and lets
+        // the consumer skip a second round-trip via `getTx`. Both are
+        // optional on `IHistoryTx`; spread-conditionally so the
+        // returned shape doesn't carry explicit `undefined` keys when
+        // the upstream payload didn't include them.
+        ...(tx.headers ? { headers: tx.headers } : {}),
+        ...(tx.shielded_outputs ? { shielded_outputs: tx.shielded_outputs } : {}),
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
         txHistory.ncCaller = (tx.nc_pubkey &&
@@ -1030,6 +1081,146 @@ class HathorWallet extends EventEmitter {
    */
   async getTx(id: string): Promise<IHistoryTx | null> {
     return this.storage.getTx(id);
+  }
+
+  /**
+   * Get the unblinding factors for shielded outputs in a transaction.
+   *
+   * Returns one entry per shielded output **the wallet owns** (received +
+   * change). Outputs the wallet generated for other recipients are not in
+   * scope — even though the wallet knows their blinding factors at signing
+   * time, disclosing them would leak the recipient's amount/token to a third
+   * party. The same is true of any shielded output decoded with a different
+   * wallet's scan key.
+   *
+   * Each entry carries the on-chain absolute output index the explorer / a
+   * fullnode uses to identify the output (`len(transparent_outputs) +
+   * shielded_index`). The viewer can recompute the Pedersen commitment from
+   * `{value, token, vbf, abf?}` and confirm it matches the on-chain
+   * commitment at that index.
+   *
+   * Used by the mobile/desktop "View in Explorer unblinded" / "Copy
+   * unblinding values" surfaces. The wallet stores `blindingFactor` /
+   * `assetBlindingFactor` on the appended `tx.outputs[]` entries during
+   * `processSingleTx`'s decryption pass, so this works for spent outputs
+   * too — UTXO deletion on spend doesn't drop the history record.
+   */
+  async getShieldedUnblindingForTx(txId: string): Promise<{
+    outputs: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }>;
+    inputs: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }>;
+  }> {
+    const tx = await this.storage.getTx(txId);
+    if (!tx) return { outputs: [], inputs: [] };
+
+    const ownedOutputsOf = (
+      target: IHistoryTx
+    ): Map<number, { value: bigint; token: string; vbf: string; abf?: string }> => {
+      // Build a lookup keyed by on-chain absolute output index for
+      // shielded outputs the wallet owns (decoded). Same shape used by
+      // both the outputs path (this tx's outputs) and the inputs path
+      // (each input's parent tx's outputs). Entries the fullnode
+      // delivered but we couldn't decode never get appended to
+      // `tx.outputs[]`, so the `blindingFactor` filter is the
+      // ownership gate.
+      const transparentCount = target.outputs.filter(
+        o => !transactionUtils.isShieldedOutputEntry(o)
+      ).length;
+      const out = new Map<number, { value: bigint; token: string; vbf: string; abf?: string }>();
+      for (const output of target.outputs) {
+        if (!transactionUtils.isShieldedOutputEntry(output)) continue;
+        if (!output.blindingFactor) continue;
+        // Prefer the recorded on-chain index. Older cached entries
+        // (written before `onChainIndex` was added) need recovery by
+        // matching `commitment` back to the
+        // `tx.shielded_outputs[]` position; mirrors the fallback in
+        // `utils/storage.ts:processSingleTxUtil`.
+        let absIdx: number;
+        if (output.onChainIndex !== undefined) {
+          absIdx = output.onChainIndex;
+        } else {
+          const shielded = target.shielded_outputs ?? [];
+          const matchIdx = shielded.findIndex(s => s.commitment === output.commitment);
+          if (matchIdx < 0) continue;
+          absIdx = transparentCount + matchIdx;
+        }
+        out.set(absIdx, {
+          value: BigInt(output.value),
+          token: output.token,
+          vbf: output.blindingFactor,
+          ...(output.assetBlindingFactor ? { abf: output.assetBlindingFactor } : {}),
+        });
+      }
+      return out;
+    };
+
+    const outputsResult: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }> = [];
+    for (const [absIdx, opening] of ownedOutputsOf(tx).entries()) {
+      outputsResult.push({ index: absIdx, ...opening });
+    }
+
+    // Inputs: a shielded input references a previous shielded output
+    // by `tx_id` + `index`. If the wallet owned that previous output
+    // (it's in the wallet's history with `blindingFactor` populated),
+    // the same opening unblinds the input. Inputs the wallet doesn't
+    // own the parent of stay opaque — the wallet has no business
+    // disclosing someone else's blinding factors.
+    const inputsResult: Array<{
+      index: number;
+      value: bigint;
+      token: string;
+      vbf: string;
+      abf?: string;
+    }> = [];
+    const parentTxCache = new Map<
+      string,
+      Map<number, { value: bigint; token: string; vbf: string; abf?: string }>
+    >();
+    for (const [inputIdx, input] of (tx.inputs ?? []).entries()) {
+      // We don't gate this loop on `input.type === 'shielded'` because
+      // the sender-local insert path (utils/transaction.ts's
+      // `convertTransactionToHistoryTx`) builds the IHistoryTx without
+      // setting `type` on inputs that spend shielded parents — so a
+      // tx the wallet itself sent would have all its inputs skipped
+      // until a WebSocket re-delivery overwrote the shape. Instead,
+      // attempt the parent-opening lookup on every input: only inputs
+      // whose parent tx has a decoded shielded entry at the referenced
+      // index will produce a hit, which is precisely the ownership
+      // gate we want. Transparent inputs naturally miss this lookup
+      // (parents have no shielded entry at that absolute index) and
+      // fall through.
+      const parentTxId = (input as { tx_id?: string }).tx_id;
+      const parentOutputIndex = (input as { index?: number }).index;
+      if (!parentTxId || parentOutputIndex === undefined) continue;
+      let parentOwned = parentTxCache.get(parentTxId);
+      if (parentOwned === undefined) {
+        const parent = await this.storage.getTx(parentTxId);
+        parentOwned = parent ? ownedOutputsOf(parent) : new Map();
+        parentTxCache.set(parentTxId, parentOwned);
+      }
+      const opening = parentOwned.get(parentOutputIndex);
+      if (!opening) continue;
+      inputsResult.push({ index: inputIdx, ...opening });
+    }
+
+    return { outputs: outputsResult, inputs: inputsResult };
   }
 
   /**
@@ -1103,6 +1294,13 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
+        // hathor-core surfaces `spent_by` on both transparent and
+        // shielded outputs (see `_shielded_output_to_json` in
+        // base_transaction.py and `meta.get_output_spent_by`).
+        // normalizeShieldedOutputs + the processNewTx decryption block
+        // thread the field through onto the decoded shielded entries
+        // appended to tx.outputs, so the canonical "is this UTXO
+        // spent" check is the same regardless of output type.
         const is_spent = output.spent_by !== null;
         const is_time_locked = transactionUtils.isOutputLocked(output);
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
@@ -1423,7 +1621,7 @@ class HathorWallet extends EventEmitter {
       });
     }
 
-    await this.storage.processHistory();
+    await this.storage.processHistory(this.pinCode ?? undefined);
   }
 
   /**
@@ -1436,7 +1634,12 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      await this.syncHistory(loadMoreAddresses.nextIndex, loadMoreAddresses.count, processHistory);
+      await this.syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        processHistory,
+        this.pinCode ?? undefined
+      );
     }
   }
 
@@ -1470,10 +1673,25 @@ class HathorWallet extends EventEmitter {
   /**
    * Enqueue the call for onNewTx with the given data.
    *
+   * The `.catch` is load-bearing — without it, one rejection inside
+   * onNewTx (or any of its downstream awaits: `addTx`, `processNewTx`,
+   * the shielded decryption loop, `processHistory`, etc.) would leave
+   * `newTxPromise` in a rejected state, and every subsequent
+   * `.then(() => onNewTx(...))` would propagate the rejection without
+   * invoking the handler. The wallet would silently stop processing
+   * websocket events for the rest of the session. Logging the error and
+   * swallowing the rejection preserves the queue contract for follow-up
+   * messages while keeping the underlying failure visible.
+   *
    * @param wsData WebSocket message data containing transaction history
    */
   enqueueOnNewTx(wsData: WalletWebSocketData): void {
-    this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
+    this.newTxPromise = this.newTxPromise
+      .then(() => this.onNewTx(wsData))
+      .catch(err => {
+        const txId = wsData?.history?.tx_id ?? '<unknown>';
+        this.logger.error(`enqueueOnNewTx: onNewTx failed for tx ${txId}: ${err?.stack ?? err}`);
+      });
   }
 
   /**
@@ -1488,6 +1706,11 @@ class HathorWallet extends EventEmitter {
       return;
     }
     const newTx = parseResult.data;
+
+    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
+    // converting base64 fields to hex.
+    transactionUtils.normalizeShieldedOutputs(newTx);
+
     // Later we will compare the storageTx and the received tx.
     // To avoid reference issues we clone the current storageTx.
     const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
@@ -1495,35 +1718,147 @@ class HathorWallet extends EventEmitter {
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
+    // On re-delivery, the wire form typically strips previously-enriched data:
+    //   - shielded INPUTS lose value/token/token_data (the UTXO was already
+    //     deleted on first receipt, so the fullnode just sends the reference);
+    //   - shielded OUTPUTS may come back bare — either nested in outputs[]
+    //     with type='shielded' (no `value`/`token`) or omitted entirely if
+    //     the ws event is a metadata-only update.
+    //
+    // The initial `addTx` below unconditionally persists `newTx`, so we must
+    // merge the enriched fields from the previously-stored tx INTO newTx
+    // before that save — otherwise the initial addTx clobbers decoded
+    // shielded outputs with outputs=[] and the downstream processing branch
+    // has nothing to work with on a bare re-delivery.
+    if (!isNewTx && storageTx) {
+      // Merge shielded input enrichment (value/token/etc.) from storage.
+      for (let i = 0; i < newTx.inputs.length; i += 1) {
+        const input = newTx.inputs[i];
+        if (input.decoded?.address && input.token !== undefined) continue;
+        const storedInput = storageTx.inputs?.find(
+          si => si.tx_id === input.tx_id && si.index === input.index
+        );
+        if (storedInput?.decoded?.address && storedInput.token !== undefined) {
+          input.decoded = storedInput.decoded;
+          input.value = storedInput.value;
+          input.token = storedInput.token;
+          input.token_data = storedInput.token_data ?? 0;
+        }
+      }
+      // Merge previously-decoded shielded outputs so we don't lose the
+      // decrypted state on a bare re-delivery. storageTx.outputs contains
+      // the decoded entries appended by processNewTx's decryption block on
+      // first receipt.
+      const storedDecoded = (storageTx.outputs ?? []).filter(o =>
+        transactionUtils.isShieldedOutputEntry(o)
+      );
+      const alreadyOnNewTx = newTx.outputs.some(o => transactionUtils.isShieldedOutputEntry(o));
+      if (storedDecoded.length > 0 && !alreadyOnNewTx) {
+        newTx.outputs.push(...storedDecoded);
+      }
+      // Merge shielded_outputs so normalize doesn't re-extract the decoded
+      // entries we just pushed to outputs[] on the next normalize pass, and
+      // so downstream logic (shieldedNewlyAvailable check below, processing
+      // branch) sees that shielded data is present.
+      if (!newTx.shielded_outputs && storageTx.shielded_outputs) {
+        newTx.shielded_outputs = storageTx.shielded_outputs;
+      }
+    }
+
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
+
+    // Detect when an "update" event for a known tx is actually delivering
+    // shielded outputs that weren't present on the first receipt. The full
+    // node sometimes sends a tx in two stages — first a bare announcement
+    // with empty `outputs[]`, then a follow-up message carrying the full
+    // shielded data. Without this branch the second message would route to
+    // processMetadataChanged (which doesn't decrypt) and the per-tx delta
+    // would forever read as -input until the next full reload.
+    const storedHasDecodedShielded = (storageTx?.outputs ?? []).some(o =>
+      transactionUtils.isShieldedOutputEntry(o)
+    );
+    const newHasShielded = (newTx.shielded_outputs?.length ?? 0) > 0;
+    const shieldedNewlyAvailable = !isNewTx && newHasShielded && !storedHasDecodedShielded;
 
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
+    let didProcessHistory = false;
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
-      await this.storage.processNewTx(newTx);
-    } else if (storageTx.is_voided !== newTx.is_voided) {
-      // This is a voided transaction update event.
-      // voided transactions require a full history reprocess.
-      await this.storage.processHistory();
+      await this.storage.processNewTx(newTx, this.pinCode ?? undefined);
+    } else if (storageTx.is_voided !== newTx.is_voided || shieldedNewlyAvailable) {
+      // Voided change OR shielded data only now arriving — both require
+      // full history reprocess to avoid double-counting from the prior
+      // partial processNewTx.
+      await this.storage.processHistory(this.pinCode ?? undefined);
+      didProcessHistory = true;
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
     }
+
+    // Safety net: if any stored tx has shielded_outputs but no decoded
+    // entries in outputs[], decryption silently failed at some point
+    // (e.g., the recipient address wasn't in the wallet cache at the moment
+    // processNewTx's decryption loop ran, or a per-output rewind threw).
+    // Trigger a full processHistory to retry decryption with the current
+    // wallet state — the same recovery path a reload takes.
+    //
+    // We check ALL stored txs, not only the current newTx, because:
+    //   (a) a tx received earlier may have failed decryption and been left
+    //       in a stuck state (no later event would re-trigger it);
+    //   (b) a spending tx can correctly process its debit while the origin
+    //       tx's shielded outputs are still undecoded — the per-tx delta
+    //       stays wrong for the origin tx until its outputs are decoded.
+    // Only runs when the wallet has both crypto provider and pinCode
+    // available, and skips if we already reran processHistory above.
+    if (!didProcessHistory && this.storage.shieldedCryptoProvider && this.pinCode) {
+      let needsRetry = false;
+      for await (const storedTx of this.storage.txHistory()) {
+        const hasShielded = (storedTx.shielded_outputs?.length ?? 0) > 0;
+        if (!hasShielded) continue;
+        const hasDecoded = (storedTx.outputs ?? []).some(o =>
+          transactionUtils.isShieldedOutputEntry(o)
+        );
+        if (!hasDecoded) {
+          needsRetry = true;
+          break;
+        }
+      }
+      if (needsRetry) {
+        await this.storage.processHistory(this.pinCode);
+      }
+    }
     // restore previous state
     this.state = previousState;
 
-    newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
-    // Save the transaction in the storage
-    await this.storage.addTx(newTx);
+    // Trust storage as the source of truth for the final save. The processing
+    // branches above (processNewTx / processHistory / processMetadataChanged)
+    // have persisted the authoritative post-decryption state — including
+    // decoded shielded outputs appended to tx.outputs, enriched shielded inputs,
+    // saved UTXOs, and updated address/token metadata. The `newTx` object
+    // currently in scope still carries the raw wire form, which may have
+    // outputs=[] (shielded entries hidden in shielded_outputs[] only), inputs
+    // without enriched value/token, etc. If we addTx(newTx) now we would
+    // clobber storage with the raw wire form.
+    //
+    // Instead: re-read the persisted tx, update only the processingStatus flag,
+    // and save that. This works for any input/output type combination —
+    // transparent, AmountShielded, FullShielded, or any mix — because we are
+    // not making wire-form-specific assumptions; we are just trusting whatever
+    // the processing branches produced.
+    const persisted = await this.storage.getTx(newTx.tx_id);
+    const txToSave = persisted ?? newTx;
+    txToSave.processingStatus = TxHistoryProcessingStatus.FINISHED;
+    await this.storage.addTx(txToSave);
 
     if (isNewTx) {
-      this.emit('new-tx', newTx);
+      this.emit('new-tx', txToSave);
     } else {
-      this.emit('update-tx', newTx);
+      this.emit('update-tx', txToSave);
     }
   }
 
@@ -1598,6 +1933,7 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       startMiningTx: true,
       pinCode: null,
+      changeShieldedMode: null,
       ...options,
     };
 
@@ -1605,12 +1941,43 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress, changeShieldedMode } = newOptions;
+
+    // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
+    const network = this.storage.config.getNetwork();
+    const sendOutputs = outputs.map(o => {
+      if (o.shielded) {
+        const addressObj = new Address(o.address, { network });
+        if (!addressObj.isShielded()) {
+          throw new Error('Shielded output requires a shielded address');
+        }
+        // Extract scan pubkey from shielded address for ECDH
+        // Use the spend-derived P2PKH as the on-chain address
+        const spendAddress = addressObj.getSpendAddress();
+        return {
+          type: OutputType.P2PKH as OutputType.P2PKH,
+          address: spendAddress.base58,
+          value: o.value,
+          token: o.token,
+          scanPubkey: addressObj.getScanPubkey().toString('hex'),
+          shieldedMode: o.shielded,
+          ...(o.timelock != null ? { timelock: o.timelock } : {}),
+        };
+      }
+      return {
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        ...(o.timelock ? { timelock: o.timelock } : {}),
+      };
+    });
+
     return new SendTransaction({
       wallet: this,
-      outputs,
+      outputs: sendOutputs,
       inputs,
       changeAddress,
+      changeShieldedMode,
       pin,
     });
   }
@@ -1640,6 +2007,7 @@ class HathorWallet extends EventEmitter {
     const options = { pinCode: null, password: null, ...optionsParams };
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
+
     if (!this.xpub && !pinCode) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
@@ -1698,6 +2066,21 @@ class HathorWallet extends EventEmitter {
         throw new Error('This should never happen');
       }
       await this.storage.saveAccessData(accessData);
+    } else if (pinCode && password) {
+      // Existing wallet — migrate forward if the persisted record predates
+      // shielded support. `migrateShieldedAccessData` is idempotent and a
+      // no-op for xpub-only wallets (nothing to derive from). We only
+      // persist when fields were actually written; see Sentry
+      // WALLET-MOBILE-AT for the bug this fixes.
+      const migrated = walletUtils.migrateShieldedAccessData(accessData, {
+        pin: pinCode,
+        password,
+        passphrase: this.passphrase,
+        networkName: this.conn.getCurrentNetwork(),
+      });
+      if (migrated) {
+        await this.storage.saveAccessData(accessData);
+      }
     }
 
     this.clearSensitiveData();
@@ -1711,6 +2094,22 @@ class HathorWallet extends EventEmitter {
     if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
+
+      // Auto-detect shielded crypto provider if not already set.
+      // Dynamic import because @hathor/ct-crypto-node is an optional dependency —
+      // a static import would crash the wallet module if the native package isn't installed.
+      if (!this.storage.shieldedCryptoProvider) {
+        try {
+          const { createDefaultShieldedCryptoProvider } = await import('../shielded/provider');
+          this.storage.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+        } catch (e) {
+          this.logger.info(
+            'Shielded crypto not available. Install @hathor/ct-crypto-node for shielded output support.',
+            e
+          );
+        }
+      }
+
       this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
@@ -2952,9 +3351,19 @@ class HathorWallet extends EventEmitter {
     }
 
     fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
-      hydrateWithTokenUid(output, fullTx.tx.tokens)
+      transactionUtils.isShieldedOutputEntry(output)
+        ? output
+        : hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
-    fullTx.tx.inputs = fullTx.tx.inputs.map(input => hydrateWithTokenUid(input, fullTx.tx.tokens));
+    fullTx.tx.inputs = fullTx.tx.inputs.map(input =>
+      transactionUtils.isShieldedInputEntry(input)
+        ? input
+        : hydrateWithTokenUid(input as { token_data: number }, fullTx.tx.tokens)
+    ) as typeof fullTx.tx.inputs;
+
+    // Normalize shielded outputs before balance calculation so raw shielded
+    // entries are moved to shielded_outputs[] and don't break getTxBalance.
+    transactionUtils.normalizeShieldedOutputs(fullTx.tx as unknown as IHistoryTx);
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
@@ -3298,6 +3707,16 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Set the shielded crypto provider for confidential transaction support.
+   * Use this for explicit injection (e.g., mobile apps using UniFFI bindings).
+   *
+   * @param provider The shielded crypto provider, or undefined to disable
+   */
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
+    this.storage.setShieldedCryptoProvider(provider);
+  }
+
+  /**
    * Set the history sync mode.
    *
    * @param mode The history sync mode to use
@@ -3316,7 +3735,8 @@ class HathorWallet extends EventEmitter {
   async syncHistory(
     startIndex: number,
     count: number,
-    shouldProcessHistory: boolean = false
+    shouldProcessHistory?: boolean,
+    pinCode?: string
   ): Promise<void> {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
@@ -3340,7 +3760,7 @@ class HathorWallet extends EventEmitter {
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
     await GLL.add(async () => {
-      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
+      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory, pinCode);
     });
   }
 
@@ -3362,7 +3782,12 @@ class HathorWallet extends EventEmitter {
       await this.storage.saveAccessData(accessData);
     }
     const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-    await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+    await this.syncHistory(
+      addressesToLoad.nextIndex,
+      addressesToLoad.count,
+      false,
+      this.pinCode ?? undefined
+    );
   }
 
   /**
