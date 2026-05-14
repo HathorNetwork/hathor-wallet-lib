@@ -279,12 +279,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     for (const input of this.inputs) {
       const inputTx = await this.storage.getTx(input.txId);
-      if (inputTx === null || !inputTx.outputs[input.index]) {
+      // Sparse-decode-aware lookup. Positional inputTx.outputs[input.index]
+      // would return the wrong output on a parent whose shielded outputs
+      // were only partially decoded, causing this send pipeline to attach
+      // wrong value/token/address to the input and the fullnode to reject
+      // the signed tx ("Failed to verify if elements are equal").
+      const spentOut =
+        inputTx !== null ? transactionUtils.findSpentOutput(inputTx, input.index) : undefined;
+      if (inputTx === null || !spentOut) {
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
-      const spentOut = inputTx.outputs[input.index];
       if (!tokenMap.has(spentOut.token)) {
         // the inputs should be used to pay fees, otherwise it's an invalid input and it will raise an error after the fee is calculated
         if (HTR_UID === spentOut.token) {
@@ -1261,14 +1267,17 @@ export async function checkUnspentInput(
   if (tx.is_voided) {
     return { success: false, message: `Transaction [${input.txId}] is voided` };
   }
-  if (tx.outputs.length - 1 < input.index) {
+  // Sparse-decode-aware lookup so explicit shielded inputs validate against
+  // the correct decoded entry, not whatever happens to sit positionally at
+  // `tx.outputs[input.index]`.
+  const txout = transactionUtils.findSpentOutput(tx, input.index);
+  if (!txout) {
     return {
       success: false,
       message: `Transaction [${input.txId}] does not have this output [index=${input.index}]`,
     };
   }
 
-  const txout = tx.outputs[input.index];
   if (transactionUtils.isAuthorityOutput(txout)) {
     /**
      * XXX: We are NOT enabling authority outputs for now.

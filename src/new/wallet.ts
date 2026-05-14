@@ -735,8 +735,14 @@ class HathorWallet extends EventEmitter {
     const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
+      // Sparse-decode-aware lookup so the P2SH signing path picks the
+      // correct address info when the spent output is a shielded entry
+      // whose array position doesn't equal its on-chain index.
+      const spentUtxo = transactionUtils.findSpentOutput(spentTx, input.index);
+      if (!spentUtxo?.decoded?.address) {
+        continue;
+      }
+      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -3105,9 +3111,15 @@ class HathorWallet extends EventEmitter {
     const walletInputs: IWalletInputInfo[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const addressInfo = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address!
-      );
+      // Sparse-decode-aware lookup so a caller using this API to fetch
+      // signing info (e.g. external signers, the partial-tx flow) gets
+      // the address path of the actual spent output, not a positional
+      // mismatch on a sparse-decoded parent.
+      const spentOut = transactionUtils.findSpentOutput(spentTx, input.index);
+      if (!spentOut?.decoded?.address) {
+        continue;
+      }
+      const addressInfo = await this.storage.getAddressInfo(spentOut.decoded.address);
       if (addressInfo === null) {
         continue;
       }

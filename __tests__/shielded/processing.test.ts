@@ -294,7 +294,9 @@ describe('processShieldedOutputs', () => {
     // cross-check failure was logged at error level (this branch indicates
     // either a bug in tag/commitment construction or active forgery — both
     // warrant error-level visibility, not warn).
-    expect(storage.logger.error).toHaveBeenCalledWith(expect.stringContaining('cross-check failed'));
+    expect(storage.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('cross-check failed')
+    );
     // The error message must carry enough context to debug from logs alone:
     // the recovered token UID and the on-chain assetCommitment hex.
     const errorMsg = (storage.logger.error as jest.Mock).mock.calls[0][0] as string;

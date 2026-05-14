@@ -762,11 +762,20 @@ export class Storage implements IStorage {
    */
   async utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void> {
     const tx = await this.getTx(utxo.txId);
-    if (!tx || !tx.outputs[utxo.index]) {
+    if (!tx) {
+      return;
+    }
+    // Resolve the actual output the UTXO record refers to via the sparse-
+    // decode-aware helper. A positional `tx.outputs[utxo.index]` would read
+    // a different decoded shielded entry when `utxo.index` (the on-chain
+    // absolute index) doesn't equal the entry's array position — the
+    // `.spent_by` check below would then consult the wrong entry's flag.
+    const output = transactionUtils.findSpentOutput(tx, utxo.index);
+    if (!output) {
       return;
     }
 
-    if (markAs && tx.outputs[utxo.index].spent_by !== null) {
+    if (markAs && output.spent_by !== null) {
       // Already spent, no need to mark as selected_as_input
       return;
     }

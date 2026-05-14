@@ -34,6 +34,7 @@
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
+  DEFAULT_PIN_CODE,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -436,5 +437,207 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     // would be `sendAmount - 20n` instead.
     const balAAfter = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
     expect(balABefore - balAAfter).toBe(sendAmount);
+  });
+
+  it("N.7 — sender spends a shielded UTXO whose on-chain index falls INSIDE the wallet's outputs[] range (recipient's confidential output sits at a LOWER on-chain idx, shifting the wallet's decoded entries down by 1)", async () => {
+    // Reproduces the mobile-wallet bug observed by a real user.
+    //
+    // Setup: walletA sends a tx with three AmountShielded outputs in this order:
+    //   [recipient B, walletA self#1, walletA self#2]
+    //
+    // The recipient's confidential output therefore lands at the LOWEST shielded
+    // on-chain index. WalletA decodes only its own two outputs — the recipient's
+    // entry is undecryptable for walletA and never appears in walletA's local
+    // tx.outputs[].
+    //
+    // For the resulting parent tx the layout becomes:
+    //   on-chain idx 0: transparent change                       (kept in outputs[])
+    //   on-chain idx 1: shielded to B                            (NOT decoded by walletA)
+    //   on-chain idx 2: shielded to walletA self#1               (decoded, value 50)
+    //   on-chain idx 3: shielded to walletA self#2               (decoded, value 40)
+    //
+    // walletA's stored outputs[] (after appending the 2 decoded shielded entries):
+    //   position 0: transparent change       (onChainIndex = 0)
+    //   position 1: A self#1                  (onChainIndex = 2)  ← shifted down by 1
+    //   position 2: A self#2                  (onChainIndex = 3)  ← shifted down by 1
+    // outputs.length = 3.
+    //
+    // Now walletA sends everything to walletC, consuming all three UTXOs as inputs.
+    // The spending tx's inputs reference the parent at on-chain indices 0, 2, 3.
+    //
+    // The bug fires on the input that references on-chain idx 2 (walletA self#1):
+    //   - input.index = 2
+    //   - parent.outputs.length = 3
+    //   - input.index (2) < outputs.length (3) → the sparse-decode branch in
+    //     processNewTx is SKIPPED (it gates on `input.index >= outputs.length`)
+    //   - falls through to the positional fallback `origTx.outputs[input.index]`
+    //     which returns position 2 = A self#2 (onChainIndex 3, value 40),
+    //     NOT the intended A self#1 (onChainIndex 2, value 50).
+    //   - input is enriched with the wrong output's value (40 instead of 50).
+    //   - token-meta debits 40 instead of 50 — a 10-HTR phantom remainder.
+    //
+    // The assertion below catches this directly: a transparent send (no fee) of
+    // `sendAmount` MUST decrement walletA's balance by exactly `sendAmount`. With
+    // the bug the decrement is `sendAmount - 10`.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 200n);
+
+    // Distinct shielded addresses for the two self-outputs so saveAddress
+    // doesn't collapse them; B's recipient address is on its own chain.
+    const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sa1 = await walletA.getAddressAtIndex(5, { legacy: false });
+    const sa2 = await walletA.getAddressAtIndex(6, { legacy: false });
+
+    // Order matters: recipient FIRST so its confidential output occupies
+    // shielded_outputs[0] — the on-chain index that the walletA can't decode.
+    const splitTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sa1,
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sa2,
+        value: 40n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(splitTx).not.toBeNull();
+    await waitForTxReceived(walletA, splitTx!.hash!);
+    await waitForTxReceived(walletB, splitTx!.hash!);
+    await waitUntilNextTimestamp(walletA, splitTx!.hash!);
+
+    const balABefore = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    // walletA's HTR balance: 200 - 30 (to B) - 50 (A self#1) - 40 (A self#2) - 3 fee = 77 transparent
+    // + 50 + 40 = 167 total.
+    expect(balABefore).toBe(167n);
+
+    // Send essentially everything to walletC. With 167 total and 1 left as
+    // transparent change, the wallet has to consume ALL three UTXOs as
+    // inputs — including the bug-triggering walletA self#1 UTXO at parent
+    // on-chain idx 2.
+    const sendAmount = 166n;
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const finalTx = await walletA.sendTransaction(addrC, sendAmount);
+    expect(finalTx).not.toBeNull();
+    await waitForTxReceived(walletA, finalTx!.hash!);
+    await waitForTxReceived(walletC, finalTx!.hash!);
+
+    // On-chain ground truth: walletC received exactly `sendAmount` (transparent send, no fee).
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(sendAmount);
+
+    // Regression assertion. balanceBefore - balanceAfter MUST equal sendAmount.
+    // With the bug, the A self#1 input enrichment fetches A self#2's value (40)
+    // via positional fallback instead of A self#1's actual value (50), so
+    // token-meta is debited 10 short → balanceAfter is 11 instead of 1 →
+    // (balanceBefore - balanceAfter) = 156 instead of 166.
+    const balAAfter = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balABefore - balAAfter).toBe(sendAmount);
+  });
+
+  it('N.8 — wallet state survives a processHistory reload after sparse-decode + spend', async () => {
+    // Reload-from-history is what runs on every fresh wallet boot, on every
+    // safety-net retry (wallet.ts:1818-1834), and any time the wallet calls
+    // `storage.processHistory()` to rebuild metadata from scratch. The loop
+    // iterates every stored tx in chronological order and re-runs
+    // processNewTx, and it also has its own per-tx UTXO-cleanup safety-net
+    // loop that resolved spent outputs via positional lookup. With the old
+    // positional code, that loop could either over-delete (when the
+    // positional entry happened to be the wallet's other decoded shielded
+    // output) or fail to delete (when the positional entry was undefined),
+    // leaving the spent UTXO behind. Result: the next send either fails
+    // validation ("input already spent") or double-debits token-meta.
+    //
+    // This test exercises the full reload-then-send cycle on a sparse-
+    // decode-shaped wallet and asserts that the wallet's balance counter
+    // is identical pre- and post-reload AND that a follow-up send succeeds.
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 200n);
+
+    // Recipient first → its confidential output sits at the lowest shielded
+    // on-chain index, shifting walletA's two decoded entries DOWN.
+    const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sa1 = await walletA.getAddressAtIndex(7, { legacy: false });
+    const sa2 = await walletA.getAddressAtIndex(8, { legacy: false });
+    const splitTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbB,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sa1,
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: sa2,
+        value: 40n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(splitTx).not.toBeNull();
+    await waitForTxReceived(walletA, splitTx!.hash!);
+    await waitForTxReceived(walletB, splitTx!.hash!);
+    await waitUntilNextTimestamp(walletA, splitTx!.hash!);
+
+    // First spend: amount > transparent change + smaller shielded UTXO so
+    // the selector has to pick the larger sparse-decoded shielded UTXO too.
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const firstSendAmount = 160n;
+    const firstTx = await walletA.sendTransaction(addrC, firstSendAmount);
+    expect(firstTx).not.toBeNull();
+    await waitForTxReceived(walletA, firstTx!.hash!);
+    await waitForTxReceived(walletC, firstTx!.hash!);
+
+    const balBeforeReload = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balBeforeReload).toBe(167n - firstSendAmount);
+
+    // Force a processHistory rebuild. This rewinds wallet metadata and
+    // replays every stored tx through processNewTx + the safety-net
+    // input-cleanup loop. The helper must keep the state coherent across
+    // this rebuild.
+    await walletA.storage.processHistory(DEFAULT_PIN_CODE);
+
+    const balAfterReload = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balAfterReload).toBe(balBeforeReload);
+    // Guard the next assertions: balAfterReload must be > 0 by construction
+    // (we sent 160 out of 167) but be loud if some upstream change ever
+    // breaks that assumption.
+    expect(balAfterReload).toBeGreaterThan(0n);
+
+    // Follow-up send must succeed (proves no phantom UTXO leaked through
+    // the reload and no UTXO got mis-flagged as spent). Drain the wallet
+    // entirely so the assertion is unambiguous.
+    const secondTx = await walletA.sendTransaction(addrC, balAfterReload);
+    expect(secondTx).not.toBeNull();
+    await waitForTxReceived(walletA, secondTx!.hash!);
+    await waitForTxReceived(walletC, secondTx!.hash!);
+
+    const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
+    expect(balC[0].balance.unlocked).toBe(firstSendAmount + balAfterReload);
+
+    const balAFinal = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
+    expect(balAFinal).toBe(0n);
   });
 });
