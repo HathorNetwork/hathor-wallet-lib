@@ -687,3 +687,138 @@ test('getXprivFromData', () => {
   );
   expect(xpriv).toEqual(hdPrivKey.xprivkey);
 });
+
+describe('migrateShieldedAccessData', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  function makePreShieldedRecord() {
+    // Freshly-generated record, then strip the four shielded fields to
+    // simulate a persisted record from a pre-shielded wallet-lib version.
+    const full = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const { scanXpubkey, scanMainKey, spendXpubkey, spendMainKey, ...preShielded } = full;
+    // Ensure the stripping actually matched the current schema so this test
+    // fails loudly if the fields are renamed.
+    expect(scanXpubkey).toBeDefined();
+    expect(scanMainKey).toBeDefined();
+    expect(spendXpubkey).toBeDefined();
+    expect(spendMainKey).toBeDefined();
+    return preShielded;
+  }
+
+  test('M.1 — no-op when record already has all four shielded fields', () => {
+    const full = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const before = { ...full };
+    const migrated = wallet.migrateShieldedAccessData(full, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    expect(migrated).toBe(false);
+    // Fields must be byte-identical — nothing should have been touched.
+    expect(full.scanXpubkey).toBe(before.scanXpubkey);
+    expect(full.scanMainKey).toEqual(before.scanMainKey);
+    expect(full.spendXpubkey).toBe(before.spendXpubkey);
+    expect(full.spendMainKey).toEqual(before.spendMainKey);
+  });
+
+  test('M.2 — no-op when xpub-only (no words to derive from)', () => {
+    // xpub-only records don't carry `words`, so migration has nothing to
+    // decrypt. This includes read-only view wallets that never had a seed.
+    const preShielded = makePreShieldedRecord();
+    delete preShielded.words;
+    const migrated = wallet.migrateShieldedAccessData(preShielded, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    expect(migrated).toBe(false);
+    expect(preShielded.scanXpubkey).toBeUndefined();
+    expect(preShielded.scanMainKey).toBeUndefined();
+    expect(preShielded.spendXpubkey).toBeUndefined();
+    expect(preShielded.spendMainKey).toBeUndefined();
+  });
+
+  test('M.3 — migrates pre-shielded record with the same derivation as fresh-create', () => {
+    const preShielded = makePreShieldedRecord();
+    const migrated = wallet.migrateShieldedAccessData(preShielded, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    expect(migrated).toBe(true);
+
+    const fresh = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+
+    // xpubs are deterministic (no random salt) — must match byte-for-byte so
+    // a migrated wallet and a freshly-created wallet derive identical
+    // shielded addresses at every index.
+    expect(preShielded.scanXpubkey).toBe(fresh.scanXpubkey);
+    expect(preShielded.spendXpubkey).toBe(fresh.spendXpubkey);
+
+    // mainKeys use a random salt — they will not be byte-identical, but
+    // they must be valid encrypted blobs that decrypt with the same PIN.
+    expect(preShielded.scanMainKey).toBeDefined();
+    expect(preShielded.spendMainKey).toBeDefined();
+    expect(checkPassword(preShielded.scanMainKey!, '123')).toBe(true);
+    expect(checkPassword(preShielded.spendMainKey!, '123')).toBe(true);
+  });
+
+  test('M.4 — idempotent: calling again after migration is a no-op', () => {
+    const record = makePreShieldedRecord();
+    wallet.migrateShieldedAccessData(record, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const afterFirst = { ...record };
+    const second = wallet.migrateShieldedAccessData(record, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    expect(second).toBe(false);
+    expect(record.scanXpubkey).toBe(afterFirst.scanXpubkey);
+    expect(record.scanMainKey).toEqual(afterFirst.scanMainKey);
+    expect(record.spendXpubkey).toBe(afterFirst.spendXpubkey);
+    expect(record.spendMainKey).toEqual(afterFirst.spendMainKey);
+  });
+
+  test('M.5 — wrong password throws and leaves the record untouched', () => {
+    const record = makePreShieldedRecord();
+    let caught: unknown;
+    try {
+      wallet.migrateShieldedAccessData(record, {
+        pin: '123',
+        password: 'wrong-password',
+        networkName: 'testnet',
+      });
+    } catch (e) {
+      caught = e;
+    }
+    // We wrap decryptData's failure in a specific message so operators
+    // know to provide the wallet password (not PIN). The original
+    // InvalidPasswdError stays available via .cause.
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/wallet password \(not PIN\)/);
+    expect((caught as Error & { cause?: unknown }).cause).toBeInstanceOf(InvalidPasswdError);
+    // Critical: no fields should have been assigned before the throw. If
+    // decryptData throws, we must not leave a half-migrated record.
+    expect(record.scanXpubkey).toBeUndefined();
+    expect(record.scanMainKey).toBeUndefined();
+    expect(record.spendXpubkey).toBeUndefined();
+    expect(record.spendMainKey).toBeUndefined();
+  });
+});

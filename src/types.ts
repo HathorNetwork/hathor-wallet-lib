@@ -102,6 +102,8 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
+  // Address type: undefined = legacy, 'shielded' = full shielded address, 'shielded-spend' = on-chain P2PKH from spend key
+  addressType?: 'p2pkh' | 'p2sh' | 'shielded' | 'shielded-spend';
 }
 
 export interface IAddressMetadata {
@@ -401,6 +403,11 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
+  // Shielded address key material (optional, absent on wallets created before shielded feature)
+  scanXpubkey?: string; // xpub at m/44'/280'/1'/0 (scan chain — view-only access)
+  scanMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
+  spendXpubkey?: string; // xpub at m/44'/280'/2'/0 (spend chain — signing authority)
+  spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/2'/0
 }
 
 export enum SCANNING_POLICY {
