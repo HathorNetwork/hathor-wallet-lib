@@ -41,7 +41,17 @@ class ShieldedOutput {
   /** The plaintext value, used for weight calculation. Not serialized on-chain. */
   value: OutputValueType;
 
-  // eslint-disable-next-line default-param-last
+  /**
+   * @param value Plaintext value (required so callers can't silently get
+   *   a 0n placeholder that would skew weight calculation). For wire-
+   *   format outputs whose value is hidden until rewind, pass `0n`
+   *   explicitly — see `ShieldedOutputsHeader.deserialize` in PR 3.
+   * @param options.assetCommitment / options.surjectionProof — required
+   *   for FullShielded mode; absent for AmountShielded mode. Enforced at
+   *   serialize time, not construction time, so deserializers can build
+   *   partial outputs (e.g. during streaming parse) before all fields
+   *   are populated.
+   */
   constructor(
     mode: ShieldedOutputMode,
     commitment: Buffer,
@@ -49,9 +59,8 @@ class ShieldedOutput {
     tokenData: number,
     script: Buffer,
     ephemeralPubkey: Buffer,
-    assetCommitment?: Buffer,
-    surjectionProof?: Buffer,
-    value: OutputValueType = 0n
+    value: OutputValueType,
+    options: { assetCommitment?: Buffer; surjectionProof?: Buffer } = {}
   ) {
     this.mode = mode;
     this.commitment = commitment;
@@ -59,9 +68,9 @@ class ShieldedOutput {
     this.tokenData = tokenData;
     this.script = script;
     this.ephemeralPubkey = ephemeralPubkey;
-    this.assetCommitment = assetCommitment;
     this.value = value;
-    this.surjectionProof = surjectionProof;
+    this.assetCommitment = options.assetCommitment;
+    this.surjectionProof = options.surjectionProof;
   }
 
   /**

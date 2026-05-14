@@ -28,9 +28,8 @@ function makeOutput(
     overrides.tokenData ?? 0,
     overrides.script ?? Buffer.from([0x76, 0xa9, 0x14]),
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0xcc),
-    overrides.assetCommitment,
-    overrides.surjectionProof,
-    overrides.value ?? 100n
+    overrides.value ?? 100n,
+    { assetCommitment: overrides.assetCommitment, surjectionProof: overrides.surjectionProof }
   );
 }
 
@@ -204,6 +203,33 @@ describe('ShieldedOutput', () => {
     it('should throw when ephemeral pubkey has wrong size', () => {
       const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
       expect(() => out.serializeSighash()).toThrow(/expected 33 bytes/);
+    });
+  });
+
+  describe('defensive throws', () => {
+    // The enum-typed `mode` parameter excludes invalid values at compile
+    // time, but runtime data (JSON ingest, `as` casts) can bypass that.
+    // We exercise the runtime guards with an explicit unsafe cast.
+    const INVALID_MODE = 99 as unknown as ShieldedOutputMode;
+
+    it('serialize throws on unsupported mode', () => {
+      const out = makeOutput({ mode: INVALID_MODE });
+      expect(() => out.serialize()).toThrow(/Unsupported shielded output mode: 99/);
+    });
+
+    it('serializeSighash throws on unsupported mode', () => {
+      const out = makeOutput({ mode: INVALID_MODE });
+      expect(() => out.serializeSighash()).toThrow(/Unsupported shielded output mode: 99/);
+    });
+
+    it('serialize throws when ephemeral pubkey is missing', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(0) });
+      expect(() => out.serialize()).toThrow(/Invalid ephemeral pubkey/);
+    });
+
+    it('serialize throws when ephemeral pubkey has wrong size', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
+      expect(() => out.serialize()).toThrow(/expected 33 bytes/);
     });
   });
 });

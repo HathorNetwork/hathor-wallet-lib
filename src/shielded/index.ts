@@ -14,4 +14,6 @@ export type {
   ICreatedShieldedOutput,
   IShieldedCryptoProvider,
   IProcessedShieldedOutput,
+  IRewoundAmountShieldedOutput,
+  IRewoundFullShieldedOutput,
 } from './types';
