@@ -96,6 +96,28 @@ async function createOCBs(sharedState) {
   const txFee = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFee, address0);
   await waitTxConfirmed(ocbWallet, txFee.hash, null);
   sharedState.blueprintIds.FEE_BLUEPRINT_ID = txFee.hash;
+
+  const codeUpgradeV1 = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/upgrade_test_v1.py',
+    'utf8'
+  );
+  const txUpgradeV1 = await ocbWallet.createAndSendOnChainBlueprintTransaction(
+    codeUpgradeV1,
+    address0
+  );
+  await waitTxConfirmed(ocbWallet, txUpgradeV1.hash, null);
+  sharedState.blueprintIds.UPGRADE_TEST_V1_BLUEPRINT_ID = txUpgradeV1.hash;
+
+  const codeUpgradeV2 = fs.readFileSync(
+    './__tests__/integration/configuration/blueprints/upgrade_test_v2.py',
+    'utf8'
+  );
+  const txUpgradeV2 = await ocbWallet.createAndSendOnChainBlueprintTransaction(
+    codeUpgradeV2,
+    address0
+  );
+  await waitTxConfirmed(ocbWallet, txUpgradeV2.hash, null);
+  sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID = txUpgradeV2.hash;
 }
 
 // This function will run before each test file is executed
@@ -141,6 +163,8 @@ beforeAll(async () => {
   global.PARENT_BLUEPRINT_ID = sharedState.blueprintIds.PARENT_BLUEPRINT_ID;
   global.CHILDREN_BLUEPRINT_ID = sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID;
   global.FEE_BLUEPRINT_ID = sharedState.blueprintIds.FEE_BLUEPRINT_ID;
+  global.UPGRADE_TEST_V1_BLUEPRINT_ID = sharedState.blueprintIds.UPGRADE_TEST_V1_BLUEPRINT_ID;
+  global.UPGRADE_TEST_V2_BLUEPRINT_ID = sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID;
 });
 
 afterAll(async () => {
