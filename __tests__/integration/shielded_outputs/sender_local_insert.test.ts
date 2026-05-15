@@ -233,14 +233,26 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     const addrA = await walletA.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
 
-    // Step 1: create a shielded UTXO the wallet owns. Without this, the
-    // spend tx in step 2 has no shielded parent to reference and the
-    // test trivially passes against transparent inputs.
+    // Step 1: create shielded UTXOs the wallet owns and drain the
+    // transparent funds. The minimum-2 rule (introduced when the send
+    // pipeline tightened — see sendTransaction.ts:498) requires two
+    // shielded outputs; the values are sized to consume the full 100n
+    // injected above (49 + 49 + 2n fee = 100n), so step 2 has nothing
+    // but shielded UTXOs to pick from. Without draining transparent,
+    // the UTXO selector prefers transparent inputs in step 2 and the
+    // shielded-input assertion at the bottom of this test fails.
     const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
     const fundShieldedTx = await walletA.sendManyOutputsTransaction([
       {
         address: shieldedAddr0,
-        value: 30n,
+        value: 49n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddr1,
+        value: 49n,
         token: NATIVE_TOKEN_UID,
         shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
       },
@@ -248,15 +260,23 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     expect(fundShieldedTx).not.toBeNull();
     await waitForTxReceived(walletA, fundShieldedTx!.hash!);
 
-    // Step 2: build a second tx that spends the shielded UTXO we just
+    // Step 2: build a second tx that spends the shielded UTXOs we just
     // created. `sign-tx` stops before mining so we can inspect the
     // history-tx shape from the signed structure directly, before any
-    // websocket delivery has a chance to overwrite it.
-    const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
+    // websocket delivery has a chance to overwrite it. Two shielded
+    // outputs for the same protocol minimum reason as step 1.
+    const shieldedAddr2 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const shieldedAddr3 = await walletA.getAddressAtIndex(3, { legacy: false });
     const spendTx = await walletA.sendManyOutputsSendTransaction([
       {
-        address: shieldedAddr1,
-        value: 20n,
+        address: shieldedAddr2,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddr3,
+        value: 10n,
         token: NATIVE_TOKEN_UID,
         shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
       },
