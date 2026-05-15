@@ -72,11 +72,10 @@ describe('Upgradable nano contract', () => {
     const ncId = txInit.hash;
 
     // V1's `set_value` accepts an Address — a wallet-owned base58 string works.
-    const txSetV1 = await hWallet.createAndSendNanoContractTransaction(
-      'set_value',
-      address0,
-      { ncId, args: [address0] }
-    );
+    const txSetV1 = await hWallet.createAndSendNanoContractTransaction('set_value', address0, {
+      ncId,
+      args: [address0],
+    });
     await checkTxValid(hWallet, txSetV1);
 
     // Sanity: state reports V1 as the current blueprint and creation tx
@@ -87,11 +86,10 @@ describe('Upgradable nano contract', () => {
     expect(initTxData.tx.nc_blueprint_id).toBe(v1);
 
     // 2. Upgrade in-place to V2.
-    const txUpgrade = await hWallet.createAndSendNanoContractTransaction(
-      'upgrade_to',
-      address0,
-      { ncId, args: [v2] }
-    );
+    const txUpgrade = await hWallet.createAndSendNanoContractTransaction('upgrade_to', address0, {
+      ncId,
+      args: [v2],
+    });
     await checkTxValid(hWallet, txUpgrade);
 
     // State now reports V2; the creation tx still carries V1 — this is the
@@ -111,11 +109,10 @@ describe('Upgradable nano contract', () => {
     // arg validation — a regression of the fix would throw a Zod regex
     // error here.
     const callerIdHex = '0000421da6413f181b86c3fcf731976ad6f7ec0983598000a6658f35a212e3e1';
-    const txSetV2 = await hWallet.createAndSendNanoContractTransaction(
-      'set_value',
-      address0,
-      { ncId, args: [callerIdHex] }
-    );
+    const txSetV2 = await hWallet.createAndSendNanoContractTransaction('set_value', address0, {
+      ncId,
+      args: [callerIdHex],
+    });
     await checkTxValid(hWallet, txSetV2);
   });
 });
