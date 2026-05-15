@@ -31,11 +31,13 @@ export function expectAuthoritiesRoutedTo(
   expect(authorityOutputs).toHaveLength(2);
 
   const [mintOutput] = authorityOutputs.filter(o => o.value === TOKEN_MINT_MASK);
+  expect(mintOutput).toBeDefined();
   const mintScript = mintOutput.parseScript(network);
   expect(mintScript).toBeInstanceOf(P2PKH);
   expect((mintScript as P2PKH).address.base58).toEqual(expected.mintAddress);
 
   const [meltOutput] = authorityOutputs.filter(o => o.value === TOKEN_MELT_MASK);
+  expect(meltOutput).toBeDefined();
   const meltScript = meltOutput.parseScript(network);
   expect(meltScript).toBeInstanceOf(P2PKH);
   expect((meltScript as P2PKH).address.base58).toEqual(expected.meltAddress);

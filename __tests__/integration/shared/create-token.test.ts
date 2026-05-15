@@ -30,7 +30,7 @@
  */
 
 import type { IWalletTestAdapter } from '../adapters/types';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { AUTHORITY_TOKEN_DATA, NATIVE_TOKEN_UID } from '../../../src/constants';
 import { TokenVersion } from '../../../src/types';
 import { InsufficientFundsError, UtxoError } from '../../../src/errors';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
@@ -146,7 +146,9 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       expect(tokenOutputs).toHaveLength(1);
       expect(tokenOutputs[0]).toMatchObject({ value: tokenAmount, tokenData: 1 });
 
-      const authorityOutputs = created.transaction.outputs.filter(o => o.tokenData === 129);
+      const authorityOutputs = created.transaction.outputs.filter(
+        o => o.tokenData === AUTHORITY_TOKEN_DATA
+      );
       expect(authorityOutputs).toHaveLength(0);
 
       const details = await adapter.getTokenDetails(wallet, created.hash);
@@ -247,7 +249,9 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       });
 
       // Default options should produce both mint and melt authority outputs
-      const authorityOutputs = created.transaction.outputs.filter(o => o.tokenData === 129);
+      const authorityOutputs = created.transaction.outputs.filter(
+        o => o.tokenData === AUTHORITY_TOKEN_DATA
+      );
       expect(authorityOutputs).toHaveLength(2);
 
       const tokenBalance = await wallet.getBalance(created.hash);
@@ -341,7 +345,9 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       expect(created.transaction.headers).toEqual([new FeeHeader([{ tokenIndex: 0, amount: 1n }])]);
 
       // No authority outputs were created
-      const authorityOutputs = created.transaction.outputs.filter(o => o.tokenData === 129);
+      const authorityOutputs = created.transaction.outputs.filter(
+        o => o.tokenData === AUTHORITY_TOKEN_DATA
+      );
       expect(authorityOutputs).toHaveLength(0);
 
       // The 1n HTR fee consumed all available HTR

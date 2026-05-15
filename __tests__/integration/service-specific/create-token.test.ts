@@ -29,7 +29,12 @@
  */
 
 import type { HathorWalletServiceWallet, CreateTokenTransaction, Output } from '../../../src';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
+import {
+  AUTHORITY_TOKEN_DATA,
+  NATIVE_TOKEN_UID,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../src/constants';
 import { SendTxError } from '../../../src/errors';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
@@ -109,7 +114,7 @@ describe('[Service] createNewToken', () => {
       createTokenTx.outputs.forEach((output: Output, index: number) => {
         if (output.tokenData === 1) {
           tokenOutputIndex = index;
-        } else if (output.tokenData === 129) {
+        } else if (output.tokenData === AUTHORITY_TOKEN_DATA) {
           if (output.value === TOKEN_MINT_MASK) {
             mintAuthorityOutputIndex = index;
           } else if (output.value === TOKEN_MELT_MASK) {
@@ -207,7 +212,7 @@ describe('[Service] createNewToken', () => {
       createTokenTx.outputs.forEach((output: Output, index: number) => {
         if (output.tokenData === 1) {
           tokenOutputIndex = index;
-        } else if (output.tokenData === 129) {
+        } else if (output.tokenData === AUTHORITY_TOKEN_DATA) {
           if (output.value === TOKEN_MINT_MASK) {
             mintAuthorityOutputIndex = index;
           } else if (output.value === TOKEN_MELT_MASK) {
