@@ -300,4 +300,121 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
       expect(typeof input.index).toBe('number');
     }
   });
+
+  /**
+   * L.5 — `convertTransactionToHistoryTx` must survive a UTXO record
+   *        racing with WebSocket-driven `processNewTx` deletion.
+   *
+   * Reproduces the headless-wallet log error
+   *   "Index (1) outside of transaction output array bounds (5) and no
+   *    stored UTXO recovery for tx_id=…"
+   *
+   * which fires when these two paths interleave (real symptom against a
+   * local fullnode with sub-millisecond broadcast):
+   *
+   *   1. handlePushTx pushes a shielded-spending tx; pushTx resolves.
+   *   2. handlePushTx kicks off `convertTransactionToHistoryTx` as a
+   *      fire-and-forget IIFE — NOT awaited before the HTTP response is
+   *      returned (sendTransaction.ts:835).
+   *   3. Meanwhile, the fullnode re-delivers the same tx over the
+   *      WebSocket; `onNewTx` → `processNewTx` runs, sees the shielded
+   *      input, and DELETES the spent UTXO from storage.
+   *   4. The IIFE then reaches `storage.getUtxo({txId, index})`, finds
+   *      nothing, and throws.
+   *
+   * The fix lives in `convertTransactionToHistoryTx`: when
+   * `findSpentOutput` returns a decoded shielded entry on the parent,
+   * read value/token/decoded directly from that entry — the parent-tx
+   * record survives WS-driven UTXO deletion, so the local-insert path
+   * stays correct regardless of who wins the race.
+   *
+   * We simulate the race by deleting the spent UTXO from storage
+   * immediately after `sign-tx` returns (i.e. before the local-insert
+   * step in real code). Before the fix this throws; after the fix the
+   * conversion succeeds and emits a properly-tagged shielded input.
+   */
+  it('L.5 — convertTransactionToHistoryTx survives concurrent UTXO deletion (WS-race)', async () => {
+    const walletA: HathorWallet = await generateWalletHelper();
+    const addrA = await walletA.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
+
+    // Same shape as L.4: fund shielded UTXOs and drain transparent, so
+    // the spend tx is forced to pick at least one shielded input.
+    const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
+    const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
+    const fundShieldedTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: shieldedAddr0,
+        value: 49n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddr1,
+        value: 49n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(fundShieldedTx).not.toBeNull();
+    await waitForTxReceived(walletA, fundShieldedTx!.hash!);
+
+    const shieldedAddr2 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const shieldedAddr3 = await walletA.getAddressAtIndex(3, { legacy: false });
+    const spendTx = await walletA.sendManyOutputsSendTransaction([
+      {
+        address: shieldedAddr2,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: shieldedAddr3,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    const tx = await spendTx.run('sign-tx');
+    tx.updateHash();
+
+    // Simulate the WS-driven UTXO deletion winning the race against the
+    // sender-local insert. For every input that references a shielded
+    // UTXO this wallet owns, delete the UTXO record from the store.
+    // This leaves the parent tx (and its decoded shielded output entry)
+    // in storage, exactly like `processNewTx` would after running
+    // `store.deleteUtxo` on the spent input.
+    let deletedAtLeastOne = false;
+    for (const input of tx.inputs) {
+      const utxo = await walletA.storage.getUtxo({ txId: input.hash, index: input.index });
+      if (utxo?.shielded) {
+        await walletA.storage.store.deleteUtxo(utxo);
+        deletedAtLeastOne = true;
+      }
+    }
+    expect(deletedAtLeastOne).toBe(true);
+
+    // With the fix in place, the conversion succeeds: it reads from the
+    // parent's stored output entry instead of the now-deleted UTXO.
+    // Without the fix, this throws "...no stored UTXO recovery for
+    // tx_id=…".
+    const historyTx = await transactionUtils.convertTransactionToHistoryTx(tx, walletA.storage);
+
+    const shieldedInputs = historyTx.inputs.filter(
+      i => (i as { type?: string }).type === 'shielded'
+    );
+    expect(shieldedInputs.length).toBeGreaterThanOrEqual(1);
+
+    // The reconstructed fields must come from the parent's spent output
+    // entry: value and token must both be present and non-trivial
+    // (defensive against a buggy fallback that emits 0n / empty string).
+    for (const input of shieldedInputs) {
+      expect(input.tx_id).toBeDefined();
+      expect(typeof input.index).toBe('number');
+      expect((input as { value?: bigint }).value).toBeDefined();
+      expect((input as { value?: bigint }).value).not.toBe(0n);
+      expect((input as { token?: string }).token).toBeDefined();
+      expect((input as { token?: string }).token).not.toBe('');
+    }
+  });
 });
