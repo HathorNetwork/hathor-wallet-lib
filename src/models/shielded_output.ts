@@ -110,15 +110,25 @@ class ShieldedOutput {
     }
 
     // Ephemeral pubkey (always 33 bytes)
+    arr.push(this.getValidatedEphemeralPubkey());
+
+    return arr;
+  }
+
+  /**
+   * Validate that the ephemeral pubkey is exactly `EPHEMERAL_PUBKEY_SIZE`
+   * bytes and return it. Both `serialize` and `serializeSighash` need the
+   * same length check before emitting the pubkey on the wire; centralizing
+   * it here keeps the error message and the gate condition in lockstep.
+   */
+  private getValidatedEphemeralPubkey(): Buffer {
     if (!this.ephemeralPubkey || this.ephemeralPubkey.length !== EPHEMERAL_PUBKEY_SIZE) {
       throw new Error(
         `Invalid ephemeral pubkey: expected ${EPHEMERAL_PUBKEY_SIZE} bytes, ` +
           `got ${this.ephemeralPubkey?.length ?? 0}`
       );
     }
-    arr.push(this.ephemeralPubkey);
-
-    return arr;
+    return this.ephemeralPubkey;
   }
 
   /**
@@ -144,13 +154,7 @@ class ShieldedOutput {
     arr.push(this.script);
 
     // Always include ephemeral pubkey in sighash
-    if (!this.ephemeralPubkey || this.ephemeralPubkey.length !== EPHEMERAL_PUBKEY_SIZE) {
-      throw new Error(
-        `Invalid ephemeral pubkey: expected ${EPHEMERAL_PUBKEY_SIZE} bytes, ` +
-          `got ${this.ephemeralPubkey?.length ?? 0}`
-      );
-    }
-    arr.push(this.ephemeralPubkey);
+    arr.push(this.getValidatedEphemeralPubkey());
 
     return arr;
   }
