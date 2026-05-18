@@ -127,6 +127,8 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     expect(htrUtxos.utxos.length).toBeGreaterThan(0);
     const feeTokenUtxo = feeTokenUtxos.utxos[0];
     const htrUtxo = htrUtxos.utxos[0];
+    // FBT input must exceed the 50n output below for change to be generated.
+    expect(feeTokenUtxo.amount).toBeGreaterThan(50n);
 
     const inputs = [
       { txId: feeTokenUtxo.tx_id, index: feeTokenUtxo.index },
