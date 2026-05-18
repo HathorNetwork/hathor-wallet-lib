@@ -364,6 +364,10 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     throw new Error('Nano contract ID is not defined');
   }
 
+  // Primary path: ask the state endpoint. It reports the contract's *current*
+  // blueprint id, which reflects any in-place upgrades performed via
+  // syscall.change_blueprint. This is the id a method call must be validated
+  // against.
   const [stateError, stateResponse] = await getResultHelper(() =>
     ncApi.getNanoContractState(ncId, [], [], [])
   );
@@ -371,6 +375,11 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     return stateResponse.blueprint_id;
   }
 
+  // Fallback: state endpoint can't serve the contract — typically because the
+  // creation tx isn't confirmed/indexed yet, or the contract was created by
+  // another contract whose state isn't yet queryable. In those cases the
+  // contract cannot have been upgraded yet, so the *creation* blueprint id
+  // (carried by the tx) is also the current one.
   const [txError, txResponse] = (await getResultHelper(() => wallet.getFullTxById(ncId))) as [
     Error | null,
     FullNodeTxResponse | null,
@@ -379,6 +388,7 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     return txResponse.tx.nc_blueprint_id;
   }
 
+  // Both endpoints failed — surface whichever underlying error is more useful.
   throw new NanoContractTransactionError(
     `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || txError?.message || 'Invalid response structure'}`
   );
