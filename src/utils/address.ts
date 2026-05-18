@@ -20,16 +20,35 @@ import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
 
 /**
- * Parse address and return the address type
+ * Parse address and return the address type.
+ * Returns 'p2pkh' or 'p2sh' for legacy addresses.
+ * Throws for shielded addresses — callers expecting an output script type
+ * should not receive shielded addresses directly.
  *
  * @param {string} address
  * @param {Network} network
  *
- * @returns {string} output type of the address (p2pkh or p2sh)
+ * @returns {'p2pkh' | 'p2sh'} output type of the address
  */
 export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' {
   const addressObj = new Address(address, { network });
-  return addressObj.getType();
+  const addrType = addressObj.getType();
+  if (addrType === 'shielded') {
+    throw new Error(
+      'Shielded addresses cannot be used directly as output script type. Use the spend-derived P2PKH address instead.'
+    );
+  }
+  return addrType;
+}
+
+/**
+ * Convert a bitcore PublicKey to a base58 P2PKH address string.
+ */
+export function publicKeyToP2PKH(
+  publicKey: InstanceType<typeof bitcorePublicKey>,
+  network: Network
+): string {
+  return new BitcoreAddress(publicKey, network.bitcoreNetwork).toString();
 }
 
 export function deriveAddressFromXPubP2PKH(
@@ -41,7 +60,7 @@ export function deriveAddressFromXPubP2PKH(
   const hdpubkey = new HDPublicKey(xpubkey);
   const key = hdpubkey.deriveChild(index);
   return {
-    base58: new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString(),
+    base58: publicKeyToP2PKH(key.publicKey, network),
     bip32AddressIndex: index,
     publicKey: key.publicKey.toString('hex'),
   };
@@ -119,6 +138,12 @@ export function createOutputScriptFromAddress(address: string, network: Network)
   if (addressType === 'p2pkh') {
     // P2PKH
     const p2pkh = new P2PKH(addressObj);
+    return p2pkh.createScript();
+  }
+  if (addressType === 'shielded') {
+    // For shielded addresses, derive P2PKH script from spend_pubkey
+    const spendAddress = addressObj.getSpendAddress();
+    const p2pkh = new P2PKH(spendAddress);
     return p2pkh.createScript();
   }
   throw new Error('Invalid address type');
