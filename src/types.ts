@@ -372,7 +372,7 @@ export enum WALLET_FLAGS {
 }
 
 export interface IWalletAccessData {
-  // Optional because single-key wallets (Web3Auth PoC) have no HD key hierarchy
+  // Optional: absent on single-key wallets (no BIP32 hierarchy).
   xpubkey?: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
   acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
@@ -382,35 +382,15 @@ export interface IWalletAccessData {
   walletType: WalletType;
   walletFlags: number;
 
-  /**
-   * Marker for single-key wallets (Web3Auth) — a P2PKH wallet keyed by a
-   * single raw secp256k1 private key with no BIP32 hierarchy. Implemented
-   * as a flag on `WalletType.P2PKH` rather than a new enum member; see
-   * `internal-rfcs/projects/wallet-mobile/0003-web3auth-single-key-wallet.md` §1.8.
-   *
-   * All `switch(walletType)` sites in `src/` have been audited and behave
-   * correctly under this interpretation: MULTISIG branches off explicitly,
-   * single-key wallets fall through the P2PKH path. The external-signer
-   * hook (`setExternalTxSigningMethod`) intercepts the tx-signing path
-   * upstream of any HD-specific derivation.
-   */
+  /** P2PKH wallet keyed by a single raw secp256k1 key (no BIP32). */
   singleKeyMode?: boolean;
   singleKeyPublicKey?: string; // hex-encoded DER public key
   singleKeyPrivateKey?: IEncryptedData; // encrypted raw private key (pin)
 
   /**
-   * Whether the wallet has the cryptographic material (xpub/xpriv) needed to
-   * derive addresses beyond index 0. Set to:
-   *  - `true` for seed / xpriv / xpub-backed wallets (HD), even when running
-   *    under SINGLE_ADDRESS scanning policy — they still hold the xpub and
-   *    can derive on demand (required by `hasTxOutsideFirstAddress` and other
-   *    safety checks).
-   *  - `false` for raw single-key wallets (Web3Auth) — only the key for
-   *    address index 0 is available.
-   *
-   * Optional for backward compatibility with stored access data that predates
-   * this flag; consumers should resolve it via `Storage.canDeriveAddresses()`
-   * which falls back to `!!xpubkey` when this field is undefined.
+   * Whether the wallet can derive addresses beyond index 0. True for HD
+   * wallets (seed/xpriv/xpub), false for single-key wallets. Optional for
+   * backward compatibility — resolve via `Storage.canDeriveAddresses()`.
    */
   canDeriveAddresses?: boolean;
 }

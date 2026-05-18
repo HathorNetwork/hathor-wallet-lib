@@ -186,7 +186,7 @@ class HathorWallet extends EventEmitter {
 
   xpub?: string;
 
-  // Single-key wallet (Web3Auth PoC): raw secp256k1 private key + public key
+  // Single-key wallet: raw secp256k1 private key + public key (no BIP32).
   privateKey?: string;
 
   publicKey?: string;

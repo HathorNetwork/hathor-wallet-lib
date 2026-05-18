@@ -706,18 +706,12 @@ const wallet = {
   },
 
   /**
-   * Generate access data for a single-key wallet (Web3Auth PoC).
-   *
-   * A single-key wallet is backed by a raw secp256k1 private key (no BIP32)
-   * and has exactly one address. No xpub, no seed, no account/auth path keys.
+   * Generate access data for a single-key wallet (raw secp256k1, no BIP32).
+   * Exactly one address; no xpub, seed, or account/auth path keys.
    *
    * @param privateKeyHex Raw private key as a hex string (without '0x' prefix)
-   * @param publicKeyHex DER-encoded public key as a hex string — MUST match
-   *   the key derived from `privateKeyHex`. Required by the caller because
-   *   downstream code (storage / preCalculatedAddresses) needs the pubkey
-   *   before the pin is unlocked; we validate it here to refuse mismatched
-   *   pairs at construction time, preventing a class of bugs where signatures
-   *   come from one keypair while the wallet identity is cached as another.
+   * @param publicKeyHex DER-encoded public key (hex); validated against the
+   *   key derived from `privateKeyHex` to reject mismatched pairs.
    * @param options.pin PIN used to encrypt the private key at rest
    */
   generateAccessDataFromPrivateKey(

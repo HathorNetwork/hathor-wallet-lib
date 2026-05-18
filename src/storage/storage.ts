@@ -173,7 +173,7 @@ export class Storage implements IStorage {
    *      Web3Auth (key never leaves the trusted environment) and by hardware
    *      wallets. Wins over any local key.
    *   2. Raw single-key in access data (`singleKeyPrivateKey`) — single-key
-   *      wallets that DO hold the key locally (e.g. PoC, tests) sign with it
+   *      wallets that hold the key locally sign with it
    *      directly. Per r4mmer: external signer is not a hard requirement when
    *      the key is available; it's the right escape hatch for Web3Auth only.
    *   3. HD path (`mainKey` / xpriv) — the original behavior.
