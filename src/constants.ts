@@ -199,9 +199,23 @@ export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
 export const MIN_POLLING_INTERVAL: number = 0.5;
 
 /**
+ * Shape of the per-network weight constants consumed by
+ * {@link Transaction.calculateWeight}. Network values arrive via the
+ * fullnode's /version response and are normalised by
+ * `transactionUtils.getWeightConstantsFromStorage`; the hardcoded
+ * {@link TX_WEIGHT_CONSTANTS} below is the fallback used when the
+ * version data hasn't been fetched yet.
+ */
+export interface TxWeightConstants {
+  txMinWeight: number;
+  txWeightCoefficient: number;
+  txMinWeightK: number;
+}
+
+/**
  * Constants to calculate weight
  */
-export const TX_WEIGHT_CONSTANTS = {
+export const TX_WEIGHT_CONSTANTS: TxWeightConstants = {
   txMinWeight: 14,
   txWeightCoefficient: 1.6,
   txMinWeightK: 100,

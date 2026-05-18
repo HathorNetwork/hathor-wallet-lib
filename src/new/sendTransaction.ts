@@ -378,7 +378,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
 
       await transactionUtils.signTransaction(this.transaction, this.storage, pinToUse);
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       this._currentStep = 'signed';
       return this.transaction;
     } catch (e) {
@@ -435,7 +435,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         this.fullTxData,
         this.storage.config.getNetwork()
       );
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       return this.transaction;
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
@@ -685,6 +685,29 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         selected,
         SELECT_OUTPUTS_TIMEOUT
       );
+    }
+  }
+
+  /**
+   * Release all UTXOs that were marked as selected for this transaction.
+   * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
+   */
+  async releaseUtxos(): Promise<void> {
+    if (this.transaction === null) {
+      return;
+    }
+
+    if (!this.storage) {
+      return;
+    }
+
+    for (const input of this.transaction.inputs) {
+      try {
+        await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      } catch (err) {
+        // Best-effort: continue releasing remaining UTXOs
+        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+      }
     }
   }
 }
