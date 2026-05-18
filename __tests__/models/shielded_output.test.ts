@@ -28,9 +28,8 @@ function makeOutput(
     overrides.tokenData ?? 0,
     overrides.script ?? Buffer.from([0x76, 0xa9, 0x14]),
     overrides.ephemeralPubkey ?? Buffer.alloc(33, 0xcc),
-    overrides.assetCommitment,
-    overrides.surjectionProof,
-    overrides.value ?? 100n
+    overrides.value ?? 100n,
+    { assetCommitment: overrides.assetCommitment, surjectionProof: overrides.surjectionProof }
   );
 }
 
@@ -128,15 +127,24 @@ describe('ShieldedOutput', () => {
       expect(serialized.subarray(acOffset + 35, acOffset + 37)).toEqual(surjectionProof);
     });
 
-    it('should throw when FullShielded fields are missing', () => {
+    it('should throw when FullShielded asset_commitment is missing', () => {
       const out = makeOutput({
         mode: ShieldedOutputMode.FULLY_SHIELDED,
       });
 
-      expect(() => out.serialize()).toThrow(
-        'FullShielded output requires assetCommitment and surjectionProof'
-      );
+      expect(() => out.serialize()).toThrow('FullShielded output requires assetCommitment');
       expect(() => out.serializeSighash()).toThrow('FullShielded output requires assetCommitment');
+    });
+
+    it('should throw when FullShielded surjection_proof is missing on serialize but not on sighash', () => {
+      const out = makeOutput({
+        mode: ShieldedOutputMode.FULLY_SHIELDED,
+        assetCommitment: Buffer.alloc(33, 0xdd),
+      });
+
+      // serialize requires the proof — sighash deliberately omits it.
+      expect(() => out.serialize()).toThrow('FullShielded output requires surjectionProof');
+      expect(() => out.serializeSighash()).not.toThrow();
     });
   });
 
@@ -204,6 +212,68 @@ describe('ShieldedOutput', () => {
     it('should throw when ephemeral pubkey has wrong size', () => {
       const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
       expect(() => out.serializeSighash()).toThrow(/expected 33 bytes/);
+    });
+  });
+
+  describe('AmountShielded tokenData', () => {
+    it('serialize should throw when tokenData is undefined', () => {
+      const out = new ShieldedOutput(
+        ShieldedOutputMode.AMOUNT_SHIELDED,
+        Buffer.alloc(33, 0xaa),
+        Buffer.alloc(10, 0xbb),
+        undefined,
+        Buffer.from([0x76, 0xa9, 0x14]),
+        Buffer.alloc(33, 0xcc),
+        100n
+      );
+      expect(() => out.serialize()).toThrow('AmountShielded output requires tokenData');
+      expect(() => out.serializeSighash()).toThrow('AmountShielded output requires tokenData');
+    });
+
+    it('FullShielded does not require tokenData', () => {
+      // Mirrors how PR 2+ deserializers build FullShielded outputs without
+      // ever populating tokenData — the wire format has no slot for it in
+      // FullShielded mode, so requiring callers to pass a placeholder would
+      // be misleading.
+      const out = new ShieldedOutput(
+        ShieldedOutputMode.FULLY_SHIELDED,
+        Buffer.alloc(33, 0xaa),
+        Buffer.alloc(10, 0xbb),
+        undefined,
+        Buffer.from([0x76, 0xa9, 0x14]),
+        Buffer.alloc(33, 0xcc),
+        100n,
+        { assetCommitment: Buffer.alloc(33, 0xdd), surjectionProof: Buffer.from([0xee]) }
+      );
+      expect(() => out.serialize()).not.toThrow();
+      expect(() => out.serializeSighash()).not.toThrow();
+    });
+  });
+
+  describe('defensive throws', () => {
+    // The enum-typed `mode` parameter excludes invalid values at compile
+    // time, but runtime data (JSON ingest, `as` casts) can bypass that.
+    // We exercise the runtime guards with an explicit unsafe cast.
+    const INVALID_MODE = 99 as unknown as ShieldedOutputMode;
+
+    it('serialize throws on unsupported mode', () => {
+      const out = makeOutput({ mode: INVALID_MODE });
+      expect(() => out.serialize()).toThrow(/Unsupported shielded output mode: 99/);
+    });
+
+    it('serializeSighash throws on unsupported mode', () => {
+      const out = makeOutput({ mode: INVALID_MODE });
+      expect(() => out.serializeSighash()).toThrow(/Unsupported shielded output mode: 99/);
+    });
+
+    it('serialize throws when ephemeral pubkey is missing', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(0) });
+      expect(() => out.serialize()).toThrow(/Invalid ephemeral pubkey/);
+    });
+
+    it('serialize throws when ephemeral pubkey has wrong size', () => {
+      const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
+      expect(() => out.serialize()).toThrow(/expected 33 bytes/);
     });
   });
 });

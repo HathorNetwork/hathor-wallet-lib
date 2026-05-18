@@ -126,17 +126,14 @@ class ShieldedOutputsHeader extends Header {
       buf = buf.subarray(33);
 
       outputs.push(
-        new ShieldedOutput(
-          mode,
-          commitment,
-          rangeProof,
-          tokenData,
-          script,
-          ephemeralPubkey,
+        // PR 1 refactor: value moved before the options bag; asset/surjection
+        // live inside it. value is 0n here because the wire format doesn't
+        // carry the plaintext value — it's recovered via rewind on the
+        // recipient side.
+        new ShieldedOutput(mode, commitment, rangeProof, tokenData, script, ephemeralPubkey, 0n, {
           assetCommitment,
           surjectionProof,
-          0n // value is not stored on-chain; it's recovered via rewind
-        )
+        })
       );
     }
 

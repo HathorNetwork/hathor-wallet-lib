@@ -14,10 +14,6 @@ export type {
   ICreatedShieldedOutput,
   IShieldedCryptoProvider,
   IProcessedShieldedOutput,
+  IRewoundAmountShieldedOutput,
+  IRewoundFullShieldedOutput,
 } from './types';
-
-export { createDefaultShieldedCryptoProvider } from './provider';
-
-export { createBrowserShieldedCryptoProvider } from './provider.browser';
-
-export { processShieldedOutputs } from './processing';

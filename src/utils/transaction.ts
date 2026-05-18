@@ -922,6 +922,9 @@ const transaction = {
           txData.tokens
         );
 
+        // PR 1 refactor: ShieldedOutput constructor moved value before the
+        // options bag, and assetCommitment/surjectionProof now live inside
+        // the options bag instead of being positional args.
         return new ShieldedOutput(
           so.mode,
           so.commitment,
@@ -929,9 +932,8 @@ const transaction = {
           tokenData,
           Buffer.from(so.script, 'hex'),
           so.ephemeralPubkey,
-          so.assetCommitment,
-          so.surjectionProof,
-          so.value
+          so.value,
+          { assetCommitment: so.assetCommitment, surjectionProof: so.surjectionProof }
         );
       });
 

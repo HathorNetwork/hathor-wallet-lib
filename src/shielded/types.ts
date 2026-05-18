@@ -51,7 +51,7 @@ export interface IDecryptedShieldedOutput {
   blindingFactor: Buffer;
   tokenUid: string; // hex, 32 bytes
   assetBlindingFactor?: Buffer;
-  outputType: ShieldedOutputMode;
+  mode: ShieldedOutputMode;
 }
 
 /**
@@ -223,7 +223,11 @@ export interface IRewoundAmountShieldedOutput {
 export interface IRewoundFullShieldedOutput {
   value: bigint;
   blindingFactor: Buffer;
-  tokenUid: Buffer; // 32 bytes, recovered from proof message
+  // hex, 32 bytes. Recovered from the proof message. Hex (not Buffer) so the
+  // shielded module presents a single canonical token-UID encoding to every
+  // consumer (storage, history, balance) — matching the rest of wallet-lib
+  // where `IUtxo.token` and friends are hex strings.
+  tokenUid: string;
   assetBlindingFactor: Buffer; // 32 bytes, recovered from proof message
 }
 

@@ -278,7 +278,9 @@ describe('processShieldedOutputs', () => {
       rewindFullShieldedOutput: jest.fn().mockReturnValue({
         value: 100n,
         blindingFactor: Buffer.alloc(32, 0x02),
-        tokenUid: Buffer.alloc(32, 0x03),
+        // PR 1 refactor: provider boundary returns tokenUid as hex string
+        // (single canonical encoding for the shielded module).
+        tokenUid: '03'.repeat(32),
         assetBlindingFactor: Buffer.alloc(32, 0x04),
       }),
       deriveTag: jest.fn().mockReturnValue(Buffer.alloc(32, 0x05)),
