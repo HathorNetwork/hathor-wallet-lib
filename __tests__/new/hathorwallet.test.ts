@@ -626,9 +626,9 @@ test('getAddressPrivKey', async () => {
   const address0 = await hWallet.getAddressAtIndex(0);
   const address0HDPrivKey = await hWallet.getAddressPrivKey('123', 0);
 
-  expect(
-    address0HDPrivKey.privateKey.toAddress(new Network('testnet').getNetwork()).toString()
-  ).toStrictEqual(address0);
+  expect(address0HDPrivKey.toAddress(new Network('testnet').getNetwork()).toString()).toStrictEqual(
+    address0
+  );
 });
 
 test('signMessageWithAddress', async () => {

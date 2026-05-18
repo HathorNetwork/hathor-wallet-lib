@@ -52,13 +52,34 @@ export interface HathorWalletConstructorParams {
   /** Extended public key (xpub) for read-only wallet */
   xpub?: string;
   /**
-   * Raw secp256k1 private key (hex string) for single-key wallets (Web3Auth PoC).
-   * When set, `publicKey` and `preCalculatedAddresses[0]` are required and
-   * `seed`/`xpriv`/`xpub` must NOT be provided. The wallet has exactly one
-   * address and relies on an external signer for transactions.
+   * Raw secp256k1 private key (hex string) for single-key wallets — e.g.
+   * Web3Auth onboarding where no BIP32 chain code is available.
+   *
+   * When set:
+   * - `publicKey` and `preCalculatedAddresses[0]` are REQUIRED
+   * - `seed` / `xpriv` / `xpub` MUST NOT be provided
+   * - the wallet has exactly one address (index 0)
+   * - transactions MUST be signed via `setExternalTxSigningMethod`
+   *
+   * @example
+   * const wallet = new HathorWallet({
+   *   connection,
+   *   privateKey: '<32-byte hex>',
+   *   publicKey: '<33-byte compressed hex>',
+   *   preCalculatedAddresses: ['<base58 address>'],
+   *   pinCode: '<pin>',
+   *   scanPolicy: { policy: SCANNING_POLICY.SINGLE_ADDRESS },
+   * });
+   * wallet.setExternalTxSigningMethod(myWeb3AuthSigner);
+   * await wallet.start({ pinCode: '<pin>' });
    */
   privateKey?: string;
-  /** DER-encoded secp256k1 public key (hex). Required alongside `privateKey`. */
+
+  /**
+   * DER-encoded compressed secp256k1 public key (hex). Required alongside
+   * `privateKey`. The caller is expected to derive this from the private
+   * key using their own crypto primitives.
+   */
   publicKey?: string;
 
   // Token configuration

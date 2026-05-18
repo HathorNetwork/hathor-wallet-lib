@@ -22,7 +22,7 @@
 /* eslint @typescript-eslint/explicit-function-return-type: "error" */
 
 import { cloneDeep, get } from 'lodash';
-import bitcore, { HDPrivateKey } from 'bitcore-lib';
+import bitcore from 'bitcore-lib';
 import EventEmitter from 'events';
 import { z } from 'zod';
 import {
@@ -331,12 +331,9 @@ class HathorWallet extends EventEmitter {
       throw Error('You must provide a connection.');
     }
 
-    if (!seed && !xpriv && !xpub && !privateKey) {
-      throw Error('You must explicitly provide the seed, xpriv, xpub or privateKey.');
-    }
-
-    if (seed && xpriv) {
-      throw Error('You cannot provide both a seed and an xpriv.');
+    const keyInputCount = [seed, xpriv, xpub, privateKey].filter(Boolean).length;
+    if (keyInputCount !== 1) {
+      throw Error('You must provide exactly one of seed, xpriv, xpub, or privateKey.');
     }
 
     if (xpriv && passphrase !== '') {
@@ -344,9 +341,6 @@ class HathorWallet extends EventEmitter {
     }
 
     if (privateKey) {
-      if (seed || xpriv || xpub) {
-        throw Error('You cannot combine privateKey with seed, xpriv or xpub.');
-      }
       if (!publicKey) {
         throw Error('You must provide publicKey alongside privateKey.');
       }
@@ -515,6 +509,7 @@ class HathorWallet extends EventEmitter {
    * @param value The new gap limit value
    */
   async setGapLimit(value: number): Promise<void> {
+    await this.assertSupportsHDOperation('setGapLimit');
     return this.storage.setGapLimit(value);
   }
 
@@ -524,6 +519,7 @@ class HathorWallet extends EventEmitter {
    * @returns The index of the last address loaded
    */
   async indexLimitLoadMore(count: number): Promise<number> {
+    await this.assertSupportsHDOperation('indexLimitLoadMore');
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -543,6 +539,7 @@ class HathorWallet extends EventEmitter {
    * @param endIndex The new index limit value
    */
   async indexLimitSetEndIndex(endIndex: number): Promise<void> {
+    await this.assertSupportsHDOperation('indexLimitSetEndIndex');
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -804,10 +801,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    */
   async hasTxOutsideFirstAddress(): Promise<boolean> {
-    // Single-key wallets have exactly one address (index 0), so by definition
-    // no transactions can exist outside of it.
-    const accessData = await this.storage?.getAccessData?.();
-    if (accessData?.singleKeyMode) {
+    // Wallets with SINGLE_ADDRESS policy have exactly one address (index 0), so
+    // by definition no transactions can exist outside of it.
+    if ((await this.storage?.getScanningPolicy?.()) === SCANNING_POLICY.SINGLE_ADDRESS) {
       return false;
     }
 
@@ -839,6 +835,11 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAddressAtIndex(index: number): Promise<string> {
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.singleKeyMode && index !== 0) {
+      throw new AddressError('Single-key wallets only support address index 0.');
+    }
+
     let address = await this.storage.getAddressAtIndex(index);
 
     if (address === null) {
@@ -896,6 +897,7 @@ class HathorWallet extends EventEmitter {
    * Get the next address after the current available
    */
   async getNextAddress(): Promise<{ address: string; index: number | null; addressPath: string }> {
+    await this.assertSupportsHDOperation('getNextAddress');
     // First we mark the current address as used, then return the next
     await this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();
@@ -1795,30 +1797,17 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Returns an address' HDPrivateKey given an index and the encryption password
+   * Return the address' raw private key given a BIP32 index.
    *
-   * @param pinCode - The PIN used to encrypt data in accessData
-   * @param addressIndex - The address' index to fetch
+   * Always returns a raw `bitcore.PrivateKey` ready for `ECDSA.sign` or
+   * `signMessage`. For HD wallets the child key is derived via
+   * `deriveNonCompliantChild` (Hathor-standard). For single-key wallets only
+   * `addressIndex === 0` is valid; other indexes throw `AddressError`.
    *
-   * @memberof HathorWallet
-   * @inner
+   * The actual key resolution lives in `storage.getAddressPrivKeyForIndex`.
    */
-  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<unknown> {
-    const accessData = await this.storage.getAccessData();
-    if (accessData?.singleKeyMode) {
-      if (addressIndex !== 0) {
-        throw new AddressError('Single-key wallets only support address index 0.');
-      }
-      const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pinCode);
-      // Return a raw bitcore PrivateKey (not an HDPrivateKey) so callers
-      // that ignore HD-specific affordances (e.g. signMessage) work directly.
-      return new bitcore.PrivateKey(rawPrivHex);
-    }
-
-    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
-    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
-
-    return addressHDPrivKey;
+  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey> {
+    return this.storage.getAddressPrivKeyForIndex(pinCode, addressIndex);
   }
 
   /**
@@ -1832,16 +1821,8 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const key = await this.getAddressPrivKey(pinCode, index);
-    // HD-derived keys expose `.privateKey`; raw (single-key) PrivateKey
-    // objects don't, and can be passed directly to `signMessage`.
-    const privateKey =
-      (key as { privateKey?: unknown }).privateKey !== undefined
-        ? (key as { privateKey: unknown }).privateKey
-        : key;
-    const signedMessage = signMessage(message, privateKey);
-
-    return signedMessage;
+    const privateKey = await this.storage.getAddressPrivKeyForIndex(pinCode, index);
+    return signMessage(message, privateKey);
   }
 
   /**
@@ -2525,6 +2506,18 @@ class HathorWallet extends EventEmitter {
     this.xpriv = undefined;
     this.seed = undefined;
     this.privateKey = undefined;
+  }
+
+  /**
+   * Throws if the wallet is in single-key mode. Used to guard HD-only
+   * operations (gap-limit changes, index-limit scanning, multi-address mode
+   * transitions, etc.) that are meaningless for single-key wallets.
+   */
+  private async assertSupportsHDOperation(methodName: string): Promise<void> {
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.singleKeyMode) {
+      throw new Error(`${methodName} is not supported for single-key wallets.`);
+    }
   }
 
   /**
@@ -3329,7 +3322,10 @@ class HathorWallet extends EventEmitter {
    * @param [options.pinCode] PIN to decrypt the private key.
    *                          Optional but required if not set in instance
    */
-  async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
+  async getPrivateKeyFromAddress(
+    address: string,
+    options: { pinCode?: string | null } = {}
+  ): Promise<bitcore.PrivateKey> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
@@ -3344,20 +3340,7 @@ class HathorWallet extends EventEmitter {
       throw new AddressError('Address does not belong to the wallet.');
     }
 
-    const accessData = await this.storage.getAccessData();
-    if (accessData?.singleKeyMode) {
-      if (addressIndex !== 0) {
-        throw new AddressError('Single-key wallets only support address index 0.');
-      }
-      const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pin);
-      return new bitcore.PrivateKey(rawPrivHex);
-    }
-
-    const xprivkey = await this.storage.getMainXPrivKey(pin);
-    const key = HDPrivateKey(xprivkey);
-    // Derive key to addressIndex
-    const derivedKey = key.deriveNonCompliantChild(addressIndex);
-    return derivedKey.privateKey;
+    return this.storage.getAddressPrivKeyForIndex(pin, addressIndex);
   }
 
   /**
@@ -3613,6 +3596,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async enableMultiAddressMode(gapLimit: number = GAP_LIMIT): Promise<void> {
+    await this.assertSupportsHDOperation('enableMultiAddressMode');
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }

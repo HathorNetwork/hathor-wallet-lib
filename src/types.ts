@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import bitcore from 'bitcore-lib';
 import { Config } from './config';
 import Transaction from './models/transaction';
 import Input from './models/input';
@@ -381,8 +382,18 @@ export interface IWalletAccessData {
   walletType: WalletType;
   walletFlags: number;
 
-  // Single-key mode (no BIP32). The wallet is backed by a raw secp256k1
-  // private key — e.g. a Web3Auth-managed key — and has exactly one address.
+  /**
+   * Marker for single-key wallets (Web3Auth) — a P2PKH wallet keyed by a
+   * single raw secp256k1 private key with no BIP32 hierarchy. Implemented
+   * as a flag on `WalletType.P2PKH` rather than a new enum member; see
+   * `internal-rfcs/projects/wallet-mobile/0003-web3auth-single-key-wallet.md` §1.8.
+   *
+   * All `switch(walletType)` sites in `src/` have been audited and behave
+   * correctly under this interpretation: MULTISIG branches off explicitly,
+   * single-key wallets fall through the P2PKH path. The external-signer
+   * hook (`setExternalTxSigningMethod`) intercepts the tx-signing path
+   * upstream of any HD-specific derivation.
+   */
   singleKeyMode?: boolean;
   singleKeyPublicKey?: string; // hex-encoded DER public key
   singleKeyPrivateKey?: IEncryptedData; // encrypted raw private key (pin)
@@ -663,6 +674,18 @@ export interface IStorage {
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
+  /**
+   * Resolve the private key for a given address index.
+   *
+   * Resolve the raw secp256k1 private key for a given address index.
+   *
+   * - HD wallets: derives via `deriveNonCompliantChild` (Hathor-standard) from `mainKey`.
+   * - Single-key wallets: returns the raw key (only valid for index 0).
+   *
+   * The single-source-of-truth method for "give me the key that signs for address N".
+   * Always returns a raw PrivateKey — callers do not need to unwrap.
+   */
+  getAddressPrivKeyForIndex(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   getSingleKeyPrivateKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;

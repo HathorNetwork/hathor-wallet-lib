@@ -10,7 +10,14 @@ import Mnemonic from 'bitcore-mnemonic';
 import HathorWallet from '../../src/new/wallet';
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
-import { ITxSignatureData, IStorage, SCANNING_POLICY } from '../../src/types';
+import {
+  ITxSignatureData,
+  IStorage,
+  SCANNING_POLICY,
+  WalletType,
+  HistorySyncMode,
+} from '../../src/types';
+import { getSupportedSyncMode } from '../../src/utils/storage';
 import { P2PKH_ACCT_PATH } from '../../src/constants';
 import walletUtils from '../../src/utils/wallet';
 import { verifyMessage } from '../../src/utils/crypto';
@@ -156,7 +163,7 @@ describe('singleKeyWallet — construction validation', () => {
           preCalculatedAddresses: [expectedAddress],
           seed: SEED,
         })
-    ).toThrow(/cannot combine privateKey/);
+    ).toThrow(/exactly one/i);
   });
 
   test('privateKey + xpriv throws', () => {
@@ -169,7 +176,7 @@ describe('singleKeyWallet — construction validation', () => {
           preCalculatedAddresses: [expectedAddress],
           xpriv: rootXpriv.xprivkey,
         })
-    ).toThrow(/cannot combine privateKey/);
+    ).toThrow(/exactly one/i);
   });
 
   test('privateKey + xpub throws', () => {
@@ -182,7 +189,7 @@ describe('singleKeyWallet — construction validation', () => {
           preCalculatedAddresses: [expectedAddress],
           xpub: rootXpriv.xpubkey,
         })
-    ).toThrow(/cannot combine privateKey/);
+    ).toThrow(/exactly one/i);
   });
 });
 
@@ -372,5 +379,276 @@ describe('singleKeyWallet — scan policy invariants', () => {
     await wallet.enableSingleAddressMode();
     const policy = await storage.getScanningPolicy();
     expect(policy).toBe(SCANNING_POLICY.SINGLE_ADDRESS);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Storage helper: getAddressPrivKeyForIndex
+// ---------------------------------------------------------------------------
+
+describe('Storage.getAddressPrivKeyForIndex — single-key wallets', () => {
+  test('returns a bitcore.PrivateKey for index 0', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    const key = await storage.getAddressPrivKeyForIndex(PIN, 0);
+    expect(key).toBeInstanceOf(bitcore.PrivateKey);
+    // raw key — must NOT be an HDPrivateKey
+    expect((key as unknown as { xprivkey?: string }).xprivkey).toBeUndefined();
+    expect((key as bitcore.PrivateKey).toString()).toBe(rawPrivHex);
+  });
+
+  test('throws AddressError for index !== 0', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    await expect(storage.getAddressPrivKeyForIndex(PIN, 1)).rejects.toThrow(/index 0/);
+  });
+
+  test('throws for wrong pin', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    await expect(storage.getAddressPrivKeyForIndex('wrong-pin', 0)).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Constructor: "exactly one" key-input rule
+// ---------------------------------------------------------------------------
+
+describe('HathorWallet constructor — exactly one key input', () => {
+  function baseOpts() {
+    return {
+      connection: makeMockedConnection() as never,
+      preCalculatedAddresses: [expectedAddress],
+      pinCode: PIN,
+      password: PASSWORD,
+    };
+  }
+
+  test('zero key inputs throws', () => {
+    expect(() => new HathorWallet({ ...baseOpts() })).toThrow(/exactly one/i);
+  });
+
+  test('seed + xpub throws (HD double-input)', () => {
+    expect(
+      () =>
+        new HathorWallet({
+          ...baseOpts(),
+          seed: SEED,
+          xpub: rootXpriv.hdPublicKey.toString(),
+        })
+    ).toThrow(/exactly one/i);
+  });
+
+  test('xpriv + xpub throws', () => {
+    expect(
+      () =>
+        new HathorWallet({
+          ...baseOpts(),
+          xpriv: rootXpriv.toString(),
+          xpub: rootXpriv.hdPublicKey.toString(),
+        })
+    ).toThrow(/exactly one/i);
+  });
+
+  test('seed + xpriv still throws', () => {
+    expect(
+      () =>
+        new HathorWallet({
+          ...baseOpts(),
+          seed: SEED,
+          xpriv: rootXpriv.toString(),
+        })
+    ).toThrow(/exactly one/i);
+  });
+});
+
+describe('Storage.getAddressPrivKeyForIndex — HD wallets (raw PrivateKey)', () => {
+  async function buildHDWallet(): Promise<{ storage: IStorage }> {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork(NETWORK_NAME);
+    const accessData = walletUtils.generateAccessDataFromSeed(SEED, {
+      pin: PIN,
+      password: PASSWORD,
+      networkName: NETWORK_NAME,
+    });
+    await storage.saveAccessData(accessData);
+    return { storage };
+  }
+
+  test('returns a raw bitcore.PrivateKey for index 0', async () => {
+    const { storage } = await buildHDWallet();
+    const key = await storage.getAddressPrivKeyForIndex(PIN, 0);
+    expect(key).toBeInstanceOf(bitcore.PrivateKey);
+    // Must be raw — NOT an HDPrivateKey wrapper
+    expect((key as unknown as { xprivkey?: string }).xprivkey).toBeUndefined();
+    // The HD derivation at index 0 of the test seed must match the fixture's rawPrivHex
+    expect(key.toString()).toBe(rawPrivHex);
+  });
+
+  test('returns a raw bitcore.PrivateKey for index N (N > 0)', async () => {
+    const { storage } = await buildHDWallet();
+    const key = await storage.getAddressPrivKeyForIndex(PIN, 5);
+    expect(key).toBeInstanceOf(bitcore.PrivateKey);
+    expect((key as unknown as { xprivkey?: string }).xprivkey).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. changeEncryptionPin re-encrypts singleKeyPrivateKey
+// ---------------------------------------------------------------------------
+
+describe('changeEncryptionPin — single-key wallets', () => {
+  test('re-encrypts singleKeyPrivateKey with the new pin', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet({ pin: PIN });
+    const accessData = await storage.getAccessData();
+    expect(accessData).not.toBeNull();
+
+    const OLD_PIN = PIN;
+    const NEW_PIN = '654321';
+
+    const newAccessData = walletUtils.changeEncryptionPin(accessData!, OLD_PIN, NEW_PIN);
+
+    expect(newAccessData.singleKeyMode).toBe(true);
+    expect(newAccessData.singleKeyPrivateKey).toBeDefined();
+    // The encrypted blob must differ from the old one (different IV/ciphertext)
+    expect(newAccessData.singleKeyPrivateKey).not.toEqual(accessData!.singleKeyPrivateKey);
+
+    await storage.saveAccessData(newAccessData);
+    // Decrypting with the new pin must yield the original raw key
+    const decryptedHex = await storage.getSingleKeyPrivateKey(NEW_PIN);
+    expect(decryptedHex).toBe(rawPrivHex);
+    // Old pin must fail
+    await expect(storage.getSingleKeyPrivateKey(OLD_PIN)).rejects.toThrow();
+  });
+
+  test('still throws "No data to change" for empty access data', () => {
+    const empty = {
+      walletType: WalletType.P2PKH,
+      walletFlags: 0,
+    } as unknown as Parameters<typeof walletUtils.changeEncryptionPin>[0];
+
+    expect(() => walletUtils.changeEncryptionPin(empty, '1', '2')).toThrow(/No data to change/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. getTxSignatures rejects single-key wallets without external signer
+// ---------------------------------------------------------------------------
+
+describe('Storage.getTxSignatures — single-key wallets', () => {
+  test('throws a clear error when no external signer is registered', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    // Do NOT register a signer via setTxSignatureMethod.
+    const tx = new Transaction([], []);
+    await expect(storage.getTxSignatures(tx, PIN)).rejects.toThrow(
+      /external.*sign|setExternalTxSigningMethod/i
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Storage.getAddressPubkey — xpubkey-missing guard
+// ---------------------------------------------------------------------------
+
+describe('Storage.getAddressPubkey — single-key wallets', () => {
+  test('returns the cached public key for index 0', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    const pubkey = await storage.getAddressPubkey(0);
+    expect(pubkey).toBe(pubKeyHex);
+  });
+
+  test('throws a clear error if pubkey is not cached and wallet has no xpub', async () => {
+    // Construct a single-key wallet but DELIBERATELY save the address without
+    // caching its publicKey, to exercise the fallback path.
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork(NETWORK_NAME);
+    await storage.setScanningPolicyData({
+      policy: SCANNING_POLICY.SINGLE_ADDRESS,
+    });
+    const accessData = walletUtils.generateAccessDataFromPrivateKey(rawPrivHex, pubKeyHex, {
+      pin: PIN,
+    });
+    await storage.saveAccessData(accessData);
+    await storage.saveAddress({
+      base58: expectedAddress,
+      bip32AddressIndex: 0,
+      // publicKey intentionally omitted
+    });
+
+    await expect(storage.getAddressPubkey(0)).rejects.toThrow(/no xpub|single-key/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. getSupportedSyncMode excludes XPUB_STREAM_WS for single-key wallets
+// ---------------------------------------------------------------------------
+
+describe('getSupportedSyncMode — single-key wallets', () => {
+  test('excludes XPUB_STREAM_WS', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    const modes = await getSupportedSyncMode(storage);
+    expect(modes).not.toContain(HistorySyncMode.XPUB_STREAM_WS);
+    expect(modes).toContain(HistorySyncMode.MANUAL_STREAM_WS);
+    expect(modes).toContain(HistorySyncMode.POLLING_HTTP_API);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 14. HD-only methods reject single-key wallets
+// ---------------------------------------------------------------------------
+
+describe('HathorWallet HD-only methods — single-key wallets reject', () => {
+  let wallet: HathorWallet;
+
+  beforeEach(async () => {
+    ({ wallet } = await buildPopulatedSingleKeyWallet());
+  });
+
+  test('setGapLimit throws', async () => {
+    await expect(wallet.setGapLimit(20)).rejects.toThrow(/single-key|not supported/i);
+  });
+
+  test('indexLimitLoadMore throws', async () => {
+    await expect(wallet.indexLimitLoadMore(10)).rejects.toThrow(/single-key|not supported/i);
+  });
+
+  test('indexLimitSetEndIndex throws', async () => {
+    await expect(wallet.indexLimitSetEndIndex(5)).rejects.toThrow(/single-key|not supported/i);
+  });
+
+  test('enableMultiAddressMode throws', async () => {
+    await expect(wallet.enableMultiAddressMode()).rejects.toThrow(/single-key|not supported/i);
+  });
+
+  test('getAddressAtIndex(0) returns the single address', async () => {
+    const addr = await wallet.getAddressAtIndex(0);
+    expect(addr).toBe(expectedAddress);
+  });
+
+  test('getAddressAtIndex(1) throws', async () => {
+    await expect(wallet.getAddressAtIndex(1)).rejects.toThrow(/single-key|index 0/i);
+  });
+
+  test('getNextAddress throws', async () => {
+    await expect(wallet.getNextAddress()).rejects.toThrow(/single-key|not supported/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 15. HathorWalletServiceWallet rejects single-key wallets
+// ---------------------------------------------------------------------------
+
+describe('HathorWalletServiceWallet — single-key rejection', () => {
+  test('constructor throws when privateKey is provided', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const HathorWalletServiceWallet = require('../../src/wallet/wallet').default;
+    expect(() => {
+      // eslint-disable-next-line no-new
+      new HathorWalletServiceWallet({
+        requestPassword: jest.fn(),
+        network,
+        seed: SEED,
+        privateKey: rawPrivHex,
+      } as never);
+    }).toThrow(/single-key|not supported|HathorWallet/i);
   });
 });

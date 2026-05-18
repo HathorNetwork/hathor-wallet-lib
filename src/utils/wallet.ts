@@ -742,7 +742,7 @@ const wallet = {
     newPin: string
   ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
-    if (!(data.mainKey || data.authKey || data.acctPathKey)) {
+    if (!(data.mainKey || data.authKey || data.acctPathKey || data.singleKeyPrivateKey)) {
       throw new Error('No data to change');
     }
 
@@ -762,6 +762,11 @@ const wallet = {
       const acctPathKey = decryptData(data.acctPathKey, oldPin);
       const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
       data.acctPathKey = newEncryptedAcctPathKey;
+    }
+
+    if (data.singleKeyPrivateKey) {
+      const privateKey = decryptData(data.singleKeyPrivateKey, oldPin);
+      data.singleKeyPrivateKey = encryptData(privateKey, newPin);
     }
 
     return data;

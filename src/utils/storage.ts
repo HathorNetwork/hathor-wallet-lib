@@ -62,17 +62,26 @@ export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction
 
 export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySyncMode[]> {
   const walletType = await storage.getWalletType();
+  let modes: HistorySyncMode[];
   if (walletType === WalletType.P2PKH) {
-    return [
+    modes = [
       HistorySyncMode.MANUAL_STREAM_WS,
       HistorySyncMode.POLLING_HTTP_API,
       HistorySyncMode.XPUB_STREAM_WS,
     ];
+  } else if (walletType === WalletType.MULTISIG) {
+    modes = [HistorySyncMode.POLLING_HTTP_API];
+  } else {
+    return [];
   }
-  if (walletType === WalletType.MULTISIG) {
-    return [HistorySyncMode.POLLING_HTTP_API];
+
+  // Single-key wallets cannot use xpub-based stream sync
+  const accessData = await storage.getAccessData();
+  if (accessData?.singleKeyMode) {
+    return modes.filter(m => m !== HistorySyncMode.XPUB_STREAM_WS);
   }
-  return [];
+
+  return modes;
 }
 
 /**

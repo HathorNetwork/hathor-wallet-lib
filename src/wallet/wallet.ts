@@ -183,6 +183,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     enableWs = true,
     storage = null,
     singleAddressMode = false,
+    privateKey = undefined,
   }: {
     requestPassword: () => Promise<string>;
     seed?: string | null;
@@ -194,8 +195,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     enableWs?: boolean;
     storage?: IStorage | null;
     singleAddressMode?: boolean;
+    privateKey?: string;
   }) {
     super();
+
+    if (privateKey) {
+      throw new Error(
+        'Single-key wallets (raw privateKey) are not supported by HathorWalletServiceWallet. ' +
+          'Use HathorWallet directly and call setExternalTxSigningMethod.'
+      );
+    }
 
     if (!seed && !xpriv && !xpub) {
       throw Error('You must explicitly provide the seed, xpriv or the xpub.');
@@ -1471,6 +1480,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.HDPrivateKey> {
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.singleKeyMode) {
+      throw new Error(
+        'getAddressPrivKey is not supported for single-key wallets in HathorWalletServiceWallet.'
+      );
+    }
+
     const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
     const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
@@ -1678,6 +1694,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<bitcore.PrivateKey> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
+    }
+
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.singleKeyMode) {
+      throw new Error(
+        'getPrivateKeyFromAddress is not supported for single-key wallets in HathorWalletServiceWallet.'
+      );
     }
 
     // First get the address index
