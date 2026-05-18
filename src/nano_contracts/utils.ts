@@ -345,10 +345,15 @@ export const getResultHelper = async <T>(
 /**
  * Retrieves the blueprint ID for a nano contract by its ID.
  *
- * The priority is to get the data from the getFullTxById API because
- * it gets contract txs that are still to be confirmed by a block. If it fails,
- * the contract might have been created by another contract, so we fallback to the state
- * API, which gets the information correctly in that case.
+ * Prefers the state API because it returns the contract's *current* blueprint id,
+ * which is what a method call must be validated against. The transaction's
+ * `nc_blueprint_id` is the *creation* blueprint id, so it is stale for any
+ * contract that has been upgraded via `upgrade_contract`.
+ *
+ * Falls back to `getFullTxById` for cases the state API can't serve — notably
+ * a contract creation tx that hasn't been confirmed yet, or a contract created
+ * by another contract whose state isn't indexed yet. In those cases the contract
+ * cannot have been upgraded, so the creation blueprint id is also the current one.
  *
  * @returns A promise resolving to the blueprint ID.
  * @throws {NanoContractTransactionError} If both API calls fail or if the nano contract ID is not defined.
@@ -359,6 +364,22 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     throw new Error('Nano contract ID is not defined');
   }
 
+  // Primary path: ask the state endpoint. It reports the contract's *current*
+  // blueprint id, which reflects any in-place upgrades performed via
+  // syscall.change_blueprint. This is the id a method call must be validated
+  // against.
+  const [stateError, stateResponse] = await getResultHelper(() =>
+    ncApi.getNanoContractState(ncId, [], [], [])
+  );
+  if (!stateError && stateResponse?.blueprint_id) {
+    return stateResponse.blueprint_id;
+  }
+
+  // Fallback: state endpoint can't serve the contract — typically because the
+  // creation tx isn't confirmed/indexed yet, or the contract was created by
+  // another contract whose state isn't yet queryable. In those cases the
+  // contract cannot have been upgraded yet, so the *creation* blueprint id
+  // (carried by the tx) is also the current one.
   const [txError, txResponse] = (await getResultHelper(() => wallet.getFullTxById(ncId))) as [
     Error | null,
     FullNodeTxResponse | null,
@@ -367,14 +388,8 @@ export const getBlueprintId = async (ncId: string, wallet: HathorWallet): Promis
     return txResponse.tx.nc_blueprint_id;
   }
 
-  const [stateError, stateResponse] = await getResultHelper(() =>
-    ncApi.getNanoContractState(ncId!, [], [], [])
+  // Both endpoints failed — surface whichever underlying error is more useful.
+  throw new NanoContractTransactionError(
+    `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || txError?.message || 'Invalid response structure'}`
   );
-  if (stateError || !stateResponse?.blueprint_id) {
-    throw new NanoContractTransactionError(
-      `Error getting nano contract transaction data with id ${ncId} from the full node: ${stateError?.message || 'Invalid response structure'}`
-    );
-  }
-
-  return stateResponse.blueprint_id;
 };
