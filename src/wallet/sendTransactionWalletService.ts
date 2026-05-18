@@ -5,9 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/* eslint-disable max-classes-per-file -- AddressPathMap is a private helper tightly coupled to SendTransactionWalletService */
 import { EventEmitter } from 'events';
 import { shuffle } from 'lodash';
 import tokensUtils from '../utils/tokens';
+import transactionUtils from '../utils/transaction';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
@@ -39,6 +41,35 @@ type optionsType = {
   transaction?: Transaction | null;
   pin?: string | null;
 };
+
+/**
+ * Maps a transaction input (identified by its txId + index) to its
+ * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
+ * the key format so the read and write sides cannot drift out of sync.
+ *
+ * Re-setting the same `{txId, index}` pair overwrites the previous path:
+ * duplicate inputs collapse to a single entry. This is fine because
+ * duplicate inputs would be rejected later as a double-spend; the map
+ * deliberately does not try to detect or signal duplicates.
+ *
+ * @internal Exported only so unit tests can use the real class instead
+ *   of a duck-typed stand-in. Not part of the public API of this module.
+ */
+export class AddressPathMap {
+  private readonly map = new Map<string, string>();
+
+  private static key(input: { txId: string; index: number }): string {
+    return `${input.txId}:${input.index}`;
+  }
+
+  set(input: { txId: string; index: number }, path: string): void {
+    this.map.set(AddressPathMap.key(input), path);
+  }
+
+  get(input: { txId: string; index: number }): string | undefined {
+    return this.map.get(AddressPathMap.key(input));
+  }
+}
 
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
@@ -433,8 +464,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     } else {
       // If the user selected the inputs, we must validate that
       // all utxos are valid and the sum is enought to fill the outputs
+      // We use an addressPathMap to collect paths keyed by input identity,
+      // then rebuild in this.inputs order. This is necessary because the
+      // two-pass validation (tokens first, HTR second) would otherwise
+      // produce paths in token-processing order rather than input order.
+      const addressPathMap = new AddressPathMap();
+
       // ignoreNative=true: HTR inputs will be validated separately below
-      utxosAddressPath = await this.validateUtxos(tokensWithoutHtr, { ignoreNative: true });
+      await this.validateUtxos(tokensWithoutHtr, addressPathMap, { ignoreNative: true });
 
       // here we should know the fee amount (in case of any fee-based token change output was added)
       const htrAmount = (tokenAmountMap[NATIVE_TOKEN_UID]?.amount ?? 0n) + this._feeAmount;
@@ -445,9 +482,31 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
             amount: htrAmount,
           },
         };
-        const htrAddressPath = await this.validateUtxos(htrTokenAmount, { onlyNative: true });
-        utxosAddressPath.push(...htrAddressPath);
+        await this.validateUtxos(htrTokenAmount, addressPathMap, { onlyNative: true });
       }
+
+      // Rebuild utxosAddressPath in this.inputs order.
+      //
+      // The only way to reach the guard below today is an HTR input provided
+      // when htrAmount === 0n: `ignoreNative: true` skipped it, the second
+      // pass was elided, and nothing populated the map for it. The hint in
+      // the error message reflects that single root cause. If a third pass
+      // is ever added (or the `ignoreNative`/`onlyNative` filtering changes)
+      // this hint will silently drift out of date — see the test
+      // "should show a helpful error when HTR input is unneeded via prepareTx
+      // path" in __tests__/wallet/sendTransactionWalletService.test.ts which
+      // pins the message and exercises the only path that reaches it.
+      utxosAddressPath = this.inputs.map(input => {
+        const path = addressPathMap.get(input);
+        if (!path) {
+          throw new SendTxError(
+            `Input ${input.txId}:${input.index} was not processed by any validation pass. ` +
+              'This usually means an HTR input was provided but no HTR is required ' +
+              '(no HTR outputs and no fee-token fees).'
+          );
+        }
+        return path;
+      });
     }
     const tokens = Object.keys(tokenAmountMap);
     const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
@@ -534,11 +593,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async validateUtxos(
     tokenAmountMap: TokenMap,
-    options: { ignoreNative?: boolean; onlyNative?: boolean } = {}
-  ): Promise<string[]> {
+    addressPathMap: AddressPathMap,
+    options: {
+      ignoreNative?: boolean;
+      onlyNative?: boolean;
+    } = {}
+  ): Promise<void> {
     const { ignoreNative = false, onlyNative = false } = options;
     const amountInputMap = {};
-    const utxosAddressPath: string[] = [];
     for (const input of this.inputs) {
       const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
       if (utxo === null) {
@@ -565,7 +627,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         );
       }
 
-      utxosAddressPath.push(utxo.addressPath);
+      addressPathMap.set(input, utxo.addressPath);
 
       if (utxo.tokenId in amountInputMap) {
         amountInputMap[utxo.tokenId] += utxo.value;
@@ -606,8 +668,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         this.outputs = shuffle(this.outputs);
       }
     }
-
-    return utxosAddressPath;
   }
 
   /**
@@ -804,7 +864,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
     // Now that the tx is completed with the data of the input
     // we can add the timestamp and calculate the weight
-    this.transaction.prepareToSend();
+    this.transaction.prepareToSend(
+      transactionUtils.getWeightConstantsFromStorage(this.wallet.storage)
+    );
 
     this._currentStep = 'signed';
     this.emit('sign-tx-end', this.transaction);
@@ -936,6 +998,18 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
       throw err;
     }
+  }
+
+  /**
+   * Release all UTXOs that were marked as selected for this transaction.
+   * No-op: wallet-service manages UTXO state server-side.
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
+  // eslint-disable-next-line class-methods-use-this
+  async releaseUtxos(): Promise<void> {
+    // No-op: wallet-service manages UTXO state server-side
   }
 
   /**
