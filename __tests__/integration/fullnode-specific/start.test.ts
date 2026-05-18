@@ -103,7 +103,7 @@ describe('[Fullnode-specific] start', () => {
           password: DEFAULT_PASSWORD,
           pinCode: DEFAULT_PIN_CODE,
         })
-    ).toThrow('seed and an xpriv');
+    ).toThrow('exactly one');
 
     // xpriv with passphrase
     expect(

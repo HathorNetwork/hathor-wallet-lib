@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
+import { crypto, util, HDPublicKey, HDPrivateKey, PrivateKey, Script, PublicKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import _ from 'lodash';
 import {
@@ -528,6 +528,7 @@ const wallet = {
       multisigData,
       // We force the readonly flag because we are starting a wallet without the private key
       walletFlags,
+      canDeriveAddresses: true,
     };
   },
 
@@ -611,6 +612,7 @@ const wallet = {
       mainKey: encryptedMainKey,
       xpubkey: xpriv.xpubkey,
       walletFlags: 0,
+      canDeriveAddresses: true,
     };
 
     if (acctXpriv !== null) {
@@ -699,6 +701,7 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
+      canDeriveAddresses: true,
     };
   },
 
@@ -709,7 +712,12 @@ const wallet = {
    * and has exactly one address. No xpub, no seed, no account/auth path keys.
    *
    * @param privateKeyHex Raw private key as a hex string (without '0x' prefix)
-   * @param publicKeyHex DER-encoded public key as a hex string
+   * @param publicKeyHex DER-encoded public key as a hex string — MUST match
+   *   the key derived from `privateKeyHex`. Required by the caller because
+   *   downstream code (storage / preCalculatedAddresses) needs the pubkey
+   *   before the pin is unlocked; we validate it here to refuse mismatched
+   *   pairs at construction time, preventing a class of bugs where signatures
+   *   come from one keypair while the wallet identity is cached as another.
    * @param options.pin PIN used to encrypt the private key at rest
    */
   generateAccessDataFromPrivateKey(
@@ -717,13 +725,19 @@ const wallet = {
     publicKeyHex: string,
     { pin }: { pin: string }
   ): IWalletAccessData {
+    const derivedPubKeyHex = new PrivateKey(privateKeyHex).toPublicKey().toString('hex');
+    if (derivedPubKeyHex !== publicKeyHex) {
+      throw new Error('publicKey does not match the public key derived from privateKey.');
+    }
+
     const encryptedPrivateKey = encryptData(privateKeyHex, pin);
     return {
       walletType: WalletType.P2PKH,
       walletFlags: 0,
       singleKeyMode: true,
-      singleKeyPublicKey: publicKeyHex,
+      singleKeyPublicKey: derivedPubKeyHex,
       singleKeyPrivateKey: encryptedPrivateKey,
+      canDeriveAddresses: false,
     };
   },
 

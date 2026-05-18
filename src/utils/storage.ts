@@ -75,10 +75,19 @@ export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySy
     return [];
   }
 
-  // Single-key wallets cannot use xpub-based stream sync
+  // XPUB_STREAM_WS requires an xpub on the wallet's access data. HD wallets
+  // running under SINGLE_ADDRESS policy still hold one and remain eligible;
+  // only wallets without derivation capability (raw single-key / Web3Auth)
+  // must be excluded. Read accessData directly here instead of going through
+  // Storage.canDeriveAddresses() because this utility may be invoked on
+  // partially-initialized storage (e.g. in unit tests that mock getWalletType
+  // without persisting access data) and must not throw in that case.
   const accessData = await storage.getAccessData();
-  if (accessData?.singleKeyMode) {
-    return modes.filter(m => m !== HistorySyncMode.XPUB_STREAM_WS);
+  if (accessData) {
+    const canDerive = accessData.canDeriveAddresses ?? !!accessData.xpubkey;
+    if (!canDerive) {
+      return modes.filter(m => m !== HistorySyncMode.XPUB_STREAM_WS);
+    }
   }
 
   return modes;

@@ -56,12 +56,19 @@ export interface HathorWalletConstructorParams {
    * Web3Auth onboarding where no BIP32 chain code is available.
    *
    * When set:
-   * - `publicKey` and `preCalculatedAddresses[0]` are REQUIRED
-   * - `seed` / `xpriv` / `xpub` MUST NOT be provided
-   * - the wallet has exactly one address (index 0)
-   * - transactions MUST be signed via `setExternalTxSigningMethod`
+   * - `publicKey` and `preCalculatedAddresses[0]` are required (see those
+   *   fields for the reasoning behind each).
+   * - `seed` / `xpriv` / `xpub` must not be provided.
+   * - The wallet has exactly one address (index 0); methods that derive
+   *   higher indexes (`getNextAddress`, `enableMultiAddressMode`,
+   *   `setGapLimit`, etc.) throw.
+   * - Transactions are signed with this key by default. Callers may register
+   *   an external signer via `setExternalTxSigningMethod` to take over —
+   *   required for Web3Auth flows where the key is held inside the trusted
+   *   environment and cannot be exposed to wallet-lib.
    *
    * @example
+   * // PoC / tests — sign locally with the raw key.
    * const wallet = new HathorWallet({
    *   connection,
    *   privateKey: '<32-byte hex>',
@@ -70,15 +77,22 @@ export interface HathorWalletConstructorParams {
    *   pinCode: '<pin>',
    *   scanPolicy: { policy: SCANNING_POLICY.SINGLE_ADDRESS },
    * });
-   * wallet.setExternalTxSigningMethod(myWeb3AuthSigner);
    * await wallet.start({ pinCode: '<pin>' });
+   *
+   * @example
+   * // Web3Auth — register the SDK as external signer; the privateKey arg
+   * // can be a placeholder the SDK exposes (e.g. for address derivation),
+   * // and signing is delegated to the secure environment.
+   * wallet.setExternalTxSigningMethod(myWeb3AuthSigner);
    */
   privateKey?: string;
 
   /**
    * DER-encoded compressed secp256k1 public key (hex). Required alongside
-   * `privateKey`. The caller is expected to derive this from the private
-   * key using their own crypto primitives.
+   * `privateKey` because downstream consumers (storage, preCalculatedAddresses)
+   * need the pubkey before the PIN is unlocked; `generateAccessDataFromPrivateKey`
+   * also validates this matches the derived value to catch mismatched pairs at
+   * construction time.
    */
   publicKey?: string;
 

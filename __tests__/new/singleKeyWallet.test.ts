@@ -534,13 +534,16 @@ describe('changeEncryptionPin — single-key wallets', () => {
 // ---------------------------------------------------------------------------
 
 describe('Storage.getTxSignatures — single-key wallets', () => {
-  test('throws a clear error when no external signer is registered', async () => {
+  test('signs locally with the raw key when no external signer is registered', async () => {
     const { storage } = await buildPopulatedSingleKeyWallet();
-    // Do NOT register a signer via setTxSignatureMethod.
+    // No signer registered — falls back to the local raw-key path. Per
+    // r4mmer's review: external signer is the right escape hatch for
+    // Web3Auth (key not exposed), not a hard requirement for every
+    // single-key wallet.
     const tx = new Transaction([], []);
-    await expect(storage.getTxSignatures(tx, PIN)).rejects.toThrow(
-      /external.*sign|setExternalTxSigningMethod/i
-    );
+    const result = await storage.getTxSignatures(tx, PIN);
+    expect(result.inputSignatures).toEqual([]);
+    expect(result.ncCallerSignature).toBeNull();
   });
 });
 
@@ -629,7 +632,75 @@ describe('HathorWallet HD-only methods — single-key wallets reject', () => {
   });
 
   test('getNextAddress throws', async () => {
-    await expect(wallet.getNextAddress()).rejects.toThrow(/single-key|not supported/i);
+    await expect(wallet.getNextAddress()).rejects.toThrow(/single-key|derive|not supported/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16. HD wallets in SINGLE_ADDRESS policy keep derivation capability
+// (regression guard against r4mmer's PR1093 comment about hasTxOutsideFirstAddress
+// and getAddressAtIndex being over-broad)
+// ---------------------------------------------------------------------------
+
+describe('HD wallet in SINGLE_ADDRESS policy — derivation capability preserved', () => {
+  async function buildHDSingleAddressWallet(): Promise<{ storage: IStorage }> {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork(NETWORK_NAME);
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.SINGLE_ADDRESS });
+    const accessData = walletUtils.generateAccessDataFromSeed(SEED, {
+      pin: PIN,
+      password: PASSWORD,
+      networkName: NETWORK_NAME,
+    });
+    await storage.saveAccessData(accessData);
+    return { storage };
+  }
+
+  test('canDeriveAddresses() returns true (has xpub)', async () => {
+    const { storage } = await buildHDSingleAddressWallet();
+    expect(await storage.canDeriveAddresses()).toBe(true);
+  });
+
+  test('getSupportedSyncMode still includes XPUB_STREAM_WS', async () => {
+    const { storage } = await buildHDSingleAddressWallet();
+    const modes = await getSupportedSyncMode(storage);
+    expect(modes).toContain(HistorySyncMode.XPUB_STREAM_WS);
+  });
+
+  test('access data without canDeriveAddresses flag falls back to !!xpubkey', async () => {
+    // Backward-compat check: stored access data created before the flag
+    // existed should still report derivation capability via the xpubkey
+    // fallback in Storage.canDeriveAddresses().
+    const { storage } = await buildHDSingleAddressWallet();
+    const accessData = await storage.getAccessData();
+    expect(accessData).not.toBeNull();
+    const stripped = { ...accessData!, canDeriveAddresses: undefined } as never;
+    await storage.saveAccessData(stripped);
+    expect(await storage.canDeriveAddresses()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. generateAccessDataFromPrivateKey validates pubkey/privkey match
+// (responds to CodeRabbit review on src/utils/wallet.ts:715-727)
+// ---------------------------------------------------------------------------
+
+describe('generateAccessDataFromPrivateKey — pubkey/privkey match', () => {
+  test('throws when publicKey does not match the key derived from privateKey', () => {
+    // Derive a DIFFERENT keypair to use as the mismatched public key.
+    const otherHDKey = changeXpriv.deriveChild(1);
+    const otherPubKeyHex = otherHDKey.publicKey.toString('hex');
+
+    expect(() =>
+      walletUtils.generateAccessDataFromPrivateKey(rawPrivHex, otherPubKeyHex, { pin: PIN })
+    ).toThrow(/does not match/i);
+  });
+
+  test('accepts the matching pair', () => {
+    expect(() =>
+      walletUtils.generateAccessDataFromPrivateKey(rawPrivHex, pubKeyHex, { pin: PIN })
+    ).not.toThrow();
   });
 });
 

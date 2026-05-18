@@ -168,7 +168,16 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Sign the transaction
+   * Sign the transaction. Routing precedence:
+   *   1. External signer registered via `setTxSignatureMethod` — used by
+   *      Web3Auth (key never leaves the trusted environment) and by hardware
+   *      wallets. Wins over any local key.
+   *   2. Raw single-key in access data (`singleKeyPrivateKey`) — single-key
+   *      wallets that DO hold the key locally (e.g. PoC, tests) sign with it
+   *      directly. Per r4mmer: external signer is not a hard requirement when
+   *      the key is available; it's the right escape hatch for Web3Auth only.
+   *   3. HD path (`mainKey` / xpriv) — the original behavior.
+   *
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
    * @returns {Promise<ITxSignatureData>} The signatures
@@ -179,11 +188,8 @@ export class Storage implements IStorage {
     }
 
     const accessData = await this.getAccessData();
-    if (accessData?.singleKeyMode) {
-      throw new Error(
-        'Single-key wallets cannot sign transactions without an external signer. ' +
-          'Register one via wallet.setExternalTxSigningMethod() before signing.'
-      );
+    if (accessData?.singleKeyPrivateKey) {
+      return transactionUtils.getSignatureForTxSingleKey(tx, this, pinCode);
     }
 
     return transactionUtils.getSignatureForTx(tx, this, pinCode);
@@ -887,6 +893,34 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Whether the wallet can derive addresses beyond the first one.
+   *
+   * True for HD wallets (seed/xpriv/xpub) — they hold an xpub and can derive
+   * children on demand even when running under SINGLE_ADDRESS scanning policy.
+   * False for raw single-key wallets (Web3Auth), which only have the key for
+   * address index 0.
+   *
+   * Resolution order:
+   *  1. explicit `canDeriveAddresses` flag on access data
+   *  2. fallback: presence of `xpubkey` (backward compat with stored access
+   *     data persisted before the explicit flag existed)
+   *  3. no access data at all: assume `true` — guards must not raise on
+   *     uninitialized storage (unit tests mock partial storage state, and a
+   *     wallet that hasn't been started yet should not be misclassified as
+   *     single-key)
+   */
+  async canDeriveAddresses(): Promise<boolean> {
+    const accessData = await this.getAccessData();
+    if (accessData === null) {
+      return true;
+    }
+    if (accessData.canDeriveAddresses !== undefined) {
+      return accessData.canDeriveAddresses;
+    }
+    return !!accessData.xpubkey;
+  }
+
+  /**
    * Decrypt and return the main private key of the wallet.
    *
    * @param {string} pinCode Pin to unlock the private key
@@ -921,8 +955,14 @@ export class Storage implements IStorage {
   /**
    * Decrypt and return the raw single-key private key (Web3Auth-style wallets).
    *
+   * This is specifically for wallets backed by a raw secp256k1 key (no BIP32
+   * chain code). Single-address wallets created from a seed/xpriv still hold
+   * an HD key — those must use {@link getMainXPrivKey} and derive index 0,
+   * not this method.
+   *
    * Throws if:
-   * - the wallet is not in single-key mode (no `singleKeyPrivateKey` on access data)
+   * - the wallet has no `singleKeyPrivateKey` on access data (HD wallets,
+   *   xpub-only wallets, or wallets not yet initialized)
    * - the pin is incorrect (decryption fails)
    *
    * @param pinCode Pin used to decrypt the key at rest.
@@ -930,8 +970,10 @@ export class Storage implements IStorage {
    */
   async getSingleKeyPrivateKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
-    if (!accessData.singleKeyMode || !accessData.singleKeyPrivateKey) {
-      throw new Error('Single-key private key is not present on this wallet.');
+    if (!accessData.singleKeyPrivateKey) {
+      throw new Error(
+        'No raw single-key private key on this wallet. Use getMainXPrivKey for HD wallets.'
+      );
     }
 
     // decryptData handles pin validation

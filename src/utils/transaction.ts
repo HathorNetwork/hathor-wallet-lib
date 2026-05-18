@@ -241,6 +241,70 @@ const transaction = {
   },
 
   /**
+   * Sign a transaction using the raw single-key (Web3Auth-style wallets).
+   *
+   * Mirrors `getSignatureForTx`, but uses the wallet's single raw secp256k1
+   * key for every signature instead of deriving per-index children of an
+   * xpriv. The wallet has exactly one address (index 0), so every input that
+   * belongs to it is signed with the same key.
+   */
+  async getSignatureForTxSingleKey(
+    tx: Transaction,
+    storage: IStorage,
+    pinCode: string
+  ): Promise<ITxSignatureData> {
+    const rawPrivHex = await storage.getSingleKeyPrivateKey(pinCode);
+    const privateKey = new PrivateKey(rawPrivHex);
+    const pubkeyDER = privateKey.toPublicKey().toDER();
+    const dataToSignHash = tx.getDataToSignHash();
+    const signatures: IInputSignature[] = [];
+    let ncCallerSignature: Buffer | null = null;
+
+    for await (const { tx: spentTx, input, index: inputIndex } of storage.getSpentTxs(tx.inputs)) {
+      if (input.data) {
+        continue;
+      }
+      const spentOut = spentTx.outputs[input.index];
+      if (!spentOut.decoded.address) {
+        continue;
+      }
+      const addressInfo = await storage.getAddressInfo(spentOut.decoded.address);
+      if (!addressInfo) {
+        continue;
+      }
+      signatures.push({
+        inputIndex,
+        addressIndex: addressInfo.bip32AddressIndex,
+        signature: this.getSignature(dataToSignHash, privateKey),
+        pubkey: pubkeyDER,
+      });
+    }
+
+    let address: Address | null = null;
+    if (tx.isNanoContract()) {
+      address = this.getNanoContractCaller(tx);
+    }
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      const { pubkey } = tx as OnChainBlueprint;
+      address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
+    }
+    if (address) {
+      const addressInfo = await storage.getAddressInfo(address.base58);
+      if (!addressInfo) {
+        return { inputSignatures: signatures, ncCallerSignature };
+      }
+      if (tx.isNanoContract()) {
+        const signature = this.getSignature(dataToSignHash, privateKey);
+        ncCallerSignature = this.createInputData(signature, pubkeyDER);
+      } else {
+        ncCallerSignature = this.getSignature(dataToSignHash, privateKey);
+      }
+    }
+
+    return { inputSignatures: signatures, ncCallerSignature };
+  },
+
+  /**
    * Gets the pubkey of the nano header from a tx.
    *
    * Returns null if it's not a nano tx.

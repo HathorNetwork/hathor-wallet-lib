@@ -397,6 +397,22 @@ export interface IWalletAccessData {
   singleKeyMode?: boolean;
   singleKeyPublicKey?: string; // hex-encoded DER public key
   singleKeyPrivateKey?: IEncryptedData; // encrypted raw private key (pin)
+
+  /**
+   * Whether the wallet has the cryptographic material (xpub/xpriv) needed to
+   * derive addresses beyond index 0. Set to:
+   *  - `true` for seed / xpriv / xpub-backed wallets (HD), even when running
+   *    under SINGLE_ADDRESS scanning policy — they still hold the xpub and
+   *    can derive on demand (required by `hasTxOutsideFirstAddress` and other
+   *    safety checks).
+   *  - `false` for raw single-key wallets (Web3Auth) — only the key for
+   *    address index 0 is available.
+   *
+   * Optional for backward compatibility with stored access data that predates
+   * this flag; consumers should resolve it via `Storage.canDeriveAddresses()`
+   * which falls back to `!!xpubkey` when this field is undefined.
+   */
+  canDeriveAddresses?: boolean;
 }
 
 export enum SCANNING_POLICY {
@@ -692,6 +708,7 @@ export interface IStorage {
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
+  canDeriveAddresses(): Promise<boolean>;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
