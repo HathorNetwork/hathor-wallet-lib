@@ -109,10 +109,18 @@ export function createDefaultShieldedCryptoProvider(): IShieldedCryptoProvider {
         rangeProof,
         assetCommitment
       );
+      // IRewoundFullShieldedOutput.tokenUid is `string` (hex) — the
+      // single canonical token-UID encoding the shielded module exposes
+      // to its consumers (storage, history, balance, fullnode API
+      // lookups). The native `ct` module returns a Buffer, so convert
+      // at the provider boundary. Without this conversion the Buffer
+      // would propagate as if it were a hex string and downstream
+      // `fetchTokenData(uid)` would query the fullnode with a garbled
+      // id, getting back "Invalid token id" on every shielded receive.
       return {
         value: result.value,
         blindingFactor: result.blindingFactor,
-        tokenUid: result.tokenUid,
+        tokenUid: result.tokenUid.toString('hex'),
         assetBlindingFactor: result.assetBlindingFactor,
       };
     },
