@@ -1169,20 +1169,56 @@ const transaction = {
       // returns the decoded shielded entry in case (b), so we use its
       // result to detect both cases.
       const resolvedSpent = this.findSpentOutput(spentTx, input.index);
-      const isShieldedSlot =
-        input.index >= spentTx.outputs.length ||
-        (resolvedSpent !== undefined && this.isShieldedOutputEntry(resolvedSpent));
+      const shieldedEntry =
+        resolvedSpent !== undefined && this.isShieldedOutputEntry(resolvedSpent)
+          ? (resolvedSpent as IShieldedOutputEntry)
+          : null;
+      const isShieldedSlot = shieldedEntry !== null || input.index >= spentTx.outputs.length;
+
       if (isShieldedSlot) {
-        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
-        if (!utxo) {
-          throw new Error(
-            `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length}) and no stored UTXO recovery for tx_id=${input.hash}`
-          );
-        }
         // The `type: 'shielded'` discriminator is required so the rest of
         // wallet-lib (e.g. `getShieldedUnblindingForTx`, the WS-driven
         // tx-history view, the signing key chain selection) routes this
         // input through the shielded code paths.
+        if (shieldedEntry !== null) {
+          // Sparse-decode hit: the wallet's stored parent tx already
+          // carries a decoded shielded entry for this slot. Read
+          // value/token/decoded/script straight off that entry instead
+          // of touching the UTXO record — the entry survives the
+          // WebSocket-driven `processNewTx` UTXO deletion that races
+          // with this fire-and-forget local-insert call. Headless
+          // wallets pointed at a local fullnode hit that race almost
+          // every time (WS re-delivery wins, UTXO is gone before this
+          // function reaches its lookup) and the old code threw
+          // "no stored UTXO recovery for tx_id=…" on every send.
+          inputs.push({
+            type: 'shielded',
+            tx_id: input.hash,
+            index: input.index,
+            script: shieldedEntry.script ?? '',
+            decoded: shieldedEntry.decoded ?? {},
+            token_data: shieldedEntry.token_data ?? 0,
+            token: shieldedEntry.token ?? NATIVE_TOKEN_UID,
+            value: shieldedEntry.value,
+          });
+          continue;
+        }
+
+        // Full-decode mismatch (input.index ≥ spentTx.outputs.length):
+        // the wallet decoded fewer outputs than the parent has on-chain
+        // and this input references one of the missing slots. The only
+        // local source of truth is the UTXO record (saved at
+        // processNewTx time but never appended to outputs[]). Fall back
+        // to it. If both records are missing the wallet truly cannot
+        // reconstruct the input — that's a real error worth surfacing.
+        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
+        if (!utxo) {
+          throw new Error(
+            `Input ${input.hash}:${input.index} references a shielded slot the wallet ` +
+              `has neither decoded into outputs[] (length ${spentTx.outputs.length}) ` +
+              `nor stored as a UTXO record — cannot reconstruct the sender-local insert.`
+          );
+        }
         inputs.push({
           type: 'shielded',
           tx_id: input.hash,
