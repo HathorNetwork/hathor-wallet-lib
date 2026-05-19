@@ -15,6 +15,7 @@ import { Storage } from './storage/storage';
 import { MemoryStore } from './storage/memory_store';
 import network from './network';
 import HathorWallet from './new/wallet';
+import SingleKeyWallet from './new/singleKeyWallet';
 import Connection from './new/connection';
 import WalletServiceConnection from './wallet/connection';
 import SendTransaction from './new/sendTransaction';
@@ -82,6 +83,7 @@ export {
   MemoryStore,
   network,
   HathorWallet,
+  SingleKeyWallet,
   Connection,
   AtomicSwapServiceConnection,
   WalletServiceConnection,

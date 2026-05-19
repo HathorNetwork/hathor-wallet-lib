@@ -251,6 +251,11 @@ export class Storage implements IStorage {
 
     // derive public key from xpub
     const accessData = await this._getValidAccessData();
+    if (!accessData.xpubkey) {
+      throw new Error(
+        'Cannot derive public key: wallet has no xpub (single-key wallet). The public key should have been cached on the address.'
+      );
+    }
     const hdpubkey = new HDPublicKey(accessData.xpubkey);
     const key: HDPublicKey = hdpubkey.deriveChild(index);
     return key.publicKey.toString('hex');

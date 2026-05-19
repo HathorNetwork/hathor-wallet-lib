@@ -51,16 +51,6 @@ export interface HathorWalletConstructorParams {
   xpriv?: string;
   /** Extended public key (xpub) for read-only wallet */
   xpub?: string;
-  /**
-   * Raw secp256k1 private key (hex string) for single-key wallets (Web3Auth PoC).
-   * When set, `publicKey` and `preCalculatedAddresses[0]` are required and
-   * `seed`/`xpriv`/`xpub` must NOT be provided. The wallet has exactly one
-   * address and relies on an external signer for transactions.
-   */
-  privateKey?: string;
-  /** DER-encoded secp256k1 public key (hex). Required alongside `privateKey`. */
-  publicKey?: string;
-
   // Token configuration
   /** UID of the token to track (defaults to HTR) */
   tokenUid?: string;
@@ -83,6 +73,46 @@ export interface HathorWalletConstructorParams {
   /** Address scanning policy configuration */
   scanPolicy?: AddressScanPolicyData | null;
   /** Logger instance for wallet operations */
+  logger?: ILogger | null;
+}
+
+/**
+ * @internal — Extended constructor params including single-key fields.
+ * Use {@link SingleKeyWalletConstructorParams} and {@link SingleKeyWallet}
+ * instead of passing these to HathorWallet directly.
+ */
+export interface HathorWalletInternalConstructorParams extends HathorWalletConstructorParams {
+  /** Raw secp256k1 private key (hex). Only via SingleKeyWallet. */
+  privateKey?: string;
+  /** DER-encoded compressed public key (hex). Required with privateKey. */
+  publicKey?: string;
+}
+
+/**
+ * Constructor parameters for SingleKeyWallet.
+ */
+export interface SingleKeyWalletConstructorParams {
+  /** Connection to the fullnode server */
+  connection: WalletConnection;
+  /** Storage implementation (defaults to MemoryStore if not provided) */
+  storage?: IStorage;
+  /** Raw 32-byte secp256k1 private key as hex string (no 0x prefix) */
+  privateKey: string;
+  /** DER-encoded compressed public key as hex string */
+  publicKey: string;
+  /** The single P2PKH address derived from publicKey */
+  address: string;
+  /** UID of the token to track (defaults to HTR) */
+  tokenUid?: string;
+  /** PIN code to encrypt the private key at rest and execute wallet actions */
+  pinCode: string;
+  /** Password to encrypt access data */
+  password?: string | null;
+  /** Enable debug mode */
+  debug?: boolean;
+  /** Callback executed before reloading wallet data */
+  beforeReloadCallback?: (() => void) | null;
+  /** Logger instance */
   logger?: ILogger | null;
 }
 
