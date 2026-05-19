@@ -48,7 +48,7 @@ test('addresses methods', async () => {
   await expect(store.getAddressMeta('b')).resolves.toEqual(5);
   await expect(store.addressCount()).resolves.toEqual(3);
 
-  await expect(store.getCurrentAddress()).rejects.toThrow('Current address is not loaded');
+  await expect(store.getCurrentAddress()).rejects.toThrow('Current legacy address is not loaded');
   expect(store.walletData.currentAddressIndex).toEqual(-1);
   expect(store.walletData.lastLoadedAddressIndex).toEqual(0);
   await store.saveAddress({
@@ -74,6 +74,40 @@ test('addresses methods', async () => {
   await expect(store.getCurrentAddress()).resolves.toEqual('d');
   await expect(store.getCurrentAddress(true)).resolves.toEqual('d');
   await expect(store.getCurrentAddress()).resolves.toEqual('e');
+});
+
+test('addressIter chain-selection (legacy vs shielded)', async () => {
+  const store = new MemoryStore();
+
+  // Mixed-chain fixture: two legacy P2PKHs (with explicit + implicit
+  // addressType), one shielded receive, one shielded-spend (internal),
+  // and one P2SH. The iterator must filter strictly by chain.
+  await store.saveAddress({ base58: 'leg-0', bip32AddressIndex: 0, addressType: 'p2pkh' });
+  await store.saveAddress({ base58: 'leg-1', bip32AddressIndex: 1 }); // untyped → legacy
+  await store.saveAddress({ base58: 'p2sh-2', bip32AddressIndex: 2, addressType: 'p2sh' });
+  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-spend-0', bip32AddressIndex: 0, addressType: 'shielded-spend' });
+
+  // Default (no opts) → legacy chain only. shielded + shielded-spend
+  // entries are filtered out (the receive pipeline relies on the
+  // shielded-spend P2PKH being invisible at this surface).
+  const defaultBases: string[] = [];
+  for await (const info of store.addressIter()) defaultBases.push(info.base58);
+  expect(defaultBases.sort()).toEqual(['leg-0', 'leg-1', 'p2sh-2'].sort());
+
+  // legacy: true is the explicit form of the default.
+  const legacyBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: true })) legacyBases.push(info.base58);
+  expect(legacyBases.sort()).toEqual(defaultBases.sort());
+
+  // legacy: false → user-facing shielded receive addresses only, in
+  // BIP32-index order. shielded-spend MUST NOT leak through (it's
+  // internal — surfacing it would let callers send to a wallet's
+  // spend P2PKH thinking it's a shielded address).
+  const shieldedBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: false })) shieldedBases.push(info.base58);
+  expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
 });
 
 test('history methods', async () => {
@@ -283,6 +317,46 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx02');
+
+  // Add a shielded UTXO
+  await store.saveUtxo({
+    txId: 'tx03',
+    index: 0,
+    token: '00',
+    address: 'addr3',
+    value: 30n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'aa'.repeat(32),
+  });
+
+  // Default (no shielded filter) returns all including shielded
+  buf = [];
+  for await (const u of store.selectUtxos({})) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(2); // tx01 (HTR) + tx03 (HTR shielded)
+
+  // shielded: true returns only shielded
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: true })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx03');
+  expect(buf[0].shielded).toBe(true);
+
+  // shielded: false returns only transparent
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: false })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx01');
+  expect(buf[0].shielded).toBeUndefined();
 });
 
 test('access data methods', async () => {

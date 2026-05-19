@@ -189,13 +189,16 @@ export class WalletServiceStorageProxy {
           type: input.decoded.type ?? undefined,
         },
       })) as IHistoryTx['inputs'],
-      outputs: tx.outputs.map(output => ({
-        ...output,
-        decoded: {
-          ...output.decoded,
-          type: output.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['outputs'],
+      outputs: tx.outputs.map(output => {
+        if (transactionUtils.isShieldedOutputEntry(output)) return output;
+        return {
+          ...output,
+          decoded: {
+            ...output.decoded,
+            type: output.decoded.type ?? undefined,
+          },
+        };
+      }) as IHistoryTx['outputs'],
       parents: tx.parents,
       tokens: tx.tokens.map(token => token.uid),
       height: meta.height,
