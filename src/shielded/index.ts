@@ -17,3 +17,6 @@ export type {
   IRewoundAmountShieldedOutput,
   IRewoundFullShieldedOutput,
 } from './types';
+
+export { encodeShieldedUnblindingPayload } from './unblinding';
+export type { IShieldedUnblindingEntry } from './unblinding';
