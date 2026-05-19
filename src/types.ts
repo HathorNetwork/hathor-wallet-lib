@@ -666,7 +666,7 @@ export interface IStore {
   validate(): Promise<void>;
   preProcessHistory(): Promise<void>;
   // Address methods
-  addressIter(): AsyncGenerator<IAddressInfo>;
+  addressIter(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo>;
   getAddress(base58: string): Promise<IAddressInfo | null>;
   getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
   getSeqnumMeta(base58: string): Promise<number | null>;
@@ -774,7 +774,7 @@ export interface IStorage {
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   // Address methods
-  getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
+  getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo & IAddressMetadata>;
   getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null>;
   getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   getAddressPubkey(index: number): Promise<string>;

@@ -777,15 +777,20 @@ class HathorWallet extends EventEmitter {
    * @returns Address object with the count of txs for this address
    * @memberof HathorWallet
    * */
-  async *getAllAddresses(): AsyncGenerator<{
+  async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<{
     address: string;
     index: number;
     transactions: number;
   }> {
     // We add the count of transactions
     // in order to replicate the same return as the new
-    // wallet service facade
-    for await (const address of this.storage.getAllAddresses()) {
+    // wallet service facade.
+    //
+    // `opts.legacy` defaults to `true`; pass `legacy: false` to
+    // enumerate the shielded receive chain instead. The storage
+    // surface filters out the internal `shielded-spend` entries on
+    // either branch, so callers always get the user-facing shape.
+    for await (const address of this.storage.getAllAddresses(opts)) {
       yield {
         address: address.base58,
         index: address.bip32AddressIndex,

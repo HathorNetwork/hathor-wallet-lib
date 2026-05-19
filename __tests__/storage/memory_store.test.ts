@@ -76,6 +76,40 @@ test('addresses methods', async () => {
   await expect(store.getCurrentAddress()).resolves.toEqual('e');
 });
 
+test('addressIter chain-selection (legacy vs shielded)', async () => {
+  const store = new MemoryStore();
+
+  // Mixed-chain fixture: two legacy P2PKHs (with explicit + implicit
+  // addressType), one shielded receive, one shielded-spend (internal),
+  // and one P2SH. The iterator must filter strictly by chain.
+  await store.saveAddress({ base58: 'leg-0', bip32AddressIndex: 0, addressType: 'p2pkh' });
+  await store.saveAddress({ base58: 'leg-1', bip32AddressIndex: 1 }); // untyped → legacy
+  await store.saveAddress({ base58: 'p2sh-2', bip32AddressIndex: 2, addressType: 'p2sh' });
+  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-spend-0', bip32AddressIndex: 0, addressType: 'shielded-spend' });
+
+  // Default (no opts) → legacy chain only. shielded + shielded-spend
+  // entries are filtered out (the receive pipeline relies on the
+  // shielded-spend P2PKH being invisible at this surface).
+  const defaultBases: string[] = [];
+  for await (const info of store.addressIter()) defaultBases.push(info.base58);
+  expect(defaultBases.sort()).toEqual(['leg-0', 'leg-1', 'p2sh-2'].sort());
+
+  // legacy: true is the explicit form of the default.
+  const legacyBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: true })) legacyBases.push(info.base58);
+  expect(legacyBases.sort()).toEqual(defaultBases.sort());
+
+  // legacy: false → user-facing shielded receive addresses only, in
+  // BIP32-index order. shielded-spend MUST NOT leak through (it's
+  // internal — surfacing it would let callers send to a wallet's
+  // spend P2PKH thinking it's a shielded address).
+  const shieldedBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: false })) shieldedBases.push(info.base58);
+  expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
+});
+
 test('history methods', async () => {
   const store = new MemoryStore();
   await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });

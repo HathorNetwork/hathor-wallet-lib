@@ -220,17 +220,40 @@ export class MemoryStore implements IStore {
   /** ADDRESSES */
 
   /**
-   * Iterate on all addresses
+   * Iterate on the wallet's addresses for one chain.
    *
-   * @async
+   * `opts.legacy` defaults to `true` and selects which chain to walk:
+   *   - `true`  → p2pkh / p2sh / undefined (the user-facing legacy
+   *               chain). `shielded` and `shielded-spend` entries are
+   *               filtered out — they're internal to the receive
+   *               pipeline and surfacing them under the legacy chain
+   *               would leak the spend-derived P2PKH the wallet uses
+   *               to match incoming shielded outputs.
+   *   - `false` → user-facing shielded receive addresses (the 71-byte
+   *               encoded form), enumerated by walking
+   *               `shieldedAddressIndexes` in BIP32-index order. The
+   *               internal `shielded-spend` entries are still
+   *               excluded — callers consuming this iterator (e.g. a
+   *               wallet's `/addresses` API) want the user-facing
+   *               shape, not the spend P2PKHs.
+   *
    * @returns {AsyncGenerator<IAddressInfo>}
    */
-  async *addressIter(): AsyncGenerator<IAddressInfo, void, void> {
+  async *addressIter(opts: IAddressChainOptions = {}): AsyncGenerator<IAddressInfo, void, void> {
+    const legacy = opts.legacy ?? true;
     for (const addrInfo of this.addresses.values()) {
-      // Only yield legacy addresses (p2pkh, p2sh, or untyped).
-      // Shielded and shielded-spend addresses are internal and should not
-      // be exposed through the general address iteration.
-      if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
+      if (legacy) {
+        // Legacy chain: skip shielded receive AND shielded-spend (the
+        // latter is the internal P2PKH the receive pipeline uses to
+        // match incoming shielded outputs — surfacing it under the
+        // legacy chain would leak an internal address).
+        if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
+          continue;
+        }
+      } else if (addrInfo.addressType !== 'shielded') {
+        // Shielded chain: only the user-facing shielded receive entry
+        // (71-byte encoded form). Legacy entries and the internal
+        // shielded-spend P2PKHs are skipped.
         continue;
       }
       yield addrInfo;
@@ -748,6 +771,31 @@ export class MemoryStore implements IStore {
     let sumAmount = 0n;
     let utxoNum = 0;
 
+    // Resolve filter_address to its on-chain form. UTXOs always carry the
+    // address that actually labels the on-chain output — for shielded
+    // outputs that's the spend-derived P2PKH (`addressType:
+    // 'shielded-spend'`), not the user-facing 71-byte encoded shielded
+    // address. So if the caller passed the user-facing shielded form,
+    // swap to the matching spend P2PKH at the same BIP32 index before
+    // comparing against utxo.address. Without this swap the filter would
+    // never match a shielded UTXO when a shielded receive address was
+    // passed.
+    let effectiveFilterAddress = options.filter_address;
+    if (effectiveFilterAddress) {
+      const info = this.addresses.get(effectiveFilterAddress);
+      if (info?.addressType === 'shielded') {
+        for (const candidate of this.addresses.values()) {
+          if (
+            candidate.addressType === 'shielded-spend' &&
+            candidate.bip32AddressIndex === info.bip32AddressIndex
+          ) {
+            effectiveFilterAddress = candidate.base58;
+            break;
+          }
+        }
+      }
+    }
+
     // Map.prototype.values() is an iterable but orderBy returns an array
     // Both work with for...of so we can use them interchangeably
     let iter: IterableIterator<IUtxo> | IUtxo[];
@@ -773,7 +821,7 @@ export class MemoryStore implements IStore {
         (options.filter_method && !options.filter_method(utxo)) ||
         (options.amount_bigger_than && utxo.value <= options.amount_bigger_than) ||
         (options.amount_smaller_than && utxo.value >= options.amount_smaller_than) ||
-        (options.filter_address && utxo.address !== options.filter_address) ||
+        (effectiveFilterAddress && utxo.address !== effectiveFilterAddress) ||
         (options.shielded === true && !utxo.shielded) ||
         (options.shielded === false && !!utxo.shielded) ||
         !authority_match ||
