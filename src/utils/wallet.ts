@@ -5,7 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { crypto, util, HDPublicKey, HDPrivateKey, PrivateKey, Script, PublicKey } from 'bitcore-lib';
+import {
+  crypto,
+  util,
+  HDPublicKey,
+  HDPrivateKey,
+  PrivateKey,
+  Script,
+  PublicKey,
+} from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import _ from 'lodash';
 import {

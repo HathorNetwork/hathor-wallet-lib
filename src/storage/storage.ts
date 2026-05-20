@@ -172,11 +172,9 @@ export class Storage implements IStorage {
    *   1. External signer registered via `setTxSignatureMethod` — used by
    *      Web3Auth (key never leaves the trusted environment) and by hardware
    *      wallets. Wins over any local key.
-   *   2. Raw single-key in access data (`singleKeyPrivateKey`) — single-key
-   *      wallets that hold the key locally sign with it
-   *      directly. Per r4mmer: external signer is not a hard requirement when
-   *      the key is available; it's the right escape hatch for Web3Auth only.
-   *   3. HD path (`mainKey` / xpriv) — the original behavior.
+   *   2. Local key path via `transactionUtils.getSignatureForTx`, which
+   *      transparently handles HD (xpriv) and single-key wallets through its
+   *      internal signing-key resolver.
    *
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
@@ -185,11 +183,6 @@ export class Storage implements IStorage {
   async getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData> {
     if (this.txSignFunc) {
       return this.txSignFunc(tx, this, pinCode);
-    }
-
-    const accessData = await this.getAccessData();
-    if (accessData?.singleKeyPrivateKey) {
-      return transactionUtils.getSignatureForTxSingleKey(tx, this, pinCode);
     }
 
     return transactionUtils.getSignatureForTx(tx, this, pinCode);

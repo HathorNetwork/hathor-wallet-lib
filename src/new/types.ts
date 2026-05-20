@@ -53,17 +53,19 @@ export interface HathorWalletConstructorParams {
   xpub?: string;
   /**
    * Raw secp256k1 private key (hex) for single-key wallets (no BIP32).
-   * Requires `publicKey` and `preCalculatedAddresses[0]`; mutually exclusive
-   * with `seed` / `xpriv` / `xpub`. The wallet has exactly one address (index
-   * 0). Transactions are signed locally by default; register an external
-   * signer via `setExternalTxSigningMethod` to delegate signing (required
-   * when the key is held in a trusted environment outside wallet-lib).
+   * Mutually exclusive with `seed` / `xpriv` / `xpub`. The wallet has exactly
+   * one address (index 0). `publicKey` and `preCalculatedAddresses[0]` are
+   * both optional — derived internally when omitted. Transactions are signed
+   * locally by default; register an external signer via
+   * `setExternalTxSigningMethod` to delegate signing (required when the key
+   * is held in a trusted environment outside wallet-lib).
    */
   privateKey?: string;
 
   /**
-   * DER-encoded compressed secp256k1 public key (hex). Required with
-   * `privateKey` and validated against the key derived from it.
+   * DER-encoded compressed secp256k1 public key (hex). Optional; when omitted
+   * with `privateKey`, derived from the private key. When provided, validated
+   * against the derived value at access-data generation time.
    */
   publicKey?: string;
 

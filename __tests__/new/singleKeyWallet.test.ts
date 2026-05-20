@@ -131,7 +131,7 @@ describe('singleKeyWallet — construction validation', () => {
     ).not.toThrow();
   });
 
-  test('privateKey without publicKey throws', () => {
+  test('privateKey without publicKey is accepted (publicKey derived internally)', () => {
     expect(
       () =>
         new HathorWallet({
@@ -139,10 +139,10 @@ describe('singleKeyWallet — construction validation', () => {
           privateKey: rawPrivHex,
           preCalculatedAddresses: [expectedAddress],
         })
-    ).toThrow(/publicKey/);
+    ).not.toThrow();
   });
 
-  test('privateKey without preCalculatedAddresses throws', () => {
+  test('privateKey without preCalculatedAddresses is accepted (address derived on start)', () => {
     expect(
       () =>
         new HathorWallet({
@@ -150,7 +150,17 @@ describe('singleKeyWallet — construction validation', () => {
           privateKey: rawPrivHex,
           publicKey: pubKeyHex,
         })
-    ).toThrow(/preCalculatedAddresses/);
+    ).not.toThrow();
+  });
+
+  test('privateKey alone is accepted (both publicKey and address derived)', () => {
+    expect(
+      () =>
+        new HathorWallet({
+          ...baseOpts,
+          privateKey: rawPrivHex,
+        })
+    ).not.toThrow();
   });
 
   test('privateKey + seed throws', () => {
@@ -244,6 +254,65 @@ describe('singleKeyWallet — start & access data', () => {
     // Scan policy defaults to SINGLE_ADDRESS
     const policy = await storage.getScanningPolicy();
     expect(policy).toBe(SCANNING_POLICY.SINGLE_ADDRESS);
+  });
+
+  test('start() without preCalculatedAddresses derives the single address from publicKey', async () => {
+    jest.spyOn(versionApi, 'getVersion').mockImplementation((resolve: (v: unknown) => void) => {
+      resolve({ network: NETWORK_NAME });
+    });
+
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork(NETWORK_NAME);
+
+    // No preCalculatedAddresses: start() must derive index 0 from
+    // publicKey + the connection's network internally via getAddressFromPubkey.
+    const wallet = new HathorWallet({
+      connection: makeMockedConnection() as never,
+      storage,
+      privateKey: rawPrivHex,
+      publicKey: pubKeyHex,
+      pinCode: PIN,
+      password: PASSWORD,
+    });
+
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+
+    const addr0 = await storage.getAddressAtIndex(0);
+    expect(addr0).not.toBeNull();
+    expect(addr0!.base58).toBe(expectedAddress);
+    expect(addr0!.bip32AddressIndex).toBe(0);
+    expect(addr0!.publicKey).toBe(pubKeyHex);
+  });
+
+  test('start() with privateKey only (no publicKey, no preCalculatedAddresses) works end-to-end', async () => {
+    jest.spyOn(versionApi, 'getVersion').mockImplementation((resolve: (v: unknown) => void) => {
+      resolve({ network: NETWORK_NAME });
+    });
+
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork(NETWORK_NAME);
+
+    // privateKey alone — publicKey is derived in the constructor, address is
+    // derived in start(). The caller doesn't have to pre-compute anything.
+    const wallet = new HathorWallet({
+      connection: makeMockedConnection() as never,
+      storage,
+      privateKey: rawPrivHex,
+      pinCode: PIN,
+      password: PASSWORD,
+    });
+
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+
+    const accessData = await storage.getAccessData();
+    expect(accessData!.singleKeyPublicKey).toBe(pubKeyHex);
+
+    const addr0 = await storage.getAddressAtIndex(0);
+    expect(addr0).not.toBeNull();
+    expect(addr0!.base58).toBe(expectedAddress);
+    expect(addr0!.publicKey).toBe(pubKeyHex);
   });
 });
 
@@ -530,10 +599,10 @@ describe('changeEncryptionPin — single-key wallets', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 11. getTxSignatures rejects single-key wallets without external signer
+// 11. getTxSignatures local-signs single-key wallets without external signer
 // ---------------------------------------------------------------------------
 
-describe('Storage.getTxSignatures — single-key wallets', () => {
+describe('Storage.getTxSignatures — single-key wallets (local-sign fallback)', () => {
   test('signs locally with the raw key when no external signer is registered', async () => {
     const { storage } = await buildPopulatedSingleKeyWallet();
     // No signer registered — falls back to the local raw-key path. Per

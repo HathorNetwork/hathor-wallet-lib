@@ -340,17 +340,18 @@ class HathorWallet extends EventEmitter {
       throw Error("You can't use xpriv with passphrase.");
     }
 
+    // publicKey and preCalculatedAddresses[0] are both derivable from
+    // privateKey + network. When the caller omits publicKey we derive it
+    // here; generateAccessDataFromPrivateKey still validates the pair when
+    // both are provided. When preCalculatedAddresses is omitted, start()
+    // derives the single address via getAddressFromPubkey.
+    let resolvedPublicKey = publicKey;
     if (privateKey) {
-      if (!publicKey) {
-        throw Error('You must provide publicKey alongside privateKey.');
-      }
-      if (!preCalculatedAddresses || preCalculatedAddresses.length < 1) {
-        throw Error(
-          'You must provide preCalculatedAddresses with the single address when using privateKey.'
-        );
-      }
       if (multisig) {
         throw Error('Single-key wallets do not support multisig.');
+      }
+      if (!resolvedPublicKey) {
+        resolvedPublicKey = new bitcore.PrivateKey(privateKey).toPublicKey().toString('hex');
       }
     }
 
@@ -384,7 +385,7 @@ class HathorWallet extends EventEmitter {
     this.seed = seed;
     this.xpub = xpub;
     this.privateKey = privateKey;
-    this.publicKey = publicKey;
+    this.publicKey = resolvedPublicKey;
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
@@ -852,9 +853,7 @@ class HathorWallet extends EventEmitter {
     // be allowed to derive (it's a requirement of `hasTxOutsideFirstAddress`
     // and other safety checks).
     if (index !== 0 && !(await this.storage.canDeriveAddresses())) {
-      throw new AddressError(
-        'This wallet has no key material to derive addresses beyond index 0.'
-      );
+      throw new AddressError('This wallet has no key material to derive addresses beyond index 0.');
     }
 
     let address = await this.storage.getAddressAtIndex(index);
@@ -1710,7 +1709,21 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    if (this.preCalculatedAddresses) {
+    if (
+      this.privateKey &&
+      (!this.preCalculatedAddresses || this.preCalculatedAddresses.length === 0)
+    ) {
+      // Single-key wallet without preCalculatedAddresses: derive the single
+      // address from publicKey + network internally. No xpub to fall back on,
+      // so we must populate storage upfront.
+      const network = new Network(this.conn.getCurrentNetwork());
+      const { base58 } = getAddressFromPubkey(this.publicKey as string, network);
+      await this.storage.saveAddress({
+        base58,
+        bip32AddressIndex: 0,
+        publicKey: this.publicKey,
+      });
+    } else if (this.preCalculatedAddresses) {
       for (const [index, addr] of this.preCalculatedAddresses.entries()) {
         // Attach the pubkey for single-key wallets so consumers don't fall
         // through to the xpub-based derivation path (which is absent here).
