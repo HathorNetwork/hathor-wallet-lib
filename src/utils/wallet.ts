@@ -13,6 +13,8 @@ import {
   HATHOR_BIP44_CODE,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
+  SHIELDED_SCAN_ACCT_PATH,
+  SHIELDED_SPEND_ACCT_PATH,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import { OP_0 } from '../opcodes';
@@ -619,6 +621,21 @@ const wallet = {
       accessData.acctPathKey = encryptedAcctPathKey;
     }
 
+    // Derive shielded scan and spend keys if root key is available.
+    // Scan (account 1') and spend (account 2') use separate derivation paths from legacy (account 0')
+    // so the scan key only grants view access, not spending authority over legacy funds.
+    if (argXpriv.depth === 0) {
+      const scanAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+      const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+      accessData.scanXpubkey = scanXpriv.xpubkey;
+      accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+
+      const spendAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+      const spendXpriv2 = spendAcctXpriv.deriveNonCompliantChild(0);
+      accessData.spendXpubkey = spendXpriv2.xpubkey;
+      accessData.spendMainKey = encryptData(spendXpriv2.xprivkey, pin);
+    }
+
     if (authXpriv || derivedAuthKey) {
       let authKey: IEncryptedData;
       if (authXpriv) {
@@ -690,6 +707,13 @@ const wallet = {
       };
     }
 
+    // Derive shielded scan (account 1') and spend (account 2') keys.
+    // Separate from legacy (account 0') so scan key only grants view access.
+    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+
     return {
       walletType,
       multisigData,
@@ -699,7 +723,93 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
+      scanXpubkey: scanXpriv.xpubkey,
+      scanMainKey: encryptData(scanXpriv.xprivkey, pin),
+      spendXpubkey: spendXpriv.xpubkey,
+      spendMainKey: encryptData(spendXpriv.xprivkey, pin),
     };
+  },
+
+  /**
+   * Re-derive the shielded scan/spend keys on an access-data record that was
+   * persisted before shielded support existed. No-op if the record already
+   * has all four shielded fields, or if the record lacks the encrypted seed
+   * (xpub-only wallets have nothing to derive from).
+   *
+   * The derivation MUST exactly match what `generateAccessDataFromSeed`
+   * produces for a fresh wallet (same paths, same encryption) so that a
+   * wallet that migrates and a wallet that was created fresh with the same
+   * seed end up with identical scan/spend keys and, therefore, identical
+   * shielded addresses.
+   *
+   * Mutates `accessData` in place when migration runs. Returns true iff
+   * any fields were written; the caller is expected to `saveAccessData` in
+   * that case.
+   *
+   * Existing wallet users hit this path when they upgrade from a
+   * pre-shielded wallet-lib (e.g. 0.37.0) to a shielded-capable one: the
+   * persisted access-data entry has no scan/spend fields, `loadAddresses`
+   * skips shielded derivation (`deriveShieldedAddressFromStorage` returns
+   * null when `scanXpubkey` is missing), and `getCurrentAddress({legacy:
+   * false})` later throws "Current shielded address is not loaded
+   * (index=-1)". Running this migration on the next `wallet.start()` fixes
+   * the state permanently.
+   */
+  migrateShieldedAccessData(
+    accessData: IWalletAccessData,
+    {
+      pin,
+      password,
+      passphrase = '',
+      networkName,
+    }: { pin: string; password: string; passphrase?: string; networkName: string }
+  ): boolean {
+    const hasAll =
+      !!accessData.scanXpubkey &&
+      !!accessData.scanMainKey &&
+      !!accessData.spendXpubkey &&
+      !!accessData.spendMainKey;
+    if (hasAll) return false;
+    if (!accessData.words) return false;
+
+    // `decryptData` throws InvalidPasswdError / DecryptionError. We wrap it
+    // here so the operator sees the *specific* failure mode — the wallet
+    // password (not the PIN) is required to decrypt the seed during shielded
+    // migration. Without context, "InvalidPasswdError" during wallet.start
+    // looks like a generic password problem and operators commonly retry
+    // with the PIN. We do NOT partially write fields before the throw, so a
+    // failed migration leaves the record untouched.
+    let words: string;
+    try {
+      words = decryptData(accessData.words, password);
+    } catch (e) {
+      // Project tsconfig predates ES2022 ErrorOptions; attach `cause` via
+      // property assignment so the original InvalidPasswdError/DecryptionError
+      // is still recoverable from `(err as Error & { cause? }).cause`.
+      const wrapped = new Error(
+        'Shielded migration requires the wallet password (not PIN) to decrypt the seed. ' +
+          'Ensure you provided the password and not the PIN, then retry wallet.start.'
+      );
+      (wrapped as Error & { cause?: unknown }).cause = e;
+      throw wrapped;
+    }
+    const code = new Mnemonic(words);
+    const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
+
+    // Paths + encryption must match `generateAccessDataFromSeed` exactly.
+    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+
+    /* eslint-disable no-param-reassign */
+    accessData.scanXpubkey = scanXpriv.xpubkey;
+    accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+    accessData.spendXpubkey = spendXpriv.xpubkey;
+    accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
+    /* eslint-enable no-param-reassign */
+
+    return true;
   },
 
   /**
@@ -737,6 +847,16 @@ const wallet = {
       const acctPathKey = decryptData(data.acctPathKey, oldPin);
       const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
       data.acctPathKey = newEncryptedAcctPathKey;
+    }
+
+    if (data.scanMainKey) {
+      const scanKey = decryptData(data.scanMainKey, oldPin);
+      data.scanMainKey = encryptData(scanKey, newPin);
+    }
+
+    if (data.spendMainKey) {
+      const spendKey = decryptData(data.spendMainKey, oldPin);
+      data.spendMainKey = encryptData(spendKey, newPin);
     }
 
     return data;

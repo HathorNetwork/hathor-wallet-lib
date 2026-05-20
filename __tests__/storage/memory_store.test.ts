@@ -48,7 +48,7 @@ test('addresses methods', async () => {
   await expect(store.getAddressMeta('b')).resolves.toEqual(5);
   await expect(store.addressCount()).resolves.toEqual(3);
 
-  await expect(store.getCurrentAddress()).rejects.toThrow('Current address is not loaded');
+  await expect(store.getCurrentAddress()).rejects.toThrow('Current legacy address is not loaded');
   expect(store.walletData.currentAddressIndex).toEqual(-1);
   expect(store.walletData.lastLoadedAddressIndex).toEqual(0);
   await store.saveAddress({
@@ -74,6 +74,44 @@ test('addresses methods', async () => {
   await expect(store.getCurrentAddress()).resolves.toEqual('d');
   await expect(store.getCurrentAddress(true)).resolves.toEqual('d');
   await expect(store.getCurrentAddress()).resolves.toEqual('e');
+});
+
+test('addressIter chain-selection (legacy vs shielded)', async () => {
+  const store = new MemoryStore();
+
+  // Mixed-chain fixture: two legacy P2PKHs (with explicit + implicit
+  // addressType), one shielded receive, one shielded-spend (internal),
+  // and one P2SH. The iterator must filter strictly by chain.
+  await store.saveAddress({ base58: 'leg-0', bip32AddressIndex: 0, addressType: 'p2pkh' });
+  await store.saveAddress({ base58: 'leg-1', bip32AddressIndex: 1 }); // untyped → legacy
+  await store.saveAddress({ base58: 'p2sh-2', bip32AddressIndex: 2, addressType: 'p2sh' });
+  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
+  await store.saveAddress({
+    base58: 'shi-spend-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded-spend',
+  });
+
+  // Default (no opts) → legacy chain only. shielded + shielded-spend
+  // entries are filtered out (the receive pipeline relies on the
+  // shielded-spend P2PKH being invisible at this surface).
+  const defaultBases: string[] = [];
+  for await (const info of store.addressIter()) defaultBases.push(info.base58);
+  expect(defaultBases.sort()).toEqual(['leg-0', 'leg-1', 'p2sh-2'].sort());
+
+  // legacy: true is the explicit form of the default.
+  const legacyBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: true })) legacyBases.push(info.base58);
+  expect(legacyBases.sort()).toEqual(defaultBases.sort());
+
+  // legacy: false → user-facing shielded receive addresses only, in
+  // BIP32-index order. shielded-spend MUST NOT leak through (it's
+  // internal — surfacing it would let callers send to a wallet's
+  // spend P2PKH thinking it's a shielded address).
+  const shieldedBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: false })) shieldedBases.push(info.base58);
+  expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
 });
 
 test('history methods', async () => {
@@ -283,6 +321,110 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx02');
+
+  // Add a shielded UTXO
+  await store.saveUtxo({
+    txId: 'tx03',
+    index: 0,
+    token: '00',
+    address: 'addr3',
+    value: 30n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'aa'.repeat(32),
+  });
+
+  // Default (no shielded filter) returns all including shielded
+  buf = [];
+  for await (const u of store.selectUtxos({})) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(2); // tx01 (HTR) + tx03 (HTR shielded)
+
+  // shielded: true returns only shielded
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: true })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx03');
+  expect(buf[0].shielded).toBe(true);
+
+  // shielded: false returns only transparent
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: false })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx01');
+  expect(buf[0].shielded).toBeUndefined();
+});
+
+test('selectUtxos filter_address resolves user-facing shielded → spend P2PKH at same BIP32 index', async () => {
+  // Regression test for the /wallet/send-tx query input bug:
+  //   inputs: [{type: "query", filter_address: "<user-facing shielded>"}]
+  // returns "No utxos available for the query filter for this amount."
+  // Root cause: the user-facing shielded form (addressType 'shielded',
+  // K-prefix encoded) never matches utxo.address — UTXOs carry the
+  // spend-derived P2PKH (addressType 'shielded-spend', W-prefix).
+  // The fix in selectUtxos resolves the caller-provided shielded
+  // address to its sibling spend-P2PKH at the same BIP32 index.
+  const store = new MemoryStore();
+  const SHIELDED_BIP32_INDEX = 5;
+  const USER_FACING_SHIELDED = 'K3MowdLNAKLnjL19HsjywgB8Uta5YEwz63BDpX1yv8'; // K-prefix
+  const SPEND_P2PKH = 'WaJveoooUbAAKco1uSX2X3TRUgspjkxKHx'; // W-prefix sibling
+
+  // Register both forms at the same BIP32 index (matches what
+  // loadAddresses / deriveShieldedAddressFromStorage produces).
+  await store.saveAddress({
+    base58: USER_FACING_SHIELDED,
+    bip32AddressIndex: SHIELDED_BIP32_INDEX,
+    addressType: 'shielded',
+  });
+  await store.saveAddress({
+    base58: SPEND_P2PKH,
+    bip32AddressIndex: SHIELDED_BIP32_INDEX,
+    addressType: 'shielded-spend',
+  });
+
+  // The shielded UTXO is labeled with the spend-P2PKH (what's on-chain).
+  await store.saveUtxo({
+    txId: 'tx-shielded-1',
+    index: 0,
+    token: '00',
+    address: SPEND_P2PKH,
+    value: 500n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'aa'.repeat(32),
+  });
+
+  // Pass the user-facing shielded form — the fix should resolve it to
+  // the sibling spend-P2PKH and match the UTXO.
+  const matches: Array<{ txId: string; address: string; value: bigint }> = [];
+  for await (const u of store.selectUtxos({ filter_address: USER_FACING_SHIELDED })) {
+    matches.push({ txId: u.txId, address: u.address, value: u.value });
+  }
+  expect(matches).toHaveLength(1);
+  expect(matches[0].txId).toBe('tx-shielded-1');
+  expect(matches[0].address).toBe(SPEND_P2PKH); // returned form is the on-chain one
+  expect(matches[0].value).toBe(500n);
+
+  // Negative control: filtering by a totally unrelated address still
+  // returns nothing (no over-resolution leaking shielded UTXOs).
+  const empty: typeof matches = [];
+  for await (const u of store.selectUtxos({
+    filter_address: 'WunrelatedAddressNotMineAtAll0000000',
+  })) {
+    empty.push({ txId: u.txId, address: u.address, value: u.value });
+  }
+  expect(empty).toHaveLength(0);
 });
 
 test('access data methods', async () => {

@@ -8,10 +8,18 @@
 import EventEmitter from 'events';
 import { shuffle } from 'lodash';
 import txApi from '../api/txApi';
-import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  MAX_SHIELDED_OUTPUTS,
+  SELECT_OUTPUTS_TIMEOUT,
+  ZERO_TWEAK,
+  FEE_PER_AMOUNT_SHIELDED_OUTPUT,
+  FEE_PER_FULL_SHIELDED_OUTPUT,
+} from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
 import Address from '../models/address';
+import { getAddressType } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { Fee } from '../utils/fee';
 import Transaction from '../models/transaction';
@@ -19,6 +27,7 @@ import {
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
+  IDataShieldedOutput,
   IDataTx,
   isDataOutputCreateToken,
   IStorage,
@@ -26,6 +35,8 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
+import { createShieldedOutputs, InputGeneratorInfo } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
@@ -65,7 +76,20 @@ export interface ISendTokenOutput {
   timelock?: number | null;
 }
 
-export type ISendOutput = ISendDataOutput | ISendTokenOutput;
+export interface ISendShieldedOutput {
+  type: OutputType.P2PKH | OutputType.P2SH;
+  address: string;
+  value: OutputValueType;
+  token: string;
+  scanPubkey: string; // hex, 33 bytes compressed EC scan pubkey for ECDH
+  shieldedMode: ShieldedOutputMode;
+}
+
+export function isShieldedOutput(output: ISendOutput): output is ISendShieldedOutput {
+  return 'shieldedMode' in output;
+}
+
+export type ISendOutput = ISendDataOutput | ISendTokenOutput | ISendShieldedOutput;
 
 /**
  * This is transaction mining class responsible for:
@@ -96,6 +120,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
   changeAddress: string | null;
 
+  /**
+   * If set, the HTR fee-change output that `prepareSendTokensData` would
+   * have emitted as transparent is rewritten as a shielded HTR output in
+   * the given mode (FullShielded or AmountShielded). Defaults to `null`,
+   * which preserves the long-standing transparent-change behavior.
+   *
+   * Used by callers that also pass shielded recipient outputs and want
+   * the HTR change for the per-shielded-output fee to match the same
+   * privacy mode the user selected — otherwise the transparent HTR
+   * change would correlate the sender with an otherwise-private send.
+   */
+  changeShieldedMode: ShieldedOutputMode | null;
+
   pin: string | null;
 
   fullTxData: IDataTx | null;
@@ -113,6 +150,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
+   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set, the HTR fee-change is emitted shielded in this mode instead of transparent
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -123,6 +161,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     outputs = [],
     inputs = [],
     changeAddress = null,
+    changeShieldedMode = null,
     pin = null,
   }: {
     wallet?: HathorWallet | null;
@@ -131,6 +170,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     inputs?: ISendInput[];
     outputs?: ISendOutput[];
     changeAddress?: string | null;
+    changeShieldedMode?: ShieldedOutputMode | null;
     pin?: string | null;
   } = {}) {
     super();
@@ -145,6 +185,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     this.outputs = outputs;
     this.inputs = inputs;
     this.changeAddress = changeAddress;
+    this.changeShieldedMode = changeShieldedMode;
     this.pin = pin;
     this.fullTxData = null;
   }
@@ -174,6 +215,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // Map of token uid to the chooseInputs value of this token
     const tokenMap = new Map<string, boolean>();
 
+    // Collect shielded output definitions separately
+    const shieldedOutputDefs: ISendShieldedOutput[] = [];
+    // Track phantom outputs for removal after UTXO selection and shuffle
+    const phantomOutputs = new Set<IDataOutput>();
+
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
         tokenMap.set(HTR_UID, true);
@@ -187,8 +233,33 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           authorities: 0n,
           token: output.token,
         });
+      } else if (isShieldedOutput(output)) {
+        // Shielded output: store definition and add a phantom transparent output
+        // so UTXO selection accounts for this value
+        shieldedOutputDefs.push(output);
+        tokenMap.set(output.token, true);
+
+        // Phantom output for UTXO selection (removed after shuffle).
+        // output.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
+        const phantom: IDataOutput = {
+          address: output.address,
+          value: output.value,
+          timelock: null,
+          authorities: 0n,
+          token: output.token,
+          type: getAddressType(output.address, network),
+        };
+        phantomOutputs.add(phantom);
+        txData.outputs.push(phantom);
       } else {
         const addressObj = new Address(output.address, { network });
+        let outputAddrType = addressObj.getType();
+        if (outputAddrType === 'shielded') {
+          // Shielded address used for transparent output — use the spend-derived P2PKH
+          const spendAddress = addressObj.getSpendAddress();
+          output.address = spendAddress.base58;
+          outputAddrType = 'p2pkh';
+        }
         // We set chooseInputs true as default and may be overwritten by the inputs.
         // chooseInputs should be true if no inputs are given
         tokenMap.set(output.token, true);
@@ -199,7 +270,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           timelock: output.timelock ? output.timelock : null,
           authorities: 0n,
           token: output.token,
-          type: addressObj.getType(),
+          type: outputAddrType,
         });
       }
     }
@@ -208,12 +279,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     for (const input of this.inputs) {
       const inputTx = await this.storage.getTx(input.txId);
-      if (inputTx === null || !inputTx.outputs[input.index]) {
+      // Sparse-decode-aware lookup. Positional inputTx.outputs[input.index]
+      // would return the wrong output on a parent whose shielded outputs
+      // were only partially decoded, causing this send pipeline to attach
+      // wrong value/token/address to the input and the fullnode to reject
+      // the signed tx ("Failed to verify if elements are equal").
+      const spentOut =
+        inputTx !== null ? transactionUtils.findSpentOutput(inputTx, input.index) : undefined;
+      if (inputTx === null || !spentOut) {
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
-      const spentOut = inputTx.outputs[input.index];
       if (!tokenMap.has(spentOut.token)) {
         // the inputs should be used to pay fees, otherwise it's an invalid input and it will raise an error after the fee is calculated
         if (HTR_UID === spentOut.token) {
@@ -270,13 +347,25 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       throw err;
     }
 
-    const headers: Header[] = [];
-    if (fee > 0) {
-      headers.push(new FeeHeader([{ tokenIndex: 0, amount: fee }]));
-      // if the token map doesn't have HTR, it means that the user didn't provide any HTR input or output, so we need to choose inputs for HTR to pay fees
-      if (!tokenMapHasHTR) {
-        shouldChooseHTRInputs = true;
+    // Calculate shielded output fee
+    let shieldedFee = 0n;
+    for (const def of shieldedOutputDefs) {
+      if (def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED) {
+        shieldedFee += FEE_PER_FULL_SHIELDED_OUTPUT;
+      } else {
+        shieldedFee += FEE_PER_AMOUNT_SHIELDED_OUTPUT;
       }
+    }
+
+    let totalFee = fee + shieldedFee;
+
+    // Decide whether to auto-pick HTR inputs based on the original
+    // totalFee (the value `prepareSendTokensData` is about to use for
+    // selection). The post-conversion fee bump done below is funded
+    // entirely from the would-be transparent change, so inputs picked
+    // here remain sufficient.
+    if (totalFee > 0n && !tokenMapHasHTR) {
+      shouldChooseHTRInputs = true;
     }
 
     const options: IUtxoSelectionOptions = {
@@ -295,8 +384,33 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         outputs: partialOutputs,
       },
       options,
-      fee
+      totalFee
     );
+
+    // If the caller opted in to shielded HTR change, rewrite the
+    // transparent change emitted above as a shielded HTR output. The
+    // helper mutates both `partialHtrTxData.outputs` (removing the
+    // transparent change) and `shieldedOutputDefs` (appending the
+    // shielded replacement), and returns the extra shielded-output
+    // fee we now owe — funded by reducing the change by the same
+    // amount, so inputs already picked are still sufficient.
+    const { addedFee } = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      shieldedOutputDefs,
+      this.changeShieldedMode,
+      this.wallet,
+      network
+    );
+    totalFee += addedFee;
+
+    // FeeHeader is pushed AFTER the conversion so it carries the final
+    // total. The header gates on `totalFee > 0`; that's still
+    // monotonically increasing through the conversion (addedFee >= 0n)
+    // so the gate's outcome can't flip from true to false.
+    const headers: Header[] = [];
+    if (totalFee > 0n) {
+      headers.push(new FeeHeader([{ tokenIndex: 0, amount: totalFee }]));
+    }
 
     const shouldShuffleOutputs =
       partialTxData.outputs.length > 0 || partialHtrTxData.outputs.length > 0;
@@ -307,13 +421,193 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       outputs = shuffle([...partialOutputs, ...partialHtrTxData.outputs]);
     }
 
+    // Remove phantom outputs (shielded) from the final outputs list.
+    // This relies on reference equality — Set.has() matches the same object instances
+    // created above. The spread operators and shuffle preserve object references.
+    if (phantomOutputs.size > 0) {
+      outputs = outputs.filter(out => !phantomOutputs.has(out));
+    }
+
+    // Walk every input (user-supplied + HTR-picked) once, regardless of
+    // whether we're building shielded outputs. We need these both for:
+    //   (a) surjection-proof domain construction (shielded-outputs path), and
+    //   (b) excess-blinding-factor computation (full-unshield path).
+    // Collecting once keeps the two paths in sync on input ordering.
+    const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
+    const inputGenerators: InputGeneratorInfo[] = [];
+    const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+    // Transparent non-authority inputs collected separately. Needed only for the
+    // excess-blinding-factor calc on full-unshield txs where the wallet holds a
+    // mix of transparent + shielded UTXOs of the same token: the fullnode's
+    // balance verifier sums ALL inputs (transparent + shielded) against all
+    // outputs, so computeBalancingBlindingFactor must see the transparent
+    // inputs too or it returns a bf that doesn't satisfy the equation (the
+    // fullnode then panics when it tries to build the excess commitment).
+    const transparentInputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+
+    for (const inp of allInputs) {
+      const utxo = await this.storage.getUtxo({
+        txId: inp.txId,
+        index: inp.index,
+      });
+
+      // Build generator info for surjection proof domain
+      if (inp.token) {
+        const genInfo: InputGeneratorInfo = { tokenUid: inp.token as string };
+        // For FullShielded inputs, pass the asset blinding factor so the
+        // surjection proof domain uses the blinded generator (asset_commitment)
+        // matching what the fullnode verifies against.
+        if (utxo?.shielded && utxo.assetBlindingFactor) {
+          genInfo.assetBlindingFactor = Buffer.from(utxo.assetBlindingFactor, 'hex');
+        }
+        inputGenerators.push(genInfo);
+      }
+
+      // Extract blinding factors from shielded inputs for the homomorphic balance equation.
+      if (utxo?.shielded) {
+        if (!utxo.blindingFactor) {
+          throw new SendTxError(
+            `Shielded input ${inp.txId}:${inp.index} is missing blindingFactor — ` +
+              'cannot satisfy the homomorphic balance equation.'
+          );
+        }
+        blindedInputsArr.push({
+          value: utxo.value,
+          vbf: Buffer.from(utxo.blindingFactor, 'hex'),
+          gbf: utxo.assetBlindingFactor ? Buffer.from(utxo.assetBlindingFactor, 'hex') : ZERO_TWEAK,
+        });
+      } else if (utxo && (utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
+        transparentInputEntries.push({
+          value: utxo.value,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+    }
+
+    // Create shielded outputs with cryptographic commitments and proofs
+    let shieldedOutputs: IDataShieldedOutput[] = [];
+    if (shieldedOutputDefs.length > 0) {
+      const cryptoProvider = this.storage.shieldedCryptoProvider;
+      if (!cryptoProvider) {
+        throw new SendTxError(
+          'Shielded crypto provider is not set. Cannot create shielded outputs.'
+        );
+      }
+
+      // Validate shielded output count before expensive crypto work
+      if (shieldedOutputDefs.length === 1) {
+        throw new SendTxError(
+          'At least 2 shielded outputs are required to prevent trivial commitment matching.'
+        );
+      }
+      if (shieldedOutputDefs.length > MAX_SHIELDED_OUTPUTS) {
+        throw new SendTxError(
+          `Cannot create more than ${MAX_SHIELDED_OUTPUTS} shielded outputs per transaction ` +
+            `(requested ${shieldedOutputDefs.length}).`
+        );
+      }
+
+      shieldedOutputs = await createShieldedOutputs(
+        shieldedOutputDefs,
+        cryptoProvider,
+        network,
+        inputGenerators,
+        blindedInputsArr
+      );
+    }
+
+    // Full-unshield detection: tx has shielded inputs but no shielded outputs.
+    // The fullnode rejects such a tx unless it carries an UnshieldBalanceHeader
+    // with excess = sum(r_in) − sum(r_out). Compute excess using the existing
+    // computeBalancingBlindingFactor primitive: pass value=0, gbf=ZERO, ALL
+    // inputs (shielded with their real blinding factors + transparent with
+    // vbf=0) as `inputs`, and every output + transparent fee entry as
+    // `otherOutputs` with (vbf=0, gbf=0). The function expects sum of input
+    // values to equal sum of other-output values plus the last-output value,
+    // so transparent inputs MUST be included when the wallet pulls from a
+    // mixed transparent+shielded pool — otherwise the function returns a bf
+    // that doesn't satisfy the equation and the fullnode panics trying to
+    // build the excess commitment at verify time.
+    //
+    // Mutually exclusive with shielded outputs (hathor-core enforces this at
+    // verify time). We gate on `shieldedOutputs.length === 0` to skip this
+    // branch on the shielded/partial-unshield path.
+    let excessBlindingFactor: Buffer | undefined;
+    if (shieldedOutputs.length === 0 && blindedInputsArr.length > 0) {
+      const cryptoProvider = this.storage.shieldedCryptoProvider;
+      if (!cryptoProvider) {
+        throw new SendTxError(
+          'Shielded crypto provider is not set. Cannot compute excess blinding ' +
+            'factor for a full-unshield transaction.'
+        );
+      }
+
+      // All transparent outputs contribute (value, vbf=0, gbf=0). Include the
+      // HTR fee amount as a transparent output entry — the scalar must cover
+      // the full output side the verifier sees.
+      const transparentOutputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      for (const out of outputs) {
+        transparentOutputEntries.push({
+          value: out.value,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+      if (totalFee > 0n) {
+        transparentOutputEntries.push({
+          value: totalFee,
+          vbf: ZERO_TWEAK,
+          gbf: ZERO_TWEAK,
+        });
+      }
+
+      const excess = await cryptoProvider.computeBalancingBlindingFactor(
+        0n,
+        ZERO_TWEAK,
+        [...blindedInputsArr, ...transparentInputEntries],
+        transparentOutputEntries
+      );
+      excessBlindingFactor = excess;
+    }
+
+    // Privacy guard: a non-HTR token MUST appear in `tokens[]` only when
+    // at least one output in the FINAL tx references it via `token_data`
+    // — i.e. a transparent (including downstream-added change) or
+    // AmountShielded output. FullShielded outputs commit the token UID
+    // under `asset_commitment` instead; listing the token publicly in
+    // `tokens[]` would defeat that privacy guarantee. Inputs don't carry
+    // `token_data` in the wire format, so they don't pull a token in.
+    //
+    // Computed AFTER `outputs` is finalized (phantoms removed, change
+    // outputs added by prepareSendManyTokensData included) — populating
+    // earlier from `this.outputs` alone misses transparent change and
+    // breaks balance verification when the same token has both FS user
+    // outputs and a transparent change.
+    const tokensWithVisibleOutput = new Set<string>();
+    for (const out of outputs) {
+      const tokenUid = (out as { token?: string }).token;
+      if (!tokenUid || tokenUid === HTR_UID) continue;
+      if ((out.authorities ?? 0n) !== 0n) continue;
+      tokensWithVisibleOutput.add(tokenUid);
+    }
+    for (const so of shieldedOutputs) {
+      if (so.mode !== ShieldedOutputMode.FULLY_SHIELDED) {
+        tokensWithVisibleOutput.add(so.token);
+      }
+    }
+
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       outputs,
       inputs: [...partialInputs, ...partialHtrTxData.inputs],
-      // We already removed HTR from the tokenMap
-      tokens: Array.from(tokenMap.keys()),
+      // We already removed HTR from the tokenMap. Filter out any token
+      // whose only references are FullShielded outputs (see the privacy
+      // guard above).
+      tokens: Array.from(tokenMap.keys()).filter(t => tokensWithVisibleOutput.has(t)),
       headers,
+      ...(shieldedOutputs.length > 0 ? { shieldedOutputs } : {}),
+      ...(excessBlindingFactor ? { excessBlindingFactor } : {}),
     };
 
     return this.fullTxData;
@@ -736,6 +1030,81 @@ export async function prepareSendTokensData(
   }
 }
 
+/**
+ * If `mode` is set and `prepareSendTokensData` emitted a transparent
+ * HTR change output, rewrite that change as a shielded HTR output in
+ * `shieldedOutputDefs`. Mutates both `partialHtrTxData.outputs` (to
+ * remove the transparent change) and `shieldedOutputDefs` (to append
+ * the shielded one). Returns the additional shielded-output fee that
+ * the caller must add to `totalFee`, or `0n` when no conversion was
+ * performed.
+ *
+ * No-ops in any of these cases:
+ *   - `mode` is null/undefined (caller did not opt in).
+ *   - `wallet` is null (no shielded address derivation available).
+ *   - `shieldedOutputDefs` is empty (a pure-transparent tx has no
+ *     shielded fee context; converting the change here would silently
+ *     break the `>= 2 shielded outputs` invariant downstream).
+ *   - No HTR change output exists in `partialHtrTxData.outputs` (the
+ *     selected HTR UTXO covered the fee exactly).
+ *   - The transparent change value is `<= additionalFee` — converting
+ *     would zero-out or negate the change. Keeping the transparent
+ *     change is the safe, value-preserving choice.
+ */
+export async function convertHtrChangeIfRequested(
+  partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
+  shieldedOutputDefs: ISendShieldedOutput[],
+  mode: ShieldedOutputMode | null,
+  wallet: HathorWallet | null,
+  network: ReturnType<IStorage['config']['getNetwork']>
+): Promise<{ addedFee: bigint }> {
+  if (!mode) return { addedFee: 0n };
+  if (!wallet) return { addedFee: 0n };
+  if (shieldedOutputDefs.length === 0) return { addedFee: 0n };
+
+  const additionalFee =
+    mode === ShieldedOutputMode.FULLY_SHIELDED
+      ? FEE_PER_FULL_SHIELDED_OUTPUT
+      : FEE_PER_AMOUNT_SHIELDED_OUTPUT;
+
+  const HTR_UID = NATIVE_TOKEN_UID;
+  const changeIdx = partialHtrTxData.outputs.findIndex(o => {
+    const withToken = o as IDataOutputWithToken & { isChange?: boolean };
+    return withToken.token === HTR_UID && withToken.isChange === true;
+  });
+  if (changeIdx === -1) return { addedFee: 0n };
+
+  const transparentChange = partialHtrTxData.outputs[changeIdx];
+  if (transparentChange.value <= additionalFee) {
+    // Conversion would produce a zero or negative shielded value —
+    // keep the transparent change so we don't silently drop funds.
+    return { addedFee: 0n };
+  }
+
+  const { address: shieldedAddress } = await wallet.getCurrentAddress({}, { legacy: false });
+  const addressObj = new Address(shieldedAddress, { network });
+  if (!addressObj.isShielded()) {
+    throw new SendTxError('Wallet did not return a shielded address for HTR change conversion.');
+  }
+  const spendAddress = addressObj.getSpendAddress();
+
+  // Remove the transparent change output before appending the shielded
+  // replacement so any later iteration over `partialHtrTxData.outputs`
+  // sees the post-conversion shape.
+  partialHtrTxData.outputs.splice(changeIdx, 1);
+
+  shieldedOutputDefs.push({
+    type: OutputType.P2PKH,
+    address: spendAddress.base58,
+    value: transparentChange.value - additionalFee,
+    token: HTR_UID,
+    scanPubkey: addressObj.getScanPubkey().toString('hex'),
+    shieldedMode: mode,
+  });
+
+  return { addedFee: additionalFee };
+}
+
 async function getOutputTypeFromWallet(storage: IStorage): Promise<'p2pkh' | 'p2sh'> {
   const walletType = await storage.getWalletType();
   if (walletType === WalletType.P2PKH) {
@@ -898,14 +1267,17 @@ export async function checkUnspentInput(
   if (tx.is_voided) {
     return { success: false, message: `Transaction [${input.txId}] is voided` };
   }
-  if (tx.outputs.length - 1 < input.index) {
+  // Sparse-decode-aware lookup so explicit shielded inputs validate against
+  // the correct decoded entry, not whatever happens to sit positionally at
+  // `tx.outputs[input.index]`.
+  const txout = transactionUtils.findSpentOutput(tx, input.index);
+  if (!txout) {
     return {
       success: false,
       message: `Transaction [${input.txId}] does not have this output [index=${input.index}]`,
     };
   }
 
-  const txout = tx.outputs[input.index];
   if (transactionUtils.isAuthorityOutput(txout)) {
     /**
      * XXX: We are NOT enabling authority outputs for now.
@@ -917,7 +1289,26 @@ export async function checkUnspentInput(
   }
 
   if (txout.decoded.address) {
-    if (txout.decoded.address !== input.address) {
+    // Resolve a user-supplied shielded receive form (the 71-byte
+    // encoded address) to the on-chain spend-derived P2PKH at the
+    // same BIP32 index — that's what `txout.decoded.address` carries
+    // for shielded outputs. Without this resolution the equality
+    // check rejects every shielded input whose caller passed the
+    // user-facing address. Same shape as the `selectUtxos`
+    // shielded resolution.
+    let effectiveInputAddress = input.address;
+    if (effectiveInputAddress && effectiveInputAddress !== txout.decoded.address) {
+      const inputAddrInfo = await storage.getAddressInfo(effectiveInputAddress);
+      const txoutAddrInfo = await storage.getAddressInfo(txout.decoded.address);
+      if (
+        inputAddrInfo?.addressType === 'shielded' &&
+        txoutAddrInfo?.addressType === 'shielded-spend' &&
+        inputAddrInfo.bip32AddressIndex === txoutAddrInfo.bip32AddressIndex
+      ) {
+        effectiveInputAddress = txout.decoded.address;
+      }
+    }
+    if (txout.decoded.address !== effectiveInputAddress) {
       return {
         success: false,
         message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input`,
