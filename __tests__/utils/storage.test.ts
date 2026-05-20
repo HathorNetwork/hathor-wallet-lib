@@ -591,3 +591,148 @@ describe('processMetadataChanged — shielded UTXO preservation', () => {
     expect(shieldedAfter?.blindingFactor).toBe(BLINDING_FACTOR);
   });
 });
+
+describe('processNewTx — spent_by stamping on origin outputs', () => {
+  // Regression test for the bug surfaced via the headless /address-info
+  // endpoint. Sequence: address W receives 500 → sends 1 → gets 499 as
+  // change back to W. getAddressInfo reads `output.spent_by !== null`
+  // directly from tx history to compute `total_amount_sent`. Without
+  // the fix, sender-local insert (via SendTransaction.handlePushTx →
+  // wallet.enqueueOnNewTx → processNewTx) doesn't update tx A's
+  // `outputs[i].spent_by`, so getAddressInfo returns
+  // total_amount_sent=0 / total_amount_available=999 (received 500
+  // original + 499 change, but the 500 input not marked as sent)
+  // until the fullnode's metadata update for tx A arrives —
+  // potentially never if the websocket reconnects mid-update.
+  //
+  // After the fix, processNewTx stamps `spent_by = tx.tx_id` on each
+  // wallet-owned origin output during the input enrichment phase, so
+  // the tx-history view matches the UTXO set immediately.
+  const OWN_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const FOREIGN_ADDR = 'WforeignAddressNotMine000000000000';
+  const ORIG_TX_ID = '11'.repeat(32);
+  const NEW_TX_ID = '22'.repeat(32);
+
+  // Minimal IHistoryTx shape — only the fields processNewTx reads.
+  const buildOriginTx = (outputAddress: string) => ({
+    tx_id: ORIG_TX_ID,
+    version: 1,
+    timestamp: 1,
+    is_voided: false,
+    nonce: 0,
+    weight: 1,
+    parents: [],
+    inputs: [],
+    height: 100,
+    tokens: [],
+    outputs: [
+      {
+        type: 'p2pkh',
+        value: 500n,
+        token: NATIVE_TOKEN_UID,
+        token_data: 0,
+        script: '',
+        decoded: { address: outputAddress, timelock: null },
+        spent_by: null,
+      },
+    ],
+  });
+
+  // Spending tx — references origin tx output 0 as input.
+  const buildSpendingTx = () => ({
+    tx_id: NEW_TX_ID,
+    version: 1,
+    timestamp: 2,
+    is_voided: false,
+    nonce: 0,
+    weight: 1,
+    parents: [],
+    inputs: [
+      {
+        tx_id: ORIG_TX_ID,
+        index: 0,
+        token: NATIVE_TOKEN_UID,
+        token_data: 0,
+        script: '',
+        value: 500n,
+        decoded: { address: OWN_ADDR, timelock: null },
+      },
+    ],
+    height: 101,
+    tokens: [],
+    outputs: [
+      {
+        type: 'p2pkh',
+        value: 499n,
+        token: NATIVE_TOKEN_UID,
+        token_data: 0,
+        script: '',
+        decoded: { address: OWN_ADDR, timelock: null },
+        spent_by: null,
+      },
+    ],
+  });
+
+  it('stamps spent_by on a wallet-owned origin output during sender-local insert', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    // Seed the address registry so the output-loop's `getAddress` lookup
+    // finds the address as ours.
+    await store.saveAddress({ base58: OWN_ADDR, bip32AddressIndex: 0 });
+    await store.saveTx(buildOriginTx(OWN_ADDR) as unknown as Parameters<typeof store.saveTx>[0]);
+
+    const before = await store.getTx(ORIG_TX_ID);
+    expect(before!.outputs[0].spent_by).toBeNull();
+
+    const { processNewTx } = await import('../../src/utils/storage');
+    await processNewTx(storage, buildSpendingTx() as unknown as Parameters<typeof processNewTx>[1]);
+
+    const after = await store.getTx(ORIG_TX_ID);
+    expect(after!.outputs[0].spent_by).toBe(NEW_TX_ID);
+  });
+
+  it('does NOT stamp spent_by on a foreign-owned origin output (not in our wallet)', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    // isAddressMine returns true only for OWN_ADDR; FOREIGN_ADDR is not ours.
+    jest.spyOn(storage, 'isAddressMine').mockImplementation(async (addr: string) => {
+      return addr === OWN_ADDR;
+    });
+    await store.saveAddress({ base58: OWN_ADDR, bip32AddressIndex: 0 });
+    // Origin tx's output sits on FOREIGN_ADDR — not ours.
+    await store.saveTx(
+      buildOriginTx(FOREIGN_ADDR) as unknown as Parameters<typeof store.saveTx>[0]
+    );
+
+    const { processNewTx } = await import('../../src/utils/storage');
+    await processNewTx(storage, buildSpendingTx() as unknown as Parameters<typeof processNewTx>[1]);
+
+    // Foreign address → no spent_by stamp. Avoids leaking spend
+    // information into foreign-owned tx records and keeps the wallet
+    // honest about what it actually knows.
+    const after = await store.getTx(ORIG_TX_ID);
+    expect(after!.outputs[0].spent_by).toBeNull();
+  });
+
+  it('is idempotent — re-running with the same tx leaves spent_by stamped once', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    await store.saveAddress({ base58: OWN_ADDR, bip32AddressIndex: 0 });
+    await store.saveTx(buildOriginTx(OWN_ADDR) as unknown as Parameters<typeof store.saveTx>[0]);
+
+    const { processNewTx } = await import('../../src/utils/storage');
+    const spendingTx = buildSpendingTx() as unknown as Parameters<typeof processNewTx>[1];
+
+    await processNewTx(storage, spendingTx);
+    const afterFirst = await store.getTx(ORIG_TX_ID);
+    expect(afterFirst!.outputs[0].spent_by).toBe(NEW_TX_ID);
+
+    // Run a second time — the early-return path (origOutput.spent_by ===
+    // tx.tx_id) prevents redundant saveTx work; the field stays correct.
+    await processNewTx(storage, spendingTx);
+    const afterSecond = await store.getTx(ORIG_TX_ID);
+    expect(afterSecond!.outputs[0].spent_by).toBe(NEW_TX_ID);
+  });
+});

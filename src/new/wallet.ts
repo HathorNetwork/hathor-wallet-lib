@@ -1278,6 +1278,13 @@ class HathorWallet extends EventEmitter {
     // Derivation path index
     const addressData = await this.storage.getAddressInfo(address);
     const index = addressData!.bip32AddressIndex;
+    // When the caller passes the user-facing shielded receive
+    // address (the 71-byte encoded form), on-chain outputs are
+    // labelled with the spend-derived P2PKH (`addressType:
+    // 'shielded-spend'`) at the SAME BIP32 index. Without this
+    // awareness the address-matching loop below would never hit any
+    // shielded output and the totals would all be zero.
+    const callerIsShieldedReceive = addressData!.addressType === 'shielded';
 
     // Address information that will be calculated below
     const addressInfo = {
@@ -1298,7 +1305,18 @@ class HathorWallet extends EventEmitter {
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        const is_address_valid = output.decoded && output.decoded.address === address;
+        let is_address_valid = output.decoded && output.decoded.address === address;
+        // Shielded-receive equivalence: if the direct comparison
+        // missed and the caller asked about a shielded receive
+        // address, accept the output when it lands on the wallet's
+        // own `shielded-spend` sibling at the same BIP32 index.
+        if (!is_address_valid && callerIsShieldedReceive && output.decoded?.address) {
+          const outAddrInfo = await this.storage.getAddressInfo(output.decoded.address);
+          is_address_valid =
+            !!outAddrInfo &&
+            outAddrInfo.addressType === 'shielded-spend' &&
+            outAddrInfo.bip32AddressIndex === addressData!.bip32AddressIndex;
+        }
         const is_token_valid = token === output.token;
         const is_authority = transactionUtils.isAuthorityOutput(output);
         if (!is_address_valid || !is_token_valid || is_authority) {

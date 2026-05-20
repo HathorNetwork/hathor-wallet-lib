@@ -204,4 +204,72 @@ describe('shielded outputs — Group Q: address listing + UTXO filter cross-chai
       expect(m.address).toBe(legacyAddr);
     }
   });
+
+  it('Q.3 — getAddressInfo on a shielded receive sums the on-chain spend-P2PKH outputs', async () => {
+    // Bug surfaced via the headless /wallet/address-info endpoint:
+    // passing the user-facing shielded address returned `0` for
+    // every total because the matching loop compared base58 against
+    // `output.decoded.address`, which for shielded outputs is the
+    // spend-P2PKH at the same BIP32 index — not the user-facing
+    // shielded encoding. The fix: when the caller passed a
+    // shielded receive entry, also accept outputs landing on the
+    // wallet's shielded-spend sibling at the same index.
+    const sender: HathorWallet = await generateWalletHelper();
+    const recipient: HathorWallet = await generateWalletHelper();
+
+    await GenesisWalletHelper.injectFunds(sender, await sender.getAddressAtIndex(0), 200n);
+
+    // Two shielded outputs at the same recipient index (5) so we
+    // can sum both and pin total_amount_received.
+    const recipientShielded5 = await recipient.getAddressAtIndex(5, { legacy: false });
+    const recipientShielded6 = await recipient.getAddressAtIndex(6, { legacy: false });
+    const tx = await sender.sendManyOutputsTransaction([
+      {
+        address: recipientShielded5,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: recipientShielded6,
+        value: 70n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+    await waitForTxReceived(recipient, tx!.hash!);
+
+    // Pass the user-facing shielded receive address to
+    // getAddressInfo. Without the fix, total_amount_received is
+    // zero. With the fix, it's exactly the value of the output
+    // landing at THIS index (30), not the wallet's total shielded
+    // balance.
+    const infoAt5 = await recipient.getAddressInfo(recipientShielded5);
+    expect(infoAt5.total_amount_received).toBe(30n);
+    expect(infoAt5.total_amount_available).toBe(30n);
+    expect(infoAt5.total_amount_sent).toBe(0n);
+    expect(infoAt5.index).toBe(5);
+
+    // Index 6 is independently summed (catches an over-resolution
+    // bug that would lump all shielded UTXOs together).
+    const infoAt6 = await recipient.getAddressInfo(recipientShielded6);
+    expect(infoAt6.total_amount_received).toBe(70n);
+    expect(infoAt6.index).toBe(6);
+  });
+
+  it('Q.3 — getAddressInfo on a legacy P2PKH still works (no regression)', async () => {
+    // The fallback storage lookup only kicks in when the caller's
+    // address is shielded — the original direct base58 match runs
+    // first and short-circuits for legacy. Pin that here so a
+    // future refactor can't accidentally make legacy slower or
+    // wrong.
+    const wallet: HathorWallet = await generateWalletHelper();
+    const legacyAddr = await wallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(wallet, legacyAddr, 50n);
+
+    const info = await wallet.getAddressInfo(legacyAddr);
+    expect(info.total_amount_received).toBe(50n);
+    expect(info.total_amount_available).toBe(50n);
+  });
 });

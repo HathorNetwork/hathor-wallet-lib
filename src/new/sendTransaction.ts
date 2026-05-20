@@ -1289,7 +1289,26 @@ export async function checkUnspentInput(
   }
 
   if (txout.decoded.address) {
-    if (txout.decoded.address !== input.address) {
+    // Resolve a user-supplied shielded receive form (the 71-byte
+    // encoded address) to the on-chain spend-derived P2PKH at the
+    // same BIP32 index — that's what `txout.decoded.address` carries
+    // for shielded outputs. Without this resolution the equality
+    // check rejects every shielded input whose caller passed the
+    // user-facing address. Same shape as the `selectUtxos`
+    // shielded resolution.
+    let effectiveInputAddress = input.address;
+    if (effectiveInputAddress && effectiveInputAddress !== txout.decoded.address) {
+      const inputAddrInfo = await storage.getAddressInfo(effectiveInputAddress);
+      const txoutAddrInfo = await storage.getAddressInfo(txout.decoded.address);
+      if (
+        inputAddrInfo?.addressType === 'shielded' &&
+        txoutAddrInfo?.addressType === 'shielded-spend' &&
+        inputAddrInfo.bip32AddressIndex === txoutAddrInfo.bip32AddressIndex
+      ) {
+        effectiveInputAddress = txout.decoded.address;
+      }
+    }
+    if (txout.decoded.address !== effectiveInputAddress) {
       return {
         success: false,
         message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input`,

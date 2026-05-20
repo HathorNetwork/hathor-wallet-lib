@@ -1229,6 +1229,30 @@ export async function processNewTx(
     input.token_data = origOutput.token_data ?? 0;
   }
 
+  // Stamp spent_by on origin outputs we own. getAddressInfo reads
+  // `output.spent_by` directly from tx history; without this stamp the
+  // sender-local insert leaves the origin tx's outputs.spent_by null
+  // until the fullnode's metadata update for the origin tx arrives.
+  // During that window, getAddressInfo returns inflated `available` and
+  // zero `sent` for the address that owned the spent UTXO. The UTXO set
+  // is already correct (deleteUtxo above / saveUtxo skipped on the
+  // output loop's spent branch), so this only fixes the tx-history view.
+  // Idempotent: re-running with the same tx.tx_id is a no-op.
+  const dirtyOrigTxs = new Map<string, IHistoryTx>();
+  for (const input of tx.inputs) {
+    const origTx = dirtyOrigTxs.get(input.tx_id) ?? (await store.getTx(input.tx_id));
+    if (!origTx) continue;
+    const origOutput = transactionUtils.findSpentOutput(origTx, input.index);
+    if (!origOutput?.decoded?.address) continue;
+    if (!(await storage.isAddressMine(origOutput.decoded.address))) continue;
+    if (origOutput.spent_by === tx.tx_id) continue;
+    origOutput.spent_by = tx.tx_id;
+    dirtyOrigTxs.set(input.tx_id, origTx);
+  }
+  for (const origTx of dirtyOrigTxs.values()) {
+    await store.saveTx(origTx);
+  }
+
   for (const input of tx.inputs) {
     // We ignore data inputs and shielded inputs we don't own. Wallet-owned
     // shielded inputs are enriched above so their decoded/value/token/token_data

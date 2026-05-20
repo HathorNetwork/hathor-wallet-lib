@@ -322,6 +322,71 @@ test('checkUnspentInput', async () => {
   });
 });
 
+test('checkUnspentInput accepts the user-facing shielded form when output is on the spend-P2PKH sibling', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  jest.spyOn(storage, 'isAddressMine').mockReturnValue(Promise.resolve(true));
+  jest.spyOn(storage, 'getTx').mockReturnValue(
+    Promise.resolve({
+      is_voided: false,
+      outputs: [{ token_data: 1, token: '01', decoded: { address: 'spend-p2pkh-W' } }],
+    })
+  );
+  // Caller passed the user-facing shielded receive form. On-chain
+  // the output is labelled with the spend-P2PKH sibling at the same
+  // BIP32 index. The validator must resolve the two as equivalent.
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(addr => {
+    if (addr === 'shielded-K') {
+      return Promise.resolve({ addressType: 'shielded', bip32AddressIndex: 7 });
+    }
+    if (addr === 'spend-p2pkh-W') {
+      return Promise.resolve({ addressType: 'shielded-spend', bip32AddressIndex: 7 });
+    }
+    return Promise.resolve(null);
+  });
+
+  const input = { txId: 'tx-id', index: 0, address: 'shielded-K', token: '01' };
+  await expect(checkUnspentInput(storage, input, '01')).resolves.toEqual({
+    success: true,
+    message: '',
+  });
+});
+
+test('checkUnspentInput still rejects a totally unrelated address (no over-resolution regression)', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  jest.spyOn(storage, 'isAddressMine').mockReturnValue(Promise.resolve(true));
+  jest.spyOn(storage, 'getTx').mockReturnValue(
+    Promise.resolve({
+      is_voided: false,
+      outputs: [{ token_data: 1, token: '01', decoded: { address: 'spend-p2pkh-W' } }],
+    })
+  );
+  // Caller's shielded address resolves to a DIFFERENT BIP32 index
+  // than the output's spend-P2PKH. Must still be rejected — the
+  // shielded resolution must not become an "always accept" bypass.
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(addr => {
+    if (addr === 'shielded-K-other-index') {
+      return Promise.resolve({ addressType: 'shielded', bip32AddressIndex: 99 });
+    }
+    if (addr === 'spend-p2pkh-W') {
+      return Promise.resolve({ addressType: 'shielded-spend', bip32AddressIndex: 7 });
+    }
+    return Promise.resolve(null);
+  });
+
+  const input = { txId: 'tx-id', index: 0, address: 'shielded-K-other-index', token: '01' };
+  await expect(checkUnspentInput(storage, input, '01')).resolves.toEqual({
+    success: false,
+    message:
+      'Output [0] of transaction [tx-id] does not have the same address as the provided input',
+  });
+});
+
 test('prepareSendTokensData', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
