@@ -41,6 +41,7 @@ import type {
   MintTokensAdapterOptions,
   MeltTokensAdapterOptions,
   MintMeltResult,
+  TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
   AdapterOutput,
@@ -303,6 +304,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
     return { hash: result.hash, transaction: result };
+  }
+
+  async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
+    return this.concrete(wallet).getTokenDetails(tokenUid);
   }
 
   async getUtxos(
