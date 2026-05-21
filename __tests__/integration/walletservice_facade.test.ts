@@ -8,7 +8,7 @@ import {
   initializeServiceGlobalConfigs,
   pollForTx,
 } from './helpers/service-facade.helper';
-import { UtxoError, WalletRequestError } from '../../src/errors';
+import { WalletRequestError } from '../../src/errors';
 import { GetAddressesObject } from '../../src/wallet/types';
 import { WalletAddressMode } from '../../src/types';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
