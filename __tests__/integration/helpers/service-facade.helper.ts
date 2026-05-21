@@ -4,7 +4,7 @@ import { delay } from '../utils/core.util';
 import { HathorWalletServiceWallet, MemoryStore, Storage, walletUtils } from '../../../src';
 import Network from '../../../src/models/network';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
-import { TxNotFoundError } from '../../../src/errors';
+import { TxNotFoundError, WalletRequestError } from '../../../src/errors';
 import { precalculationHelpers } from './wallet-precalculation.helper';
 import config from '../../../src/config';
 import ncApi from '../../../src/api/nano';
@@ -150,6 +150,60 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
     await delay(delayMs);
   }
   throw new Error(`Transaction ${txId} not found after ${maxAttempts} attempts`);
+}
+
+/**
+ * Backoff sequence between retry attempts on a transient `wallet/init` failure.
+ * 4 total attempts (initial + 3 backoffs), ~3.5s worst-case added latency.
+ */
+const TRANSIENT_WALLET_INIT_BACKOFFS_MS = [500, 1000, 2000];
+
+/**
+ * The exact error message thrown by `walletApi.createWallet` at `walletApi.ts:123`
+ * when `POST wallet/init` returns an unexpected status/body. Matching this exact
+ * string keeps the retry surface minimal — see `retryOnTransientWalletInit`.
+ */
+const TRANSIENT_WALLET_INIT_ERROR_MESSAGE = 'Error creating wallet.';
+
+/**
+ * Retries a wallet-init operation on transient `wallet/init` HTTP failures.
+ *
+ * The wallet-service backend can briefly reject `POST wallet/init` while a freshly-spawned
+ * docker stack is still settling. Jest's `retryTimes(2)` cannot help, because the failure
+ * typically happens inside `beforeAll` — and Jest only retries `it()` bodies.
+ *
+ * Retry surface is intentionally narrow: only `WalletRequestError` with message
+ * `"Error creating wallet."` is treated as transient. Test-injected mocks (e.g.
+ * `new Error('Crash')`) and other errors propagate immediately on the first attempt.
+ */
+export async function retryOnTransientWalletInit<T>(
+  op: () => Promise<T>,
+  label: string
+): Promise<T> {
+  const maxAttempts = TRANSIENT_WALLET_INIT_BACKOFFS_MS.length + 1;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const result = await op();
+      if (attempt > 1) {
+        loggers.test!.log(`${label} succeeded on attempt ${attempt}`);
+      }
+      return result;
+    } catch (err) {
+      const isTransient =
+        err instanceof WalletRequestError && err.message === TRANSIENT_WALLET_INIT_ERROR_MESSAGE;
+      if (!isTransient || attempt === maxAttempts) {
+        throw err;
+      }
+      const backoffMs = TRANSIENT_WALLET_INIT_BACKOFFS_MS[attempt - 1];
+      loggers.test!.warn(
+        `${label} hit transient wallet/init flake on attempt ${attempt}, retrying in ${backoffMs}ms`,
+        { error: (err as Error).message }
+      );
+      await delay(backoffMs);
+    }
+  }
+  // Unreachable: the loop above either returns or throws on the final attempt.
+  throw new Error(`retryOnTransientWalletInit: unreachable for ${label}`);
 }
 
 /**
