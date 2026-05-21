@@ -610,7 +610,10 @@ describe('Full blueprint basic tests', () => {
 
     const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
     expect(onChainBlueprintList.success).toBe(true);
-    expect(onChainBlueprintList.blueprints.length).toBe(6);
+    // Lower-bound check rather than exact count: the global on-chain blueprint
+    // list grows whenever a new fixture is registered in setupTests-integration.js,
+    // so an exact assertion couples this test to unrelated additions.
+    expect(onChainBlueprintList.blueprints.length).toBeGreaterThanOrEqual(8);
 
     const nanoList = await ncApi.getNanoContractCreationList();
     // The correct length depends on the execution order, so I
