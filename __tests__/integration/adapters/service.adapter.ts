@@ -17,6 +17,7 @@ import {
   pollForTx,
   pollForTokenDetails,
   pollUntilCondition,
+  retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
@@ -181,10 +182,13 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
     // Pass options through directly — do NOT fill defaults when the caller
     // explicitly passes undefined (used by validation tests).
-    await sw.start({
-      pinCode: options?.pinCode,
-      password: options?.password,
-    });
+    // Wrap in retryOnTransientWalletInit so a freshly-spawned wallet-service
+    // backend rejecting `POST wallet/init` doesn't fail the suite's beforeAll
+    // (Jest's retryTimes only re-runs it() bodies, not setup hooks).
+    await retryOnTransientWalletInit(
+      () => sw.start({ pinCode: options?.pinCode, password: options?.password }),
+      'ServiceWalletTestAdapter.startWallet'
+    );
   }
 
   async waitForReady(_wallet: FuzzyWalletType): Promise<void> {

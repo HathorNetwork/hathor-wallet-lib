@@ -913,9 +913,33 @@ class NanoContractTransactionBuilder {
       }
 
       if (totalFee > 0n && !this.contractPaysFees && !this.tokenFeeAddedInDeposit) {
-        const { inputs: feeInputs, outputs: feeOutputs } = await this.selectFeeInputs(totalFee);
-        inputs = concat(inputs, feeInputs);
-        outputs = concat(outputs, feeOutputs);
+        // Try to fund the fee from an HTR deposit change output already in the
+        // tx before selecting new HTR utxos. This avoids failing when the only
+        // HTR utxo was already consumed (and locked) by the HTR deposit action.
+        let remainingFee = totalFee;
+        const changeIdx = outputs.findIndex(
+          o =>
+            'token' in o &&
+            o.token === NATIVE_TOKEN_UID &&
+            o.authorities === 0n &&
+            o.isChange === true
+        );
+        if (changeIdx !== -1) {
+          const change = outputs[changeIdx];
+          if (change.value > remainingFee) {
+            change.value -= remainingFee;
+            remainingFee = 0n;
+          } else {
+            remainingFee -= change.value;
+            outputs.splice(changeIdx, 1);
+          }
+        }
+        if (remainingFee > 0n) {
+          const { inputs: feeInputs, outputs: feeOutputs } =
+            await this.selectFeeInputs(remainingFee);
+          inputs = concat(inputs, feeInputs);
+          outputs = concat(outputs, feeOutputs);
+        }
       }
 
       // When contractPaysFees is true, deduct fee from HTR withdrawal output
