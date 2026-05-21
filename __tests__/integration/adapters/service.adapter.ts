@@ -36,6 +36,7 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
   AdapterOutput,
@@ -306,6 +307,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     await pollForTx(sw, result.hash);
     await pollForTokenDetails(sw, result.hash);
     return { hash: result.hash, transaction: result };
+  }
+
+  async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
+    return this.concrete(wallet).getTokenDetails(tokenUid);
   }
 
   async getUtxos(
