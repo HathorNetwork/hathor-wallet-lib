@@ -99,6 +99,12 @@ export async function bestUtxoSelection(
   let utxosAmount = 0n;
   let selectedUtxo: IUtxo | null = null;
 
+  // Select any UTXO (transparent or shielded) up to the requested amount.
+  // hathor-core accepts shielded inputs in transparent-output-only txs
+  // (see `is_shielded()` gating in verification_service.py); ownership is
+  // enforced via the P2PKH signature on the spend-derived key for shielded
+  // outputs, and the fullnode skips the HTR surplus/deficit check for
+  // shielded txs (commit 75831f9a).
   const options: IUtxoFilterOptions = {
     token,
     authorities: 0n,

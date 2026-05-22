@@ -38,7 +38,7 @@ export const decodedSchema = z.discriminatedUnion('type', [
   unknownDecodedScriptSchema,
 ]);
 
-export const fullnodeTxApiInputSchema = z.object({
+const fullnodeTxApiTransparentInputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
   script: z.string(),
@@ -48,6 +48,22 @@ export const fullnodeTxApiInputSchema = z.object({
   token: z.string().nullish(),
 });
 
+// Shielded inputs expose only a commitment + range proof on the wire; the
+// amount, token and spender are hidden. Additional fields may be added by the
+// fullnode over time, so we passthrough unknown keys instead of rejecting.
+const fullnodeTxApiShieldedInputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    commitment: z.string(),
+    range_proof: z.string(),
+  })
+  .passthrough();
+
+export const fullnodeTxApiInputSchema = z.union([
+  fullnodeTxApiShieldedInputSchema,
+  fullnodeTxApiTransparentInputSchema,
+]);
+
 export const fullnodeTxApiOutputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
@@ -56,6 +72,56 @@ export const fullnodeTxApiOutputSchema = z.object({
   token: z.string().nullish(),
   spent_by: z.string().nullable().default(null),
 });
+
+// Shielded outputs hide their value behind a Pedersen commitment, so the
+// `decoded` block carries only address-side fields (no `value` /
+// `token_data` like transparent outputs). Matches `IShieldedOutputDecoded`
+// in src/shielded/types.ts and what `_shielded_output_to_json` in
+// hathor-core's base_transaction.py emits.
+const shieldedDecodedSchema = z
+  .object({
+    type: z.string().optional(),
+    address: z.string().optional(),
+    timelock: z.number().nullish(),
+  })
+  .passthrough();
+
+// Shielded outputs as emitted by the fullnode's tx API. Mirrors
+// `IShieldedOutput` (src/shielded/types.ts) plus the optional FullShielded
+// extensions and the `spent_by` flag that the fullnode populates the same
+// way it does for transparent outputs (see hathor-core
+// `_shielded_output_to_json` in base_transaction.py and
+// `meta.get_output_spent_by`). `.passthrough()` keeps any new
+// forward-compat fields the fullnode might add without rejecting the tx.
+export const fullnodeTxApiShieldedOutputSchema = z
+  .object({
+    // 1 = AmountShielded, 2 = FullShielded (matches ShieldedOutputMode).
+    // Optional because hathor-core nodes pre-`_shielded_output_to_json`
+    // mode-field addition still send shielded outputs without it.
+    // Downstream readers fall back to detecting FullShielded via the
+    // presence of `asset_commitment`. Once every node consumers care
+    // about has shipped the field this can be tightened back.
+    mode: z.number().optional(),
+    commitment: z.string(), // hex, 33 bytes
+    range_proof: z.string(), // hex, variable
+    script: z.string(), // hex, P2PKH/P2SH script template
+    // FullShielded outputs may omit `token_data` (the token UID is
+    // hidden behind `asset_commitment`, so the field carries no
+    // meaningful value). Defaulting to 0 (native-token slot) matches
+    // the AmountShielded-when-uncertain fallback used elsewhere.
+    token_data: z.number().optional().default(0),
+    ephemeral_pubkey: z.string(), // hex, 33 bytes; used for ECDH decryption
+    decoded: shieldedDecodedSchema,
+    // FullShielded only — present when `mode === 2`.
+    asset_commitment: z.string().optional(), // hex, 33 bytes
+    surjection_proof: z.string().optional(), // hex, variable
+    // Set by the fullnode when this slot has been spent in another tx.
+    // Null when unspent. Same semantics as transparent
+    // `IHistoryOutput.spent_by`; missing on older fullnode builds that
+    // don't yet emit it, hence `.optional()`.
+    spent_by: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 export const fullnodeTxApiTokenSchema = z.object({
   uid: z.string(),
@@ -80,6 +146,8 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_blueprint_id: z.string().nullish(),
   inputs: fullnodeTxApiInputSchema.array(),
   outputs: fullnodeTxApiOutputSchema.array(),
+  shielded_inputs: fullnodeTxApiShieldedInputSchema.array().nullish(),
+  shielded_outputs: fullnodeTxApiShieldedOutputSchema.array().nullish(),
   tokens: fullnodeTxApiTokenSchema.array(),
   token_name: z.string().nullish(),
   token_symbol: z.string().nullish(),

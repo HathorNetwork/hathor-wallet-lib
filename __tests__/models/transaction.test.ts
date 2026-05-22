@@ -7,6 +7,7 @@
 
 import lodash from 'lodash';
 import Transaction from '../../src/models/transaction';
+import ShieldedOutput from '../../src/models/shielded_output';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
@@ -15,7 +16,12 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
-import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
+import {
+  DEFAULT_TX_VERSION,
+  MAX_OUTPUTS,
+  MAX_SHIELDED_OUTPUTS,
+  DEFAULT_SIGNAL_BITS,
+} from '../../src/constants';
 import {
   CreateTokenTxInvalid,
   MaximumNumberInputsError,
@@ -610,5 +616,45 @@ describe('NFT Validation', () => {
     ];
     txInstance = helpers.createTxFromHistoryObject(historyTx);
     expect(() => txInstance.validateNft(network)).toThrow('mint and melt is allowed');
+  });
+});
+
+describe('Transaction.validate shielded outputs', () => {
+  it('should accept MAX_SHIELDED_OUTPUTS shielded outputs', () => {
+    const tx = new Transaction([], [], { version: DEFAULT_TX_VERSION });
+    const fakeShielded = {
+      mode: 1,
+      commitment: Buffer.alloc(33),
+      rangeProof: Buffer.alloc(10),
+      tokenData: 0,
+      script: Buffer.alloc(25),
+      ephemeralPubkey: Buffer.alloc(33),
+      value: 1n,
+      serialize: () => [Buffer.alloc(1)],
+      serializeSighash: () => [Buffer.alloc(1)],
+    };
+    tx.shieldedOutputs = Array.from({ length: MAX_SHIELDED_OUTPUTS }, () => ({
+      ...fakeShielded,
+    })) as ShieldedOutput[];
+    expect(() => tx.validate()).not.toThrow();
+  });
+
+  it('should reject more than MAX_SHIELDED_OUTPUTS shielded outputs', () => {
+    const tx = new Transaction([], [], { version: DEFAULT_TX_VERSION });
+    const fakeShielded = {
+      mode: 1,
+      commitment: Buffer.alloc(33),
+      rangeProof: Buffer.alloc(10),
+      tokenData: 0,
+      script: Buffer.alloc(25),
+      ephemeralPubkey: Buffer.alloc(33),
+      value: 1n,
+      serialize: () => [Buffer.alloc(1)],
+      serializeSighash: () => [Buffer.alloc(1)],
+    };
+    tx.shieldedOutputs = Array.from({ length: MAX_SHIELDED_OUTPUTS + 1 }, () => ({
+      ...fakeShielded,
+    })) as ShieldedOutput[];
+    expect(() => tx.validate()).toThrow(MaximumNumberOutputsError);
   });
 });
