@@ -6,6 +6,11 @@
  */
 
 import { get, includes } from 'lodash';
+// `@hathor/ct-crypto-node` is not declared in wallet-lib's package.json: it is
+// not on npm yet, and integration tests are the only consumer. Install it
+// manually before running the suite — see __tests__/integration/README.md.
+// eslint-disable-next-line import/no-unresolved, import/no-extraneous-dependencies
+import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -107,6 +112,10 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, param);
   }
   const hWallet = new HathorWallet(walletConfig);
+  // Register the shielded crypto provider explicitly before start. wallet-lib
+  // no longer auto-detects; the provider lives in `@hathor/ct-crypto-node`,
+  // installed manually (see __tests__/integration/README.md).
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
