@@ -18,8 +18,12 @@ export type {
   IRewoundFullShieldedOutput,
 } from './types';
 
-export { createDefaultShieldedCryptoProvider } from './provider';
-
-export { createBrowserShieldedCryptoProvider } from './provider.browser';
+// Provider implementations live with their respective ct-crypto packages:
+//   - Node:    @hathor/ct-crypto-node    → createDefaultShieldedCryptoProvider()
+//   - Browser: @hathor/ct-crypto-wasm    → createBrowserShieldedCryptoProvider()
+//   - Mobile:  built into the app target (RN native module)
+//
+// Install whichever crypto package matches your runtime, then wire it in via
+// `wallet.setShieldedCryptoProvider(createXxxShieldedCryptoProvider())`.
 
 export { processShieldedOutputs } from './processing';
