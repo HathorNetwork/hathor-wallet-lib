@@ -3698,8 +3698,46 @@ describe('pollForWalletStatus', () => {
       const error = await caught;
       expect(error).toBeInstanceOf(WalletRequestError);
       expect(error.message).toContain('Wallet status polling timed out');
-      expect(error.cause).toBeInstanceOf(WalletRequestError);
-      expect((error.cause as Error).message).toBe('Persistent server error');
+      const cause = (error as WalletRequestError).cause as { source: WalletRequestError };
+      expect(cause.source).toBeInstanceOf(WalletRequestError);
+      expect(cause.source.message).toBe('Persistent server error');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should include last wallet state as cause when timing out without errors', async () => {
+    jest.useFakeTimers();
+
+    const creatingResponse = {
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: Date.now(),
+        readyAt: null,
+      },
+    };
+
+    try {
+      jest.spyOn(walletApi, 'getWalletStatus').mockResolvedValue(creatingResponse);
+
+      const promise = wallet.pollForWalletStatus();
+      const caught = promise.catch((err: Error) => err);
+
+      for (let i = 0; i < 60; i++) {
+        await jest.advanceTimersByTimeAsync(1000);
+      }
+
+      const error = await caught;
+      expect(error).toBeInstanceOf(WalletRequestError);
+      expect(error.message).toContain('Wallet status polling timed out');
+      const cause = (error as WalletRequestError).cause as {
+        state: typeof creatingResponse.status;
+      };
+      expect(cause.state).toEqual(creatingResponse.status);
     } finally {
       jest.useRealTimers();
     }
