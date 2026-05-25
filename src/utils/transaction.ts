@@ -54,7 +54,7 @@ import {
   IHistoryShieldedOutput,
   AuthorityType,
 } from '../types';
-import { ShieldedOutputMode } from '../shielded/types';
+import { IBlindingEntry, ShieldedOutputMode } from '../shielded/types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -1330,8 +1330,8 @@ const transaction = {
       !txData.excessBlindingFactor &&
       (!txData.shieldedOutputs || txData.shieldedOutputs.length === 0)
     ) {
-      const shieldedInputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
-      const transparentInputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      const shieldedInputs: Array<IBlindingEntry> = [];
+      const transparentInputs: Array<IBlindingEntry> = [];
       // The excess scalar in UnshieldBalanceHeader represents
       // sum(r_in) - sum(r_out), independent of token (it lives on G).
       // Include shielded inputs of every token so the G-term sum is
@@ -1345,16 +1345,16 @@ const transaction = {
           if (!utxo.blindingFactor) continue;
           shieldedInputs.push({
             value: utxo.value,
-            vbf: Buffer.from(utxo.blindingFactor, 'hex'),
-            gbf: utxo.assetBlindingFactor
+            valueBlindingFactor: Buffer.from(utxo.blindingFactor, 'hex'),
+            generatorBlindingFactor: utxo.assetBlindingFactor
               ? Buffer.from(utxo.assetBlindingFactor, 'hex')
               : ZERO_TWEAK,
           });
         } else if ((utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
           transparentInputs.push({
             value: utxo.value,
-            vbf: ZERO_TWEAK,
-            gbf: ZERO_TWEAK,
+            valueBlindingFactor: ZERO_TWEAK,
+            generatorBlindingFactor: ZERO_TWEAK,
           });
         }
       }
@@ -1367,7 +1367,7 @@ const transaction = {
               'factor for a tx that spends shielded UTXOs without producing shielded outputs.'
           );
         }
-        const transparentOutputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+        const transparentOutputEntries: Array<IBlindingEntry> = [];
         // All outputs contribute (value, vbf=0, gbf=0). Authority outputs
         // are skipped because their `value` field is the authority mask,
         // not a token amount the verifier sums.
@@ -1375,8 +1375,8 @@ const transaction = {
           if (out.value > 0n && (out.authorities ?? 0n) === 0n) {
             transparentOutputEntries.push({
               value: out.value,
-              vbf: ZERO_TWEAK,
-              gbf: ZERO_TWEAK,
+              valueBlindingFactor: ZERO_TWEAK,
+              generatorBlindingFactor: ZERO_TWEAK,
             });
           }
         }
@@ -1386,8 +1386,8 @@ const transaction = {
             for (const fee of header.entries) {
               transparentOutputEntries.push({
                 value: fee.amount,
-                vbf: ZERO_TWEAK,
-                gbf: ZERO_TWEAK,
+                valueBlindingFactor: ZERO_TWEAK,
+                generatorBlindingFactor: ZERO_TWEAK,
               });
             }
           }

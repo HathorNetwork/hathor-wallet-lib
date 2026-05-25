@@ -10,7 +10,12 @@ import { IDataShieldedOutput } from '../types';
 import { getAddressType } from '../utils/address';
 import transactionUtils from '../utils/transaction';
 import Network from '../models/network';
-import { IShieldedCryptoProvider, ShieldedOutputMode } from './types';
+import {
+  IBlindingEntry,
+  IShieldedCryptoProvider,
+  ISurjectionDomainEntry,
+  ShieldedOutputMode,
+} from './types';
 
 interface ShieldedOutputDef {
   address: string;
@@ -21,11 +26,12 @@ interface ShieldedOutputDef {
   timelock?: number;
 }
 
-export interface ShieldedInputBlinding {
-  value: bigint;
-  vbf: Buffer; // value blinding factor
-  gbf: Buffer; // generator/asset blinding factor (ZERO_TWEAK for AmountShielded)
-}
+/**
+ * Re-export of `IBlindingEntry` under wallet-lib's local name. The contract
+ * lives in `@hathor/ct-crypto-provider`; alias kept for back-compat with the
+ * old `ShieldedInputBlinding` type that callers may still import.
+ */
+export type ShieldedInputBlinding = IBlindingEntry;
 
 /**
  * Per-input generator info for surjection proof domain construction.
@@ -80,7 +86,7 @@ export async function createShieldedOutputs(
   }
 
   const results: IDataShieldedOutput[] = [];
-  const createdOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+  const createdOutputs: IBlindingEntry[] = [];
 
   for (let i = 0; i < defs.length; i++) {
     const def = defs[i];
@@ -114,8 +120,8 @@ export async function createShieldedOutputs(
           );
           createdOutputs.push({
             value: def.value,
-            vbf: cryptoResult.blindingFactor,
-            gbf: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
+            valueBlindingFactor: cryptoResult.blindingFactor,
+            generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
           });
         } else {
           // AmountShielded last output: compute balancing vbf, create with it
@@ -133,8 +139,8 @@ export async function createShieldedOutputs(
           );
           createdOutputs.push({
             value: def.value,
-            vbf: cryptoResult.blindingFactor,
-            gbf: ZERO_TWEAK,
+            valueBlindingFactor: cryptoResult.blindingFactor,
+            generatorBlindingFactor: ZERO_TWEAK,
           });
         }
       } else if (fullyShielded) {
@@ -150,8 +156,8 @@ export async function createShieldedOutputs(
         );
         createdOutputs.push({
           value: def.value,
-          vbf: cryptoResult.blindingFactor,
-          gbf: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
+          valueBlindingFactor: cryptoResult.blindingFactor,
+          generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
         });
       } else {
         // AmountShielded non-last output: generate random vbf
@@ -164,8 +170,8 @@ export async function createShieldedOutputs(
         );
         createdOutputs.push({
           value: def.value,
-          vbf: cryptoResult.blindingFactor,
-          gbf: ZERO_TWEAK,
+          valueBlindingFactor: cryptoResult.blindingFactor,
+          generatorBlindingFactor: ZERO_TWEAK,
         });
       }
 
@@ -191,7 +197,7 @@ export async function createShieldedOutputs(
       let surjectionProof: Buffer | undefined;
       if (fullyShielded && cryptoResult.assetBlindingFactor) {
         const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
-        const domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }> = [];
+        const domain: ISurjectionDomainEntry[] = [];
         for (const inputInfo of inputGenerators) {
           const inputTokenBuf = Buffer.from(
             inputInfo.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : inputInfo.tokenUid,

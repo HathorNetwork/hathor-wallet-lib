@@ -207,14 +207,22 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Fetch all addresses from storage
+   * Fetch all addresses from storage for one chain.
+   *
+   * `opts.legacy` defaults to `true`; pass `legacy: false` to
+   * enumerate the wallet's user-facing shielded receive addresses
+   * (the 71-byte encoded form) in BIP32-index order. See
+   * `IStore.addressIter` for the chain-selection semantics.
    *
    * @async
    * @generator
+   * @param {IAddressChainOptions} [opts]
    * @yields {Promise<IAddressInfo & Partial<IAddressMetadata>>} The addresses in store.
    */
-  async *getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata> {
-    for await (const address of this.store.addressIter()) {
+  async *getAllAddresses(
+    opts?: IAddressChainOptions
+  ): AsyncGenerator<IAddressInfo & IAddressMetadata> {
+    for await (const address of this.store.addressIter(opts)) {
       const meta = await this.store.getAddressMeta(address.base58);
       yield { ...address, ...DEFAULT_ADDRESS_META, ...meta };
     }
