@@ -1709,24 +1709,11 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    if (
-      this.privateKey &&
-      (!this.preCalculatedAddresses || this.preCalculatedAddresses.length === 0)
-    ) {
-      // Single-key wallet without preCalculatedAddresses: derive the single
-      // address from publicKey + network internally. No xpub to fall back on,
-      // so we must populate storage upfront.
-      const network = new Network(this.conn.getCurrentNetwork());
-      const { base58 } = getAddressFromPubkey(this.publicKey as string, network);
-      await this.storage.saveAddress({
-        base58,
-        bip32AddressIndex: 0,
-        publicKey: this.publicKey,
-      });
-    } else if (this.preCalculatedAddresses) {
+    if (this.preCalculatedAddresses) {
       for (const [index, addr] of this.preCalculatedAddresses.entries()) {
-        // Attach the pubkey for single-key wallets so consumers don't fall
-        // through to the xpub-based derivation path (which is absent here).
+        // For single-key wallets, attach the cached publicKey at index 0 so
+        // pubkey lookups don't fall through to the xpub-based derivation
+        // path (which is absent for raw single-key wallets).
         const pubkey = this.privateKey && index === 0 ? this.publicKey : undefined;
         await this.storage.saveAddress({
           base58: addr,
@@ -1734,6 +1721,17 @@ class HathorWallet extends EventEmitter {
           ...(pubkey ? { publicKey: pubkey } : {}),
         });
       }
+    } else if (this.privateKey) {
+      // Single-key wallet without preCalculatedAddresses: derive the single
+      // address from publicKey + network internally. No xpub to fall back
+      // on, so we must populate storage upfront.
+      const network = new Network(this.conn.getCurrentNetwork());
+      const { base58 } = getAddressFromPubkey(this.publicKey as string, network);
+      await this.storage.saveAddress({
+        base58,
+        bip32AddressIndex: 0,
+        publicKey: this.publicKey,
+      });
     }
 
     let accessData = await this.storage.getAccessData();

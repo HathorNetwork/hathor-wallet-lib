@@ -1079,11 +1079,14 @@ export class Storage implements IStorage {
    */
   async checkPin(pinCode: string): Promise<boolean> {
     const accessData = await this._getValidAccessData();
-    if (!accessData.mainKey) {
+    // Single-key wallets persist `singleKeyPrivateKey` instead of `mainKey`;
+    // either encrypted blob can be used to verify the pin.
+    const encryptedKey = accessData.mainKey ?? accessData.singleKeyPrivateKey;
+    if (!encryptedKey) {
       throw new Error('Cannot check pin without the private key.');
     }
 
-    return checkPassword(accessData.mainKey, pinCode);
+    return checkPassword(encryptedKey, pinCode);
   }
 
   /**

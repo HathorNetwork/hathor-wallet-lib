@@ -792,3 +792,19 @@ describe('HathorWalletServiceWallet — single-key rejection', () => {
     }).toThrow(/single-key|not supported|HathorWallet/i);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 16. checkPin works against singleKeyPrivateKey
+// ---------------------------------------------------------------------------
+
+describe('Storage.checkPin — single-key wallets', () => {
+  test('returns true for the correct pin', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    await expect(storage.checkPin(PIN)).resolves.toBe(true);
+  });
+
+  test('returns false for the wrong pin', async () => {
+    const { storage } = await buildPopulatedSingleKeyWallet();
+    await expect(storage.checkPin('0000')).resolves.toBe(false);
+  });
+});

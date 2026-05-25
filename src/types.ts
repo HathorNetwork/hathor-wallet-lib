@@ -671,8 +671,6 @@ export interface IStorage {
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
   /**
-   * Resolve the private key for a given address index.
-   *
    * Resolve the raw secp256k1 private key for a given address index.
    *
    * - HD wallets: derives via `deriveNonCompliantChild` (Hathor-standard) from `mainKey`.
