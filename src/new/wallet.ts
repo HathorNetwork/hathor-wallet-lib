@@ -2124,20 +2124,11 @@ class HathorWallet extends EventEmitter {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
 
-      // Auto-detect shielded crypto provider if not already set.
-      // Dynamic import because @hathor/ct-crypto-node is an optional dependency —
-      // a static import would crash the wallet module if the native package isn't installed.
-      if (!this.storage.shieldedCryptoProvider) {
-        try {
-          const { createDefaultShieldedCryptoProvider } = await import('../shielded/provider');
-          this.storage.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
-        } catch (e) {
-          this.logger.info(
-            'Shielded crypto not available. Install @hathor/ct-crypto-node for shielded output support.',
-            e
-          );
-        }
-      }
+      // Note: shielded crypto provider is not auto-detected. Clients that
+      // need shielded support MUST install the appropriate crypto package
+      // (@hathor/ct-crypto-node for Node, @hathor/ct-crypto-wasm for
+      // browser verifier-only) and register the provider explicitly via
+      // `wallet.setShieldedCryptoProvider(...)` before starting the wallet.
 
       this.conn.start();
     } else {

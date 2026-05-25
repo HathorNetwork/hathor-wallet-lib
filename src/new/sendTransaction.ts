@@ -35,7 +35,7 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
-import { ShieldedOutputMode } from '../shielded/types';
+import { IBlindingEntry, ShieldedOutputMode } from '../shielded/types';
 import { createShieldedOutputs, InputGeneratorInfo } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
@@ -435,7 +435,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // Collecting once keeps the two paths in sync on input ordering.
     const allInputs = [...partialInputs, ...partialHtrTxData.inputs];
     const inputGenerators: InputGeneratorInfo[] = [];
-    const blindedInputsArr: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+    const blindedInputsArr: Array<IBlindingEntry> = [];
     // Transparent non-authority inputs collected separately. Needed only for the
     // excess-blinding-factor calc on full-unshield txs where the wallet holds a
     // mix of transparent + shielded UTXOs of the same token: the fullnode's
@@ -443,7 +443,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // outputs, so computeBalancingBlindingFactor must see the transparent
     // inputs too or it returns a bf that doesn't satisfy the equation (the
     // fullnode then panics when it tries to build the excess commitment).
-    const transparentInputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+    const transparentInputEntries: Array<IBlindingEntry> = [];
 
     for (const inp of allInputs) {
       const utxo = await this.storage.getUtxo({
@@ -473,14 +473,16 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         }
         blindedInputsArr.push({
           value: utxo.value,
-          vbf: Buffer.from(utxo.blindingFactor, 'hex'),
-          gbf: utxo.assetBlindingFactor ? Buffer.from(utxo.assetBlindingFactor, 'hex') : ZERO_TWEAK,
+          valueBlindingFactor: Buffer.from(utxo.blindingFactor, 'hex'),
+          generatorBlindingFactor: utxo.assetBlindingFactor
+            ? Buffer.from(utxo.assetBlindingFactor, 'hex')
+            : ZERO_TWEAK,
         });
       } else if (utxo && (utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
         transparentInputEntries.push({
           value: utxo.value,
-          vbf: ZERO_TWEAK,
-          gbf: ZERO_TWEAK,
+          valueBlindingFactor: ZERO_TWEAK,
+          generatorBlindingFactor: ZERO_TWEAK,
         });
       }
     }
@@ -546,19 +548,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // All transparent outputs contribute (value, vbf=0, gbf=0). Include the
       // HTR fee amount as a transparent output entry — the scalar must cover
       // the full output side the verifier sees.
-      const transparentOutputEntries: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }> = [];
+      const transparentOutputEntries: Array<IBlindingEntry> = [];
       for (const out of outputs) {
         transparentOutputEntries.push({
           value: out.value,
-          vbf: ZERO_TWEAK,
-          gbf: ZERO_TWEAK,
+          valueBlindingFactor: ZERO_TWEAK,
+          generatorBlindingFactor: ZERO_TWEAK,
         });
       }
       if (totalFee > 0n) {
         transparentOutputEntries.push({
           value: totalFee,
-          vbf: ZERO_TWEAK,
-          gbf: ZERO_TWEAK,
+          valueBlindingFactor: ZERO_TWEAK,
+          generatorBlindingFactor: ZERO_TWEAK,
         });
       }
 
