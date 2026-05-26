@@ -84,6 +84,22 @@ export async function createShieldedOutputs(
       'FullShielded outputs require at least one input token UID for surjection proof domain'
     );
   }
+  // Validate inputGenerators tokenUid length up front for the same reason
+  // we validate proposal.token above: Buffer.from(hex) silently truncates
+  // malformed strings, and a wrong-length tag computed downstream by
+  // deriveTag would produce a surjection proof the fullnode rejects with
+  // a confusing error far from the actual cause.
+  for (const [idx, info] of inputGenerators.entries()) {
+    const inputTokenBuf = Buffer.from(
+      info.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : info.tokenUid,
+      'hex'
+    );
+    if (inputTokenBuf.length !== 32) {
+      throw new Error(
+        `inputGenerators[${idx}]: token UID must be 32 bytes, got ${inputTokenBuf.length}`
+      );
+    }
+  }
 
   const results: IDataShieldedOutput[] = [];
   const createdOutputs: IBlindingEntry[] = [];
@@ -118,10 +134,22 @@ export async function createShieldedOutputs(
             balancingBf,
             lastAbf
           );
+          if (!cryptoResult.assetBlindingFactor) {
+            // Contract violation: createShieldedOutputWithBothBlindings is
+            // required to return the asset blinding factor it used to build
+            // the asset commitment. Silently falling back to ZERO_TWEAK
+            // here would produce a malformed FullShielded output (the
+            // commitment computed with the real abf but the stored
+            // generatorBlindingFactor zeroed) — wallet decryption later
+            // mismatches and balance corruption ensues.
+            throw new Error(
+              'Crypto provider returned no assetBlindingFactor for last FullShielded output'
+            );
+          }
           createdOutputs.push({
             value: proposal.value,
             valueBlindingFactor: cryptoResult.blindingFactor,
-            generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
+            generatorBlindingFactor: cryptoResult.assetBlindingFactor,
           });
         } else {
           // AmountShielded last output: compute balancing vbf, create with it
@@ -154,10 +182,18 @@ export async function createShieldedOutputs(
           vbf,
           abf
         );
+        if (!cryptoResult.assetBlindingFactor) {
+          // Same contract as the last-output branch above — fail loud here
+          // rather than store a zeroed generatorBlindingFactor and corrupt
+          // the wallet's view of this UTXO downstream.
+          throw new Error(
+            'Crypto provider returned no assetBlindingFactor for FullShielded output'
+          );
+        }
         createdOutputs.push({
           value: proposal.value,
           valueBlindingFactor: cryptoResult.blindingFactor,
-          generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
+          generatorBlindingFactor: cryptoResult.assetBlindingFactor,
         });
       } else {
         // AmountShielded non-last output: generate random vbf
@@ -195,7 +231,16 @@ export async function createShieldedOutputs(
       // For FullShielded inputs: use the blinded generator (asset_commitment) reconstructed
       // from the input's asset blinding factor — the fullnode verifies against this.
       let surjectionProof: Buffer | undefined;
-      if (fullyShielded && cryptoResult.assetBlindingFactor) {
+      if (fullyShielded) {
+        // assetBlindingFactor is guaranteed non-null inside the FullShielded
+        // branches above (we throw if the provider doesn't supply it), but
+        // TypeScript can't carry that narrowing across the cryptoResult
+        // reassignment in different if-branches — assert here.
+        if (!cryptoResult.assetBlindingFactor) {
+          throw new Error(
+            'FullShielded output reached surjection-proof step without an assetBlindingFactor'
+          );
+        }
         const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
         const domain: ISurjectionDomainEntry[] = [];
         for (const inputInfo of inputGenerators) {
