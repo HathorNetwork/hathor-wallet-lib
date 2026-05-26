@@ -1829,3 +1829,60 @@ describe('hasTxOutsideFirstAddress', () => {
     }
   });
 });
+
+describe('sendManyOutputsSendTransaction output mapping', () => {
+  // Regression coverage for `outputs.map(...)` in src/new/wallet.ts. The
+  // shielded-integration commit added per-output handling and the non-shielded
+  // branch silently dropped `type` and `data`, so data outputs fell through
+  // to `new Address(undefined)` deeper in the pipeline. No prior unit or
+  // integration test exercised data outputs through this API, so the
+  // regression shipped to wallet-lib 0.0.11+ and was first caught by the
+  // headless `send-tx.test.js` data-output cases.
+  function buildWallet() {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isReadonly').mockResolvedValue(false);
+    jest.spyOn(storage.config, 'getNetwork').mockReturnValue(new Network('testnet'));
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.pinCode = '000000';
+    return hWallet;
+  }
+
+  test('preserves type and data on data outputs', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { type: 'data', data: 'test', value: 1n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(1);
+    expect(sendTx.outputs[0]).toMatchObject({ type: 'data', data: 'test' });
+  });
+
+  test('preserves address outputs unchanged', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', value: 100n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(1);
+    expect(sendTx.outputs[0]).toMatchObject({
+      address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+      value: 100n,
+      token: '00',
+    });
+  });
+
+  test('preserves a mix of data and address outputs in input order', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { type: 'data', data: 'first', value: 1n, token: '00' },
+      { address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', value: 100n, token: '00' },
+      { type: 'data', data: 'second', value: 1n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(3);
+    expect(sendTx.outputs[0]).toMatchObject({ type: 'data', data: 'first' });
+    expect(sendTx.outputs[1]).toMatchObject({
+      address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+    });
+    expect(sendTx.outputs[2]).toMatchObject({ type: 'data', data: 'second' });
+  });
+});

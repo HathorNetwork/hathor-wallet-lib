@@ -41,7 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction from './sendTransaction';
+import SendTransaction, { ISendOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -1350,6 +1350,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Default to value-desc so max_utxos / max_amount truncation keeps the
+      // largest UTXOs — matches getUtxosForAmount and what any tx-builder
+      // consumer actually needs. Explicitly pass 'asc' to invert.
+      order_by_value: options.order_by_value ?? 'desc',
     };
     const utxoDetails: UtxoDetails = {
       total_amount_available: 0n,
@@ -1969,6 +1973,19 @@ class HathorWallet extends EventEmitter {
           shieldedMode: o.shielded,
           ...(o.timelock != null ? { timelock: o.timelock } : {}),
         };
+      }
+      if ((o as unknown as { type?: string }).type === 'data') {
+        // Data outputs come in as { type: 'data', data: string|Buffer, ... }
+        // and ProposedOutput is typed for address outputs. SendTransaction's
+        // ISendDataOutput handles both Buffer and string at runtime; preserve
+        // the shape verbatim so prepareTxData routes through isDataOutput().
+        const d = o as unknown as { data: Buffer | string; value?: bigint; token?: string };
+        return {
+          type: OutputType.DATA,
+          data: d.data,
+          ...(d.value !== undefined ? { value: d.value } : {}),
+          ...(d.token !== undefined ? { token: d.token } : {}),
+        } as unknown as ISendOutput;
       }
       return {
         address: o.address,
