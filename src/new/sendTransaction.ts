@@ -27,7 +27,6 @@ import {
   IDataInput,
   IDataOutput,
   IDataOutputWithToken,
-  IDataShieldedOutput,
   IDataTx,
   isDataOutputCreateToken,
   IStorage,
@@ -35,7 +34,7 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
-import { IBlindingEntry, ShieldedOutputMode } from '../shielded/types';
+import { IBlindingEntry, IDataShieldedOutput, ShieldedOutputMode } from '../shielded/types';
 import { createShieldedOutputs, InputGeneratorInfo } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
@@ -594,7 +593,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       tokensWithVisibleOutput.add(tokenUid);
     }
     for (const so of shieldedOutputs) {
-      if (so.mode !== ShieldedOutputMode.FULLY_SHIELDED) {
+      if (so.shieldedMode !== ShieldedOutputMode.FULLY_SHIELDED) {
         tokensWithVisibleOutput.add(so.token);
       }
     }

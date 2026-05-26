@@ -926,7 +926,7 @@ const transaction = {
         // options bag, and assetCommitment/surjectionProof now live inside
         // the options bag instead of being positional args.
         return new ShieldedOutput(
-          so.mode,
+          so.shieldedMode,
           so.commitment,
           so.rangeProof,
           tokenData,
