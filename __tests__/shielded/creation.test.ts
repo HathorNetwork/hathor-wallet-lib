@@ -47,7 +47,7 @@ const network = new Network('testnet');
 const TEST_ADDRESS = 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo';
 const TEST_SCAN_PUBKEY = `02${'aa'.repeat(32)}`;
 
-function makeDef(overrides = {}) {
+function makeProposal(overrides = {}) {
   return {
     address: TEST_ADDRESS,
     value: 100n,
@@ -61,9 +61,9 @@ function makeDef(overrides = {}) {
 describe('createShieldedOutputs', () => {
   it('should create AmountShielded outputs with balancing blinding factor on last output', async () => {
     const provider = makeMockProvider();
-    const defs = [makeDef({ value: 60n }), makeDef({ value: 40n })];
+    const proposals = [makeProposal({ value: 60n }), makeProposal({ value: 40n })];
 
-    const results = await createShieldedOutputs(defs, provider, network);
+    const results = await createShieldedOutputs(proposals, provider, network);
 
     expect(results).toHaveLength(2);
     // First output uses random vbf
@@ -86,9 +86,9 @@ describe('createShieldedOutputs', () => {
         throw new Error('crypto failure on output 0');
       }),
     });
-    const defs = [makeDef(), makeDef()];
+    const proposals = [makeProposal(), makeProposal()];
 
-    await expect(createShieldedOutputs(defs, provider, network)).rejects.toThrow(
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
       'crypto failure on output 0'
     );
   });
@@ -109,21 +109,21 @@ describe('createShieldedOutputs', () => {
         throw new Error('crypto failure on output 1');
       }),
     });
-    const defs = [makeDef({ value: 60n }), makeDef({ value: 40n })];
+    const proposals = [makeProposal({ value: 60n }), makeProposal({ value: 40n })];
 
-    await expect(createShieldedOutputs(defs, provider, network)).rejects.toThrow(
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
       'crypto failure on output 1'
     );
   });
 
   it('should create FullShielded outputs with surjection proofs', async () => {
     const provider = makeMockProvider();
-    const defs = [
-      makeDef({ value: 60n, shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
-      makeDef({ value: 40n, shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+    const proposals = [
+      makeProposal({ value: 60n, shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+      makeProposal({ value: 40n, shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
     ];
 
-    const results = await createShieldedOutputs(defs, provider, network, [{ tokenUid: '00' }]);
+    const results = await createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }]);
 
     expect(results).toHaveLength(2);
     // Both FullShielded outputs should have surjection proofs
@@ -134,18 +134,127 @@ describe('createShieldedOutputs', () => {
 
   it('should handle single output (no balancing needed)', async () => {
     const provider = makeMockProvider();
-    const defs = [makeDef({ value: 100n })];
+    const proposals = [makeProposal({ value: 100n })];
 
-    const results = await createShieldedOutputs(defs, provider, network);
+    const results = await createShieldedOutputs(proposals, provider, network);
 
     expect(results).toHaveLength(1);
     // Single output: isLast=true but createdOutputs.length=0, so random vbf path
     expect(provider.computeBalancingBlindingFactor).not.toHaveBeenCalled();
   });
 
-  it('should return empty array for empty defs', async () => {
+  it('should return empty array for empty proposals', async () => {
     const provider = makeMockProvider();
     const results = await createShieldedOutputs([], provider, network);
     expect(results).toEqual([]);
+  });
+});
+
+/**
+ * Coverage for the upfront validation block in `createShieldedOutputs`.
+ * Each test exercises one rejection path so a future "cleanup" of the
+ * guard block can't silently delete a check without a red test.
+ */
+describe('createShieldedOutputs validation guards', () => {
+  it('rejects scanPubkey that is not 33 bytes', async () => {
+    const provider = makeMockProvider();
+    const proposals = [makeProposal({ scanPubkey: '02aa' /* 2 bytes */ })];
+
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
+      /scanPubkey must be 33 bytes, got 2/
+    );
+    // Crypto provider must not have been called for the invalid input.
+    expect(provider.createAmountShieldedOutput).not.toHaveBeenCalled();
+  });
+
+  it('rejects proposal.token that is not 32 bytes', async () => {
+    const provider = makeMockProvider();
+    const proposals = [makeProposal({ token: 'cafe' /* 2 bytes */ })];
+
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
+      /token UID must be 32 bytes, got 2/
+    );
+    expect(provider.createAmountShieldedOutput).not.toHaveBeenCalled();
+  });
+
+  it('rejects FullShielded outputs with empty inputGenerators', async () => {
+    const provider = makeMockProvider();
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+    ];
+
+    await expect(createShieldedOutputs(proposals, provider, network, [])).rejects.toThrow(
+      /FullShielded outputs require at least one input token UID/
+    );
+    expect(provider.createShieldedOutputWithBothBlindings).not.toHaveBeenCalled();
+  });
+
+  it('rejects inputGenerators tokenUid that is not 32 bytes', async () => {
+    const provider = makeMockProvider();
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 60n }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
+    ];
+    const inputGenerators = [{ tokenUid: 'cafe' /* 2 bytes */ }];
+
+    await expect(
+      createShieldedOutputs(proposals, provider, network, inputGenerators)
+    ).rejects.toThrow(/inputGenerators\[0\]: token UID must be 32 bytes, got 2/);
+    expect(provider.createShieldedOutputWithBothBlindings).not.toHaveBeenCalled();
+  });
+
+  it('rejects when provider returns FullShielded result without assetBlindingFactor (non-last)', async () => {
+    // Provider returns the non-last FullShielded output WITHOUT abf — that
+    // is a contract violation; the code must throw rather than silently
+    // store ZERO_TWEAK as the generator blinding factor.
+    const provider = makeMockProvider({
+      createShieldedOutputWithBothBlindings: jest.fn().mockReturnValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(33, 0x03),
+        rangeProof: Buffer.alloc(10, 0x04),
+        blindingFactor: Buffer.alloc(32, 0x05),
+        assetCommitment: Buffer.alloc(33, 0x06),
+        // assetBlindingFactor intentionally omitted
+      }),
+    });
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 60n }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
+    ];
+
+    await expect(
+      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
+    ).rejects.toThrow(/no assetBlindingFactor for FullShielded output/);
+  });
+
+  it('rejects when provider returns FullShielded result without assetBlindingFactor (last)', async () => {
+    // First call returns a valid result, second (last) returns no abf —
+    // exercises the last-output FullShielded branch's throw.
+    let callCount = 0;
+    const provider = makeMockProvider({
+      createShieldedOutputWithBothBlindings: jest.fn().mockImplementation(() => {
+        callCount++;
+        const base = {
+          ephemeralPubkey: Buffer.alloc(33, 0x02),
+          commitment: Buffer.alloc(33, 0x03),
+          rangeProof: Buffer.alloc(10, 0x04),
+          blindingFactor: Buffer.alloc(32, 0x05),
+          assetCommitment: Buffer.alloc(33, 0x06),
+        };
+        if (callCount === 1) {
+          return { ...base, assetBlindingFactor: Buffer.alloc(32, 0x07) };
+        }
+        return base; // last output: abf missing
+      }),
+    });
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 60n }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
+    ];
+
+    await expect(
+      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
+    ).rejects.toThrow(/no assetBlindingFactor for last FullShielded output/);
   });
 });
