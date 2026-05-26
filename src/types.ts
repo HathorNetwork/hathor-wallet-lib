@@ -10,7 +10,6 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
-import type { ShieldedOutputMode } from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -322,27 +321,6 @@ interface IDataTokenCreationTx {
   name: string;
   symbol: string;
   tokenVersion?: TokenVersion; // `tokenVersion` cannot be named `version` because it conflicts with the `version` property of the `IDataTx` interface
-}
-
-/**
- * Intermediary representation of a shielded output during transaction building.
- * Contains the output parameters and, after crypto processing, the cryptographic fields.
- */
-export interface IDataShieldedOutput {
-  address: string;
-  value: OutputValueType;
-  token: string;
-  scanPubkey: string; // hex, 33 bytes compressed EC pubkey for ECDH
-  mode: ShieldedOutputMode; // 1 = AmountShielded, 2 = FullShielded
-  // Populated after crypto processing:
-  ephemeralPubkey?: Buffer;
-  commitment?: Buffer;
-  rangeProof?: Buffer;
-  blindingFactor?: Buffer;
-  assetCommitment?: Buffer;
-  assetBlindingFactor?: Buffer;
-  surjectionProof?: Buffer;
-  script?: string; // hex, the P2PKH/P2SH output script
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions

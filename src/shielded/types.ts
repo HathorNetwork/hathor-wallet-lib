@@ -6,6 +6,7 @@
  */
 
 import { ShieldedOutputMode } from '@hathor/ct-crypto-provider';
+import type { OutputValueType } from '../types';
 
 // ─── crypto-provider contract — re-exported from @hathor/ct-crypto-provider ─
 //
@@ -77,4 +78,32 @@ export interface IProcessedShieldedOutput {
   decrypted: IDecryptedShieldedOutput;
   address: string;
   tokenUid: string;
+}
+
+/**
+ * Intermediary representation of a shielded output during transaction
+ * building — used as the return shape of `createShieldedOutputs()`.
+ *
+ * The non-optional prefix is the pre-crypto definition (mirrors what
+ * `ShieldedOutputProposal` carries in). Everything after `shieldedMode` is
+ * populated by the crypto provider in a single pass; the fields are
+ * marked optional only because `assetCommitment`/`assetBlindingFactor`/
+ * `surjectionProof` are FullShielded-only — for AmountShielded outputs
+ * they remain undefined.
+ */
+export interface IDataShieldedOutput {
+  address: string;
+  value: OutputValueType;
+  token: string;
+  scanPubkey: string; // hex, 33 bytes compressed EC pubkey for ECDH
+  shieldedMode: ShieldedOutputMode; // matches ShieldedOutputProposal.shieldedMode
+  // Populated after crypto processing:
+  ephemeralPubkey?: Buffer;
+  commitment?: Buffer;
+  rangeProof?: Buffer;
+  blindingFactor?: Buffer;
+  assetCommitment?: Buffer;
+  assetBlindingFactor?: Buffer;
+  surjectionProof?: Buffer;
+  script?: string; // hex, the P2PKH/P2SH output script
 }

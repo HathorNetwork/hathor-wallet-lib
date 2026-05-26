@@ -6,18 +6,18 @@
  */
 
 import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, ZERO_TWEAK } from '../constants';
-import { IDataShieldedOutput } from '../types';
 import { getAddressType } from '../utils/address';
 import transactionUtils from '../utils/transaction';
 import Network from '../models/network';
 import {
   IBlindingEntry,
+  IDataShieldedOutput,
   IShieldedCryptoProvider,
   ISurjectionDomainEntry,
   ShieldedOutputMode,
 } from './types';
 
-interface ShieldedOutputDef {
+interface ShieldedOutputProposal {
   address: string;
   value: bigint;
   token: string;
@@ -54,25 +54,25 @@ export interface InputGeneratorInfo {
  * is computed via computeBalancingBlindingFactor to satisfy the constraint.
  */
 export async function createShieldedOutputs(
-  defs: ShieldedOutputDef[],
+  proposals: ShieldedOutputProposal[],
   cryptoProvider: IShieldedCryptoProvider,
   network: Network,
   inputGenerators: InputGeneratorInfo[] = [],
   blindedInputs: ShieldedInputBlinding[] = []
 ): Promise<IDataShieldedOutput[]> {
-  if (defs.length === 0) return [];
+  if (proposals.length === 0) return [];
 
   // Validate inputs upfront before expensive crypto work
-  const hasFullShielded = defs.some(d => d.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED);
-  for (const [idx, def] of defs.entries()) {
-    const pubkeyBuf = Buffer.from(def.scanPubkey, 'hex');
+  const hasFullShielded = proposals.some(p => p.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED);
+  for (const [idx, proposal] of proposals.entries()) {
+    const pubkeyBuf = Buffer.from(proposal.scanPubkey, 'hex');
     if (pubkeyBuf.length !== 33) {
       throw new Error(
         `Shielded output ${idx}: scanPubkey must be 33 bytes, got ${pubkeyBuf.length}`
       );
     }
     const tokenBuf = Buffer.from(
-      def.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : def.token,
+      proposal.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : proposal.token,
       'hex'
     );
     if (tokenBuf.length !== 32) {
@@ -88,17 +88,17 @@ export async function createShieldedOutputs(
   const results: IDataShieldedOutput[] = [];
   const createdOutputs: IBlindingEntry[] = [];
 
-  for (let i = 0; i < defs.length; i++) {
-    const def = defs[i];
-    const fullyShielded = def.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
-    const recipientPubkeyBuf = Buffer.from(def.scanPubkey, 'hex');
+  for (let i = 0; i < proposals.length; i++) {
+    const proposal = proposals[i];
+    const fullyShielded = proposal.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
+    const recipientPubkeyBuf = Buffer.from(proposal.scanPubkey, 'hex');
     const tokenUidBuf = Buffer.from(
-      def.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : def.token,
+      proposal.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : proposal.token,
       'hex'
     );
 
     let cryptoResult;
-    const isLast = i === defs.length - 1;
+    const isLast = i === proposals.length - 1;
 
     try {
       if (isLast && createdOutputs.length > 0) {
@@ -106,39 +106,39 @@ export async function createShieldedOutputs(
           // FullShielded last output: generate abf, compute balancing vbf, create with both
           const lastAbf = await cryptoProvider.generateRandomBlindingFactor();
           const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
-            def.value,
+            proposal.value,
             lastAbf,
             blindedInputs,
             createdOutputs
           );
           cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-            def.value,
+            proposal.value,
             recipientPubkeyBuf,
             tokenUidBuf,
             balancingBf,
             lastAbf
           );
           createdOutputs.push({
-            value: def.value,
+            value: proposal.value,
             valueBlindingFactor: cryptoResult.blindingFactor,
             generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
           });
         } else {
           // AmountShielded last output: compute balancing vbf, create with it
           const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
-            def.value,
+            proposal.value,
             ZERO_TWEAK,
             blindedInputs,
             createdOutputs
           );
           cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-            def.value,
+            proposal.value,
             recipientPubkeyBuf,
             tokenUidBuf,
             balancingBf
           );
           createdOutputs.push({
-            value: def.value,
+            value: proposal.value,
             valueBlindingFactor: cryptoResult.blindingFactor,
             generatorBlindingFactor: ZERO_TWEAK,
           });
@@ -148,14 +148,14 @@ export async function createShieldedOutputs(
         const vbf = await cryptoProvider.generateRandomBlindingFactor();
         const abf = await cryptoProvider.generateRandomBlindingFactor();
         cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-          def.value,
+          proposal.value,
           recipientPubkeyBuf,
           tokenUidBuf,
           vbf,
           abf
         );
         createdOutputs.push({
-          value: def.value,
+          value: proposal.value,
           valueBlindingFactor: cryptoResult.blindingFactor,
           generatorBlindingFactor: cryptoResult.assetBlindingFactor ?? ZERO_TWEAK,
         });
@@ -163,28 +163,28 @@ export async function createShieldedOutputs(
         // AmountShielded non-last output: generate random vbf
         const vbf = await cryptoProvider.generateRandomBlindingFactor();
         cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-          def.value,
+          proposal.value,
           recipientPubkeyBuf,
           tokenUidBuf,
           vbf
         );
         createdOutputs.push({
-          value: def.value,
+          value: proposal.value,
           valueBlindingFactor: cryptoResult.blindingFactor,
           generatorBlindingFactor: ZERO_TWEAK,
         });
       }
 
       // Create the output script for the on-chain address (spend-derived P2PKH).
-      // def.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
+      // proposal.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
       const scriptBuf = transactionUtils.createOutputScript(
         {
-          address: def.address,
-          value: def.value,
-          timelock: def.timelock ?? null,
+          address: proposal.address,
+          value: proposal.value,
+          timelock: proposal.timelock ?? null,
           authorities: 0n,
-          token: def.token,
-          type: getAddressType(def.address, network),
+          token: proposal.token,
+          type: getAddressType(proposal.address, network),
         },
         network
       );
@@ -216,11 +216,11 @@ export async function createShieldedOutputs(
       }
 
       results.push({
-        address: def.address,
-        value: def.value,
-        token: def.token,
-        scanPubkey: def.scanPubkey,
-        mode: def.shieldedMode,
+        address: proposal.address,
+        value: proposal.value,
+        token: proposal.token,
+        scanPubkey: proposal.scanPubkey,
+        shieldedMode: proposal.shieldedMode,
         ephemeralPubkey: cryptoResult.ephemeralPubkey,
         commitment: cryptoResult.commitment,
         rangeProof: cryptoResult.rangeProof,
@@ -233,7 +233,7 @@ export async function createShieldedOutputs(
     } catch (e) {
       const mode = fullyShielded ? 'FullShielded' : 'AmountShielded';
       throw new Error(
-        `Failed to create shielded output ${i}/${defs.length} (mode=${mode}, token=${def.token}): ${e}`
+        `Failed to create shielded output ${i}/${proposals.length} (mode=${mode}, token=${proposal.token}): ${e}`
       );
     }
   }
