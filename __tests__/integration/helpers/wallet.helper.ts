@@ -6,6 +6,10 @@
  */
 
 import { get, includes } from 'lodash';
+// `@hathor/ct-crypto-node` lives in devDependencies (not a runtime dep of
+// wallet-lib). Integration tests are the only consumer; production wallets
+// register their own provider per the post-migration contract.
+import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -82,6 +86,16 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
+/**
+ * Register the shielded crypto provider on a wallet. Tests that build a
+ * HathorWallet directly (rather than via generateWalletHelper) must call this
+ * before `wallet.start()` — wallet-lib does not auto-register the provider
+ * post-migration, the client is required to wire it in.
+ */
+export function registerShieldedProvider(hWallet) {
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+}
+
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
   let walletData = {};
@@ -107,6 +121,10 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, param);
   }
   const hWallet = new HathorWallet(walletConfig);
+  // Register the shielded crypto provider explicitly before start.
+  // wallet-lib no longer auto-detects after the @hathor/ct-crypto-provider
+  // migration; clients (including the integration suite) must wire it up.
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);

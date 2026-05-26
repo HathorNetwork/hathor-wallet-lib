@@ -19,6 +19,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { MemoryStore, Storage } from '../../../src/storage';
 import {
   generateConnection,
+  registerShieldedProvider,
   stopAllWallets,
   waitForWalletReady,
   DEFAULT_PASSWORD,
@@ -89,6 +90,7 @@ describe('shielded outputs — Group M: access-data migration', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
     });
+    registerShieldedProvider(hWallet);
     await hWallet.start();
     await waitForWalletReady(hWallet);
 
@@ -147,6 +149,7 @@ describe('shielded outputs — Group M: access-data migration', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
     });
+    registerShieldedProvider(hWallet);
     await hWallet.start();
     await waitForWalletReady(hWallet);
 
