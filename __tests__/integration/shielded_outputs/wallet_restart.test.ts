@@ -24,6 +24,7 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateConnection,
   generateWalletHelper,
+  registerShieldedProvider,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
@@ -48,6 +49,7 @@ async function reloadFromSeed(words: string): Promise<HathorWallet> {
     pinCode: DEFAULT_PIN_CODE,
     scanPolicy: getGapLimitConfig(),
   });
+  registerShieldedProvider(wallet);
   await wallet.start();
   await waitForWalletReady(wallet);
   return wallet;
