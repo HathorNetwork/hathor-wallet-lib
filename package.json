@@ -4,7 +4,7 @@
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   },
   "directories": {
@@ -55,7 +55,7 @@
     "@types/crypto-js": "4.2.2",
     "@types/jest": "29.5.12",
     "@types/lodash": "4.17.5",
-    "@types/node": "20.14.2",
+    "@types/node": "24.12.2",
     "@typescript-eslint/eslint-plugin": "7.13.0",
     "@typescript-eslint/parser": "7.13.0",
     "axios-mock-adapter": "1.22.0",
