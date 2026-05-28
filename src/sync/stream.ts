@@ -415,6 +415,11 @@ export class StreamManager extends AbortController {
       throw new Error('No access data');
     }
     const { xpubkey } = accessData;
+    if (!xpubkey) {
+      // Should not reach here because stream sync is only used for gap-limit
+      // wallets, but guard against single-key wallets surfacing here.
+      throw new Error('Cannot stream sync a wallet without an xpub.');
+    }
     // Should not throw here since we only support gapLimit wallets
     const gapLimit = await this.storage.getGapLimit();
     this.xpubkey = xpubkey;
