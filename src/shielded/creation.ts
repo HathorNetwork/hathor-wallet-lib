@@ -250,21 +250,53 @@ export async function createShieldedOutputs(
         );
       }
 
-      results.push({
-        address: proposal.address,
-        value: proposal.value,
-        token: proposal.token,
-        scanPubkey: proposal.scanPubkey,
-        shieldedMode: proposal.shieldedMode,
-        ephemeralPubkey: cryptoResult.ephemeralPubkey,
-        commitment: cryptoResult.commitment,
-        rangeProof: cryptoResult.rangeProof,
-        blindingFactor: cryptoResult.blindingFactor,
-        assetCommitment: cryptoResult.assetCommitment,
-        assetBlindingFactor: cryptoResult.assetBlindingFactor,
-        surjectionProof,
-        script: scriptBuf.toString('hex'),
-      });
+      // Branch the result construction on the mode so the discriminated
+      // union (`IDataAmountShieldedOutput | IDataFullShieldedOutput`) is
+      // satisfied without optional fields. The FullShielded variant
+      // requires `assetCommitment` / `assetBlindingFactor` / `surjectionProof`
+      // to be non-null — the earlier throws already validate the latter
+      // two in this branch; assertCommitment is checked here for the same
+      // contract-violation reason.
+      if (fullyShielded) {
+        if (!cryptoResult.assetCommitment) {
+          throw new Error('Crypto provider returned no assetCommitment for FullShielded output');
+        }
+        if (!cryptoResult.assetBlindingFactor || !surjectionProof) {
+          // Defensive — both are guaranteed by earlier throws on this branch,
+          // but TS cannot carry that narrowing across the cryptoResult mutation.
+          throw new Error(
+            'FullShielded output missing assetBlindingFactor or surjectionProof at result push'
+          );
+        }
+        results.push({
+          address: proposal.address,
+          value: proposal.value,
+          token: proposal.token,
+          scanPubkey: proposal.scanPubkey,
+          shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          ephemeralPubkey: cryptoResult.ephemeralPubkey,
+          commitment: cryptoResult.commitment,
+          rangeProof: cryptoResult.rangeProof,
+          blindingFactor: cryptoResult.blindingFactor,
+          assetCommitment: cryptoResult.assetCommitment,
+          assetBlindingFactor: cryptoResult.assetBlindingFactor,
+          surjectionProof,
+          script: scriptBuf.toString('hex'),
+        });
+      } else {
+        results.push({
+          address: proposal.address,
+          value: proposal.value,
+          token: proposal.token,
+          scanPubkey: proposal.scanPubkey,
+          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          ephemeralPubkey: cryptoResult.ephemeralPubkey,
+          commitment: cryptoResult.commitment,
+          rangeProof: cryptoResult.rangeProof,
+          blindingFactor: cryptoResult.blindingFactor,
+          script: scriptBuf.toString('hex'),
+        });
+      }
     } catch (e) {
       const mode = ShieldedOutputMode[proposal.shieldedMode];
       throw new Error(
