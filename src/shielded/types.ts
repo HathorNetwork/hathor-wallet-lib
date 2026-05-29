@@ -6,6 +6,7 @@
  */
 
 import { ShieldedOutputMode } from '@hathor/ct-crypto-provider';
+import type { IBlindingEntry } from '@hathor/ct-crypto-provider';
 import type { OutputValueType } from '../types';
 
 // ─── crypto-provider contract — re-exported from @hathor/ct-crypto-provider ─
@@ -78,6 +79,42 @@ export interface IProcessedShieldedOutput {
   decrypted: IDecryptedShieldedOutput;
   address: string;
   tokenUid: string;
+}
+
+// ─── createShieldedOutputs I/O ─────────────────────────────────────────────
+
+/**
+ * Caller-supplied description of one shielded output to be built by
+ * `createShieldedOutputs()`. The function takes an array of these and
+ * returns an `IDataShieldedOutput[]` with the cryptographic fields
+ * populated.
+ */
+export interface ShieldedOutputProposal {
+  address: string;
+  value: bigint;
+  token: string;
+  scanPubkey: string;
+  shieldedMode: ShieldedOutputMode;
+  timelock?: number;
+}
+
+/**
+ * Re-export of `IBlindingEntry` under wallet-lib's local name. The contract
+ * lives in `@hathor/ct-crypto-provider`; alias kept for back-compat with the
+ * old `ShieldedInputBlinding` type that callers may still import.
+ */
+export type ShieldedInputBlinding = IBlindingEntry;
+
+/**
+ * Per-input generator info for surjection proof domain construction.
+ * For transparent/AmountShielded inputs, only `tokenUid` is needed (unblinded
+ * generator). For FullShielded inputs, the `assetBlindingFactor` is required
+ * to reconstruct the blinded generator (asset_commitment) that the fullnode
+ * uses for verification.
+ */
+export interface InputGeneratorInfo {
+  tokenUid: string;
+  assetBlindingFactor?: Buffer; // present only for FullShielded inputs
 }
 
 /**

@@ -34,8 +34,13 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
-import { IBlindingEntry, IDataShieldedOutput, ShieldedOutputMode } from '../shielded/types';
-import { createShieldedOutputs, InputGeneratorInfo } from '../shielded/creation';
+import {
+  IBlindingEntry,
+  IDataShieldedOutput,
+  InputGeneratorInfo,
+  ShieldedOutputMode,
+} from '../shielded/types';
+import { createShieldedOutputs } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
