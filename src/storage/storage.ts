@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPublicKey } from 'bitcore-lib';
+import bitcore, { HDPublicKey } from 'bitcore-lib';
 import Input from '../models/input';
 import {
   ApiVersion,
@@ -60,7 +60,7 @@ import {
   DECIMAL_PLACES,
   DEFAULT_NATIVE_TOKEN_CONFIG,
 } from '../constants';
-import { UninitializedWalletError } from '../errors';
+import { AddressError, UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
 
 export const DEFAULT_ADDRESS_META: IAddressMetadata = {
@@ -168,7 +168,14 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Sign the transaction
+   * Sign the transaction. Routing precedence:
+   *   1. External signer registered via `setTxSignatureMethod` — used by
+   *      Web3Auth (key never leaves the trusted environment) and by hardware
+   *      wallets. Wins over any local key.
+   *   2. Local key path via `transactionUtils.getSignatureForTx`, which
+   *      transparently handles HD (xpriv) and single-key wallets through its
+   *      internal signing-key resolver.
+   *
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
    * @returns {Promise<ITxSignatureData>} The signatures
@@ -177,6 +184,7 @@ export class Storage implements IStorage {
     if (this.txSignFunc) {
       return this.txSignFunc(tx, this, pinCode);
     }
+
     return transactionUtils.getSignatureForTx(tx, this, pinCode);
   }
 
@@ -251,6 +259,12 @@ export class Storage implements IStorage {
 
     // derive public key from xpub
     const accessData = await this._getValidAccessData();
+    if (!accessData.xpubkey) {
+      throw new Error(
+        'Cannot derive public key: wallet has no xpub (single-key wallet). ' +
+          'The public key should have been cached on the address.'
+      );
+    }
     const hdpubkey = new HDPublicKey(accessData.xpubkey);
     const key: HDPublicKey = hdpubkey.deriveChild(index);
     return key.publicKey.toString('hex');
@@ -872,6 +886,34 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Whether the wallet can derive addresses beyond the first one.
+   *
+   * True for HD wallets (seed/xpriv/xpub) — they hold an xpub and can derive
+   * children on demand even when running under SINGLE_ADDRESS scanning policy.
+   * False for raw single-key wallets (Web3Auth), which only have the key for
+   * address index 0.
+   *
+   * Resolution order:
+   *  1. explicit `canDeriveAddresses` flag on access data
+   *  2. fallback: presence of `xpubkey` (backward compat with stored access
+   *     data persisted before the explicit flag existed)
+   *  3. no access data at all: assume `true` — guards must not raise on
+   *     uninitialized storage (unit tests mock partial storage state, and a
+   *     wallet that hasn't been started yet should not be misclassified as
+   *     single-key)
+   */
+  async canDeriveAddresses(): Promise<boolean> {
+    const accessData = await this.getAccessData();
+    if (accessData === null) {
+      return true;
+    }
+    if (accessData.canDeriveAddresses !== undefined) {
+      return accessData.canDeriveAddresses;
+    }
+    return !!accessData.xpubkey;
+  }
+
+  /**
    * Decrypt and return the main private key of the wallet.
    *
    * @param {string} pinCode Pin to unlock the private key
@@ -901,6 +943,65 @@ export class Storage implements IStorage {
 
     // decryptData handles pin validation
     return decryptData(accessData.acctPathKey, pinCode);
+  }
+
+  /**
+   * Decrypt and return the raw single-key private key (Web3Auth-style wallets).
+   *
+   * This is specifically for wallets backed by a raw secp256k1 key (no BIP32
+   * chain code). Single-address wallets created from a seed/xpriv still hold
+   * an HD key — those must use {@link getMainXPrivKey} and derive index 0,
+   * not this method.
+   *
+   * Throws if:
+   * - the wallet has no `singleKeyPrivateKey` on access data (HD wallets,
+   *   xpub-only wallets, or wallets not yet initialized)
+   * - the pin is incorrect (decryption fails)
+   *
+   * @param pinCode Pin used to decrypt the key at rest.
+   * @returns The raw 32-byte secp256k1 private key as a hex string.
+   */
+  async getSingleKeyPrivateKey(pinCode: string): Promise<string> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.singleKeyPrivateKey) {
+      throw new Error(
+        'No raw single-key private key on this wallet. Use getMainXPrivKey for HD wallets.'
+      );
+    }
+
+    // decryptData handles pin validation
+    return decryptData(accessData.singleKeyPrivateKey, pinCode);
+  }
+
+  /**
+   * Resolve the raw secp256k1 private key for a given address index.
+   *
+   * - HD wallets: derives the child via `deriveNonCompliantChild(addressIndex)`
+   *   from `mainKey` and unwraps to the underlying `bitcore.PrivateKey`.
+   *   Uses `deriveNonCompliantChild` to match the historical Hathor derivation
+   *   path used by `getPrivateKeyFromAddress` in master.
+   * - Single-key wallets: returns the raw `bitcore.PrivateKey` decoded from
+   *   `singleKeyPrivateKey` (only valid for `addressIndex === 0`).
+   *
+   * Always returns a raw PrivateKey ready for `ECDSA.sign` / `signMessage`.
+   * Callers do not need to unwrap or instanceof-check.
+   */
+  async getAddressPrivKeyForIndex(
+    pinCode: string,
+    addressIndex: number
+  ): Promise<bitcore.PrivateKey> {
+    const accessData = await this._getValidAccessData();
+
+    if (accessData.singleKeyMode) {
+      if (addressIndex !== 0) {
+        throw new AddressError('Single-key wallets only support address index 0.');
+      }
+      const rawPrivHex = await this.getSingleKeyPrivateKey(pinCode);
+      return new bitcore.PrivateKey(rawPrivHex);
+    }
+
+    const mainXPrivKey = await this.getMainXPrivKey(pinCode);
+    return new bitcore.HDPrivateKey(mainXPrivKey).deriveNonCompliantChild(addressIndex).privateKey;
   }
 
   /**
@@ -978,11 +1079,14 @@ export class Storage implements IStorage {
    */
   async checkPin(pinCode: string): Promise<boolean> {
     const accessData = await this._getValidAccessData();
-    if (!accessData.mainKey) {
+    // Single-key wallets persist `singleKeyPrivateKey` instead of `mainKey`;
+    // either encrypted blob can be used to verify the pin.
+    const encryptedKey = accessData.mainKey ?? accessData.singleKeyPrivateKey;
+    if (!encryptedKey) {
       throw new Error('Cannot check pin without the private key.');
     }
 
-    return checkPassword(accessData.mainKey, pinCode);
+    return checkPassword(encryptedKey, pinCode);
   }
 
   /**

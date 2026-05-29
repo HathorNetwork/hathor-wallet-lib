@@ -163,18 +163,51 @@ const transaction = {
   },
 
   /**
-   * Get the signatures for a transaction
+   * Build a per-address signing-key resolver bound to the wallet's key
+   * material. The expensive setup (decrypt + parse) runs once; the returned
+   * function is cheap and synchronous.
+   *
+   * - HD wallets: derives `deriveNonCompliantChild(addressIndex)` from the
+   *   decrypted xpriv on every call.
+   * - Single-key wallets: returns the same `(privateKey, pubkeyDER)` pair for
+   *   every index (the only valid one is 0; the wallet has a single address).
+   */
+  async buildSigningKeyResolver(
+    storage: IStorage,
+    pinCode: string
+  ): Promise<(addressIndex: number) => { privateKey: PrivateKey; pubkeyDER: Buffer }> {
+    const accessData = await storage.getAccessData();
+    if (accessData?.singleKeyMode) {
+      const rawPrivHex = await storage.getSingleKeyPrivateKey(pinCode);
+      const privateKey = new PrivateKey(rawPrivHex);
+      const pubkeyDER = privateKey.toPublicKey().toDER();
+      return () => ({ privateKey, pubkeyDER });
+    }
+
+    const xprivstr = await storage.getMainXPrivKey(pinCode);
+    const xprivkey = HDPrivateKey.fromString(xprivstr);
+    return (addressIndex: number) => {
+      const xpriv = xprivkey.deriveNonCompliantChild(addressIndex);
+      return { privateKey: xpriv.privateKey, pubkeyDER: xpriv.publicKey.toDER() };
+    };
+  },
+
+  /**
+   * Get the signatures for a transaction.
+   *
+   * Works for both HD and single-key wallets — the difference is encapsulated
+   * in `buildSigningKeyResolver`, which is invoked once per call.
+   *
    * @param tx Transaction to sign
    * @param storage Storage of the wallet
-   * @param pinCode Pin to unlock the mainKey for signatures
+   * @param pinCode Pin to unlock the signing key
    */
   async getSignatureForTx(
     tx: Transaction,
     storage: IStorage,
     pinCode: string
   ): Promise<ITxSignatureData> {
-    const xprivstr = await storage.getMainXPrivKey(pinCode);
-    const xprivkey = HDPrivateKey.fromString(xprivstr);
+    const resolveSigningKey = await this.buildSigningKeyResolver(storage, pinCode);
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
     let ncCallerSignature: Buffer | null = null;
@@ -195,12 +228,12 @@ const transaction = {
         // Not a wallet address
         continue;
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      const { privateKey, pubkeyDER } = resolveSigningKey(addressInfo.bip32AddressIndex);
       signatures.push({
         inputIndex,
         addressIndex: addressInfo.bip32AddressIndex,
-        signature: this.getSignature(dataToSignHash, xpriv.privateKey),
-        pubkey: xpriv.publicKey.toDER(),
+        signature: this.getSignature(dataToSignHash, privateKey),
+        pubkey: pubkeyDER,
       });
     }
 
@@ -222,15 +255,15 @@ const transaction = {
         // The nano contract address or OCB pubkey are not from our wallet.
         return { inputSignatures: signatures, ncCallerSignature };
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      const { privateKey, pubkeyDER } = resolveSigningKey(addressInfo.bip32AddressIndex);
 
       if (tx.isNanoContract()) {
         // Nano contract
-        const signature = this.getSignature(dataToSignHash, xpriv.privateKey);
-        ncCallerSignature = this.createInputData(signature, xpriv.publicKey.toDER());
+        const signature = this.getSignature(dataToSignHash, privateKey);
+        ncCallerSignature = this.createInputData(signature, pubkeyDER);
       } else {
         // On-chain blueprint
-        ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+        ncCallerSignature = this.getSignature(dataToSignHash, privateKey);
       }
     }
 

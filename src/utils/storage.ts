@@ -62,17 +62,35 @@ export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction
 
 export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySyncMode[]> {
   const walletType = await storage.getWalletType();
+  let modes: HistorySyncMode[];
   if (walletType === WalletType.P2PKH) {
-    return [
+    modes = [
       HistorySyncMode.MANUAL_STREAM_WS,
       HistorySyncMode.POLLING_HTTP_API,
       HistorySyncMode.XPUB_STREAM_WS,
     ];
+  } else if (walletType === WalletType.MULTISIG) {
+    modes = [HistorySyncMode.POLLING_HTTP_API];
+  } else {
+    return [];
   }
-  if (walletType === WalletType.MULTISIG) {
-    return [HistorySyncMode.POLLING_HTTP_API];
+
+  // XPUB_STREAM_WS requires an xpub on the wallet's access data. HD wallets
+  // running under SINGLE_ADDRESS policy still hold one and remain eligible;
+  // only wallets without derivation capability (raw single-key / Web3Auth)
+  // must be excluded. Read accessData directly here instead of going through
+  // Storage.canDeriveAddresses() because this utility may be invoked on
+  // partially-initialized storage (e.g. in unit tests that mock getWalletType
+  // without persisting access data) and must not throw in that case.
+  const accessData = await storage.getAccessData();
+  if (accessData) {
+    const canDerive = accessData.canDeriveAddresses ?? !!accessData.xpubkey;
+    if (!canDerive) {
+      return modes.filter(m => m !== HistorySyncMode.XPUB_STREAM_WS);
+    }
   }
-  return [];
+
+  return modes;
 }
 
 /**

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import bitcore from 'bitcore-lib';
 import { Config } from './config';
 import Transaction from './models/transaction';
 import Input from './models/input';
@@ -371,7 +372,8 @@ export enum WALLET_FLAGS {
 }
 
 export interface IWalletAccessData {
-  xpubkey: string;
+  // Optional: absent on single-key wallets (no BIP32 hierarchy).
+  xpubkey?: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
   acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
   words?: IEncryptedData; // encrypted seed (uses password for encryption)
@@ -379,6 +381,18 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
+
+  /** P2PKH wallet keyed by a single raw secp256k1 key (no BIP32). */
+  singleKeyMode?: boolean;
+  singleKeyPublicKey?: string; // hex-encoded DER public key
+  singleKeyPrivateKey?: IEncryptedData; // encrypted raw private key (pin)
+
+  /**
+   * Whether the wallet can derive addresses beyond index 0. True for HD
+   * wallets (seed/xpriv/xpub), false for single-key wallets. Optional for
+   * backward compatibility — resolve via `Storage.canDeriveAddresses()`.
+   */
+  canDeriveAddresses?: boolean;
 }
 
 export enum SCANNING_POLICY {
@@ -656,11 +670,23 @@ export interface IStorage {
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
+  /**
+   * Resolve the raw secp256k1 private key for a given address index.
+   *
+   * - HD wallets: derives via `deriveNonCompliantChild` (Hathor-standard) from `mainKey`.
+   * - Single-key wallets: returns the raw key (only valid for index 0).
+   *
+   * The single-source-of-truth method for "give me the key that signs for address N".
+   * Always returns a raw PrivateKey — callers do not need to unwrap.
+   */
+  getAddressPrivKeyForIndex(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
+  getSingleKeyPrivateKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
+  canDeriveAddresses(): Promise<boolean>;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;

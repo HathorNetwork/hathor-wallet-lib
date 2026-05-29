@@ -5,7 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
+import {
+  crypto,
+  util,
+  HDPublicKey,
+  HDPrivateKey,
+  PrivateKey,
+  Script,
+  PublicKey,
+} from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import _ from 'lodash';
 import {
@@ -528,6 +536,7 @@ const wallet = {
       multisigData,
       // We force the readonly flag because we are starting a wallet without the private key
       walletFlags,
+      canDeriveAddresses: true,
     };
   },
 
@@ -611,6 +620,7 @@ const wallet = {
       mainKey: encryptedMainKey,
       xpubkey: xpriv.xpubkey,
       walletFlags: 0,
+      canDeriveAddresses: true,
     };
 
     if (acctXpriv !== null) {
@@ -699,6 +709,37 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
+      canDeriveAddresses: true,
+    };
+  },
+
+  /**
+   * Generate access data for a single-key wallet (raw secp256k1, no BIP32).
+   * Exactly one address; no xpub, seed, or account/auth path keys.
+   *
+   * @param privateKeyHex Raw private key as a hex string (without '0x' prefix)
+   * @param publicKeyHex DER-encoded public key (hex); validated against the
+   *   key derived from `privateKeyHex` to reject mismatched pairs.
+   * @param options.pin PIN used to encrypt the private key at rest
+   */
+  generateAccessDataFromPrivateKey(
+    privateKeyHex: string,
+    publicKeyHex: string,
+    { pin }: { pin: string }
+  ): IWalletAccessData {
+    const derivedPubKeyHex = new PrivateKey(privateKeyHex).toPublicKey().toString('hex');
+    if (derivedPubKeyHex !== publicKeyHex) {
+      throw new Error('publicKey does not match the public key derived from privateKey.');
+    }
+
+    const encryptedPrivateKey = encryptData(privateKeyHex, pin);
+    return {
+      walletType: WalletType.P2PKH,
+      walletFlags: 0,
+      singleKeyMode: true,
+      singleKeyPublicKey: derivedPubKeyHex,
+      singleKeyPrivateKey: encryptedPrivateKey,
+      canDeriveAddresses: false,
     };
   },
 
@@ -717,7 +758,7 @@ const wallet = {
     newPin: string
   ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
-    if (!(data.mainKey || data.authKey || data.acctPathKey)) {
+    if (!(data.mainKey || data.authKey || data.acctPathKey || data.singleKeyPrivateKey)) {
       throw new Error('No data to change');
     }
 
@@ -737,6 +778,11 @@ const wallet = {
       const acctPathKey = decryptData(data.acctPathKey, oldPin);
       const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
       data.acctPathKey = newEncryptedAcctPathKey;
+    }
+
+    if (data.singleKeyPrivateKey) {
+      const privateKey = decryptData(data.singleKeyPrivateKey, oldPin);
+      data.singleKeyPrivateKey = encryptData(privateKey, newPin);
     }
 
     return data;
