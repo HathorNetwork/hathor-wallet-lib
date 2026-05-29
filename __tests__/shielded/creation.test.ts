@@ -132,14 +132,14 @@ describe('createShieldedOutputs', () => {
     expect(provider.createSurjectionProof).toHaveBeenCalledTimes(2);
   });
 
-  it('should handle single output (no balancing needed)', async () => {
+  it('rejects a single-output call (hathor-core trivial-commitment rule)', async () => {
     const provider = makeMockProvider();
     const proposals = [makeProposal({ value: 100n })];
 
-    const results = await createShieldedOutputs(proposals, provider, network);
-
-    expect(results).toHaveLength(1);
-    // Single output: isLast=true but createdOutputs.length=0, so random vbf path
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
+      /At least 2 shielded outputs are required/
+    );
+    expect(provider.createAmountShieldedOutput).not.toHaveBeenCalled();
     expect(provider.computeBalancingBlindingFactor).not.toHaveBeenCalled();
   });
 
@@ -158,7 +158,10 @@ describe('createShieldedOutputs', () => {
 describe('createShieldedOutputs validation guards', () => {
   it('rejects scanPubkey that is not 33 bytes', async () => {
     const provider = makeMockProvider();
-    const proposals = [makeProposal({ scanPubkey: '02aa' /* 2 bytes */ })];
+    // Two proposals so the minimum-2 check (hathor-core trivial-commitment
+    // rule) doesn't fire first — we want to exercise the per-proposal
+    // scanPubkey length guard.
+    const proposals = [makeProposal({ scanPubkey: '02aa' /* 2 bytes */ }), makeProposal()];
 
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
       /scanPubkey must be 33 bytes, got 2/
@@ -169,7 +172,7 @@ describe('createShieldedOutputs validation guards', () => {
 
   it('rejects proposal.token that is not 32 bytes', async () => {
     const provider = makeMockProvider();
-    const proposals = [makeProposal({ token: 'cafe' /* 2 bytes */ })];
+    const proposals = [makeProposal({ token: 'cafe' /* 2 bytes */ }), makeProposal()];
 
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
       /token UID must be 32 bytes, got 2/

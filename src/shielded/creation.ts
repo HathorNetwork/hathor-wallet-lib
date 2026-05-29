@@ -53,11 +53,13 @@ export interface InputGeneratorInfo {
 /**
  * Create shielded outputs with cryptographic commitments and proofs.
  *
- * The homomorphic balance equation requires blinding factors to sum to zero.
- * For transparent-only inputs, all input blinding factors are zero.
- * For shielded inputs, their blinding factors are passed via `blindedInputs`.
- * N-1 outputs use random blinding factors; the last output's blinding factor
- * is computed via computeBalancingBlindingFactor to satisfy the constraint.
+ * N-1 outputs use random blinding factors; the last output's blinding
+ * factor is computed via `computeBalancingBlindingFactor` so the
+ * homomorphic balance equation holds.
+ *
+ * hathor-core forbids transactions with a single shielded output
+ * (trivial-commitment matching), so we throw when only one proposal is
+ * passed. Empty input returns `[]`.
  */
 export async function createShieldedOutputs(
   proposals: ShieldedOutputProposal[],
@@ -67,6 +69,11 @@ export async function createShieldedOutputs(
   blindedInputs: ShieldedInputBlinding[] = []
 ): Promise<IDataShieldedOutput[]> {
   if (proposals.length === 0) return [];
+  if (proposals.length === 1) {
+    throw new Error(
+      'At least 2 shielded outputs are required (hathor-core trivial-commitment rule)'
+    );
+  }
 
   // Validate inputs upfront before expensive crypto work
   const hasFullShielded = proposals.some(p => p.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED);
