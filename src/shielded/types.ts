@@ -110,29 +110,48 @@ export interface InputGeneratorInfo {
 }
 
 /**
- * Intermediary representation of a shielded output during transaction
- * building — used as the return shape of `createShieldedOutputs()`.
- *
- * The non-optional prefix is the pre-crypto definition (mirrors what
- * `ShieldedOutputProposal` carries in). Everything after `shieldedMode` is
- * populated by the crypto provider in a single pass; the fields are
- * marked optional only because `assetCommitment`/`assetBlindingFactor`/
- * `surjectionProof` are FullShielded-only — for AmountShielded outputs
- * they remain undefined.
+ * Fields populated for every shielded output (both modes) by
+ * `createShieldedOutputs()`. The non-crypto prefix mirrors what
+ * `ShieldedOutputProposal` carries in; everything else is filled in by the
+ * crypto provider in a single pass.
  */
-export interface IDataShieldedOutput {
+interface IDataShieldedOutputBase {
   address: string;
   value: OutputValueType;
   token: string;
   scanPubkey: string; // hex, 33 bytes compressed EC pubkey for ECDH
-  shieldedMode: ShieldedOutputMode; // matches ShieldedOutputProposal.shieldedMode
-  // Populated after crypto processing:
-  ephemeralPubkey?: Buffer;
-  commitment?: Buffer;
-  rangeProof?: Buffer;
-  blindingFactor?: Buffer;
-  assetCommitment?: Buffer;
-  assetBlindingFactor?: Buffer;
-  surjectionProof?: Buffer;
-  script?: string; // hex, the P2PKH/P2SH output script
+  ephemeralPubkey: Buffer;
+  commitment: Buffer;
+  rangeProof: Buffer;
+  blindingFactor: Buffer;
+  script: string; // hex, the P2PKH/P2SH output script
 }
+
+/**
+ * AmountShielded output — value is hidden but the token UID is in the clear
+ * (encoded as the output's token index). No asset commitment or surjection
+ * proof.
+ */
+export interface IDataAmountShieldedOutput extends IDataShieldedOutputBase {
+  shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED;
+}
+
+/**
+ * FullShielded output — both value and token UID are hidden behind a
+ * Pedersen-style asset commitment, plus a surjection proof tying the output
+ * back to one of the inputs' tokens.
+ */
+export interface IDataFullShieldedOutput extends IDataShieldedOutputBase {
+  shieldedMode: ShieldedOutputMode.FULLY_SHIELDED;
+  assetCommitment: Buffer;
+  assetBlindingFactor: Buffer;
+  surjectionProof: Buffer;
+}
+
+/**
+ * Intermediary representation of a shielded output during transaction
+ * building — return shape of `createShieldedOutputs()`. Discriminated on
+ * `shieldedMode`: consumers that need the FullShielded-only fields narrow
+ * with `if (out.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED)`.
+ */
+export type IDataShieldedOutput = IDataAmountShieldedOutput | IDataFullShieldedOutput;
