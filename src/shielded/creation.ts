@@ -18,37 +18,13 @@ import Network from '../models/network';
 import {
   IBlindingEntry,
   IDataShieldedOutput,
+  InputGeneratorInfo,
   IShieldedCryptoProvider,
   ISurjectionDomainEntry,
+  ShieldedInputBlinding,
   ShieldedOutputMode,
+  ShieldedOutputProposal,
 } from './types';
-
-interface ShieldedOutputProposal {
-  address: string;
-  value: bigint;
-  token: string;
-  scanPubkey: string;
-  shieldedMode: ShieldedOutputMode;
-  timelock?: number;
-}
-
-/**
- * Re-export of `IBlindingEntry` under wallet-lib's local name. The contract
- * lives in `@hathor/ct-crypto-provider`; alias kept for back-compat with the
- * old `ShieldedInputBlinding` type that callers may still import.
- */
-export type ShieldedInputBlinding = IBlindingEntry;
-
-/**
- * Per-input generator info for surjection proof domain construction.
- * For transparent/AmountShielded inputs, only tokenUid is needed (unblinded generator).
- * For FullShielded inputs, the assetBlindingFactor is required to reconstruct
- * the blinded generator (asset_commitment) that the fullnode uses for verification.
- */
-export interface InputGeneratorInfo {
-  tokenUid: string;
-  assetBlindingFactor?: Buffer; // present only for FullShielded inputs
-}
 
 /**
  * Create shielded outputs with cryptographic commitments and proofs.
