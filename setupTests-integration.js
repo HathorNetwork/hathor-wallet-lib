@@ -18,6 +18,7 @@ import {
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests__/integration/helpers/wallet.helper';
+import { delay } from './__tests__/integration/utils/core.util';
 import { stopGLLBackgroundTask } from './src/sync/gll';
 import Transaction from './src/models/transaction';
 
@@ -48,6 +49,39 @@ Transaction.prototype.calculateWeight = function () {
 axios.defaults.httpAgent = new http.Agent({ keepAlive: false });
 axios.defaults.httpsAgent = new https.Agent({ keepAlive: false });
 
+/**
+ * Deploy an on-chain blueprint, retrying on the fullnode's timestamp-collision
+ * rejection.
+ *
+ * The wallet stamps a transaction with the current second (`Date.now()`), while
+ * the tx-mining-service picks the current DAG tips as parents without raising
+ * the timestamp above them. When a chosen tip shares that same wall-clock
+ * second, the fullnode rejects the tx because `tx.timestamp <= parent.timestamp`
+ * (hathor-core `vertex_verifier.verify_parents`). This is a pre-existing race in
+ * the mining pipeline — reproducible on master as well — and the OCBs deployed
+ * back-to-back here are especially exposed to it.
+ *
+ * On that specific rejection we wait past the colliding second (block interval
+ * is 1s) and re-mine, which stamps a strictly greater timestamp and clears the
+ * collision. Any other error is rethrown untouched.
+ */
+async function deployBlueprintWithRetry(wallet, code, address, maxRetries = 4) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await wallet.createAndSendOnChainBlueprintTransaction(code, address);
+    } catch (err) {
+      const message = err && err.message ? err.message : '';
+      const isTimestampCollision =
+        /full validation failed: tx=.*timestamp=\d+, parent=.*timestamp=\d+/.test(message);
+      if (attempt < maxRetries && isTimestampCollision) {
+        await delay(1500);
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 async function createOCBs(sharedState) {
   const { seed } = WALLET_CONSTANTS.ocb;
   const ocbWallet = await generateWalletHelper({ seed });
@@ -55,17 +89,17 @@ async function createOCBs(sharedState) {
   await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
 
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
-  const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
+  const txBet = await deployBlueprintWithRetry(ocbWallet, codeBet, address0);
   await waitTxConfirmed(ocbWallet, txBet.hash, null);
   sharedState.blueprintIds.BET_BLUEPRINT_ID = txBet.hash;
 
   const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
-  const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
+  const txAuthority = await deployBlueprintWithRetry(ocbWallet, codeAuthority, address0);
   await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
   sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
 
   const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
-  const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
+  const txFull = await deployBlueprintWithRetry(ocbWallet, codeFull, address0);
   await waitTxConfirmed(ocbWallet, txFull.hash, null);
   sharedState.blueprintIds.FULL_BLUEPRINT_ID = txFull.hash;
 
@@ -74,7 +108,7 @@ async function createOCBs(sharedState) {
     'utf8'
   );
 
-  const txParent = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
+  const txParent = await deployBlueprintWithRetry(ocbWallet, codeParent, address0);
   await waitTxConfirmed(ocbWallet, txParent.hash);
   sharedState.blueprintIds.PARENT_BLUEPRINT_ID = txParent.hash;
 
@@ -82,10 +116,7 @@ async function createOCBs(sharedState) {
     './__tests__/integration/configuration/blueprints/test_children.py',
     'utf8'
   );
-  const txChildren = await ocbWallet.createAndSendOnChainBlueprintTransaction(
-    codeChildren,
-    address0
-  );
+  const txChildren = await deployBlueprintWithRetry(ocbWallet, codeChildren, address0);
   await waitTxConfirmed(ocbWallet, txChildren.hash);
   sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID = txChildren.hash;
 
@@ -93,7 +124,7 @@ async function createOCBs(sharedState) {
     './__tests__/integration/configuration/blueprints/fee.py',
     'utf8'
   );
-  const txFee = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFee, address0);
+  const txFee = await deployBlueprintWithRetry(ocbWallet, codeFee, address0);
   await waitTxConfirmed(ocbWallet, txFee.hash, null);
   sharedState.blueprintIds.FEE_BLUEPRINT_ID = txFee.hash;
 
@@ -101,10 +132,7 @@ async function createOCBs(sharedState) {
     './__tests__/integration/configuration/blueprints/upgrade_test_v1.py',
     'utf8'
   );
-  const txUpgradeV1 = await ocbWallet.createAndSendOnChainBlueprintTransaction(
-    codeUpgradeV1,
-    address0
-  );
+  const txUpgradeV1 = await deployBlueprintWithRetry(ocbWallet, codeUpgradeV1, address0);
   await waitTxConfirmed(ocbWallet, txUpgradeV1.hash, null);
   sharedState.blueprintIds.UPGRADE_TEST_V1_BLUEPRINT_ID = txUpgradeV1.hash;
 
@@ -112,10 +140,7 @@ async function createOCBs(sharedState) {
     './__tests__/integration/configuration/blueprints/upgrade_test_v2.py',
     'utf8'
   );
-  const txUpgradeV2 = await ocbWallet.createAndSendOnChainBlueprintTransaction(
-    codeUpgradeV2,
-    address0
-  );
+  const txUpgradeV2 = await deployBlueprintWithRetry(ocbWallet, codeUpgradeV2, address0);
   await waitTxConfirmed(ocbWallet, txUpgradeV2.hash, null);
   sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID = txUpgradeV2.hash;
 }
