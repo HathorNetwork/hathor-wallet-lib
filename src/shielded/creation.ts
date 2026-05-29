@@ -5,7 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, ZERO_TWEAK } from '../constants';
+import {
+  COMPRESSED_PUBKEY_SIZE_BYTES,
+  NATIVE_TOKEN_UID,
+  NATIVE_TOKEN_UID_HEX,
+  TX_HASH_SIZE_BYTES,
+  ZERO_TWEAK,
+} from '../constants';
 import { getAddressType } from '../utils/address';
 import transactionUtils from '../utils/transaction';
 import Network from '../models/network';
@@ -66,17 +72,19 @@ export async function createShieldedOutputs(
   const hasFullShielded = proposals.some(p => p.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED);
   for (const [idx, proposal] of proposals.entries()) {
     const pubkeyBuf = Buffer.from(proposal.scanPubkey, 'hex');
-    if (pubkeyBuf.length !== 33) {
+    if (pubkeyBuf.length !== COMPRESSED_PUBKEY_SIZE_BYTES) {
       throw new Error(
-        `Shielded output ${idx}: scanPubkey must be 33 bytes, got ${pubkeyBuf.length}`
+        `Shielded output ${idx}: scanPubkey must be ${COMPRESSED_PUBKEY_SIZE_BYTES} bytes, got ${pubkeyBuf.length}`
       );
     }
     const tokenBuf = Buffer.from(
       proposal.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : proposal.token,
       'hex'
     );
-    if (tokenBuf.length !== 32) {
-      throw new Error(`Shielded output ${idx}: token UID must be 32 bytes, got ${tokenBuf.length}`);
+    if (tokenBuf.length !== TX_HASH_SIZE_BYTES) {
+      throw new Error(
+        `Shielded output ${idx}: token UID must be ${TX_HASH_SIZE_BYTES} bytes, got ${tokenBuf.length}`
+      );
     }
   }
   if (hasFullShielded && inputGenerators.length === 0) {
@@ -94,9 +102,9 @@ export async function createShieldedOutputs(
       info.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : info.tokenUid,
       'hex'
     );
-    if (inputTokenBuf.length !== 32) {
+    if (inputTokenBuf.length !== TX_HASH_SIZE_BYTES) {
       throw new Error(
-        `inputGenerators[${idx}]: token UID must be 32 bytes, got ${inputTokenBuf.length}`
+        `inputGenerators[${idx}]: token UID must be ${TX_HASH_SIZE_BYTES} bytes, got ${inputTokenBuf.length}`
       );
     }
   }
