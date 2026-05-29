@@ -293,7 +293,8 @@ export async function createShieldedOutputs(
     } catch (e) {
       const mode = fullyShielded ? 'FullShielded' : 'AmountShielded';
       throw new Error(
-        `Failed to create shielded output ${i}/${proposals.length} (mode=${mode}, token=${proposal.token}): ${e}`
+        `Failed to create shielded output ${i}/${proposals.length} (mode=${mode}, token=${proposal.token}): ${e}`,
+        { cause: e }
       );
     }
   }
