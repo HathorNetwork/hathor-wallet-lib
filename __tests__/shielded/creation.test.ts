@@ -258,6 +258,6 @@ describe('createShieldedOutputs validation guards', () => {
 
     await expect(
       createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
-    ).rejects.toThrow(/no assetBlindingFactor for last FullShielded output/);
+    ).rejects.toThrow(/no assetBlindingFactor for FullShielded output/);
   });
 });
