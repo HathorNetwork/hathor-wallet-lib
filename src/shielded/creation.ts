@@ -266,7 +266,7 @@ export async function createShieldedOutputs(
         script: scriptBuf.toString('hex'),
       });
     } catch (e) {
-      const mode = fullyShielded ? 'FullShielded' : 'AmountShielded';
+      const mode = ShieldedOutputMode[proposal.shieldedMode];
       throw new Error(
         `Failed to create shielded output ${i}/${proposals.length} (mode=${mode}, token=${proposal.token}): ${e}`,
         { cause: e }
