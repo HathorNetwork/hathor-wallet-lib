@@ -6,7 +6,6 @@
  */
 
 import { ShieldedOutputMode } from '@hathor/ct-crypto-provider';
-import type { IBlindingEntry } from '@hathor/ct-crypto-provider';
 import type { OutputValueType } from '../types';
 
 // ─── crypto-provider contract — re-exported from @hathor/ct-crypto-provider ─
@@ -97,13 +96,6 @@ export interface ShieldedOutputProposal {
   shieldedMode: ShieldedOutputMode;
   timelock?: number;
 }
-
-/**
- * Re-export of `IBlindingEntry` under wallet-lib's local name. The contract
- * lives in `@hathor/ct-crypto-provider`; alias kept for back-compat with the
- * old `ShieldedInputBlinding` type that callers may still import.
- */
-export type ShieldedInputBlinding = IBlindingEntry;
 
 /**
  * Per-input generator info for surjection proof domain construction.

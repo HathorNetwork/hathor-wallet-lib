@@ -21,7 +21,6 @@ import {
   InputGeneratorInfo,
   IShieldedCryptoProvider,
   ISurjectionDomainEntry,
-  ShieldedInputBlinding,
   ShieldedOutputMode,
   ShieldedOutputProposal,
 } from './types';
@@ -42,7 +41,7 @@ export async function createShieldedOutputs(
   cryptoProvider: IShieldedCryptoProvider,
   network: Network,
   inputGenerators: InputGeneratorInfo[] = [],
-  blindedInputs: ShieldedInputBlinding[] = []
+  blindedInputs: IBlindingEntry[] = []
 ): Promise<IDataShieldedOutput[]> {
   if (proposals.length === 0) return [];
   if (proposals.length === 1) {
