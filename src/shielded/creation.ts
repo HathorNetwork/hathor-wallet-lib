@@ -17,6 +17,8 @@ import transactionUtils from '../utils/transaction';
 import Network from '../models/network';
 import {
   IBlindingEntry,
+  IDataAmountShieldedOutput,
+  IDataFullShieldedOutput,
   IDataShieldedOutput,
   InputGeneratorInfo,
   IShieldedCryptoProvider,
@@ -24,6 +26,221 @@ import {
   ShieldedOutputMode,
   ShieldedOutputProposal,
 } from './types';
+
+// ─── per-proposal build context ───────────────────────────────────────────
+//
+// Shared inputs for the per-proposal helpers. `createdOutputs` is the
+// accumulator from previous iterations; the helpers only read from it.
+// The orchestrator (`createShieldedOutputs`) pushes the new createdEntry
+// returned by each call once the helper has succeeded.
+
+interface ShieldedOutputBuildContext {
+  proposal: ShieldedOutputProposal;
+  isLast: boolean;
+  cryptoProvider: IShieldedCryptoProvider;
+  blindedInputs: IBlindingEntry[];
+  createdOutputs: IBlindingEntry[];
+  recipientPubkeyBuf: Buffer;
+  tokenUidBuf: Buffer;
+  scriptHex: string;
+}
+
+interface FullShieldedBuildContext extends ShieldedOutputBuildContext {
+  inputGenerators: InputGeneratorInfo[];
+}
+
+// ─── per-mode helpers ──────────────────────────────────────────────────────
+
+/**
+ * Build a single AmountShielded output: pick the right blinding factor
+ * (random for non-last, balancing for the last output when there are
+ * already siblings) and call the crypto provider.
+ */
+async function buildAmountShieldedOutput(
+  ctx: ShieldedOutputBuildContext
+): Promise<{ result: IDataAmountShieldedOutput; createdEntry: IBlindingEntry }> {
+  const {
+    proposal,
+    isLast,
+    cryptoProvider,
+    blindedInputs,
+    createdOutputs,
+    recipientPubkeyBuf,
+    tokenUidBuf,
+    scriptHex,
+  } = ctx;
+
+  let cryptoResult;
+  if (isLast && createdOutputs.length > 0) {
+    // Last output: use a balancing vbf so the sum of output blinding factors
+    // matches the sum of input blinding factors.
+    const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
+      proposal.value,
+      ZERO_TWEAK,
+      blindedInputs,
+      createdOutputs
+    );
+    cryptoResult = await cryptoProvider.createAmountShieldedOutput(
+      proposal.value,
+      recipientPubkeyBuf,
+      tokenUidBuf,
+      balancingBf
+    );
+  } else {
+    // Non-last output (or single-call with no siblings): random vbf.
+    const vbf = await cryptoProvider.generateRandomBlindingFactor();
+    cryptoResult = await cryptoProvider.createAmountShieldedOutput(
+      proposal.value,
+      recipientPubkeyBuf,
+      tokenUidBuf,
+      vbf
+    );
+  }
+
+  return {
+    createdEntry: {
+      value: proposal.value,
+      valueBlindingFactor: cryptoResult.blindingFactor,
+      // AmountShielded does not hide the token; generator blinding factor is zero.
+      generatorBlindingFactor: ZERO_TWEAK,
+    },
+    result: {
+      address: proposal.address,
+      value: proposal.value,
+      token: proposal.token,
+      scanPubkey: proposal.scanPubkey,
+      shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+      ephemeralPubkey: cryptoResult.ephemeralPubkey,
+      commitment: cryptoResult.commitment,
+      rangeProof: cryptoResult.rangeProof,
+      blindingFactor: cryptoResult.blindingFactor,
+      script: scriptHex,
+    },
+  };
+}
+
+/**
+ * Build the surjection-proof domain: every input generator contributes one
+ * entry (tag + asset commitment). Transparent/AmountShielded inputs use
+ * the unblinded generator (ZERO_TWEAK); FullShielded inputs use their
+ * stored assetBlindingFactor — same shape the fullnode reconstructs for
+ * verification.
+ */
+async function buildSurjectionDomain(
+  inputGenerators: InputGeneratorInfo[],
+  cryptoProvider: IShieldedCryptoProvider
+): Promise<ISurjectionDomainEntry[]> {
+  const domain: ISurjectionDomainEntry[] = [];
+  for (const inputInfo of inputGenerators) {
+    const inputTokenBuf = Buffer.from(
+      inputInfo.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : inputInfo.tokenUid,
+      'hex'
+    );
+    const inputTag = await cryptoProvider.deriveTag(inputTokenBuf);
+    const abf = inputInfo.assetBlindingFactor ?? ZERO_TWEAK;
+    const inputGen = await cryptoProvider.createAssetCommitment(inputTag, abf);
+    domain.push({ generator: inputGen, tag: inputTag, blindingFactor: abf });
+  }
+  return domain;
+}
+
+/**
+ * Build a single FullShielded output: pick the right (vbf, abf) pair (both
+ * random for non-last; balancing vbf + random abf for the last output),
+ * call the crypto provider, then build the surjection proof tying the
+ * output's hidden token back to one of the input tokens.
+ */
+async function buildFullShieldedOutput(
+  ctx: FullShieldedBuildContext
+): Promise<{ result: IDataFullShieldedOutput; createdEntry: IBlindingEntry }> {
+  const {
+    proposal,
+    isLast,
+    cryptoProvider,
+    blindedInputs,
+    createdOutputs,
+    recipientPubkeyBuf,
+    tokenUidBuf,
+    scriptHex,
+    inputGenerators,
+  } = ctx;
+
+  let cryptoResult;
+  if (isLast && createdOutputs.length > 0) {
+    // Last FullShielded output: random abf + balancing vbf computed against it.
+    const lastAbf = await cryptoProvider.generateRandomBlindingFactor();
+    const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
+      proposal.value,
+      lastAbf,
+      blindedInputs,
+      createdOutputs
+    );
+    cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
+      proposal.value,
+      recipientPubkeyBuf,
+      tokenUidBuf,
+      balancingBf,
+      lastAbf
+    );
+  } else {
+    // Non-last FullShielded output: both random.
+    const vbf = await cryptoProvider.generateRandomBlindingFactor();
+    const abf = await cryptoProvider.generateRandomBlindingFactor();
+    cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
+      proposal.value,
+      recipientPubkeyBuf,
+      tokenUidBuf,
+      vbf,
+      abf
+    );
+  }
+
+  // Contract: the crypto provider is required to return both
+  // assetBlindingFactor and assetCommitment for any FullShielded output.
+  // Silently falling back to ZERO_TWEAK or skipping the surjection proof
+  // would produce a malformed FullShielded output the fullnode (or wallet
+  // decryption) rejects later with a confusing error; fail loud here at
+  // the contract boundary instead.
+  if (!cryptoResult.assetBlindingFactor) {
+    throw new Error('Crypto provider returned no assetBlindingFactor for FullShielded output');
+  }
+  if (!cryptoResult.assetCommitment) {
+    throw new Error('Crypto provider returned no assetCommitment for FullShielded output');
+  }
+
+  const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
+  const domain = await buildSurjectionDomain(inputGenerators, cryptoProvider);
+  const surjectionProof = await cryptoProvider.createSurjectionProof(
+    codomainTag,
+    cryptoResult.assetBlindingFactor,
+    domain
+  );
+
+  return {
+    createdEntry: {
+      value: proposal.value,
+      valueBlindingFactor: cryptoResult.blindingFactor,
+      generatorBlindingFactor: cryptoResult.assetBlindingFactor,
+    },
+    result: {
+      address: proposal.address,
+      value: proposal.value,
+      token: proposal.token,
+      scanPubkey: proposal.scanPubkey,
+      shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      ephemeralPubkey: cryptoResult.ephemeralPubkey,
+      commitment: cryptoResult.commitment,
+      rangeProof: cryptoResult.rangeProof,
+      blindingFactor: cryptoResult.blindingFactor,
+      assetCommitment: cryptoResult.assetCommitment,
+      assetBlindingFactor: cryptoResult.assetBlindingFactor,
+      surjectionProof,
+      script: scriptHex,
+    },
+  };
+}
+
+// ─── orchestrator ──────────────────────────────────────────────────────────
 
 /**
  * Create shielded outputs with cryptographic commitments and proofs.
@@ -96,114 +313,18 @@ export async function createShieldedOutputs(
 
   for (let i = 0; i < proposals.length; i++) {
     const proposal = proposals[i];
-    const fullyShielded = proposal.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED;
+    const isLast = i === proposals.length - 1;
     const recipientPubkeyBuf = Buffer.from(proposal.scanPubkey, 'hex');
     const tokenUidBuf = Buffer.from(
       proposal.token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : proposal.token,
       'hex'
     );
 
-    let cryptoResult;
-    const isLast = i === proposals.length - 1;
-
-    try {
-      if (isLast && createdOutputs.length > 0) {
-        if (fullyShielded) {
-          // FullShielded last output: generate abf, compute balancing vbf, create with both
-          const lastAbf = await cryptoProvider.generateRandomBlindingFactor();
-          const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
-            proposal.value,
-            lastAbf,
-            blindedInputs,
-            createdOutputs
-          );
-          cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-            proposal.value,
-            recipientPubkeyBuf,
-            tokenUidBuf,
-            balancingBf,
-            lastAbf
-          );
-          if (!cryptoResult.assetBlindingFactor) {
-            // Contract violation: createShieldedOutputWithBothBlindings is
-            // required to return the asset blinding factor it used to build
-            // the asset commitment. Silently falling back to ZERO_TWEAK
-            // here would produce a malformed FullShielded output (the
-            // commitment computed with the real abf but the stored
-            // generatorBlindingFactor zeroed) — wallet decryption later
-            // mismatches and balance corruption ensues.
-            throw new Error(
-              'Crypto provider returned no assetBlindingFactor for last FullShielded output'
-            );
-          }
-          createdOutputs.push({
-            value: proposal.value,
-            valueBlindingFactor: cryptoResult.blindingFactor,
-            generatorBlindingFactor: cryptoResult.assetBlindingFactor,
-          });
-        } else {
-          // AmountShielded last output: compute balancing vbf, create with it
-          const balancingBf = await cryptoProvider.computeBalancingBlindingFactor(
-            proposal.value,
-            ZERO_TWEAK,
-            blindedInputs,
-            createdOutputs
-          );
-          cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-            proposal.value,
-            recipientPubkeyBuf,
-            tokenUidBuf,
-            balancingBf
-          );
-          createdOutputs.push({
-            value: proposal.value,
-            valueBlindingFactor: cryptoResult.blindingFactor,
-            generatorBlindingFactor: ZERO_TWEAK,
-          });
-        }
-      } else if (fullyShielded) {
-        // FullShielded non-last output: generate both blinding factors
-        const vbf = await cryptoProvider.generateRandomBlindingFactor();
-        const abf = await cryptoProvider.generateRandomBlindingFactor();
-        cryptoResult = await cryptoProvider.createShieldedOutputWithBothBlindings(
-          proposal.value,
-          recipientPubkeyBuf,
-          tokenUidBuf,
-          vbf,
-          abf
-        );
-        if (!cryptoResult.assetBlindingFactor) {
-          // Same contract as the last-output branch above — fail loud here
-          // rather than store a zeroed generatorBlindingFactor and corrupt
-          // the wallet's view of this UTXO downstream.
-          throw new Error(
-            'Crypto provider returned no assetBlindingFactor for FullShielded output'
-          );
-        }
-        createdOutputs.push({
-          value: proposal.value,
-          valueBlindingFactor: cryptoResult.blindingFactor,
-          generatorBlindingFactor: cryptoResult.assetBlindingFactor,
-        });
-      } else {
-        // AmountShielded non-last output: generate random vbf
-        const vbf = await cryptoProvider.generateRandomBlindingFactor();
-        cryptoResult = await cryptoProvider.createAmountShieldedOutput(
-          proposal.value,
-          recipientPubkeyBuf,
-          tokenUidBuf,
-          vbf
-        );
-        createdOutputs.push({
-          value: proposal.value,
-          valueBlindingFactor: cryptoResult.blindingFactor,
-          generatorBlindingFactor: ZERO_TWEAK,
-        });
-      }
-
-      // Create the output script for the on-chain address (spend-derived P2PKH).
-      // proposal.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
-      const scriptBuf = transactionUtils.createOutputScript(
+    // proposal.address is already the spend-derived P2PKH (resolved in
+    // `sendManyOutputsSendTransaction`); compute the on-chain script once
+    // per iteration so both helpers receive it ready to use.
+    const scriptHex = transactionUtils
+      .createOutputScript(
         {
           address: proposal.address,
           value: proposal.value,
@@ -213,90 +334,27 @@ export async function createShieldedOutputs(
           type: getAddressType(proposal.address, network),
         },
         network
-      );
+      )
+      .toString('hex');
 
-      // For FullShielded outputs, generate a surjection proof.
-      // The domain must include ALL input generators (matching the fullnode's verification).
-      // For transparent/AmountShielded inputs: use unblinded generator (ZERO_TWEAK).
-      // For FullShielded inputs: use the blinded generator (asset_commitment) reconstructed
-      // from the input's asset blinding factor — the fullnode verifies against this.
-      let surjectionProof: Buffer | undefined;
-      if (fullyShielded) {
-        // assetBlindingFactor is guaranteed non-null inside the FullShielded
-        // branches above (we throw if the provider doesn't supply it), but
-        // TypeScript can't carry that narrowing across the cryptoResult
-        // reassignment in different if-branches — assert here.
-        if (!cryptoResult.assetBlindingFactor) {
-          throw new Error(
-            'FullShielded output reached surjection-proof step without an assetBlindingFactor'
-          );
-        }
-        const codomainTag = await cryptoProvider.deriveTag(tokenUidBuf);
-        const domain: ISurjectionDomainEntry[] = [];
-        for (const inputInfo of inputGenerators) {
-          const inputTokenBuf = Buffer.from(
-            inputInfo.tokenUid === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : inputInfo.tokenUid,
-            'hex'
-          );
-          const inputTag = await cryptoProvider.deriveTag(inputTokenBuf);
-          const abf = inputInfo.assetBlindingFactor ?? ZERO_TWEAK;
-          const inputGen = await cryptoProvider.createAssetCommitment(inputTag, abf);
-          domain.push({ generator: inputGen, tag: inputTag, blindingFactor: abf });
-        }
-        surjectionProof = await cryptoProvider.createSurjectionProof(
-          codomainTag,
-          cryptoResult.assetBlindingFactor,
-          domain
-        );
-      }
+    try {
+      const baseCtx: ShieldedOutputBuildContext = {
+        proposal,
+        isLast,
+        cryptoProvider,
+        blindedInputs,
+        createdOutputs,
+        recipientPubkeyBuf,
+        tokenUidBuf,
+        scriptHex,
+      };
+      const built =
+        proposal.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED
+          ? await buildFullShieldedOutput({ ...baseCtx, inputGenerators })
+          : await buildAmountShieldedOutput(baseCtx);
 
-      // Branch the result construction on the mode so the discriminated
-      // union (`IDataAmountShieldedOutput | IDataFullShieldedOutput`) is
-      // satisfied without optional fields. The FullShielded variant
-      // requires `assetCommitment` / `assetBlindingFactor` / `surjectionProof`
-      // to be non-null — the earlier throws already validate the latter
-      // two in this branch; assertCommitment is checked here for the same
-      // contract-violation reason.
-      if (fullyShielded) {
-        if (!cryptoResult.assetCommitment) {
-          throw new Error('Crypto provider returned no assetCommitment for FullShielded output');
-        }
-        if (!cryptoResult.assetBlindingFactor || !surjectionProof) {
-          // Defensive — both are guaranteed by earlier throws on this branch,
-          // but TS cannot carry that narrowing across the cryptoResult mutation.
-          throw new Error(
-            'FullShielded output missing assetBlindingFactor or surjectionProof at result push'
-          );
-        }
-        results.push({
-          address: proposal.address,
-          value: proposal.value,
-          token: proposal.token,
-          scanPubkey: proposal.scanPubkey,
-          shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
-          ephemeralPubkey: cryptoResult.ephemeralPubkey,
-          commitment: cryptoResult.commitment,
-          rangeProof: cryptoResult.rangeProof,
-          blindingFactor: cryptoResult.blindingFactor,
-          assetCommitment: cryptoResult.assetCommitment,
-          assetBlindingFactor: cryptoResult.assetBlindingFactor,
-          surjectionProof,
-          script: scriptBuf.toString('hex'),
-        });
-      } else {
-        results.push({
-          address: proposal.address,
-          value: proposal.value,
-          token: proposal.token,
-          scanPubkey: proposal.scanPubkey,
-          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
-          ephemeralPubkey: cryptoResult.ephemeralPubkey,
-          commitment: cryptoResult.commitment,
-          rangeProof: cryptoResult.rangeProof,
-          blindingFactor: cryptoResult.blindingFactor,
-          script: scriptBuf.toString('hex'),
-        });
-      }
+      results.push(built.result);
+      createdOutputs.push(built.createdEntry);
     } catch (e) {
       const mode = ShieldedOutputMode[proposal.shieldedMode];
       throw new Error(
