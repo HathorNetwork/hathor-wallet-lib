@@ -925,6 +925,16 @@ const transaction = {
         // PR 1 refactor: ShieldedOutput constructor moved value before the
         // options bag, and assetCommitment/surjectionProof now live inside
         // the options bag instead of being positional args.
+        //
+        // Narrow on the discriminator before reading the FullShielded-only
+        // fields — they only exist on `IDataFullShieldedOutput`, not on
+        // `IDataAmountShieldedOutput`.
+        let assetCommitment: Buffer | undefined;
+        let surjectionProof: Buffer | undefined;
+        if (so.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED) {
+          assetCommitment = so.assetCommitment;
+          surjectionProof = so.surjectionProof;
+        }
         return new ShieldedOutput(
           so.shieldedMode,
           so.commitment,
@@ -933,7 +943,7 @@ const transaction = {
           Buffer.from(so.script, 'hex'),
           so.ephemeralPubkey,
           so.value,
-          { assetCommitment: so.assetCommitment, surjectionProof: so.surjectionProof }
+          { assetCommitment, surjectionProof }
         );
       });
 
