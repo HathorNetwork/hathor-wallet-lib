@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HathorWalletServiceWallet — Send-TX Profile (testnet)</title>
+<style>
+  :root {
+    --bg: #0b0f17;
+    --panel: #131823;
+    --panel-2: #1a2030;
+    --ink: #e6edf3;
+    --muted: #8892a6;
+    --accent: #7aa2f7;
+    --good: #9ece6a;
+    --warn: #e0af68;
+    --bad: #f7768e;
+    --grid: #2a3040;
+    --c-utxo: #e0af68;
+    --c-sign: #bb9af7;
+    --c-mine-submit: #7dcfff;
+    --c-mine-status: #9ece6a;
+    --c-propose-post: #f7768e;
+    --c-propose-put: #ff9e64;
+    --c-setup: #565f89;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+  }
+  main { max-width: 1200px; margin: 0 auto; padding: 36px 28px 120px; }
+  h1 { font-size: 28px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 20px;
+    margin: 44px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--grid);
+    letter-spacing: -0.005em;
+  }
+  h3 { font-size: 15px; margin: 24px 0 8px; color: var(--ink); }
+  p, li { color: var(--ink); }
+  code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .tag {
+    display: inline-block;
+    background: var(--panel-2);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-right: 6px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--grid);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .row-3, .row-4 { grid-template-columns: 1fr; } }
+  .stat { padding: 12px 14px; background: var(--panel-2); border-radius: 6px; }
+  .stat .val { font-size: 22px; font-weight: 600; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .stat .lbl { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .stat .delta { font-size: 11px; color: var(--bad); margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { text-align: right; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 6px; font-size: 12px; color: var(--muted); }
+  .legend .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 6px; }
+  .status-ok { color: var(--good); }
+  .status-warn { color: var(--warn); }
+  .status-bad { color: var(--bad); }
+  a { color: var(--accent); }
+  pre {
+    background: var(--panel-2);
+    padding: 14px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    padding: 10px 14px;
+    background: rgba(122, 162, 247, 0.08);
+    border-radius: 0 6px 6px 0;
+    margin: 14px 0;
+  }
+  .callout.bad { border-color: var(--bad); background: rgba(247, 118, 142, 0.08); }
+  .callout.warn { border-color: var(--warn); background: rgba(224, 175, 104, 0.08); }
+  .callout.good { border-color: var(--good); background: rgba(158, 206, 106, 0.08); }
+  svg text { fill: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+  svg .axis text { fill: var(--muted); }
+  svg .grid line { stroke: var(--grid); stroke-dasharray: 2 3; }
+  svg .bar { stroke: rgba(0,0,0,0.25); stroke-width: 0.5; }
+  svg .bar-label { fill: #fff; font-weight: 500; }
+  svg .marker { stroke: #f7768e; stroke-width: 1.2; stroke-dasharray: 3 2; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; margin: 12px 0 4px; }
+  .toc a {
+    padding: 4px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--grid);
+    border-radius: 999px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+  .toc a:hover { border-color: var(--accent); }
+  .pill-bad { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: rgba(247, 118, 142, 0.15); color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="small muted">Profile report</div>
+    <h1>Send transaction &mdash; profile</h1>
+    <p class="muted">
+      End-to-end timing of <code>HathorWalletServiceWallet.sendTransaction()</code> against
+      the public testnet wallet-service + tx-mining-service. Self-send of 1 smallest-unit HTR
+      to the wallet's own first address. Three runs: one "cold" pathological run and two
+      warmer back-to-back runs.
+    </p>
+    <div>
+      <span class="tag">network: testnet</span>
+      <span class="tag">wallet-service: wallet-service.testnet.hathor.network</span>
+      <span class="tag">tx-mining: txmining.testnet.hathor.network</span>
+      <span class="tag">3 sends profiled</span>
+    </div>
+    <nav class="toc">
+      <a href="#tldr">TL;DR</a>
+      <a href="#anatomy">Anatomy of a send</a>
+      <a href="#waterfalls">Waterfalls</a>
+      <a href="#http">HTTP calls</a>
+      <a href="#findings">Findings</a>
+      <a href="#recs">Recommendations</a>
+      <a href="#method">Methodology</a>
+    </nav>
+  </header>
+
+  <h2 id="tldr">TL;DR</h2>
+  <div class="panel">
+    <div class="row-3">
+      <div class="stat">
+        <div class="val">~3&ndash;4&nbsp;s</div>
+        <div class="lbl">typical send (warm, testnet)</div>
+      </div>
+      <div class="stat">
+        <div class="val">11.6&nbsp;s</div>
+        <div class="lbl">pathological send (seen once, backend tail-latency)</div>
+        <div class="delta">tx/proposal responses 4.5 s each</div>
+      </div>
+      <div class="stat">
+        <div class="val">59&ndash;81%</div>
+        <div class="lbl">of total time spent in <code>handleSendTxProposal</code></div>
+      </div>
+    </div>
+    <p style="margin-top: 16px;">
+      Sending a transaction is <b>dominated by two serial wallet-service calls</b> that run
+      <i>after</i> the tx is already mined: <code>POST /tx/proposal</code> followed by
+      <code>PUT /tx/proposal/{id}</code>. These together take <b>1.9&ndash;9.4 seconds</b> of
+      the <b>3.1&ndash;11.6 s</b> total. Both requests carry the same signed txHex. Proof-of-
+      work + the tx-mining round-trip is ~900 ms &mdash; a minor part of the total.
+    </p>
+    <div class="callout bad">
+      <b>Headline finding:</b> The <code>POST /tx/proposal</code> + <code>PUT /tx/proposal/{id}</code>
+      round-trip is the hotspot. The client sends the full txHex (~530&thinsp;B) twice in
+      sequence. If these could be collapsed into a single call, or run in parallel with
+      mining, send time would drop by 1.5&ndash;4&thinsp;s in the typical case.
+    </div>
+  </div>
+
+  <h2 id="anatomy">Anatomy of a <code>sendTransaction()</code> call</h2>
+  <div class="panel">
+    <p>Six phases, in order:</p>
+    <ol style="line-height: 1.8;">
+      <li>
+        <b>prepareTxData</b> (UTXO selection):
+        <code>GET /wallet/tx_outputs</code> to pick inputs for the amount.
+        <span class="muted">310&ndash;780 ms &mdash; one HTTP call.</span>
+      </li>
+      <li>
+        <b>signTx</b> (local secp256k1 signing):
+        <span class="muted">19&ndash;25 ms &mdash; pure CPU, negligible.</span>
+      </li>
+      <li>
+        <b>runFromMining</b> &rarr; <code>MineTransaction.start()</code>:
+        <ul>
+          <li><b>submitJob</b>: <code>POST /submit-job</code> to tx-mining-service with the unsigned tx hex. <span class="muted">215&ndash;691 ms.</span></li>
+          <li><b>handleJobStatus</b> (polled): <code>GET /job-status</code> &mdash; interval = <code>max(estimation / 2, 500 ms)</code>. <span class="muted">Only one poll needed per run here.</span></li>
+          <li><span class="muted">+ an idle wait before the first poll: <code>max(estimation/2, 500 ms)</code> via <code>setTimeout</code>.</span></li>
+        </ul>
+      </li>
+      <li>
+        <b>handleSendTxProposal</b> &mdash; the hotspot:
+        <ul>
+          <li><code>POST /tx/proposal</code> with the txHex. <span class="muted">1023&ndash;4531 ms.</span></li>
+          <li><code>PUT /tx/proposal/{id}</code> with the <i>same</i> txHex. <span class="muted">849&ndash;4881 ms.</span></li>
+        </ul>
+      </li>
+    </ol>
+    <div class="callout">
+      Total = HTTP calls (network + backend) + mining wait + tiny CPU. On testnet the network
+      + backend part is ~3 seconds in the best case and multiples of that when the wallet-
+      service tx/proposal endpoint gets slow.
+    </div>
+  </div>
+
+  <h2 id="waterfalls">Waterfalls &mdash; 3 runs</h2>
+  <p class="muted">
+    All three runs exhibit the same shape: UTXO fetch &rarr; sign &rarr; mining
+    submit+poll &rarr; dual tx/proposal round-trip. Only the magnitudes of the final two
+    HTTP calls swing wildly. Red dashed line marks the moment the tx was <i>mined</i> (PoW
+    complete); everything to the right of it is wallet-service validation/propagation.
+  </p>
+
+  <div class="legend">
+    <span><i class="sw" style="background: var(--c-utxo)"></i>GET /wallet/tx_outputs (UTXO select)</span>
+    <span><i class="sw" style="background: var(--c-sign)"></i>signTx (local)</span>
+    <span><i class="sw" style="background: var(--c-mine-submit)"></i>POST /submit-job</span>
+    <span><i class="sw" style="background: var(--c-mine-status)"></i>GET /job-status</span>
+    <span><i class="sw" style="background: var(--c-propose-post)"></i>POST /tx/proposal</span>
+    <span><i class="sw" style="background: var(--c-propose-put)"></i>PUT /tx/proposal/&lt;id&gt;</span>
+    <span><i class="sw" style="background: var(--c-setup)"></i>orchestration / idle wait</span>
+  </div>
+
+  <div id="charts"></div>
+
+  <h2 id="http">HTTP calls per run</h2>
+  <div id="http-tables"></div>
+
+  <h2 id="findings">Findings</h2>
+
+  <h3 class="status-bad">1. <code>POST</code> + <code>PUT /tx/proposal</code> is the hotspot <span class="pill-bad">&gt; 50% of send time</span></h3>
+  <p>
+    In <code>handleSendTxProposal</code>
+    (<code>src/wallet/sendTransactionWalletService.ts:890&ndash;892</code>), the client does:
+  </p>
+  <pre>const { txProposalId } = await walletApi.createTxProposal(wallet, txHex);  // POST
+await walletApi.updateTxProposal(wallet, txProposalId, txHex);              // PUT (same txHex!)</pre>
+  <p>
+    Both requests carry the same signed txHex (~530&thinsp;B). The POST creates a proposal
+    server-side and returns a UUID; the PUT finalizes it with the same data. Measured
+    durations:
+  </p>
+  <table style="max-width: 700px;">
+    <thead>
+      <tr><th>Run</th><th class="num">POST /tx/proposal</th><th class="num">PUT /tx/proposal/&lt;id&gt;</th><th class="num">Combined</th><th class="num">% of total</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Pathological</td><td class="num">4531 ms</td><td class="num">4881 ms</td><td class="num">9412 ms</td><td class="num status-bad">81%</td></tr>
+      <tr><td>Warm #1</td><td class="num">1106 ms</td><td class="num">1023 ms</td><td class="num">2129 ms</td><td class="num status-warn">53%</td></tr>
+      <tr><td>Warm #2</td><td class="num">1024 ms</td><td class="num">849 ms</td><td class="num">1872 ms</td><td class="num status-warn">60%</td></tr>
+    </tbody>
+  </table>
+  <div class="callout bad">
+    Why are these both so slow? The wallet-service is almost certainly <b>synchronously
+    waiting for fullnode propagation / acceptance</b> during these calls. That's server-side
+    work we can't eliminate from the client &mdash; but we <i>can</i> question whether we
+    need two round-trips or whether they can overlap with mining.
+  </div>
+
+  <h3 class="status-warn">2. UTXO selection takes 310&ndash;780 ms for one HTTP call</h3>
+  <p>
+    <code>GET /wallet/tx_outputs</code> returns ~345&thinsp;B of JSON describing the
+    available UTXOs. Even warm, this takes 310&thinsp;ms on testnet. Cold first-call of the
+    process takes 780&thinsp;ms (same TLS/auth cold-start we saw in the load profile).
+    Consistent part of the hot path, hard to eliminate without a client-side UTXO cache.
+  </p>
+
+  <h3 class="status-ok">3. Mining (PoW) is NOT the bottleneck</h3>
+  <p>
+    The tx-mining service returns in ~900&thinsp;ms total (submit 215&ndash;691&thinsp;ms,
+    one status poll at 215&ndash;220&thinsp;ms, plus a ~500&thinsp;ms idle wait between them).
+    Everyone blames PoW for slow sends. On testnet it's only ~8&ndash;15% of the total.
+  </p>
+
+  <h3 class="status-ok">4. <code>signTx</code> is cheap (19&ndash;25 ms)</h3>
+  <p>
+    secp256k1 signing of a single-input single-output transaction is fast even in pure JS
+    (bitcore-lib). Not worth optimizing.
+  </p>
+
+  <h3 class="status-warn">5. An idle <code>setTimeout</code> wait before the first mining-status poll</h3>
+  <p>
+    <code>handleJobStatus</code> in <code>src/wallet/mineTransaction.ts:147</code> computes
+    <code>poll_time = max(estimation / 2, MIN_POLLING_INTERVAL) * 1000</code> and sleeps
+    before the first status GET. With
+    <code>MIN_POLLING_INTERVAL = 0.5</code> (0.5&thinsp;s) and testnet estimations typically
+    ~1&thinsp;s, this adds a flat ~500&thinsp;ms of <i>pure idle</i> after the tx was
+    submitted. If mining finishes earlier, we still wait.
+  </p>
+
+  <h2 id="recs">Recommendations</h2>
+  <ol>
+    <li>
+      <b>Ask the wallet-service team why POST + PUT are both needed.</b>
+      Can the POST body include <code>finalize: true</code> so a single call does both? Or
+      can the PUT start immediately after POST returns without server-side re-validation?
+      Any reduction in either call's latency maps 1:1 to user-visible savings. This is the
+      single biggest lever.
+    </li>
+    <li>
+      <b>Overlap <code>POST /tx/proposal</code> with mining.</b>
+      The POST could potentially accept an un-mined tx (or a "pre-proposal" stub) and
+      validate inputs / UTXOs in parallel with the tx-mining PoW. Then the PUT updates it
+      with nonce+parents+timestamp once mining finishes. Net savings: up to 900&thinsp;ms
+      per send.
+    </li>
+    <li>
+      <b>Drop the blind 500&thinsp;ms <code>setTimeout</code> before first poll.</b>
+      Issue the first <code>GET /job-status</code> immediately after <code>POST /submit-job</code>
+      returns, or use a push/stream channel from tx-mining if available. Net: ~500&thinsp;ms
+      cheaper per send.
+    </li>
+    <li>
+      <b>Short-circuit UTXO selection for trivial sends</b> &mdash; if the wallet already
+      knows about a UTXO >= requested amount from a previous query or WS update, skip the
+      <code>GET /wallet/tx_outputs</code>. Net: ~300&ndash;780&thinsp;ms.
+    </li>
+  </ol>
+
+  <h2>What was <u>not</u> measured</h2>
+  <div class="callout">
+    <ul>
+      <li>
+        Transactions with <b>many inputs/outputs</b> (multi-token, batch sends).
+        <code>signTx</code> scales linearly &mdash; with 10+ inputs the local CPU time
+        grows, and <code>tx_outputs</code> response size grows too. Worth a follow-up.
+      </li>
+      <li>
+        <b>Fullnode-directed sends</b> (non-wallet-service path). The old
+        <code>HathorWallet</code> facade uses a different proposal pipeline.
+      </li>
+      <li>
+        <b>Nano contract transactions</b> go through the same <code>handleSendTxProposal</code>
+        hotspot &mdash; likely the same findings apply, plus extra server-side work.
+      </li>
+    </ul>
+  </div>
+
+  <h2 id="method">Methodology</h2>
+  <p>Harness: <code>profiling/profile-send-tx.ts</code>. It:</p>
+  <ul>
+    <li>starts the wallet normally (not profiled &mdash; see the load-profile report for that);</li>
+    <li>monkey-patches <code>SendTransactionWalletService.prototype</code>
+      (<code>prepareTx</code>, <code>prepareTxData</code>, <code>selectUtxosToUse</code>,
+      <code>signTx</code>, <code>runFromMining</code>, <code>handleSendTxProposal</code>) and
+      <code>MineTransaction.prototype</code> (<code>submitJob</code>,
+      <code>handleJobStatus</code>) to emit <code>perf_hooks</code> marks;</li>
+    <li>installs axios interceptors that capture every HTTP call made to wallet-service and
+      tx-mining-service (method, URL, status, duration, bytes);</li>
+    <li>calls <code>wallet.sendTransaction(addr, 1n, { pinCode })</code> with the wallet's
+      own address 0 as destination (self-send, no economic effect);</li>
+    <li>writes per-run JSON to <code>profiling/profiles/sendtx-&lt;label&gt;.json</code>.</li>
+  </ul>
+  <h3>Reproducing</h3>
+  <pre>RUNS=2 SEND_AMOUNT=1 NETWORK=testnet npm run profile:send-tx</pre>
+
+  <h2>Raw data</h2>
+  <details>
+    <summary style="cursor: pointer; color: var(--muted);">Click to view all 3 runs' JSON</summary>
+    <pre id="rawjson" style="max-height: 360px; overflow: auto;"></pre>
+  </details>
+
+  <footer style="margin-top: 60px; color: var(--muted); font-size: 12px;">
+    Companion to the wallet-load profile report. Same seed, same server, different flow.
+    No secrets included.
+  </footer>
+</main>
+
+<script>
+// ---------- Embedded run data (send transaction) ----------
+const RUNS = [
+  {
+    "label": "pathological send",
+    "totalMs": 11642.074083,
+    "t0": 3723.683125,
+    "phases": [
+      { "name": "phase.total",                    "startTime": 3723.819208, "duration": 11641.922792 },
+      { "name": "phase.send.run",                 "startTime": 3726.330791, "duration": 11639.300125 },
+      { "name": "phase.prepareTx",                "startTime": 3726.406916, "duration": 787.005042 },
+      { "name": "phase.selectUtxosToUse",         "startTime": 3727.230583, "duration": 784.64625 },
+      { "name": "phase.signTx",                   "startTime": 4513.46475,  "duration": 19.311166 },
+      { "name": "phase.runFromMining",            "startTime": 4532.793541, "duration": 10832.828917 },
+      { "name": "phase.mining.submitJob#1",       "startTime": 4532.992416, "duration": 0.241334 },
+      { "name": "phase.mining.scheduleJobStatus", "startTime": 5224.785833, "duration": 1.731875 },
+      { "name": "phase.handleSendTxProposal",     "startTime": 5946.616791, "duration": 9418.975 }
+    ],
+    "http": [
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/tx_outputs",       "startTime": 3727.702083,  "duration": 782.227333,  "reqBytes": 0,   "status": 200, "resBytes": 348 },
+      { "method": "POST", "url": "https://txmining.testnet.hathor.network/submit-job",                    "startTime": 4533.24375,   "duration": 691.283291,  "reqBytes": 500, "status": 200, "resBytes": 380 },
+      { "method": "GET",  "url": "https://txmining.testnet.hathor.network/job-status",                    "startTime": 5726.781416,  "duration": 219.3765,    "reqBytes": 0,   "status": 200, "resBytes": 550 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/tx/proposal",             "startTime": 5947.500916,  "duration": 4531.443459, "reqBytes": 594, "status": 201, "resBytes": 203 },
+      { "method": "PUT",  "url": "https://wallet-service.testnet.hathor.network/tx/proposal/PROPOSAL-ID", "startTime": 10483.869291, "duration": 4881.024042, "reqBytes": 594, "status": 200, "resBytes": 663 }
+    ]
+  },
+  {
+    "label": "warm send #1",
+    "totalMs": 4012.6975,
+    "t0": 2700.256542,
+    "phases": [
+      { "name": "phase.total",                    "startTime": 2700.318625, "duration": 4012.624917 },
+      { "name": "phase.send.run",                 "startTime": 2700.8475,   "duration": 4012.003042 },
+      { "name": "phase.prepareTx",                "startTime": 2700.877458, "duration": 482.769834 },
+      { "name": "phase.selectUtxosToUse",         "startTime": 2701.166667, "duration": 481.985125 },
+      { "name": "phase.signTx",                   "startTime": 3183.666667, "duration": 20.737958 },
+      { "name": "phase.runFromMining",            "startTime": 3204.425292, "duration": 3508.419541 },
+      { "name": "phase.mining.submitJob#1",       "startTime": 3204.652333, "duration": 0.287875 },
+      { "name": "phase.mining.scheduleJobStatus", "startTime": 3856.013917, "duration": 0.117875 },
+      { "name": "phase.handleSendTxProposal",     "startTime": 4582.287708, "duration": 2130.536959 }
+    ],
+    "http": [
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/tx_outputs",       "startTime": 2701.375542, "duration": 481.543833,  "reqBytes": 0,   "status": 200, "resBytes": 345 },
+      { "method": "POST", "url": "https://txmining.testnet.hathor.network/submit-job",                    "startTime": 3204.953583, "duration": 650.977542,  "reqBytes": 436, "status": 200, "resBytes": 383 },
+      { "method": "GET",  "url": "https://txmining.testnet.hathor.network/job-status",                    "startTime": 4360.724333, "duration": 221.171459,  "reqBytes": 0,   "status": 200, "resBytes": 554 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/tx/proposal",             "startTime": 4583.100042, "duration": 1106.273541, "reqBytes": 530, "status": 201, "resBytes": 201 },
+      { "method": "PUT",  "url": "https://wallet-service.testnet.hathor.network/tx/proposal/PROPOSAL-ID", "startTime": 5689.7095,   "duration": 1022.745708, "reqBytes": 530, "status": 200, "resBytes": 599 }
+    ]
+  },
+  {
+    "label": "warm send #2",
+    "totalMs": 3143.534333,
+    "t0": 8715.910125,
+    "phases": [
+      { "name": "phase.total",                    "startTime": 8715.91925,  "duration": 3143.522208 },
+      { "name": "phase.send.run",                 "startTime": 8716.19375,  "duration": 3143.241167 },
+      { "name": "phase.prepareTx",                "startTime": 8716.202208, "duration": 311.144417 },
+      { "name": "phase.selectUtxosToUse",         "startTime": 8716.275083, "duration": 310.951334 },
+      { "name": "phase.signTx",                   "startTime": 9027.3525,   "duration": 24.896208 },
+      { "name": "phase.runFromMining",            "startTime": 9052.263375, "duration": 2807.165125 },
+      { "name": "phase.mining.submitJob#1",       "startTime": 9052.3005,   "duration": 0.199042 },
+      { "name": "phase.mining.scheduleJobStatus", "startTime": 9267.869542, "duration": 0.028625 },
+      { "name": "phase.handleSendTxProposal",     "startTime": 9985.685833, "duration": 1873.723292 }
+    ],
+    "http": [
+      { "method": "GET",  "url": "https://wallet-service.testnet.hathor.network/wallet/tx_outputs",       "startTime": 8716.73275,   "duration": 310.226375,  "reqBytes": 0,   "status": 200, "resBytes": 345 },
+      { "method": "POST", "url": "https://txmining.testnet.hathor.network/submit-job",                    "startTime": 9052.505625,  "duration": 215.329042,  "reqBytes": 434, "status": 200, "resBytes": 383 },
+      { "method": "GET",  "url": "https://txmining.testnet.hathor.network/job-status",                    "startTime": 9770.730583,  "duration": 214.92075,   "reqBytes": 0,   "status": 200, "resBytes": 554 },
+      { "method": "POST", "url": "https://wallet-service.testnet.hathor.network/tx/proposal",             "startTime": 9986.064792,  "duration": 1023.675958, "reqBytes": 528, "status": 201, "resBytes": 201 },
+      { "method": "PUT",  "url": "https://wallet-service.testnet.hathor.network/tx/proposal/PROPOSAL-ID", "startTime": 11010.595083, "duration": 848.567542,  "reqBytes": 528, "status": 200, "resBytes": 597 }
+    ]
+  }
+];
+
+// ---------- Rendering ----------
+const HTTP_COLOR = (url, method) => {
+  if (url.includes('/tx_outputs')) return 'var(--c-utxo)';
+  if (url.includes('/submit-job')) return 'var(--c-mine-submit)';
+  if (url.includes('/job-status')) return 'var(--c-mine-status)';
+  if (url.includes('/tx/proposal/')) return 'var(--c-propose-put)';
+  if (url.includes('/tx/proposal')) return 'var(--c-propose-post)';
+  return 'var(--accent)';
+};
+const PHASE_COLOR = (name) => {
+  if (name === 'phase.prepareTx' || name === 'phase.selectUtxosToUse') return 'var(--c-utxo)';
+  if (name === 'phase.signTx') return 'var(--c-sign)';
+  if (name.startsWith('phase.mining.submitJob')) return 'var(--c-mine-submit)';
+  if (name === 'phase.mining.scheduleJobStatus') return 'var(--c-mine-status)';
+  if (name === 'phase.handleSendTxProposal') return 'var(--c-propose-post)';
+  if (name === 'phase.runFromMining') return 'var(--c-setup)';
+  if (name === 'phase.send.run' || name === 'phase.total') return 'var(--c-setup)';
+  return 'var(--c-setup)';
+};
+
+function phaseLabel(name) {
+  return name.replace('phase.mining.', 'mining.').replace('phase.', '');
+}
+
+function renderWaterfall(run, axisMs) {
+  const t0 = run.t0;
+  const keep = new Set([
+    'phase.prepareTx',
+    'phase.selectUtxosToUse',
+    'phase.signTx',
+    'phase.runFromMining',
+    'phase.handleSendTxProposal',
+  ]);
+  const rows = [];
+  for (const p of run.phases) {
+    // Keep only the first occurrence of selectUtxosToUse (the real one) — there's a
+    // ~0.2ms phantom that's likely a re-entry artifact; skip if duration < 1ms.
+    if (!keep.has(p.name)) continue;
+    if (p.name === 'phase.selectUtxosToUse' && p.duration < 1) continue;
+    rows.push({ kind: 'phase', name: phaseLabel(p.name), start: p.startTime - t0, dur: p.duration, color: PHASE_COLOR(p.name) });
+  }
+  for (const h of run.http) {
+    rows.push({
+      kind: 'http',
+      name: `${h.method} ${new URL(h.url).pathname}`,
+      start: h.startTime - t0,
+      dur: h.duration,
+      color: HTTP_COLOR(h.url, h.method),
+      status: h.status,
+    });
+  }
+  rows.sort((a, b) => a.start - b.start);
+
+  // Red marker at end of mining (= start of handleSendTxProposal)
+  const minedAtMs = (() => {
+    const p = run.phases.find(x => x.name === 'phase.handleSendTxProposal');
+    return p ? (p.startTime - t0) : null;
+  })();
+
+  const totalEnd = axisMs || Math.max(...rows.map(r => r.start + r.dur));
+  const step = totalEnd > 6000 ? 2000 : (totalEnd > 2500 ? 500 : 250);
+
+  const rowH = 22;
+  const leftPad = 300;
+  const rightPad = 60;
+  const chartW = 900;
+  const width = leftPad + chartW + rightPad;
+  const height = 40 + rows.length * rowH + 24;
+  const xScale = (ms) => leftPad + (ms / totalEnd) * chartW;
+
+  let svg = `<svg width="100%" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">`;
+  svg += `<g class="grid">`;
+  for (let t = 0; t <= totalEnd; t += step) {
+    const x = xScale(t);
+    svg += `<line x1="${x}" y1="24" x2="${x}" y2="${height - 24}" />`;
+  }
+  svg += `</g>`;
+  svg += `<g class="axis">`;
+  for (let t = 0; t <= totalEnd; t += step) {
+    const x = xScale(t);
+    svg += `<text x="${x}" y="18" text-anchor="middle">${t} ms</text>`;
+  }
+  svg += `</g>`;
+  if (minedAtMs != null) {
+    const x = xScale(minedAtMs);
+    svg += `<line class="marker" x1="${x}" y1="24" x2="${x}" y2="${height - 24}" />`;
+    svg += `<text x="${x + 5}" y="${height - 8}" fill="#f7768e">mined @ ${minedAtMs.toFixed(0)}ms</text>`;
+  }
+  rows.forEach((r, i) => {
+    const y = 32 + i * rowH;
+    const x = xScale(r.start);
+    const w = Math.max(1, xScale(r.start + r.dur) - x);
+    svg += `<text x="${leftPad - 10}" y="${y + 14}" text-anchor="end">${r.name}</text>`;
+    svg += `<rect class="bar" x="${x}" y="${y}" width="${w}" height="16" rx="2" fill="${r.color}" />`;
+    const dlabel = `${r.dur.toFixed(0)}ms`;
+    if (w > 52) {
+      svg += `<text class="bar-label" x="${x + 6}" y="${y + 12}">${dlabel}</text>`;
+    } else {
+      svg += `<text x="${x + w + 6}" y="${y + 12}">${dlabel}</text>`;
+    }
+  });
+  svg += `</svg>`;
+  return svg;
+}
+
+function renderHttpTable(run) {
+  const body = run.http.map((h) => {
+    const statusClass = (h.status >= 200 && h.status < 300) ? 'status-ok' : 'status-bad';
+    const u = new URL(h.url);
+    return `<tr>
+      <td>${h.method}</td>
+      <td>${u.host}</td>
+      <td>${u.pathname}</td>
+      <td class="num ${statusClass}">${h.status}</td>
+      <td class="num">${h.duration.toFixed(1)}</td>
+      <td class="num">${(h.startTime - run.t0).toFixed(1)}</td>
+      <td class="num">${h.reqBytes}</td>
+      <td class="num">${h.resBytes}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="panel"><h3>${run.label} &nbsp;<span class="muted small">total = ${run.totalMs.toFixed(0)} ms</span></h3>
+    <table>
+      <thead><tr><th>Method</th><th>Host</th><th>Path</th><th class="num">Status</th><th class="num">Dur (ms)</th><th class="num">Start t (ms)</th><th class="num">Req B</th><th class="num">Res B</th></tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+}
+
+function renderAll() {
+  // Use the pathological run's total as the shared axis so visuals are comparable.
+  const patho = RUNS[0].totalMs;
+  const charts = document.getElementById('charts');
+  charts.innerHTML = RUNS.map((run, idx) => {
+    const outlier = idx === 0;
+    return `<div class="panel">
+      <h3>${run.label} &nbsp;<span class="muted small">total = ${run.totalMs.toFixed(0)} ms</span>${outlier ? ' <span class="status-bad small">&nbsp;&bull; backend tail-latency</span>' : ''}</h3>
+      ${renderWaterfall(run, patho)}
+    </div>`;
+  }).join('');
+
+  document.getElementById('http-tables').innerHTML = RUNS.map(renderHttpTable).join('');
+  document.getElementById('rawjson').textContent = JSON.stringify(RUNS, null, 2);
+}
+
+renderAll();
+</script>
+</body>
+</html>
