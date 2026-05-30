@@ -8,6 +8,37 @@
 import { z } from 'zod';
 import { getDefaultLogger } from '../types';
 
+/*
+ * `JSONBigInt` depends on the "JSON source text access" proposal, which ships in
+ * V8 / Node v22 but is NOT implemented by react-native engines (Hermes and
+ * JavaScriptCore):
+ *
+ *  - `parse` relies on the `context` argument of the `JSON.parse` reviver
+ *    (`context.source`) to detect integers above `Number.MAX_SAFE_INTEGER`.
+ *    Without it, large integers silently lose precision. We feature-detect the
+ *    native support and fall back to the core-js-pure parse ponyfill on engines
+ *    that lack it. `JSON.rawJSON` is used as the probe because it ships in the
+ *    same proposal as the parse `context`.
+ *
+ *  - `stringify` would use `JSON.rawJSON` to emit a `bigint` as a raw, unquoted
+ *    JSON number. That API is missing on react-native, and the core-js-pure
+ *    stringify/rawJSON ponyfills break under SES hardening used by some consumers
+ *    (e.g. hathor-wallet-mobile) with "Cannot assign to read-only property". So
+ *    instead we serialize bigints to a sentinel string with the native (SES-safe)
+ *    `JSON.stringify` and then unquote them into raw numbers. The leading NUL byte
+ *    makes a collision with real string data effectively impossible.
+ */
+/* eslint-disable global-require, @typescript-eslint/no-var-requires */
+const hasNativeJsonSourceText = typeof (JSON as { rawJSON?: unknown }).rawJSON === 'function';
+
+const jsonParse: typeof JSON.parse = hasNativeJsonSourceText
+  ? JSON.parse
+  : require('core-js-pure/actual/json/parse');
+/* eslint-enable global-require, @typescript-eslint/no-var-requires */
+
+const BIGINT_SENTINEL = `${String.fromCharCode(0)}bigint:`;
+const BIGINT_SENTINEL_RE = /"\\u0000bigint:(-?\d+)"/g;
+
 /**
  * An object equivalent to the native global JSON, providing `parse()` and `stringify()` functions with compatible signatures, except
  * for the `reviver` and `replacer` parameters that are not supported to prevent accidental override of the custom BigInt behavior.
@@ -18,17 +49,24 @@ import { getDefaultLogger } from '../types';
 export const JSONBigInt = {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   parse(text: string): any {
-    // @ts-expect-error TypeScript hasn't been updated with the `context` argument from Node v22.
-    return JSON.parse(text, this.bigIntReviver);
+    return jsonParse(text, this.bigIntReviver);
   },
 
   stringify(value: any, space?: string | number): string {
-    return JSON.stringify(value, this.bigIntReplacer, space);
+    // Native JSON.stringify is SES-safe; bigIntReplacer tags BigInts with a
+    // sentinel string which we then unquote into raw JSON numbers.
+    return JSON.stringify(value, this.bigIntReplacer, space).replace(BIGINT_SENTINEL_RE, '$1');
   },
 
-  bigIntReviver(_key: string, value: any, context: { source: string }): any {
+  bigIntReviver(_key: string, value: any, context?: { source: string }): any {
     if (typeof value !== 'number') {
       // No special handling needed for non-number values.
+      return value;
+    }
+
+    if (!context) {
+      // Engines without JSON source text access do not provide `context`, so we
+      // cannot inspect the original token; keep the value as a Number.
       return value;
     }
 
@@ -44,8 +82,10 @@ export const JSONBigInt = {
     } catch (e) {
       if (
         e instanceof SyntaxError &&
-        (e.message === `Cannot convert ${context.source} to a BigInt` ||
-          e.message === `invalid BigInt syntax`)
+        (e.message === `Cannot convert ${context.source} to a BigInt` || // V8 / Node
+          e.message === `invalid BigInt syntax` || // older V8
+          e.message === `can't convert string to bigint` || // JavaScriptCore
+          e.message === `Failed to parse String to BigInt`) // Hermes
       ) {
         // When this error happens, it means the number cannot be converted to a BigInt,
         // so it's a double, for example '123.456' or '1e2'.
@@ -59,9 +99,9 @@ export const JSONBigInt = {
   },
 
   bigIntReplacer(_key: string, value_: any): any {
-    // If the value is a BigInt, we simply return its string representation.
-    // @ts-expect-error TypeScript hasn't been updated with the `rawJSON` function from Node v22.
-    return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString(10)) : value_;
+    // Tag BigInts with a sentinel string; stringify() unquotes them into raw JSON
+    // numbers so they round-trip back to a BigInt through bigIntReviver.
+    return typeof value_ === 'bigint' ? `${BIGINT_SENTINEL}${value_.toString(10)}` : value_;
   },
   /* eslint-enable @typescript-eslint/no-explicit-any */
 };

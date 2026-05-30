@@ -106,6 +106,14 @@ describe('test JSONBigInt', () => {
   test('should stringify bigint', () => {
     expect(JSONBigInt.stringify(bigIntObj)).toStrictEqual(bigIntJson);
   });
+
+  test('does not corrupt string values that resemble the bigint marker', () => {
+    // Only a NUL-prefixed sentinel is unquoted, so ordinary strings that merely
+    // contain "bigint:<digits>" must round-trip untouched.
+    const tricky = { note: 'bigint:123', mixed: 'x bigint:456 y' };
+    expect(JSONBigInt.stringify(tricky)).toStrictEqual(JSON.stringify(tricky));
+    expect(JSONBigInt.parse(JSONBigInt.stringify(tricky))).toStrictEqual(tricky);
+  });
 });
 
 describe('test parseJsonBigInt', () => {
@@ -115,5 +123,43 @@ describe('test parseJsonBigInt', () => {
 
   test('should parse object with small and large bigints', () => {
     expect(parseJsonBigInt(bigIntJson, bigIntObjSchema)).toStrictEqual(bigIntCoercedObj);
+  });
+});
+
+describe('JSONBigInt without native JSON source text access (e.g. Hermes/JSC)', () => {
+  // Simulates react-native engines that do not implement the "JSON source text
+  // access" proposal: `JSON.parse` falls back to the core-js-pure ponyfill, and
+  // BigInt stringify uses the native-JSON sentinel path (no `JSON.rawJSON`).
+  let rawJSONDescriptor: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    rawJSONDescriptor = Object.getOwnPropertyDescriptor(JSON, 'rawJSON');
+    delete (JSON as { rawJSON?: unknown }).rawJSON;
+    jest.resetModules();
+  });
+
+  afterEach(() => {
+    if (rawJSONDescriptor) {
+      Object.defineProperty(JSON, 'rawJSON', rawJSONDescriptor);
+    }
+    jest.resetModules();
+  });
+
+  test('falls back to the core-js ponyfill and still round-trips bigints', () => {
+    // Sanity check: the native API must really be absent for this test to be meaningful.
+    expect(typeof (JSON as { rawJSON?: unknown }).rawJSON).not.toBe('function');
+
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
+    const { JSONBigInt: FallbackJSONBigInt } = require('../../src/utils/bigint');
+
+    // The whole point of the fix: stringifying a bigint must not throw.
+    expect(FallbackJSONBigInt.stringify(bigIntObj)).toStrictEqual(bigIntJson);
+    expect(FallbackJSONBigInt.parse(bigIntJson)).toStrictEqual(bigIntObj);
+
+    // Behaviour must match the native path for plain JSON and precision edges.
+    expect(FallbackJSONBigInt.stringify(obj)).toStrictEqual(nativeJson);
+    expect(FallbackJSONBigInt.parse('9007199254740991')).toStrictEqual(9007199254740991);
+    expect(FallbackJSONBigInt.parse('9007199254740992')).toStrictEqual(9007199254740992n);
+    expect(FallbackJSONBigInt.parse('123.456')).toStrictEqual(123.456);
   });
 });
