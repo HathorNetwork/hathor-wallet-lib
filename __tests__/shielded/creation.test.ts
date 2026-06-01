@@ -260,4 +260,30 @@ describe('createShieldedOutputs validation guards', () => {
       createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
     ).rejects.toThrow(/no assetBlindingFactor for FullShielded output/);
   });
+
+  it('rejects when provider returns FullShielded result without assetCommitment', async () => {
+    // Same contract as the assetBlindingFactor tests above — the FullShielded
+    // helper checks both at the post-crypto-call boundary so it can construct
+    // a well-formed `IDataFullShieldedOutput`. Silently storing `undefined`
+    // would propagate down to the on-chain serialization and the fullnode
+    // rejects with a confusing error far from the actual cause.
+    const provider = makeMockProvider({
+      createShieldedOutputWithBothBlindings: jest.fn().mockReturnValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(33, 0x03),
+        rangeProof: Buffer.alloc(10, 0x04),
+        blindingFactor: Buffer.alloc(32, 0x05),
+        assetBlindingFactor: Buffer.alloc(32, 0x07),
+        // assetCommitment intentionally omitted
+      }),
+    });
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 60n }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
+    ];
+
+    await expect(
+      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
+    ).rejects.toThrow(/no assetCommitment for FullShielded output/);
+  });
 });
