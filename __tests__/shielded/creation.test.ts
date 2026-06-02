@@ -13,16 +13,14 @@ function makeMockProvider(
   overrides: Partial<IShieldedCryptoProvider> = {}
 ): IShieldedCryptoProvider {
   return {
-    generateRandomBlindingFactor: jest.fn().mockReturnValue(Buffer.alloc(32, 0x01)),
-    createAmountShieldedOutput: jest.fn().mockImplementation(() => {
-      return {
-        ephemeralPubkey: Buffer.alloc(33, 0x02),
-        commitment: Buffer.alloc(33, 0x03),
-        rangeProof: Buffer.alloc(10, 0x04),
-        blindingFactor: Buffer.alloc(32, 0x05),
-      };
+    generateRandomBlindingFactor: jest.fn().mockResolvedValue(Buffer.alloc(32, 0x01)),
+    createAmountShieldedOutput: jest.fn().mockResolvedValue({
+      ephemeralPubkey: Buffer.alloc(33, 0x02),
+      commitment: Buffer.alloc(33, 0x03),
+      rangeProof: Buffer.alloc(10, 0x04),
+      blindingFactor: Buffer.alloc(32, 0x05),
     }),
-    createShieldedOutputWithBothBlindings: jest.fn().mockReturnValue({
+    createShieldedOutputWithBothBlindings: jest.fn().mockResolvedValue({
       ephemeralPubkey: Buffer.alloc(33, 0x02),
       commitment: Buffer.alloc(33, 0x03),
       rangeProof: Buffer.alloc(10, 0x04),
@@ -32,10 +30,10 @@ function makeMockProvider(
     }),
     rewindAmountShieldedOutput: jest.fn(),
     rewindFullShieldedOutput: jest.fn(),
-    computeBalancingBlindingFactor: jest.fn().mockReturnValue(Buffer.alloc(32, 0x08)),
-    deriveTag: jest.fn().mockReturnValue(Buffer.alloc(32, 0x09)),
-    createAssetCommitment: jest.fn().mockReturnValue(Buffer.alloc(33, 0x0a)),
-    createSurjectionProof: jest.fn().mockReturnValue(Buffer.alloc(20, 0x0b)),
+    computeBalancingBlindingFactor: jest.fn().mockResolvedValue(Buffer.alloc(32, 0x08)),
+    deriveTag: jest.fn().mockResolvedValue(Buffer.alloc(32, 0x09)),
+    createAssetCommitment: jest.fn().mockResolvedValue(Buffer.alloc(33, 0x0a)),
+    createSurjectionProof: jest.fn().mockResolvedValue(Buffer.alloc(20, 0x0b)),
     deriveEcdhSharedSecret: jest.fn(),
     ...overrides,
   };
@@ -82,9 +80,9 @@ describe('createShieldedOutputs', () => {
 
   it('should propagate crypto provider error on first output', async () => {
     const provider = makeMockProvider({
-      createAmountShieldedOutput: jest.fn().mockImplementation(() => {
-        throw new Error('crypto failure on output 0');
-      }),
+      createAmountShieldedOutput: jest
+        .fn()
+        .mockRejectedValue(new Error('crypto failure on output 0')),
     });
     const proposals = [makeProposal(), makeProposal()];
 
@@ -96,7 +94,7 @@ describe('createShieldedOutputs', () => {
   it('should propagate crypto provider error on second output', async () => {
     let callCount = 0;
     const provider = makeMockProvider({
-      createAmountShieldedOutput: jest.fn().mockImplementation(() => {
+      createAmountShieldedOutput: jest.fn().mockImplementation(async () => {
         callCount++;
         if (callCount === 1) {
           return {
@@ -212,7 +210,7 @@ describe('createShieldedOutputs validation guards', () => {
     // is a contract violation; the code must throw rather than silently
     // store ZERO_TWEAK as the generator blinding factor.
     const provider = makeMockProvider({
-      createShieldedOutputWithBothBlindings: jest.fn().mockReturnValue({
+      createShieldedOutputWithBothBlindings: jest.fn().mockResolvedValue({
         ephemeralPubkey: Buffer.alloc(33, 0x02),
         commitment: Buffer.alloc(33, 0x03),
         rangeProof: Buffer.alloc(10, 0x04),
@@ -236,7 +234,7 @@ describe('createShieldedOutputs validation guards', () => {
     // exercises the last-output FullShielded branch's throw.
     let callCount = 0;
     const provider = makeMockProvider({
-      createShieldedOutputWithBothBlindings: jest.fn().mockImplementation(() => {
+      createShieldedOutputWithBothBlindings: jest.fn().mockImplementation(async () => {
         callCount++;
         const base = {
           ephemeralPubkey: Buffer.alloc(33, 0x02),
@@ -268,7 +266,7 @@ describe('createShieldedOutputs validation guards', () => {
     // would propagate down to the on-chain serialization and the fullnode
     // rejects with a confusing error far from the actual cause.
     const provider = makeMockProvider({
-      createShieldedOutputWithBothBlindings: jest.fn().mockReturnValue({
+      createShieldedOutputWithBothBlindings: jest.fn().mockResolvedValue({
         ephemeralPubkey: Buffer.alloc(33, 0x02),
         commitment: Buffer.alloc(33, 0x03),
         rangeProof: Buffer.alloc(10, 0x04),
