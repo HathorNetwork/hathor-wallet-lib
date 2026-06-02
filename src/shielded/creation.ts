@@ -87,7 +87,7 @@ async function buildAmountShieldedOutput(
       balancingBf
     );
   } else {
-    // Non-last output (or single-call with no siblings): random vbf.
+    // Non-last output: random vbf.
     const vbf = await cryptoProvider.generateRandomBlindingFactor();
     cryptoResult = await cryptoProvider.createAmountShieldedOutput(
       proposal.value,
