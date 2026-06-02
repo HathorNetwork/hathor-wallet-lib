@@ -87,7 +87,7 @@ async function buildAmountShieldedOutput(
       balancingBf
     );
   } else {
-    // Non-last output (or single-call with no siblings): random vbf.
+    // Non-last output: random vbf.
     const vbf = await cryptoProvider.generateRandomBlindingFactor();
     cryptoResult = await cryptoProvider.createAmountShieldedOutput(
       proposal.value,
@@ -309,7 +309,7 @@ export async function createShieldedOutputs(
   }
 
   const results: IDataShieldedOutput[] = [];
-  const createdOutputs: Array<IBlindingEntry> = [];
+  const createdOutputs: IBlindingEntry[] = [];
 
   for (let i = 0; i < proposals.length; i++) {
     const proposal = proposals[i];

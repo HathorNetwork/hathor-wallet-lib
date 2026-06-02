@@ -176,15 +176,42 @@ export class WalletError extends Error {
 }
 
 /**
- * Error thrown when executing wallet requests
+ * Diagnostic context attached to a {@link WalletRequestError}. Three variants
+ * capture the kinds of evidence a wallet request failure can produce:
+ *
+ *   - `{ status, data }` — HTTP failure: status code and body from an axios
+ *     response.
+ *   - `{ state }`       — App-level rejection: the HTTP call succeeded but
+ *     the response indicates the wallet is in a non-success state.
+ *   - `{ source }`      — Chained failure: this error wraps a prior
+ *     {@link WalletRequestError} (e.g. a polling loop that exhausted retries
+ *     after multiple transient errors).
+ *
+ * Variants are mutually exclusive: each has a unique required field, so the
+ * type system rejects accidental combinations like `{ status, source }`.
+ */
+export type WalletRequestErrorCause =
+  | { status: number; data: unknown }
+  | { state: unknown }
+  | { source: WalletRequestError };
+
+/**
+ * Error thrown when executing wallet requests.
+ *
+ * The {@link cause} is currently optional to permit incremental adoption: not
+ * every throw site populates it yet. A follow-up PR will make `cause`
+ * mandatory once every throw site has been swept.
  *
  * @memberof Errors
  * @inner
  */
 export class WalletRequestError extends WalletError {
-  cause: unknown = null;
+  cause: WalletRequestErrorCause | undefined = undefined;
 
-  constructor(message: string, errorData: { cause: unknown } = { cause: null }) {
+  constructor(
+    message: string,
+    errorData: { cause: WalletRequestErrorCause | undefined } = { cause: undefined }
+  ) {
     super(message);
     this.cause = errorData.cause;
   }

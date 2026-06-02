@@ -600,6 +600,60 @@ describe('FeeBlueprint nano contract operations', () => {
     expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - 100n);
   });
 
+  it('should pay fees when the wallet has a single HTR utxo covering deposit + fee', async () => {
+    // Regression test for the bug where executeDeposit locks the only HTR utxo
+    // before selectFeeInputs runs, causing selectFeeInputs to fail even though
+    // the deposit's change output has more than enough HTR to cover the fee.
+    const singleUtxoWallet = await generateWalletHelper(null);
+    const recipient = await singleUtxoWallet.getAddressAtIndex(0);
+
+    // Single HTR utxo sized to cover deposit (10n) + fee (1n) + small change (9n)
+    await GenesisWalletHelper.injectFunds(singleUtxoWallet, recipient, 20n, {});
+
+    const fbtWithdrawalAmount = 50n;
+    const htrDepositAmount = 10n;
+    const expectedFee = 1n;
+
+    const tx = await singleUtxoWallet.createAndSendNanoContractTransaction('noop', recipient, {
+      ncId: contractId,
+      args: [],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: htrDepositAmount,
+          changeAddress: recipient,
+        },
+        {
+          type: 'withdrawal',
+          token: fbtUid,
+          amount: fbtWithdrawalAmount,
+          address: recipient,
+        },
+      ],
+    });
+    await checkTxValid(singleUtxoWallet, tx);
+
+    // Single HTR input was used to fund both deposit and fee.
+    expect(tx.inputs.length).toBe(1);
+
+    // Outputs: HTR change (20 - 10 - 1 = 9) + FBT withdrawal (50)
+    const htrOutputs = tx.outputs.filter(o => o.tokenData === 0);
+    const fbtOutputs = tx.outputs.filter(o => o.tokenData !== 0);
+    expect(htrOutputs.length).toBe(1);
+    expect(htrOutputs[0].value).toBe(20n - htrDepositAmount - expectedFee);
+    expect(fbtOutputs.length).toBe(1);
+    expect(fbtOutputs[0].value).toBe(fbtWithdrawalAmount);
+
+    // FeeHeader carries the expected fee.
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].tokenIndex).toBe(0);
+    expect(feeHeader!.entries[0].amount).toBe(expectedFee);
+
+    await singleUtxoWallet.stop();
+  });
+
   it('should get an error when trying to pay fees without enough HTR', async () => {
     /** Dedicated wallet for tests that require an empty wallet (never funded) */
     const emptyWallet = await generateWalletHelper(null);
