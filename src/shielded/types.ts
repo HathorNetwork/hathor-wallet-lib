@@ -5,13 +5,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-/**
- * Shielded output modes matching the Hathor protocol.
- */
-export enum ShieldedOutputMode {
-  AMOUNT_SHIELDED = 1,
-  FULLY_SHIELDED = 2,
-}
+import { ShieldedOutputMode } from '@hathor/ct-crypto-provider';
+import type { OutputValueType } from '../types';
+
+// ─── crypto-provider contract — re-exported from @hathor/ct-crypto-provider ─
+//
+// The shielded crypto provider interface, abstract class, and result
+// shapes are owned by `@hathor/ct-crypto-provider`. Re-exporting them
+// here keeps wallet-lib's internal import paths short (`./types` instead
+// of the full package path) without making wallet-lib the owner of the
+// contract.
+export { ShieldedOutputMode };
+export type {
+  IShieldedCryptoProvider,
+  ICreatedShieldedOutput,
+  IRewoundAmountShieldedOutput,
+  IRewoundFullShieldedOutput,
+  IBlindingEntry,
+  ISurjectionDomainEntry,
+  IOpenedFullShieldedCommitment,
+} from '@hathor/ct-crypto-provider';
+
+// ─── wallet-lib-domain shielded types ──────────────────────────────────────
 
 /**
  * A shielded output as received from the full node API.
@@ -55,183 +70,6 @@ export interface IDecryptedShieldedOutput {
 }
 
 /**
- * Result of creating a shielded output via the crypto provider.
- */
-export interface ICreatedShieldedOutput {
-  ephemeralPubkey: Buffer;
-  commitment: Buffer;
-  rangeProof: Buffer;
-  blindingFactor: Buffer;
-  assetCommitment?: Buffer;
-  assetBlindingFactor?: Buffer;
-  surjectionProof?: Buffer;
-}
-
-/**
- * Swappable crypto provider for shielded output operations.
- *
- * Function names follow the SHIELDED-OUTPUTS-CLIENT-GUIDE.md specification.
- *
- * Implementations:
- * - Node.js: @hathor/ct-crypto-node (napi-rs, default)
- * - iOS: Swift wrapper via UniFFI
- * - Android: Kotlin wrapper via UniFFI
- *
- * Every method returns `Promise<T>`. Some implementations (e.g. the Node
- * native addon) compute results synchronously, but the interface uniformly
- * returns Promises so callers don't have to defend against a `T | Promise<T>`
- * union at every call site. Sync implementations should declare their methods
- * `async` or wrap the return in `Promise.resolve(...)`.
- */
-export interface IShieldedCryptoProvider {
-  /**
-   * Generate a random 32-byte blinding factor (valid secp256k1 scalar).
-   * MUST use the Rust crypto RNG — never use JS crypto.randomBytes.
-   */
-  generateRandomBlindingFactor(): Promise<Buffer>;
-
-  /**
-   * Create an AmountShielded output (amount hidden, token visible).
-   * Caller provides the value blinding factor (from generateRandomBlindingFactor
-   * or computeBalancingBlindingFactor).
-   */
-  createAmountShieldedOutput(
-    value: bigint,
-    recipientPubkey: Buffer,
-    tokenUid: Buffer,
-    valueBlindingFactor: Buffer
-  ): Promise<ICreatedShieldedOutput>;
-
-  /**
-   * Create a FullShielded output (amount AND token hidden).
-   * Caller provides both the value and asset blinding factors.
-   */
-  createShieldedOutputWithBothBlindings(
-    value: bigint,
-    recipientPubkey: Buffer,
-    tokenUid: Buffer,
-    valueBlindingFactor: Buffer,
-    assetBlindingFactor: Buffer
-  ): Promise<ICreatedShieldedOutput>;
-
-  /**
-   * Rewind an AmountShielded output to recover value and blinding factor.
-   * The token UID is known from the visible token_data field.
-   */
-  rewindAmountShieldedOutput(
-    privateKey: Buffer,
-    ephemeralPubkey: Buffer,
-    commitment: Buffer,
-    rangeProof: Buffer,
-    tokenUid: Buffer
-  ): Promise<IRewoundAmountShieldedOutput>;
-
-  /**
-   * Rewind a FullShielded output to recover value, blinding factor, token UID,
-   * and asset blinding factor. Does NOT take tokenUid — it's recovered from the proof message.
-   */
-  rewindFullShieldedOutput(
-    privateKey: Buffer,
-    ephemeralPubkey: Buffer,
-    commitment: Buffer,
-    rangeProof: Buffer,
-    assetCommitment: Buffer
-  ): Promise<IRewoundFullShieldedOutput>;
-
-  /**
-   * Compute the balancing blinding factor for the last shielded output.
-   * Uses secp256k1-zkp's compute_adaptive_blinding_factor.
-   *
-   * @param value - The value of the last output
-   * @param generatorBlindingFactor - Generator bf for the last output (zero for AmountShielded)
-   * @param inputs - Array of {value, vbf, gbf} for all inputs
-   * @param otherOutputs - Array of {value, vbf, gbf} for all other outputs (not the last)
-   */
-  computeBalancingBlindingFactor(
-    value: bigint,
-    generatorBlindingFactor: Buffer,
-    inputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>,
-    otherOutputs: Array<{ value: bigint; vbf: Buffer; gbf: Buffer }>
-  ): Promise<Buffer>;
-
-  /**
-   * Derive a raw Tag from a token UID (for surjection proofs and cross-checks).
-   */
-  deriveTag(tokenUid: Buffer): Promise<Buffer>;
-
-  /**
-   * Derive a blinded asset generator from a raw tag and blinding factor.
-   */
-  createAssetCommitment(tag: Buffer, blindingFactor: Buffer): Promise<Buffer>;
-
-  /**
-   * Create a surjection proof proving the output asset derives from one of the input assets.
-   */
-  createSurjectionProof(
-    codomainTag: Buffer,
-    codomainBlindingFactor: Buffer,
-    domain: Array<{ generator: Buffer; tag: Buffer; blindingFactor: Buffer }>
-  ): Promise<Buffer>;
-
-  /**
-   * ECDH shared secret derivation (for scanning optimization).
-   */
-  deriveEcdhSharedSecret(privkey: Buffer, pubkey: Buffer): Promise<Buffer>;
-
-  /**
-   * Recompute the AmountShielded value commitment from the cleartext
-   * `value`, `vbf`, and the (public) `tokenUid`. Equivalent to
-   * `createCommitment(value, vbf, deriveAssetTag(tokenUid))`. Used by
-   * verifier-only consumers (e.g. the explorer's "view tx unblinded"
-   * path) to confirm a shared opening matches the on-chain commitment
-   * without needing a range proof or ephemeral key.
-   *
-   * Returns the 33-byte serialized Pedersen commitment.
-   */
-  openAmountShieldedCommitment(value: bigint, vbf: Buffer, tokenUid: Buffer): Promise<Buffer>;
-
-  /**
-   * Recompute both the value and asset commitments for a FullShielded
-   * output from cleartext `value`, `vbf`, `tokenUid` and `abf`.
-   * Equivalent to:
-   *   tag = deriveTag(tokenUid)
-   *   assetCommitment = createAssetCommitment(tag, abf)
-   *   valueCommitment = createCommitment(value, vbf, assetCommitment)
-   *
-   * Returns both 33-byte serialized commitments. Verifier compares
-   * each to the on-chain bytes.
-   */
-  openFullShieldedCommitment(
-    value: bigint,
-    vbf: Buffer,
-    tokenUid: Buffer,
-    abf: Buffer
-  ): Promise<{ valueCommitment: Buffer; assetCommitment: Buffer }>;
-}
-
-/**
- * Result of rewinding an AmountShielded output.
- */
-export interface IRewoundAmountShieldedOutput {
-  value: bigint;
-  blindingFactor: Buffer;
-}
-
-/**
- * Result of rewinding a FullShielded output.
- */
-export interface IRewoundFullShieldedOutput {
-  value: bigint;
-  blindingFactor: Buffer;
-  // hex, 32 bytes. Recovered from the proof message. Hex (not Buffer) so the
-  // shielded module presents a single canonical token-UID encoding to every
-  // consumer (storage, history, balance) — matching the rest of wallet-lib
-  // where `IUtxo.token` and friends are hex strings.
-  tokenUid: string;
-  assetBlindingFactor: Buffer; // 32 bytes, recovered from proof message
-}
-
-/**
  * Result of processing shielded outputs for a single transaction.
  */
 export interface IProcessedShieldedOutput {
@@ -241,3 +79,79 @@ export interface IProcessedShieldedOutput {
   address: string;
   tokenUid: string;
 }
+
+// ─── createShieldedOutputs I/O ─────────────────────────────────────────────
+
+/**
+ * Caller-supplied description of one shielded output to be built by
+ * `createShieldedOutputs()`. The function takes an array of these and
+ * returns an `IDataShieldedOutput[]` with the cryptographic fields
+ * populated.
+ */
+export interface ShieldedOutputProposal {
+  address: string;
+  value: bigint;
+  token: string;
+  scanPubkey: string;
+  shieldedMode: ShieldedOutputMode;
+  timelock?: number;
+}
+
+/**
+ * Per-input generator info for surjection proof domain construction.
+ * For transparent/AmountShielded inputs, only `tokenUid` is needed (unblinded
+ * generator). For FullShielded inputs, the `assetBlindingFactor` is required
+ * to reconstruct the blinded generator (asset_commitment) that the fullnode
+ * uses for verification.
+ */
+export interface InputGeneratorInfo {
+  tokenUid: string;
+  assetBlindingFactor?: Buffer; // present only for FullShielded inputs
+}
+
+/**
+ * Fields populated for every shielded output (both modes) by
+ * `createShieldedOutputs()`. The non-crypto prefix mirrors what
+ * `ShieldedOutputProposal` carries in; everything else is filled in by the
+ * crypto provider in a single pass.
+ */
+interface IDataShieldedOutputBase {
+  address: string;
+  value: OutputValueType;
+  token: string;
+  scanPubkey: string; // hex, 33 bytes compressed EC pubkey for ECDH
+  ephemeralPubkey: Buffer;
+  commitment: Buffer;
+  rangeProof: Buffer;
+  blindingFactor: Buffer;
+  script: string; // hex, the P2PKH/P2SH output script
+}
+
+/**
+ * AmountShielded output — value is hidden but the token UID is in the clear
+ * (encoded as the output's token index). No asset commitment or surjection
+ * proof.
+ */
+export interface IDataAmountShieldedOutput extends IDataShieldedOutputBase {
+  shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED;
+}
+
+/**
+ * FullShielded output — both value and token UID are hidden behind a
+ * Pedersen-style asset commitment, plus a surjection proof tying the output
+ * back to one of the inputs' tokens.
+ */
+export interface IDataFullShieldedOutput extends IDataShieldedOutputBase {
+  shieldedMode: ShieldedOutputMode.FULLY_SHIELDED;
+  assetCommitment: Buffer;
+  assetBlindingFactor: Buffer;
+  surjectionProof: Buffer;
+}
+
+/**
+ * Intermediary representation of a shielded output during transaction
+ * building — return shape of `createShieldedOutputs()`. Discriminated on
+ * `shieldedMode`: consumers that need the FullShielded-only fields narrow
+ * with `if (out.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED)`.
+ */
+export type IDataShieldedOutput = IDataAmountShieldedOutput | IDataFullShieldedOutput;

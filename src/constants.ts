@@ -263,9 +263,21 @@ export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
 export const SELECT_OUTPUTS_TIMEOUT: number = 1000 * 60;
 
 /**
- * Size in bytes of a transaction hash (32 bytes)
+ * Size in bytes of a transaction hash (32 bytes).
+ *
+ * Also the size of a token UID, because a token's UID is the hash of the
+ * transaction that created it.
  */
 export const TX_HASH_SIZE_BYTES: number = 32;
+
+/**
+ * Size in bytes of a compressed SEC1-encoded EC public key (33 bytes:
+ * 1 prefix byte indicating Y parity + 32 X-coordinate bytes).
+ *
+ * Used for shielded scan/spend pubkeys and any other compressed
+ * secp256k1 public key the wallet validates at a trust boundary.
+ */
+export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
 
 /**
  * Maximum number of retries allowed when an error different
