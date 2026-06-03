@@ -27,8 +27,7 @@ describe('MeltHeader', () => {
       expect(() => new MeltHeader([])).toThrow(/MeltHeader requires at least 1 entry/);
     });
 
-    it('rejects more than MAX_MINT_MELT_ENTRIES entries', () => {
-      // 17 entries with valid token indices (1..16) plus a 17th that fails per-entry validation
+    it('rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
       const entries: IMintMeltEntry[] = Array.from(
         { length: MAX_MINT_MELT_ENTRIES + 1 },
         (_, i) => ({
@@ -36,7 +35,9 @@ describe('MeltHeader', () => {
           amount: 1n,
         })
       );
-      expect(() => new MeltHeader(entries)).toThrow(/MeltHeader:/);
+      expect(() => new MeltHeader(entries)).toThrow(
+        /MeltHeader: too many entries: 17 exceeds maximum 16/
+      );
     });
 
     it('rejects duplicate tokenIndex values', () => {

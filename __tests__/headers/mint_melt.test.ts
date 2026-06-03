@@ -188,7 +188,7 @@ describe('MintHeader', () => {
       expect(() => new MintHeader([])).toThrow(/MintHeader requires at least 1 entry/);
     });
 
-    it('rejects more than MAX_MINT_MELT_ENTRIES entries', () => {
+    it('rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
       const entries: IMintMeltEntry[] = Array.from(
         { length: MAX_MINT_MELT_ENTRIES + 1 },
         (_, i) => ({
@@ -196,8 +196,9 @@ describe('MintHeader', () => {
           amount: 1n,
         })
       );
-      // tokenIndex 17 exceeds the per-entry validator before the overall count check
-      expect(() => new MintHeader(entries)).toThrow(/MintHeader:/);
+      expect(() => new MintHeader(entries)).toThrow(
+        /MintHeader: too many entries: 17 exceeds maximum 16/
+      );
     });
 
     it('rejects duplicate tokenIndex values', () => {

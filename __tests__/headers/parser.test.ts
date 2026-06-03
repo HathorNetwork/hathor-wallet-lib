@@ -26,14 +26,16 @@ describe('HeaderParser', () => {
   });
 
   it('getHeader returns the right class for each id', () => {
-    expect(HeaderParser.getHeader(VertexHeaderId.MINT_HEADER)).toBe(MintHeader);
-    expect(HeaderParser.getHeader(VertexHeaderId.MELT_HEADER)).toBe(MeltHeader);
-    expect(HeaderParser.getHeader(VertexHeaderId.UNSHIELD_BALANCE_HEADER)).toBe(
-      UnshieldBalanceHeader
-    );
+    expect(HeaderParser.getHeader(VertexHeaderId.NANO_HEADER)).toBe(NanoContractHeader);
+    expect(HeaderParser.getHeader(VertexHeaderId.FEE_HEADER)).toBe(FeeHeader);
     expect(HeaderParser.getHeader(VertexHeaderId.SHIELDED_OUTPUTS_HEADER)).toBe(
       ShieldedOutputsHeader
     );
+    expect(HeaderParser.getHeader(VertexHeaderId.UNSHIELD_BALANCE_HEADER)).toBe(
+      UnshieldBalanceHeader
+    );
+    expect(HeaderParser.getHeader(VertexHeaderId.MINT_HEADER)).toBe(MintHeader);
+    expect(HeaderParser.getHeader(VertexHeaderId.MELT_HEADER)).toBe(MeltHeader);
   });
 
   it('getHeader throws for an unknown id', () => {
@@ -58,6 +60,17 @@ describe('getVertexHeaderIdFromBuffer', () => {
   it('throws on an unknown first byte', () => {
     expect(() => getVertexHeaderIdFromBuffer(Buffer.from([0xff]))).toThrow(
       /Invalid VertexHeaderId/
+    );
+  });
+
+  it('throws an out-of-range Buffer error on an empty buffer (not the domain error)', () => {
+    // `buf.readUInt8()` walks off the end of the buffer before any
+    // domain check runs, so the error here is the Buffer module's
+    // "outside buffer bounds" error rather than "Invalid VertexHeaderId".
+    // Worth pinning so a future swap in the implementation doesn't
+    // silently change the failure mode at the header-decoding boundary.
+    expect(() => getVertexHeaderIdFromBuffer(Buffer.alloc(0))).toThrow(
+      /outside buffer bounds|out of range/i
     );
   });
 });
