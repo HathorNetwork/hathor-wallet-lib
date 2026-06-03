@@ -126,7 +126,7 @@ export function deserializeMintMeltEntries(
   return [entries, buf.subarray(needed)];
 }
 
-function validateEntries(entries: IMintMeltEntry[], headerName: string): void {
+export function validateMintMeltEntries(entries: IMintMeltEntry[], headerName: string): void {
   if (entries.length === 0) {
     throw new Error(`${headerName} requires at least 1 entry`);
   }
@@ -152,11 +152,18 @@ export class MintHeader extends Header {
 
   constructor(entries: IMintMeltEntry[]) {
     super();
-    validateEntries(entries, MintHeader.HEADER_NAME);
+    validateMintMeltEntries(entries, MintHeader.HEADER_NAME);
     this.entries = entries;
   }
 
   private serializeAll(array: Buffer[]) {
+    // Re-validate at the serialize boundary: `this.entries` is a public
+    // mutable field that captures the caller-supplied array by reference,
+    // so a constructor-validated header can be mutated afterwards
+    // (`header.entries.push(...)`, etc.) and silently emit malformed wire
+    // bytes that the fullnode then rejects with a confusing remote error.
+    // Re-running the check here is O(n ≤ 16) of primitive comparisons.
+    validateMintMeltEntries(this.entries, MintHeader.HEADER_NAME);
     array.push(getVertexHeaderIdBuffer(VertexHeaderId.MINT_HEADER));
     array.push(serializeMintMeltEntries(this.entries));
   }

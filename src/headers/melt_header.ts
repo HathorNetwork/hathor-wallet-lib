@@ -16,8 +16,7 @@ import {
   IMintMeltEntry,
   serializeMintMeltEntries,
   deserializeMintMeltEntries,
-  MAX_MINT_MELT_ENTRIES,
-  validateMintMeltEntry,
+  validateMintMeltEntries,
 } from './mint_melt';
 
 export class MeltHeader extends Header {
@@ -27,26 +26,15 @@ export class MeltHeader extends Header {
 
   constructor(entries: IMintMeltEntry[]) {
     super();
-    if (entries.length === 0) {
-      throw new Error(`${MeltHeader.HEADER_NAME} requires at least 1 entry`);
-    }
-    if (entries.length > MAX_MINT_MELT_ENTRIES) {
-      throw new Error(
-        `${MeltHeader.HEADER_NAME}: too many entries: ${entries.length} exceeds maximum ${MAX_MINT_MELT_ENTRIES}`
-      );
-    }
-    const seen = new Set<number>();
-    for (const entry of entries) {
-      validateMintMeltEntry(entry, MeltHeader.HEADER_NAME);
-      if (seen.has(entry.tokenIndex)) {
-        throw new Error(`${MeltHeader.HEADER_NAME}: duplicate token_index ${entry.tokenIndex}`);
-      }
-      seen.add(entry.tokenIndex);
-    }
+    validateMintMeltEntries(entries, MeltHeader.HEADER_NAME);
     this.entries = entries;
   }
 
   private serializeAll(array: Buffer[]) {
+    // Re-validate at the serialize boundary; see the same guard in
+    // MintHeader.serializeAll for rationale (header.entries is a public
+    // mutable field that captures the caller's array by reference).
+    validateMintMeltEntries(this.entries, MeltHeader.HEADER_NAME);
     array.push(getVertexHeaderIdBuffer(VertexHeaderId.MELT_HEADER));
     array.push(serializeMintMeltEntries(this.entries));
   }

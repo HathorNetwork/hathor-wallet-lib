@@ -239,6 +239,33 @@ describe('MintHeader', () => {
       expect(Buffer.concat(a).equals(Buffer.concat(b))).toBe(true);
       expect(Buffer.concat(a).equals(Buffer.concat(c))).toBe(true);
     });
+
+    describe('post-construction mutation is caught at serialize time', () => {
+      it('rejects a duplicate tokenIndex pushed after construction', () => {
+        const header = new MintHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries.push({ tokenIndex: 1, amount: 20n });
+        expect(() => header.serialize([])).toThrow(/MintHeader: duplicate token_index 1/);
+      });
+
+      it('rejects an amount mutated to 0 after construction', () => {
+        const header = new MintHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries[0].amount = 0n;
+        expect(() => header.serialize([])).toThrow(/MintHeader: amount must be in/);
+      });
+
+      it('rejects an entry array emptied after construction', () => {
+        const header = new MintHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries.length = 0;
+        expect(() => header.serialize([])).toThrow(/MintHeader requires at least 1 entry/);
+      });
+
+      it('catches the same drift via serializeFields and serializeSighash', () => {
+        const header = new MintHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries[0].tokenIndex = 0;
+        expect(() => header.serializeFields([])).toThrow(/MintHeader:/);
+        expect(() => header.serializeSighash([])).toThrow(/MintHeader:/);
+      });
+    });
   });
 
   describe('deserialize', () => {
