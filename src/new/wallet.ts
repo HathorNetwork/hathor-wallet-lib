@@ -22,7 +22,7 @@
 /* eslint @typescript-eslint/explicit-function-return-type: "error" */
 
 import { cloneDeep, get } from 'lodash';
-import bitcore, { HDPrivateKey } from 'bitcore-lib';
+import bitcore from 'bitcore-lib';
 import EventEmitter from 'events';
 import { z } from 'zod';
 import {
@@ -186,6 +186,11 @@ class HathorWallet extends EventEmitter {
 
   xpub?: string;
 
+  // Single-key wallet: raw secp256k1 private key + public key (no BIP32).
+  privateKey?: string;
+
+  publicKey?: string;
+
   // Token configuration
   token: ITokenData | null;
 
@@ -302,6 +307,9 @@ class HathorWallet extends EventEmitter {
 
       xpub,
 
+      privateKey,
+      publicKey,
+
       tokenUid = NATIVE_TOKEN_UID,
 
       password = null,
@@ -323,16 +331,28 @@ class HathorWallet extends EventEmitter {
       throw Error('You must provide a connection.');
     }
 
-    if (!seed && !xpriv && !xpub) {
-      throw Error('You must explicitly provide the seed, xpriv or the xpub.');
-    }
-
-    if (seed && xpriv) {
-      throw Error('You cannot provide both a seed and an xpriv.');
+    const keyInputCount = [seed, xpriv, xpub, privateKey].filter(Boolean).length;
+    if (keyInputCount !== 1) {
+      throw Error('You must provide exactly one of seed, xpriv, xpub, or privateKey.');
     }
 
     if (xpriv && passphrase !== '') {
       throw Error("You can't use xpriv with passphrase.");
+    }
+
+    // publicKey and preCalculatedAddresses[0] are both derivable from
+    // privateKey + network. When the caller omits publicKey we derive it
+    // here; generateAccessDataFromPrivateKey still validates the pair when
+    // both are provided. When preCalculatedAddresses is omitted, start()
+    // derives the single address via getAddressFromPubkey.
+    let resolvedPublicKey = publicKey;
+    if (privateKey) {
+      if (multisig) {
+        throw Error('Single-key wallets do not support multisig.');
+      }
+      if (!resolvedPublicKey) {
+        resolvedPublicKey = new bitcore.PrivateKey(privateKey).toPublicKey().toString('hex');
+      }
     }
 
     if (connection.getState() !== ConnectionState.CLOSED) {
@@ -364,6 +384,8 @@ class HathorWallet extends EventEmitter {
     this.xpriv = xpriv;
     this.seed = seed;
     this.xpub = xpub;
+    this.privateKey = privateKey;
+    this.publicKey = resolvedPublicKey;
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
@@ -488,6 +510,7 @@ class HathorWallet extends EventEmitter {
    * @param value The new gap limit value
    */
   async setGapLimit(value: number): Promise<void> {
+    await this.assertCanDeriveAddresses('setGapLimit');
     return this.storage.setGapLimit(value);
   }
 
@@ -497,6 +520,7 @@ class HathorWallet extends EventEmitter {
    * @returns The index of the last address loaded
    */
   async indexLimitLoadMore(count: number): Promise<number> {
+    await this.assertCanDeriveAddresses('indexLimitLoadMore');
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -516,6 +540,7 @@ class HathorWallet extends EventEmitter {
    * @param endIndex The new index limit value
    */
   async indexLimitSetEndIndex(endIndex: number): Promise<void> {
+    await this.assertCanDeriveAddresses('indexLimitSetEndIndex');
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
@@ -777,6 +802,24 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    */
   async hasTxOutsideFirstAddress(): Promise<boolean> {
+    // Wallets without derivation capability (raw single-key / Web3Auth) only
+    // have address index 0 by construction — they could never have received
+    // funds at any other index, so the check is trivially false. This guard
+    // also avoids attempting to derive addresses we cannot derive.
+    //
+    // HD wallets in SINGLE_ADDRESS policy still hold an xpub and CAN derive
+    // higher indexes; running this check is exactly the protection r4mmer
+    // described — detecting prior gap-limit history before allowing a
+    // single-address switch — so we must NOT short-circuit on policy alone.
+    //
+    // Optional-chaining default mirrors the prior defensive pattern: when
+    // tests mock the wallet without wiring storage, assume HD (the dominant
+    // path) and run the full check.
+    const canDerive = (await this.storage?.canDeriveAddresses?.()) ?? true;
+    if (!canDerive) {
+      return false;
+    }
+
     const addresses: string[] = [];
     let foundAnyTx = false;
     // Load address from index 1 to GAP_LIMIT
@@ -805,6 +848,14 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAddressAtIndex(index: number): Promise<string> {
+    // Only reject when the wallet has no material to derive other indexes.
+    // HD wallets running SINGLE_ADDRESS policy still hold an xpub and must
+    // be allowed to derive (it's a requirement of `hasTxOutsideFirstAddress`
+    // and other safety checks).
+    if (index !== 0 && !(await this.storage.canDeriveAddresses())) {
+      throw new AddressError('This wallet has no key material to derive addresses beyond index 0.');
+    }
+
     let address = await this.storage.getAddressAtIndex(index);
 
     if (address === null) {
@@ -862,6 +913,7 @@ class HathorWallet extends EventEmitter {
    * Get the next address after the current available
    */
   async getNextAddress(): Promise<{ address: string; index: number | null; addressPath: string }> {
+    await this.assertCanDeriveAddresses('getNextAddress');
     // First we mark the current address as used, then return the next
     await this.getCurrentAddress({ markAsUsed: true });
     return this.getCurrentAddress();
@@ -1659,11 +1711,27 @@ class HathorWallet extends EventEmitter {
 
     if (this.preCalculatedAddresses) {
       for (const [index, addr] of this.preCalculatedAddresses.entries()) {
+        // For single-key wallets, attach the cached publicKey at index 0 so
+        // pubkey lookups don't fall through to the xpub-based derivation
+        // path (which is absent for raw single-key wallets).
+        const pubkey = this.privateKey && index === 0 ? this.publicKey : undefined;
         await this.storage.saveAddress({
           base58: addr,
           bip32AddressIndex: index,
+          ...(pubkey ? { publicKey: pubkey } : {}),
         });
       }
+    } else if (this.privateKey) {
+      // Single-key wallet without preCalculatedAddresses: derive the single
+      // address from publicKey + network internally. No xpub to fall back
+      // on, so we must populate storage upfront.
+      const network = new Network(this.conn.getCurrentNetwork());
+      const { base58 } = getAddressFromPubkey(this.publicKey as string, network);
+      await this.storage.saveAddress({
+        base58,
+        bip32AddressIndex: 0,
+        publicKey: this.publicKey,
+      });
     }
 
     let accessData = await this.storage.getAccessData();
@@ -1694,6 +1762,16 @@ class HathorWallet extends EventEmitter {
         accessData = walletUtils.generateAccessDataFromXpub(this.xpub, {
           multisig: this.multisig,
         });
+      } else if (this.privateKey) {
+        if (!pinCode) {
+          throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+        }
+        // Constructor validation ensures publicKey is set when privateKey is.
+        accessData = walletUtils.generateAccessDataFromPrivateKey(
+          this.privateKey,
+          this.publicKey as string,
+          { pin: pinCode }
+        );
       } else {
         throw new Error('This should never happen');
       }
@@ -1747,19 +1825,28 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Returns an address' HDPrivateKey given an index and the encryption password
+   * Returns the private key for a given BIP32 address index.
    *
-   * @param pinCode - The PIN used to encrypt data in accessData
-   * @param addressIndex - The address' index to fetch
-   *
-   * @memberof HathorWallet
-   * @inner
+   * - HD wallets: returns the `bitcore.HDPrivateKey` derived at `addressIndex`
+   *   from `mainKey` (BIP32-compliant derivation, matching `getAddressAtIndex`).
+   * - Single-key wallets: returns the raw `bitcore.PrivateKey` and only
+   *   `addressIndex === 0` is valid; other indexes throw `AddressError`.
    */
-  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<unknown> {
-    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
-    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+  async getAddressPrivKey(
+    pinCode: string,
+    addressIndex: number
+  ): Promise<bitcore.HDPrivateKey | bitcore.PrivateKey> {
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.singleKeyMode) {
+      if (addressIndex !== 0) {
+        throw new AddressError('Single-key wallets only support address index 0.');
+      }
+      const rawPrivHex = await this.storage.getSingleKeyPrivateKey(pinCode);
+      return new bitcore.PrivateKey(rawPrivHex);
+    }
 
-    return addressHDPrivKey;
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    return new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
   }
 
   /**
@@ -1773,12 +1860,10 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
-      privateKey: unknown;
-    };
-    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
-
-    return signedMessage;
+    const key = await this.getAddressPrivKey(pinCode, index);
+    // HD wallets return HDPrivateKey; unwrap to the raw PrivateKey for signing.
+    const privateKey = key instanceof bitcore.HDPrivateKey ? key.privateKey : key;
+    return signMessage(message, privateKey);
   }
 
   /**
@@ -2461,6 +2546,25 @@ class HathorWallet extends EventEmitter {
   clearSensitiveData(): void {
     this.xpriv = undefined;
     this.seed = undefined;
+    this.privateKey = undefined;
+  }
+
+  /**
+   * Throws if the wallet has no derivation capability (raw single-key /
+   * Web3Auth). Used to guard operations that depend on deriving addresses
+   * beyond index 0 (gap-limit changes, index-limit scanning, multi-address
+   * mode transitions, advancing to the next address).
+   *
+   * HD wallets pass this check even when running under SINGLE_ADDRESS policy
+   * because they still hold an xpub.
+   */
+  private async assertCanDeriveAddresses(methodName: string): Promise<void> {
+    if (!(await this.storage.canDeriveAddresses())) {
+      throw new Error(
+        `${methodName} requires a wallet with address-derivation capability ` +
+          '(seed/xpriv/xpub). This wallet only holds a raw single-key.'
+      );
+    }
   }
 
   /**
@@ -3265,7 +3369,10 @@ class HathorWallet extends EventEmitter {
    * @param [options.pinCode] PIN to decrypt the private key.
    *                          Optional but required if not set in instance
    */
-  async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
+  async getPrivateKeyFromAddress(
+    address: string,
+    options: { pinCode?: string | null } = {}
+  ): Promise<bitcore.PrivateKey> {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
@@ -3280,11 +3387,7 @@ class HathorWallet extends EventEmitter {
       throw new AddressError('Address does not belong to the wallet.');
     }
 
-    const xprivkey = await this.storage.getMainXPrivKey(pin);
-    const key = HDPrivateKey(xprivkey);
-    // Derive key to addressIndex
-    const derivedKey = key.deriveNonCompliantChild(addressIndex);
-    return derivedKey.privateKey;
+    return this.storage.getAddressPrivKeyForIndex(pin, addressIndex);
   }
 
   /**
@@ -3540,6 +3643,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async enableMultiAddressMode(gapLimit: number = GAP_LIMIT): Promise<void> {
+    await this.assertCanDeriveAddresses('enableMultiAddressMode');
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }

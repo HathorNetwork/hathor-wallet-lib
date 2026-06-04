@@ -52,6 +52,10 @@ export async function deriveAddressP2PKH(index: number, storage: IStorage): Prom
   if (accessData === null) {
     throw new Error('No access data');
   }
+  if (!accessData.xpubkey) {
+    // Single-key wallets have no BIP32 hierarchy and cannot derive addresses.
+    throw new Error('Cannot derive address: wallet has no xpub (single-key wallet).');
+  }
   return deriveAddressFromXPubP2PKH(accessData.xpubkey, index, storage.config.getNetwork().name);
 }
 
