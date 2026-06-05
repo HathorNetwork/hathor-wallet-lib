@@ -19,7 +19,7 @@
 import { OutputValueType } from '../types';
 
 export const MAX_MINT_MELT_ENTRIES = 16;
-export const ENTRY_SIZE = 1 + 8;
+export const ENTRY_SIZE = 1 + 8; // token_index(1) + amount(8 BE)
 
 export interface IMintMeltEntry {
   /** Index into the tx's `tokens[]` (1-based; 0 = HTR is forbidden). */
