@@ -192,7 +192,9 @@ class ShieldedOutput {
     const script = Buffer.from(buf.subarray(0, scriptLen));
     buf = buf.subarray(scriptLen);
 
-    let tokenData = 0;
+    // FullShielded has no token_data slot on the wire — leave it undefined
+    // (the field is meaningless for that mode) rather than synthesizing a 0.
+    let tokenData: number | undefined;
     let assetCommitment: Buffer | undefined;
     let surjectionProof: Buffer | undefined;
 

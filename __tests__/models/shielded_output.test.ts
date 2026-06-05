@@ -308,6 +308,9 @@ describe('ShieldedOutput', () => {
       expect(parsed.mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
       expect(parsed.assetCommitment).toEqual(out.assetCommitment);
       expect(parsed.surjectionProof).toEqual(out.surjectionProof);
+      // FullShielded has no token_data on the wire — it must stay undefined,
+      // not a synthesized 0 (which would invent a token index).
+      expect(parsed.tokenData).toBeUndefined();
     });
 
     it('returns the remaining buffer so callers can chain across a list', () => {
