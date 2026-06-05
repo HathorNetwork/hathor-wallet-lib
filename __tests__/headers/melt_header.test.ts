@@ -141,7 +141,7 @@ describe('MeltHeader', () => {
       // 0x14 is MintHeader's id — wrong for MeltHeader.deserialize
       const wrongId = Buffer.from([0x14, 0x01, 0x01, 0, 0, 0, 0, 0, 0, 0, 1]);
       expect(() => MeltHeader.deserialize(wrongId, network)).toThrow(
-        /Invalid vertex header id for melt header/
+        /Invalid vertex header id for MeltHeader/
       );
     });
   });
