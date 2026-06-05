@@ -11,7 +11,7 @@ import NanoContractHeader from '../../src/nano_contracts/header';
 import FeeHeader from '../../src/headers/fee';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import UnshieldBalanceHeader from '../../src/headers/unshield_balance';
-import { MintHeader } from '../../src/headers/mint_melt';
+import { MintHeader } from '../../src/headers/mint_header';
 import { MeltHeader } from '../../src/headers/melt_header';
 
 describe('HeaderParser', () => {

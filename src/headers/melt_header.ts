@@ -17,7 +17,7 @@ import {
   serializeMintMeltEntries,
   deserializeMintMeltEntries,
   validateMintMeltEntries,
-} from './mint_melt';
+} from './mint_melt_entry';
 
 export class MeltHeader extends Header {
   static HEADER_NAME = 'MeltHeader';
