@@ -7,6 +7,7 @@
 
 import ShieldedOutput from '../../src/models/shielded_output';
 import { ShieldedOutputMode } from '../../src/shielded/types';
+import { MAX_RANGE_PROOF_SIZE } from '../../src/constants';
 
 function makeOutput(
   overrides: Partial<{
@@ -274,6 +275,67 @@ describe('ShieldedOutput', () => {
     it('serialize throws when ephemeral pubkey has wrong size', () => {
       const out = makeOutput({ ephemeralPubkey: Buffer.alloc(32) });
       expect(() => out.serialize()).toThrow(/expected 33 bytes/);
+    });
+  });
+
+  describe('deserialize', () => {
+    it('round-trips an AmountShielded output (value reset to 0n)', () => {
+      const out = makeOutput({ tokenData: 3, value: 777n });
+      const wire = Buffer.concat(out.serialize());
+
+      const [parsed, leftover] = ShieldedOutput.deserialize(wire);
+      expect(leftover.length).toBe(0);
+      expect(parsed.mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+      expect(parsed.commitment).toEqual(out.commitment);
+      expect(parsed.rangeProof).toEqual(out.rangeProof);
+      expect(parsed.tokenData).toBe(3);
+      expect(parsed.script).toEqual(out.script);
+      expect(parsed.ephemeralPubkey).toEqual(out.ephemeralPubkey);
+      // value is not on-chain; deserialize always rebuilds it as 0n
+      expect(parsed.value).toBe(0n);
+    });
+
+    it('round-trips a FullShielded output preserving asset commitment + surjection proof', () => {
+      const out = makeOutput({
+        mode: ShieldedOutputMode.FULLY_SHIELDED,
+        assetCommitment: Buffer.alloc(33, 0xdd),
+        surjectionProof: Buffer.alloc(7, 0xee),
+      });
+      const wire = Buffer.concat(out.serialize());
+
+      const [parsed, leftover] = ShieldedOutput.deserialize(wire);
+      expect(leftover.length).toBe(0);
+      expect(parsed.mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(parsed.assetCommitment).toEqual(out.assetCommitment);
+      expect(parsed.surjectionProof).toEqual(out.surjectionProof);
+    });
+
+    it('returns the remaining buffer so callers can chain across a list', () => {
+      const a = makeOutput({ tokenData: 1 });
+      const b = makeOutput({ tokenData: 2 });
+      const wire = Buffer.concat([...a.serialize(), ...b.serialize()]);
+
+      const [first, rest] = ShieldedOutput.deserialize(wire);
+      expect(first.tokenData).toBe(1);
+      const [second, leftover] = ShieldedOutput.deserialize(rest);
+      expect(second.tokenData).toBe(2);
+      expect(leftover.length).toBe(0);
+    });
+
+    it('throws on an unsupported mode byte', () => {
+      const buf = Buffer.alloc(1 + 33 + 2 + 5 + 2 + 5 + 1 + 33);
+      buf[0] = 0x99; // unknown mode
+      expect(() => ShieldedOutput.deserialize(buf)).toThrow(
+        /Unsupported shielded output mode: 153/
+      );
+    });
+
+    it('enforces the hathor-core range proof size cap', () => {
+      // mode(1) + commitment(33) + rp_len(2) declaring > MAX_RANGE_PROOF_SIZE
+      const buf = Buffer.alloc(1 + 33 + 2);
+      buf[0] = ShieldedOutputMode.AMOUNT_SHIELDED;
+      buf.writeUInt16BE(MAX_RANGE_PROOF_SIZE + 1, 1 + 33);
+      expect(() => ShieldedOutput.deserialize(buf)).toThrow(/range proof size .* exceeds maximum/);
     });
   });
 });
