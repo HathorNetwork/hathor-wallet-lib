@@ -94,6 +94,23 @@ describe('ShieldedOutputsHeader', () => {
   });
 
   describe('output count validation (hathor-core)', () => {
+    it('does not validate at construction (validation lives in validate())', () => {
+      expect(() => new ShieldedOutputsHeader([])).not.toThrow();
+    });
+
+    it('validate() throws on a header with no outputs', () => {
+      expect(() => new ShieldedOutputsHeader([]).validate()).toThrow(/at least 1 output/);
+    });
+
+    it('validate() throws on more than MAX_SHIELDED_OUTPUTS outputs', () => {
+      const outputs = Array.from({ length: MAX_SHIELDED_OUTPUTS + 1 }, () =>
+        makeAmountShieldedOutput()
+      );
+      expect(() => new ShieldedOutputsHeader(outputs).validate()).toThrow(
+        /too many shielded outputs/
+      );
+    });
+
     it('should throw when serializing a header with no outputs', () => {
       const header = new ShieldedOutputsHeader([]);
       expect(() => header.serialize([])).toThrow(/at least 1 output/);

@@ -30,7 +30,13 @@ class ShieldedOutputsHeader extends Header {
     this.shieldedOutputs = shieldedOutputs;
   }
 
-  private serializeWith(array: Buffer[], outputSerializer: (output: ShieldedOutput) => Buffer[]) {
+  /**
+   * Validate the output count (1..MAX_SHIELDED_OUTPUTS). Following the
+   * FeeHeader convention this is NOT run from the constructor — `serialize`
+   * calls it so an out-of-range header never reaches the wire. `deserialize`
+   * checks the count separately since it guards untrusted wire bytes.
+   */
+  validate(): void {
     // hathor-core validation: a shielded outputs header must carry at least 1 output.
     if (this.shieldedOutputs.length < 1) {
       throw new Error('shielded outputs header must contain at least 1 output');
@@ -41,6 +47,10 @@ class ShieldedOutputsHeader extends Header {
         `too many shielded outputs: ${this.shieldedOutputs.length} exceeds maximum ${MAX_SHIELDED_OUTPUTS}`
       );
     }
+  }
+
+  private serializeWith(array: Buffer[], outputSerializer: (output: ShieldedOutput) => Buffer[]) {
+    this.validate();
     array.push(getVertexHeaderIdBuffer(VertexHeaderId.SHIELDED_OUTPUTS_HEADER));
     array.push(intToBytes(this.shieldedOutputs.length, 1));
     for (const output of this.shieldedOutputs) {
