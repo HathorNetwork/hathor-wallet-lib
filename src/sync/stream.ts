@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
+import { Address as BitcoreAddress, HDPublicKey, Script } from 'bitcore-lib';
 import queueMicrotask from 'queue-microtask';
 import FullNodeConnection from '../new/connection';
 import {
@@ -14,13 +14,27 @@ import {
   isGapLimitScanPolicy,
   IAddressInfo,
   ILogger,
+  IMultisigData,
+  WalletType,
 } from '../types';
 import Network from '../models/network';
 import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
+import { XPubError } from '../errors';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
+
+// Multisig (P2SH) streaming tuning.
+// P2SH derivation costs one BIP32 child derivation per participant, so it is several times
+// slower than P2PKH. With the P2PKH defaults (40 per batch, 600 window) a multisig batch
+// blocks the Node event loop long enough that the client derives far ahead of the fullnode
+// and starves other work. Smaller values keep each synchronous derivation chunk short and
+// stop the client from deriving far ahead, so the headless server stays responsive
+// (pings/ACKs/other HTTP requests) during a multisig sync. Applied per-stream in
+// StreamManager.setupStream().
+const MULTISIG_ADDRESSES_PER_MESSAGE = 5;
+const MULTISIG_MAX_WINDOW_SIZE = 30;
 
 interface IStreamSyncHistoryBegin {
   type: 'stream:history:begin';
@@ -230,8 +244,8 @@ class StreamStatsManager {
 }
 
 /**
- * Load addresses in a CPU intensive way
- * This only contemplates P2PKH addresses for now.
+ * Load addresses in a CPU intensive way.
+ * This contemplates P2PKH addresses; see loadP2SHAddressesCPUIntensive for multisig.
  */
 export function loadAddressesCPUIntensive(
   startIndex: number,
@@ -249,6 +263,64 @@ export function loadAddressesCPUIntensive(
     addresses.push([i, new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString()]);
   }
 
+  return addresses;
+}
+
+/**
+ * Derive the multisig (P2SH) addresses for the index range [startIndex, startIndex + count).
+ *
+ * P2SH derivation is expensive — one BIP32 child derivation per participant for each address —
+ * so the index-invariant work (the network, the sorted participant xpubs, and the change-level
+ * node m/45'/280'/0'/0) is computed once and only the final per-index child derivation runs in
+ * the loop.
+ */
+export function loadP2SHAddressesCPUIntensive(
+  startIndex: number,
+  count: number,
+  multisigData: IMultisigData,
+  networkName: string
+): [number, string][] {
+  const network = new Network(networkName);
+
+  // The participant xpubs and their order are the same for every index. The sort key
+  // (account-level public key, hex) must match createP2SHRedeemScript so the redeem script —
+  // and therefore the address — matches the polling path. The explicit `<`/`>` string
+  // comparator reproduces lodash `_.sortBy`'s ordering.
+  let sortedXpubs: HDPublicKey[];
+  try {
+    sortedXpubs = multisigData.pubkeys.map(xpub => new HDPublicKey(xpub));
+  } catch (e) {
+    throw new XPubError('Invalid xpub');
+  }
+  sortedXpubs.sort((a, b) => {
+    const keyA = a.publicKey.toString('hex');
+    const keyB = b.publicKey.toString('hex');
+    if (keyA < keyB) return -1;
+    if (keyA > keyB) return 1;
+    return 0;
+  });
+
+  // The change-level node m/45'/280'/0'/0 is shared by every index; only the final
+  // deriveChild(index) below varies. Deriving it once per participant is the bulk of the saving.
+  const changeNodes = sortedXpubs.map(xpub => xpub.deriveChild(0));
+
+  // Per index, derive only the final child of each participant, build the m-of-n redeem script,
+  // and hash it into the P2SH address. The toBuffer()/fromBuffer() round-trip mirrors
+  // deriveAddressFromDataP2SH so the resulting address bytes match the polling path.
+  const addresses: [number, string][] = [];
+  const stopIndex = startIndex + count;
+  for (let i = startIndex; i < stopIndex; i++) {
+    const pubkeys = changeNodes.map(node => node.deriveChild(i).publicKey);
+    const redeemScript = Script.buildMultisigOut(pubkeys, multisigData.numSignatures, {
+      noSorting: true,
+    }).toBuffer();
+    // eslint-disable-next-line new-cap -- bitcore exposes the constructor as Address.payingTo
+    const address = new BitcoreAddress.payingTo(
+      Script.fromBuffer(redeemScript),
+      network.bitcoreNetwork
+    );
+    addresses.push([i, address.toString()]);
+  }
   return addresses;
 }
 
@@ -330,6 +402,8 @@ export class StreamManager extends AbortController {
 
   xpubkey: string;
 
+  multisigData?: IMultisigData;
+
   gapLimit: number;
 
   network: string;
@@ -381,6 +455,7 @@ export class StreamManager extends AbortController {
     this.storage = storage;
     this.connection = connection;
     this.xpubkey = '';
+    this.multisigData = undefined;
     this.gapLimit = 0;
     this.network = '';
     this.lastLoadedIndex = startIndex - 1;
@@ -421,6 +496,18 @@ export class StreamManager extends AbortController {
     this.gapLimit = gapLimit;
     this.network = this.storage.config.getNetwork().name;
 
+    const walletType = await this.storage.getWalletType();
+    if (walletType === WalletType.MULTISIG) {
+      if (!accessData.multisigData) {
+        throw new Error('No multisig data');
+      }
+      this.multisigData = accessData.multisigData;
+
+      // P2SH derivation is heavier, so multisig streams use a smaller batch and window.
+      this.ADDRESSES_PER_MESSAGE = MULTISIG_ADDRESSES_PER_MESSAGE;
+      this.MAX_WINDOW_SIZE = MULTISIG_MAX_WINDOW_SIZE;
+    }
+
     // Make sure this is the only stream running on this connection
     if (!this.connection.lockStream(this.streamId)) {
       throw new Error('There is an on-going stream on this connection');
@@ -455,6 +542,18 @@ export class StreamManager extends AbortController {
   }
 
   /**
+   * Derive a batch of addresses for the stream, choosing P2SH for multisig
+   * wallets and P2PKH otherwise. Both paths reuse the same derivation as the
+   * polling sync, so streamed addresses are identical to polled ones.
+   */
+  deriveBatch(startIndex: number, count: number): [number, string][] {
+    if (this.multisigData) {
+      return loadP2SHAddressesCPUIntensive(startIndex, count, this.multisigData, this.network);
+    }
+    return loadAddressesCPUIntensive(startIndex, count, this.xpubkey, this.network);
+  }
+
+  /**
    * Generate the next batch of addresses to send to the fullnode.
    * The batch will generate `ADDRESSES_PER_MESSAGE` addresses and send them to the fullnode.
    * It will run again until the fullnode has `MAX_WINDOW_SIZE` addresses on its end.
@@ -476,12 +575,7 @@ export class StreamManager extends AbortController {
       }
 
       // This part is sync so that we block the main loop during the generation of the batch
-      const batch = loadAddressesCPUIntensive(
-        this.lastLoadedIndex + 1,
-        this.ADDRESSES_PER_MESSAGE,
-        this.xpubkey,
-        this.network
-      );
+      const batch = this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE);
       this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
       this.connection.sendManualStreamingHistory(
         this.streamId,
@@ -647,12 +741,7 @@ export class StreamManager extends AbortController {
         this.connection.sendManualStreamingHistory(
           this.streamId,
           this.lastLoadedIndex + 1,
-          loadAddressesCPUIntensive(
-            this.lastLoadedIndex + 1,
-            this.ADDRESSES_PER_MESSAGE,
-            this.xpubkey,
-            this.network
-          ),
+          this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE),
           true,
           this.gapLimit
         );

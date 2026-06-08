@@ -5,6 +5,7 @@ import { MemoryStore, Storage } from '../src/storage';
 import { HistorySyncMode, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 import { getGapLimitConfig } from './integration/utils/core.util';
+import { loadP2SHAddressesCPUIntensive } from '../src/sync/stream';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -129,9 +130,13 @@ function makeServerMock(mockServer, mockType, sendCapabilities = true) {
 /**
  * Prepare a wallet for testing with a websocket server
  * @param {HistorySyncMode} mode - History sync mode for the wallet
+ * @param [options] - Extra wallet options; pass `multisig` to start a P2SH (multisig) wallet
  * @returns {Promise<HathorWallet>}
  */
-async function startWalletFor(mode) {
+async function startWalletFor(
+  mode,
+  { multisig }: { multisig?: { pubkeys: string[]; numSignatures: number } } = {}
+) {
   // Start a wallet with stream xpub history sync mode
   const seed =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
@@ -155,6 +160,7 @@ async function startWalletFor(mode) {
     password: '123',
     pinCode: '123',
     scanPolicy: getGapLimitConfig(),
+    ...(multisig ? { multisig } : {}),
   };
   const hWallet = new HathorWallet(walletConfig);
   hWallet.setHistorySyncMode(mode);
@@ -317,4 +323,108 @@ describe('Websocket stream history sync', () => {
       'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
     );
   }, 10000);
+});
+
+const MULTISIG_DATA = {
+  numSignatures: 3,
+  pubkeys: [
+    'xpub6CvvCBtHqFfErbcW2Rv28TmZ3MqcFuWQVKGg8xDzLeAwEAHRz9LBTgSFSj7B99scSvZGbq6TxAyyATA9b6cnwsgduNs9NGKQJnEQr3PYtwK',
+    'xpub6CA16g2qPwukWAWBMdJKU3p2fQEEi831W3WAs2nesuCzPhbrG29aJsoRDSEDT4Ac3smqSk51uuv6oujU3MAAL3d1Nm87q9GDwE3HRGQLjdP',
+    'xpub6BwNT613Vzy7ARVHDEpoX23SMBEZQMJXdqTWYjQKvJZJVDBjEemU38exJEhc6qbFVc4MmarN68gUKHkyZ3NEgXXCbWtoXXGouHpwMEcXJLf',
+    'xpub6DCyPHg4AwXsdiMh7QSTHR7afmNVwZKHBBMFUiy5aCYQNaWp68ceQXYXCGQr5fZyLAe5hiJDdXrq6w3AXzvVmjFX9F7EdM87repxJEhsmjL',
+    'xpub6CgPUcCCJ9pAK7Rj52hwkxTutSRv91Fq74Hx1SjN62eg6Mp3S3YCJFPChPaDjpp9jCbCZHibBgdKnfNdq6hE9umyjyZKUCySBNF7wkoG4uK',
+  ],
+};
+
+const MULTISIG_ADDRESSES = [
+  'wgyUgNjqZ18uYr4YfE2ALW6tP5hd8MumH5',
+  'wbe2eJdyZVimA7nJjmBQnKYJSXmpnpMKgG',
+  'wQQWdSZwp2CEGKsTvvbJ7i8HfHuV2i5QVQ',
+  'wfrtq9cMe1YfixVgSKXQNQ5hjsmR4hpjP6',
+  'wQG7itjdtZBsNTk9TG4f1HrehyQiAEMN18',
+];
+
+describe('loadP2SHAddressesCPUIntensive', () => {
+  it('derives P2SH addresses matching the polling-path fixture', () => {
+    const result = loadP2SHAddressesCPUIntensive(0, 5, MULTISIG_DATA, 'testnet');
+    expect(result).toEqual([
+      [0, MULTISIG_ADDRESSES[0]],
+      [1, MULTISIG_ADDRESSES[1]],
+      [2, MULTISIG_ADDRESSES[2]],
+      [3, MULTISIG_ADDRESSES[3]],
+      [4, MULTISIG_ADDRESSES[4]],
+    ]);
+  });
+
+  it('respects the startIndex offset and count', () => {
+    const result = loadP2SHAddressesCPUIntensive(2, 2, MULTISIG_DATA, 'testnet');
+    expect(result).toEqual([
+      [2, MULTISIG_ADDRESSES[2]],
+      [3, MULTISIG_ADDRESSES[3]],
+    ]);
+  });
+});
+
+// Multisig wallets derive P2SH per index, which is much heavier than P2PKH, so the stream uses
+// a smaller batch. This must match MULTISIG_ADDRESSES_PER_MESSAGE in src/sync/stream.ts.
+const MULTISIG_EXPECTED_BATCH_SIZE = 5;
+
+describe('Websocket stream history sync for multisig', () => {
+  it('should send P2SH addresses on a manual stream for a multisig wallet', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    let capturedFirstAddress: string | undefined;
+    let capturedBatchSize: number | undefined;
+    mockServer.on('connection', socket => {
+      socket.send(JSON.stringify({ type: 'capabilities', capabilities: ['history-streaming'] }));
+      socket.on('message', data => {
+        const jsonData = JSON.parse(data as string);
+        if (jsonData.type === 'subscribe_address') {
+          socket.send(JSON.stringify({ type: 'subscribe_success', address: jsonData.address }));
+        } else if (jsonData.type === 'ping') {
+          socket.send(JSON.stringify({ type: 'pong' }));
+        } else if (jsonData.type === 'request:history:manual' && jsonData.first) {
+          // jsonData.addresses is [[index, address], ...]
+          const [firstEntry] = jsonData.addresses;
+          [, capturedFirstAddress] = firstEntry;
+          capturedBatchSize = jsonData.addresses.length;
+          const streamId = jsonData.id;
+          socket.send(JSON.stringify({ id: streamId, type: 'stream:history:begin' }));
+          socket.send(
+            JSON.stringify({
+              id: streamId,
+              type: 'stream:history:address',
+              address: jsonData.addresses[0][1],
+              index: 0,
+            })
+          );
+          socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
+        }
+      });
+    });
+
+    const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS, {
+      multisig: { numSignatures: 3, pubkeys: MULTISIG_DATA.pubkeys },
+    });
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
+      }
+      // The first address the client derived and sent must be the multisig P2SH fixture[0].
+      // (A P2SH address starts with 'w' on testnet; a P2PKH one starts with 'W'.)
+      expect(capturedFirstAddress).toEqual(MULTISIG_ADDRESSES[0]);
+      // The multisig stream must use the smaller P2SH batch size, not the P2PKH default of 40.
+      expect(capturedBatchSize).toEqual(MULTISIG_EXPECTED_BATCH_SIZE);
+      // Outcome check: the address streamed back by the fullnode must be persisted as the
+      // wallet's P2SH address at index 0, matching the polling-path fixture end to end.
+      await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(MULTISIG_ADDRESSES[0]);
+    } finally {
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
+      mockServer.stop();
+    }
+  }, 30000);
 });
