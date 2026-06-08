@@ -41,7 +41,6 @@ export abstract class MintMeltHeaderBase extends Header {
 
   constructor(entries: IMintMeltEntry[]) {
     super();
-    validateMintMeltEntries(entries, this.headerName);
     this.entries = entries;
   }
 
@@ -55,14 +54,23 @@ export abstract class MintMeltHeaderBase extends Header {
     return (this.constructor as typeof MintMeltHeaderBase).HEADER_ID;
   }
 
-  serialize(array: Buffer[]) {
-    // Re-validate at the serialize boundary: `this.entries` is a public
-    // mutable field that captures the caller-supplied array by reference,
-    // so a constructor-validated header can be mutated afterwards
-    // (`header.entries.push(...)`, etc.) and silently emit malformed wire
-    // bytes that the fullnode then rejects with a confusing remote error.
-    // Re-running the check here is O(n ≤ 16) of primitive comparisons.
+  /**
+   * Validate the entries: count in [1, MAX_MINT_MELT_ENTRIES], each
+   * token_index in [1, 16], each amount in [1, 2^64), and no duplicate
+   * token_index. Following the FeeHeader convention this is NOT run from the
+   * constructor — callers validate explicitly; `serialize` calls it so
+   * malformed bytes never reach the wire.
+   */
+  validate(): void {
     validateMintMeltEntries(this.entries, this.headerName);
+  }
+
+  serialize(array: Buffer[]) {
+    // Validate at the serialize boundary: `this.entries` is a public mutable
+    // field captured by reference, so a header can be mutated after
+    // construction (`header.entries.push(...)`, etc.) and would otherwise
+    // emit malformed wire bytes the fullnode rejects with a confusing error.
+    this.validate();
     array.push(getVertexHeaderIdBuffer(this.headerId));
     array.push(serializeMintMeltEntries(this.entries));
   }

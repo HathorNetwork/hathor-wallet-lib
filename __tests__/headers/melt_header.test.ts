@@ -13,7 +13,7 @@ import Network from '../../src/models/network';
 const network = new Network('testnet');
 
 describe('MeltHeader', () => {
-  describe('constructor', () => {
+  describe('constructor and validate()', () => {
     it('stores the entries verbatim when valid', () => {
       const entries: IMintMeltEntry[] = [
         { tokenIndex: 1, amount: 10n },
@@ -23,11 +23,16 @@ describe('MeltHeader', () => {
       expect(header.entries).toEqual(entries);
     });
 
-    it('rejects an empty entries list', () => {
-      expect(() => new MeltHeader([])).toThrow(/MeltHeader requires at least 1 entry/);
+    it('does not validate at construction (validation lives in validate())', () => {
+      expect(() => new MeltHeader([])).not.toThrow();
+      expect(() => new MeltHeader([{ tokenIndex: 0, amount: 1n }])).not.toThrow();
     });
 
-    it('rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
+    it('validate() rejects an empty entries list', () => {
+      expect(() => new MeltHeader([]).validate()).toThrow(/MeltHeader requires at least 1 entry/);
+    });
+
+    it('validate() rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
       const entries: IMintMeltEntry[] = Array.from(
         { length: MAX_MINT_MELT_ENTRIES + 1 },
         (_, i) => ({
@@ -35,22 +40,28 @@ describe('MeltHeader', () => {
           amount: 1n,
         })
       );
-      expect(() => new MeltHeader(entries)).toThrow(
+      expect(() => new MeltHeader(entries).validate()).toThrow(
         /MeltHeader: too many entries: 17 exceeds maximum 16/
       );
     });
 
-    it('rejects duplicate tokenIndex values', () => {
+    it('validate() rejects duplicate tokenIndex values', () => {
       const entries: IMintMeltEntry[] = [
         { tokenIndex: 3, amount: 1n },
         { tokenIndex: 3, amount: 1n },
       ];
-      expect(() => new MeltHeader(entries)).toThrow(/MeltHeader: duplicate token_index 3/);
+      expect(() => new MeltHeader(entries).validate()).toThrow(
+        /MeltHeader: duplicate token_index 3/
+      );
     });
 
-    it('rejects an entry that fails per-entry validation', () => {
-      expect(() => new MeltHeader([{ tokenIndex: 0, amount: 1n }])).toThrow(/MeltHeader:/);
-      expect(() => new MeltHeader([{ tokenIndex: 1, amount: 0n }])).toThrow(/MeltHeader:/);
+    it('validate() rejects an entry that fails per-entry validation', () => {
+      expect(() => new MeltHeader([{ tokenIndex: 0, amount: 1n }]).validate()).toThrow(
+        /MeltHeader:/
+      );
+      expect(() => new MeltHeader([{ tokenIndex: 1, amount: 0n }]).validate()).toThrow(
+        /MeltHeader:/
+      );
     });
   });
 

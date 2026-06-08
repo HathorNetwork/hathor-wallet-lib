@@ -13,7 +13,7 @@ import Network from '../../src/models/network';
 const network = new Network('testnet');
 
 describe('MintHeader', () => {
-  describe('constructor', () => {
+  describe('constructor and validate()', () => {
     it('stores the entries verbatim when valid', () => {
       const entries: IMintMeltEntry[] = [
         { tokenIndex: 1, amount: 10n },
@@ -23,11 +23,16 @@ describe('MintHeader', () => {
       expect(header.entries).toEqual(entries);
     });
 
-    it('rejects an empty entries list', () => {
-      expect(() => new MintHeader([])).toThrow(/MintHeader requires at least 1 entry/);
+    it('does not validate at construction (validation lives in validate())', () => {
+      expect(() => new MintHeader([])).not.toThrow();
+      expect(() => new MintHeader([{ tokenIndex: 0, amount: 1n }])).not.toThrow();
     });
 
-    it('rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
+    it('validate() rejects an empty entries list', () => {
+      expect(() => new MintHeader([]).validate()).toThrow(/MintHeader requires at least 1 entry/);
+    });
+
+    it('validate() rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
       const entries: IMintMeltEntry[] = Array.from(
         { length: MAX_MINT_MELT_ENTRIES + 1 },
         (_, i) => ({
@@ -35,22 +40,24 @@ describe('MintHeader', () => {
           amount: 1n,
         })
       );
-      expect(() => new MintHeader(entries)).toThrow(
+      expect(() => new MintHeader(entries).validate()).toThrow(
         /MintHeader: too many entries: 17 exceeds maximum 16/
       );
     });
 
-    it('rejects duplicate tokenIndex values', () => {
+    it('validate() rejects duplicate tokenIndex values', () => {
       const entries: IMintMeltEntry[] = [
         { tokenIndex: 2, amount: 1n },
         { tokenIndex: 2, amount: 1n },
       ];
-      expect(() => new MintHeader(entries)).toThrow(/MintHeader: duplicate token_index 2/);
+      expect(() => new MintHeader(entries).validate()).toThrow(
+        /MintHeader: duplicate token_index 2/
+      );
     });
 
-    it('rejects an entry that fails per-entry validation', () => {
+    it('validate() rejects an entry that fails per-entry validation', () => {
       const entries: IMintMeltEntry[] = [{ tokenIndex: 0, amount: 1n }];
-      expect(() => new MintHeader(entries)).toThrow(/MintHeader:/);
+      expect(() => new MintHeader(entries).validate()).toThrow(/MintHeader:/);
     });
   });
 
