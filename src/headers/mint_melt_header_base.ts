@@ -55,7 +55,7 @@ export abstract class MintMeltHeaderBase extends Header {
     return (this.constructor as typeof MintMeltHeaderBase).HEADER_ID;
   }
 
-  private serializeAll(array: Buffer[]) {
+  serialize(array: Buffer[]) {
     // Re-validate at the serialize boundary: `this.entries` is a public
     // mutable field that captures the caller-supplied array by reference,
     // so a constructor-validated header can be mutated afterwards
@@ -68,15 +68,11 @@ export abstract class MintMeltHeaderBase extends Header {
   }
 
   serializeFields(array: Buffer[]) {
-    this.serializeAll(array);
-  }
-
-  serialize(array: Buffer[]) {
-    this.serializeAll(array);
+    this.serialize(array);
   }
 
   serializeSighash(array: Buffer[]) {
-    this.serializeAll(array);
+    this.serialize(array);
   }
 
   /**
