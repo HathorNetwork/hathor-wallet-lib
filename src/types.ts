@@ -10,6 +10,11 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
+import type {
+  IDataShieldedOutput,
+  IShieldedCryptoProvider,
+  ShieldedOutputMode,
+} from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -93,7 +98,8 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ) => Promise<void>;
 
 export interface IAddressInfo {
@@ -101,6 +107,16 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
+  // Address type: undefined = legacy, 'shielded' = full shielded address, 'shielded-spend' = on-chain P2PKH from spend key
+  addressType?: 'p2pkh' | 'p2sh' | 'shielded' | 'shielded-spend';
+}
+
+/**
+ * Options for address methods that can operate on either the legacy or shielded address chain.
+ * Defaults to legacy (true) for backward compatibility.
+ */
+export interface IAddressChainOptions {
+  legacy?: boolean; // default: true
 }
 
 export interface IAddressMetadata {
@@ -225,6 +241,45 @@ export interface IHistoryTx {
   nc_context?: IHistoryNanoContractContext;
   nc_seqnum?: number; // For nano contract
   first_block?: string | null;
+  shielded_outputs?: IHistoryShieldedOutput[]; // For confidential transactions
+  /**
+   * Tx-level headers persisted from the wire payload (FeeHeader,
+   * UnshieldBalanceHeader, ...). The wallet keeps them as the original
+   * untyped on-chain shape (each entry has `id` + header-specific
+   * fields like `entries[]` for FeeHeader); reconstructing the typed
+   * `Header` instance here would force `processNewTx` to call into the
+   * tx parser unnecessarily. Display layers can read the entries and
+   * compute network fees directly.
+   */
+  headers?: { id?: number; entries?: { tokenIndex?: number; amount?: bigint }[] }[];
+}
+
+// Equivalent to IShieldedOutput in shielded/types.ts but uses IHistoryOutputDecoded
+// (which includes the extra `data?` field). Keep both in sync when modifying.
+export interface IHistoryShieldedOutput {
+  // Optional because hathor-core nodes pre-`_shielded_output_to_json`
+  // mode-field addition still send shielded outputs without `mode`.
+  // Readers fall back to inferring FullShielded vs AmountShielded from
+  // the presence of `asset_commitment`.
+  mode?: ShieldedOutputMode;
+  commitment: string; // hex
+  range_proof: string; // hex
+  script: string; // hex
+  // Optional + defaults to 0 in the parser. FullShielded outputs may
+  // omit `token_data` (the token UID is hidden behind asset_commitment).
+  token_data?: number;
+  ephemeral_pubkey: string; // hex
+  decoded: IHistoryOutputDecoded;
+  asset_commitment?: string; // hex (FullShielded only)
+  surjection_proof?: string; // hex (FullShielded only)
+  // Set by the fullnode when the shielded output is spent by another tx.
+  // Null when the slot is still unspent. Mirrors the transparent
+  // `IHistoryOutput.spent_by` semantics — see hathor-core's
+  // `_shielded_output_to_json` + `meta.get_output_spent_by` in
+  // `base_transaction.py`. Threaded through normalizeShieldedOutputs and
+  // the processNewTx decryption append so the wallet treats shielded
+  // and transparent outputs identically when checking spend status.
+  spent_by?: string | null;
 }
 
 export enum TxHistoryProcessingStatus {
@@ -233,13 +288,28 @@ export enum TxHistoryProcessingStatus {
 }
 
 export interface IHistoryInput {
-  value: OutputValueType;
-  token_data: number;
-  script: string;
-  decoded: IHistoryOutputDecoded;
-  token: string;
+  // These fields are resolved from the spent output.
+  // For shielded inputs (spending shielded outputs), they may be absent
+  // because the spent output's value/token are hidden in commitments.
+  value?: OutputValueType;
+  token_data?: number;
+  script?: string;
+  decoded?: IHistoryOutputDecoded;
+  token?: string;
+  // Always present:
   tx_id: string;
   index: number;
+  // Set to 'shielded' when this input spends a shielded output. The
+  // fullnode emits this on the wire for inputs in `address_history` /
+  // `/transaction?id=…` responses; the wallet's sender-local insert
+  // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
+  // self-sent shielded spends carry the discriminator before any
+  // WebSocket re-delivery. Absent on transparent inputs.
+  type?: 'shielded';
+  // Shielded inputs carry their own commitment on the wire; surfaced
+  // here so the explorer's unblinding verifier (and any future
+  // re-derive flows) can read it without round-tripping the full tx.
+  commitment?: string;
 }
 
 // Obs: this will change with nano contracts
@@ -250,7 +320,7 @@ export interface IHistoryOutputDecoded {
   data?: string;
 }
 
-export interface IHistoryOutput {
+export interface ITransparentOutput {
   value: OutputValueType;
   token_data: number;
   script: string;
@@ -259,6 +329,38 @@ export interface IHistoryOutput {
   spent_by: string | null;
   selected_as_input?: boolean;
 }
+
+/**
+ * Shielded output entry as it appears in tx.outputs after decryption.
+ * Before decryption (from fullnode), value/token/decoded are absent.
+ * After decryption (by processNewTx), they are populated so the output
+ * can be processed uniformly with transparent outputs.
+ */
+export interface IShieldedOutputEntry {
+  type: 'shielded';
+  value: OutputValueType;
+  token_data: number;
+  script: string;
+  decoded: IHistoryOutputDecoded;
+  token: string;
+  spent_by: string | null;
+  commitment: string;
+  range_proof: string;
+  ephemeral_pubkey: string;
+  asset_commitment?: string;
+  surjection_proof?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (populated after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
+  // The fullnode-canonical absolute output index (`transparentCount + s_index`).
+  // Recorded when the wallet decodes a shielded output and appends it to
+  // `tx.outputs[]` (see `utils/storage.ts:processSingleTxUtil`). Older cached
+  // history entries written before this field existed don't carry it; readers
+  // must recover the index by matching `commitment` back to its position in
+  // `tx.shielded_outputs[]` and adding the transparent count.
+  onChainIndex?: number;
+}
+
+export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;
 
 export interface IDataOutputData {
   type: 'data';
@@ -331,6 +433,20 @@ export interface IDataTx extends Partial<IDataTokenCreationTx> {
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
+  shieldedOutputs?: IDataShieldedOutput[];
+  /**
+   * 32-byte excess blinding factor for a full-unshield transaction
+   * (shielded inputs → transparent outputs only, no shielded outputs).
+   *
+   * When present, `prepareTransaction` attaches an `UnshieldBalanceHeader`
+   * (id 0x13) to the built Transaction. Mutually exclusive with
+   * `shieldedOutputs`; the fullnode rejects a tx that carries both, and
+   * rejects a tx with shielded inputs but no shielded outputs and no
+   * excess. See hathor-core
+   * `hathor/transaction/headers/unshield_balance_header.py` and
+   * Section 2.4 of the shielded outputs client guide.
+   */
+  excessBlindingFactor?: Buffer;
   weight?: number;
   nonce?: number;
   timestamp?: number;
@@ -353,6 +469,9 @@ export interface IUtxo {
   timelock: number | null;
   type: number; // tx.version, is the value of the transaction version byte
   height: number | null; // only for block outputs
+  shielded?: boolean; // marks this as a shielded UTXO (confidential transaction)
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor from decryption
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export interface ILockedUtxo {
@@ -379,6 +498,11 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
+  // Shielded address key material (optional, absent on wallets created before shielded feature)
+  scanXpubkey?: string; // xpub at m/44'/280'/1'/0 (scan chain — view-only access)
+  scanMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
+  spendXpubkey?: string; // xpub at m/44'/280'/2'/0 (spend chain — signing authority)
+  spendMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/2'/0
 }
 
 export enum SCANNING_POLICY {
@@ -442,6 +566,10 @@ export interface IWalletData {
   lastLoadedAddressIndex: number;
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
+  // Shielded address chain tracking (separate gap-limit scanning)
+  shieldedLastLoadedAddressIndex: number;
+  shieldedLastUsedAddressIndex: number;
+  shieldedCurrentAddressIndex: number;
   bestBlockHeight: number;
   scanPolicyData: AddressScanPolicyData;
 }
@@ -475,6 +603,11 @@ export interface IUtxoFilterOptions {
   // Will order utxos by value, asc or desc
   // If not set, will not order
   order_by_value?: 'asc' | 'desc';
+  // Filter by shielded status:
+  // undefined (default) → all UTXOs (transparent + shielded)
+  // true → only shielded UTXOs
+  // false → only transparent UTXOs
+  shielded?: boolean;
 }
 
 export type UtxoSelectionAlgorithm = (
@@ -516,11 +649,11 @@ export interface IStore {
   validate(): Promise<void>;
   preProcessHistory(): Promise<void>;
   // Address methods
-  addressIter(): AsyncGenerator<IAddressInfo>;
+  addressIter(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo>;
   getAddress(base58: string): Promise<IAddressInfo | null>;
   getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
   getSeqnumMeta(base58: string): Promise<number | null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
@@ -528,7 +661,17 @@ export interface IStore {
   editSeqnumMeta(base58: string, seqnum: number): Promise<void>;
 
   // tx history methods
-  historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
+  /**
+   * Yield txs from the local history.
+   *
+   * @param tokenUid Optional. If set, only yield txs that involve this token
+   *   on a wallet-owned address (input or output).
+   * @param options.order `'desc'` (default) yields newest-first — the order
+   *   the wallet UI consumes. `'asc'` yields oldest-first, used by
+   *   `processHistory` to replay txs chronologically so a tx that spends a
+   *   previous tx's UTXO finds it already saved.
+   */
+  historyIter(tokenUid?: string, options?: { order?: 'asc' | 'desc' }): AsyncGenerator<IHistoryTx>;
   saveTx(tx: IHistoryTx): Promise<void>;
   getTx(txId: string): Promise<IHistoryTx | null>;
   historyCount(): Promise<number>;
@@ -548,6 +691,7 @@ export interface IStore {
   utxoIter(): AsyncGenerator<IUtxo>;
   selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
   saveUtxo(utxo: IUtxo): Promise<void>;
+  getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
   saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
   iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
   unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
@@ -557,13 +701,13 @@ export interface IStore {
   getAccessData(): Promise<IWalletAccessData | null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getWalletData(): Promise<IWalletData>;
-  getLastLoadedAddressIndex(): Promise<number>;
-  getLastUsedAddressIndex(): Promise<number>;
-  setLastUsedAddressIndex(index: number): Promise<void>;
+  getLastLoadedAddressIndex(opts?: IAddressChainOptions): Promise<number>;
+  getLastUsedAddressIndex(opts?: IAddressChainOptions): Promise<number>;
+  setLastUsedAddressIndex(index: number, opts?: IAddressChainOptions): Promise<void>;
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
-  getCurrentAddress(markAsUsed?: boolean): Promise<string>;
-  setCurrentAddressIndex(index: number): Promise<void>;
+  getCurrentAddress(markAsUsed?: boolean, opts?: IAddressChainOptions): Promise<string>;
+  setCurrentAddressIndex(index: number, opts?: IAddressChainOptions): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
   getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
@@ -598,6 +742,10 @@ export interface IStorage {
   version: ApiVersion | null;
   logger: ILogger;
 
+  // Shielded (confidential transaction) crypto provider
+  shieldedCryptoProvider?: IShieldedCryptoProvider;
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
   saveNativeToken(): Promise<void>;
@@ -609,13 +757,13 @@ export interface IStorage {
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   // Address methods
-  getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
+  getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo & IAddressMetadata>;
   getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   getAddressPubkey(index: number): Promise<string>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
-  getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  getCurrentAddress(markAsUsed?: boolean, opts?: IAddressChainOptions): Promise<string>;
   getChangeAddress(options?: { changeAddress?: null | string }): Promise<string>;
 
   // Transaction methods
@@ -624,8 +772,9 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  processHistory(): Promise<void>;
-  processNewTx(tx: IHistoryTx): Promise<void>;
+  processHistory(pinCode?: string): Promise<void>;
+  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
+  getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens
   addToken(data: ITokenData): Promise<void>;
@@ -656,6 +805,12 @@ export interface IStorage {
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
+
+  // Shielded key methods (return undefined if wallet was created before shielded feature)
+  getScanXPrivKey(pinCode: string): Promise<string>;
+  getSpendXPrivKey(pinCode: string): Promise<string>;
+  getScanXPubKey(): Promise<string | undefined>;
+  getSpendXPubKey(): Promise<string | undefined>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
   getCurrentHeight(): Promise<number>;

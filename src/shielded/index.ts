@@ -18,6 +18,9 @@ export type {
   IRewoundFullShieldedOutput,
 } from './types';
 
+export { encodeShieldedUnblindingPayload } from './unblinding';
+export type { IShieldedUnblindingEntry } from './unblinding';
+
 // Provider implementations live with their respective ct-crypto packages:
 //   - Node:    @hathor/ct-crypto-node    → createDefaultShieldedCryptoProvider()
 //   - Browser: @hathor/ct-crypto-wasm    → createBrowserShieldedCryptoProvider()

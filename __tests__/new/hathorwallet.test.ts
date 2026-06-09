@@ -932,6 +932,229 @@ test('getTxHistory', async () => {
   ]);
 });
 
+describe('getShieldedUnblindingForTx', () => {
+  // Helper that builds a tx in the post-decryption shape produced by
+  // `processSingleTxUtil` — transparent outputs first, then appended
+  // shielded entries carrying decrypted value/token + blindingFactor +
+  // onChainIndex.
+  const makeTx = (
+    txId: string,
+    transparent: Array<{ value: bigint; token: string }>,
+    shielded: Array<{
+      onChainIndex?: number;
+      commitment: string;
+      value?: bigint;
+      token?: string;
+      blindingFactor?: string;
+      assetBlindingFactor?: string;
+    }>
+  ): IHistoryTx =>
+    ({
+      tx_id: txId,
+      timestamp: 1,
+      version: 1,
+      weight: 1,
+      nonce: 0,
+      height: 0,
+      parents: [],
+      inputs: [],
+      outputs: [
+        ...transparent.map(t => ({
+          value: t.value,
+          token_data: 0,
+          token: t.token,
+          spent_by: null,
+          script: '',
+          decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
+        })),
+        ...shielded.map(s => ({
+          type: 'shielded' as const,
+          token_data: 0,
+          script: '',
+          decoded: { type: 'P2PKH', address: 'addrShielded', timelock: null },
+          token: s.token ?? '00',
+          spent_by: null,
+          commitment: s.commitment,
+          range_proof: '',
+          ephemeral_pubkey: '',
+          value: s.value ?? 0n,
+          blindingFactor: s.blindingFactor,
+          assetBlindingFactor: s.assetBlindingFactor,
+          onChainIndex: s.onChainIndex,
+        })),
+      ],
+      // shielded_outputs[] mirrors the on-chain shielded slot order; reused
+      // for the legacy-record fallback path.
+      shielded_outputs: shielded.map(s => ({
+        mode: s.assetBlindingFactor ? 2 : 1,
+        commitment: s.commitment,
+        range_proof: '',
+        script: '',
+        token_data: 0,
+        ephemeral_pubkey: '',
+        decoded: { type: 'P2PKH', address: 'addrShielded', timelock: null },
+      })),
+    }) as unknown as IHistoryTx;
+
+  test('returns one entry per wallet-owned shielded output', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    const tx = makeTx(
+      'tx1',
+      [{ value: 100n, token: '00' }],
+      [
+        // owned (decoded) AmountShielded — onChainIndex = 1
+        {
+          onChainIndex: 1,
+          commitment: 'aa',
+          value: 250n,
+          token: '00',
+          blindingFactor: 'cafe',
+        },
+        // not decoded — wallet doesn't own. No `blindingFactor` → skipped.
+        { commitment: 'bb' },
+        // owned FullShielded — onChainIndex = 3
+        {
+          onChainIndex: 3,
+          commitment: 'cc',
+          value: 999n,
+          token: '0102',
+          blindingFactor: 'beef',
+          assetBlindingFactor: 'dead',
+        },
+      ]
+    );
+    jest.spyOn(storage, 'getTx').mockResolvedValue(tx);
+
+    const result = await hWallet.getShieldedUnblindingForTx('tx1');
+
+    expect(result.outputs).toEqual([
+      { index: 1, value: 250n, token: '00', vbf: 'cafe' },
+      { index: 3, value: 999n, token: '0102', vbf: 'beef', abf: 'dead' },
+    ]);
+    expect(result.inputs).toEqual([]);
+  });
+
+  test('returns empty when tx not found or has no decoded shielded outputs', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    jest.spyOn(storage, 'getTx').mockResolvedValueOnce(null);
+    await expect(hWallet.getShieldedUnblindingForTx('missing')).resolves.toEqual({
+      outputs: [],
+      inputs: [],
+    });
+
+    const transparentOnly = makeTx('tx2', [{ value: 5n, token: '00' }], []);
+    jest.spyOn(storage, 'getTx').mockResolvedValueOnce(transparentOnly);
+    await expect(hWallet.getShieldedUnblindingForTx('tx2')).resolves.toEqual({
+      outputs: [],
+      inputs: [],
+    });
+  });
+
+  test('falls back to commitment lookup when onChainIndex is missing on legacy entries', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    // Two transparent outputs, then two shielded slots — the wallet owns
+    // the second one. The appended `tx.outputs[]` entry intentionally
+    // lacks `onChainIndex` to simulate a legacy cached record. The
+    // implementation must recover the index by matching `commitment`
+    // back to the `tx.shielded_outputs[]` position (slot 1) and adding
+    // the transparent count (2) → on-chain index 3.
+    const tx = makeTx(
+      'tx3',
+      [
+        { value: 1n, token: '00' },
+        { value: 2n, token: '00' },
+      ],
+      [
+        { commitment: 'foreign' }, // not owned, not decoded
+        {
+          commitment: 'mine',
+          value: 50n,
+          token: '00',
+          blindingFactor: 'fade',
+          // onChainIndex deliberately omitted
+        },
+      ]
+    );
+    jest.spyOn(storage, 'getTx').mockResolvedValue(tx);
+
+    const result = await hWallet.getShieldedUnblindingForTx('tx3');
+    expect(result.outputs).toEqual([{ index: 3, value: 50n, token: '00', vbf: 'fade' }]);
+    expect(result.inputs).toEqual([]);
+  });
+
+  test('returns inputs the wallet owned the parent output for', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    // Parent tx has 1 transparent output + 1 shielded the wallet owns
+    // (onChainIndex 1).
+    const parent = makeTx(
+      'parentA',
+      [{ value: 10n, token: '00' }],
+      [
+        {
+          onChainIndex: 1,
+          commitment: 'parent-shielded-cm',
+          value: 777n,
+          token: '00',
+          blindingFactor: 'parentVbf',
+          assetBlindingFactor: 'parentAbf',
+        },
+      ]
+    );
+
+    // Spending tx: input #0 is a shielded reference to parentA[1]
+    // (the wallet-owned output), input #1 is a shielded reference to a
+    // tx the wallet doesn't have (no parent → skipped silently).
+    const spending = {
+      ...makeTx('spendA', [], [{ commitment: 'self-cm' }]),
+      inputs: [
+        { type: 'shielded', tx_id: 'parentA', index: 1, commitment: 'parent-shielded-cm' },
+        { type: 'shielded', tx_id: 'foreign', index: 2, commitment: 'foreign-cm' },
+        // Transparent input — should be ignored, doesn't need unblinding.
+        {
+          type: 'transparent',
+          tx_id: 'parentA',
+          index: 0,
+          value: 10n,
+          token: '00',
+          token_data: 0,
+          script: '',
+          decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
+        },
+      ],
+    };
+
+    jest.spyOn(storage, 'getTx').mockImplementation(async (id: string) => {
+      if (id === 'spendA') return spending as unknown as IHistoryTx;
+      if (id === 'parentA') return parent;
+      return null;
+    });
+
+    const result = await hWallet.getShieldedUnblindingForTx('spendA');
+    // Owned-parent input is included with the input position in the
+    // current tx (`index: 0`). The foreign-parent input is silently
+    // skipped — the wallet has no opening for it.
+    expect(result.inputs).toEqual([
+      { index: 0, value: 777n, token: '00', vbf: 'parentVbf', abf: 'parentAbf' },
+    ]);
+  });
+});
+
 test('isHardwareWallet', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -1604,5 +1827,62 @@ describe('hasTxOutsideFirstAddress', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('sendManyOutputsSendTransaction output mapping', () => {
+  // Regression coverage for `outputs.map(...)` in src/new/wallet.ts. The
+  // shielded-integration commit added per-output handling and the non-shielded
+  // branch silently dropped `type` and `data`, so data outputs fell through
+  // to `new Address(undefined)` deeper in the pipeline. No prior unit or
+  // integration test exercised data outputs through this API, so the
+  // regression shipped to wallet-lib 0.0.11+ and was first caught by the
+  // headless `send-tx.test.js` data-output cases.
+  function buildWallet() {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isReadonly').mockResolvedValue(false);
+    jest.spyOn(storage.config, 'getNetwork').mockReturnValue(new Network('testnet'));
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.pinCode = '000000';
+    return hWallet;
+  }
+
+  test('preserves type and data on data outputs', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { type: 'data', data: 'test', value: 1n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(1);
+    expect(sendTx.outputs[0]).toMatchObject({ type: 'data', data: 'test' });
+  });
+
+  test('preserves address outputs unchanged', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', value: 100n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(1);
+    expect(sendTx.outputs[0]).toMatchObject({
+      address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+      value: 100n,
+      token: '00',
+    });
+  });
+
+  test('preserves a mix of data and address outputs in input order', async () => {
+    const hWallet = buildWallet();
+    const sendTx = await hWallet.sendManyOutputsSendTransaction([
+      { type: 'data', data: 'first', value: 1n, token: '00' },
+      { address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', value: 100n, token: '00' },
+      { type: 'data', data: 'second', value: 1n, token: '00' },
+    ]);
+    expect(sendTx.outputs).toHaveLength(3);
+    expect(sendTx.outputs[0]).toMatchObject({ type: 'data', data: 'first' });
+    expect(sendTx.outputs[1]).toMatchObject({
+      address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+    });
+    expect(sendTx.outputs[2]).toMatchObject({ type: 'data', data: 'second' });
   });
 });

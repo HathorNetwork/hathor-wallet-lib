@@ -5,14 +5,24 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
+import { PrivateKey } from 'bitcore-lib';
+import {
+  FEE_PER_AMOUNT_SHIELDED_OUTPUT,
+  FEE_PER_FULL_SHIELDED_OUTPUT,
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+} from '../../src/constants';
+import Network from '../../src/models/network';
 import SendTransaction, {
   isDataOutput,
   checkUnspentInput,
+  convertHtrChangeIfRequested,
   prepareSendTokensData,
 } from '../../src/new/sendTransaction';
+import { ShieldedOutputMode } from '../../src/shielded/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import transaction from '../../src/utils/transaction';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
@@ -312,6 +322,71 @@ test('checkUnspentInput', async () => {
   });
 });
 
+test('checkUnspentInput accepts the user-facing shielded form when output is on the spend-P2PKH sibling', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  jest.spyOn(storage, 'isAddressMine').mockReturnValue(Promise.resolve(true));
+  jest.spyOn(storage, 'getTx').mockReturnValue(
+    Promise.resolve({
+      is_voided: false,
+      outputs: [{ token_data: 1, token: '01', decoded: { address: 'spend-p2pkh-W' } }],
+    })
+  );
+  // Caller passed the user-facing shielded receive form. On-chain
+  // the output is labelled with the spend-P2PKH sibling at the same
+  // BIP32 index. The validator must resolve the two as equivalent.
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(addr => {
+    if (addr === 'shielded-K') {
+      return Promise.resolve({ addressType: 'shielded', bip32AddressIndex: 7 });
+    }
+    if (addr === 'spend-p2pkh-W') {
+      return Promise.resolve({ addressType: 'shielded-spend', bip32AddressIndex: 7 });
+    }
+    return Promise.resolve(null);
+  });
+
+  const input = { txId: 'tx-id', index: 0, address: 'shielded-K', token: '01' };
+  await expect(checkUnspentInput(storage, input, '01')).resolves.toEqual({
+    success: true,
+    message: '',
+  });
+});
+
+test('checkUnspentInput still rejects a totally unrelated address (no over-resolution regression)', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  jest.spyOn(storage, 'isAddressMine').mockReturnValue(Promise.resolve(true));
+  jest.spyOn(storage, 'getTx').mockReturnValue(
+    Promise.resolve({
+      is_voided: false,
+      outputs: [{ token_data: 1, token: '01', decoded: { address: 'spend-p2pkh-W' } }],
+    })
+  );
+  // Caller's shielded address resolves to a DIFFERENT BIP32 index
+  // than the output's spend-P2PKH. Must still be rejected — the
+  // shielded resolution must not become an "always accept" bypass.
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(addr => {
+    if (addr === 'shielded-K-other-index') {
+      return Promise.resolve({ addressType: 'shielded', bip32AddressIndex: 99 });
+    }
+    if (addr === 'spend-p2pkh-W') {
+      return Promise.resolve({ addressType: 'shielded-spend', bip32AddressIndex: 7 });
+    }
+    return Promise.resolve(null);
+  });
+
+  const input = { txId: 'tx-id', index: 0, address: 'shielded-K-other-index', token: '01' };
+  await expect(checkUnspentInput(storage, input, '01')).resolves.toEqual({
+    success: false,
+    message:
+      'Output [0] of transaction [tx-id] does not have the same address as the provided input',
+  });
+});
+
 test('prepareSendTokensData', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -505,5 +580,206 @@ describe('releaseUtxos', () => {
     await sendTx.releaseUtxos(); // should not throw
 
     expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('convertHtrChangeIfRequested', () => {
+  // Build a fresh real shielded testnet address per test so the helper
+  // can extract scanPubkey + spend P2PKH the same way the production
+  // `sendManyOutputsSendTransaction` does. Reusing the same network
+  // across tests is fine — the helper doesn't cache anything.
+  const testnetNetwork = new Network('testnet');
+
+  // Real EC pubkeys (compressed, 33 bytes) so the helper's
+  // `getSpendAddress()` call can derive a valid P2PKH instead of
+  // throwing on a malformed point. We don't need deterministic keys
+  // here — only that they parse.
+  const buildShieldedAddress = (): string => {
+    const scanPubkey = new PrivateKey().toPublicKey().toBuffer();
+    const spendPubkey = new PrivateKey().toPublicKey().toBuffer();
+    return encodeShieldedAddress(scanPubkey, spendPubkey, testnetNetwork);
+  };
+
+  const buildHtrChangeOutput = (value: bigint) => ({
+    type: 'p2pkh' as const,
+    address: 'transparent-change-address',
+    value,
+    token: NATIVE_TOKEN_UID,
+    authorities: 0n,
+    timelock: null,
+    isChange: true,
+  });
+
+  const buildShieldedDef = (mode: ShieldedOutputMode) => ({
+    type: OutputType.P2PKH as OutputType.P2PKH,
+    address: 'spend-P2PKH-of-recipient',
+    value: 10n,
+    token: '01',
+    scanPubkey: 'aa'.repeat(33),
+    shieldedMode: mode,
+  });
+
+  const mockWallet = (shieldedAddress: string) =>
+    ({
+      getCurrentAddress: jest.fn().mockResolvedValue({
+        address: shieldedAddress,
+        index: 0,
+        addressPath: 'm/0',
+      }),
+    }) as unknown as import('../../src/new/wallet').default;
+
+  test('H.1 — converts transparent HTR change to FS', async () => {
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.FULLY_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(FEE_PER_FULL_SHIELDED_OUTPUT);
+    // Transparent change removed.
+    expect(partialHtrTxData.outputs).toHaveLength(0);
+    // Shielded HTR change appended.
+    expect(defs).toHaveLength(3);
+    const htrChange = defs[2];
+    expect(htrChange.token).toBe(NATIVE_TOKEN_UID);
+    expect(htrChange.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+    expect(htrChange.value).toBe(100n - FEE_PER_FULL_SHIELDED_OUTPUT);
+    // scanPubkey is hex-encoded 33 bytes (66 hex chars).
+    expect(htrChange.scanPubkey).toMatch(/^[0-9a-f]{66}$/);
+  });
+
+  test('H.2 — converts transparent HTR change to AS', async () => {
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.AMOUNT_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(FEE_PER_AMOUNT_SHIELDED_OUTPUT);
+    expect(partialHtrTxData.outputs).toHaveLength(0);
+    expect(defs).toHaveLength(3);
+    expect(defs[2].shieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+    expect(defs[2].value).toBe(100n - FEE_PER_AMOUNT_SHIELDED_OUTPUT);
+  });
+
+  test('H.3 — no-op when mode is null', async () => {
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      null,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(0n);
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(defs).toHaveLength(2);
+  });
+
+  test('H.4 — no-op when change value <= additionalFee', async () => {
+    // Edge: change exactly equals the FEE → conversion would zero-out
+    // the resulting shielded value, which is strictly worse than
+    // keeping the transparent change (we'd be silently destroying
+    // funds via the fee).
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(FEE_PER_FULL_SHIELDED_OUTPUT)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.FULLY_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(0n);
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(defs).toHaveLength(2);
+  });
+
+  test('H.5 — no-op when no HTR change output present', async () => {
+    // All HTR was consumed exactly by the fee — `prepareSendTokensData`
+    // would have emitted no `isChange: true` HTR entry, so there's
+    // nothing for us to convert.
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.FULLY_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(0n);
+    expect(defs).toHaveLength(2);
+  });
+
+  test('H.6 — no-op when shieldedOutputDefs is empty (defensive)', async () => {
+    // A pure-transparent tx that somehow received `changeShieldedMode`
+    // should NOT have its HTR change converted — the resulting tx
+    // would have exactly one shielded output, violating the `>= 2`
+    // invariant enforced later in prepareTxData.
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    const defs: ReturnType<typeof buildShieldedDef>[] = [];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.FULLY_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork
+    );
+
+    expect(result.addedFee).toBe(0n);
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(defs).toHaveLength(0);
   });
 });
