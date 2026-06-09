@@ -9,6 +9,12 @@ import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import ShieldedOutput from '../../src/models/shielded_output';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import Network from '../../src/models/network';
+import {
+  MAX_SHIELDED_OUTPUTS,
+  MAX_RANGE_PROOF_SIZE,
+  MAX_SURJECTION_PROOF_SIZE,
+  MAX_SHIELDED_OUTPUT_SCRIPT_SIZE,
+} from '../../src/constants';
 
 function makeAmountShieldedOutput(
   overrides: Partial<{
@@ -25,7 +31,8 @@ function makeAmountShieldedOutput(
     overrides.rangeProof ?? Buffer.from([0x02, 0x03, 0x04]),
     overrides.tokenData ?? 0,
     overrides.script ?? Buffer.from([0x76, 0xa9, 0x14]),
-    overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x05)
+    overrides.ephemeralPubkey ?? Buffer.alloc(33, 0x05),
+    0n
   );
 }
 
@@ -83,6 +90,69 @@ describe('ShieldedOutputsHeader', () => {
 
       expect(buf[0]).toBe(0x12);
       expect(buf[1]).toBe(1);
+    });
+  });
+
+  describe('output count validation (hathor-core)', () => {
+    it('does not validate at construction (validation lives in validate())', () => {
+      expect(() => new ShieldedOutputsHeader([])).not.toThrow();
+    });
+
+    it('validate() throws on a header with no outputs', () => {
+      expect(() => new ShieldedOutputsHeader([]).validate()).toThrow(/at least 1 output/);
+    });
+
+    it('validate() throws on more than MAX_SHIELDED_OUTPUTS outputs', () => {
+      const outputs = Array.from({ length: MAX_SHIELDED_OUTPUTS + 1 }, () =>
+        makeAmountShieldedOutput()
+      );
+      expect(() => new ShieldedOutputsHeader(outputs).validate()).toThrow(
+        /too many shielded outputs/
+      );
+    });
+
+    it('should throw when serializing a header with no outputs', () => {
+      const header = new ShieldedOutputsHeader([]);
+      expect(() => header.serialize([])).toThrow(/at least 1 output/);
+      expect(() => header.serializeSighash([])).toThrow(/at least 1 output/);
+    });
+
+    it('should throw when serializing more than MAX_SHIELDED_OUTPUTS outputs', () => {
+      const outputs = Array.from({ length: MAX_SHIELDED_OUTPUTS + 1 }, () =>
+        makeAmountShieldedOutput()
+      );
+      const header = new ShieldedOutputsHeader(outputs);
+      expect(() => header.serialize([])).toThrow(/too many shielded outputs/);
+    });
+
+    it('should throw when deserializing a header declaring 0 outputs', () => {
+      const buf = Buffer.from([0x12, 0x00]);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(/at least 1 output/);
+    });
+
+    it('should throw when deserializing a header declaring more than MAX_SHIELDED_OUTPUTS', () => {
+      const buf = Buffer.from([0x12, MAX_SHIELDED_OUTPUTS + 1]);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /too many shielded outputs/
+      );
+    });
+
+    it('accepts and round-trips exactly MAX_SHIELDED_OUTPUTS outputs (upper boundary)', () => {
+      const outputs = Array.from({ length: MAX_SHIELDED_OUTPUTS }, () =>
+        makeAmountShieldedOutput()
+      );
+      const header = new ShieldedOutputsHeader(outputs);
+
+      const parts: Buffer[] = [];
+      expect(() => header.serialize(parts)).not.toThrow();
+      const serialized = Buffer.concat(parts);
+      // num_outputs byte equals exactly MAX_SHIELDED_OUTPUTS
+      expect(serialized[1]).toBe(MAX_SHIELDED_OUTPUTS);
+
+      const [deserialized] = ShieldedOutputsHeader.deserialize(serialized, network);
+      expect((deserialized as ShieldedOutputsHeader).shieldedOutputs.length).toBe(
+        MAX_SHIELDED_OUTPUTS
+      );
     });
   });
 
@@ -194,6 +264,16 @@ describe('ShieldedOutputsHeader', () => {
       expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow('Invalid');
     });
 
+    it('throws the shielded-specific error for a valid but non-shielded header id', () => {
+      // 0x11 (FEE_HEADER) is a valid VertexHeaderId, so it passes
+      // getVertexHeaderIdFromBuffer and reaches ShieldedOutputsHeader's own
+      // id check — unlike 0xff above, which the enum lookup rejects first.
+      const buf = Buffer.from([0x11, 0x01]);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /Invalid vertex header id for shielded outputs header/
+      );
+    });
+
     it('should re-serialize to identical bytes', () => {
       const header = new ShieldedOutputsHeader([
         makeAmountShieldedOutput(),
@@ -257,6 +337,45 @@ describe('ShieldedOutputsHeader', () => {
       const truncated = full.subarray(0, full.length - 10);
       expect(() => ShieldedOutputsHeader.deserialize(truncated, network)).toThrow(
         /missing ephemeral pubkey/
+      );
+    });
+
+    it('should throw when range proof length exceeds MAX_RANGE_PROOF_SIZE (hathor-core)', () => {
+      // header_id + num=1 + mode=1 + commitment(33) + rp_len declaring > max
+      const buf = Buffer.alloc(3 + 33 + 2);
+      buf[0] = headerId;
+      buf[1] = 1; // num outputs
+      buf[2] = 1; // mode AMOUNT_SHIELDED
+      buf.writeUInt16BE(MAX_RANGE_PROOF_SIZE + 1, 3 + 33);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /range proof size .* exceeds maximum/
+      );
+    });
+
+    it('should throw when script length exceeds MAX_SHIELDED_OUTPUT_SCRIPT_SIZE (hathor-core)', () => {
+      // ... commitment(33) + rp_len=0 + script_len declaring > max
+      const buf = Buffer.alloc(3 + 33 + 2 + 2);
+      buf[0] = headerId;
+      buf[1] = 1;
+      buf[2] = 1; // mode AMOUNT_SHIELDED
+      buf.writeUInt16BE(0, 3 + 33); // range proof length = 0
+      buf.writeUInt16BE(MAX_SHIELDED_OUTPUT_SCRIPT_SIZE + 1, 3 + 33 + 2);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /script size .* exceeds maximum/
+      );
+    });
+
+    it('should throw when surjection proof length exceeds MAX_SURJECTION_PROOF_SIZE (hathor-core)', () => {
+      // FullShielded: ... rp_len=0 + script_len=0 + asset_commitment(33) + sp_len declaring > max
+      const buf = Buffer.alloc(3 + 33 + 2 + 2 + 33 + 2);
+      buf[0] = headerId;
+      buf[1] = 1;
+      buf[2] = 2; // mode FULLY_SHIELDED
+      buf.writeUInt16BE(0, 3 + 33); // range proof length = 0
+      buf.writeUInt16BE(0, 3 + 33 + 2); // script length = 0
+      buf.writeUInt16BE(MAX_SURJECTION_PROOF_SIZE + 1, 3 + 33 + 2 + 2 + 33);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /surjection proof size .* exceeds maximum/
       );
     });
   });

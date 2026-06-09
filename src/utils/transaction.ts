@@ -34,7 +34,7 @@ import ShieldedOutput from '../models/shielded_output';
 import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import UnshieldBalanceHeader from '../headers/unshield_balance';
 import FeeHeader from '../headers/fee';
-import { MintHeader } from '../headers/mint_melt';
+import { MintHeader } from '../headers/mint_header';
 import { MeltHeader } from '../headers/melt_header';
 import Network from '../models/network';
 import {

@@ -4,30 +4,22 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Mint/Melt headers (per RFC §4.1, ids 0x14 and 0x15). When a shielded
- * transaction (one with shielded inputs and/or outputs) creates new supply
- * for a non-HTR token, the wallet MUST publicly declare the per-token
- * amount via a `MintHeader`. Symmetric `MeltHeader` declares supply
- * destroyed. The declared scalars enter the augmented Pedersen balance
- * equation as unblinded terms — recipient set stays hidden, no-inflation
- * guarantee is preserved.
+ * Shared building blocks for the Mint (0x14) and Melt (0x15) headers.
+ * Both headers have the identical entry wire format and validation rules,
+ * so the entry type, bounds, and (de)serialization helpers live here and
+ * are consumed by `mint_header.ts` and `melt_header.ts`.
  *
- * Wire format (both headers):
- *   header_id(1) | num_entries(1) | entries[token_index(1) | amount(8 BE)]
+ * Entry wire format (used by both headers):
+ *   num_entries(1) | entries[token_index(1) | amount(8 BE)]
  *
  * Per-entry constraints: 1 ≤ token_index ≤ 16 (HTR forbidden); 1 ≤ amount
- * < 2^64; tokenIndex unique within a header. Mutual constraints
- * (one-instance-per-type, ascending canonical order) are enforced when the
- * header gets serialized into the tx alongside Fee/Shielded/Unshield.
+ * < 2^64; token_index unique within a header.
  */
 
-import { getVertexHeaderIdBuffer, getVertexHeaderIdFromBuffer, VertexHeaderId } from './types';
-import Header from './base';
-import Network from '../models/network';
 import { OutputValueType } from '../types';
 
 export const MAX_MINT_MELT_ENTRIES = 16;
-const ENTRY_SIZE = 1 + 8;
+export const ENTRY_SIZE = 1 + 8; // token_index(1) + amount(8 BE)
 
 export interface IMintMeltEntry {
   /** Index into the tx's `tokens[]` (1-based; 0 = HTR is forbidden). */
@@ -126,7 +118,7 @@ export function deserializeMintMeltEntries(
   return [entries, buf.subarray(needed)];
 }
 
-function validateEntries(entries: IMintMeltEntry[], headerName: string): void {
+export function validateMintMeltEntries(entries: IMintMeltEntry[], headerName: string): void {
   if (entries.length === 0) {
     throw new Error(`${headerName} requires at least 1 entry`);
   }
@@ -144,44 +136,3 @@ function validateEntries(entries: IMintMeltEntry[], headerName: string): void {
     seen.add(entry.tokenIndex);
   }
 }
-
-export class MintHeader extends Header {
-  static HEADER_NAME = 'MintHeader';
-
-  entries: IMintMeltEntry[];
-
-  constructor(entries: IMintMeltEntry[]) {
-    super();
-    validateEntries(entries, MintHeader.HEADER_NAME);
-    this.entries = entries;
-  }
-
-  private serializeAll(array: Buffer[]) {
-    array.push(getVertexHeaderIdBuffer(VertexHeaderId.MINT_HEADER));
-    array.push(serializeMintMeltEntries(this.entries));
-  }
-
-  serializeFields(array: Buffer[]) {
-    this.serializeAll(array);
-  }
-
-  serialize(array: Buffer[]) {
-    this.serializeAll(array);
-  }
-
-  serializeSighash(array: Buffer[]) {
-    this.serializeAll(array);
-  }
-
-  static deserialize(srcBuf: Buffer, _network: Network): [Header, Buffer] {
-    let buf = Buffer.from(srcBuf);
-    if (getVertexHeaderIdFromBuffer(buf) !== VertexHeaderId.MINT_HEADER) {
-      throw new Error('Invalid vertex header id for mint header.');
-    }
-    buf = buf.subarray(1);
-    const [entries, leftover] = deserializeMintMeltEntries(buf, MintHeader.HEADER_NAME);
-    return [new MintHeader(entries), leftover];
-  }
-}
-
-export default MintHeader;
