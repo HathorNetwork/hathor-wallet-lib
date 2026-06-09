@@ -136,6 +136,24 @@ describe('ShieldedOutputsHeader', () => {
         /too many shielded outputs/
       );
     });
+
+    it('accepts and round-trips exactly MAX_SHIELDED_OUTPUTS outputs (upper boundary)', () => {
+      const outputs = Array.from({ length: MAX_SHIELDED_OUTPUTS }, () =>
+        makeAmountShieldedOutput()
+      );
+      const header = new ShieldedOutputsHeader(outputs);
+
+      const parts: Buffer[] = [];
+      expect(() => header.serialize(parts)).not.toThrow();
+      const serialized = Buffer.concat(parts);
+      // num_outputs byte equals exactly MAX_SHIELDED_OUTPUTS
+      expect(serialized[1]).toBe(MAX_SHIELDED_OUTPUTS);
+
+      const [deserialized] = ShieldedOutputsHeader.deserialize(serialized, network);
+      expect((deserialized as ShieldedOutputsHeader).shieldedOutputs.length).toBe(
+        MAX_SHIELDED_OUTPUTS
+      );
+    });
   });
 
   describe('serializeSighash', () => {
@@ -244,6 +262,16 @@ describe('ShieldedOutputsHeader', () => {
     it('should throw for invalid header ID', () => {
       const buf = Buffer.from([0xff, 0x01]);
       expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow('Invalid');
+    });
+
+    it('throws the shielded-specific error for a valid but non-shielded header id', () => {
+      // 0x11 (FEE_HEADER) is a valid VertexHeaderId, so it passes
+      // getVertexHeaderIdFromBuffer and reaches ShieldedOutputsHeader's own
+      // id check — unlike 0xff above, which the enum lookup rejects first.
+      const buf = Buffer.from([0x11, 0x01]);
+      expect(() => ShieldedOutputsHeader.deserialize(buf, network)).toThrow(
+        /Invalid vertex header id for shielded outputs header/
+      );
     });
 
     it('should re-serialize to identical bytes', () => {

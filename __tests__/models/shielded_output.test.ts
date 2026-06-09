@@ -340,5 +340,46 @@ describe('ShieldedOutput', () => {
       buf.writeUInt16BE(MAX_RANGE_PROOF_SIZE + 1, 1 + 33);
       expect(() => ShieldedOutput.deserialize(buf)).toThrow(/range proof size .* exceeds maximum/);
     });
+
+    describe('FullShielded truncation', () => {
+      // FullShielded wire layout for these fixed sizes:
+      //   mode(1) | commitment(33) | rp_len(2) | range_proof(4) |
+      //   script_len(2) | script(2) | asset_commitment(33) | sp_len(2) |
+      //   surjection_proof(3) | ephemeral_pubkey(33)
+      function fullWire(): Buffer {
+        const out = makeOutput({
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
+          rangeProof: Buffer.alloc(4, 0xbb),
+          script: Buffer.alloc(2, 0x76),
+          assetCommitment: Buffer.alloc(33, 0xdd),
+          surjectionProof: Buffer.alloc(3, 0xee),
+        });
+        return Buffer.concat(out.serialize());
+      }
+      const AFTER_SCRIPT = 1 + 33 + 2 + 4 + 2 + 2; // asset_commitment starts here
+      const AFTER_ASSET_COMMITMENT = AFTER_SCRIPT + 33; // sp_len starts here
+      const AFTER_SP_LEN = AFTER_ASSET_COMMITMENT + 2; // surjection_proof starts here
+
+      it('throws on missing asset commitment', () => {
+        const buf = fullWire().subarray(0, AFTER_SCRIPT + 10); // < 33 bytes left
+        expect(() => ShieldedOutput.deserialize(buf)).toThrow(
+          /Truncated FullShielded output: missing asset commitment/
+        );
+      });
+
+      it('throws on missing surjection proof length', () => {
+        const buf = fullWire().subarray(0, AFTER_ASSET_COMMITMENT + 1); // < 2 bytes left
+        expect(() => ShieldedOutput.deserialize(buf)).toThrow(
+          /Truncated FullShielded output: missing surjection proof length/
+        );
+      });
+
+      it('throws on incomplete surjection proof', () => {
+        const buf = fullWire().subarray(0, AFTER_SP_LEN + 1); // sp_len says 3, only 1 byte left
+        expect(() => ShieldedOutput.deserialize(buf)).toThrow(
+          /Truncated FullShielded output: incomplete surjection proof/
+        );
+      });
+    });
   });
 });
