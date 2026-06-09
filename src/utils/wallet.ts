@@ -631,9 +631,9 @@ const wallet = {
       accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
 
       const spendAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
-      const spendXpriv2 = spendAcctXpriv.deriveNonCompliantChild(0);
-      accessData.spendXpubkey = spendXpriv2.xpubkey;
-      accessData.spendMainKey = encryptData(spendXpriv2.xprivkey, pin);
+      const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+      accessData.spendXpubkey = spendXpriv.xpubkey;
+      accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
     }
 
     if (authXpriv || derivedAuthKey) {

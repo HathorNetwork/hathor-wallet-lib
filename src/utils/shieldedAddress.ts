@@ -5,10 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { encoding, HDPublicKey } from 'bitcore-lib';
+import { encoding, HDPublicKey, PublicKey } from 'bitcore-lib';
 import Network from '../models/network';
 import helpers from './helpers';
 import { publicKeyToP2PKH } from './address';
+
+/**
+ * Assert a buffer is a valid compressed secp256k1 public key: 33 bytes,
+ * 02/03 prefix, AND an x-coordinate that decompresses to a point on the
+ * curve. The shape checks alone would accept ~50% of random 33-byte
+ * buffers (any x without a curve point fails only at decompression), so
+ * skipping the curve check lets a malformed address be encoded/sent around
+ * and only fail much later, inside the crypto provider, with an opaque
+ * error far from the cause.
+ */
+export function assertValidCompressedPubkey(pubkey: Buffer, label: string): void {
+  if (pubkey.length !== 33 || (pubkey[0] !== 0x02 && pubkey[0] !== 0x03)) {
+    throw new Error(
+      `Invalid ${label}: expected 33-byte compressed EC point (02/03 prefix), ` +
+        `got ${pubkey.length} bytes with prefix 0x${pubkey[0]?.toString(16).padStart(2, '0')}`
+    );
+  }
+  try {
+    // bitcore validates curve membership at construction (throws on
+    // invalid x / point not on curve).
+    PublicKey.fromBuffer(pubkey);
+  } catch (e) {
+    throw new Error(
+      `Invalid ${label}: not a point on the secp256k1 curve (${e instanceof Error ? e.message : e})`
+    );
+  }
+}
 
 export interface IShieldedAddressInfo {
   /** Full shielded address in base58 */
@@ -37,18 +64,8 @@ export function encodeShieldedAddress(
   spendPubkey: Buffer,
   network: Network
 ): string {
-  if (scanPubkey.length !== 33 || (scanPubkey[0] !== 0x02 && scanPubkey[0] !== 0x03)) {
-    throw new Error(
-      `Invalid scan pubkey: expected 33-byte compressed EC point (02/03 prefix), ` +
-        `got ${scanPubkey.length} bytes with prefix 0x${scanPubkey[0]?.toString(16).padStart(2, '0')}`
-    );
-  }
-  if (spendPubkey.length !== 33 || (spendPubkey[0] !== 0x02 && spendPubkey[0] !== 0x03)) {
-    throw new Error(
-      `Invalid spend pubkey: expected 33-byte compressed EC point (02/03 prefix), ` +
-        `got ${spendPubkey.length} bytes with prefix 0x${spendPubkey[0]?.toString(16).padStart(2, '0')}`
-    );
-  }
+  assertValidCompressedPubkey(scanPubkey, 'scan pubkey');
+  assertValidCompressedPubkey(spendPubkey, 'spend pubkey');
 
   const versionByte = Buffer.from([network.versionBytes.shielded]);
   const payload = Buffer.concat([versionByte, scanPubkey, spendPubkey]);

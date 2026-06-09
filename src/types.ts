@@ -101,7 +101,12 @@ export interface IAddressInfo {
   bip32AddressIndex: number;
   // Only for p2pkh, undefined for multisig
   publicKey?: string;
-  // Address type: undefined = legacy, 'shielded' = full shielded address, 'shielded-spend' = on-chain P2PKH from spend key
+  // Address type: undefined = legacy.
+  // 'shielded' = the full 71-byte shielded address string (scan + spend pubkeys);
+  //   it has no output script of its own and must NOT be passed to
+  //   utils/address getAddressType(), which throws for it.
+  // 'shielded-spend' = the on-chain P2PKH derived from HASH160(spend_pubkey);
+  //   this is the form getAddressType()/script builders accept.
   addressType?: 'p2pkh' | 'p2sh' | 'shielded' | 'shielded-spend';
 }
 
@@ -381,7 +386,11 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
-  // Shielded address key material (optional, absent on wallets created before shielded feature)
+  // Shielded address key material. Optional: absent on wallets created
+  // before the shielded feature AND on wallets without root-key access —
+  // the scan/spend chains are hardened accounts (1'/2'), derivable only
+  // from the root xpriv, so xpub-only (read-only) wallets and wallets
+  // initialized from an account-level xpriv can never populate these.
   scanXpubkey?: string; // xpub at m/44'/280'/1'/0 (scan chain — view-only access)
   scanMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
   spendXpubkey?: string; // xpub at m/44'/280'/2'/0 (spend chain — signing authority)

@@ -35,7 +35,9 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
   const addrType = addressObj.getType();
   if (addrType === 'shielded') {
     throw new Error(
-      'Shielded addresses cannot be used directly as output script type. Use the spend-derived P2PKH address instead.'
+      'Shielded addresses cannot be used directly as output script type. ' +
+        'Use the spend-derived P2PKH address instead — obtain it via ' +
+        '`new Address(addr, { network }).getSpendAddress().base58`.'
     );
   }
   return addrType;

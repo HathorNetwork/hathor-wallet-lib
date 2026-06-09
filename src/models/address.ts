@@ -126,6 +126,21 @@ class Address {
         `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh}, ${this.network.versionBytes.p2sh}, or ${this.network.versionBytes.shielded} and received ${firstByte}.`
       );
     }
+
+    // Cross-check length against version byte: the length and version-byte
+    // checks above are individually necessary but not jointly sufficient —
+    // without this, a crafted 25-byte address carrying the shielded version
+    // byte (or a 71-byte one carrying a legacy byte) validates, and the
+    // pubkey extractors would silently clamp `subarray` reads on the short
+    // buffer. Note this runs only when the network is known (not under
+    // `skipNetwork`), since the byte→length mapping is network-defined.
+    const expectedLength =
+      firstByte === this.network.versionBytes.shielded ? SHIELDED_ADDR_LENGTH : LEGACY_ADDR_LENGTH;
+    if (addressBytes.length !== expectedLength) {
+      throw new AddressError(
+        `${errorMessage} Version byte ${firstByte} requires ${expectedLength} bytes, got ${addressBytes.length}.`
+      );
+    }
     return true;
   }
 
@@ -187,7 +202,9 @@ class Address {
       throw new AddressError('Not a shielded address');
     }
     const addressBytes = this.decode();
-    return Buffer.from(addressBytes.subarray(1, 34));
+    const scanPubkey = Buffer.from(addressBytes.subarray(1, 34));
+    this.assertOnCurve(scanPubkey, 'scan pubkey');
+    return scanPubkey;
   }
 
   /**
@@ -204,7 +221,30 @@ class Address {
       throw new AddressError('Not a shielded address');
     }
     const addressBytes = this.decode();
-    return Buffer.from(addressBytes.subarray(34, 67));
+    const spendPubkey = Buffer.from(addressBytes.subarray(34, 67));
+    this.assertOnCurve(spendPubkey, 'spend pubkey');
+    return spendPubkey;
+  }
+
+  /**
+   * Assert an extracted pubkey decompresses to a point on the secp256k1
+   * curve. Base58 checksum only protects against transmission corruption —
+   * a deliberately crafted address can carry a 02/03-prefixed buffer whose
+   * x-coordinate has no curve point. Without this check such a key only
+   * fails much later (inside the crypto provider for scan keys, or inside
+   * bitcore for spend keys) with an opaque error far from the cause.
+   *
+   * @throws {AddressError} If the pubkey is not a valid curve point
+   */
+  private assertOnCurve(pubkey: Buffer, label: string): void {
+    try {
+      // bitcore validates curve membership at construction.
+      bitcorePublicKey.fromBuffer(pubkey);
+    } catch (e) {
+      throw new AddressError(
+        `Invalid address: ${this.base58}. The ${label} is not a point on the secp256k1 curve.`
+      );
+    }
   }
 
   /**
