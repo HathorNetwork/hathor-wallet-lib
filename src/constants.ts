@@ -248,6 +248,24 @@ export const MAX_OUTPUTS: number = 255;
 export const MAX_SHIELDED_OUTPUTS: number = 32;
 
 /**
+ * Maximum serialized size (bytes) of a shielded output's range proof.
+ * Mirrors hathor-core's MAX_RANGE_PROOF_SIZE.
+ */
+export const MAX_RANGE_PROOF_SIZE: number = 3328;
+
+/**
+ * Maximum serialized size (bytes) of a FullShielded output's surjection proof.
+ * Mirrors hathor-core's MAX_SURJECTION_PROOF_SIZE.
+ */
+export const MAX_SURJECTION_PROOF_SIZE: number = 4096;
+
+/**
+ * Maximum serialized size (bytes) of a shielded output's locking script.
+ * Mirrors hathor-core's MAX_SHIELDED_OUTPUT_SCRIPT_SIZE.
+ */
+export const MAX_SHIELDED_OUTPUT_SCRIPT_SIZE: number = 1024;
+
+/**
  * Maximum number of fee entries in a FeeHeader
  */
 export const MAX_FEE_HEADER_ENTRIES: number = 16;
