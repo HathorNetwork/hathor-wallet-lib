@@ -7,8 +7,10 @@
 
 import { encoding, HDPublicKey, PublicKey } from 'bitcore-lib';
 import Network from '../models/network';
+import { COMPRESSED_PUBKEY_SIZE_BYTES } from '../constants';
 import helpers from './helpers';
 import { publicKeyToP2PKH } from './address';
+import type { IShieldedAddressInfo } from '../shielded/types';
 
 /**
  * Assert a buffer is a valid compressed secp256k1 public key: 33 bytes,
@@ -18,11 +20,19 @@ import { publicKeyToP2PKH } from './address';
  * skipping the curve check lets a malformed address be encoded/sent around
  * and only fail much later, inside the crypto provider, with an opaque
  * error far from the cause.
+ *
+ * The explicit shape check is NOT redundant with `PublicKey.fromBuffer`:
+ * bitcore also accepts 65-byte UNCOMPRESSED keys (04/06/07 prefix), which
+ * would silently corrupt the fixed 33-byte slots of the address layout —
+ * and its own rejection message for bad shapes is an opaque 'Invalid X'.
  */
 export function assertValidCompressedPubkey(pubkey: Buffer, label: string): void {
-  if (pubkey.length !== 33 || (pubkey[0] !== 0x02 && pubkey[0] !== 0x03)) {
+  if (
+    pubkey.length !== COMPRESSED_PUBKEY_SIZE_BYTES ||
+    (pubkey[0] !== 0x02 && pubkey[0] !== 0x03)
+  ) {
     throw new Error(
-      `Invalid ${label}: expected 33-byte compressed EC point (02/03 prefix), ` +
+      `Invalid ${label}: expected ${COMPRESSED_PUBKEY_SIZE_BYTES}-byte compressed EC point (02/03 prefix), ` +
         `got ${pubkey.length} bytes with prefix 0x${pubkey[0]?.toString(16).padStart(2, '0')}`
     );
   }
@@ -35,19 +45,6 @@ export function assertValidCompressedPubkey(pubkey: Buffer, label: string): void
       `Invalid ${label}: not a point on the secp256k1 curve (${e instanceof Error ? e.message : e})`
     );
   }
-}
-
-export interface IShieldedAddressInfo {
-  /** Full shielded address in base58 */
-  base58: string;
-  /** BIP32 index used to derive both scan and spend keys */
-  bip32AddressIndex: number;
-  /** 33-byte compressed scan pubkey (hex) */
-  scanPubkey: string;
-  /** 33-byte compressed spend pubkey (hex) */
-  spendPubkey: string;
-  /** P2PKH address derived from HASH160(spend_pubkey) — the on-chain address */
-  spendAddress: string;
 }
 
 /**
