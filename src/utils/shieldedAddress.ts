@@ -89,6 +89,14 @@ export function deriveShieldedAddress(
   index: number,
   networkName: string
 ): IShieldedAddressInfo {
+  // Fail loud with a deterministic error: negative/non-integer/hardened-range
+  // indexes would otherwise die deep inside bitcore with low-level errors
+  // (xpubs cannot derive hardened children, i.e. index >= 2^31).
+  if (!Number.isInteger(index) || index < 0 || index >= 0x80000000) {
+    throw new Error(
+      `Invalid BIP32 address index: expected a non-negative integer < 2^31, got ${index}`
+    );
+  }
   const network = new Network(networkName);
 
   const scanHdPub = new HDPublicKey(scanXpubkey);

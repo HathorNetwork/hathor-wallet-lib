@@ -183,8 +183,14 @@ class Address {
   isShielded(): boolean {
     try {
       return this.getType() === 'shielded';
-    } catch {
-      return false;
+    } catch (e) {
+      // Only AddressError means "structurally not a shielded address".
+      // Anything else is an unexpected failure that must not be silently
+      // converted into a misleading `false`.
+      if (e instanceof AddressError) {
+        return false;
+      }
+      throw e;
     }
   }
 

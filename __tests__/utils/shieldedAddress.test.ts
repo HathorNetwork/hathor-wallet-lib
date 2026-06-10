@@ -113,6 +113,17 @@ describe('deriveShieldedAddress', () => {
     expect(info.spendPubkey).toBe(SPEND_PUBKEY.toString('hex'));
   });
 
+  it('rejects out-of-bounds indexes with a deterministic error', () => {
+    const cases = [-1, 1.5, NaN, 0x80000000];
+    for (const bad of cases) {
+      expect(() => deriveShieldedAddress(SCAN_XPUB, SPEND_XPUB, bad, 'testnet')).toThrow(
+        /Invalid BIP32 address index/
+      );
+    }
+    // Boundary: the largest non-hardened index is accepted
+    expect(() => deriveShieldedAddress(SCAN_XPUB, SPEND_XPUB, 0x7fffffff, 'testnet')).not.toThrow();
+  });
+
   it('spendAddress is consistent with Address.getSpendAddress()', () => {
     const info = deriveShieldedAddress(SCAN_XPUB, SPEND_XPUB, 3, 'testnet');
     const addr = new Address(info.base58, { network: testnetNetwork });
