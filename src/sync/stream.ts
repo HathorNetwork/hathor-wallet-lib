@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 import { Address as BitcoreAddress, HDPublicKey, Script } from 'bitcore-lib';
+import _ from 'lodash';
 import queueMicrotask from 'queue-microtask';
 import FullNodeConnection from '../new/connection';
 import {
@@ -25,14 +26,10 @@ import { XPubError } from '../errors';
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
 
-// Multisig (P2SH) streaming tuning.
-// P2SH derivation costs one BIP32 child derivation per participant, so it is several times
-// slower than P2PKH. With the P2PKH defaults (40 per batch, 600 window) a multisig batch
-// blocks the Node event loop long enough that the client derives far ahead of the fullnode
-// and starves other work. Smaller values keep each synchronous derivation chunk short and
-// stop the client from deriving far ahead, so the headless server stays responsive
-// (pings/ACKs/other HTTP requests) during a multisig sync. Applied per-stream in
-// StreamManager.setupStream().
+// Multisig (P2SH) streaming tuning. P2SH derivation is several times slower than P2PKH (one BIP32
+// child derivation per participant), so the P2PKH defaults (40/batch, 600 window) let the client
+// derive far ahead of the fullnode and block the Node event loop. Smaller values keep each
+// synchronous chunk short so the headless server stays responsive. Applied in StreamManager.setupStream().
 const MULTISIG_ADDRESSES_PER_MESSAGE = 5;
 const MULTISIG_MAX_WINDOW_SIZE = 30;
 
@@ -269,10 +266,8 @@ export function loadAddressesCPUIntensive(
 /**
  * Derive the multisig (P2SH) addresses for the index range [startIndex, startIndex + count).
  *
- * P2SH derivation is expensive — one BIP32 child derivation per participant for each address —
- * so the index-invariant work (the network, the sorted participant xpubs, and the change-level
- * node m/45'/280'/0'/0) is computed once and only the final per-index child derivation runs in
- * the loop.
+ * P2SH derivation is expensive (one BIP32 child derivation per participant per address), so the
+ * index-invariant work is hoisted out of the loop and only the final per-index child runs in it.
  */
 export function loadP2SHAddressesCPUIntensive(
   startIndex: number,
@@ -282,31 +277,25 @@ export function loadP2SHAddressesCPUIntensive(
 ): [number, string][] {
   const network = new Network(networkName);
 
-  // The participant xpubs and their order are the same for every index. The sort key
-  // (account-level public key, hex) must match createP2SHRedeemScript so the redeem script —
-  // and therefore the address — matches the polling path. The explicit `<`/`>` string
-  // comparator reproduces lodash `_.sortBy`'s ordering.
+  // Sort the participant xpubs exactly as createP2SHRedeemScript does, so the derived address
+  // matches the polling path.
   let sortedXpubs: HDPublicKey[];
   try {
-    sortedXpubs = multisigData.pubkeys.map(xpub => new HDPublicKey(xpub));
+    sortedXpubs = _.sortBy(
+      multisigData.pubkeys.map(xpub => new HDPublicKey(xpub)),
+      (xpub: HDPublicKey) => {
+        return xpub.publicKey.toString('hex');
+      }
+    );
   } catch (e) {
     throw new XPubError('Invalid xpub');
   }
-  sortedXpubs.sort((a, b) => {
-    const keyA = a.publicKey.toString('hex');
-    const keyB = b.publicKey.toString('hex');
-    if (keyA < keyB) return -1;
-    if (keyA > keyB) return 1;
-    return 0;
-  });
 
-  // The change-level node m/45'/280'/0'/0 is shared by every index; only the final
-  // deriveChild(index) below varies. Deriving it once per participant is the bulk of the saving.
+  // m/45'/280'/0'/0 is shared by every index; only the final deriveChild(i) below varies.
   const changeNodes = sortedXpubs.map(xpub => xpub.deriveChild(0));
 
-  // Per index, derive only the final child of each participant, build the m-of-n redeem script,
-  // and hash it into the P2SH address. The toBuffer()/fromBuffer() round-trip mirrors
-  // deriveAddressFromDataP2SH so the resulting address bytes match the polling path.
+  // The toBuffer()/fromBuffer() round-trip mirrors deriveAddressFromDataP2SH so the address
+  // bytes match the polling path.
   const addresses: [number, string][] = [];
   const stopIndex = startIndex + count;
   for (let i = startIndex; i < stopIndex; i++) {
