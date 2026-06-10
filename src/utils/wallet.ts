@@ -754,6 +754,14 @@ const wallet = {
    * false})` later throws "Current shielded address is not loaded
    * (index=-1)". Running this migration on the next `wallet.start()` fixes
    * the state permanently.
+   *
+   * IMPORTANT: `passphrase` must be the wallet's original BIP39 passphrase.
+   * A different passphrase derives the shielded keys from a different root
+   * than the wallet's legacy keys — and this is NOT detectable here, since
+   * BIP39 passphrases are unverifiable by design (any passphrase yields a
+   * valid seed). The PIN, however, IS cross-checked against `mainKey` below
+   * so the new blobs can never be encrypted under a PIN that differs from
+   * the rest of the record.
    */
   migrateShieldedAccessData(
     accessData: IWalletAccessData,
@@ -793,6 +801,26 @@ const wallet = {
       (wrapped as Error & { cause?: unknown }).cause = e;
       throw wrapped;
     }
+
+    // Cross-check the PIN against the record's existing key material before
+    // writing anything: without this, a mismatched PIN silently produces
+    // scan/spend blobs encrypted under a DIFFERENT pin than mainKey — the
+    // wallet then fails to decrypt its shielded keys on every unlock, with
+    // no hint that the migration was the cause. BIP39 passphrases cannot be
+    // validated the same way (see doc comment), but the PIN can and must be.
+    if (accessData.mainKey) {
+      try {
+        decryptData(accessData.mainKey, pin);
+      } catch (e) {
+        const wrapped = new Error(
+          'Shielded migration PIN does not match the wallet mainKey. ' +
+            'The new shielded keys must be encrypted under the same PIN as the rest of the record.'
+        );
+        (wrapped as Error & { cause?: unknown }).cause = e;
+        throw wrapped;
+      }
+    }
+
     const code = new Mnemonic(words);
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
 
