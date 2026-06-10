@@ -96,6 +96,12 @@ export type HistorySyncFunction = (
   shouldProcessHistory?: boolean
 ) => Promise<void>;
 
+/**
+ * Valid address types, as returned by `Address.getType()`:
+ * the two legacy script types plus the 71-byte shielded address format.
+ */
+export type AddressType = 'p2pkh' | 'p2sh' | 'shielded';
+
 export interface IAddressInfo {
   base58: string;
   bip32AddressIndex: number;
@@ -107,7 +113,7 @@ export interface IAddressInfo {
   //   utils/address getAddressType(), which throws for it.
   // 'shielded-spend' = the on-chain P2PKH derived from HASH160(spend_pubkey);
   //   this is the form getAddressType()/script builders accept.
-  addressType?: 'p2pkh' | 'p2sh' | 'shielded' | 'shielded-spend';
+  addressType?: AddressType | 'shielded-spend';
 }
 
 export interface IAddressMetadata {

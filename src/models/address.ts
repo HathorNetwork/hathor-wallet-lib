@@ -17,14 +17,23 @@ import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
 import helpers from '../utils/helpers';
+import {
+  COMPRESSED_PUBKEY_SIZE_BYTES,
+  LEGACY_ADDRESS_SIZE_BYTES,
+  SHIELDED_ADDRESS_SIZE_BYTES,
+} from '../constants';
+import type { AddressType } from '../types';
+import type { IShieldedAddressParts } from '../shielded/types';
 
-/** Valid address types */
-export type AddressType = 'p2pkh' | 'p2sh' | 'shielded';
+// Re-export so existing `import { AddressType } from 'models/address'`
+// consumers keep working; the canonical home is src/types.ts.
+export type { AddressType };
 
-/** Shielded address payload length: 1B version + 33B scan + 33B spend = 67B + 4B checksum = 71B */
-const SHIELDED_ADDR_LENGTH = 71;
-/** Legacy address payload length: 1B version + 20B hash + 4B checksum = 25B */
-const LEGACY_ADDR_LENGTH = 25;
+// Shielded address layout offsets, derived from the pubkey size so the
+// 33-byte width is stated once: version(1) | scan(33) | spend(33) | checksum(4)
+const SCAN_PUBKEY_START = 1;
+const SCAN_PUBKEY_END = SCAN_PUBKEY_START + COMPRESSED_PUBKEY_SIZE_BYTES;
+const SPEND_PUBKEY_END = SCAN_PUBKEY_END + COMPRESSED_PUBKEY_SIZE_BYTES;
 
 class Address {
   // String with address as base58
@@ -97,11 +106,11 @@ class Address {
 
     // Validate address length
     if (
-      addressBytes.length !== LEGACY_ADDR_LENGTH &&
-      addressBytes.length !== SHIELDED_ADDR_LENGTH
+      addressBytes.length !== LEGACY_ADDRESS_SIZE_BYTES &&
+      addressBytes.length !== SHIELDED_ADDRESS_SIZE_BYTES
     ) {
       throw new AddressError(
-        `${errorMessage} Address has ${addressBytes.length} bytes and should have ${LEGACY_ADDR_LENGTH} or ${SHIELDED_ADDR_LENGTH}.`
+        `${errorMessage} Address has ${addressBytes.length} bytes and should have ${LEGACY_ADDRESS_SIZE_BYTES} or ${SHIELDED_ADDRESS_SIZE_BYTES}.`
       );
     }
 
@@ -135,7 +144,9 @@ class Address {
     // buffer. Note this runs only when the network is known (not under
     // `skipNetwork`), since the byte→length mapping is network-defined.
     const expectedLength =
-      firstByte === this.network.versionBytes.shielded ? SHIELDED_ADDR_LENGTH : LEGACY_ADDR_LENGTH;
+      firstByte === this.network.versionBytes.shielded
+        ? SHIELDED_ADDRESS_SIZE_BYTES
+        : LEGACY_ADDRESS_SIZE_BYTES;
     if (addressBytes.length !== expectedLength) {
       throw new AddressError(
         `${errorMessage} Version byte ${firstByte} requires ${expectedLength} bytes, got ${addressBytes.length}.`
@@ -195,41 +206,61 @@ class Address {
   }
 
   /**
-   * Extract the 33-byte scan pubkey from a shielded address.
-   * Bytes [1..34) of the decoded address.
+   * Split a shielded address into its structural parts:
+   * version(1) | scan_pubkey(33) | spend_pubkey(33) | checksum(4).
    *
-   * @throws {AddressError} If address is not shielded
+   * Single decode + on-curve validation of BOTH embedded pubkeys; the
+   * individual getters delegate here. Note this is stricter than
+   * extracting one key in isolation: an address with ANY invalid key is
+   * invalid as a whole, so both are checked regardless of which part the
+   * caller wants.
+   *
+   * @throws {AddressError} If address is not shielded or a pubkey is not
+   *   a point on the secp256k1 curve
+   * @return {IShieldedAddressParts}
+   * @memberof Address
+   * @inner
+   */
+  parseShielded(): IShieldedAddressParts {
+    if (!this.isShielded()) {
+      throw new AddressError('Not a shielded address');
+    }
+    const addressBytes = this.decode();
+    const parts: IShieldedAddressParts = {
+      versionByte: addressBytes[0],
+      scanPubkey: Buffer.from(addressBytes.subarray(SCAN_PUBKEY_START, SCAN_PUBKEY_END)),
+      spendPubkey: Buffer.from(addressBytes.subarray(SCAN_PUBKEY_END, SPEND_PUBKEY_END)),
+      checksum: Buffer.from(addressBytes.subarray(SPEND_PUBKEY_END)),
+    };
+    this.assertOnCurve(parts.scanPubkey, 'scan pubkey');
+    this.assertOnCurve(parts.spendPubkey, 'spend pubkey');
+    return parts;
+  }
+
+  /**
+   * Extract the 33-byte scan pubkey from a shielded address.
+   *
+   * @throws {AddressError} If address is not shielded or carries an
+   *   invalid pubkey (see parseShielded)
    * @return {Buffer} 33-byte compressed EC public key
    * @memberof Address
    * @inner
    */
   getScanPubkey(): Buffer {
-    if (!this.isShielded()) {
-      throw new AddressError('Not a shielded address');
-    }
-    const addressBytes = this.decode();
-    const scanPubkey = Buffer.from(addressBytes.subarray(1, 34));
-    this.assertOnCurve(scanPubkey, 'scan pubkey');
-    return scanPubkey;
+    return this.parseShielded().scanPubkey;
   }
 
   /**
    * Extract the 33-byte spend pubkey from a shielded address.
-   * Bytes [34..67) of the decoded address.
    *
-   * @throws {AddressError} If address is not shielded
+   * @throws {AddressError} If address is not shielded or carries an
+   *   invalid pubkey (see parseShielded)
    * @return {Buffer} 33-byte compressed EC public key
    * @memberof Address
    * @inner
    */
   getSpendPubkey(): Buffer {
-    if (!this.isShielded()) {
-      throw new AddressError('Not a shielded address');
-    }
-    const addressBytes = this.decode();
-    const spendPubkey = Buffer.from(addressBytes.subarray(34, 67));
-    this.assertOnCurve(spendPubkey, 'spend pubkey');
-    return spendPubkey;
+    return this.parseShielded().spendPubkey;
   }
 
   /**

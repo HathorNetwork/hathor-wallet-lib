@@ -248,6 +248,18 @@ export const MAX_OUTPUTS: number = 255;
 export const MAX_SHIELDED_OUTPUTS: number = 32;
 
 /**
+ * Decoded byte length of a legacy (P2PKH/P2SH) address:
+ * version(1) + hash(20) + checksum(4)
+ */
+export const LEGACY_ADDRESS_SIZE_BYTES: number = 25;
+
+/**
+ * Decoded byte length of a shielded address:
+ * version(1) + scan_pubkey(33) + spend_pubkey(33) + checksum(4)
+ */
+export const SHIELDED_ADDRESS_SIZE_BYTES: number = 71;
+
+/**
  * Maximum serialized size (bytes) of a shielded output's range proof.
  * Mirrors hathor-core's MAX_RANGE_PROOF_SIZE.
  */

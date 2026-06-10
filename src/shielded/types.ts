@@ -172,3 +172,18 @@ export interface IShieldedAddressInfo {
   /** P2PKH address derived from HASH160(spend_pubkey) — the on-chain address */
   spendAddress: string;
 }
+
+/**
+ * Structural parts of a decoded 71-byte shielded address — return shape of
+ * `Address.parseShielded()`: version(1) | scan(33) | spend(33) | checksum(4).
+ */
+export interface IShieldedAddressParts {
+  /** Network version byte (first byte) */
+  versionByte: number;
+  /** 33-byte compressed scan pubkey (ECDH detection) */
+  scanPubkey: Buffer;
+  /** 33-byte compressed spend pubkey (signing authority) */
+  spendPubkey: Buffer;
+  /** 4-byte checksum over the first 67 bytes */
+  checksum: Buffer;
+}

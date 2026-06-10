@@ -146,10 +146,31 @@ test('Shielded address with off-curve pubkey is rejected at extraction', () => {
 
   // Structure (length/checksum/version byte) is fine…
   expect(addr.isValid()).toBe(true);
-  // …but extracting the scan pubkey fails the on-curve check.
+  // …but parsing fails the on-curve check — and an address with ANY invalid
+  // key is invalid as a whole, so both extractors throw, including the one
+  // for the genuine spend key.
+  expect(() => addr.parseShielded()).toThrow(/not a point on the secp256k1 curve/);
   expect(() => addr.getScanPubkey()).toThrow(/not a point on the secp256k1 curve/);
-  // The spend key is genuine, so its extraction still works.
-  expect(addr.getSpendPubkey()).toEqual(SPEND_PUBKEY);
+  expect(() => addr.getSpendPubkey()).toThrow(/not a point on the secp256k1 curve/);
+});
+
+test('parseShielded returns all structural parts of a shielded address', () => {
+  const testnetNetwork = new Network('testnet');
+  const shieldedAddr = encodeShieldedAddress(SCAN_PUBKEY, SPEND_PUBKEY, testnetNetwork);
+  const addr = new Address(shieldedAddr, { network: testnetNetwork });
+
+  const parts = addr.parseShielded();
+  expect(parts.versionByte).toBe(testnetNetwork.versionBytes.shielded);
+  expect(parts.scanPubkey).toEqual(SCAN_PUBKEY);
+  expect(parts.spendPubkey).toEqual(SPEND_PUBKEY);
+  // Checksum is the last 4 bytes of the decoded address and matches what
+  // the validator accepts (the address validated above via isShielded).
+  expect(parts.checksum).toEqual(addr.decode().subarray(-4));
+  expect(parts.checksum.length).toBe(4);
+
+  // Non-shielded addresses reject parseShielded
+  const legacy = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', { network: testnetNetwork });
+  expect(() => legacy.parseShielded()).toThrow('Not a shielded address');
 });
 
 test('Non-shielded address getScanPubkey throws', () => {
