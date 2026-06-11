@@ -20,15 +20,22 @@ import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
 
 /**
- * Parse address and return the address type.
- * Returns 'p2pkh' or 'p2sh' for legacy addresses.
- * Throws for shielded addresses — callers expecting an output script type
- * should not receive shielded addresses directly.
+ * Parse address and return its OUTPUT SCRIPT type.
+ *
+ * This util answers "which script does an output to this address use" —
+ * every caller (send pipeline, token utils, storage fillTx, nano builder)
+ * feeds the result into output building. Shielded addresses have no output
+ * script form of their own (on-chain they use the spend-derived P2PKH), so
+ * this throws for them rather than letting a 71-byte address reach script
+ * builders.
+ *
+ * For the general address-family classifier — including 'shielded' — use
+ * `new Address(address, { network }).getType()` instead.
  *
  * @param {string} address
  * @param {Network} network
  *
- * @returns {'p2pkh' | 'p2sh'} output type of the address
+ * @returns {'p2pkh' | 'p2sh'} output script type of the address
  */
 export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' {
   const addressObj = new Address(address, { network });

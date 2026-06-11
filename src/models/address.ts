@@ -143,10 +143,22 @@ class Address {
     // pubkey extractors would silently clamp `subarray` reads on the short
     // buffer. Note this runs only when the network is known (not under
     // `skipNetwork`), since the byte→length mapping is network-defined.
-    const expectedLength =
-      firstByte === this.network.versionBytes.shielded
-        ? SHIELDED_ADDRESS_SIZE_BYTES
-        : LEGACY_ADDRESS_SIZE_BYTES;
+    //
+    // Each valid version byte maps explicitly to its family's decoded
+    // length. `firstByte` is guaranteed present by isVersionByteValid above,
+    // but a future address family added to the network without an entry
+    // here must fail loudly rather than silently default to a length.
+    const sizeByVersionByte: Record<number, number> = {
+      [this.network.versionBytes.p2pkh]: LEGACY_ADDRESS_SIZE_BYTES,
+      [this.network.versionBytes.p2sh]: LEGACY_ADDRESS_SIZE_BYTES,
+      [this.network.versionBytes.shielded]: SHIELDED_ADDRESS_SIZE_BYTES,
+    };
+    const expectedLength = sizeByVersionByte[firstByte];
+    if (expectedLength === undefined) {
+      throw new AddressError(
+        `${errorMessage} No decoded length registered for version byte ${firstByte}.`
+      );
+    }
     if (addressBytes.length !== expectedLength) {
       throw new AddressError(
         `${errorMessage} Version byte ${firstByte} requires ${expectedLength} bytes, got ${addressBytes.length}.`
