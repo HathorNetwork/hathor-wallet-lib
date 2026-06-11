@@ -391,6 +391,9 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
+    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
+    // converting base64 fields to hex.
+    transactionUtils.normalizeShieldedOutputs(tx);
     await this.store.saveTx(tx);
   }
 
@@ -760,7 +763,12 @@ export class Storage implements IStorage {
     if (!tx) {
       return;
     }
-    const output = tx.outputs[utxo.index];
+    // Resolve the actual output the UTXO record refers to via the sparse-
+    // decode-aware helper. A positional `tx.outputs[utxo.index]` would read
+    // a different decoded shielded entry when `utxo.index` (the on-chain
+    // absolute index) doesn't equal the entry's array position — the
+    // `.spent_by` check below would then consult the wrong entry's flag.
+    const output = transactionUtils.findSpentOutput(tx, utxo.index);
     if (!output) {
       return;
     }

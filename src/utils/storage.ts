@@ -780,6 +780,18 @@ export async function processNewTx(
   }
 
   for (const input of tx.inputs) {
+    // Inputs spending shielded outputs carry no transparent fields
+    // (value/token/decoded are hidden in commitments). Their balance
+    // handling lands with the receive pipeline in the next PR; here we
+    // only need the type-level guard so transparent processing narrows.
+    if (
+      input.value === undefined ||
+      input.token === undefined ||
+      input.token_data === undefined ||
+      input.decoded === undefined
+    ) {
+      continue;
+    }
     // We ignore data inputs since they do not have an address
     if (!input.decoded.address) continue;
 
@@ -787,7 +799,9 @@ export async function processNewTx(
     // This is not our address, ignore
     if (!addressInfo) continue;
 
-    const isAuthority: boolean = transactionUtils.isAuthorityOutput(input);
+    const isAuthority: boolean = transactionUtils.isAuthorityOutput({
+      token_data: input.token_data,
+    });
     let addressMeta = await store.getAddressMeta(input.decoded.address);
     let tokenMeta = await store.getTokenMeta(input.token);
 
@@ -813,11 +827,11 @@ export async function processNewTx(
     txAddresses.add(input.decoded.address);
 
     if (isAuthority) {
-      if (transactionUtils.isMint(input)) {
+      if (transactionUtils.isMint({ value: input.value, token_data: input.token_data })) {
         tokenMeta.balance.authorities.mint.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1n;
       }
-      if (transactionUtils.isMelt(input)) {
+      if (transactionUtils.isMelt({ value: input.value, token_data: input.token_data })) {
         tokenMeta.balance.authorities.melt.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1n;
       }
