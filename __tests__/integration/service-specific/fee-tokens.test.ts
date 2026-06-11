@@ -22,9 +22,12 @@ import { SendTxError } from '../../../src/errors';
 import transactionUtils from '../../../src/utils/transaction';
 import { TokenVersion } from '../../../src/types';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
-import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
-import { buildWalletInstance, pollForTx } from '../helpers/service-facade.helper';
+import {
+  buildWalletInstance,
+  pollForTx,
+  pollUntilCondition,
+} from '../helpers/service-facade.helper';
 import { expectFeeAmount } from '../utils/fee-headers.util';
 
 const adapter = new ServiceWalletTestAdapter();
@@ -57,10 +60,17 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
   });
 
   it('should fail to send fee tokens when wallet has no HTR to pay the fee', async () => {
+    // A wallet that only ever received fee tokens — never any HTR — has nothing
+    // to pay the per-output fee with, so the wallet-service builder rejects the
+    // send. We model that state natively with a second, never-funded wallet
+    // (`emptyFeeWallet`) instead of draining the creator wallet's HTR.
     await feeWallet.start({ pinCode, password });
-    await GenesisWalletServiceHelper.injectFunds(feeWalletAddresses[0], 1n, feeWallet);
+    // feeWallet only needs HTR to mint the fee token (1n) and pay the fee to
+    // forward tokens (1n); a comfortable margin keeps the test off the fee
+    // boundary, since feeWallet's HTR balance is not what we assert here.
+    const feeWalletFunds = 10n;
+    await GenesisWalletServiceHelper.injectFunds(feeWalletAddresses[0], feeWalletFunds, feeWallet);
 
-    // Create fee token first (1n fee).
     const tokenAmount = 1000n;
     const createTokenTx = await feeWallet.createNewToken('NoHtrFeeToken', 'NHFT', tokenAmount, {
       pinCode,
@@ -69,32 +79,54 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     await pollForTx(feeWallet, createTokenTx.hash!);
     const tokenUid = createTokenTx.hash!;
 
-    // Drain any remaining HTR by sending it to a known external address.
-    let htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    const remainingHtr = htrBalance[0]?.balance.unlocked ?? 0n;
-    if (remainingHtr > 0n) {
-      const drainTx = await feeWallet.sendTransaction(
-        WALLET_CONSTANTS.genesis.addresses[0],
-        remainingHtr,
-        { pinCode }
-      );
-      await pollForTx(feeWallet, drainTx.hash!);
-    }
+    // Wait for the HTR change from token creation (1n flat fee) to be re-indexed
+    // before we spend it again to forward tokens — the UTXO index lags tx
+    // visibility on the wallet-service, so pollForTx above is not enough.
+    await pollUntilCondition(
+      () =>
+        feeWallet
+          .getBalance(NATIVE_TOKEN_UID)
+          .then(([b]) => (b?.balance.unlocked ?? 0n) === feeWalletFunds - 1n),
+      'feeWallet HTR change indexed after fee-token creation'
+    );
 
-    htrBalance = await feeWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0]?.balance.unlocked ?? 0n).toBe(0n);
-
-    const tokenBalance = await feeWallet.getBalance(tokenUid);
-    expect(tokenBalance[0].balance.unlocked).toBe(tokenAmount);
-
-    // Sending fee tokens without HTR is rejected by the wallet-service builder.
-    // feeWalletAddresses[5] is an arbitrary empty address — any non-genesis target works.
-    await expect(
-      feeWallet.sendTransaction(feeWalletAddresses[5], 100n, {
+    // A fresh wallet that receives only the fee token, never any HTR.
+    const { wallet: emptyFeeWallet, addresses: emptyFeeWalletAddresses } = buildWalletInstance();
+    await emptyFeeWallet.start({ pinCode, password });
+    try {
+      // feeWallet pays the HTR fee to forward fee tokens into the empty wallet.
+      const forwardAmount = 100n;
+      const fundTx = await feeWallet.sendTransaction(emptyFeeWalletAddresses[0], forwardAmount, {
         token: tokenUid,
         pinCode,
-      })
-    ).rejects.toThrow(SendTxError);
+      });
+      await pollForTx(feeWallet, fundTx.hash!);
+
+      // Wait for the forwarded tokens to reach emptyFeeWallet's balance index
+      // (tx visibility leads the UTXO/balance index on the wallet-service, so
+      // pollForTx alone is not enough — we poll the derived balance directly).
+      // This proves the rejection below fails because of missing HTR, not
+      // because the forwarded tokens hadn't been indexed yet.
+      await pollUntilCondition(
+        () =>
+          emptyFeeWallet.getBalance(tokenUid).then(([b]) => b?.balance.unlocked === forwardAmount),
+        'emptyFeeWallet received fee tokens'
+      );
+
+      const emptyHtrBalance = await emptyFeeWallet.getBalance(NATIVE_TOKEN_UID);
+      expect(emptyHtrBalance[0]?.balance.unlocked ?? 0n).toBe(0n);
+
+      // Sending fee tokens without HTR is rejected by the wallet-service builder.
+      // feeWalletAddresses[5] is an arbitrary empty address — any external target works.
+      await expect(
+        emptyFeeWallet.sendTransaction(feeWalletAddresses[5], 50n, {
+          token: tokenUid,
+          pinCode,
+        })
+      ).rejects.toThrow(SendTxError);
+    } finally {
+      await emptyFeeWallet.stop({ cleanStorage: true });
+    }
   });
 
   it('should calculate correct HTR change when pre-selected inputs generate fee token change', async () => {
