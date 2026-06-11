@@ -248,6 +248,24 @@ export const MAX_OUTPUTS: number = 255;
 export const MAX_SHIELDED_OUTPUTS: number = 32;
 
 /**
+ * Maximum serialized size (bytes) of a shielded output's range proof.
+ * Mirrors hathor-core's MAX_RANGE_PROOF_SIZE.
+ */
+export const MAX_RANGE_PROOF_SIZE: number = 3328;
+
+/**
+ * Maximum serialized size (bytes) of a FullShielded output's surjection proof.
+ * Mirrors hathor-core's MAX_SURJECTION_PROOF_SIZE.
+ */
+export const MAX_SURJECTION_PROOF_SIZE: number = 4096;
+
+/**
+ * Maximum serialized size (bytes) of a shielded output's locking script.
+ * Mirrors hathor-core's MAX_SHIELDED_OUTPUT_SCRIPT_SIZE.
+ */
+export const MAX_SHIELDED_OUTPUT_SCRIPT_SIZE: number = 1024;
+
+/**
  * Maximum number of fee entries in a FeeHeader
  */
 export const MAX_FEE_HEADER_ENTRIES: number = 16;
@@ -263,9 +281,21 @@ export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
 export const SELECT_OUTPUTS_TIMEOUT: number = 1000 * 60;
 
 /**
- * Size in bytes of a transaction hash (32 bytes)
+ * Size in bytes of a transaction hash (32 bytes).
+ *
+ * Also the size of a token UID, because a token's UID is the hash of the
+ * transaction that created it.
  */
 export const TX_HASH_SIZE_BYTES: number = 32;
+
+/**
+ * Size in bytes of a compressed SEC1-encoded EC public key (33 bytes:
+ * 1 prefix byte indicating Y parity + 32 X-coordinate bytes).
+ *
+ * Used for shielded scan/spend pubkeys and any other compressed
+ * secp256k1 public key the wallet validates at a trust boundary.
+ */
+export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
 
 /**
  * Maximum number of retries allowed when an error different
