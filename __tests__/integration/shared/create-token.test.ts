@@ -321,7 +321,7 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
         filter_address: addr,
       });
       expect(utxos).toContainEqual(
-        expect.objectContaining({ address: addr, amount: expectedHtrAfter })
+        expect.objectContaining({ address: addr, value: expectedHtrAfter })
       );
     } finally {
       await adapter.stopWallet(wallet);
