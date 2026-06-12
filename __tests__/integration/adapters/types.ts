@@ -336,13 +336,15 @@ export interface TokenDetailsResult {
 
 /**
  * Options for querying UTXOs via the adapter.
+ *
+ * Only the filters exercised by the shared suite are exposed. Amount/count
+ * filters (`max_utxos`, `amount_smaller_than`, `amount_bigger_than`) are tested
+ * per-facade against the concrete APIs, so they are intentionally absent here to
+ * keep both adapters' contracts symmetric and honest.
  */
 export interface GetUtxosAdapterOptions {
   token?: string;
   address?: string;
-  max_utxos?: number;
-  amount_smaller_than?: bigint;
-  amount_bigger_than?: bigint;
 }
 
 /**

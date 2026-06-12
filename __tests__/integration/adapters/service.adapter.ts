@@ -322,13 +322,6 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     const result = await this.concrete(wallet).getUtxos({
       token: tokenId,
       filter_address: options?.address,
-      max_utxos: options?.max_utxos,
-      amount_smaller_than: options?.amount_smaller_than
-        ? Number(options.amount_smaller_than)
-        : undefined,
-      amount_bigger_than: options?.amount_bigger_than
-        ? Number(options.amount_bigger_than)
-        : undefined,
     });
 
     const utxos: AdapterUtxo[] = result.utxos.map(u => ({
