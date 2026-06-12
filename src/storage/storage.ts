@@ -904,6 +904,22 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Decrypt and return the raw private key of a single-key wallet.
+   *
+   * @param {string} pinCode Pin to unlock the private key
+   * @returns {Promise<string>} The raw private key as a hex string.
+   */
+  async getSingleKeyPrivateKey(pinCode: string): Promise<string> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.singleKeyMode || !accessData.singleKeyPrivateKey) {
+      throw new Error('Single-key private key is not present on this wallet.');
+    }
+
+    // decryptData handles pin validation
+    return decryptData(accessData.singleKeyPrivateKey, pinCode);
+  }
+
+  /**
    * Decrypt and return the auth private key of the wallet.
    *
    * @param {string} pinCode Pin to unlock the private key

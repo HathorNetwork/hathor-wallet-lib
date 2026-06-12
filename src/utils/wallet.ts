@@ -703,6 +703,31 @@ const wallet = {
   },
 
   /**
+   * Generate access data for a single-key wallet (Web3Auth PoC).
+   *
+   * A single-key wallet is backed by a raw secp256k1 private key (no BIP32)
+   * and has exactly one address. No xpub, no seed, no account/auth path keys.
+   *
+   * @param privateKeyHex Raw private key as a hex string (without '0x' prefix)
+   * @param publicKeyHex DER-encoded public key as a hex string
+   * @param options.pin PIN used to encrypt the private key at rest
+   */
+  generateAccessDataFromPrivateKey(
+    privateKeyHex: string,
+    publicKeyHex: string,
+    { pin }: { pin: string }
+  ): IWalletAccessData {
+    const encryptedPrivateKey = encryptData(privateKeyHex, pin);
+    return {
+      walletType: WalletType.P2PKH,
+      walletFlags: 0,
+      singleKeyMode: true,
+      singleKeyPublicKey: publicKeyHex,
+      singleKeyPrivateKey: encryptedPrivateKey,
+    };
+  },
+
+  /**
    * Change the encryption pin on the fields that are encrypted using the pin.
    * Will not save the access data, only return the new access data.
    *
