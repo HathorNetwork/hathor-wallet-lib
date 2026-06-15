@@ -59,7 +59,7 @@ describe('[Service] addresses methods', () => {
     for (let i = 0; i < knownAddresses.length; i++) {
       const path = await wallet.getAddressPathForIndex(i);
       expect(path.endsWith(`/${i}`)).toBe(true);
-      expect(path).toMatch(/m\/44'\/280'\/0'\/0\/[0-9]+/);
+      expect(path).toMatch(/^m\/44'\/280'\/0'\/0\/[0-9]+$/);
     }
   });
 
