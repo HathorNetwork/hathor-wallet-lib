@@ -80,12 +80,13 @@ describe('[Fullnode] getAvailableUtxos', () => {
     });
     expect(await generator.next()).toStrictEqual({ value: undefined, done: true });
 
-    // authorities=3n includes mint and melt authority outputs for the token.
-    // The fullnode storage layer accepts the option even though it is not on the
-    // GetAvailableUtxosOptions surface — pass through `as unknown` to bypass.
+    // TOKEN_MINT_MASK | TOKEN_MELT_MASK selects both the mint and melt authority
+    // outputs for the token. The fullnode storage layer accepts the option even
+    // though it is not on the GetAvailableUtxosOptions surface — pass through
+    // `as unknown` to bypass.
     generator = hWallet.getAvailableUtxos({
       token: tokenUid,
-      authorities: 3n,
+      authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
     } as unknown as Parameters<typeof hWallet.getAvailableUtxos>[0]);
     const authorityUtxos: unknown[] = [];
     for await (const utxo of generator) {

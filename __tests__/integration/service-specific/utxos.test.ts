@@ -32,7 +32,7 @@ describe('[Service] getUtxos', () => {
 
   beforeAll(async () => {
     const created = await adapter.createWallet();
-    wallet = created.wallet as unknown as HathorWalletServiceWallet;
+    wallet = created.wallet;
 
     const addr0 = (await wallet.getAddressAtIndex(0))!;
     const addr1 = (await wallet.getAddressAtIndex(1))!;
@@ -87,5 +87,12 @@ describe('[Service] getUtxos', () => {
     const big = await wallet.getUtxos({ amount_bigger_than: 40 });
     expect(big.total_utxos_available).toBe(1n);
     expect(big.utxos[0].amount).toBe(50n);
+  });
+
+  it('should filter UTXOs by amount_bigger_than and amount_smaller_than combined', async () => {
+    // Bounds 25 < value < 40 exclude the 18n and 50n UTXOs, leaving only addr2's 30n.
+    const mid = await wallet.getUtxos({ amount_bigger_than: 25, amount_smaller_than: 40 });
+    expect(mid.total_utxos_available).toBe(1n);
+    expect(mid.utxos[0].amount).toBe(30n);
   });
 });

@@ -56,6 +56,13 @@ const SERVICE_PASSWORD = 'testpass';
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true };
 
 /**
+ * Like {@link CreateWalletResult}, but with `wallet` narrowed to the concrete
+ * {@link HathorWalletServiceWallet}. This adapter only ever builds service
+ * wallets, so service-specific tests can read `created.wallet` with no cast.
+ */
+type ServiceCreateWalletResult = CreateWalletResult & { wallet: HathorWalletServiceWallet };
+
+/**
  * Adapter for the wallet-service facade ({@link HathorWalletServiceWallet}).
  *
  * Key behavioral differences from the fullnode adapter:
@@ -124,7 +131,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     await GenesisWalletServiceHelper.stop();
   }
 
-  async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+  async createWallet(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // The wallet-service backend must know about the wallet before startReadOnly() can
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
@@ -147,7 +154,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
+  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
     const result = buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
@@ -162,7 +169,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
 
     return {
-      wallet: result.wallet as FuzzyWalletType,
+      wallet: result.wallet,
       storage: result.storage,
       words: result.words,
       addresses: result.addresses,
