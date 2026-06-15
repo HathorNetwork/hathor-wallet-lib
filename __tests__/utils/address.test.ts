@@ -228,3 +228,54 @@ test('deriveShieldedAddressFromStorage returns null when shielded keys unavailab
   const result = await deriveShieldedAddressFromStorage(0, storage);
   expect(result).toBeNull();
 });
+
+test('deriveShieldedAddressFromStorage returns paired shielded + spend records', async () => {
+  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+  const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
+  const { encryptData } = await import('../../src/utils/crypto');
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+  const networkName = storage.config.getNetwork().name;
+
+  // Independent scan and spend public chains (the wallet derives both from
+  // hardened accounts; for this test any two xpubs exercise the same path).
+  const xpriv = new HDPrivateKey();
+  const scanXpubkey = new HDPrivateKey().xpubkey;
+  const spendXpubkey = new HDPrivateKey().xpubkey;
+  await store.saveAccessData({
+    xpubkey: xpriv.xpubkey,
+    mainKey: encryptData(xpriv.xprivkey, '123'),
+    walletType: 'p2pkh' as const,
+    walletFlags: 0,
+    scanXpubkey,
+    spendXpubkey,
+  });
+
+  const index = 5;
+  const result = await deriveShieldedAddressFromStorage(index, storage);
+  expect(result).not.toBeNull();
+
+  // Independent oracle: the same inputs through the pure derivation helper.
+  const expected = deriveShieldedAddress(scanXpubkey, spendXpubkey, index, networkName);
+
+  // User-facing shielded receive record (71-byte encoded form).
+  expect(result!.shieldedAddress).toEqual({
+    base58: expected.base58,
+    bip32AddressIndex: index,
+    publicKey: expected.scanPubkey,
+    addressType: 'shielded',
+  });
+
+  // Internal on-chain spend-derived P2PKH record (HASH160(spend_pubkey)).
+  expect(result!.spendAddress).toEqual({
+    base58: expected.spendAddress,
+    bip32AddressIndex: index,
+    publicKey: expected.spendPubkey,
+    addressType: 'shielded-spend',
+  });
+
+  // Both records share the BIP32 index; the spend address is the on-chain
+  // P2PKH while the shielded address is the user-facing encoded form.
+  expect(result!.shieldedAddress.base58).not.toEqual(result!.spendAddress.base58);
+});

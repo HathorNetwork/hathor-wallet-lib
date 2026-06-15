@@ -714,6 +714,33 @@ describe('getChangeAddress', () => {
     await getChangeAddressTest(store);
   });
 
+  it('converts a wallet-owned shielded change address to its spend-derived P2PKH', async () => {
+    const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork('testnet');
+    const networkName = storage.config.getNetwork().name;
+
+    // A real 71-byte shielded address (encode validates on-curve pubkeys).
+    const scanXpubkey = new HDPrivateKey().xpubkey;
+    const spendXpubkey = new HDPrivateKey().xpubkey;
+    const info = deriveShieldedAddress(scanXpubkey, spendXpubkey, 0, networkName);
+
+    // Wallet owns the shielded address (saved during shielded derivation).
+    await store.saveAddress({
+      base58: info.base58,
+      bip32AddressIndex: 0,
+      addressType: 'shielded',
+    });
+
+    // A shielded address has no transparent output script form, so the change
+    // address must resolve to its on-chain spend-derived P2PKH (same pubkey
+    // hash) rather than be returned as-is or rejected.
+    await expect(storage.getChangeAddress({ changeAddress: info.base58 })).resolves.toEqual(
+      info.spendAddress
+    );
+  });
+
   async function getChangeAddressTest(store) {
     const storage = new Storage(store);
     const addr0 = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';

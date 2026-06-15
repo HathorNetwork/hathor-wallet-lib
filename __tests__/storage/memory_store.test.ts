@@ -114,6 +114,20 @@ test('addressIter chain-selection (legacy vs shielded)', async () => {
   expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
 });
 
+test('addressIter shielded chain yields BIP32-index order even when saved out of order', async () => {
+  const store = new MemoryStore();
+  // Save shielded receive addresses with indices out of order to prove the
+  // iterator sorts by BIP32 index rather than relying on insertion order.
+  await store.saveAddress({ base58: 'shi-3', bip32AddressIndex: 3, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-2', bip32AddressIndex: 2, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
+
+  const bases: string[] = [];
+  for await (const info of store.addressIter({ legacy: false })) bases.push(info.base58);
+  expect(bases).toEqual(['shi-0', 'shi-1', 'shi-2', 'shi-3']);
+});
+
 test('history methods', async () => {
   const store = new MemoryStore();
   await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
@@ -360,7 +374,10 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx01');
-  expect(buf[0].shielded).toBeUndefined();
+  // Assert the transparent classification (filter treats both `undefined` and
+  // `false` as transparent), not the exact stored representation — a store
+  // that normalized transparent UTXOs to `shielded: false` is still correct.
+  expect(buf[0].shielded).not.toBe(true);
 });
 
 test('access data methods', async () => {

@@ -241,19 +241,26 @@ export class MemoryStore implements IStore {
    */
   async *addressIter(opts: IAddressChainOptions = {}): AsyncGenerator<IAddressInfo, void, void> {
     const legacy = opts.legacy ?? true;
+    if (!legacy) {
+      // Shielded chain: walk shieldedAddressIndexes in ascending BIP32-index
+      // order. Sorting the keys keeps the documented order even if shielded
+      // addresses were saved or restored out of order (the index map, like
+      // any Map, otherwise reflects insertion order). The map holds only the
+      // user-facing 'shielded' receive entries — legacy addresses and the
+      // internal shielded-spend P2PKHs are excluded by saveAddress routing.
+      const indexes = [...this.shieldedAddressIndexes.keys()].sort((a, b) => a - b);
+      for (const index of indexes) {
+        const base58 = this.shieldedAddressIndexes.get(index)!;
+        yield this.addresses.get(base58)!;
+      }
+      return;
+    }
     for (const addrInfo of this.addresses.values()) {
-      if (legacy) {
-        // Legacy chain: skip shielded receive AND shielded-spend (the
-        // latter is the internal P2PKH the receive pipeline uses to
-        // match incoming shielded outputs — surfacing it under the
-        // legacy chain would leak an internal address).
-        if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
-          continue;
-        }
-      } else if (addrInfo.addressType !== 'shielded') {
-        // Shielded chain: only the user-facing shielded receive entry
-        // (71-byte encoded form). Legacy entries and the internal
-        // shielded-spend P2PKHs are skipped.
+      // Legacy chain: skip shielded receive AND shielded-spend (the latter is
+      // the internal P2PKH the receive pipeline uses to match incoming
+      // shielded outputs — surfacing it under the legacy chain would leak an
+      // internal address).
+      if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
         continue;
       }
       yield addrInfo;
