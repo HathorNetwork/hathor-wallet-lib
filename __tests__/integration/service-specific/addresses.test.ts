@@ -19,10 +19,28 @@
 import type { HathorWalletServiceWallet } from '../../../src';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { WalletRequestError } from '../../../src/errors';
-import { GAP_LIMIT } from '../../../src/constants';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
 const adapter = new ServiceWalletTestAdapter();
+
+/**
+ * Gap limit of the Wallet Service in the integration test environment.
+ *
+ * This intentionally does NOT use the lib's GAP_LIMIT constant (20). The
+ * integration private-net Wallet Service is configured with a smaller gap limit
+ * to make boundary testing cheaper — see the `MAX_ADDRESS_GAP: 10` env var on
+ * the wallet-service containers in
+ * `__tests__/integration/configuration/docker-compose.yml` (commented there as
+ * "Different from default 20 to facilitate tests").
+ *
+ * Because of this, a fresh wallet-service wallet only knows the addresses at
+ * indices [0, SERVICE_GAP_LIMIT - 1]; asking the backend for any index at or
+ * beyond SERVICE_GAP_LIMIT is rejected as "not mine". These tests therefore
+ * bound their assertions to SERVICE_GAP_LIMIT, NOT to the full precalculated
+ * address list. If the docker-compose value ever changes, update this constant
+ * to match (a mismatch will fail loudly here, not silently pass).
+ */
+const SERVICE_GAP_LIMIT = 10;
 
 beforeAll(async () => {
   await adapter.suiteSetup();
@@ -34,6 +52,9 @@ afterAll(async () => {
 
 describe('[Service] addresses methods', () => {
   let wallet: HathorWalletServiceWallet;
+  /** Full precalculated address list (more entries than the service gap limit). */
+  let allPrecalculated: string[];
+  /** Addresses the wallet-service wallet actually knows: the first SERVICE_GAP_LIMIT. */
   let knownAddresses: string[];
   const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
 
@@ -43,15 +64,13 @@ describe('[Service] addresses methods', () => {
     if (!created.addresses) {
       throw new Error('Precalculated wallet has no addresses');
     }
-    // The wallet-service facade resolves addresses through its backend, which
-    // only loads a bounded window of GAP_LIMIT addresses for a fresh wallet.
-    // The precalculated wallet exposes a few more than that (currently 22), so
-    // we restrict the "known" set to the first GAP_LIMIT addresses — the ones
-    // the wallet actually knows locally. We deliberately use the lib's GAP_LIMIT
-    // constant (not created.addresses.length): the Wallet Service is assumed to
-    // use the same gap limit, and if it ever diverges the assertions below fail
-    // loudly instead of silently testing the wrong range.
-    knownAddresses = created.addresses.slice(0, GAP_LIMIT);
+    // The precalculated wallet exposes more addresses (currently 22) than the
+    // wallet-service backend loads for a fresh wallet. Keep the full list for
+    // the boundary tests (which need indices just past the limit), and restrict
+    // the "known" set to the first SERVICE_GAP_LIMIT addresses — the only ones
+    // the backend recognizes (see SERVICE_GAP_LIMIT docstring).
+    allPrecalculated = created.addresses;
+    knownAddresses = created.addresses.slice(0, SERVICE_GAP_LIMIT);
   });
 
   afterEach(async () => {
@@ -133,19 +152,19 @@ describe('[Service] addresses methods', () => {
   });
 
   it('getNextAddress signals GAP_LIMIT_REACHED at the boundary', () => {
-    // knownAddresses holds exactly GAP_LIMIT addresses (see beforeEach). Advance
-    // the pointer to one short of the last, then the final call must land on the
-    // last known address (index GAP_LIMIT - 1) and report GAP_LIMIT_REACHED.
-    // This is the explicit gap-limit contract check: if the Wallet Service used
-    // a different gap limit than the lib's GAP_LIMIT, last.index would not equal
-    // GAP_LIMIT - 1 and this fails loudly.
-    for (let i = 0; i < GAP_LIMIT - 1; i++) {
+    // The wallet knows exactly SERVICE_GAP_LIMIT addresses (see beforeEach).
+    // Advance the pointer to one short of the last, then the final call must
+    // land on the last known address (index SERVICE_GAP_LIMIT - 1) and report
+    // GAP_LIMIT_REACHED. If the Wallet Service's MAX_ADDRESS_GAP ever stops
+    // matching SERVICE_GAP_LIMIT, last.index won't equal SERVICE_GAP_LIMIT - 1
+    // and this fails loudly.
+    for (let i = 0; i < SERVICE_GAP_LIMIT - 1; i++) {
       wallet.getNextAddress();
     }
 
     const last = wallet.getNextAddress();
-    expect(last.index).toBe(GAP_LIMIT - 1);
-    expect(last.address).toBe(knownAddresses[GAP_LIMIT - 1]);
+    expect(last.index).toBe(SERVICE_GAP_LIMIT - 1);
+    expect(last.address).toBe(knownAddresses[SERVICE_GAP_LIMIT - 1]);
     expect(last.info).toBe('GAP_LIMIT_REACHED');
   });
 
@@ -165,5 +184,43 @@ describe('[Service] addresses methods', () => {
 
   it('getAddressDetails throws for an unknown address', async () => {
     await expect(wallet.getAddressDetails(unknownAddress)).rejects.toThrow(WalletRequestError);
+  });
+
+  /**
+   * Gap-limit boundary checks for the wallet-service facade.
+   *
+   * A fresh wallet-service wallet knows exactly the addresses at indices
+   * [0, SERVICE_GAP_LIMIT - 1]. These tests probe the three indices around that
+   * edge using the FULL precalculated list (allPrecalculated), since the
+   * addresses at and beyond the limit are deliberately outside knownAddresses:
+   *
+   *   - SERVICE_GAP_LIMIT - 1 : last index inside the window  -> recognized
+   *   - SERVICE_GAP_LIMIT     : the precise cutoff (first one excluded) -> not mine
+   *   - SERVICE_GAP_LIMIT + 1 : clearly past the window       -> "not my address"
+   */
+  describe('gap-limit boundary', () => {
+    it('recognizes the address one short of the gap limit', async () => {
+      // Index SERVICE_GAP_LIMIT - 1 is the last address inside the window.
+      const insideAddress = allPrecalculated[SERVICE_GAP_LIMIT - 1];
+      expect(await wallet.isAddressMine(insideAddress)).toBe(true);
+    });
+
+    it('does not recognize the address exactly at the gap limit', async () => {
+      // Index SERVICE_GAP_LIMIT is the first address the backend does not load,
+      // so it is already "not mine" — this pins down the precise cutoff.
+      const atLimitAddress = allPrecalculated[SERVICE_GAP_LIMIT];
+      expect(await wallet.isAddressMine(atLimitAddress)).toBe(false);
+    });
+
+    it('rejects the address one past the gap limit as not belonging to the wallet', async () => {
+      // Index SERVICE_GAP_LIMIT + 1 is clearly outside the window: isAddressMine
+      // is false and key derivation reports the "not my address" validation
+      // response.
+      const outsideAddress = allPrecalculated[SERVICE_GAP_LIMIT + 1];
+      expect(await wallet.isAddressMine(outsideAddress)).toBe(false);
+      await expect(
+        wallet.getPrivateKeyFromAddress(outsideAddress, { pinCode: adapter.defaultPinCode })
+      ).rejects.toThrow(/does not belong to this wallet/);
+    });
   });
 });

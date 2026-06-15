@@ -28,6 +28,22 @@ const adapters: IWalletTestAdapter[] = [
 
 const ADDRESS_PATH_REGEX = /^m\/44'\/280'\/0'\/0\/\d+$/;
 
+/**
+ * How many addresses the shared, index-by-index comparisons verify.
+ *
+ * The shared suite only needs to prove that address derivation works and is
+ * consistent across BOTH facades — it deliberately does NOT exercise gap-limit
+ * boundaries, which are facade-specific (the wallet-service backend loads a
+ * smaller window than the fullnode facade derives on demand; see
+ * service-specific/addresses.test.ts and fullnode-specific/addresses.test.ts).
+ *
+ * A small sample comfortably below every facade's gap limit (fullnode 20,
+ * wallet service 10) keeps these assertions cheap and free of any coupling to a
+ * particular facade's address window. Five addresses is plenty to prove the
+ * derivation is correct and deterministic.
+ */
+const SHARED_ADDRESS_SAMPLE = 5;
+
 describe.each(adapters)('[Shared] addresses — $name', adapter => {
   beforeAll(async () => {
     await adapter.suiteSetup();
@@ -57,8 +73,10 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
         expect(entry.index).toBe(position);
       });
 
-      // The address at each index should match getAddressAtIndex
-      for (let i = 0; i < addresses.length; i++) {
+      // The address at each index should match getAddressAtIndex. Only the
+      // first SHARED_ADDRESS_SAMPLE are checked — enough to prove consistency
+      // without depending on any facade's gap-limit window.
+      for (let i = 0; i < SHARED_ADDRESS_SAMPLE; i++) {
         const direct = await adapter.getAddressAtIndex(wallet, i);
         expect(direct).toBe(addresses[i].address);
       }
@@ -148,15 +166,13 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
       expect(addresses).toBeDefined();
       const expected = addresses!;
 
-      // Compare only the indices the wallet knows locally. The wallet-service
-      // facade loads a bounded window of addresses (its gap limit) and throws
-      // for indices beyond it, while the precalculated set has a few extra
-      // entries. getAllAddresses() returns exactly the locally-known addresses
-      // for whichever facade is under test, so its length is the right bound
-      // here. The fullnode facade's unbounded on-demand derivation is covered in
-      // fullnode-specific/addresses.test.ts.
-      const localAddresses = await adapter.getAllAddresses(wallet);
-      for (let i = 0; i < localAddresses.length; i++) {
+      // Only compare the first SHARED_ADDRESS_SAMPLE addresses. That is enough
+      // to prove getAddressAtIndex returns the correctly-derived address, and it
+      // keeps the shared assertions independent of any facade's gap-limit window
+      // (the wallet-service facade only knows a bounded set; see
+      // SHARED_ADDRESS_SAMPLE). Facade-specific limits are tested in
+      // service-specific/ and fullnode-specific/ addresses.test.ts.
+      for (let i = 0; i < SHARED_ADDRESS_SAMPLE; i++) {
         const address = await adapter.getAddressAtIndex(wallet, i);
         expect(address).toBe(expected[i]);
       }
