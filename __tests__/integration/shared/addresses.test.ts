@@ -148,7 +148,15 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
       expect(addresses).toBeDefined();
       const expected = addresses!;
 
-      for (let i = 0; i < expected.length; i++) {
+      // Compare only the indices the wallet knows locally. The wallet-service
+      // facade loads a bounded window of addresses (its gap limit) and throws
+      // for indices beyond it, while the precalculated set has a few extra
+      // entries. getAllAddresses() returns exactly the locally-known addresses
+      // for whichever facade is under test, so its length is the right bound
+      // here. The fullnode facade's unbounded on-demand derivation is covered in
+      // fullnode-specific/addresses.test.ts.
+      const localAddresses = await adapter.getAllAddresses(wallet);
+      for (let i = 0; i < localAddresses.length; i++) {
         const address = await adapter.getAddressAtIndex(wallet, i);
         expect(address).toBe(expected[i]);
       }

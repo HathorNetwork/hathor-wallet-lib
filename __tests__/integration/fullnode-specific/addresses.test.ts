@@ -24,6 +24,7 @@ import {
 } from '../helpers/wallet.helper';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { verifyMessage } from '../../../src/utils/crypto';
+import { GAP_LIMIT } from '../../../src/constants';
 
 describe('[Fullnode] addresses methods', () => {
   afterEach(async () => {
@@ -71,18 +72,26 @@ describe('[Fullnode] addresses methods', () => {
   it('should get correct addresses for a multisig wallet', async () => {
     const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
 
-    for (let i = 0; i < 21; ++i) {
-      expect(await mshWallet.getAddressAtIndex(i)).toStrictEqual(
-        WALLET_CONSTANTS.multisig.addresses[i]
-      );
+    // The fullnode facade derives every index locally (no gap-limit window), so
+    // we verify the whole precalculated multisig set. The bound is the length of
+    // that precalculated list, not a magic number.
+    const expected = WALLET_CONSTANTS.multisig.addresses;
+    for (let i = 0; i < expected.length; i++) {
+      expect(await mshWallet.getAddressAtIndex(i)).toStrictEqual(expected[i]);
     }
   });
 
   it('should derive an address if it has not been generated yet', async () => {
+    // The fullnode facade derives addresses on demand and is NOT bounded by
+    // GAP_LIMIT (unlike the wallet-service facade, which only loads a GAP_LIMIT
+    // window from its backend). Use an index comfortably past GAP_LIMIT to prove
+    // derivation is uncapped — a fresh wallet has only ~GAP_LIMIT addresses
+    // loaded, yet this index still resolves.
+    const farIndex = GAP_LIMIT + 30; // 50 with the current GAP_LIMIT of 20
     const hWallet = await generateWalletHelper();
-    await expect(hWallet.getAddressAtIndex(50)).resolves.toBeDefined();
+    await expect(hWallet.getAddressAtIndex(farIndex)).resolves.toBeDefined();
 
     const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
-    await expect(mshWallet.getAddressAtIndex(50)).resolves.toBeDefined();
+    await expect(mshWallet.getAddressAtIndex(farIndex)).resolves.toBeDefined();
   });
 });

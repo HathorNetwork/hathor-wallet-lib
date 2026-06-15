@@ -19,6 +19,7 @@
 import type { HathorWalletServiceWallet } from '../../../src';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { WalletRequestError } from '../../../src/errors';
+import { GAP_LIMIT } from '../../../src/constants';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 
 const adapter = new ServiceWalletTestAdapter();
@@ -42,7 +43,15 @@ describe('[Service] addresses methods', () => {
     if (!created.addresses) {
       throw new Error('Precalculated wallet has no addresses');
     }
-    knownAddresses = created.addresses;
+    // The wallet-service facade resolves addresses through its backend, which
+    // only loads a bounded window of GAP_LIMIT addresses for a fresh wallet.
+    // The precalculated wallet exposes a few more than that (currently 22), so
+    // we restrict the "known" set to the first GAP_LIMIT addresses — the ones
+    // the wallet actually knows locally. We deliberately use the lib's GAP_LIMIT
+    // constant (not created.addresses.length): the Wallet Service is assumed to
+    // use the same gap limit, and if it ever diverges the assertions below fail
+    // loudly instead of silently testing the wrong range.
+    knownAddresses = created.addresses.slice(0, GAP_LIMIT);
   });
 
   afterEach(async () => {
@@ -124,14 +133,19 @@ describe('[Service] addresses methods', () => {
   });
 
   it('getNextAddress signals GAP_LIMIT_REACHED at the boundary', () => {
-    // Advance the pointer until we are one short of the last known address
-    for (let i = 0; i < knownAddresses.length - 1; i++) {
+    // knownAddresses holds exactly GAP_LIMIT addresses (see beforeEach). Advance
+    // the pointer to one short of the last, then the final call must land on the
+    // last known address (index GAP_LIMIT - 1) and report GAP_LIMIT_REACHED.
+    // This is the explicit gap-limit contract check: if the Wallet Service used
+    // a different gap limit than the lib's GAP_LIMIT, last.index would not equal
+    // GAP_LIMIT - 1 and this fails loudly.
+    for (let i = 0; i < GAP_LIMIT - 1; i++) {
       wallet.getNextAddress();
     }
 
     const last = wallet.getNextAddress();
-    expect(last.index).toBe(knownAddresses.length - 1);
-    expect(last.address).toBe(knownAddresses[knownAddresses.length - 1]);
+    expect(last.index).toBe(GAP_LIMIT - 1);
+    expect(last.address).toBe(knownAddresses[GAP_LIMIT - 1]);
     expect(last.info).toBe('GAP_LIMIT_REACHED');
   });
 
