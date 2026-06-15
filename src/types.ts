@@ -10,7 +10,7 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
-import type { IShieldedCryptoProvider, ShieldedOutputMode } from './shielded/types';
+import type { IShieldedCryptoProvider, IShieldedOutput } from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -260,24 +260,14 @@ export interface IHistoryTx {
   headers?: { id?: number; entries?: { tokenIndex?: number; amount?: bigint }[] }[];
 }
 
-// Equivalent to IShieldedOutput in shielded/types.ts but uses IHistoryOutputDecoded
-// (which includes the extra `data?` field). Keep both in sync when modifying.
-export interface IHistoryShieldedOutput {
-  // Optional because hathor-core nodes pre-`_shielded_output_to_json`
-  // mode-field addition still send shielded outputs without `mode`.
-  // Readers fall back to inferring FullShielded vs AmountShielded from
-  // the presence of `asset_commitment`.
-  mode?: ShieldedOutputMode;
-  commitment: string; // hex
-  range_proof: string; // hex
-  script: string; // hex
-  // Optional + defaults to 0 in the parser. FullShielded outputs may
-  // omit `token_data` (the token UID is hidden behind asset_commitment).
-  token_data?: number;
-  ephemeral_pubkey: string; // hex
+// The history/storage shape of a shielded output: structurally the wire
+// `IShieldedOutput` (shielded/types.ts) plus spend tracking. It overrides
+// `decoded` with the richer `IHistoryOutputDecoded` (which adds the `data?`
+// field) and adds `spent_by`. Extending keeps the crypto wire fields
+// (mode/commitment/range_proof/…) single-source, so the two shapes cannot
+// drift out of sync.
+export interface IHistoryShieldedOutput extends Omit<IShieldedOutput, 'decoded'> {
   decoded: IHistoryOutputDecoded;
-  asset_commitment?: string; // hex (FullShielded only)
-  surjection_proof?: string; // hex (FullShielded only)
   // Set by the fullnode when the shielded output is spent by another tx.
   // Null when the slot is still unspent. Mirrors the transparent
   // `IHistoryOutput.spent_by` semantics — see hathor-core's
