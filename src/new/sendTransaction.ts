@@ -11,7 +11,7 @@ import txApi from '../api/txApi';
 import { NATIVE_TOKEN_UID, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
-import Address from '../models/address';
+import { getAddressType } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { Fee } from '../utils/fee';
 import Transaction from '../models/transaction';
@@ -188,7 +188,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           token: output.token,
         });
       } else {
-        const addressObj = new Address(output.address, { network });
         // We set chooseInputs true as default and may be overwritten by the inputs.
         // chooseInputs should be true if no inputs are given
         tokenMap.set(output.token, true);
@@ -199,7 +198,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           timelock: output.timelock ? output.timelock : null,
           authorities: 0n,
           token: output.token,
-          type: addressObj.getType(),
+          type: getAddressType(output.address, network),
         });
       }
     }
@@ -378,7 +377,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
 
       await transactionUtils.signTransaction(this.transaction, this.storage, pinToUse);
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       this._currentStep = 'signed';
       return this.transaction;
     } catch (e) {
@@ -435,7 +434,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         this.fullTxData,
         this.storage.config.getNetwork()
       );
-      this.transaction.prepareToSend();
+      this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
       return this.transaction;
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);

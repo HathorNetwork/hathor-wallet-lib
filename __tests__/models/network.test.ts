@@ -12,12 +12,14 @@ test('Get and set network', () => {
     mainnet: {
       p2pkh: 0x28,
       p2sh: 0x64,
+      shielded: 0x3c,
       xpriv: 0x03523b05,
       xpub: 0x0488b21e,
     },
     testnet: {
       p2pkh: 0x49,
       p2sh: 0x87,
+      shielded: 0x5d,
       xpriv: 0x0434c8c4,
       xpub: 0x0488b21e,
     },
@@ -47,10 +49,12 @@ test('network.isVersionByteValid', () => {
     mainnet: {
       p2pkh: 0x28,
       p2sh: 0x64,
+      shielded: 0x3c,
     },
     testnet: {
       p2pkh: 0x49,
       p2sh: 0x87,
+      shielded: 0x5d,
     },
   };
 
@@ -58,6 +62,7 @@ test('network.isVersionByteValid', () => {
   // Valid version bytes for testnet
   expect(testnet.isVersionByteValid(versionBytes.testnet.p2pkh)).toBe(true);
   expect(testnet.isVersionByteValid(versionBytes.testnet.p2sh)).toBe(true);
+  expect(testnet.isVersionByteValid(versionBytes.testnet.shielded)).toBe(true);
   // Invalid version bytes
   expect(testnet.isVersionByteValid(1)).toBe(false);
   expect(testnet.isVersionByteValid(105)).toBe(false);
@@ -67,6 +72,7 @@ test('network.isVersionByteValid', () => {
   // Valid version bytes for mainnet
   expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2pkh)).toBe(true);
   expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2sh)).toBe(true);
+  expect(mainnet.isVersionByteValid(versionBytes.mainnet.shielded)).toBe(true);
   // Invalid version bytes
   expect(mainnet.isVersionByteValid(1)).toBe(false);
   expect(mainnet.isVersionByteValid(105)).toBe(false);

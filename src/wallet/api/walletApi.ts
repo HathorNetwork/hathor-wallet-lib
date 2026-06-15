@@ -68,7 +68,9 @@ const walletApi = {
     if (response.status === 200 && data.success) {
       return parseSchema(data, walletStatusResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet status.');
+    throw new WalletRequestError('Error getting wallet status.', {
+      cause: { status: response.status, data: response.data },
+    });
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
@@ -293,7 +295,9 @@ const walletApi = {
       return parseSchema(response.data, authTokenResponseSchema);
     }
 
-    throw new WalletRequestError('Error requesting auth token.');
+    throw new WalletRequestError('Error requesting auth token.', {
+      cause: { status: response.status, data: response.data },
+    });
   },
 
   async createReadOnlyAuthToken(
@@ -309,7 +313,9 @@ const walletApi = {
       return parseSchema(response.data, authTokenResponseSchema);
     }
 
-    throw new WalletRequestError('Error requesting read-only auth token.');
+    throw new WalletRequestError('Error requesting read-only auth token.', {
+      cause: { status: response.status, data: response.data },
+    });
   },
 
   async getTxById(
@@ -324,7 +330,7 @@ const walletApi = {
       if (!response.data.success) {
         walletApi._txNotFoundGuard(response.data);
         throw new WalletRequestError('Error getting transaction by its id.', {
-          cause: response.data,
+          cause: { status: response.status, data: response.data },
         });
       }
       return parseSchema(response.data, txByIdResponseSchema);
@@ -337,7 +343,7 @@ const walletApi = {
     }
 
     throw new WalletRequestError('Error getting transaction by its id.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -366,7 +372,7 @@ const walletApi = {
     walletApi._txNotFoundGuard(response.data);
 
     throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -385,7 +391,7 @@ const walletApi = {
     throw new WalletRequestError(
       'Error getting transaction confirmation data by its id from the proxied fullnode.',
       {
-        cause: response.data,
+        cause: { status: response.status, data: response.data },
       }
     );
   },
@@ -412,7 +418,7 @@ const walletApi = {
         throw new WalletRequestError(
           `Error getting neighbors data for ${txId} from the proxied fullnode.`,
           {
-            cause: response.data.message,
+            cause: { status: response.status, data: response.data },
           }
         );
       }
@@ -423,7 +429,7 @@ const walletApi = {
     throw new WalletRequestError(
       `Error getting neighbors data for ${txId} from the proxied fullnode.`,
       {
-        cause: response.data,
+        cause: { status: response.status, data: response.data },
       }
     );
   },

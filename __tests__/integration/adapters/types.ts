@@ -217,6 +217,13 @@ export interface IWalletTestAdapter {
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult>;
 
+  /**
+   * Retrieves token metadata for a given token UID.
+   * Both facades expose `getTokenDetails()` with structurally identical results,
+   * so the adapter returns the common shape directly.
+   */
+  getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult>;
+
   // --- UTXO queries ---
 
   /**
@@ -338,6 +345,23 @@ export interface CreateTokenOptions {
 export interface CreateTokenResult {
   hash: string;
   transaction: Transaction;
+}
+
+/**
+ * Normalized token details shared by both facade implementations.
+ * The fullnode and wallet-service `getTokenDetails()` already return the same
+ * shape; this interface exists to give shared tests a stable type.
+ */
+export interface TokenDetailsResult {
+  totalSupply: bigint;
+  totalTransactions: number;
+  tokenInfo: {
+    id: string;
+    name: string;
+    symbol: string;
+    version?: TokenVersion;
+  };
+  authorities: { mint: boolean; melt: boolean };
 }
 
 /**

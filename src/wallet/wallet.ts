@@ -11,6 +11,7 @@ import assert from 'assert';
 import Header from '../headers/base';
 import FeeHeader from '../headers/fee';
 import {
+  DECIMAL_PLACES,
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
@@ -22,6 +23,7 @@ import {
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
+import { retryOnTransientWalletError } from './walletServiceRetry';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -44,7 +46,6 @@ import {
   GetBalanceObject,
   GetAddressesObject,
   GetHistoryObject,
-  WalletStatus,
   Utxo,
   OutputType,
   OutputSendTransaction,
@@ -94,6 +95,7 @@ import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
 import {
+  ApiVersion,
   IStorage,
   IWalletAccessData,
   OutputValueType,
@@ -110,6 +112,22 @@ import { Fee } from '../utils/fee';
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
 const WALLET_STATUS_POLLING_INTERVAL = 1000;
+
+// Maximum number of polling attempts before timing out
+const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
+
+// Wallet status values returned by the wallet-service API
+const WS_STATUS_READY = 'ready';
+const WS_STATUS_CREATING = 'creating';
+
+// Bounded retry budget for the wallet-service auth-token renewal.
+//
+// Context: right after `createWallet` returns, the `/auth/token` endpoint can
+// briefly respond with a transient error while the wallet-service's internal
+// state settles.
+// That renewal is awaited and errors propagate, we need an explicit bounded retry
+// to keep integration tests (and real clients) tolerant of the same settling race.
+const MAX_AUTH_TOKEN_RENEW_ATTEMPTS = 3;
 
 enum walletState {
   NOT_STARTED = 'Not started',
@@ -442,21 +460,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       await this.storage.saveAccessData(accessData);
     }
 
-    let renewPromise: Promise<void> | null = null;
-    let renewPromiseError = null;
-    if (accessData.acctPathKey) {
-      // We can preemtively request/renew the auth token so the wallet can wait for this process
-      // to finish while we derive and request the wallet creation.
-      // This call will fail is the wallet is being created for the first time.
-      const acctKey = decryptData(accessData.acctPathKey, pinCode);
-      const privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
-      const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(privKeyAccountPath.xpubkey);
-      this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
-        renewPromiseError = err;
-      });
-    }
-
     const {
       xpub,
       authXpub,
@@ -468,48 +471,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
     this.firstAddress = firstAddress;
 
-    if (!renewPromise) {
-      // we need to start the process to renew the auth token If for any reason we had to
-      // derive the account path xpubkey on the method above.
-      const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-      this.walletId = walletId;
-      renewPromise = this.validateAndRenewAuthToken(pinCode).catch(err => {
-        renewPromiseError = err;
-      });
-    }
-
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
-
-    let renewPromise2Error = null;
-    const handleCreate = async (data: WalletStatus, tokenRenewPromise: Promise<void> | null) => {
-      this.walletId = data.walletId;
-
-      if (data.status === 'creating') {
-        // If the wallet status is creating, we should wait until it is ready
-        // before continuing
-        await this.pollForWalletStatus();
-      } else if (data.status !== 'ready') {
-        // At this stage, if the wallet is not `ready` or `creating` we should
-        // throw an error as there are only three states: `ready`, `creating` or `error`
-        throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, { cause: data.status });
-      }
-
-      if (tokenRenewPromise !== null) {
-        try {
-          if (renewPromise2Error) {
-            // If an error happened async before this await, we must
-            // throw it, for it to be captured by the following catch
-            throw renewPromise2Error;
-          }
-          await tokenRenewPromise;
-        } catch (err) {
-          this.authToken = null;
-        }
-      }
-
-      await this.onWalletReady();
-    };
 
     const data = await walletApi.createWallet(
       this,
@@ -521,8 +484,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress
     );
 
-    // Set walletId immediately after wallet creation
     this.walletId = data.status.walletId;
+
+    // Populate `storage.version` with the fullnode network constants.
+    // Without this, `prepareToSend` would always fall back to the hardcoded
+    // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's reported
+    // `min_tx_weight*` values — see HathorWallet.start in src/new/wallet.ts
+    // where the equivalent setApiVersion call lives.
+    //
+    // Run this BEFORE the `waitReady === false` early return so both
+    // public startup paths (waitReady=true and waitReady=false) populate
+    // the field. Otherwise non-blocking-startup callers would silently
+    // fall back to TX_WEIGHT_CONSTANTS forever, defeating the purpose of
+    // this feature.
+    await this.populateStorageVersion();
 
     // If waitReady is false, return immediately after wallet creation
     if (!waitReady) {
@@ -530,30 +505,70 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       return;
     }
 
-    // If auth token api fails we can still retry during wallet creation status polling.
-    let renewPromise2: Promise<void> | null = null;
-    try {
-      if (renewPromiseError) {
-        // If an error happened async before this await, we must
-        // throw it, for it to be captured by the following catch
-        throw renewPromiseError;
-      }
-      // Here we await the first auth token api call before continuing the startup process.
-      await renewPromise;
-    } catch (err) {
-      // If the wallet was being created the api would fail, but we will try to request a new token
-      // now that the wallet was created and before it is ready.
-      this.authToken = null;
-      const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-      this.walletId = walletId;
-      renewPromise2 = this.validateAndRenewAuthToken(pinCode).catch(renew2Err => {
-        renewPromise2Error = renew2Err;
+    if (data.status.status === WS_STATUS_CREATING) {
+      // If the wallet status is creating, we should wait until it is ready
+      // before continuing
+      await this.pollForWalletStatus();
+    } else if (data.status.status !== WS_STATUS_READY) {
+      // At this stage, if the wallet is not 'ready' or 'creating' we should
+      // throw an error as there are only three states: 'ready', 'creating' or 'error'
+      throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {
+        cause: { state: data.status },
       });
     }
 
-    await handleCreate(data.status, renewPromise2);
-
+    // Auth token renewal is NOT called explicitly here. The axios interceptor
+    // in walletServiceAxios.ts handles it on-demand: any authenticated API
+    // call (including getWalletStatus during polling) triggers
+    // validateAndRenewAuthToken() automatically when the token is missing or
+    // expired. By this point, authPrivKey and walletId are both set, so the
+    // interceptor can obtain a token without needing the PIN.
+    await this.onWalletReady();
     this.clearSensitiveData();
+  }
+
+  /**
+   * Fetch the connected wallet-service's /version response and write it to
+   * `storage.version` so internal callers (notably `prepareToSend` via
+   * `transactionUtils.getWeightConstantsFromStorage`) consume the network's
+   * actual weight constants instead of the hardcoded mainnet defaults.
+   *
+   * `walletApi.getVersionData` returns `FullNodeVersionData` (camelCase, and
+   * without `decimal_places` / `native_token`). We map to the snake_case
+   * `ApiVersion` shape that storage expects, defaulting the missing fields:
+   * `decimal_places` to the constant default and `native_token` to null
+   * (storage.getDecimalPlaces / getNativeTokenData already fall back to
+   * constants when those fields are missing).
+   *
+   * Non-fatal: any failure is logged via the storage logger and swallowed.
+   * The wallet still works — `prepareToSend` simply falls back to
+   * `TX_WEIGHT_CONSTANTS` as it did before this method existed. We emit a
+   * warning rather than silently dropping the error so a regression here is
+   * visible in logs instead of producing surprisingly-mined transactions.
+   */
+  private async populateStorageVersion(): Promise<void> {
+    try {
+      const v = await this.getVersionData();
+      const apiVersion: ApiVersion = {
+        version: v.version,
+        network: v.network,
+        min_weight: v.minWeight,
+        min_tx_weight: v.minTxWeight,
+        min_tx_weight_coefficient: v.minTxWeightCoefficient,
+        min_tx_weight_k: v.minTxWeightK,
+        token_deposit_percentage: v.tokenDepositPercentage,
+        reward_spend_min_blocks: v.rewardSpendMinBlocks,
+        max_number_inputs: v.maxNumberInputs,
+        max_number_outputs: v.maxNumberOutputs,
+        decimal_places: DECIMAL_PLACES,
+        native_token: null,
+      };
+      this.storage.setApiVersion(apiVersion);
+    } catch (e) {
+      this.storage.logger.warn(
+        `wallet-service /version fetch failed during start(): ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
   }
 
   /**
@@ -775,20 +790,41 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async pollForWalletStatus(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const pollIntervalTimer = setInterval(async () => {
-        const data = await walletApi.getWalletStatus(this);
-
-        if (data.status.status === 'ready') {
-          clearInterval(pollIntervalTimer);
-          resolve();
-        } else if (data.status.status !== 'creating') {
-          // Only possible states are 'ready', 'creating' and 'error', if status
-          // is not ready or creating, we should reject the promise
-          clearInterval(pollIntervalTimer);
-          reject(new WalletRequestError('Error getting wallet status.', { cause: data.status }));
+    let lastError: WalletRequestError | undefined;
+    let lastState: unknown;
+    for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
+      let data;
+      try {
+        data = await walletApi.getWalletStatus(this);
+      } catch (err) {
+        if (!(err instanceof WalletRequestError)) {
+          throw err;
         }
-      }, WALLET_STATUS_POLLING_INTERVAL);
+        // WalletRequestError means the server (or the auth interceptor)
+        // responded but said no — could be a transient 502/503 or a
+        // momentary auth endpoint hiccup. Retry until we exhaust attempts.
+        lastError = err;
+        await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
+        continue;
+      }
+
+      lastError = undefined;
+      lastState = data.status;
+      if (data.status.status === WS_STATUS_READY) {
+        return;
+      }
+      // Only possible states are 'ready', 'creating' and 'error'. If status
+      // is not ready or creating, we should throw an error.
+      if (data.status.status !== WS_STATUS_CREATING) {
+        throw new WalletRequestError('Error getting wallet status.', {
+          cause: { state: data.status },
+        });
+      }
+
+      await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
+    }
+    throw new WalletRequestError('Wallet status polling timed out.', {
+      cause: lastError ? { source: lastError } : { state: lastState },
     });
   }
 
@@ -1178,23 +1214,26 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         privKey = bitcore.HDPrivateKey.fromString(await this.storage.getAuthPrivKey(password));
       }
 
-      await this.renewAuthToken(privKey, timestampNow);
+      await retryOnTransientWalletError(() => this.renewAuthToken(privKey, timestampNow), {
+        maxAttempts: MAX_AUTH_TOKEN_RENEW_ATTEMPTS,
+        intervalMs: WALLET_STATUS_POLLING_INTERVAL,
+      });
     } else if (usePassword) {
-      // If we have received the user PIN, we should renew the token anyway
-      // without blocking this method's promise
-
+      // Token is valid but the user provided a PIN — renew proactively.
       const privKey = bitcore.HDPrivateKey.fromString(
         await this.storage.getAuthPrivKey(usePassword)
       );
 
-      this.renewAuthToken(privKey, timestampNow);
+      await retryOnTransientWalletError(() => this.renewAuthToken(privKey, timestampNow), {
+        maxAttempts: MAX_AUTH_TOKEN_RENEW_ATTEMPTS,
+        intervalMs: WALLET_STATUS_POLLING_INTERVAL,
+      });
     }
   }
 
   /**
-   * Renew the auth token on the wallet service
-   *
-   * Note: This method is called in a fire-and-forget manner, so it should not throw exceptions when failing.
+   * Renew the auth token on the wallet service.
+   * Throws on failure so callers can handle the root cause.
    *
    * @param {HDPrivateKey} privKey - private key to sign the auth message
    * @param {number} timestamp - Current timestamp to assemble the signature
@@ -1207,16 +1246,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new Error('Wallet not ready yet.');
     }
 
-    try {
-      const sign = this.signMessage(privKey, timestamp, this.walletId);
-      const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
-
-      this.authToken = data.token;
-    } catch (err) {
-      // We should not throw here since this method is called in a fire-and-forget manner
-      // TODO: When this wallet has a logger, we should log this error to help with debugging
-      this.authToken = null;
-    }
+    const sign = this.signMessage(privKey, timestamp, this.walletId);
+    const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
+    this.authToken = data.token;
   }
 
   /**
@@ -1273,30 +1305,37 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const accessData = walletUtils.generateAccessDataFromXpub(this.xpub);
     await this.storage.saveAccessData(accessData);
 
-    // Try to get read-only auth token
-    // This will succeed only if wallet is in 'ready' state
-    try {
-      await this.getReadOnlyAuthToken();
-      // Token obtained successfully, wallet is ready
-      await this.onWalletReady(skipAddressFetch);
-    } catch (error) {
-      // Token request failed, check wallet status to determine why
-      const walletStatus = await walletApi.getWalletStatus(this);
-
-      if (walletStatus.status.status === 'creating') {
-        // Wallet is still being created, poll until it's ready
-        await this.pollForWalletStatus();
-        // After polling completes, get the token now that wallet is ready
+    // Poll for read-only auth token. The RO token endpoint (no auth required)
+    // returns 400 while the wallet is still 'creating'. We retry WalletRequestError
+    // (server responded but said no) until it succeeds or we time out.
+    // Non-WalletRequestError (network failures, timeouts) propagate immediately.
+    let lastError: WalletRequestError | undefined;
+    for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
+      try {
         await this.getReadOnlyAuthToken();
-        await this.onWalletReady(skipAddressFetch);
-      } else {
-        // Wallet is in error state or other invalid state
-        throw new WalletRequestError(
-          'Wallet must be initialized and ready before starting in read-only mode.',
-          { cause: walletStatus.status }
-        );
+        lastError = undefined;
+        break;
+      } catch (err) {
+        if (!(err instanceof WalletRequestError)) {
+          throw err;
+        }
+        // Only retry on HTTP 400 (wallet may still be creating).
+        // Other status codes (401, 403, 404, etc.) are permanent failures.
+        const { cause } = err;
+        if (cause && 'status' in cause && cause.status !== 400) {
+          throw err;
+        }
+        lastError = err;
+        await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
       }
     }
+    if (lastError) {
+      throw new WalletRequestError(
+        'Read-only wallet startup timed out. The wallet may not be initialized or is in an error state.',
+        { cause: { source: lastError } }
+      );
+    }
+    await this.onWalletReady(skipAddressFetch);
   }
 
   /**
@@ -1987,7 +2026,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2303,7 +2342,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2507,7 +2546,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -2668,7 +2707,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
     inputsObj[0].setData(inputData);
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
 
     return tx;
   }
@@ -2749,7 +2788,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
-    tx.prepareToSend();
+    tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return tx;
   }
 
@@ -3198,7 +3237,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       storageProxy.createProxy(),
       options.pinCode
     );
-    signedTx.prepareToSend();
+    signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }
 }

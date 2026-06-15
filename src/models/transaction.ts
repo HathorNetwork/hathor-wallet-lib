@@ -20,6 +20,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
+  TxWeightConstants,
 } from '../constants';
 import {
   bufferToHex,
@@ -305,15 +306,21 @@ class Transaction {
   }
 
   /**
-   * Calculate the minimum tx weight
+   * Calculate the minimum tx weight.
    *
-   * @throws {ConstantNotSet} If the weight constants are not set yet
+   * Defaults to the hardcoded {@link TX_WEIGHT_CONSTANTS}, but accepts an
+   * override so callers with access to the network's actual values (from
+   * `storage.version.min_tx_weight*`) can pass them in. Networks like the
+   * shielded testnet report much lower constants, which significantly
+   * reduces mining work.
    *
+   * @param weightConstants Optional override of the weight constants.
    * @return {number} Minimum weight calculated (float)
    * @memberof Transaction
    * @inner
    */
-  calculateWeight(): number {
+  calculateWeight(weightConstants?: TxWeightConstants): number {
+    const constants = weightConstants ?? TX_WEIGHT_CONSTANTS;
     let txSize = this.toBytes().length;
 
     // If parents are not in txData, we need to consider them here
@@ -334,12 +341,12 @@ class Transaction {
     const amount = sumOutputs / 10 ** DECIMAL_PLACES;
 
     let weight =
-      TX_WEIGHT_CONSTANTS.txWeightCoefficient * Math.log2(txSize) +
-      4 / (1 + TX_WEIGHT_CONSTANTS.txMinWeightK / amount) +
+      constants.txWeightCoefficient * Math.log2(txSize) +
+      4 / (1 + constants.txMinWeightK / amount) +
       4;
 
     // Make sure the calculated weight is at least the minimum
-    weight = Math.max(weight, TX_WEIGHT_CONSTANTS.txMinWeight);
+    weight = Math.max(weight, constants.txMinWeight);
     // FIXME precision difference between backend and frontend (weight (17.76246721531992) is smaller than the minimum weight (17.762467215319923))
     // Even though it must be fixed, there is no practical effect when mining the transaction
     return weight + 1e-6;
@@ -471,9 +478,9 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  prepareToSend() {
+  prepareToSend(weightConstants?: TxWeightConstants) {
     this.updateTimestamp();
-    this.weight = this.calculateWeight();
+    this.weight = this.calculateWeight(weightConstants);
   }
 
   /**
