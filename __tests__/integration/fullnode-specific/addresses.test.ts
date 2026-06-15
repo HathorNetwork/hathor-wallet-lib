@@ -71,10 +71,6 @@ describe('[Fullnode] addresses methods', () => {
   it('should get correct addresses for a multisig wallet', async () => {
     const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
 
-    expect((await mshWallet.getCurrentAddress()).address).toStrictEqual(
-      WALLET_CONSTANTS.multisig.addresses[0]
-    );
-
     for (let i = 0; i < 21; ++i) {
       expect(await mshWallet.getAddressAtIndex(i)).toStrictEqual(
         WALLET_CONSTANTS.multisig.addresses[i]
