@@ -221,6 +221,37 @@ test('Rejects length/version-byte mismatches (crafted addresses with valid check
   expect(goodLegacy.isValid()).toBe(true);
 });
 
+test('Rejects a version byte with no decoded length registered', () => {
+  const testnetNetwork = new Network('testnet');
+
+  // The "no decoded length registered" guard is defensive: today the size
+  // map is keyed by the same three version bytes that isVersionByteValid
+  // accepts, so the two can never disagree through the public path. It exists
+  // for the future case of a byte added to the network's validity check
+  // without a matching size entry — which must fail loudly rather than
+  // default to a length. Simulate that divergence by accepting an unmapped
+  // byte at the network layer.
+  const unmappedByte = 0x99;
+  expect(testnetNetwork.versionBytes.p2pkh).not.toBe(unmappedByte);
+  expect(testnetNetwork.versionBytes.p2sh).not.toBe(unmappedByte);
+  expect(testnetNetwork.versionBytes.shielded).not.toBe(unmappedByte);
+
+  // 25-byte payload (passes the length check) with a valid checksum, so only
+  // the size-map lookup can reject it.
+  const payload = Buffer.concat([Buffer.from([unmappedByte]), Buffer.alloc(20, 0xcc)]);
+  const crafted = encoding.Base58.encode(Buffer.concat([payload, helpers.getChecksum(payload)]));
+  const addr = new Address(crafted, { network: testnetNetwork });
+
+  const spy = jest.spyOn(testnetNetwork, 'isVersionByteValid').mockReturnValue(true);
+  try {
+    expect(() => addr.validateAddress()).toThrow(
+      new RegExp(`No decoded length registered for version byte ${unmappedByte}`)
+    );
+  } finally {
+    spy.mockRestore();
+  }
+});
+
 test('Address script', () => {
   const addr = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ');
   const p2sh = new P2SH(addr);
