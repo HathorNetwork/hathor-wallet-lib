@@ -106,26 +106,18 @@ test('addressIter chain-selection (legacy vs shielded)', async () => {
   expect(legacyBases.sort()).toEqual(defaultBases.sort());
 
   // legacy: false → user-facing shielded receive addresses only, in
-  // BIP32-index order. shielded-spend MUST NOT leak through (it's
-  // internal — surfacing it would let callers send to a wallet's
+  // insertion (== BIP32-index) order. shielded-spend MUST NOT leak through
+  // (it's internal — surfacing it would let callers send to a wallet's
   // spend P2PKH thinking it's a shielded address).
   const shieldedBases: string[] = [];
   for await (const info of store.addressIter({ legacy: false })) shieldedBases.push(info.base58);
   expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
-});
 
-test('addressIter shielded chain yields BIP32-index order even when saved out of order', async () => {
-  const store = new MemoryStore();
-  // Save shielded receive addresses with indices out of order to prove the
-  // iterator sorts by BIP32 index rather than relying on insertion order.
-  await store.saveAddress({ base58: 'shi-3', bip32AddressIndex: 3, addressType: 'shielded' });
-  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
-  await store.saveAddress({ base58: 'shi-2', bip32AddressIndex: 2, addressType: 'shielded' });
-  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
-
-  const bases: string[] = [];
-  for await (const info of store.addressIter({ legacy: false })) bases.push(info.base58);
-  expect(bases).toEqual(['shi-0', 'shi-1', 'shi-2', 'shi-3']);
+  // addressCount is per-chain: legacy counts leg-0/leg-1/p2sh-2 (3), shielded
+  // counts shi-0/shi-1 (2); the internal shielded-spend is in neither.
+  await expect(store.addressCount()).resolves.toEqual(3);
+  await expect(store.addressCount({ legacy: true })).resolves.toEqual(3);
+  await expect(store.addressCount({ legacy: false })).resolves.toEqual(2);
 });
 
 test('history methods', async () => {

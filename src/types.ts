@@ -595,7 +595,7 @@ export interface IStore {
   getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<IAddressInfo | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
-  addressCount(): Promise<number>;
+  addressCount(opts?: IAddressChainOptions): Promise<number>;
   editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void>;
   editSeqnumMeta(base58: string, seqnum: number): Promise<void>;
 
