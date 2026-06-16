@@ -714,7 +714,7 @@ describe('getChangeAddress', () => {
     await getChangeAddressTest(store);
   });
 
-  it('converts a wallet-owned shielded change address to its spend-derived P2PKH', async () => {
+  it('returns a wallet-owned shielded change address as-is (no eager script conversion)', async () => {
     const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
     const store = new MemoryStore();
     const storage = new Storage(store);
@@ -733,12 +733,15 @@ describe('getChangeAddress', () => {
       addressType: 'shielded',
     });
 
-    // A shielded address has no transparent output script form, so the change
-    // address must resolve to its on-chain spend-derived P2PKH (same pubkey
-    // hash) rather than be returned as-is or rejected.
+    // getChangeAddress is a storage-layer resolver: it returns the owned
+    // address verbatim, including the 71-byte shielded form. The
+    // shielded -> spend-derived-P2PKH rule for the output script is applied
+    // later by the transaction layer (createOutputScript /
+    // createOutputScriptFromAddress), not duplicated here.
     await expect(storage.getChangeAddress({ changeAddress: info.base58 })).resolves.toEqual(
-      info.spendAddress
+      info.base58
     );
+    expect(info.base58).not.toEqual(info.spendAddress);
   });
 
   async function getChangeAddressTest(store) {
