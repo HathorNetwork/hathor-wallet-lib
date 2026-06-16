@@ -2,10 +2,10 @@ import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
-import { HistorySyncMode, getDefaultLogger } from '../src/types';
+import { HistorySyncMode, WalletType, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 import { getGapLimitConfig } from './integration/utils/core.util';
-import { loadP2SHAddressesCPUIntensive } from '../src/sync/stream';
+import { StreamManager, loadP2SHAddressesCPUIntensive } from '../src/sync/stream';
 import { XPubError } from '../src/errors';
 
 const mock_tx = {
@@ -434,4 +434,22 @@ describe('Websocket stream history sync for multisig', () => {
       mockServer.stop();
     }
   }, 30000);
+
+  it('should reject XPUB streaming for a multisig wallet', async () => {
+    const storage = new Storage(new MemoryStore());
+    jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.MULTISIG);
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue({
+      multisigData: { numSignatures: 3, pubkeys: MULTISIG_DATA.pubkeys },
+    } as never);
+    jest.spyOn(storage, 'getGapLimit').mockResolvedValue(20);
+
+    const manager = new StreamManager(0, storage, {} as never, HistorySyncMode.XPUB_STREAM_WS);
+    try {
+      await expect(manager.setupStream()).rejects.toThrow(
+        'XPUB streaming is not supported for multisig wallets'
+      );
+    } finally {
+      manager.stats.clean();
+    }
+  });
 });

@@ -463,6 +463,9 @@ export class StreamManager extends AbortController {
 
     const walletType = await this.storage.getWalletType();
     if (walletType === WalletType.MULTISIG) {
+      if (this.mode === HistorySyncMode.XPUB_STREAM_WS) {
+        throw new Error('XPUB streaming is not supported for multisig wallets');
+      }
       if (!accessData.multisigData) {
         throw new Error('No multisig data');
       }
