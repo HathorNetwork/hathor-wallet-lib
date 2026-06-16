@@ -155,3 +155,35 @@ export interface IDataFullShieldedOutput extends IDataShieldedOutputBase {
  * with `if (out.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED)`.
  */
 export type IDataShieldedOutput = IDataAmountShieldedOutput | IDataFullShieldedOutput;
+
+/**
+ * Result of deriving a shielded address at a BIP32 index from the scan and
+ * spend xpubs — return shape of `utils/shieldedAddress.deriveShieldedAddress()`.
+ */
+export interface IShieldedAddressInfo {
+  /** Full shielded address in base58 */
+  base58: string;
+  /** BIP32 index used to derive both scan and spend keys */
+  bip32AddressIndex: number;
+  /** 33-byte compressed scan pubkey (hex) */
+  scanPubkey: string;
+  /** 33-byte compressed spend pubkey (hex) */
+  spendPubkey: string;
+  /** P2PKH address derived from HASH160(spend_pubkey) — the on-chain address */
+  spendAddress: string;
+}
+
+/**
+ * Structural parts of a decoded 71-byte shielded address — return shape of
+ * `Address.parseShielded()`: version(1) | scan(33) | spend(33) | checksum(4).
+ */
+export interface IShieldedAddressParts {
+  /** Network version byte (first byte) */
+  versionByte: number;
+  /** 33-byte compressed scan pubkey (ECDH detection) */
+  scanPubkey: Buffer;
+  /** 33-byte compressed spend pubkey (signing authority) */
+  spendPubkey: Buffer;
+  /** 4-byte checksum over the first 67 bytes */
+  checksum: Buffer;
+}

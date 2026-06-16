@@ -5,18 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPublicKey } from 'bitcore-lib';
+import { HDPublicKey, HDPrivateKey } from 'bitcore-lib';
 import Network from '../../src/models/network';
+import Address from '../../src/models/address';
+import P2PKH from '../../src/models/p2pkh';
 import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';
 import {
   getAddressType,
+  createOutputScriptFromAddress,
   deriveAddressFromDataP2SH,
   deriveAddressFromXPubP2PKH,
   deriveAddressP2PKH,
   deriveAddressP2SH,
   getAddressFromPubkey,
 } from '../../src/utils/address';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- These variables also serve as a documentation, even if unused */
 const seed =
@@ -97,6 +101,33 @@ test('Get address type', () => {
   const testnet = new Network('testnet');
   expect(getAddressType(WALLET_DATA.p2pkh.addresses[0], testnet)).toEqual('p2pkh');
   expect(getAddressType(WALLET_DATA.multisig.addresses[3], testnet)).toEqual('p2sh');
+});
+
+test('getAddressType throws for shielded addresses with actionable guidance', () => {
+  const testnet = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x07), 'testnet');
+  const scanPubkey = root.deriveChild("m/0'/0").publicKey.toBuffer();
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey.toBuffer();
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnet);
+
+  expect(() => getAddressType(shieldedAddr, testnet)).toThrow(
+    /cannot be used directly as output script type.*getSpendAddress/s
+  );
+});
+
+test('createOutputScriptFromAddress builds the spend-P2PKH script for shielded addresses', () => {
+  const testnet = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x07), 'testnet');
+  const scanPubkey = root.deriveChild("m/0'/0").publicKey.toBuffer();
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey.toBuffer();
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnet);
+
+  const script = createOutputScriptFromAddress(shieldedAddr, testnet);
+  // Must equal the P2PKH script of the spend-derived address — the shielded
+  // address itself has no script form.
+  const spendAddress = new Address(shieldedAddr, { network: testnet }).getSpendAddress();
+  const expected = new P2PKH(spendAddress).createScript();
+  expect(script).toStrictEqual(expected);
 });
 
 test('Derive p2pkh address from xpub', () => {
