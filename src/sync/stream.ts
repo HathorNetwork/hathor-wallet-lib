@@ -4,8 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import { Address as BitcoreAddress, HDPublicKey, Script } from 'bitcore-lib';
-import _ from 'lodash';
+import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import queueMicrotask from 'queue-microtask';
 import FullNodeConnection from '../new/connection';
 import {
@@ -21,7 +20,8 @@ import {
 import Network from '../models/network';
 import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
-import { XPubError } from '../errors';
+import { prepareP2SHChangeNodes, buildP2SHRedeemScriptAtIndex } from '../utils/scripts';
+import { redeemScriptToP2SHAddress } from '../utils/address';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -267,7 +267,9 @@ export function loadAddressesCPUIntensive(
  * Derive the multisig (P2SH) addresses for the index range [startIndex, startIndex + count).
  *
  * P2SH derivation is expensive (one BIP32 child derivation per participant per address), so the
- * index-invariant work is hoisted out of the loop and only the final per-index child runs in it.
+ * index-invariant work ({@link prepareP2SHChangeNodes}) is hoisted out of the loop. Reuses the
+ * canonical primitives so streamed addresses stay byte-identical to the polling path
+ * ({@link deriveAddressFromDataP2SH}).
  */
 export function loadP2SHAddressesCPUIntensive(
   startIndex: number,
@@ -276,39 +278,13 @@ export function loadP2SHAddressesCPUIntensive(
   networkName: string
 ): [number, string][] {
   const network = new Network(networkName);
+  const changeNodes = prepareP2SHChangeNodes(multisigData.pubkeys);
 
-  // Sort the participant xpubs exactly as createP2SHRedeemScript does, so the derived address
-  // matches the polling path.
-  let sortedXpubs: HDPublicKey[];
-  try {
-    sortedXpubs = _.sortBy(
-      multisigData.pubkeys.map(xpub => new HDPublicKey(xpub)),
-      (xpub: HDPublicKey) => {
-        return xpub.publicKey.toString('hex');
-      }
-    );
-  } catch (e) {
-    throw new XPubError('Invalid xpub');
-  }
-
-  // m/45'/280'/0'/0 is shared by every index; only the final deriveChild(i) below varies.
-  const changeNodes = sortedXpubs.map(xpub => xpub.deriveChild(0));
-
-  // The toBuffer()/fromBuffer() round-trip mirrors deriveAddressFromDataP2SH so the address
-  // bytes match the polling path.
   const addresses: [number, string][] = [];
   const stopIndex = startIndex + count;
   for (let i = startIndex; i < stopIndex; i++) {
-    const pubkeys = changeNodes.map(node => node.deriveChild(i).publicKey);
-    const redeemScript = Script.buildMultisigOut(pubkeys, multisigData.numSignatures, {
-      noSorting: true,
-    }).toBuffer();
-    // eslint-disable-next-line new-cap -- bitcore exposes the constructor as Address.payingTo
-    const address = new BitcoreAddress.payingTo(
-      Script.fromBuffer(redeemScript),
-      network.bitcoreNetwork
-    );
-    addresses.push([i, address.toString()]);
+    const redeemScript = buildP2SHRedeemScriptAtIndex(changeNodes, multisigData.numSignatures, i);
+    addresses.push([i, redeemScriptToP2SHAddress(redeemScript, network)]);
   }
   return addresses;
 }
@@ -563,16 +539,23 @@ export class StreamManager extends AbortController {
         return;
       }
 
-      // This part is sync so that we block the main loop during the generation of the batch
-      const batch = this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE);
-      this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
-      this.connection.sendManualStreamingHistory(
-        this.streamId,
-        this.lastLoadedIndex + 1,
-        batch,
-        false,
-        this.gapLimit
-      );
+      try {
+        // This part is sync so that we block the main loop during the generation of the batch
+        const batch = this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE);
+        this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
+        this.connection.sendManualStreamingHistory(
+          this.streamId,
+          this.lastLoadedIndex + 1,
+          batch,
+          false,
+          this.gapLimit
+        );
+      } catch (err) {
+        // An uncaught throw here would reject batchQueue with no handler and hang the wallet in
+        // SYNCING; route it through abort -> shutdown so the wallet moves to ERROR instead.
+        this.abortWithError(err instanceof Error ? err.message : String(err));
+        return;
+      }
 
       // Free main loop to run other tasks and queue next batch
       setTimeout(() => {
@@ -836,7 +819,15 @@ export async function streamSyncHistory(
   manager: StreamManager,
   shouldProcessHistory: boolean
 ): Promise<void> {
-  await manager.setupStream();
+  try {
+    await manager.setupStream();
+  } catch (err) {
+    // The stats interval starts in the constructor and setupStream runs before the try/finally
+    // below, so clean it here to avoid leaking the timer. No abort/emit: a setup failure must not
+    // touch the connection (it may hold another stream's lock).
+    manager.stats.clean();
+    throw err;
+  }
 
   // This is a try..finally so that we can always call the signal abort function
   // This is meant to prevent memory leaks
@@ -884,6 +875,8 @@ export async function streamSyncHistory(
       await manager.storage.processHistory();
     }
   } finally {
+    // shutdown() (which clears the interval) is skipped when sendStartMessage throws; clean() is idempotent.
+    manager.stats.clean();
     // Always abort on finally to avoid memory leaks
     manager.abort();
     manager.connection.emit('stream-end');

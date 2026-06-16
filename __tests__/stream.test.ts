@@ -6,6 +6,7 @@ import { HistorySyncMode, getDefaultLogger } from '../src/types';
 import { JSONBigInt } from '../src/utils/bigint';
 import { getGapLimitConfig } from './integration/utils/core.util';
 import { loadP2SHAddressesCPUIntensive } from '../src/sync/stream';
+import { XPubError } from '../src/errors';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -362,6 +363,12 @@ describe('loadP2SHAddressesCPUIntensive', () => {
       [2, MULTISIG_ADDRESSES[2]],
       [3, MULTISIG_ADDRESSES[3]],
     ]);
+  });
+
+  it('throws XPubError on invalid xpub', () => {
+    expect(() =>
+      loadP2SHAddressesCPUIntensive(0, 1, { pubkeys: ['not-an-xpub'], numSignatures: 1 }, 'testnet')
+    ).toThrow(XPubError);
   });
 });
 
