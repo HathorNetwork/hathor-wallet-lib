@@ -208,8 +208,6 @@ test('Get address from pubkey', async () => {
 });
 
 test('deriveShieldedAddressFromStorage returns null when shielded keys unavailable', async () => {
-  // HDPrivateKey comes from the top-level import (added by the pr-4 review
-  // tests); re-importing it here shadowed that declaration.
   const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
   const { encryptData } = await import('../../src/utils/crypto');
   const store = new MemoryStore();

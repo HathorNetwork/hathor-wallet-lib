@@ -1180,3 +1180,70 @@ describe('getAddressPubkey', () => {
     await expect(storage.getAddressPubkey(20)).resolves.toEqual(publicKey20);
   });
 });
+
+describe('shielded key access (smoke)', () => {
+  const PIN = '1234';
+
+  async function shieldedWallet() {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const legacy = new HDPrivateKey();
+    const scan = new HDPrivateKey();
+    const spend = new HDPrivateKey();
+    await store.saveAccessData({
+      xpubkey: legacy.xpubkey,
+      mainKey: cryptoUtils.encryptData(legacy.xprivkey, PIN),
+      scanMainKey: cryptoUtils.encryptData(scan.xprivkey, PIN),
+      spendMainKey: cryptoUtils.encryptData(spend.xprivkey, PIN),
+      scanXpubkey: scan.xpubkey,
+      spendXpubkey: spend.xpubkey,
+      walletType: 'p2pkh' as const,
+      walletFlags: 0,
+    });
+    return { storage, scan, spend };
+  }
+
+  it('returns the scan/spend xpubs and decrypts the xprivs with the PIN', async () => {
+    const { storage, scan, spend } = await shieldedWallet();
+    await expect(storage.getScanXPubKey()).resolves.toEqual(scan.xpubkey);
+    await expect(storage.getSpendXPubKey()).resolves.toEqual(spend.xpubkey);
+    await expect(storage.getScanXPrivKey(PIN)).resolves.toEqual(scan.xprivkey);
+    await expect(storage.getSpendXPrivKey(PIN)).resolves.toEqual(spend.xprivkey);
+  });
+
+  it('throws cleanly when the wallet has no shielded keys', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const legacy = new HDPrivateKey();
+    await store.saveAccessData({
+      xpubkey: legacy.xpubkey,
+      mainKey: cryptoUtils.encryptData(legacy.xprivkey, PIN),
+      walletType: 'p2pkh' as const,
+      walletFlags: 0,
+    });
+    await expect(storage.getScanXPrivKey(PIN)).rejects.toThrow('Scan private key is not present');
+    await expect(storage.getSpendXPrivKey(PIN)).rejects.toThrow('Spend private key is not present');
+    // The xpub getters are non-throwing: pre-shielded wallets simply have none.
+    await expect(storage.getScanXPubKey()).resolves.toBeUndefined();
+    await expect(storage.getSpendXPubKey()).resolves.toBeUndefined();
+  });
+
+  it('rejects xpriv decryption with a wrong PIN', async () => {
+    const { storage } = await shieldedWallet();
+    await expect(storage.getScanXPrivKey('9999')).rejects.toThrow();
+    await expect(storage.getSpendXPrivKey('9999')).rejects.toThrow();
+  });
+
+  it('round-trips the shielded crypto provider field/setter', () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    expect(storage.shieldedCryptoProvider).toBeUndefined();
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    expect(storage.shieldedCryptoProvider).toBe(provider);
+    storage.setShieldedCryptoProvider(undefined);
+    expect(storage.shieldedCryptoProvider).toBeUndefined();
+  });
+});
