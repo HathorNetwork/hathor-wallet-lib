@@ -399,7 +399,6 @@ export class MemoryStore implements IStore {
       ? this.walletData.currentAddressIndex
       : this.walletData.shieldedCurrentAddressIndex;
 
-    // Reuse the chain-aware index lookup instead of duplicating it.
     const addressInfo = await this.getAddressAtIndex(currentIndex, opts);
     if (!addressInfo) {
       const chain = isLegacy ? 'legacy' : 'shielded';
