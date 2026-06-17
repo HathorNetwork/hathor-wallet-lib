@@ -347,11 +347,10 @@ class Transaction {
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     const amount = sumOutputs / 10 ** DECIMAL_PLACES;
 
-    // When txMinWeightK is 0, avoid the division-by-zero in `k/amount` —
-    // the term `4 / (1 + 0)` collapses to 4.
-    const kTerm = constants.txMinWeightK === 0 ? 4 : 4 / (1 + constants.txMinWeightK / amount);
-
-    let weight = constants.txWeightCoefficient * Math.log2(txSize) + kTerm + 4;
+    let weight =
+      constants.txWeightCoefficient * Math.log2(txSize) +
+      4 / (1 + constants.txMinWeightK / amount) +
+      4;
 
     // Make sure the calculated weight is at least the minimum
     weight = Math.max(weight, constants.txMinWeight);
@@ -362,6 +361,14 @@ class Transaction {
 
   /**
    * Calculate the sum of outputs. Authority outputs are ignored.
+   *
+   * Shielded outputs are intentionally excluded: hathor-core derives the
+   * minimum tx weight from the transparent `sum_outputs` only (see
+   * `hathor/daa.py::minimum_tx_weight` and `base_transaction.py::sum_outputs`),
+   * with shielded outputs living in a separate property that never enters the
+   * weight. Including their plaintext values here would leak the exact total
+   * shielded amount through the publicly-invertible weight formula. Keep this
+   * in lockstep with core.
    *
    * @return {number} Sum of outputs
    * @memberof Transaction
@@ -374,10 +381,6 @@ class Transaction {
         continue;
       }
       sumOutputs += output.value;
-    }
-    // Shielded outputs also contribute to the weight calculation
-    for (const shieldedOut of this.shieldedOutputs) {
-      sumOutputs += shieldedOut.value;
     }
     return sumOutputs;
   }

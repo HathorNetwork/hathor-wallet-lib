@@ -13,6 +13,7 @@ import Input from '../../src/models/input';
 import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
+import ShieldedOutput from '../../src/models/shielded_output';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
@@ -611,4 +612,47 @@ describe('NFT Validation', () => {
     txInstance = helpers.createTxFromHistoryObject(historyTx);
     expect(() => txInstance.validateNft(network)).toThrow('mint and melt is allowed');
   });
+});
+
+test('getOutputsSum / weight exclude shielded output values (privacy: GAP1-01)', () => {
+  // hathor-core derives the minimum tx weight from the transparent
+  // `sum_outputs` only (hathor/daa.py::minimum_tx_weight). If the wallet folded
+  // the plaintext shielded values into getOutputsSum(), the published weight
+  // would invert to reveal the exact total shielded amount of every tx. This
+  // guards that the two are decoupled.
+  const buildTx = (shieldedValues: bigint[]): Transaction => {
+    const address = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX', {
+      network: new Network('testnet'),
+    });
+    const p2pkh = new P2PKH(address);
+    const transparentOut = new Output(1000n, p2pkh.createScript());
+    const tx = new Transaction([], [transparentOut], { version: DEFAULT_TX_VERSION });
+    tx.shieldedOutputs = shieldedValues.map(
+      value =>
+        ({
+          mode: 1,
+          commitment: Buffer.alloc(33),
+          rangeProof: Buffer.alloc(675),
+          tokenData: 0,
+          script: Buffer.alloc(25),
+          ephemeralPubkey: Buffer.alloc(33),
+          value,
+          serialize: () => [Buffer.alloc(1)],
+          serializeSighash: () => [Buffer.alloc(1)],
+        }) as unknown as ShieldedOutput
+    );
+    return tx;
+  };
+
+  // Output sum reflects only the transparent output, regardless of how much
+  // value is hidden in the shielded outputs.
+  expect(buildTx([5000n, 7000n]).getOutputsSum()).toBe(1000n);
+
+  // Two structurally-identical txs that differ ONLY in the hidden shielded
+  // amounts must produce identical output sums and identical weights, so an
+  // observer cannot recover the shielded total from the on-chain weight.
+  const txSmall = buildTx([1n, 2n]);
+  const txLarge = buildTx([9_000_000n, 1_000_000n]);
+  expect(txSmall.getOutputsSum()).toBe(txLarge.getOutputsSum());
+  expect(txSmall.calculateWeight()).toBe(txLarge.calculateWeight());
 });
