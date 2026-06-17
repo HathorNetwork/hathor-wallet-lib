@@ -18,6 +18,7 @@ import type { HathorWalletServiceWallet } from '../../../src';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { loggers } from '../utils/logger.util';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -36,8 +37,13 @@ describe('[Service] getBalance', () => {
     if (wallet) {
       try {
         await wallet.stop({ cleanStorage: true });
-      } catch {
-        // Wallet may already be stopped
+      } catch (e) {
+        // Teardown is best-effort: the wallet may already be stopped, but a real
+        // failure here (network, storage corruption, a bug in stop() itself) could
+        // leak state into the next test, so surface it instead of swallowing.
+        loggers.test!.warn('Failed to stop wallet during cleanup', {
+          error: (e as Error).message,
+        });
       }
     }
   });
