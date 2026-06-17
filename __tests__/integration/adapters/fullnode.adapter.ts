@@ -7,6 +7,7 @@
  */
 
 import HathorWallet from '../../../src/new/wallet';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { WalletTracker } from '../utils/wallet-tracker.util';
 import {
   AddressScanPolicyData,
@@ -44,6 +45,7 @@ import type {
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
   AuthorityUtxoResult,
@@ -314,11 +316,36 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     options?: GetUtxosAdapterOptions
   ): Promise<GetUtxosResult> {
-    const result = await this.concrete(wallet).getUtxos(options);
+    const hWallet = this.concrete(wallet);
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const utxos: AdapterUtxo[] = [];
+    let totalAmount = 0n;
+    let totalUtxos = 0n;
+
+    // The fullnode facade exposes UTXO listing as an async generator. Drain it
+    // into an array so the adapter contract matches the wallet-service shape.
+    // `getAvailableUtxos` only yields available (unlocked) UTXOs by definition.
+    const generator = hWallet.getAvailableUtxos({
+      token: tokenId,
+      filter_address: options?.address,
+    });
+    for await (const utxo of generator) {
+      utxos.push({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        tokenId,
+        locked: false,
+      });
+      totalAmount += utxo.value;
+      totalUtxos += 1n;
+    }
+
     return {
-      total_amount_available: result.total_amount_available,
-      total_utxos_available: result.total_utxos_available,
-      utxos: result.utxos,
+      total_amount_available: totalAmount,
+      total_utxos_available: totalUtxos,
+      utxos,
     };
   }
 
