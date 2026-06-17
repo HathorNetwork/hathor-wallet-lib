@@ -221,8 +221,8 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
       {
         inputs: [
-          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
-          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
+          { txId: htrUtxo.txId, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
+          { txId: tokenUtxo.txId, token: tokenUid, index: tokenUtxo.index },
         ],
       }
     );
@@ -271,8 +271,8 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
       {
         inputs: [
-          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
-          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
+          { txId: tokenUtxo.txId, token: tokenUid, index: tokenUtxo.index },
+          { txId: htrUtxo.txId, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
         ],
       }
     );

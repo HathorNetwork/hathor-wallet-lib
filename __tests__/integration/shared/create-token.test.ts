@@ -318,10 +318,10 @@ describe.each(adapters)('[Shared] createNewToken — $name', adapter => {
       // between facades; this UTXO query confirms the routing.
       const { utxos } = await adapter.getUtxos(wallet, {
         token: NATIVE_TOKEN_UID,
-        filter_address: addr,
+        address: addr,
       });
       expect(utxos).toContainEqual(
-        expect.objectContaining({ address: addr, amount: expectedHtrAfter })
+        expect.objectContaining({ address: addr, value: expectedHtrAfter })
       );
     } finally {
       await adapter.stopWallet(wallet);
