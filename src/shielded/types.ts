@@ -32,24 +32,35 @@ export type {
  * A shielded output as received from the full node API.
  * This is the on-chain data before decryption.
  */
-export interface IShieldedOutput {
+/**
+ * The on-chain confidential fields of a shielded output: the Pedersen value
+ * commitment, its range proof, the ECDH ephemeral pubkey, and (FullShielded
+ * only) the asset commitment + surjection proof. Defined once and shared by
+ * every shielded-output representation — the wire `IShieldedOutput` here and
+ * the decrypted `IShieldedOutputEntry` in tx.outputs[] (src/types.ts) — so the
+ * field set can't drift between them.
+ */
+export interface IShieldedOutputProofs {
+  commitment: string; // hex, 33 bytes
+  range_proof: string; // hex, variable (~675 bytes)
+  ephemeral_pubkey: string; // hex, 33 bytes
+  // FullShielded only:
+  asset_commitment?: string; // hex, 33 bytes
+  surjection_proof?: string; // hex, variable
+}
+
+export interface IShieldedOutput extends IShieldedOutputProofs {
   // Optional because hathor-core nodes pre-`_shielded_output_to_json`
   // mode-field addition still send shielded outputs without `mode`.
   // Readers must fall back to detecting FullShielded via the presence
   // of `asset_commitment` (the same pattern already used in the
   // explorer's `TxData.isFullShielded`).
   mode?: ShieldedOutputMode;
-  commitment: string; // hex, 33 bytes
-  range_proof: string; // hex, variable (~675 bytes)
   script: string; // hex, output script (P2PKH/P2SH)
   // FullShielded outputs may omit `token_data` (the token UID is hidden
   // behind `asset_commitment`, so the field has no meaningful value).
   token_data?: number; // token index (AmountShielded only)
-  ephemeral_pubkey: string; // hex, 33 bytes
   decoded: IShieldedOutputDecoded;
-  // FullShielded only:
-  asset_commitment?: string; // hex, 33 bytes
-  surjection_proof?: string; // hex, variable
 }
 
 export interface IShieldedOutputDecoded {
