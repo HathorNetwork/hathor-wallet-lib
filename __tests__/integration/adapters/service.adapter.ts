@@ -39,6 +39,7 @@ import type {
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
   AuthorityUtxoResult,
@@ -53,6 +54,13 @@ const SERVICE_PASSWORD = 'testpass';
 
 /** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true };
+
+/**
+ * Like {@link CreateWalletResult}, but with `wallet` narrowed to the concrete
+ * {@link HathorWalletServiceWallet}. This adapter only ever builds service
+ * wallets, so service-specific tests can read `created.wallet` with no cast.
+ */
+type ServiceCreateWalletResult = CreateWalletResult & { wallet: HathorWalletServiceWallet };
 
 /**
  * Adapter for the wallet-service facade ({@link HathorWalletServiceWallet}).
@@ -123,7 +131,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     await GenesisWalletServiceHelper.stop();
   }
 
-  async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+  async createWallet(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // The wallet-service backend must know about the wallet before startReadOnly() can
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
@@ -146,7 +154,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
+  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
     const result = buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
@@ -161,7 +169,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
 
     return {
-      wallet: result.wallet as FuzzyWalletType,
+      wallet: result.wallet,
       storage: result.storage,
       words: result.words,
       addresses: result.addresses,
@@ -317,11 +325,25 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     options?: GetUtxosAdapterOptions
   ): Promise<GetUtxosResult> {
-    const result = await this.concrete(wallet).getUtxos(options);
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxos({
+      token: tokenId,
+      filter_address: options?.address,
+    });
+
+    const utxos: AdapterUtxo[] = result.utxos.map(u => ({
+      txId: u.tx_id,
+      index: u.index,
+      value: u.amount,
+      address: u.address,
+      tokenId,
+      locked: u.locked,
+    }));
+
     return {
       total_amount_available: result.total_amount_available,
       total_utxos_available: result.total_utxos_available,
-      utxos: result.utxos,
+      utxos,
     };
   }
 
