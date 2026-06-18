@@ -220,43 +220,42 @@ export class MemoryStore implements IStore {
   /** ADDRESSES */
 
   /**
-   * Iterate on the wallet's addresses for one chain.
+   * The index→base58 map for the chain selected by `opts.legacy` (defaults
+   * `true`):
+   *   - legacy  → `addressIndexes`         (p2pkh / p2sh / undefined)
+   *   - !legacy → `shieldedAddressIndexes` (user-facing 'shielded' receives)
    *
-   * `opts.legacy` defaults to `true` and selects which chain to walk:
-   *   - `true`  → p2pkh / p2sh / undefined (the user-facing legacy
-   *               chain). `shielded` and `shielded-spend` entries are
-   *               filtered out — they're internal to the receive
-   *               pipeline and surfacing them under the legacy chain
-   *               would leak the spend-derived P2PKH the wallet uses
-   *               to match incoming shielded outputs.
-   *   - `false` → user-facing shielded receive addresses (the 71-byte
-   *               encoded form). The internal `shielded-spend` entries are
-   *               still excluded — callers consuming this iterator (e.g. a
-   *               wallet's `/addresses` API) want the user-facing shape, not
-   *               the spend P2PKHs.
+   * `saveAddress` is the sole writer of both maps and routes by address type:
+   * 'shielded' into `shieldedAddressIndexes`, legacy into `addressIndexes`, and
+   * 'shielded-spend' into NEITHER. That last exclusion is deliberate and
+   * security-relevant — 'shielded-spend' is the internal spend-derived P2PKH the
+   * receive pipeline uses to match incoming shielded outputs, and surfacing it
+   * to callers (e.g. a wallet's `/addresses` API) would leak an internal
+   * address. Because it lives in neither map, every read path that goes through
+   * this helper (addressIter, addressCount, getAddressAtIndex) excludes it
+   * automatically — the partition is defined once, here + in `saveAddress`.
+   */
+  private chainIndexMap(opts?: IAddressChainOptions): Map<number, string> {
+    const legacy = opts?.legacy ?? true;
+    return legacy ? this.addressIndexes : this.shieldedAddressIndexes;
+  }
+
+  /**
+   * Iterate the wallet's addresses for one chain (`opts.legacy` defaults
+   * `true`), backed by that chain's index map (see `chainIndexMap`).
    *
-   * Both chains yield in insertion order, which equals BIP32-index order
-   * because addresses are saved sequentially per index by `loadAddresses` —
-   * the same ordering the legacy chain has always relied on.
+   * Yields in the index map's insertion order, which equals BIP32-index order
+   * for everything `loadAddresses` derives (it saves sequentially per index).
+   * The legacy chain additionally inherits whatever order the stream sync
+   * delivers in — the same ordering the legacy chain has always relied on, and
+   * identical to iterating `this.addresses` directly, since both are written in
+   * lockstep by `saveAddress`.
    *
    * @returns {AsyncGenerator<IAddressInfo>}
    */
   async *addressIter(opts: IAddressChainOptions = {}): AsyncGenerator<IAddressInfo, void, void> {
-    const legacy = opts.legacy ?? true;
-    for (const addrInfo of this.addresses.values()) {
-      if (legacy) {
-        // Legacy chain: skip shielded receive AND shielded-spend (the latter
-        // is the internal P2PKH the receive pipeline uses to match incoming
-        // shielded outputs — surfacing it under the legacy chain would leak
-        // an internal address).
-        if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
-          continue;
-        }
-      } else if (addrInfo.addressType !== 'shielded') {
-        // Shielded chain: only the user-facing 'shielded' receive entry.
-        continue;
-      }
-      yield addrInfo;
+    for (const base58 of this.chainIndexMap(opts).values()) {
+      yield this.addresses.get(base58) as IAddressInfo;
     }
   }
 
@@ -294,19 +293,15 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Count the number of addresses in storage for one chain.
-   *
-   * `opts.legacy` defaults to `true`. Each index map holds exactly its chain's
-   * addresses — `saveAddress` routes `shielded` into `shieldedAddressIndexes`,
-   * legacy (p2pkh/p2sh/undefined) into `addressIndexes`, and `shielded-spend`
-   * into neither (it's an internal P2PKH, not a counted chain address) — so
-   * the map size is the per-chain count in O(1).
+   * Count the number of addresses in storage for one chain (`opts.legacy`
+   * defaults `true`). The chain's index map holds exactly its addresses (see
+   * `chainIndexMap`), so its size is the per-chain count in O(1).
    *
    * @async
    * @returns {Promise<number>} A promise with the number of addresses
    */
   async addressCount(opts?: IAddressChainOptions): Promise<number> {
-    return opts?.legacy === false ? this.shieldedAddressIndexes.size : this.addressIndexes.size;
+    return this.chainIndexMap(opts).size;
   }
 
   /**
@@ -319,9 +314,7 @@ export class MemoryStore implements IStore {
     index: number,
     opts?: IAddressChainOptions
   ): Promise<IAddressInfo | null> {
-    const isLegacy = opts?.legacy !== false;
-    const indexMap = isLegacy ? this.addressIndexes : this.shieldedAddressIndexes;
-    const addr = indexMap.get(index);
+    const addr = this.chainIndexMap(opts).get(index);
     if (addr === undefined) {
       // We do not have this index loaded on storage, it should be generated instead
       return null;
