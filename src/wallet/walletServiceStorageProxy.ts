@@ -174,15 +174,10 @@ export class WalletServiceStorageProxy {
   private convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
     const { tx, meta } = fullTxResponse;
 
-    // SEPARATED model: keep `outputs[]` transparent-only. The wire may still
-    // deliver shielded outputs INLINE in `outputs[]` (legacy form); filter
-    // those out here so a downstream resolver doesn't treat them as
-    // transparent. The dedicated `shielded_outputs[]` field (passthrough — not
-    // on the FullNodeTx type) is threaded through unchanged so shielded spends
-    // can still resolve their parent slots via getUtxo/resolveSpentOutput.
-    const transparentOutputs = tx.outputs.filter(
-      output => !transactionUtils.isInlineShieldedWireEntry(output)
-    );
+    // SEPARATED model: `outputs[]` is transparent-only. The dedicated
+    // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
+    // threaded through unchanged so shielded spends can still resolve their
+    // parent slots via getUtxo/resolveSpentOutput.
     const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
       .shielded_outputs;
 
@@ -201,7 +196,7 @@ export class WalletServiceStorageProxy {
           type: input.decoded.type ?? undefined,
         },
       })) as IHistoryTx['inputs'],
-      outputs: transparentOutputs.map(output => ({
+      outputs: tx.outputs.map(output => ({
         ...output,
         decoded: {
           ...output.decoded,

@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  *
  * Direct coverage for the SEPARATED-model shielded transaction utils:
- * isInlineShieldedWireEntry (the wire discriminator), resolveSpentOutput (the
- * arithmetic parent-output resolver: idx < T → transparent, T ≤ idx < T+S →
- * shielded slot idx-T, else undefined), normalizeShieldedOutputs, and
- * getTxBalance crediting/debiting owned shielded outputs.
+ * resolveSpentOutput (the arithmetic parent-output resolver: idx < T →
+ * transparent, T ≤ idx < T+S → shielded slot idx-T, else undefined),
+ * normalizeShieldedOutputs, and getTxBalance crediting/debiting owned
+ * shielded outputs.
  */
 
 import transactionUtils from '../../src/utils/transaction';
@@ -76,17 +76,6 @@ function makeTx(
     ...extra,
   };
 }
-
-describe('isInlineShieldedWireEntry', () => {
-  it('discriminates inline wire entries on the type field', () => {
-    expect(transactionUtils.isInlineShieldedWireEntry({ type: 'shielded', commitment: 'ab' })).toBe(
-      true
-    );
-    expect(transactionUtils.isInlineShieldedWireEntry(makeTransparentOutput(5n, 'W-addr'))).toBe(
-      false
-    );
-  });
-});
 
 describe('resolveSpentOutput', () => {
   // Parent layout: T=2 transparent outputs, S=2 shielded outputs.
@@ -163,34 +152,39 @@ describe('resolveSpentOutput', () => {
 });
 
 describe('normalizeShieldedOutputs', () => {
-  it('extracts inline shielded entries from outputs[] and converts base64 fields to hex', () => {
+  it('converts base64 confidential fields in shielded_outputs[] to hex in place', () => {
     const base64Proof = Buffer.from([0x01, 0x02, 0xff]).toString('base64');
-    const tx = makeTx([
-      makeTransparentOutput(1n, 'A'),
-      {
-        // Wire shape from to_json_extended: shielded entry inside outputs[]
-        // with base64-encoded buffers.
-        type: 'shielded',
-        value: 0n,
-        token_data: 0,
-        script: Buffer.from([0xaa]).toString('base64'),
-        decoded: {},
-        token: '00',
-        spent_by: null,
-        commitment: 'ab'.repeat(33), // already hex — must pass through
-        range_proof: base64Proof,
-        ephemeral_pubkey: 'cd'.repeat(33),
-      } as unknown as IHistoryOutput,
-    ]);
+    const tx = makeTx(
+      [makeTransparentOutput(1n, 'A')],
+      [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'ab'.repeat(33), // already hex — must pass through unchanged
+          range_proof: base64Proof, // base64 — must become hex
+          script: 'aa',
+          token_data: 0,
+          ephemeral_pubkey: 'cd'.repeat(33),
+          decoded: {},
+          spent_by: null,
+        },
+      ]
+    );
 
     transactionUtils.normalizeShieldedOutputs(tx);
 
-    // Transparent output stays; shielded entry moved to shielded_outputs[]
+    // outputs[] is untouched (transparent-only); the shielded entry is converted in place
     expect(tx.outputs).toHaveLength(1);
     expect(tx.shielded_outputs).toHaveLength(1);
     const so = tx.shielded_outputs![0];
     expect(so.commitment).toBe('ab'.repeat(33));
     expect(so.range_proof).toBe('0102ff'); // base64 -> hex
+  });
+
+  it('is a no-op for a transparent-only tx (no shielded_outputs)', () => {
+    const tx = makeTx([makeTransparentOutput(1n, 'A')]);
+    transactionUtils.normalizeShieldedOutputs(tx);
+    expect(tx.outputs).toHaveLength(1);
+    expect(tx.shielded_outputs).toBeUndefined();
   });
 
   it('is idempotent when shielded_outputs is already populated', () => {
@@ -212,27 +206,31 @@ describe('normalizeShieldedOutputs', () => {
     expect(JSON.stringify(tx.shielded_outputs)).toBe(before);
   });
 
-  it('preserves owned-marker fields on an inline wire entry', () => {
-    const tx = makeTx([
-      makeTransparentOutput(1n, 'A'),
-      {
-        type: 'shielded',
-        value: 77n,
-        token: '00',
-        token_data: 0,
-        script: 'bb',
-        decoded: { type: 'P2PKH', address: 'W-spend', timelock: null },
-        spent_by: null,
-        commitment: 'ab'.repeat(33),
-        range_proof: 'cc',
-        ephemeral_pubkey: 'dd',
-        blindingFactor: 'ff'.repeat(32),
-      } as unknown as IHistoryOutput,
-    ]);
+  it('preserves owned-marker fields while converting an owned shielded entry', () => {
+    const tx = makeTx(
+      [makeTransparentOutput(1n, 'A')],
+      [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'ab'.repeat(33),
+          range_proof: Buffer.from([0xcc]).toString('base64'), // base64 — converted to hex
+          script: 'bb',
+          token_data: 0,
+          ephemeral_pubkey: 'dd',
+          decoded: { type: 'P2PKH', address: 'W-spend', timelock: null },
+          spent_by: null,
+          // owned-marker fields, populated post-decryption — must survive normalize
+          value: 77n,
+          token: '00',
+          blindingFactor: 'ff'.repeat(32),
+        },
+      ]
+    );
 
     transactionUtils.normalizeShieldedOutputs(tx);
 
     const so = tx.shielded_outputs![0];
+    expect(so.range_proof).toBe('cc'); // base64 -> hex
     expect(so.value).toBe(77n);
     expect(so.token).toBe('00');
     expect(so.blindingFactor).toBe('ff'.repeat(32));

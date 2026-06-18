@@ -17,7 +17,6 @@ import { AddressInfoObject } from '../../src/wallet/types';
 
 jest.mock('../../src/utils/transaction', () => ({
   getSignatureForTx: jest.fn(),
-  isInlineShieldedWireEntry: jest.fn().mockReturnValue(false),
 }));
 
 describe('WalletServiceStorageProxy', () => {
