@@ -204,6 +204,8 @@ export async function deriveShieldedAddressFromStorage(
     bip32AddressIndex: index,
     publicKey: info.scanPubkey,
     addressType: 'shielded',
+    // Pair link: from the user-facing shielded address to its on-chain spend P2PKH.
+    ctMappingAddress: info.spendAddress,
   };
 
   // The on-chain P2PKH derived from the spend pubkey (spend_pubkey → HASH160 → P2PKH).
@@ -214,6 +216,8 @@ export async function deriveShieldedAddressFromStorage(
     bip32AddressIndex: index,
     publicKey: info.spendPubkey,
     addressType: 'shielded-spend',
+    // Pair link: from the on-chain spend P2PKH back to the user-facing shielded address.
+    ctMappingAddress: info.base58,
   };
 
   return { shieldedAddress, spendAddress };

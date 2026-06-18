@@ -115,6 +115,15 @@ export interface IAddressInfo {
   // 'shielded-spend' = the on-chain P2PKH derived from HASH160(spend_pubkey);
   //   this is the form getAddressType()/script builders accept.
   addressType?: AddressType | 'shielded-spend';
+  // Cross-link between the two records of a shielded address pair (which share
+  // the same BIP32 index), so callers translate between them in O(1) without a
+  // full-address scan or a parallel index map:
+  //   - on a 'shielded' record       → the paired 'shielded-spend' P2PKH base58
+  //   - on a 'shielded-spend' record → the paired 'shielded' (71-byte) base58
+  // Undefined for legacy records. Set once when the pair is derived
+  // (deriveShieldedAddressFromStorage), so `this.addresses` stays the single
+  // source of truth for the mapping.
+  ctMappingAddress?: string;
 }
 
 /**

@@ -763,27 +763,18 @@ export class MemoryStore implements IStore {
     let utxoNum = 0;
 
     // Resolve filter_address to its on-chain form. UTXOs always carry the
-    // address that actually labels the on-chain output — for shielded
-    // outputs that's the spend-derived P2PKH (`addressType:
-    // 'shielded-spend'`), not the user-facing 71-byte encoded shielded
-    // address. So if the caller passed the user-facing shielded form,
-    // swap to the matching spend P2PKH at the same BIP32 index before
-    // comparing against utxo.address. Without this swap the filter would
-    // never match a shielded UTXO when a shielded receive address was
-    // passed.
+    // address that actually labels the on-chain output — for shielded outputs
+    // that's the spend-derived P2PKH (`addressType: 'shielded-spend'`), not the
+    // user-facing 71-byte encoded shielded address. So if the caller passed the
+    // user-facing shielded form, swap to its paired spend P2PKH before comparing
+    // against utxo.address. The pairing is stored on the address record
+    // (`ctMappingAddress`, set at derivation), so this is an O(1) lookup — no
+    // scan over all addresses, no parallel index map.
     let effectiveFilterAddress = options.filter_address;
     if (effectiveFilterAddress) {
       const info = this.addresses.get(effectiveFilterAddress);
-      if (info?.addressType === 'shielded') {
-        for (const candidate of this.addresses.values()) {
-          if (
-            candidate.addressType === 'shielded-spend' &&
-            candidate.bip32AddressIndex === info.bip32AddressIndex
-          ) {
-            effectiveFilterAddress = candidate.base58;
-            break;
-          }
-        }
+      if (info?.addressType === 'shielded' && info.ctMappingAddress) {
+        effectiveFilterAddress = info.ctMappingAddress;
       }
     }
 

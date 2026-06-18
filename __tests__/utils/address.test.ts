@@ -257,20 +257,24 @@ test('deriveShieldedAddressFromStorage returns paired shielded + spend records',
   // Independent oracle: the same inputs through the pure derivation helper.
   const expected = deriveShieldedAddress(scanXpubkey, spendXpubkey, index, networkName);
 
-  // User-facing shielded receive record (71-byte encoded form).
+  // User-facing shielded receive record (71-byte encoded form). Its
+  // ctMappingAddress links to the paired on-chain spend P2PKH.
   expect(result!.shieldedAddress).toEqual({
     base58: expected.base58,
     bip32AddressIndex: index,
     publicKey: expected.scanPubkey,
     addressType: 'shielded',
+    ctMappingAddress: expected.spendAddress,
   });
 
-  // Internal on-chain spend-derived P2PKH record (HASH160(spend_pubkey)).
+  // Internal on-chain spend-derived P2PKH record (HASH160(spend_pubkey)). Its
+  // ctMappingAddress links back to the paired user-facing shielded address.
   expect(result!.spendAddress).toEqual({
     base58: expected.spendAddress,
     bip32AddressIndex: index,
     publicKey: expected.spendPubkey,
     addressType: 'shielded-spend',
+    ctMappingAddress: expected.base58,
   });
 
   // Both records share the BIP32 index; the spend address is the on-chain

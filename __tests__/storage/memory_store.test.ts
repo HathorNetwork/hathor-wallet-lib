@@ -372,6 +372,53 @@ test('utxo methods', async () => {
   expect(buf[0].shielded).not.toBe(true);
 });
 
+test('selectUtxos resolves a shielded filter_address to its spend P2PKH via ctMappingAddress', async () => {
+  const store = new MemoryStore();
+  // A shielded receive pair at index 0, cross-linked via ctMappingAddress the
+  // same way deriveShieldedAddressFromStorage sets it: the user-facing ct
+  // address points to its on-chain spend P2PKH and vice-versa.
+  await store.saveAddress({
+    base58: 'ct-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded',
+    ctMappingAddress: 'spend-0',
+  });
+  await store.saveAddress({
+    base58: 'spend-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded-spend',
+    ctMappingAddress: 'ct-0',
+  });
+  // The on-chain UTXO is labelled with the spend P2PKH, never the 71-byte ct form.
+  await store.saveUtxo({
+    txId: 'txS',
+    index: 0,
+    token: '00',
+    address: 'spend-0',
+    value: 50n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'bb'.repeat(32),
+  });
+
+  // Filtering by the user-facing ct address must resolve (O(1) via
+  // ctMappingAddress) to the spend P2PKH and find the UTXO.
+  const byCt = [];
+  for await (const u of store.selectUtxos({ filter_address: 'ct-0' })) byCt.push(u);
+  expect(byCt).toHaveLength(1);
+  expect(byCt[0].txId).toEqual('txS');
+  expect(byCt[0].address).toEqual('spend-0');
+
+  // Filtering by the spend P2PKH directly also matches (no swap needed).
+  const bySpend = [];
+  for await (const u of store.selectUtxos({ filter_address: 'spend-0' })) bySpend.push(u);
+  expect(bySpend).toHaveLength(1);
+  expect(bySpend[0].txId).toEqual('txS');
+});
+
 test('access data methods', async () => {
   const store = new MemoryStore();
   const xpriv = new HDPrivateKey();
