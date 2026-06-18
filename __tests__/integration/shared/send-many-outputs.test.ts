@@ -220,4 +220,53 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
     );
     expect(hash).toBeDefined();
   });
+
+  /**
+   * Regression: HathorWallet.sendManyOutputsSendTransaction's `outputs.map(...)`
+   * silently dropped `type` and `data` on the non-shielded branch, so a data
+   * output { type: 'data', data: 'test' } fell through to `new Address(undefined)`
+   * and threw "Parameter should be a string." Caught first by headless
+   * `send-tx.test.js` data-output tests; covered here so the wallet-lib suite
+   * — across both facades — catches future drift in the data-output path.
+   */
+  it('should send a transaction with a data-script output', async () => {
+    const { wallet } = await adapter.createWallet();
+    await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, 10n);
+
+    const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, [
+      {
+        type: 'data',
+        data: 'integration-test-data',
+      },
+    ]);
+
+    const decoded = await adapter.getTx(wallet, tx.hash);
+    // The data script burns 0.01 HTR; remaining 9.99 returns as change.
+    const dataOut = decoded.outputs.find(o => o.value === 1n);
+    expect(dataOut).toBeDefined();
+    const changeOut = decoded.outputs.find(o => o.value === 9n);
+    expect(changeOut).toBeDefined();
+  });
+
+  it('should send a transaction mixing a data-script output and an address output', async () => {
+    const { wallet } = await adapter.createWallet();
+    const recipient = await adapter.createWallet();
+    await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, 100n);
+
+    const recipientAddr = (await recipient.wallet.getAddressAtIndex(0))!;
+    const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, [
+      { type: 'data', data: 'mixed-out-prefix' },
+      { address: recipientAddr, value: 50n, token: NATIVE_TOKEN_UID },
+      { type: 'data', data: 'mixed-out-suffix' },
+    ]);
+
+    const decoded = await adapter.getTx(wallet, tx.hash);
+    // 2 data outputs (1n each) + 1 recipient output (50n) + 1 change (48n)
+    const dataOuts = decoded.outputs.filter(o => o.value === 1n);
+    expect(dataOuts).toHaveLength(2);
+    const recipientOut = decoded.outputs.find(o => o.value === 50n);
+    expect(recipientOut).toBeDefined();
+    const changeOut = decoded.outputs.find(o => o.value === 48n);
+    expect(changeOut).toBeDefined();
+  });
 });

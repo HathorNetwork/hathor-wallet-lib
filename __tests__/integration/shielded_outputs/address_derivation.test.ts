@@ -19,6 +19,7 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateConnection,
   generateWalletHelper,
+  registerShieldedProvider,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
@@ -116,6 +117,7 @@ describe('shielded outputs — Group D: Address derivation', () => {
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: precalculated.addresses,
     });
+    registerShieldedProvider(wallet);
     await wallet.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });
     await waitForWalletReady(wallet);
     const shielded3 = await wallet.getAddressAtIndex(3, { legacy: false });
@@ -129,6 +131,7 @@ describe('shielded outputs — Group D: Address derivation', () => {
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: precalculated.addresses,
     });
+    registerShieldedProvider(wallet2);
     await wallet2.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });
     await waitForWalletReady(wallet2);
     const shielded3Again = await wallet2.getAddressAtIndex(3, { legacy: false });
