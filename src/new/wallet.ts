@@ -1707,6 +1707,22 @@ class HathorWallet extends EventEmitter {
     // already-separated deliveries).
     transactionUtils.normalizeShieldedOutputs(newTx);
 
+    // SECURITY: the wire never legitimately carries decoded shielded values —
+    // the fullnode hides them behind commitments. Any value/token/blinding on an
+    // incoming WS payload is therefore UNTRUSTED: a malicious or compromised
+    // data source could pre-fill them to forge a credit that bypasses the ECDH
+    // rewind (processNewTx's `alreadyDecoded` gate would skip verification). See
+    // crypto_failures J.40–J.43. Strip the owned-marker fields here so ownership
+    // is re-established ONLY from our own rewind or the per-slot merge from our
+    // own storage (below). commitment / range_proof / ephemeral_pubkey / script /
+    // decoded.address are kept — they're public and required to rewind.
+    for (const so of newTx.shielded_outputs ?? []) {
+      so.value = undefined;
+      so.token = undefined;
+      so.blindingFactor = undefined;
+      so.assetBlindingFactor = undefined;
+    }
+
     // Later we will compare the storageTx and the received tx.
     // To avoid reference issues we clone the current storageTx.
     const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
@@ -1741,11 +1757,22 @@ class HathorWallet extends EventEmitter {
           input.token_data = storedInput.token_data ?? 0;
         }
       }
+      // Restore shielded slots dropped by a metadata-only re-delivery. The
+      // fullnode can re-send a known tx WITHOUT its shielded_outputs (or with
+      // fewer slots) — a bare metadata ping. The unconditional addTx below would
+      // then overwrite the decoded array with nothing, eroding the balance to
+      // undefined on every such update (A.3/A.4). Re-base on the stored array so
+      // the per-slot merge can preserve every decoded slot; values copied here
+      // come from our own storage, so they are trusted (unlike wire-provided
+      // values, which were stripped above).
+      const storedShielded = storageTx.shielded_outputs ?? [];
+      if (storedShielded.length > (newTx.shielded_outputs?.length ?? 0)) {
+        newTx.shielded_outputs = cloneDeep(storedShielded);
+      }
       // PER-SLOT merge of shielded_outputs[]: for each slot whose incoming
       // value is undefined (non-owned or bare re-delivery), copy the
       // owned-marker + decoded fields the wallet already decrypted on a prior
       // receipt. This preserves balance + unblinding data across re-deliveries.
-      const storedShielded = storageTx.shielded_outputs ?? [];
       const newShielded = newTx.shielded_outputs ?? [];
       for (let s = 0; s < newShielded.length; s += 1) {
         const stored = storedShielded[s];

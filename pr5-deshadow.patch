@@ -1,0 +1,14 @@
+diff --git a/__tests__/utils/address.test.ts b/__tests__/utils/address.test.ts
+index 202e71e2..391e100b 100644
+--- a/__tests__/utils/address.test.ts
++++ b/__tests__/utils/address.test.ts
+@@ -208,7 +208,8 @@ test('Get address from pubkey', async () => {
+ });
+ 
+ test('deriveShieldedAddressFromStorage returns null when shielded keys unavailable', async () => {
+-  const { HDPrivateKey } = await import('bitcore-lib');
++  // HDPrivateKey comes from the top-level import (added by the pr-4 review
++  // tests); re-importing it here shadowed that declaration.
+   const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+   const { encryptData } = await import('../../src/utils/crypto');
+   const store = new MemoryStore();

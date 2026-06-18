@@ -83,16 +83,29 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
     // Always present:
     tx_id: txIdSchema,
     index: z.number(),
-    // Set to 'shielded' when this input spends a shielded output.
-    type: z.literal('shielded').optional(),
+    // Marks a shielded spend when set to 'shielded'. The alpha fullnode also
+    // stamps 'transparent' on ordinary inputs (older nodes omit the field).
+    // Accept any string and never fail-closed on this external discriminator:
+    // the wallet's only semantic use is `=== 'shielded'` (see
+    // utils/transaction.ts:isShieldedInputEntry). A strict literal here rejects
+    // every transparent input and bricks wallet-history loading.
+    type: z.string().optional(),
     commitment: z.string().optional(),
   })
   .passthrough() as ZodSchema<IHistoryInput>;
 
-// SEPARATED model: `outputs[]` is transparent-only post-normalize. Shielded
-// outputs live in their own `shielded_outputs[]` list (see
-// `IHistoryShieldedOutputSchema` below / `IHistoryShieldedOutput` in types.ts).
-export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
+// SEPARATED model: `outputs[]` is transparent-only *post-normalize*. But this
+// schema validates the RAW wire, and alpha-v3 fullnodes — and the WS real-time
+// path (`IHistoryTxSchema.safeParse(wsData.history)` in onNewTx) — deliver
+// shielded outputs INLINE in outputs[] with `type: 'shielded'` and a commitment
+// instead of a `value`. `normalizeShieldedOutputs()` relocates those into
+// `shielded_outputs[]` immediately after validation (storage.addTx / onNewTx),
+// so the schema MUST accept the inline shape here. Requiring `value` rejects
+// every inline shielded output before normalize can run, which bricks every tx
+// that contains a shielded output (validation throws while loading history).
+// Hence a union of the transparent shape and the inline shielded wire entry; the
+// transparent-only outputs[] invariant is enforced post-normalize, not here.
+const transparentHistoryOutputSchema = z
   .object({
     value: bigIntCoercibleSchema,
     token_data: z.number(),
@@ -103,6 +116,22 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
     selected_as_input: z.boolean().optional(),
   })
   .passthrough();
+
+// Inline shielded wire entry (v3-compat). Only the `type` discriminator and the
+// commitment are needed to recognize it; normalizeShieldedOutputs re-reads and
+// hex-normalizes range_proof / ephemeral_pubkey / script / asset_commitment.
+// passthrough keeps those fields available for the normalize pass.
+const inlineShieldedHistoryOutputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    commitment: z.string(),
+  })
+  .passthrough();
+
+export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z.union([
+  transparentHistoryOutputSchema,
+  inlineShieldedHistoryOutputSchema,
+]) as unknown as ZodSchema<IHistoryOutput>;
 
 export const IHistoryNanoContractBaseAction = z.object({
   token_uid: z.string(),

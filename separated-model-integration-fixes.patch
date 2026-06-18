@@ -1,0 +1,454 @@
+diff --git a/__tests__/schemas.test.ts b/__tests__/schemas.test.ts
+new file mode 100644
+index 00000000..8195e3f6
+--- /dev/null
++++ b/__tests__/schemas.test.ts
+@@ -0,0 +1,179 @@
++/**
++ * Copyright (c) Hathor Labs and its affiliates.
++ *
++ * This source code is licensed under the MIT license found in the
++ * LICENSE file in the root directory of this source tree.
++ */
++
++import { addressHistorySchema } from '../src/api/schemas/wallet';
++import { IHistoryInputSchema } from '../src/schemas';
++import transactionUtils from '../src/utils/transaction';
++import { IHistoryTx } from '../src/types';
++
++/**
++ * Regression coverage for the `thin_wallet/address_history` response schema.
++ *
++ * The SEPARATED-model rework added a `type` discriminator to history inputs to
++ * mark shielded spends. The alpha fullnode also stamps `type: "transparent"` on
++ * ordinary transparent inputs — so a schema that only accepts the literal
++ * "shielded" (or absent) rejects every transparent input, which throws while
++ * loading wallet history and bricks every wallet start. These tests pin the
++ * accepted shapes so the schema can never regress to fail-closed on a plain
++ * transparent input again.
++ */
++describe('addressHistorySchema — history input `type` discriminator', () => {
++  // A real genesis funding tx as returned by the alpha fullnode: a single
++  // transparent input carrying `type: "transparent"`, two transparent outputs.
++  const transparentInput = {
++    value: 100000000000n,
++    token_data: 0,
++    script: 'dqkUZmZbJ/fbxMjAidL2hsFwx01m8LWIrA==',
++    decoded: { type: 'P2PKH', address: 'WY1URKUnqCTyiixW1Dw29vmeG99hNN4EW6', timelock: null },
++    token: '00',
++    type: 'transparent',
++    tx_id: '00000334a21fbb58b4db8d7ff282d018e03e2977abd3004cf378fb1d677c3967',
++    index: 0,
++  };
++
++  const transparentOutput = {
++    value: 99999999000n,
++    token_data: 0,
++    script: 'dqkUC0ZxRSSEE4r0LK+clnbZUaB1IyyIrA==',
++    decoded: { type: 'P2PKH', address: 'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f', timelock: null },
++    token: '00',
++    spent_by: null,
++  };
++
++  const makeHistoryResponse = (input: Record<string, unknown>) => ({
++    success: true,
++    history: [
++      {
++        tx_id: '7a274493f738aa59572ea1a0fdce0d765dd8a28ca47d5c73b2f68c6ce76134cf',
++        version: 1,
++        weight: 1.0,
++        timestamp: 1781753958,
++        is_voided: false,
++        inputs: [input],
++        outputs: [transparentOutput],
++        parents: [
++          '54165cef1fd4cf2240d702b8383c307c822c16ca407f78014bdefa189a7571c2',
++          '039906854ce6309b3180945f2a23deb9edff369753f7082e19053f5ac11bfbae',
++        ],
++        tokens: [],
++      },
++    ],
++    has_more: false,
++    first_hash: null,
++    first_address: null,
++  });
++
++  it('accepts an explicit transparent input (`type: "transparent"`)', () => {
++    const result = addressHistorySchema.safeParse(makeHistoryResponse(transparentInput));
++    expect(result.success).toBe(true);
++  });
++
++  it('accepts a transparent input that omits `type` (older fullnodes)', () => {
++    const { type: _type, ...noType } = transparentInput;
++    const result = addressHistorySchema.safeParse(makeHistoryResponse(noType));
++    expect(result.success).toBe(true);
++  });
++
++  it('accepts a shielded input (`type: "shielded"`)', () => {
++    const shieldedInput = {
++      tx_id: '00000334a21fbb58b4db8d7ff282d018e03e2977abd3004cf378fb1d677c3967',
++      index: 0,
++      type: 'shielded',
++      commitment: '02abcdef',
++    };
++    const result = addressHistorySchema.safeParse(makeHistoryResponse(shieldedInput));
++    expect(result.success).toBe(true);
++  });
++
++  it('IHistoryInputSchema accepts both transparent and shielded discriminators', () => {
++    expect(IHistoryInputSchema.safeParse(transparentInput).success).toBe(true);
++    expect(
++      IHistoryInputSchema.safeParse({ tx_id: transparentInput.tx_id, index: 0, type: 'shielded' })
++        .success
++    ).toBe(true);
++  });
++});
++
++/**
++ * Regression coverage for INLINE shielded outputs in `outputs[]`.
++ *
++ * The alpha-v3 fullnode (and the WS real-time path) deliver shielded outputs
++ * nested inside `outputs[]` with `type: 'shielded'` and a commitment instead of
++ * a value. The SEPARATED-model schema briefly required `value` on every output,
++ * which rejected the inline shielded shape and threw before
++ * `normalizeShieldedOutputs` could relocate it into `shielded_outputs[]` —
++ * bricking every tx that contains a shielded output. These tests pin both the
++ * schema acceptance and the normalize relocation.
++ */
++describe('addressHistorySchema — inline shielded outputs in outputs[]', () => {
++  // A real inline shielded output as emitted by the fullnode: no `value`, a hex
++  // commitment, base64 range_proof/script, hex ephemeral_pubkey, address-only
++  // decoded. `range_proof` is base64 "abcd" so we can assert hex conversion.
++  const inlineShieldedOutput = {
++    type: 'shielded',
++    commitment: '09fbb71fb77f29184e414aa0ebda936eac97738b749247c6597be233697f1efc6c',
++    range_proof: 'YWJjZA==', // base64("abcd") -> hex "61626364"
++    script: 'dqkUF7S4s7xJDTbP3RtOd8pqL961GpaIrA==',
++    ephemeral_pubkey: '02f924f2c619c63bfebb3657a6d464fd7358bace065d804a8e3c37a9c8c996a05b',
++    token_data: 0,
++    decoded: { address: 'WQqNv68SWbgULkMXfNtwM7gdRGcgUa5oab' },
++    spent_by: null,
++    token: '00',
++  };
++
++  // Plain number `value` (not bigint) so the JSON clone in the normalize test
++  // works; bigIntCoercibleSchema coerces it, and normalize never reads it.
++  const transparentOutput = {
++    value: 60,
++    token_data: 0,
++    script: 'dqkU+m9UioQSJyfKgU/p334z9ecz24KIrA==',
++    decoded: { type: 'P2PKH', address: 'WmWDBFDRs4s4j6rXded6HLEvCMo51LkbXA', timelock: null },
++    token: '00',
++    spent_by: null,
++  };
++
++  const historyTx = {
++    tx_id: '2949aeadd060f6ffbbcb40c88fe60166a0585d5a8e27e49d220c1b54cf16ad81',
++    version: 1,
++    weight: 1.0,
++    timestamp: 1781756639,
++    is_voided: false,
++    inputs: [],
++    outputs: [transparentOutput, inlineShieldedOutput],
++    parents: [],
++    tokens: [],
++  };
++
++  it('accepts a tx whose outputs[] contains an inline shielded output', () => {
++    const result = addressHistorySchema.safeParse({
++      success: true,
++      history: [historyTx],
++      has_more: false,
++      first_hash: null,
++      first_address: null,
++    });
++    expect(result.success).toBe(true);
++  });
++
++  it('normalizeShieldedOutputs relocates the inline entry into shielded_outputs[] (transparent-only outputs[], hex fields)', () => {
++    // Clone so the shared fixture is not mutated in place.
++    const tx = JSON.parse(JSON.stringify(historyTx)) as unknown as IHistoryTx;
++    transactionUtils.normalizeShieldedOutputs(tx);
++
++    // outputs[] is transparent-only post-normalize; the shielded entry moved out.
++    expect(tx.outputs).toHaveLength(1);
++    expect((tx.outputs[0] as { value?: unknown }).value).toBeDefined();
++    expect(tx.shielded_outputs).toHaveLength(1);
++
++    const so = tx.shielded_outputs![0];
++    // commitment was already hex -> unchanged; range_proof base64 -> hex.
++    expect(so.commitment).toBe(inlineShieldedOutput.commitment);
++    expect(so.range_proof).toBe('61626364');
++    expect(so.range_proof).toMatch(/^[0-9a-f]+$/);
++    expect(so.spent_by).toBeNull();
++  });
++});
+diff --git a/src/new/wallet.ts b/src/new/wallet.ts
+index 91dca28e..e31f4469 100644
+--- a/src/new/wallet.ts
++++ b/src/new/wallet.ts
+@@ -1711,6 +1711,22 @@ class HathorWallet extends EventEmitter {
+     // already-separated deliveries).
+     transactionUtils.normalizeShieldedOutputs(newTx);
+ 
++    // SECURITY: the wire never legitimately carries decoded shielded values —
++    // the fullnode hides them behind commitments. Any value/token/blinding on an
++    // incoming WS payload is therefore UNTRUSTED: a malicious or compromised
++    // data source could pre-fill them to forge a credit that bypasses the ECDH
++    // rewind (processNewTx's `alreadyDecoded` gate would skip verification). See
++    // crypto_failures J.40–J.43. Strip the owned-marker fields here so ownership
++    // is re-established ONLY from our own rewind or the per-slot merge from our
++    // own storage (below). commitment / range_proof / ephemeral_pubkey / script /
++    // decoded.address are kept — they're public and required to rewind.
++    for (const so of newTx.shielded_outputs ?? []) {
++      so.value = undefined;
++      so.token = undefined;
++      so.blindingFactor = undefined;
++      so.assetBlindingFactor = undefined;
++    }
++
+     // Later we will compare the storageTx and the received tx.
+     // To avoid reference issues we clone the current storageTx.
+     const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
+@@ -1745,11 +1761,22 @@ class HathorWallet extends EventEmitter {
+           input.token_data = storedInput.token_data ?? 0;
+         }
+       }
++      // Restore shielded slots dropped by a metadata-only re-delivery. The
++      // fullnode can re-send a known tx WITHOUT its shielded_outputs (or with
++      // fewer slots) — a bare metadata ping. The unconditional addTx below would
++      // then overwrite the decoded array with nothing, eroding the balance to
++      // undefined on every such update (A.3/A.4). Re-base on the stored array so
++      // the per-slot merge can preserve every decoded slot; values copied here
++      // come from our own storage, so they are trusted (unlike wire-provided
++      // values, which were stripped above).
++      const storedShielded = storageTx.shielded_outputs ?? [];
++      if (storedShielded.length > (newTx.shielded_outputs?.length ?? 0)) {
++        newTx.shielded_outputs = cloneDeep(storedShielded);
++      }
+       // PER-SLOT merge of shielded_outputs[]: for each slot whose incoming
+       // value is undefined (non-owned or bare re-delivery), copy the
+       // owned-marker + decoded fields the wallet already decrypted on a prior
+       // receipt. This preserves balance + unblinding data across re-deliveries.
+-      const storedShielded = storageTx.shielded_outputs ?? [];
+       const newShielded = newTx.shielded_outputs ?? [];
+       for (let s = 0; s < newShielded.length; s += 1) {
+         const stored = storedShielded[s];
+diff --git a/src/schemas.ts b/src/schemas.ts
+index 26f816c8..3277d290 100644
+--- a/src/schemas.ts
++++ b/src/schemas.ts
+@@ -83,16 +83,29 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
+     // Always present:
+     tx_id: txIdSchema,
+     index: z.number(),
+-    // Set to 'shielded' when this input spends a shielded output.
+-    type: z.literal('shielded').optional(),
++    // Marks a shielded spend when set to 'shielded'. The alpha fullnode also
++    // stamps 'transparent' on ordinary inputs (older nodes omit the field).
++    // Accept any string and never fail-closed on this external discriminator:
++    // the wallet's only semantic use is `=== 'shielded'` (see
++    // utils/transaction.ts:isShieldedInputEntry). A strict literal here rejects
++    // every transparent input and bricks wallet-history loading.
++    type: z.string().optional(),
+     commitment: z.string().optional(),
+   })
+   .passthrough() as ZodSchema<IHistoryInput>;
+ 
+-// SEPARATED model: `outputs[]` is transparent-only post-normalize. Shielded
+-// outputs live in their own `shielded_outputs[]` list (see
+-// `IHistoryShieldedOutputSchema` below / `IHistoryShieldedOutput` in types.ts).
+-export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
++// SEPARATED model: `outputs[]` is transparent-only *post-normalize*. But this
++// schema validates the RAW wire, and alpha-v3 fullnodes — and the WS real-time
++// path (`IHistoryTxSchema.safeParse(wsData.history)` in onNewTx) — deliver
++// shielded outputs INLINE in outputs[] with `type: 'shielded'` and a commitment
++// instead of a `value`. `normalizeShieldedOutputs()` relocates those into
++// `shielded_outputs[]` immediately after validation (storage.addTx / onNewTx),
++// so the schema MUST accept the inline shape here. Requiring `value` rejects
++// every inline shielded output before normalize can run, which bricks every tx
++// that contains a shielded output (validation throws while loading history).
++// Hence a union of the transparent shape and the inline shielded wire entry; the
++// transparent-only outputs[] invariant is enforced post-normalize, not here.
++const transparentHistoryOutputSchema = z
+   .object({
+     value: bigIntCoercibleSchema,
+     token_data: z.number(),
+@@ -104,6 +117,22 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
+   })
+   .passthrough();
+ 
++// Inline shielded wire entry (v3-compat). Only the `type` discriminator and the
++// commitment are needed to recognize it; normalizeShieldedOutputs re-reads and
++// hex-normalizes range_proof / ephemeral_pubkey / script / asset_commitment.
++// passthrough keeps those fields available for the normalize pass.
++const inlineShieldedHistoryOutputSchema = z
++  .object({
++    type: z.literal('shielded'),
++    commitment: z.string(),
++  })
++  .passthrough();
++
++export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z.union([
++  transparentHistoryOutputSchema,
++  inlineShieldedHistoryOutputSchema,
++]) as unknown as ZodSchema<IHistoryOutput>;
++
+ export const IHistoryNanoContractBaseAction = z.object({
+   token_uid: z.string(),
+ });
+diff --git a/src/storage/memory_store.ts b/src/storage/memory_store.ts
+index 6e8932c5..7e179cb8 100644
+--- a/src/storage/memory_store.ts
++++ b/src/storage/memory_store.ts
+@@ -520,6 +520,26 @@ export class MemoryStore implements IStore {
+         yield tx;
+         continue;
+       }
++      // SEPARATED model: an owned shielded output lives in shielded_outputs[],
++      // not outputs[]. Without this loop a shielded-only receive (the wallet
++      // owns no transparent output of the tx) never appears in tokenHistory /
++      // getTxHistory (G.30/G.31). Owned slots carry value !== undefined and the
++      // decoded token after decryption; non-owned slots are value-less and skipped.
++      for (const so of tx.shielded_outputs ?? []) {
++        if (
++          so.value !== undefined &&
++          so.decoded?.address &&
++          this.addresses.has(so.decoded.address) &&
++          (so.token ?? NATIVE_TOKEN_UID) === tokenUid
++        ) {
++          found = true;
++          break;
++        }
++      }
++      if (found) {
++        yield tx;
++        continue;
++      }
+     }
+   }
+ 
+diff --git a/src/types.ts b/src/types.ts
+index cea53924..0249158b 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -319,8 +319,9 @@ export interface IHistoryInput {
+   // `/transaction?id=…` responses; the wallet's sender-local insert
+   // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
+   // self-sent shielded spends carry the discriminator before any
+-  // WebSocket re-delivery. Absent on transparent inputs.
+-  type?: 'shielded';
++  // WebSocket re-delivery. The alpha fullnode stamps 'transparent' on
++  // ordinary inputs; older nodes omit the field entirely.
++  type?: 'shielded' | 'transparent';
+   // Shielded inputs carry their own commitment on the wire; surfaced
+   // here so the explorer's unblinding verifier (and any future
+   // re-derive flows) can read it without round-tripping the full tx.
+diff --git a/src/utils/address.ts b/src/utils/address.ts
+index ae552d64..1dad48dd 100644
+--- a/src/utils/address.ts
++++ b/src/utils/address.ts
+@@ -51,6 +51,28 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
+   return addrType;
+ }
+ 
++/**
++ * Resolve an address to the form usable as a transparent output script.
++ *
++ * Shielded addresses have no direct output script (on-chain they use the
++ * spend-derived P2PKH), so this returns the spend address base58 for a shielded
++ * input and the address unchanged otherwise. Use it before `getAddressType` /
++ * output building wherever a caller-supplied address may be shielded — e.g. a
++ * shielded change address in token creation (otherwise getAddressType throws).
++ * Mirrors the conversion the send pipeline applies to explicit shielded outputs.
++ *
++ * @param {string} address base58 address (may be shielded)
++ * @param {Network} network
++ * @returns {string} spend-derived P2PKH base58 if shielded, else `address`
++ */
++export function resolveOutputScriptAddress(address: string, network: Network): string {
++  const addressObj = new Address(address, { network });
++  if (addressObj.getType() === 'shielded') {
++    return addressObj.getSpendAddress().base58;
++  }
++  return address;
++}
++
+ /**
+  * Convert a bitcore PublicKey to a base58 P2PKH address string.
+  */
+diff --git a/src/utils/storage.ts b/src/utils/storage.ts
+index 70903047..0e0846a8 100644
+--- a/src/utils/storage.ts
++++ b/src/utils/storage.ts
+@@ -1119,10 +1119,38 @@ export async function processNewTx(
+   }
+ 
+   for (const input of tx.inputs) {
++    // Enrich a bare shielded input from the parent tx's decoded shielded output
++    // so the balance debit below treats it like a transparent input. The
++    // realtime path enriches shielded inputs before processing (sender-local
++    // insert / onNewTx per-slot merge), but the reload path (processHistory)
++    // feeds bare {tx_id, index, type:'shielded'} inputs straight from
++    // address_history. Without this, a spent wallet-owned shielded UTXO is never
++    // debited from the balance counter on reload, so reload over-counts it vs
++    // realtime (the spent-output value lingers in `getBalance`). Gated on
++    // `value === undefined` so an already-enriched (realtime) input is debited
++    // exactly once. processHistory walks txs oldest-first, so the parent's
++    // shielded output is already decoded + persisted when we resolve it here.
++    if (input.value === undefined && transactionUtils.isShieldedInputEntry(input)) {
++      const parentTx = await storage.getTx(input.tx_id);
++      const resolved = parentTx
++        ? transactionUtils.resolveSpentOutput(parentTx, input.index)
++        : undefined;
++      if (resolved?.kind === 'shielded' && resolved.output.value !== undefined) {
++        const so = resolved.output;
++        if (so.decoded?.address && (await storage.isAddressMine(so.decoded.address))) {
++          input.value = so.value;
++          input.token = so.token ?? NATIVE_TOKEN_UID;
++          input.token_data = so.token_data ?? 0;
++          input.decoded = so.decoded;
++        }
++      }
++    }
++
+     // Inputs spending shielded outputs carry no transparent fields
+-    // (value/token/decoded are hidden in commitments). Their balance
+-    // handling lands with the receive pipeline in the next PR; here we
+-    // only need the type-level guard so transparent processing narrows.
++    // (value/token/decoded are hidden in commitments) until enriched above.
++    // Anything still bare here is a shielded input we don't own (or whose parent
++    // tx isn't ours) — skip it; the type-level guard also narrows the union for
++    // the transparent processing below.
+     if (
+       input.value === undefined ||
+       input.token === undefined ||
+diff --git a/src/utils/tokens.ts b/src/utils/tokens.ts
+index 91c4444c..b3600e61 100644
+--- a/src/utils/tokens.ts
++++ b/src/utils/tokens.ts
+@@ -29,7 +29,7 @@ import {
+   TokenVersion,
+   UtxoSelectionAlgorithm,
+ } from '../types';
+-import { getAddressType } from './address';
++import { getAddressType, resolveOutputScriptAddress } from './address';
+ import {
+   InsufficientFundsError,
+   SendTxError,
+@@ -492,7 +492,14 @@ const tokens = {
+ 
+       // get output change
+       if (foundAmount > requiredAmount) {
+-        const cAddress = await storage.getChangeAddress({ changeAddress });
++        // A shielded change address has no direct output script; resolve it to
++        // its spend-derived P2PKH (same as explicit shielded outputs in the send
++        // pipeline). Without this, getAddressType throws for a shielded
++        // changeAddress and token creation with a shielded change fails (K.2).
++        const cAddress = resolveOutputScriptAddress(
++          await storage.getChangeAddress({ changeAddress }),
++          storage.config.getNetwork()
++        );
+ 
+         // place at the beginning of the array to keep the order of the outputs
+         outputs.unshift({

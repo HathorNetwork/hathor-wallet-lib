@@ -1,0 +1,36 @@
+diff --git a/src/new/sendTransaction.ts b/src/new/sendTransaction.ts
+index 4bb07ba0..f259a0ed 100644
+--- a/src/new/sendTransaction.ts
++++ b/src/new/sendTransaction.ts
+@@ -251,25 +251,22 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
+         phantomOutputs.add(phantom);
+         txData.outputs.push(phantom);
+       } else {
+-        const addressObj = new Address(output.address, { network });
+-        let outputAddrType = addressObj.getType();
+-        if (outputAddrType === 'shielded') {
+-          // Shielded address used for transparent output — use the spend-derived P2PKH
+-          const spendAddress = addressObj.getSpendAddress();
+-          output.address = spendAddress.base58;
+-          outputAddrType = 'p2pkh';
+-        }
+         // We set chooseInputs true as default and may be overwritten by the inputs.
+         // chooseInputs should be true if no inputs are given
+         tokenMap.set(output.token, true);
+ 
++        // getAddressType throws for a 71-byte shielded address: it has no
++        // transparent output script form, so it must fail loudly here rather
++        // than be silently rewritten to its spend-derived P2PKH. To pay a
++        // shielded address, callers pass a shielded output definition
++        // (shieldedMode), which is handled by the isShieldedOutput branch above.
+         txData.outputs.push({
+           address: output.address,
+           value: output.value,
+           timelock: output.timelock ? output.timelock : null,
+           authorities: 0n,
+           token: output.token,
+-          type: outputAddrType,
++          type: getAddressType(output.address, network),
+         });
+       }
+     }

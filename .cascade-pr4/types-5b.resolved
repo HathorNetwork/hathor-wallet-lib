@@ -98,10 +98,7 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean,
-  // PIN code threaded so processHistory can derive the per-address scan key
-  // and decrypt wallet-owned shielded outputs after the history loads.
-  pinCode?: string
+  shouldProcessHistory?: boolean
 ) => Promise<void>;
 
 /**
@@ -122,15 +119,6 @@ export interface IAddressInfo {
   // 'shielded-spend' = the on-chain P2PKH derived from HASH160(spend_pubkey);
   //   this is the form getAddressType()/script builders accept.
   addressType?: AddressType | 'shielded-spend';
-  // Cross-link between the two records of a shielded address pair (which share
-  // the same BIP32 index), so callers translate between them in O(1) without a
-  // full-address scan or a parallel index map:
-  //   - on a 'shielded' record       → the paired 'shielded-spend' P2PKH base58
-  //   - on a 'shielded-spend' record → the paired 'shielded' (71-byte) base58
-  // Undefined for legacy records. Set once when the pair is derived
-  // (deriveShieldedAddressFromStorage), so `this.addresses` stays the single
-  // source of truth for the mapping.
-  ctMappingAddress?: string;
 }
 
 /**
@@ -292,18 +280,6 @@ export interface IHistoryShieldedOutput extends Omit<IShieldedOutput, 'decoded'>
   // the processNewTx decryption append so the wallet treats shielded
   // and transparent outputs identically when checking spend status.
   spent_by?: string | null;
-  // ─── owned-marker fields (SEPARATED model) ───────────────────────────────
-  // Populated IN PLACE on this entry when the wallet decrypts a shielded
-  // output it owns (received or change). The single ownership gate is
-  // `value !== undefined`: a slot with `value === undefined` is non-owned (or
-  // not yet decrypted) and is excluded from balance/credit/sign. `decoded`
-  // (address) is NOT an ownership signal — the fullnode emits a decoded
-  // address for non-owned outputs too, so keying ownership off `decoded`
-  // would let the wallet sign foreign inputs. `decoded` stays REQUIRED.
-  value?: OutputValueType;
-  token?: string;
-  blindingFactor?: string; // hex, 32 bytes — value blinding factor (after decryption)
-  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export enum TxHistoryProcessingStatus {
@@ -328,9 +304,8 @@ export interface IHistoryInput {
   // `/transaction?id=…` responses; the wallet's sender-local insert
   // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
   // self-sent shielded spends carry the discriminator before any
-  // WebSocket re-delivery. The alpha fullnode stamps 'transparent' on
-  // ordinary inputs; older nodes omit the field entirely.
-  type?: 'shielded' | 'transparent';
+  // WebSocket re-delivery. Absent on transparent inputs.
+  type?: 'shielded';
   // Shielded inputs carry their own commitment on the wire; surfaced
   // here so the explorer's unblinding verifier (and any future
   // re-derive flows) can read it without round-tripping the full tx.
@@ -355,13 +330,37 @@ export interface ITransparentOutput {
   selected_as_input?: boolean;
 }
 
-// SEPARATED model: `outputs[]` is transparent-only as a POST-NORMALIZE
-// internal invariant. Shielded outputs live in their own on-chain-ordered
-// `shielded_outputs[]` list (see `IHistoryShieldedOutput`); the on-chain
-// absolute index of `shielded_outputs[s]` is `outputs.length + s`. Resolve
-// "what does an input spend" via `resolveSpentOutput` (utils/transaction.ts),
-// never positional `outputs[idx]` for an idx that may be ≥ outputs.length.
-export type IHistoryOutput = ITransparentOutput;
+/**
+ * Shielded output entry as it appears in tx.outputs after decryption.
+ * Before decryption (from fullnode), value/token/decoded are absent.
+ * After decryption (by processNewTx), they are populated so the output
+ * can be processed uniformly with transparent outputs.
+ */
+export interface IShieldedOutputEntry {
+  type: 'shielded';
+  value: OutputValueType;
+  token_data: number;
+  script: string;
+  decoded: IHistoryOutputDecoded;
+  token: string;
+  spent_by: string | null;
+  commitment: string;
+  range_proof: string;
+  ephemeral_pubkey: string;
+  asset_commitment?: string;
+  surjection_proof?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (populated after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
+  // The fullnode-canonical absolute output index (`transparentCount + s_index`).
+  // Recorded when the wallet decodes a shielded output and appends it to
+  // `tx.outputs[]` (see `utils/storage.ts:processSingleTxUtil`). Older cached
+  // history entries written before this field existed don't carry it; readers
+  // must recover the index by matching `commitment` back to its position in
+  // `tx.shielded_outputs[]` and adding the transparent count.
+  onChainIndex?: number;
+}
+
+export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;
 
 export interface IDataOutputData {
   type: 'data';
@@ -750,10 +749,6 @@ export interface IStorage {
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
-  // Get the provider, or throw if it has not been configured. Confidential
-  // code paths require it; a missing provider is a setup error, not a
-  // condition to silently default around.
-  getShieldedCryptoProvider(): IShieldedCryptoProvider;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
@@ -781,10 +776,8 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  // pinCode is threaded so the scan-key derivation can decrypt wallet-owned
-  // shielded outputs while (re)processing the history.
-  processHistory(pinCode?: string): Promise<void>;
-  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
+  processHistory(): Promise<void>;
+  processNewTx(tx: IHistoryTx): Promise<void>;
   getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens

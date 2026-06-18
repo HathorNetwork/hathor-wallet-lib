@@ -1,0 +1,11 @@
+{
+    "isRebasing": true,
+    "patches": [
+        {
+            "didApply": false,
+            "patchContentHash": "aff5e31ce35114bfd64bf5fd3c9a74888d435cc855557c8e6f663dec38ced3cb",
+            "patchFilename": "@hathor+wallet-lib+0.0.6-shielded.patch"
+        }
+    ],
+    "version": 1
+}
