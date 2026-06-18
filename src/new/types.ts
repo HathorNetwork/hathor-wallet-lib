@@ -98,6 +98,13 @@ export interface UtxoOptions {
   amount_bigger_than?: bigint;
   max_amount?: bigint;
   only_available_utxos?: boolean;
+  /**
+   * Whether to include shielded UTXOs. Defaults to `false` (transparent-only):
+   * `getUtxos` feeds consolidation, which spends its results as TRANSPARENT
+   * inputs, so a shielded UTXO must never leak into that listing. Pass `true`
+   * to explicitly include shielded UTXOs.
+   */
+  shielded?: boolean;
 }
 
 /**

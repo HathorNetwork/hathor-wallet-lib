@@ -147,6 +147,9 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     addressIndex: 10,
     signature: expect.anything(),
     pubkey: xpriv.derive(10).publicKey.toDER(),
+    // Legacy (P2PKH) input → addressType undefined; shielded-spend inputs carry
+    // 'shielded-spend' so getSignatures can render the spend-chain path.
+    addressType: undefined,
   });
 
   const hashdata = tx.getDataToSignHash();

@@ -1317,6 +1317,39 @@ class HathorWallet extends EventEmitter {
           addressInfo.total_amount_available += output.value;
         }
       }
+
+      // SEPARATED model: owned shielded outputs live in tx.shielded_outputs[]
+      // (value/token written in place after decryption), with decoded.address =
+      // the shielded-spend P2PKH. Mirror the transparent accounting so a
+      // shielded receive/spend on this address shows in the per-address totals.
+      for (const so of tx.shielded_outputs ?? []) {
+        if (so.value === undefined) continue; // not owned / not yet decrypted
+        const is_address_valid = so.decoded?.address === address;
+        const is_token_valid = token === (so.token ?? NATIVE_TOKEN_UID);
+        if (!is_address_valid || !is_token_valid) {
+          continue;
+        }
+
+        const is_spent = (so.spent_by ?? null) !== null;
+        const is_time_locked = transactionUtils.isOutputLocked(so);
+        const nowHeight = await this.storage.getCurrentHeight();
+        const rewardLock = this.storage.version?.reward_spend_min_blocks;
+        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
+        const is_locked = is_time_locked || is_height_locked;
+
+        addressInfo.total_amount_received += so.value;
+
+        if (is_spent) {
+          addressInfo.total_amount_sent += so.value;
+          continue;
+        }
+
+        if (is_locked) {
+          addressInfo.total_amount_locked += so.value;
+        } else {
+          addressInfo.total_amount_available += so.value;
+        }
+      }
     }
 
     return addressInfo;
@@ -1339,6 +1372,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Transparent-only by default: getUtxos feeds consolidateUtxos, which
+      // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
+      // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.
+      shielded: options.shielded ?? false,
     };
     const utxoDetails: UtxoDetails = {
       total_amount_available: 0n,
@@ -3051,6 +3088,16 @@ class HathorWallet extends EventEmitter {
         addresses.add(io.decoded.address);
       }
     }
+    // SEPARATED model: a shielded output the wallet owns lives in
+    // tx.shielded_outputs[], not tx.outputs[]; its decoded.address is the
+    // wallet's on-chain spend-derived P2PKH. Without this a shielded-only
+    // receive returns an empty/incomplete address set. decoded.address is
+    // on-wire so this works regardless of decryption state.
+    for (const so of tx.shielded_outputs ?? []) {
+      if (so.decoded?.address && (await this.isAddressMine(so.decoded.address))) {
+        addresses.add(so.decoded.address);
+      }
+    }
 
     return addresses;
   }
@@ -3137,7 +3184,12 @@ class HathorWallet extends EventEmitter {
       if (addressInfo === null) {
         continue;
       }
-      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
+      // A shielded-spend input's key lives on the spend chain (m/44'/280'/2'),
+      // not the legacy P2PKH chain — select the right path so it matches the key
+      // that actually signs the input (see getSignatureForTx).
+      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex, {
+        legacy: addressInfo.addressType !== 'shielded-spend',
+      });
       walletInputs.push({
         inputIndex: index,
         addressIndex: addressInfo.bip32AddressIndex,
@@ -3175,7 +3227,11 @@ class HathorWallet extends EventEmitter {
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
         signature: sigData.signature.toString('hex'),
-        addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
+        // Render the path that matches the key that signed: a 'shielded-spend'
+        // input was signed with the spend chain, not the legacy P2PKH chain.
+        addressPath: await this.getAddressPathForIndex(sigData.addressIndex, {
+          legacy: sigData.addressType !== 'shielded-spend',
+        }),
       });
     }
     return sigInfoArray;
@@ -3389,13 +3445,26 @@ class HathorWallet extends EventEmitter {
         : hydrateWithTokenUid(input as { token_data: number }, fullTx.tx.tokens)
     ) as typeof fullTx.tx.inputs;
 
-    // Normalize shielded outputs before balance calculation so base64
-    // confidential fields become hex (getTxBalance reads off shielded_outputs[]).
-    transactionUtils.normalizeShieldedOutputs(fullTx.tx as unknown as IHistoryTx);
+    // Prefer the locally-decoded tx for the balance. A fresh fullnode fetch
+    // carries shielded_outputs WITHOUT their decrypted value/token (the wallet's
+    // ECDH-recovered plaintext lives only in local storage), so getTxBalance
+    // over the wire copy credits 0 for owned shielded outputs and could even
+    // throw "no balance" for a shielded-only receive. Fall back to the
+    // (normalized) wire copy only when the tx isn't in our local history.
+    const localTx = await this.storage.getTx(txId);
+    let balanceTx: IHistoryTx;
+    if (localTx) {
+      balanceTx = localTx;
+    } else {
+      // Normalize so any inline shielded entries move to shielded_outputs[] and
+      // base64 fields become hex (getTxBalance reads off the separated arrays).
+      transactionUtils.normalizeShieldedOutputs(fullTx.tx as unknown as IHistoryTx);
+      balanceTx = fullTx.tx as unknown as IHistoryTx;
+    }
 
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances = await this.getTxBalance(fullTx.tx as unknown as IHistoryTx);
+    const tokenBalances = await this.getTxBalance(balanceTx);
     const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
@@ -3798,9 +3867,18 @@ class HathorWallet extends EventEmitter {
   async reloadStorage(): Promise<void> {
     await this.conn.onReload();
 
-    // unsub all addresses
+    // unsub all addresses. getAllAddresses() yields the legacy chain; shielded
+    // receives are subscribed by their on-chain spend-derived P2PKH (the 71-byte
+    // shielded address itself is never subscribed — the fullnode indexes by
+    // on-chain script), so also unsubscribe each shielded record's paired spend
+    // P2PKH (ctMappingAddress). Without this, shielded subscriptions leak on reload.
     for await (const address of this.storage.getAllAddresses()) {
       this.conn.unsubscribeAddress(address.base58);
+    }
+    for await (const address of this.storage.getAllAddresses({ legacy: false })) {
+      if (address.ctMappingAddress) {
+        this.conn.unsubscribeAddress(address.ctMappingAddress);
+      }
     }
     const accessData = await this.storage.getAccessData();
     if (accessData != null) {

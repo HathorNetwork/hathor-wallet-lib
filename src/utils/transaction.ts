@@ -339,6 +339,10 @@ const transaction = {
         addressIndex: addressInfo.bip32AddressIndex,
         signature: this.getSignature(dataToSignHash, derivedKey.privateKey),
         pubkey: derivedKey.publicKey.toDER(),
+        // Carry the address type so callers (getSignatures) can render the
+        // matching derivation path: a 'shielded-spend' input was signed with the
+        // spend chain (m/44'/280'/2'), not the legacy P2PKH chain.
+        addressType: addressInfo.addressType,
       });
     }
 

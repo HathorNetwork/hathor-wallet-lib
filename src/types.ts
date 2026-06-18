@@ -56,6 +56,10 @@ export interface IInputSignature {
   addressIndex: number;
   signature: Buffer;
   pubkey: Buffer;
+  // Address type of the signed input, so consumers can render the matching
+  // derivation path. 'shielded-spend' inputs are signed with the spend chain
+  // (m/44'/280'/2'); undefined/legacy use the P2PKH/P2SH chain.
+  addressType?: AddressType | 'shielded-spend';
 }
 
 export enum HistorySyncMode {
