@@ -128,6 +128,15 @@ export class TxBalance {
    * @param index - The output index
    */
   addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+    // SEPARATED model: `outputs[]` is transparent-only; shielded outputs live
+    // in `shielded_outputs[]` at on-chain absolute index `outputs.length + s`.
+    // Templates are a transparent-only flow today, so an index that lands in
+    // (or past) the shielded range must be rejected with a clear message
+    // rather than a misleading bounds error or an undefined read.
+    const shieldedCount = tx.shielded_outputs?.length ?? 0;
+    if (index >= tx.outputs.length && index < tx.outputs.length + shieldedCount) {
+      throw new Error('Shielded inputs are not supported in transaction templates');
+    }
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }

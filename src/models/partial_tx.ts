@@ -480,6 +480,19 @@ export class PartialTx {
               return resolve(false);
             }
 
+            // SEPARATED model: `outputs[]` is transparent-only; shielded
+            // outputs live in `shielded_outputs[]` at on-chain absolute index
+            // `outputs.length + s`. Partial transactions are a transparent-only
+            // flow; an input whose index lands in the shielded range must be
+            // rejected with a clear error rather than silently resolving false
+            // (which would otherwise look like a value/address mismatch).
+            const shieldedCount = data.tx.shielded_outputs?.length ?? 0;
+            if (
+              input.index >= data.tx.outputs.length &&
+              input.index < data.tx.outputs.length + shieldedCount
+            ) {
+              return reject(new Error('Shielded inputs are not supported in partial transactions'));
+            }
             if (data.tx.outputs.length <= input.index) {
               return resolve(false);
             }
