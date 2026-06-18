@@ -72,7 +72,7 @@ describe('[Service-specific] start', () => {
   });
 
   it('should have websocket disabled by default in tests', async () => {
-    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet } = await buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode, password });
     expect(wallet.isWsEnabled()).toBe(false);
   });
@@ -80,7 +80,7 @@ describe('[Service-specific] start', () => {
   // TODO: Move mock-based tests to unit tests
   it('should handle getAccessData unexpected errors', async () => {
     let storage: Storage;
-    ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet, storage } = await buildWalletInstance({ words: emptyWallet.words }));
 
     // Exercise the event-emission path during a failed start
     const events: string[] = [];
@@ -98,7 +98,7 @@ describe('[Service-specific] start', () => {
   // TODO: Move mock-based tests to unit tests
   it('should create wallet with xpriv', async () => {
     let storage: Storage;
-    ({ wallet, storage } = buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet, storage } = await buildWalletInstance({ words: emptyWallet.words }));
 
     const seed = emptyWallet.words;
     const accessData = walletUtils.generateAccessDataFromSeed(seed, {
@@ -140,7 +140,7 @@ describe('[Service-specific] start', () => {
     // then pollForWalletStatus polls until 'ready'. Auth tokens are obtained
     // on-demand by the axios interceptor during each polling call. This is
     // the exact path where the old fire-and-forget pattern raced.
-    ({ wallet } = buildWalletInstance());
+    ({ wallet } = await buildWalletInstance());
 
     await wallet.start({ pinCode, password });
 
@@ -154,7 +154,7 @@ describe('[Service-specific] start', () => {
   });
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {
-    const walletData = adapter.getPrecalculatedWallet();
+    const walletData = await adapter.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
 
     const { wallet: xpubWallet } = await adapter.createWallet({

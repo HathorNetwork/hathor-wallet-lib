@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { promises as fs } from 'fs';
+import axios from 'axios';
 import { Address, Script } from 'bitcore-lib';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import testConfig from '../configuration/test.config';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
 
@@ -63,18 +64,6 @@ export const multisigWalletsData = {
 multisigWalletsData.walletConfig.pubkeys = multisigWalletsData.pubkeys;
 
 export class WalletPrecalculationHelper {
-  WALLETS_FILENAME: string = '';
-
-  walletsDb: PrecalculatedWalletData[] = [];
-
-  /**
-   * Initializes the helper with a filename to sync the local wallet storage with.
-   * @param walletsFilename
-   */
-  constructor(walletsFilename?: string) {
-    this.WALLETS_FILENAME = walletsFilename || './tmp/wallets.txt';
-  }
-
   /**
    * Generates 22 addresses for a wallet 24-word seed.
    * @param [params]
@@ -161,40 +150,6 @@ export class WalletPrecalculationHelper {
   }
 
   /**
-   * Reads a JSON file containing wallets and parses it
-   * @returns {Promise<PrecalculatedWalletData[]>}
-   * @throws SyntaxError
-   * @private
-   */
-  async _deserializeWalletsFile(): Promise<PrecalculatedWalletData[]> {
-    const dataBuffer = await fs.readFile(this.WALLETS_FILENAME);
-    const strData = dataBuffer.toString();
-    try {
-      return JSON.parse(strData);
-    } catch (err) {
-      loggers.test!.error('Corrupt wallets file', { error: err });
-      throw err;
-    }
-  }
-
-  /**
-   * Writes the contents of a wallet array in a human-readable way, but with one wallet per line
-   * @param {PrecalculatedWalletData[]} wallets
-   * @returns {Promise<void>}
-   * @private
-   */
-  async _serializeWalletsFile(wallets: PrecalculatedWalletData[]): Promise<void> {
-    /*
-     * The main aim of this file structure is human readability for debugging.
-     * The result must be a valid JSON, but with only one line per wallet.
-     */
-    let strWalletsData = wallets.map(w => `${JSON.stringify(w)}`).join(',\n');
-    strWalletsData = `[\n${strWalletsData}\n]`;
-
-    await fs.writeFile(this.WALLETS_FILENAME, strWalletsData);
-  }
-
-  /**
    * Generates multiple new wallets and return them on an array
    * @param [params]
    * @param {number} [params.commonWallets=100] Amount of common wallets to be generated
@@ -246,31 +201,14 @@ export class WalletPrecalculationHelper {
   }
 
   /**
-   * Loads a file containing precalculated wallets into the in-memory storage
-   * @returns {Promise<void>}
+   * Fetches a fresh precalculated wallet from the wallet provider service.
+   * Each call returns a newly generated wallet, so callers never need to worry
+   * about a pool running out.
+   * @returns {Promise<PrecalculatedWalletData>}
    */
-  async initWithWalletsFile(): Promise<void> {
-    this.walletsDb = await this._deserializeWalletsFile();
-  }
-
-  /**
-   * Writes the in-memory storage of precalculated wallets into the filesystem
-   * @returns {Promise<void>}
-   */
-  async storeDbIntoWalletsFile(): Promise<void> {
-    return this._serializeWalletsFile(this.walletsDb);
-  }
-
-  /**
-   * Fetches the first unused precalculated wallet from the in-memory storage and marks it as used.
-   * @returns {PrecalculatedWalletData}
-   */
-  getPrecalculatedWallet(): PrecalculatedWalletData {
-    const unusedWallet = this.walletsDb.find(w => !w.isUsed);
-    if (!unusedWallet) {
-      throw new Error('No unused wallet found');
-    }
-    unusedWallet.isUsed = true; // We are using it right now. Marking it.
-    return unusedWallet;
+  // eslint-disable-next-line class-methods-use-this -- kept as an instance method to preserve the precalculationHelpers.test call sites
+  async getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
+    const { data } = await axios.get(`${testConfig.walletProviderUrl}/simpleWallet`);
+    return { isUsed: false, words: data.words, addresses: data.addresses };
   }
 }

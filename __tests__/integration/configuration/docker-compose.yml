@@ -233,5 +233,17 @@ services:
     networks:
       - hathor-privnet
 
+  # Wallet Provider section
+  # Serves precalculated wallets on demand (GET /simpleWallet), replacing the
+  # former static precalculated-wallets.json. Built from the merged provider
+  # PR; ADDRESS_COUNT defaults to 22 in the image, matching the old static set.
+  # https://github.com/HathorNetwork/hathor-integration-test-helper
+  wallet-provider:
+    build: https://github.com/HathorNetwork/hathor-integration-test-helper.git#main
+    ports:
+      - "3020:3020"
+    networks:
+      - hathor-privnet
+
 networks:
   hathor-privnet:
