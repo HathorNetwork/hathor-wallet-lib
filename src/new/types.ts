@@ -112,6 +112,15 @@ export interface UtxoOptions {
    * to explicitly include shielded UTXOs.
    */
   shielded?: boolean;
+  /**
+   * Controls the iteration order of selected UTXOs. Defaults to `'desc'` when
+   * unset so that `max_utxos`/`max_amount` truncations keep the largest UTXOs
+   * — consumers building txs almost always want the smallest possible
+   * input count. Pass `'asc'` for low-value-first, or set to `undefined`
+   * (impossible via this option since unset defaults to desc; use
+   * selectUtxos directly for that) to get insertion order.
+   */
+  order_by_value?: 'asc' | 'desc';
 }
 
 /**

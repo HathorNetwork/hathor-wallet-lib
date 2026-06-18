@@ -496,14 +496,30 @@ export interface GetUtxosForAmountResult {
 }
 
 /**
- * An output for sendManyOutputsTransaction.
+ * An address-based output for sendManyOutputsTransaction.
  */
-export interface AdapterOutput {
+export interface AdapterAddressOutput {
   address: string;
   value: bigint;
   token: string;
   timelock?: number;
 }
+
+/**
+ * A data-script output for sendManyOutputsTransaction. The on-chain output
+ * burns 0.01 HTR and carries the supplied data as the script payload.
+ */
+export interface AdapterDataOutput {
+  type: 'data';
+  data: string;
+}
+
+/**
+ * An output for sendManyOutputsTransaction. Both facades accept the union;
+ * the wallet routes data outputs through the data-script pipeline and
+ * address outputs through normal UTXO selection.
+ */
+export type AdapterOutput = AdapterAddressOutput | AdapterDataOutput;
 
 /**
  * An explicit input for sendManyOutputsTransaction.

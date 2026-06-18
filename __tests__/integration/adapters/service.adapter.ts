@@ -430,10 +430,15 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
-    const result = await sw.sendManyOutputsTransaction(outputs, {
-      pinCode: SERVICE_PIN,
-      ...txOptions,
-    });
+    // Cast — service wallet's sendManyOutputsTransaction accepts data outputs
+    // at runtime even though the parameter type is narrower.
+    const result = await sw.sendManyOutputsTransaction(
+      outputs as unknown as Parameters<typeof sw.sendManyOutputsTransaction>[0],
+      {
+        pinCode: SERVICE_PIN,
+        ...txOptions,
+      }
+    );
     if (!result?.hash) {
       throw new Error('sendManyOutputsTransaction: transaction had no hash');
     }
