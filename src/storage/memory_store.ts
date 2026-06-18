@@ -547,7 +547,14 @@ export class MemoryStore implements IStore {
 
     let legacyMaxIndex = this.walletData.lastUsedAddressIndex;
     let shieldedMaxIndex = this.walletData.shieldedLastUsedAddressIndex;
-    for (const el of [...tx.inputs, ...tx.outputs]) {
+    // SEPARATED model: shielded outputs live in `tx.shielded_outputs`, not
+    // `tx.outputs`. Include them so a shielded RECEIVE advances the shielded
+    // chain cursor — each owned shielded output's `decoded.address` is our
+    // 'shielded-spend' P2PKH. Without this, shieldedLastUsedAddressIndex never
+    // moves on receives and the shielded gap-limit fails to extend, so funds on
+    // higher shielded indices would be missed. (Shielded outputs we don't own
+    // carry a foreign address and are skipped by the addressExists check.)
+    for (const el of [...tx.inputs, ...tx.outputs, ...(tx.shielded_outputs ?? [])]) {
       if (el.decoded?.address && (await this.addressExists(el.decoded.address))) {
         const addrInfo = this.addresses.get(el.decoded.address)!;
         const index = addrInfo.bip32AddressIndex;

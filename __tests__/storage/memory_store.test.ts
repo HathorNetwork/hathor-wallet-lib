@@ -11,7 +11,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { encryptData } from '../../src/utils/crypto';
-import { TokenVersion, WalletType } from '../../src/types';
+import { IHistoryTx, TokenVersion, WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';
 
 test('default values', async () => {
@@ -417,6 +417,45 @@ test('selectUtxos resolves a shielded filter_address to its spend P2PKH via ctMa
   for await (const u of store.selectUtxos({ filter_address: 'spend-0' })) bySpend.push(u);
   expect(bySpend).toHaveLength(1);
   expect(bySpend[0].txId).toEqual('txS');
+});
+
+test('addTx advances the shielded cursor from a shielded receive in tx.shielded_outputs', async () => {
+  const store = new MemoryStore();
+  // Own a shielded-spend P2PKH at index 7 (the on-chain form of a shielded
+  // receive). SEPARATED model: the receive lands in tx.shielded_outputs, NOT
+  // tx.outputs, so the address-index tracking must look there too.
+  await store.saveAddress({
+    base58: 'spend-7',
+    bip32AddressIndex: 7,
+    addressType: 'shielded-spend',
+    ctMappingAddress: 'ct-7',
+  });
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(-1);
+
+  await store.saveTx({
+    tx_id: 'a'.repeat(64),
+    version: 1,
+    weight: 1,
+    timestamp: 123,
+    is_voided: false,
+    inputs: [],
+    outputs: [],
+    shielded_outputs: [
+      {
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        ephemeral_pubkey: 'dd',
+        token_data: 0,
+        decoded: { address: 'spend-7' },
+      },
+    ],
+    parents: [],
+  } as unknown as IHistoryTx);
+
+  // The shielded chain cursor advances to 7; the legacy cursor is untouched.
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(7);
+  expect(store.walletData.lastUsedAddressIndex).toEqual(-1);
 });
 
 test('access data methods', async () => {
