@@ -37,8 +37,8 @@ export type {
  * commitment, its range proof, the ECDH ephemeral pubkey, and (FullShielded
  * only) the asset commitment + surjection proof. Defined once and shared by
  * every shielded-output representation — the wire `IShieldedOutput` here and
- * the decrypted `IShieldedOutputEntry` in tx.outputs[] (src/types.ts) — so the
- * field set can't drift between them.
+ * the history/storage `IHistoryShieldedOutput` in tx.shielded_outputs[]
+ * (src/types.ts) — so the field set can't drift between them.
  */
 export interface IShieldedOutputProofs {
   commitment: string; // hex, 33 bytes

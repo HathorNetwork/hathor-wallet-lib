@@ -174,6 +174,18 @@ export class WalletServiceStorageProxy {
   private convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
     const { tx, meta } = fullTxResponse;
 
+    // SEPARATED model: keep `outputs[]` transparent-only. The wire may still
+    // deliver shielded outputs INLINE in `outputs[]` (legacy form); filter
+    // those out here so a downstream resolver doesn't treat them as
+    // transparent. The dedicated `shielded_outputs[]` field (passthrough — not
+    // on the FullNodeTx type) is threaded through unchanged so shielded spends
+    // can still resolve their parent slots via getUtxo/resolveSpentOutput.
+    const transparentOutputs = tx.outputs.filter(
+      output => !transactionUtils.isInlineShieldedWireEntry(output)
+    );
+    const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
+      .shielded_outputs;
+
     return {
       tx_id: tx.hash,
       signalBits: 0, // Default value since fullnode tx doesn't include signal bits
@@ -189,22 +201,20 @@ export class WalletServiceStorageProxy {
           type: input.decoded.type ?? undefined,
         },
       })) as IHistoryTx['inputs'],
-      outputs: tx.outputs.map(output => {
-        if (transactionUtils.isShieldedOutputEntry(output)) return output;
-        return {
-          ...output,
-          decoded: {
-            ...output.decoded,
-            type: output.decoded.type ?? undefined,
-          },
-        };
-      }) as IHistoryTx['outputs'],
+      outputs: transparentOutputs.map(output => ({
+        ...output,
+        decoded: {
+          ...output.decoded,
+          type: output.decoded.type ?? undefined,
+        },
+      })) as IHistoryTx['outputs'],
       parents: tx.parents,
       tokens: tx.tokens.map(token => token.uid),
       height: meta.height,
       first_block: meta.first_block,
       token_name: tx.token_name ?? undefined,
       token_symbol: tx.token_symbol ?? undefined,
+      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
     };
   }
 }

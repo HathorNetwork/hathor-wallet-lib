@@ -763,17 +763,20 @@ export class Storage implements IStorage {
     if (!tx) {
       return;
     }
-    // Resolve the actual output the UTXO record refers to via the sparse-
-    // decode-aware helper. A positional `tx.outputs[utxo.index]` would read
-    // a different decoded shielded entry when `utxo.index` (the on-chain
-    // absolute index) doesn't equal the entry's array position — the
-    // `.spent_by` check below would then consult the wrong entry's flag.
-    const output = transactionUtils.findSpentOutput(tx, utxo.index);
-    if (!output) {
+    // Resolve the actual output the UTXO record refers to via the
+    // SEPARATED-model resolver. A shielded UTXO has on-chain index
+    // outputs.length + s, so a positional `tx.outputs[utxo.index]` would read
+    // the wrong (or no) entry — the `.spent_by` check below would then consult
+    // the wrong entry's flag.
+    const resolved = transactionUtils.resolveSpentOutput(tx, utxo.index);
+    if (!resolved) {
       return;
     }
 
-    if (markAs && output.spent_by !== null) {
+    // Both transparent (`string | null`) and shielded (`string | null |
+    // undefined`) outputs carry spent_by; treat undefined as unspent.
+    const spentBy = resolved.output.spent_by ?? null;
+    if (markAs && spentBy !== null) {
       // Already spent, no need to mark as selected_as_input
       return;
     }

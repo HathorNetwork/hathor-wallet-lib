@@ -13,7 +13,6 @@ import Header from './headers/base';
 import type {
   IShieldedCryptoProvider,
   IShieldedOutput,
-  IShieldedOutputProofs,
   IDataShieldedOutput,
 } from './shielded/types';
 
@@ -290,6 +289,18 @@ export interface IHistoryShieldedOutput extends Omit<IShieldedOutput, 'decoded'>
   // the processNewTx decryption append so the wallet treats shielded
   // and transparent outputs identically when checking spend status.
   spent_by?: string | null;
+  // ─── owned-marker fields (SEPARATED model) ───────────────────────────────
+  // Populated IN PLACE on this entry when the wallet decrypts a shielded
+  // output it owns (received or change). The single ownership gate is
+  // `value !== undefined`: a slot with `value === undefined` is non-owned (or
+  // not yet decrypted) and is excluded from balance/credit/sign. `decoded`
+  // (address) is NOT an ownership signal — the fullnode emits a decoded
+  // address for non-owned outputs too, so keying ownership off `decoded`
+  // would let the wallet sign foreign inputs. `decoded` stays REQUIRED.
+  value?: OutputValueType;
+  token?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export enum TxHistoryProcessingStatus {
@@ -340,33 +351,13 @@ export interface ITransparentOutput {
   selected_as_input?: boolean;
 }
 
-/**
- * Shielded output entry as it appears in tx.outputs after decryption, so the
- * output can be processed uniformly with transparent outputs.
- *
- * It reuses the standard output fields from `ITransparentOutput` (value,
- * token_data, script, decoded, token, spent_by) and the on-chain confidential
- * fields from `IShieldedOutputProofs` (commitment, range_proof,
- * ephemeral_pubkey, asset_commitment?, surjection_proof?) so neither set is
- * re-declared here. It adds only the `'shielded'` discriminant and the
- * wallet-local results produced by decryption.
- */
-export interface IShieldedOutputEntry
-  extends Omit<ITransparentOutput, 'selected_as_input'>,
-    IShieldedOutputProofs {
-  type: 'shielded';
-  blindingFactor?: string; // hex, 32 bytes — value blinding factor (populated after decryption)
-  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
-  // The fullnode-canonical absolute output index (`transparentCount + s_index`).
-  // Recorded when the wallet decodes a shielded output and appends it to
-  // `tx.outputs[]` (see `utils/storage.ts:processSingleTxUtil`). Older cached
-  // history entries written before this field existed don't carry it; readers
-  // must recover the index by matching `commitment` back to its position in
-  // `tx.shielded_outputs[]` and adding the transparent count.
-  onChainIndex?: number;
-}
-
-export type IHistoryOutput = ITransparentOutput | IShieldedOutputEntry;
+// SEPARATED model: `outputs[]` is transparent-only as a POST-NORMALIZE
+// internal invariant. Shielded outputs live in their own on-chain-ordered
+// `shielded_outputs[]` list (see `IHistoryShieldedOutput`); the on-chain
+// absolute index of `shielded_outputs[s]` is `outputs.length + s`. Resolve
+// "what does an input spend" via `resolveSpentOutput` (utils/transaction.ts),
+// never positional `outputs[idx]` for an idx that may be ≥ outputs.length.
+export type IHistoryOutput = ITransparentOutput;
 
 export interface IDataOutputData {
   type: 'data';
