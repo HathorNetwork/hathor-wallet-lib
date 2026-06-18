@@ -23,9 +23,12 @@ import {
   getHistorySyncMethod,
   apiSyncHistory,
   addCreatedTokenFromTx,
+  processMetadataChanged,
   processNewTx,
   processSingleTx,
 } from '../../src/utils/storage';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
@@ -533,4 +536,346 @@ test('addCreatedTokenFromTx', async () => {
     version: 1,
   });
   await expect(storage.getToken('d00d')).resolves.not.toBeNull();
+});
+
+describe('processNewTx — owned shielded output credit (SEPARATED model)', () => {
+  const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566778899';
+  const BLINDING_FACTOR = 'aabbccdd'.repeat(8);
+  // High shielded-spend BIP32 index — well beyond a default gap limit — to
+  // prove the shielded-chain max-index tracking advances. Omitting it would
+  // silently cap owned shielded-address discovery and strand funds.
+  const HIGH_SHIELDED_INDEX = 42;
+
+  // Owned shielded output with the decoded marker fields (value/token/decoded/
+  // blindingFactor) already set IN PLACE — i.e. what processShieldedOutputs
+  // writes. No crypto provider needed; the credit loop gates on value!==undefined.
+  const buildTxWithOwnedShielded = (overrides = {}): IHistoryTx =>
+    ({
+      tx_id: TX_ID,
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      // One transparent output ahead of the shielded slot, so the shielded
+      // output's absolute on-chain index is T(1) + s(0) = 1.
+      outputs: [
+        {
+          value: 7n,
+          token: NATIVE_TOKEN_UID,
+          token_data: 0,
+          script: '',
+          decoded: {},
+          spent_by: null,
+        },
+      ],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'deadbeef'.repeat(8),
+          range_proof: '',
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: '',
+          decoded: { address: SHIELDED_ADDR, timelock: null },
+          spent_by: null,
+          // owned-marker fields written in place by processShieldedOutputs
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          blindingFactor: BLINDING_FACTOR,
+        },
+      ],
+      ...overrides,
+    }) as unknown as IHistoryTx;
+
+  const seedStorage = async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    // Register the on-chain spend-derived P2PKH as ours at a high shielded
+    // index (addressType 'shielded-spend' drives the shielded chain tracking).
+    await store.saveAddress({
+      base58: SHIELDED_ADDR,
+      bip32AddressIndex: HIGH_SHIELDED_INDEX,
+      publicKey: '02'.repeat(33),
+      addressType: 'shielded-spend',
+    });
+    // Also register a 'shielded' entry at the same index so the shielded
+    // lastLoaded cursor is high enough for the used-index advance to apply.
+    await store.saveAddress({
+      base58: `${SHIELDED_ADDR}-recv`,
+      bip32AddressIndex: HIGH_SHIELDED_INDEX,
+      publicKey: '03'.repeat(33),
+      addressType: 'shielded',
+    });
+    return { store, storage };
+  };
+
+  it('credits balance, saves the UTXO at index T+s and advances the shielded max index', async () => {
+    const { store, storage } = await seedStorage();
+    const tx = buildTxWithOwnedShielded();
+
+    const result = await processNewTx(storage, tx, { currentHeight: 105 });
+
+    // Per-chain max index: the owned shielded output lives at a high
+    // shielded-spend index; the SHIELDED chain tracking must advance, not legacy.
+    expect(result.shieldedMaxAddressIndex).toBe(HIGH_SHIELDED_INDEX);
+    expect(result.legacyMaxAddressIndex).toBe(-1);
+    expect(result.tokens.has(NATIVE_TOKEN_UID)).toBe(true);
+
+    // The UTXO is saved at the ABSOLUTE on-chain index T + s = 1 + 0 = 1,
+    // flagged shielded with the blinding factor preserved.
+    const utxo = await store.getUtxo({ txId: TX_ID, index: 1 });
+    expect(utxo).not.toBeNull();
+    expect(utxo?.value).toBe(50n);
+    expect(utxo?.shielded).toBe(true);
+    expect(utxo?.blindingFactor).toBe(BLINDING_FACTOR);
+
+    // There is no transparent UTXO for this wallet (the transparent output has
+    // no decoded.address), so the only owned UTXO is at index 1.
+    expect(await store.getUtxo({ txId: TX_ID, index: 0 })).toBeNull();
+
+    // Balance credit landed on the address + token metadata.
+    const addrMeta = await store.getAddressMeta(SHIELDED_ADDR);
+    expect(addrMeta?.balance.get(NATIVE_TOKEN_UID)?.tokens.unlocked).toBe(50n);
+    // numTransactions advanced once for the address and token.
+    expect(addrMeta?.numTransactions).toBe(1);
+    const tokenMeta = await store.getTokenMeta(NATIVE_TOKEN_UID);
+    expect(tokenMeta?.numTransactions).toBe(1);
+    expect(tokenMeta?.balance.tokens.unlocked).toBe(50n);
+  });
+
+  it('advances the wallet shieldedLastUsedAddressIndex via processSingleTx', async () => {
+    const { store, storage } = await seedStorage();
+    const tx = buildTxWithOwnedShielded();
+    await storage.addTx(tx);
+
+    await processSingleTx(storage, tx, { currentHeight: 105 });
+
+    const walletData = await store.getWalletData();
+    expect(walletData.shieldedLastUsedAddressIndex).toBe(HIGH_SHIELDED_INDEX);
+  });
+
+  it('does not credit a non-owned shielded slot (value === undefined)', async () => {
+    const { store, storage } = await seedStorage();
+    const tx = buildTxWithOwnedShielded();
+    // Strip the owned-marker fields → the slot is non-owned.
+    delete tx.shielded_outputs![0].value;
+    delete tx.shielded_outputs![0].token;
+    delete tx.shielded_outputs![0].blindingFactor;
+
+    const result = await processNewTx(storage, tx, { currentHeight: 105 });
+
+    expect(result.shieldedMaxAddressIndex).toBe(-1);
+    expect(await store.getUtxo({ txId: TX_ID, index: 1 })).toBeNull();
+    const addrMeta = await store.getAddressMeta(SHIELDED_ADDR);
+    // No balance credited for a non-owned slot.
+    expect(addrMeta?.balance.get(NATIVE_TOKEN_UID)?.tokens.unlocked ?? 0n).toBe(0n);
+  });
+});
+
+describe('processNewTx — FullShielded token cross-check rejection', () => {
+  const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'bb00cc11dd22ee33ff44005566778899aabbccddeeff00112233445566778899';
+
+  // Build a tx whose single FullShielded output is wallet-addressed but whose
+  // recovered token UID does NOT match the on-chain asset_commitment. The
+  // crypto provider's cross-check must reject it: no in-place decode, no UTXO.
+  const buildTx = (): IHistoryTx =>
+    ({
+      tx_id: TX_ID,
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
+          commitment: 'aa'.repeat(33),
+          range_proof: 'bb'.repeat(10),
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: 'cc'.repeat(33),
+          asset_commitment: 'dd'.repeat(33),
+          decoded: { address: SHIELDED_ADDR, timelock: null },
+          spent_by: null,
+        },
+      ],
+    }) as unknown as IHistoryTx;
+
+  it('rejects the output and saves no UTXO when the cross-check fails', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: SHIELDED_ADDR,
+      bip32AddressIndex: 3,
+      publicKey: '02'.repeat(33),
+      addressType: 'shielded-spend',
+    });
+
+    // A real chain-level xpriv so scan-key derivation succeeds and rewind runs.
+    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+    const { HDPrivateKey } = require('bitcore-lib');
+    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    jest.spyOn(storage, 'getScanXPrivKey').mockResolvedValue(mockXpriv);
+
+    // Wire a crypto provider whose createAssetCommitment returns a value that
+    // does NOT match the on-chain asset_commitment → cross-check fails.
+    storage.shieldedCryptoProvider = {
+      generateRandomBlindingFactor: jest.fn(),
+      createAmountShieldedOutput: jest.fn(),
+      createShieldedOutputWithBothBlindings: jest.fn(),
+      rewindAmountShieldedOutput: jest.fn(),
+      rewindFullShieldedOutput: jest.fn().mockResolvedValue({
+        value: 100n,
+        blindingFactor: Buffer.alloc(32, 0x02),
+        tokenUid: '03'.repeat(32),
+        assetBlindingFactor: Buffer.alloc(32, 0x04),
+      }),
+      computeBalancingBlindingFactor: jest.fn(),
+      deriveTag: jest.fn().mockResolvedValue(Buffer.alloc(32, 0x05)),
+      createAssetCommitment: jest.fn().mockResolvedValue(Buffer.alloc(33, 0xff)),
+      createSurjectionProof: jest.fn(),
+      deriveEcdhSharedSecret: jest.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+
+    const tx = buildTx();
+    const result = await processNewTx(storage, tx, { currentHeight: 105, pinCode: 'pin' });
+
+    // No owned shielded output was credited; the slot stays non-owned.
+    expect(result.shieldedMaxAddressIndex).toBe(-1);
+    expect(tx.shielded_outputs![0].value).toBeUndefined();
+    expect(await store.getUtxo({ txId: TX_ID, index: 0 })).toBeNull();
+    expect(storage.logger.error).toHaveBeenCalledWith(
+      expect.stringContaining('cross-check failed')
+    );
+  });
+});
+
+describe('processMetadataChanged — shielded UTXO preservation (SEPARATED model)', () => {
+  // Regression for the bug that caused unshield sends to fail with
+  // "full-unshield tx (shielded inputs, no shielded outputs) must carry an
+  // unshield balance header". Sequence: receive a shielded HTR tx →
+  // processNewTx saves the UTXO with shielded:true + blindingFactor at the
+  // absolute on-chain index → fullnode confirms the tx and pushes a metadata
+  // update → onNewTx routes it to processMetadataChanged. If that function
+  // dropped the shielded handling, it would re-save the UTXO with the bare
+  // schema (no shielded flag, no blinding factors), corrupting the record so
+  // the next send's excess-blinding-factor computation is skipped and the
+  // fullnode rejects the tx.
+  //
+  // SEPARATED model: the decoded data lives IN PLACE on tx.shielded_outputs[],
+  // and the re-save must use the absolute index T + s.
+  const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'aa00bb11cc22dd33ee44ff5566778899aabbccddeeff00112233445566778899';
+  const COMMITMENT = 'deadbeef'.repeat(8);
+  const BLINDING_FACTOR = 'aabbccdd'.repeat(8);
+  const ASSET_BLINDING_FACTOR = '11223344'.repeat(8);
+
+  // A tx with the decoded shielded output in place (value/blindingFactor set),
+  // no transparent outputs, so the shielded slot's on-chain index is 0.
+  const buildTxWithDecodedShielded = (): IHistoryTx =>
+    ({
+      tx_id: TX_ID,
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: COMMITMENT,
+          range_proof: '',
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: '',
+          decoded: { address: SHIELDED_ADDR, timelock: null },
+          spent_by: null,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          blindingFactor: BLINDING_FACTOR,
+          assetBlindingFactor: ASSET_BLINDING_FACTOR,
+        },
+      ],
+    }) as unknown as IHistoryTx;
+
+  const seedStorage = async (index: number) => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    await store.saveUtxo({
+      txId: TX_ID,
+      index,
+      type: 1,
+      authorities: 0n,
+      address: SHIELDED_ADDR,
+      token: NATIVE_TOKEN_UID,
+      value: 50n,
+      timelock: null,
+      height: 100,
+      shielded: true,
+      blindingFactor: BLINDING_FACTOR,
+      assetBlindingFactor: ASSET_BLINDING_FACTOR,
+    });
+    return { store, storage };
+  };
+
+  it('preserves shielded:true and the blinding factors when re-saving via metadata update', async () => {
+    const { store, storage } = await seedStorage(0);
+
+    const before = await store.getUtxo({ txId: TX_ID, index: 0 });
+    expect(before?.shielded).toBe(true);
+    expect(before?.blindingFactor).toBe(BLINDING_FACTOR);
+
+    await processMetadataChanged(storage, buildTxWithDecodedShielded());
+
+    const after = await store.getUtxo({ txId: TX_ID, index: 0 });
+    expect(after?.shielded).toBe(true);
+    expect(after?.blindingFactor).toBe(BLINDING_FACTOR);
+    expect(after?.assetBlindingFactor).toBe(ASSET_BLINDING_FACTOR);
+    expect(after?.value).toBe(50n);
+    expect(after?.token).toBe(NATIVE_TOKEN_UID);
+  });
+
+  it('uses the absolute on-chain index T + s, not the shielded array position', async () => {
+    // A transparent output ahead of the shielded slot → the shielded output's
+    // absolute on-chain index is T(1) + s(0) = 1, even though it is at
+    // shielded_outputs position 0.
+    const { store, storage } = await seedStorage(1);
+
+    const tx = buildTxWithDecodedShielded();
+    tx.outputs.push({
+      value: 1n,
+      token: NATIVE_TOKEN_UID,
+      token_data: 0,
+      script: '',
+      decoded: { address: SHIELDED_ADDR, timelock: null },
+      spent_by: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    await processMetadataChanged(storage, tx);
+
+    const shieldedAfter = await store.getUtxo({ txId: TX_ID, index: 1 });
+    expect(shieldedAfter?.shielded).toBe(true);
+    expect(shieldedAfter?.blindingFactor).toBe(BLINDING_FACTOR);
+  });
 });
