@@ -419,7 +419,7 @@ test('selectUtxos resolves a shielded filter_address to its spend P2PKH via ctMa
   expect(bySpend[0].txId).toEqual('txS');
 });
 
-test('addTx advances the shielded cursor from a shielded receive in tx.shielded_outputs', async () => {
+test('addTx advances the shielded cursor only for a DECODED owned shielded receive', async () => {
   const store = new MemoryStore();
   // Own a shielded-spend P2PKH at index 7 (the on-chain form of a shielded
   // receive). SEPARATED model: the receive lands in tx.shielded_outputs, NOT
@@ -432,6 +432,9 @@ test('addTx advances the shielded cursor from a shielded receive in tx.shielded_
   });
   expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(-1);
 
+  // SECURITY: an UNDECODED shielded output (value undefined) that carries our
+  // spend P2PKH on the (untrusted) wire must NOT advance the cursor —
+  // decoded.address is not an ownership signal; only a decoded entry is ours.
   await store.saveTx({
     tx_id: 'a'.repeat(64),
     version: 1,
@@ -447,6 +450,31 @@ test('addTx advances the shielded cursor from a shielded receive in tx.shielded_
         script: 'cc',
         ephemeral_pubkey: 'dd',
         token_data: 0,
+        decoded: { address: 'spend-7' },
+      },
+    ],
+    parents: [],
+  } as unknown as IHistoryTx);
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(-1);
+
+  // A DECODED owned shielded receive (value written in place) DOES advance it.
+  await store.saveTx({
+    tx_id: 'b'.repeat(64),
+    version: 1,
+    weight: 1,
+    timestamp: 124,
+    is_voided: false,
+    inputs: [],
+    outputs: [],
+    shielded_outputs: [
+      {
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        ephemeral_pubkey: 'dd',
+        token_data: 0,
+        value: 50n,
+        token: '00',
         decoded: { address: 'spend-7' },
       },
     ],

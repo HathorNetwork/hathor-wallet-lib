@@ -552,14 +552,22 @@ export class MemoryStore implements IStore {
     // chain cursor — each owned shielded output's `decoded.address` is our
     // 'shielded-spend' P2PKH. Without this, shieldedLastUsedAddressIndex never
     // moves on receives and the shielded gap-limit fails to extend, so funds on
-    // higher shielded indices would be missed. (Shielded outputs we don't own
-    // carry a foreign address and are skipped by the addressExists check.)
+    // higher shielded indices would be missed.
     for (const el of [...tx.inputs, ...tx.outputs, ...(tx.shielded_outputs ?? [])]) {
       if (el.decoded?.address && (await this.addressExists(el.decoded.address))) {
         const addrInfo = this.addresses.get(el.decoded.address)!;
         const index = addrInfo.bip32AddressIndex;
         if (addrInfo.addressType === 'shielded-spend') {
-          if (index > shieldedMaxIndex) shieldedMaxIndex = index;
+          // Gate on the SEPARATED ownership marker (value !== undefined), same
+          // as every other shielded consumer. `decoded.address` is UNTRUSTED
+          // wire data — the fullnode emits it even for outputs we cannot
+          // decrypt — so advancing the cursor off a non-decoded entry would let
+          // a crafted tx claiming our spend P2PKH push the gap cursor. Decode-
+          // verified advancement on first receipt is handled by processNewTx;
+          // here we only honor entries already decoded as ours (value set).
+          if ((el as { value?: unknown }).value !== undefined && index > shieldedMaxIndex) {
+            shieldedMaxIndex = index;
+          }
         } else if (
           !addrInfo.addressType ||
           addrInfo.addressType === 'p2pkh' ||
