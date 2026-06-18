@@ -6,6 +6,11 @@
  */
 
 import { get, includes } from 'lodash';
+// `@hathor/ct-crypto-node` is not declared in wallet-lib's package.json: it is
+// not on npm yet, and integration tests are the only consumer. Install it
+// manually before running the suite — see __tests__/integration/README.md.
+// eslint-disable-next-line import/no-unresolved, import/no-extraneous-dependencies
+import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -113,6 +118,10 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, param);
   }
   const hWallet = new HathorWallet(walletConfig);
+  // Register the shielded crypto provider explicitly before start. wallet-lib
+  // no longer auto-detects; the provider lives in `@hathor/ct-crypto-node`,
+  // installed manually (see __tests__/integration/README.md).
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -355,7 +364,7 @@ export async function waitForTxReceived(
     // so after the transaction arrives, all the metadata involved on it is updated and we can
     // continue running the tests to correctly check balances, addresses, and everyting else
     await updateInputsSpentBy(hWallet, storageTx);
-    await hWallet.storage.processHistory();
+    await hWallet.storage.processHistory(hWallet.pinCode ?? undefined);
   }
 
   return storageTx;
@@ -374,6 +383,13 @@ async function updateInputsSpentBy(hWallet, tx) {
     const inputTx = await hWallet.getTx(input.tx_id);
     if (!inputTx) {
       // This input is not spending an output from this wallet
+      continue;
+    }
+
+    // Shielded inputs (type === 'shielded') reference a shielded output whose
+    // spent_by marking is handled by the wallet's own processing once the
+    // metadata update arrives; we don't force-mark it here.
+    if (input.type === 'shielded') {
       continue;
     }
 
