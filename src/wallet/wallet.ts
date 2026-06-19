@@ -763,7 +763,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     for (const txin of tx.inputs) {
-      if (transaction.isAuthorityOutput(txin)) {
+      // Shielded inputs don't have value/token/token_data fields
+      if (txin.token === undefined) continue;
+      if (transaction.isAuthorityOutput({ token_data: txin.token_data! })) {
         if (options.includeAuthorities) {
           if (!balance[txin.token]) {
             balance[txin.token] = 0n;
@@ -775,7 +777,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         if (!balance[txin.token]) {
           balance[txin.token] = 0n;
         }
-        balance[txin.token] -= txin.value;
+        balance[txin.token] -= txin.value!;
       }
     }
 
