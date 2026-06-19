@@ -84,11 +84,26 @@ const transaction = {
   },
 
   /**
-   * Resolve the on-chain output of a parent tx that an input with absolute
+   * Shielded inputs arrive from the fullnode inline in tx.inputs[] with
+   * type='shielded' and only a commitment + range_proof — none of the
+   * token_data/decoded/tx_id fields that transparent inputs carry. Call sites
+   * that read those fields must filter these out first. The reload path
+   * (processHistory) also feeds bare {tx_id, index, type:'shielded'} inputs
+   * from address_history, which this detects so they can be debited.
+   */
+  isShieldedInputEntry(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    input: Record<string, any>
+  ): boolean {
+    return input != null && (input as { type?: string }).type === 'shielded';
+  },
+
+  /**
+   * Resolve the on-chain output of the spent tx that an input with absolute
    * on-chain index `idx` spends, using the SEPARATED / arithmetic model that
    * mirrors hathor-core (`base_transaction.py:347-363`).
    *
-   * The parent has `T = outputs.length` transparent outputs followed by
+   * The spent tx has `T = outputs.length` transparent outputs followed by
    * `S = shielded_outputs.length` shielded outputs. The on-chain absolute
    * index of `shielded_outputs[s]` is `T + s`. Resolution is pure arithmetic
    * — NO scan, NO commitment-match, NO `onChainIndex`:
@@ -105,14 +120,14 @@ const transaction = {
    * `idx - T` onto the wrong entry.
    */
   resolveSpentOutput(
-    parentTx: IHistoryTx,
+    spentTx: IHistoryTx,
     idx: number
   ):
     | { kind: 'transparent'; output: ITransparentOutput }
     | { kind: 'shielded'; sIndex: number; output: IHistoryShieldedOutput }
     | undefined {
-    const outputs = parentTx.outputs ?? [];
-    const shieldedOutputs = parentTx.shielded_outputs ?? [];
+    const outputs = spentTx.outputs ?? [];
+    const shieldedOutputs = spentTx.shielded_outputs ?? [];
     const T = outputs.length;
     const S = shieldedOutputs.length;
     if (idx < 0) return undefined;
@@ -540,36 +555,44 @@ const transaction = {
     const rewardLock = storage.version?.reward_spend_min_blocks;
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
+    // Accrue one output/input into the running balance. `sign` is +1n to credit
+    // (outputs) or -1n to debit (inputs): authority entries move by `sign`, token
+    // amounts by `sign * value`. Shared by the transparent-output, shielded-output
+    // and input loops below so the authority/lock/value handling lives in one place.
+    const accrue = (
+      token: string,
+      value: bigint,
+      tokenData: number,
+      isLocked: boolean,
+      sign: bigint
+    ): void => {
+      if (!balance[token]) {
+        balance[token] = getEmptyBalance();
+      }
+      const entry = balance[token];
+      if (this.isAuthorityOutput({ token_data: tokenData })) {
+        if (this.isMint({ value, token_data: tokenData })) {
+          if (isLocked) entry.authorities.mint.locked += sign;
+          else entry.authorities.mint.unlocked += sign;
+        }
+        if (this.isMelt({ value, token_data: tokenData })) {
+          if (isLocked) entry.authorities.melt.locked += sign;
+          else entry.authorities.melt.unlocked += sign;
+        }
+      } else if (isLocked) {
+        entry.tokens.locked += sign * value;
+      } else {
+        entry.tokens.unlocked += sign * value;
+      }
+    };
+
     for (const output of tx.outputs) {
       const { address } = output.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      if (!balance[output.token]) {
-        balance[output.token] = getEmptyBalance();
-      }
       const isLocked = this.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked;
-
-      if (this.isAuthorityOutput(output)) {
-        if (this.isMint(output)) {
-          if (isLocked) {
-            balance[output.token].authorities.mint.locked += 1n;
-          } else {
-            balance[output.token].authorities.mint.unlocked += 1n;
-          }
-        }
-        if (this.isMelt(output)) {
-          if (isLocked) {
-            balance[output.token].authorities.melt.locked += 1n;
-          } else {
-            balance[output.token].authorities.melt.unlocked += 1n;
-          }
-        }
-      } else if (isLocked) {
-        balance[output.token].tokens.locked += output.value;
-      } else {
-        balance[output.token].tokens.unlocked += output.value;
-      }
+      accrue(output.token, output.value, output.token_data, isLocked, 1n);
     }
 
     // CREDIT loop over shielded outputs (SEPARATED model). Owned shielded
@@ -586,35 +609,10 @@ const transaction = {
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      const token = so.token ?? NATIVE_TOKEN_UID;
-      if (!balance[token]) {
-        balance[token] = getEmptyBalance();
-      }
       const isLocked = this.isOutputLocked(so, { refTs: nowTs }) || isHeightLocked;
-
       // token_data on a shielded output may be undefined (FullShielded hides
       // the token); default to 0 so the authority check reads as funds.
-      const soForAuthority = { token_data: so.token_data ?? 0, value: so.value };
-      if (this.isAuthorityOutput(soForAuthority)) {
-        if (this.isMint(soForAuthority)) {
-          if (isLocked) {
-            balance[token].authorities.mint.locked += 1n;
-          } else {
-            balance[token].authorities.mint.unlocked += 1n;
-          }
-        }
-        if (this.isMelt(soForAuthority)) {
-          if (isLocked) {
-            balance[token].authorities.melt.locked += 1n;
-          } else {
-            balance[token].authorities.melt.unlocked += 1n;
-          }
-        }
-      } else if (isLocked) {
-        balance[token].tokens.locked += so.value;
-      } else {
-        balance[token].tokens.unlocked += so.value;
-      }
+      accrue(so.token ?? NATIVE_TOKEN_UID, so.value, so.token_data ?? 0, isLocked, 1n);
     }
 
     for (const input of tx.inputs) {
@@ -640,17 +638,17 @@ const transaction = {
         } else {
           // Fallback: the UTXO has already been deleted (processNewTx deletes
           // the spent shielded UTXO right after enriching the input). Resolve
-          // the parent tx's spent output by its absolute on-chain index via
-          // the SEPARATED-model resolver and read value/token/decoded off the
+          // the spent tx's output by its absolute on-chain index via the
+          // SEPARATED-model resolver and read value/token/decoded off the
           // shielded entry. Without this fallback, a tx that spent a
           // wallet-owned shielded UTXO whose enriched inputs weren't persisted
           // reads back as `{tx_id, index}`-only here, the input gets silently
           // skipped, and the per-tx delta credits outputs (change) without
           // debiting the input — showing e.g. +8.5M on a tx that actually
           // sent 500K. Never "skip if UTXO missing".
-          const parentTx = await storage.getTx(input.tx_id);
-          if (!parentTx) continue;
-          const resolved = this.resolveSpentOutput(parentTx, input.index);
+          const spentTx = await storage.getTx(input.tx_id);
+          if (!spentTx) continue;
+          const resolved = this.resolveSpentOutput(spentTx, input.index);
           if (!resolved || resolved.kind !== 'shielded') continue;
           const decoded = resolved.output;
           // Owned-marker gate: a non-owned slot has value === undefined.
@@ -671,20 +669,8 @@ const transaction = {
         // Defensive: a wallet-owned input must carry a token by this point.
         continue;
       }
-      if (!balance[inputToken]) {
-        balance[inputToken] = getEmptyBalance();
-      }
-
-      if (this.isAuthorityOutput({ token_data: inputTokenData! })) {
-        if (this.isMint({ value: inputValue!, token_data: inputTokenData! })) {
-          balance[inputToken].authorities.mint.unlocked -= 1n;
-        }
-        if (this.isMelt({ value: inputValue!, token_data: inputTokenData! })) {
-          balance[inputToken].authorities.melt.unlocked -= 1n;
-        }
-      } else {
-        balance[inputToken].tokens.unlocked -= inputValue!;
-      }
+      // Inputs debit (sign -1n); a spent output is never locked.
+      accrue(inputToken, inputValue!, inputTokenData!, false, -1n);
     }
 
     return balance;
@@ -870,8 +856,7 @@ const transaction = {
       );
       // Attach shielded-related headers identically to the regular tx
       // branch below so a TCT funded by shielded HTR carries the
-      // UnshieldBalanceHeader + MintHeader the fullnode requires
-      // (alpha-v3 lifted the TCT-can't-be-shielded restriction).
+      // UnshieldBalanceHeader + MintHeader the fullnode requires.
       this._attachShieldedHeaders(ctTx, txData);
       return ctTx;
     }
@@ -956,7 +941,7 @@ const transaction = {
       tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
     }
 
-    // Mint/Melt headers for shielded txs (alpha-v3 protocol, RFC §4.1).
+    // Mint/Melt headers for shielded txs.
     // The wallet MUST publicly declare any *real* supply change for a
     // non-HTR token in a shielded tx. "Real" here means an explicit
     // mint or melt authority is being exercised — a simple T→F or F→T
