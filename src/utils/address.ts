@@ -84,6 +84,23 @@ export async function deriveAddressP2PKH(index: number, storage: IStorage): Prom
   return deriveAddressFromXPubP2PKH(accessData.xpubkey, index, storage.config.getNetwork().name);
 }
 
+/**
+ * Encode a P2SH redeem script as its base58 address for the given network.
+ *
+ * @param {Buffer} redeemScript The P2SH redeem script
+ * @param {Network} network Network to encode the address for
+ *
+ * @returns {string} The base58 P2SH address
+ */
+export function redeemScriptToP2SHAddress(redeemScript: Buffer, network: Network): string {
+  // eslint-disable-next-line new-cap -- Cannot change the dependency method name
+  const address = new BitcoreAddress.payingTo(
+    Script.fromBuffer(redeemScript),
+    network.bitcoreNetwork
+  );
+  return address.toString();
+}
+
 export function deriveAddressFromDataP2SH(
   multisigData: IMultisigData,
   index: number,
@@ -95,13 +112,8 @@ export function deriveAddressFromDataP2SH(
     multisigData.numSignatures,
     index
   );
-  // eslint-disable-next-line new-cap -- Cannot change the dependency method name
-  const address = new BitcoreAddress.payingTo(
-    Script.fromBuffer(redeemScript),
-    network.bitcoreNetwork
-  );
   return {
-    base58: address.toString(),
+    base58: redeemScriptToP2SHAddress(redeemScript, network),
     bip32AddressIndex: index,
   };
 }
