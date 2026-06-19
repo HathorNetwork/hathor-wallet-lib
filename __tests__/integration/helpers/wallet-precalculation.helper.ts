@@ -209,6 +209,11 @@ export class WalletPrecalculationHelper {
   // eslint-disable-next-line class-methods-use-this -- kept as an instance method to preserve the precalculationHelpers.test call sites
   async getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     const { data } = await axios.get(`${testConfig.walletProviderUrl}/simpleWallet`);
+    // Fail loudly with the raw payload if it ever returns an unexpected shape — otherwise a malformed
+    // response surfaces as a confusing error deep inside wallet construction.
+    if (!data?.words || !Array.isArray(data?.addresses)) {
+      throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
+    }
     return { isUsed: false, words: data.words, addresses: data.addresses };
   }
 }
