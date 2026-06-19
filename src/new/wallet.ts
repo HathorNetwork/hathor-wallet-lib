@@ -3432,8 +3432,11 @@ class HathorWallet extends EventEmitter {
       throw new Error(`Failed to get transaction ${txId}: ${fullTx.message}`);
     }
 
-    // Separated model: outputs[] is transparent-only (shielded outputs live in
-    // shielded_outputs[]), so hydrate every output and input with its token uid.
+    // Shielded outputs are never delivered inline in outputs[] (they arrive in
+    // the dedicated shielded_outputs[] field), so every wire output here is
+    // transparent and can be hydrated. Shielded inputs, however, may arrive bare
+    // (commitment only) and lack the token_data hydrateWithTokenUid needs, so
+    // those are skipped.
     fullTx.tx.outputs = fullTx.tx.outputs.map(output =>
       hydrateWithTokenUid(output, fullTx.tx.tokens)
     );
