@@ -833,8 +833,7 @@ const transaction = {
    * Attach the shielded-related headers (ShieldedOutputsHeader,
    * UnshieldBalanceHeader, MintHeader) onto a freshly-built tx based on
    * what `txData` carries. Shared by both regular `Transaction` and
-   * `CreateTokenTransaction` paths — alpha-v3 unblocked TCT for shielded
-   * inputs so both flows now need the same headers.
+   * `CreateTokenTransaction` paths, which need the same headers.
    *
    * @param tx The Transaction (or CreateTokenTransaction) to attach to.
    * @param txData The data the tx was built from.
@@ -1096,35 +1095,21 @@ const transaction = {
         continue;
       }
 
-      if (
-        (resolvedSpent === undefined && input.index >= spentTx.outputs.length) ||
-        resolvedSpent?.kind === 'shielded'
-      ) {
-        // The input references a shielded slot the wallet hasn't decoded into
-        // shielded_outputs[] (or the parent's shielded list is incomplete in
-        // storage). The only local source of truth is the UTXO record (saved
-        // at processNewTx time). Fall back to it. If it's also missing the
-        // wallet truly cannot reconstruct the input — a real error.
-        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
-        if (!utxo) {
-          throw new Error(
-            `Input ${input.hash}:${input.index} references a shielded slot the wallet ` +
-              `has neither decoded into shielded_outputs[] ` +
-              `(length ${spentTx.shielded_outputs?.length ?? 0}) ` +
-              `nor stored as a UTXO record — cannot reconstruct the sender-local insert.`
-          );
-        }
-        inputs.push({
-          type: 'shielded',
-          tx_id: input.hash,
-          index: input.index,
-          script: '',
-          decoded: { address: utxo.address, timelock: utxo.timelock ?? null },
-          token_data: 0,
-          token: utxo.token,
-          value: utxo.value,
-        });
-        continue;
+      if (resolvedSpent === undefined || resolvedSpent.kind === 'shielded') {
+        // Reachable only if we're "spending" a shielded slot the wallet never
+        // decoded (value === undefined) or whose stored shielded list is too
+        // short to resolve. That is impossible for a real spend: a shielded
+        // input requires the spend key and unblinding factors the wallet only
+        // holds for outputs it OWNS, and an owned output is decoded + persisted
+        // on the parent at receive time — so reaching here means corrupted or
+        // incomplete storage. Don't paper over it with the racy UTXO record;
+        // surface it (the broadcast already happened — only the local insert
+        // fails, and the WS re-delivery still processes the tx correctly).
+        throw new Error(
+          `Input ${input.hash}:${input.index} spends a shielded slot with no decoded ` +
+            `entry on the spent tx (shielded_outputs length ` +
+            `${spentTx.shielded_outputs?.length ?? 0}) — cannot reconstruct the local insert.`
+        );
       }
 
       // Transparent slot: resolvedSpent is the transparent output.
