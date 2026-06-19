@@ -1229,15 +1229,18 @@ const transaction = {
       ...options,
     };
 
-    // Full-unshield detection for tx paths that don't go through
+    // Attach an UnshieldBalanceHeader for a "full unshield" — a tx that spends
+    // shielded inputs but produces NO shielded outputs — on paths that bypass
     // SendTransaction.prepareTxData (notably `createNewToken` /
-    // `prepareCreateNewToken`, which build txData directly via tokens.ts).
-    // If the inputs include shielded UTXOs and the tx has no shielded
-    // outputs, we must attach an UnshieldBalanceHeader carrying the excess
-    // blinding factor so the fullnode's Pedersen balance check holds — same
-    // logic SendTransaction already runs for the send path. Skip if txData
-    // already carries excess (set upstream) or if there are shielded outputs
-    // (mutually exclusive with the header).
+    // `prepareCreateNewToken`, which build txData directly via tokens.ts). The
+    // header carries the excess blinding factor so the fullnode's Pedersen
+    // balance check holds (same logic SendTransaction runs for the send path).
+    //
+    // The condition AND's two separate things: `!excessBlindingFactor` is a
+    // skip-guard for paths that already computed it upstream, and "no shielded
+    // outputs" is the actual full-unshield signal (mutually exclusive with the
+    // header). The third requirement — that the tx really spends shielded inputs
+    // — is verified below: the header is only attached when shieldedInputs > 0.
     if (
       !txData.excessBlindingFactor &&
       (!txData.shieldedOutputs || txData.shieldedOutputs.length === 0)
@@ -1305,7 +1308,9 @@ const transaction = {
             });
           }
         }
-        // Fee-header amounts (HTR fees + per-token fees) on the output side.
+        // Fees (HTR + per-token) are value leaving the tx, so for the Pedersen
+        // value-conservation check (inputs = outputs + fees) they count on the
+        // OUTPUT side. Zero-blinded because fee amounts are public/explicit.
         for (const header of txData.headers ?? []) {
           if (header instanceof FeeHeader) {
             for (const fee of header.entries) {
