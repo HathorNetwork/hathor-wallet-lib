@@ -309,30 +309,13 @@ const transaction = {
       // OP_EQUALVERIFY at the fullnode with "Failed to verify if elements are
       // equal".
       const resolved = this.resolveSpentOutput(spentTx, input.index);
-      let spentOut: { decoded?: { address?: string }; value?: bigint } | undefined =
-        resolved?.output;
-      // Fall back to the stored UTXO when the resolved output can't provide a
-      // wallet address: either the parent isn't in storage (resolved ===
-      // undefined) or it resolved to a shielded slot the wallet hasn't decoded
-      // (value undefined and no decoded.address). Keying off the address here
-      // — not the resolver kind — preserves signing of owned shielded inputs
-      // whose parent carries the decoded entry, while still recovering owned
-      // inputs whose parent slot is undecoded but whose UTXO is in storage.
-      const needsUtxoFallback =
-        resolved === undefined ||
-        (resolved.kind === 'shielded' &&
-          resolved.output.value === undefined &&
-          !resolved.output.decoded?.address);
-      if (needsUtxoFallback) {
-        const utxo = await storage.getUtxo({ txId: input.hash, index: input.index });
-        if (!utxo) {
-          // Truly unknown — caller will surface this as an error elsewhere.
-          continue;
-        }
-        spentOut = { decoded: { address: utxo.address }, value: utxo.value };
-      }
+      const spentOut = resolved?.output;
+      // A shielded output's spend-derived P2PKH (decoded.address) is on the wire
+      // for every output (owned or not) and persisted on the stored entry, so
+      // the resolver always supplies the address needed to select the signing
+      // key — no UTXO lookup required.
       if (!spentOut?.decoded?.address) {
-        // This is not a wallet output
+        // Not a wallet output (or an unresolvable index)
         continue;
       }
       const addressInfo = await storage.getAddressInfo(spentOut.decoded.address);
@@ -616,61 +599,39 @@ const transaction = {
     }
 
     for (const input of tx.inputs) {
-      // Shielded inputs arrive without decoded/value/token (hidden in the
-      // commitment on-chain). Recover those fields from the stored origTx's
-      // decoded shielded output at input.index so wallet-owned shielded UTXOs
-      // are debited correctly.
+      // Determine the spent value/token/address. Transparent (or already
+      // enriched) inputs carry these inline. A shielded input is bare — its
+      // amount is hidden in the on-chain commitment — so read them off the
+      // parent tx's owned, decrypted shielded output, which the receive
+      // pipeline persists at receive time, via the SEPARATED-model resolver.
+      // Without this the per-tx delta would credit change but never debit the
+      // spend (e.g. +8.5M on a tx that actually sent 500K).
       let address = input.decoded?.address;
       let inputToken = input.token;
       let inputValue = input.value;
       let inputTokenData = input.token_data;
 
-      if (!address || inputToken === undefined) {
-        // First try: the shielded UTXO is still in storage (e.g. processNewTx
-        // has not yet run on this tx, or the tx was loaded before its spend
-        // was processed).
-        const utxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
-        if (utxo && utxo.shielded) {
-          address = utxo.address;
-          inputToken = utxo.token;
-          inputValue = utxo.value;
-          inputTokenData = 0;
-        } else {
-          // Fallback: the UTXO has already been deleted (processNewTx deletes
-          // the spent shielded UTXO right after enriching the input). Resolve
-          // the spent tx's output by its absolute on-chain index via the
-          // SEPARATED-model resolver and read value/token/decoded off the
-          // shielded entry. Without this fallback, a tx that spent a
-          // wallet-owned shielded UTXO whose enriched inputs weren't persisted
-          // reads back as `{tx_id, index}`-only here, the input gets silently
-          // skipped, and the per-tx delta credits outputs (change) without
-          // debiting the input — showing e.g. +8.5M on a tx that actually
-          // sent 500K. Never "skip if UTXO missing".
-          const spentTx = await storage.getTx(input.tx_id);
-          if (!spentTx) continue;
-          const resolved = this.resolveSpentOutput(spentTx, input.index);
-          if (!resolved || resolved.kind !== 'shielded') continue;
-          const decoded = resolved.output;
-          // Owned-marker gate: a non-owned slot has value === undefined.
-          if (decoded.value === undefined) continue;
-          if (!decoded.decoded?.address) continue;
-          if (!(await storage.isAddressMine(decoded.decoded.address))) continue;
-          address = decoded.decoded.address;
-          inputToken = decoded.token ?? NATIVE_TOKEN_UID;
-          inputValue = decoded.value;
-          inputTokenData = decoded.token_data ?? 0;
+      if (!address || inputToken === undefined || inputValue === undefined) {
+        const spentTx = await storage.getTx(input.tx_id);
+        const resolved = spentTx ? this.resolveSpentOutput(spentTx, input.index) : undefined;
+        // Owned-marker gate: only a decrypted shielded slot (value defined) is
+        // a wallet spend we can debit; a non-owned/undecoded slot has value
+        // === undefined.
+        if (resolved?.kind !== 'shielded' || resolved.output.value === undefined) {
+          continue;
         }
+        const so = resolved.output;
+        address = so.decoded?.address;
+        inputToken = so.token ?? NATIVE_TOKEN_UID;
+        inputValue = so.value;
+        inputTokenData = so.token_data ?? 0;
       }
 
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      if (inputToken === undefined) {
-        // Defensive: a wallet-owned input must carry a token by this point.
-        continue;
-      }
       // Inputs debit (sign -1n); a spent output is never locked.
-      accrue(inputToken, inputValue!, inputTokenData!, false, -1n);
+      accrue(inputToken!, inputValue!, inputTokenData!, false, -1n);
     }
 
     return balance;
