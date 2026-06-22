@@ -830,15 +830,30 @@ const transaction = {
   },
 
   /**
-   * Attach the shielded-related headers (ShieldedOutputsHeader,
-   * UnshieldBalanceHeader, MintHeader) onto a freshly-built tx based on
-   * what `txData` carries. Shared by both regular `Transaction` and
+   * Attach the shielded-related headers onto a freshly-built tx based on what
+   * `txData` carries. Shared by both regular `Transaction` and
    * `CreateTokenTransaction` paths, which need the same headers.
+   *
+   * Delegates to one helper per header, invoked in canonical header-id order so
+   * `tx.headers` stays sorted: Fee(0x11) ≤ Shielded(0x12) ≤ Unshield(0x13) ≤
+   * Mint(0x14) ≤ Melt(0x15).
    *
    * @param tx The Transaction (or CreateTokenTransaction) to attach to.
    * @param txData The data the tx was built from.
    */
   _attachShieldedHeaders(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    this._attachShieldedOutputsHeader(tx, txData);
+    this._attachUnshieldBalanceHeader(tx, txData);
+    this._attachMintMeltHeaders(tx, txData);
+  },
+
+  /**
+   * Build a `ShieldedOutput` model for each entry in `txData.shieldedOutputs`,
+   * set them on `tx.shieldedOutputs` (SEPARATED model — shielded outputs live
+   * apart from `tx.outputs`), and push a ShieldedOutputsHeader (0x12). No-op
+   * when the tx carries no shielded outputs.
+   */
+  _attachShieldedOutputsHeader(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
     // Populate shielded outputs as a ShieldedOutputsHeader
     if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
       const shieldedModels = txData.shieldedOutputs.map(so => {
@@ -883,7 +898,16 @@ const transaction = {
       tx.shieldedOutputs = shieldedModels;
       tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
     }
+  },
 
+  /**
+   * Push an UnshieldBalanceHeader (0x13) for a full-unshield tx (shielded
+   * inputs, no shielded outputs): the excess scalar closes the Pedersen balance
+   * `sum(C_in) = sum(C_out) + excess·G`. Mutually exclusive with shielded
+   * outputs — asserts the caller never set both (surfaces the bug before PoW).
+   * No-op when there's no excess blinding factor.
+   */
+  _attachUnshieldBalanceHeader(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
     // Attach UnshieldBalanceHeader for pure-unshield txs. The fullnode
     // requires it when a tx has shielded inputs and no shielded outputs
     // (full unshield): the excess scalar closes the Pedersen balance
@@ -900,7 +924,15 @@ const transaction = {
       }
       tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
     }
+  },
 
+  /**
+   * Declare real supply changes for non-HTR tokens in a shielded tx via
+   * MintHeader (0x14) / MeltHeader (0x15). A pure shielding move (T↔F) preserves
+   * supply and declares nothing; a header is emitted only when an explicit
+   * mint/melt authority is exercised (see the detection rule in the body).
+   */
+  _attachMintMeltHeaders(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
     // Mint/Melt headers for shielded txs.
     // The wallet MUST publicly declare any *real* supply change for a
     // non-HTR token in a shielded tx. "Real" here means an explicit
