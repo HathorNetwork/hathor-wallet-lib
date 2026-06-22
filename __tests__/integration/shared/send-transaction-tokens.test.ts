@@ -88,6 +88,10 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     // External wallet received 80n DBT
     const externalBalance = await externalWallet.getBalance(tokenUid);
     expect(externalBalance[0].balance.unlocked).toEqual(80n);
+
+    // Custom-token sends spend no HTR — only the original 1n deposit was consumed
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(9n);
   });
 
   it('should send custom fee token transactions', async () => {
@@ -217,8 +221,8 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
       {
         inputs: [
-          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
-          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
+          { txId: htrUtxo.txId, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
+          { txId: tokenUtxo.txId, token: tokenUid, index: tokenUtxo.index },
         ],
       }
     );
@@ -229,6 +233,14 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(fullTx.tx.outputs).toContainEqual(
       expect.objectContaining({ value: 50n, token_data: 1 })
     );
+
+    // 9n after createToken (1n fee) − 2n send fee = 7n HTR remaining
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(7n);
+    // Self-send (destination is addr5 of the same wallet): the full 100n
+    // FTMI is preserved across the manual-input path.
+    const fbtBalance = await wallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(100n);
   });
 
   it('should send fee token with manually provided inputs (token before HTR)', async () => {
@@ -259,8 +271,8 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       [{ address: (await wallet.getAddressAtIndex(5))!, value: 50n, token: tokenUid }],
       {
         inputs: [
-          { txId: tokenUtxo.tx_id, token: tokenUid, index: tokenUtxo.index },
-          { txId: htrUtxo.tx_id, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
+          { txId: tokenUtxo.txId, token: tokenUid, index: tokenUtxo.index },
+          { txId: htrUtxo.txId, token: NATIVE_TOKEN_UID, index: htrUtxo.index },
         ],
       }
     );
@@ -271,5 +283,12 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
     expect(fullTx.tx.outputs).toContainEqual(
       expect.objectContaining({ value: 50n, token_data: TOKEN_DATA.TOKEN })
     );
+
+    // Symmetric to the HTR-first case: input ordering must not affect
+    // resulting balances (self-send preserves the full 100n FTMI).
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toEqual(7n);
+    const fbtBalance = await wallet.getBalance(tokenUid);
+    expect(fbtBalance[0].balance.unlocked).toEqual(100n);
   });
 });

@@ -61,7 +61,7 @@ const walletServiceClient = {
       return response.data;
     }
     throw new WalletRequestError('Error registering device for push notification.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -75,7 +75,7 @@ const walletServiceClient = {
       return response.data;
     }
     throw new WalletRequestError('Error updating push notification settings for device.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -89,7 +89,7 @@ const walletServiceClient = {
       return response.data;
     }
     throw new WalletRequestError('Error unregistering wallet from push notifications.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 };

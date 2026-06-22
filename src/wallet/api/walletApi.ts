@@ -330,7 +330,7 @@ const walletApi = {
       if (!response.data.success) {
         walletApi._txNotFoundGuard(response.data);
         throw new WalletRequestError('Error getting transaction by its id.', {
-          cause: response.data,
+          cause: { status: response.status, data: response.data },
         });
       }
       return parseSchema(response.data, txByIdResponseSchema);
@@ -343,7 +343,7 @@ const walletApi = {
     }
 
     throw new WalletRequestError('Error getting transaction by its id.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -372,7 +372,7 @@ const walletApi = {
     walletApi._txNotFoundGuard(response.data);
 
     throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
-      cause: response.data,
+      cause: { status: response.status, data: response.data },
     });
   },
 
@@ -391,7 +391,7 @@ const walletApi = {
     throw new WalletRequestError(
       'Error getting transaction confirmation data by its id from the proxied fullnode.',
       {
-        cause: response.data,
+        cause: { status: response.status, data: response.data },
       }
     );
   },
@@ -418,7 +418,7 @@ const walletApi = {
         throw new WalletRequestError(
           `Error getting neighbors data for ${txId} from the proxied fullnode.`,
           {
-            cause: response.data.message,
+            cause: { status: response.status, data: response.data },
           }
         );
       }
@@ -429,7 +429,7 @@ const walletApi = {
     throw new WalletRequestError(
       `Error getting neighbors data for ${txId} from the proxied fullnode.`,
       {
-        cause: response.data,
+        cause: { status: response.status, data: response.data },
       }
     );
   },

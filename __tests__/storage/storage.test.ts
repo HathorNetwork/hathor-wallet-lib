@@ -94,7 +94,7 @@ describe('handleStop', () => {
     await storage.registerNanoContract('abc', testNano);
     // We have 1 transaction
     await expect(store.historyCount()).resolves.toEqual(1);
-    // 20 addresses
+    // addressCount returns only legacy addresses (shielded/shielded-spend are filtered)
     await expect(store.addressCount()).resolves.toEqual(20);
     // And 1 registered token
     let tokens = await toArray(storage.getRegisteredTokens());
@@ -134,7 +134,7 @@ describe('handleStop', () => {
 
     // handleStop with cleanStorage = true
     await storage.handleStop({ cleanStorage: true });
-    // Will clean the history bit not addresses or registered tokens
+    // Will clean the history but not addresses or registered tokens
     await expect(store.historyCount()).resolves.toEqual(0);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
@@ -177,7 +177,7 @@ describe('handleStop', () => {
     // handleStop with cleanAddresses = true
     await loadAddresses(0, 20, storage);
     await storage.handleStop({ cleanTokens: true });
-    // Will clean the history bit not addresses
+    // Will clean the tokens but not addresses
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeFalsy();
@@ -714,6 +714,36 @@ describe('getChangeAddress', () => {
     await getChangeAddressTest(store);
   });
 
+  it('returns a wallet-owned shielded change address as-is (no eager script conversion)', async () => {
+    const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.config.setNetwork('testnet');
+    const networkName = storage.config.getNetwork().name;
+
+    // A real 71-byte shielded address (encode validates on-curve pubkeys).
+    const scanXpubkey = new HDPrivateKey().xpubkey;
+    const spendXpubkey = new HDPrivateKey().xpubkey;
+    const info = deriveShieldedAddress(scanXpubkey, spendXpubkey, 0, networkName);
+
+    // Wallet owns the shielded address (saved during shielded derivation).
+    await store.saveAddress({
+      base58: info.base58,
+      bip32AddressIndex: 0,
+      addressType: 'shielded',
+    });
+
+    // getChangeAddress is a storage-layer resolver: it returns the owned
+    // address verbatim, including the 71-byte shielded form. The
+    // shielded -> spend-derived-P2PKH rule for the output script is applied
+    // later by the transaction layer (createOutputScript /
+    // createOutputScriptFromAddress), not duplicated here.
+    await expect(storage.getChangeAddress({ changeAddress: info.base58 })).resolves.toEqual(
+      info.base58
+    );
+    expect(info.base58).not.toEqual(info.spendAddress);
+  });
+
   async function getChangeAddressTest(store) {
     const storage = new Storage(store);
     const addr0 = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
@@ -1148,5 +1178,72 @@ describe('getAddressPubkey', () => {
     // Address is not saved on storage
     const publicKey20 = hdpubkey.derive(20).publicKey.toString('hex');
     await expect(storage.getAddressPubkey(20)).resolves.toEqual(publicKey20);
+  });
+});
+
+describe('shielded key access (smoke)', () => {
+  const PIN = '1234';
+
+  async function shieldedWallet() {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const legacy = new HDPrivateKey();
+    const scan = new HDPrivateKey();
+    const spend = new HDPrivateKey();
+    await store.saveAccessData({
+      xpubkey: legacy.xpubkey,
+      mainKey: cryptoUtils.encryptData(legacy.xprivkey, PIN),
+      scanMainKey: cryptoUtils.encryptData(scan.xprivkey, PIN),
+      spendMainKey: cryptoUtils.encryptData(spend.xprivkey, PIN),
+      scanXpubkey: scan.xpubkey,
+      spendXpubkey: spend.xpubkey,
+      walletType: 'p2pkh' as const,
+      walletFlags: 0,
+    });
+    return { storage, scan, spend };
+  }
+
+  it('returns the scan/spend xpubs and decrypts the xprivs with the PIN', async () => {
+    const { storage, scan, spend } = await shieldedWallet();
+    await expect(storage.getScanXPubKey()).resolves.toEqual(scan.xpubkey);
+    await expect(storage.getSpendXPubKey()).resolves.toEqual(spend.xpubkey);
+    await expect(storage.getScanXPrivKey(PIN)).resolves.toEqual(scan.xprivkey);
+    await expect(storage.getSpendXPrivKey(PIN)).resolves.toEqual(spend.xprivkey);
+  });
+
+  it('throws cleanly when the wallet has no shielded keys', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const legacy = new HDPrivateKey();
+    await store.saveAccessData({
+      xpubkey: legacy.xpubkey,
+      mainKey: cryptoUtils.encryptData(legacy.xprivkey, PIN),
+      walletType: 'p2pkh' as const,
+      walletFlags: 0,
+    });
+    await expect(storage.getScanXPrivKey(PIN)).rejects.toThrow('Scan private key is not present');
+    await expect(storage.getSpendXPrivKey(PIN)).rejects.toThrow('Spend private key is not present');
+    // The xpub getters are non-throwing: pre-shielded wallets simply have none.
+    await expect(storage.getScanXPubKey()).resolves.toBeUndefined();
+    await expect(storage.getSpendXPubKey()).resolves.toBeUndefined();
+  });
+
+  it('rejects xpriv decryption with a wrong PIN', async () => {
+    const { storage } = await shieldedWallet();
+    await expect(storage.getScanXPrivKey('9999')).rejects.toThrow();
+    await expect(storage.getSpendXPrivKey('9999')).rejects.toThrow();
+  });
+
+  it('round-trips the shielded crypto provider field/setter', () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    expect(storage.shieldedCryptoProvider).toBeUndefined();
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    expect(storage.shieldedCryptoProvider).toBe(provider);
+    storage.setShieldedCryptoProvider(undefined);
+    expect(storage.shieldedCryptoProvider).toBeUndefined();
   });
 });
