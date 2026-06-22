@@ -391,8 +391,9 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
-    // Normalize: extract shielded entries from outputs[] into shielded_outputs[],
-    // converting base64 fields to hex.
+    // Normalize: convert base64-encoded confidential fields to hex in
+    // tx.shielded_outputs[] (the fullnode delivers the transparent/shielded
+    // split; this does not move or extract entries).
     transactionUtils.normalizeShieldedOutputs(tx);
     await this.store.saveTx(tx);
   }

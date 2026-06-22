@@ -18,8 +18,22 @@ import {
   IHistoryShieldedOutput,
   IStorage,
   IUtxo,
+  IDataTx,
+  IDataInput,
+  IDataOutput,
 } from '../../src/types';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { ShieldedOutputMode, IDataShieldedOutput } from '../../src/shielded/types';
+import Transaction from '../../src/models/transaction';
+import {
+  DEFAULT_TX_VERSION,
+  CREATE_TOKEN_TX_VERSION,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+} from '../../src/constants';
+import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
+import UnshieldBalanceHeader from '../../src/headers/unshield_balance';
+import { MintHeader } from '../../src/headers/mint_header';
+import { MeltHeader } from '../../src/headers/melt_header';
 
 function makeTransparentOutput(value: bigint, address: string): IHistoryOutput {
   return {
@@ -236,6 +250,40 @@ describe('normalizeShieldedOutputs', () => {
     expect(so.blindingFactor).toBe('ff'.repeat(32));
     expect(so.decoded.address).toBe('W-spend');
   });
+
+  it('converts the FullShielded-only fields (asset_commitment, surjection_proof) base64→hex, idempotently', () => {
+    const b64 = (byte: number) => Buffer.from([byte]).toString('base64');
+    const tx = makeTx(
+      [makeTransparentOutput(1n, 'A')],
+      [
+        {
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
+          commitment: 'ab'.repeat(33), // already hex — unchanged
+          range_proof: b64(0x01),
+          script: b64(0x02),
+          ephemeral_pubkey: b64(0x03),
+          asset_commitment: b64(0xaa), // FullShielded-only — must convert
+          surjection_proof: b64(0xbb), // FullShielded-only — must convert
+          decoded: {},
+          spent_by: null,
+        },
+      ]
+    );
+
+    transactionUtils.normalizeShieldedOutputs(tx);
+    const so = tx.shielded_outputs![0];
+    expect(so.commitment).toBe('ab'.repeat(33));
+    expect(so.range_proof).toBe('01');
+    expect(so.script).toBe('02');
+    expect(so.ephemeral_pubkey).toBe('03');
+    expect(so.asset_commitment).toBe('aa');
+    expect(so.surjection_proof).toBe('bb');
+
+    // Idempotent: a second pass leaves the now-hex FullShielded fields unchanged.
+    transactionUtils.normalizeShieldedOutputs(tx);
+    expect(tx.shielded_outputs![0].asset_commitment).toBe('aa');
+    expect(tx.shielded_outputs![0].surjection_proof).toBe('bb');
+  });
 });
 
 describe('getTxBalance (shielded)', () => {
@@ -286,5 +334,202 @@ describe('getTxBalance (shielded)', () => {
 
     const balance = await transactionUtils.getTxBalance(spendingTx, storage);
     expect(balance['00'].tokens.unlocked).toBe(-300n);
+  });
+});
+
+describe('_attachShieldedHeaders + per-header helpers', () => {
+  const buf = (n: number, byte = 0xab): Buffer => Buffer.alloc(n, byte);
+
+  // Minimal AmountShielded build entry. Buffers are dummies — ShieldedOutput
+  // validates at serialize time, which header attachment never triggers.
+  const amountShieldedData = (token = '00', value = 5n): IDataShieldedOutput => ({
+    shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+    address: 'W-addr',
+    value,
+    token,
+    scanPubkey: 'ab'.repeat(33),
+    ephemeralPubkey: buf(33),
+    commitment: buf(33),
+    rangeProof: buf(8),
+    blindingFactor: buf(32),
+    script: 'aa',
+  });
+
+  const fullShieldedData = (): IDataShieldedOutput => ({
+    ...(amountShieldedData() as object),
+    shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+    assetCommitment: buf(33),
+    assetBlindingFactor: buf(32),
+    surjectionProof: buf(8),
+  });
+
+  const dataInput = (token: string, value: bigint, authorities = 0n): IDataInput => ({
+    txId: 'parent',
+    index: 0,
+    value,
+    authorities,
+    token,
+    address: 'W-addr',
+  });
+
+  // A fund output (authorities = 0). Omit `token` to model a create-token
+  // output (the new token has no uid yet).
+  const fundOutput = (token: string | undefined, value: bigint): IDataOutput => {
+    const base = { type: 'p2pkh', value, authorities: 0n, address: 'W-addr', timelock: null };
+    return (token === undefined ? base : { ...base, token }) as unknown as IDataOutput;
+  };
+
+  const makeDataTx = (over: Partial<IDataTx> = {}): IDataTx => ({
+    version: DEFAULT_TX_VERSION,
+    inputs: [],
+    outputs: [],
+    tokens: [],
+    ...over,
+  });
+
+  const newTx = () => new Transaction([], []);
+
+  describe('_attachShieldedOutputsHeader', () => {
+    it('builds models, sets tx.shieldedOutputs, and pushes a ShieldedOutputsHeader', () => {
+      const tx = newTx();
+      transactionUtils._attachShieldedOutputsHeader(
+        tx,
+        makeDataTx({ shieldedOutputs: [amountShieldedData()] })
+      );
+      expect(tx.shieldedOutputs).toHaveLength(1);
+      expect(tx.headers.some(h => h instanceof ShieldedOutputsHeader)).toBe(true);
+    });
+
+    it('carries assetCommitment/surjectionProof for FullShielded outputs', () => {
+      const tx = newTx();
+      transactionUtils._attachShieldedOutputsHeader(
+        tx,
+        makeDataTx({ shieldedOutputs: [fullShieldedData()] })
+      );
+      expect(tx.shieldedOutputs[0].assetCommitment).toBeDefined();
+      expect(tx.shieldedOutputs[0].surjectionProof).toBeDefined();
+    });
+
+    it('is a no-op when there are no shielded outputs', () => {
+      const tx = newTx();
+      transactionUtils._attachShieldedOutputsHeader(tx, makeDataTx());
+      expect(tx.headers).toHaveLength(0);
+    });
+
+    it('throws when a shielded output is missing a required crypto field', () => {
+      const tx = newTx();
+      const bad = {
+        ...amountShieldedData(),
+        commitment: undefined,
+      } as unknown as IDataShieldedOutput;
+      expect(() =>
+        transactionUtils._attachShieldedOutputsHeader(tx, makeDataTx({ shieldedOutputs: [bad] }))
+      ).toThrow(/missing required crypto fields/);
+    });
+  });
+
+  describe('_attachUnshieldBalanceHeader', () => {
+    it('pushes an UnshieldBalanceHeader when an excess blinding factor is present', () => {
+      const tx = newTx();
+      transactionUtils._attachUnshieldBalanceHeader(
+        tx,
+        makeDataTx({ excessBlindingFactor: buf(32) })
+      );
+      expect(tx.headers.some(h => h instanceof UnshieldBalanceHeader)).toBe(true);
+    });
+
+    it('throws when both an excess and shielded outputs are present (mutually exclusive)', () => {
+      const tx = newTx();
+      expect(() =>
+        transactionUtils._attachUnshieldBalanceHeader(
+          tx,
+          makeDataTx({ excessBlindingFactor: buf(32), shieldedOutputs: [amountShieldedData()] })
+        )
+      ).toThrow(/cannot carry both|mutually exclusive/i);
+    });
+
+    it('is a no-op without an excess blinding factor', () => {
+      const tx = newTx();
+      transactionUtils._attachUnshieldBalanceHeader(tx, makeDataTx());
+      expect(tx.headers).toHaveLength(0);
+    });
+  });
+
+  describe('_attachMintMeltHeaders', () => {
+    // isShieldedTx is satisfied via excessBlindingFactor so the block runs.
+    it('declares a MintHeader for a createToken positive delta', () => {
+      const tx = newTx();
+      transactionUtils._attachMintMeltHeaders(
+        tx,
+        makeDataTx({
+          version: CREATE_TOKEN_TX_VERSION,
+          excessBlindingFactor: buf(32),
+          outputs: [fundOutput(undefined, 100n)], // new token, no uid yet
+        })
+      );
+      expect(tx.headers.some(h => h instanceof MintHeader)).toBe(true);
+    });
+
+    it('declares a MintHeader for a regular tx when a mint authority is held and delta > 0', () => {
+      const tx = newTx();
+      transactionUtils._attachMintMeltHeaders(
+        tx,
+        makeDataTx({
+          excessBlindingFactor: buf(32),
+          tokens: ['tokenA'],
+          inputs: [dataInput('tokenA', 0n, TOKEN_MINT_MASK)],
+          outputs: [fundOutput('tokenA', 100n)],
+        })
+      );
+      expect(tx.headers.some(h => h instanceof MintHeader)).toBe(true);
+    });
+
+    it('declares a MeltHeader when a melt authority is held and delta < 0', () => {
+      const tx = newTx();
+      transactionUtils._attachMintMeltHeaders(
+        tx,
+        makeDataTx({
+          excessBlindingFactor: buf(32),
+          tokens: ['tokenA'],
+          inputs: [dataInput('tokenA', 100n), dataInput('tokenA', 0n, TOKEN_MELT_MASK)],
+          outputs: [], // in > out → melt
+        })
+      );
+      expect(tx.headers.some(h => h instanceof MeltHeader)).toBe(true);
+    });
+
+    it('declares nothing for a pure shielding move (no authority held)', () => {
+      const tx = newTx();
+      transactionUtils._attachMintMeltHeaders(
+        tx,
+        makeDataTx({
+          excessBlindingFactor: buf(32),
+          tokens: ['tokenA'],
+          inputs: [dataInput('tokenA', 50n)],
+          outputs: [fundOutput('tokenA', 100n)], // delta>0 but no mint authority held
+        })
+      );
+      expect(tx.headers.some(h => h instanceof MintHeader || h instanceof MeltHeader)).toBe(false);
+    });
+
+    it('is a no-op for a non-shielded tx', () => {
+      const tx = newTx();
+      transactionUtils._attachMintMeltHeaders(
+        tx,
+        makeDataTx({ tokens: ['tokenA'], outputs: [fundOutput('tokenA', 100n)] })
+      );
+      expect(tx.headers).toHaveLength(0);
+    });
+  });
+
+  describe('_attachShieldedHeaders (orchestrator)', () => {
+    it('delegates: a shielded-output tx ends up with a ShieldedOutputsHeader', () => {
+      const tx = newTx();
+      transactionUtils._attachShieldedHeaders(
+        tx,
+        makeDataTx({ shieldedOutputs: [amountShieldedData()] })
+      );
+      expect(tx.headers.some(h => h instanceof ShieldedOutputsHeader)).toBe(true);
+    });
   });
 });
