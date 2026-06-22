@@ -217,11 +217,23 @@ export interface IWalletTestAdapter {
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult>;
 
+  /**
+   * Retrieves token metadata for a given token UID.
+   * Both facades expose `getTokenDetails()` with structurally identical results,
+   * so the adapter returns the common shape directly.
+   */
+  getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult>;
+
   // --- UTXO queries ---
 
   /**
    * Retrieves unspent transaction outputs for a wallet.
-   * Both facades support `getUtxos()`.
+   *
+   * Normalizes the two facades' very different surfaces:
+   * - Fullnode exposes `getAvailableUtxos()` as an async generator yielding `IUtxo`.
+   * - Wallet-service exposes `getUtxos()` returning an object with a `utxos` array.
+   *
+   * Both are mapped to the shared {@link AdapterUtxo} shape.
    */
   getUtxos(wallet: FuzzyWalletType, options?: GetUtxosAdapterOptions): Promise<GetUtxosResult>;
 
@@ -306,25 +318,53 @@ export interface CreateTokenResult {
 }
 
 /**
+ * Normalized token details shared by both facade implementations.
+ * The fullnode and wallet-service `getTokenDetails()` already return the same
+ * shape; this interface exists to give shared tests a stable type.
+ */
+export interface TokenDetailsResult {
+  totalSupply: bigint;
+  totalTransactions: number;
+  tokenInfo: {
+    id: string;
+    name: string;
+    symbol: string;
+    version?: TokenVersion;
+  };
+  authorities: { mint: boolean; melt: boolean };
+}
+
+/**
  * Options for querying UTXOs via the adapter.
+ *
+ * Only the filters exercised by the shared suite are exposed. Amount/count
+ * filters (`max_utxos`, `amount_smaller_than`, `amount_bigger_than`) are tested
+ * per-facade against the concrete APIs, so they are intentionally absent here to
+ * keep both adapters' contracts symmetric and honest.
  */
 export interface GetUtxosAdapterOptions {
   token?: string;
-  max_utxos?: number;
-  filter_address?: string;
-  amount_smaller_than?: bigint;
-  amount_bigger_than?: bigint;
+  address?: string;
 }
 
 /**
  * A single UTXO entry returned by the adapter.
+ *
+ * Common fields across both facades (fullnode and wallet-service). Facade-specific
+ * extras (e.g. `addressPath`, `authorities`, `heightlock`) are deliberately omitted
+ * so shared tests can assert against a single, stable shape.
+ *
+ * `tokenId` is derived from the query option rather than the underlying APIs
+ * (neither facade includes it on individual UTXO entries) so callers always know
+ * which token a returned UTXO belongs to.
  */
 export interface AdapterUtxo {
-  address: string;
-  amount: bigint;
-  tx_id: string;
-  locked: boolean;
+  txId: string;
   index: number;
+  value: bigint;
+  address: string;
+  tokenId: string;
+  locked: boolean;
 }
 
 /**

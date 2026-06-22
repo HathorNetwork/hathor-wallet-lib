@@ -70,7 +70,7 @@ export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySy
     ];
   }
   if (walletType === WalletType.MULTISIG) {
-    return [HistorySyncMode.POLLING_HTTP_API];
+    return [HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.POLLING_HTTP_API];
   }
   return [];
 }

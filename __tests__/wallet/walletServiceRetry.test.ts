@@ -35,7 +35,9 @@ describe('retryOnTransientWalletError', () => {
   });
 
   it('should retry on WalletRequestError and return the eventual success value', async () => {
-    const transient = new WalletRequestError('transient', { cause: { status: 400 } });
+    const transient = new WalletRequestError('transient', {
+      cause: { status: 400, data: { success: false } },
+    });
     const op = jest
       .fn()
       .mockRejectedValueOnce(transient)
@@ -60,8 +62,12 @@ describe('retryOnTransientWalletError', () => {
   });
 
   it('should throw the last WalletRequestError once maxAttempts is exhausted', async () => {
-    const firstError = new WalletRequestError('first', { cause: { status: 400 } });
-    const lastError = new WalletRequestError('last', { cause: { status: 400 } });
+    const firstError = new WalletRequestError('first', {
+      cause: { status: 400, data: { success: false } },
+    });
+    const lastError = new WalletRequestError('last', {
+      cause: { status: 400, data: { success: false } },
+    });
     const op = jest
       .fn()
       .mockRejectedValueOnce(firstError)
@@ -81,7 +87,9 @@ describe('retryOnTransientWalletError', () => {
   });
 
   it('should wait intervalMs between attempts (not before the first, not after the last)', async () => {
-    const transient = new WalletRequestError('retry me', { cause: { status: 400 } });
+    const transient = new WalletRequestError('retry me', {
+      cause: { status: 400, data: { success: false } },
+    });
     const op = jest
       .fn()
       .mockRejectedValueOnce(transient)

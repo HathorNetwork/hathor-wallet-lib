@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
 import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
 import SendTransaction, {
   isDataOutput,
@@ -16,6 +17,41 @@ import { WalletType } from '../../src/types';
 import transaction from '../../src/utils/transaction';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
+import Network from '../../src/models/network';
+
+test('prepareTxData rejects a shielded address in a transparent output', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  // Genuine curve points (encode/extract validate on-curve membership).
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x09), 'testnet');
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    root.deriveChild("m/1'/0").publicKey.toBuffer(),
+    new Network('testnet')
+  );
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      {
+        type: OutputType.P2PKH,
+        address: shieldedAddress,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ],
+  });
+
+  // The transparent pipeline must fail loudly BEFORE any utxo selection:
+  // shielded routing only lands in PR 6, and a 71-byte address has no
+  // transparent output script form.
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    /Shielded addresses cannot be used directly as output script type/
+  );
+});
 
 test('type methods', () => {
   // The ISendInput and ISendOutput were created to satisfy the old facade methods while using typescript

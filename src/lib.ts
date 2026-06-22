@@ -137,3 +137,4 @@ export * from './headers/types';
 export * from './models/enum';
 export * from './wallet/types';
 export * from './new/types';
+export * from './shielded/types';

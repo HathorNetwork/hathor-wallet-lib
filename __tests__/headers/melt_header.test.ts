@@ -1,0 +1,159 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+import { MeltHeader } from '../../src/headers/melt_header';
+import { MAX_MINT_MELT_ENTRIES, IMintMeltEntry } from '../../src/headers/mint_melt_entry';
+import { VertexHeaderId, getVertexHeaderIdBuffer } from '../../src/headers/types';
+import Network from '../../src/models/network';
+
+const network = new Network('testnet');
+
+describe('MeltHeader', () => {
+  describe('constructor and validate()', () => {
+    it('stores the entries verbatim when valid', () => {
+      const entries: IMintMeltEntry[] = [
+        { tokenIndex: 1, amount: 10n },
+        { tokenIndex: 2, amount: 20n },
+      ];
+      const header = new MeltHeader(entries);
+      expect(header.entries).toEqual(entries);
+    });
+
+    it('does not validate at construction (validation lives in validate())', () => {
+      expect(() => new MeltHeader([])).not.toThrow();
+      expect(() => new MeltHeader([{ tokenIndex: 0, amount: 1n }])).not.toThrow();
+    });
+
+    it('validate() rejects an empty entries list', () => {
+      expect(() => new MeltHeader([]).validate()).toThrow(/MeltHeader requires at least 1 entry/);
+    });
+
+    it('validate() rejects more than MAX_MINT_MELT_ENTRIES entries (count check fires before the per-entry loop)', () => {
+      const entries: IMintMeltEntry[] = Array.from(
+        { length: MAX_MINT_MELT_ENTRIES + 1 },
+        (_, i) => ({
+          tokenIndex: i + 1,
+          amount: 1n,
+        })
+      );
+      expect(() => new MeltHeader(entries).validate()).toThrow(
+        /MeltHeader: too many entries: 17 exceeds maximum 16/
+      );
+    });
+
+    it('validate() rejects duplicate tokenIndex values', () => {
+      const entries: IMintMeltEntry[] = [
+        { tokenIndex: 3, amount: 1n },
+        { tokenIndex: 3, amount: 1n },
+      ];
+      expect(() => new MeltHeader(entries).validate()).toThrow(
+        /MeltHeader: duplicate token_index 3/
+      );
+    });
+
+    it('validate() rejects an entry that fails per-entry validation', () => {
+      expect(() => new MeltHeader([{ tokenIndex: 0, amount: 1n }]).validate()).toThrow(
+        /MeltHeader:/
+      );
+      expect(() => new MeltHeader([{ tokenIndex: 1, amount: 0n }]).validate()).toThrow(
+        /MeltHeader:/
+      );
+    });
+  });
+
+  describe('serialization', () => {
+    const entries: IMintMeltEntry[] = [
+      { tokenIndex: 1, amount: 50n },
+      { tokenIndex: 3, amount: 1_000_000n },
+    ];
+
+    it('serializeFields prepends the MeltHeader id byte', () => {
+      const header = new MeltHeader(entries);
+      const acc: Buffer[] = [];
+      header.serializeFields(acc);
+      expect(acc.length).toBe(2);
+      expect(acc[0].equals(getVertexHeaderIdBuffer(VertexHeaderId.MELT_HEADER))).toBe(true);
+    });
+
+    it('serialize, serializeFields and serializeSighash yield identical bytes', () => {
+      const header = new MeltHeader(entries);
+      const a: Buffer[] = [];
+      const b: Buffer[] = [];
+      const c: Buffer[] = [];
+      header.serialize(a);
+      header.serializeFields(b);
+      header.serializeSighash(c);
+      expect(Buffer.concat(a).equals(Buffer.concat(b))).toBe(true);
+      expect(Buffer.concat(a).equals(Buffer.concat(c))).toBe(true);
+    });
+
+    describe('post-construction mutation is caught at serialize time', () => {
+      it('rejects a duplicate tokenIndex pushed after construction', () => {
+        const header = new MeltHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries.push({ tokenIndex: 1, amount: 20n });
+        expect(() => header.serialize([])).toThrow(/MeltHeader: duplicate token_index 1/);
+      });
+
+      it('rejects an amount mutated to 0 after construction', () => {
+        const header = new MeltHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries[0].amount = 0n;
+        expect(() => header.serialize([])).toThrow(/MeltHeader: amount must be in/);
+      });
+
+      it('rejects an entry array emptied after construction', () => {
+        const header = new MeltHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries.length = 0;
+        expect(() => header.serialize([])).toThrow(/MeltHeader requires at least 1 entry/);
+      });
+
+      it('catches the same drift via serializeFields and serializeSighash', () => {
+        const header = new MeltHeader([{ tokenIndex: 1, amount: 10n }]);
+        header.entries[0].tokenIndex = 0;
+        expect(() => header.serializeFields([])).toThrow(/MeltHeader:/);
+        expect(() => header.serializeSighash([])).toThrow(/MeltHeader:/);
+      });
+    });
+  });
+
+  describe('deserialize', () => {
+    it('round-trips through serialize → deserialize', () => {
+      const entries: IMintMeltEntry[] = [
+        { tokenIndex: 1, amount: 10n },
+        { tokenIndex: 4, amount: 2n ** 50n },
+      ];
+      const original = new MeltHeader(entries);
+      const acc: Buffer[] = [];
+      original.serialize(acc);
+      const wire = Buffer.concat(acc);
+
+      const [parsed, leftover] = MeltHeader.deserialize(wire, network);
+      expect(parsed).toBeInstanceOf(MeltHeader);
+      expect((parsed as MeltHeader).entries).toEqual(entries);
+      expect(leftover.length).toBe(0);
+    });
+
+    it('preserves trailing bytes from the source buffer', () => {
+      const entries: IMintMeltEntry[] = [{ tokenIndex: 2, amount: 7n }];
+      const header = new MeltHeader(entries);
+      const acc: Buffer[] = [];
+      header.serialize(acc);
+      const trailing = Buffer.from([0xaa, 0xbb]);
+      const wire = Buffer.concat([Buffer.concat(acc), trailing]);
+
+      const [, leftover] = MeltHeader.deserialize(wire, network);
+      expect(leftover.equals(trailing)).toBe(true);
+    });
+
+    it('rejects a buffer that does not start with the MeltHeader id', () => {
+      // 0x14 is MintHeader's id — wrong for MeltHeader.deserialize
+      const wrongId = Buffer.from([0x14, 0x01, 0x01, 0, 0, 0, 0, 0, 0, 0, 1]);
+      expect(() => MeltHeader.deserialize(wrongId, network)).toThrow(
+        /Invalid vertex header id for MeltHeader/
+      );
+    });
+  });
+});

@@ -380,7 +380,10 @@ test('getSupportedSyncMode', async () => {
     HistorySyncMode.XPUB_STREAM_WS,
   ]);
   storage.getWalletType = jest.fn().mockReturnValue(Promise.resolve(WalletType.MULTISIG));
-  await expect(getSupportedSyncMode(storage)).resolves.toEqual([HistorySyncMode.POLLING_HTTP_API]);
+  await expect(getSupportedSyncMode(storage)).resolves.toEqual([
+    HistorySyncMode.MANUAL_STREAM_WS,
+    HistorySyncMode.POLLING_HTTP_API,
+  ]);
 
   storage.getWalletType = jest.fn().mockReturnValue(Promise.resolve(''));
   await expect(getSupportedSyncMode(storage)).resolves.toEqual([]);

@@ -14,13 +14,24 @@ import {
   isGapLimitScanPolicy,
   IAddressInfo,
   ILogger,
+  IMultisigData,
+  WalletType,
 } from '../types';
 import Network from '../models/network';
 import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
+import { prepareP2SHChangeNodes, buildP2SHRedeemScriptAtIndex } from '../utils/scripts';
+import { redeemScriptToP2SHAddress } from '../utils/address';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
+
+// Multisig (P2SH) streaming tuning. P2SH derivation is several times slower than P2PKH (one BIP32
+// child derivation per participant), so the P2PKH defaults (40/batch, 600 window) let the client
+// derive far ahead of the fullnode and block the Node event loop. Smaller values keep each
+// synchronous chunk short so the headless server stays responsive. Applied in StreamManager.setupStream().
+const MULTISIG_ADDRESSES_PER_MESSAGE = 5;
+const MULTISIG_MAX_WINDOW_SIZE = 30;
 
 interface IStreamSyncHistoryBegin {
   type: 'stream:history:begin';
@@ -230,8 +241,8 @@ class StreamStatsManager {
 }
 
 /**
- * Load addresses in a CPU intensive way
- * This only contemplates P2PKH addresses for now.
+ * Load addresses in a CPU intensive way.
+ * This contemplates P2PKH addresses; see loadP2SHAddressesCPUIntensive for multisig.
  */
 export function loadAddressesCPUIntensive(
   startIndex: number,
@@ -249,6 +260,32 @@ export function loadAddressesCPUIntensive(
     addresses.push([i, new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString()]);
   }
 
+  return addresses;
+}
+
+/**
+ * Derive the multisig (P2SH) addresses for the index range [startIndex, startIndex + count).
+ *
+ * P2SH derivation is expensive (one BIP32 child derivation per participant per address), so the
+ * index-invariant work ({@link prepareP2SHChangeNodes}) is hoisted out of the loop. Reuses the
+ * canonical primitives so streamed addresses stay byte-identical to the polling path
+ * ({@link deriveAddressFromDataP2SH}).
+ */
+export function loadP2SHAddressesCPUIntensive(
+  startIndex: number,
+  count: number,
+  multisigData: IMultisigData,
+  networkName: string
+): [number, string][] {
+  const network = new Network(networkName);
+  const changeNodes = prepareP2SHChangeNodes(multisigData.pubkeys);
+
+  const addresses: [number, string][] = [];
+  const stopIndex = startIndex + count;
+  for (let i = startIndex; i < stopIndex; i++) {
+    const redeemScript = buildP2SHRedeemScriptAtIndex(changeNodes, multisigData.numSignatures, i);
+    addresses.push([i, redeemScriptToP2SHAddress(redeemScript, network)]);
+  }
   return addresses;
 }
 
@@ -330,6 +367,8 @@ export class StreamManager extends AbortController {
 
   xpubkey: string;
 
+  multisigData?: IMultisigData;
+
   gapLimit: number;
 
   network: string;
@@ -381,6 +420,7 @@ export class StreamManager extends AbortController {
     this.storage = storage;
     this.connection = connection;
     this.xpubkey = '';
+    this.multisigData = undefined;
     this.gapLimit = 0;
     this.network = '';
     this.lastLoadedIndex = startIndex - 1;
@@ -421,6 +461,21 @@ export class StreamManager extends AbortController {
     this.gapLimit = gapLimit;
     this.network = this.storage.config.getNetwork().name;
 
+    const walletType = await this.storage.getWalletType();
+    if (walletType === WalletType.MULTISIG) {
+      if (this.mode === HistorySyncMode.XPUB_STREAM_WS) {
+        throw new Error('XPUB streaming is not supported for multisig wallets');
+      }
+      if (!accessData.multisigData) {
+        throw new Error('No multisig data');
+      }
+      this.multisigData = accessData.multisigData;
+
+      // P2SH derivation is heavier, so multisig streams use a smaller batch and window.
+      this.ADDRESSES_PER_MESSAGE = MULTISIG_ADDRESSES_PER_MESSAGE;
+      this.MAX_WINDOW_SIZE = MULTISIG_MAX_WINDOW_SIZE;
+    }
+
     // Make sure this is the only stream running on this connection
     if (!this.connection.lockStream(this.streamId)) {
       throw new Error('There is an on-going stream on this connection');
@@ -455,6 +510,18 @@ export class StreamManager extends AbortController {
   }
 
   /**
+   * Derive a batch of addresses for the stream, choosing P2SH for multisig
+   * wallets and P2PKH otherwise. Both paths reuse the same derivation as the
+   * polling sync, so streamed addresses are identical to polled ones.
+   */
+  deriveBatch(startIndex: number, count: number): [number, string][] {
+    if (this.multisigData) {
+      return loadP2SHAddressesCPUIntensive(startIndex, count, this.multisigData, this.network);
+    }
+    return loadAddressesCPUIntensive(startIndex, count, this.xpubkey, this.network);
+  }
+
+  /**
    * Generate the next batch of addresses to send to the fullnode.
    * The batch will generate `ADDRESSES_PER_MESSAGE` addresses and send them to the fullnode.
    * It will run again until the fullnode has `MAX_WINDOW_SIZE` addresses on its end.
@@ -475,21 +542,23 @@ export class StreamManager extends AbortController {
         return;
       }
 
-      // This part is sync so that we block the main loop during the generation of the batch
-      const batch = loadAddressesCPUIntensive(
-        this.lastLoadedIndex + 1,
-        this.ADDRESSES_PER_MESSAGE,
-        this.xpubkey,
-        this.network
-      );
-      this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
-      this.connection.sendManualStreamingHistory(
-        this.streamId,
-        this.lastLoadedIndex + 1,
-        batch,
-        false,
-        this.gapLimit
-      );
+      try {
+        // This part is sync so that we block the main loop during the generation of the batch
+        const batch = this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE);
+        this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
+        this.connection.sendManualStreamingHistory(
+          this.streamId,
+          this.lastLoadedIndex + 1,
+          batch,
+          false,
+          this.gapLimit
+        );
+      } catch (err) {
+        // An uncaught throw here would reject batchQueue with no handler and hang the wallet in
+        // SYNCING; route it through abort -> shutdown so the wallet moves to ERROR instead.
+        this.abortWithError(err instanceof Error ? err.message : String(err));
+        return;
+      }
 
       // Free main loop to run other tasks and queue next batch
       setTimeout(() => {
@@ -647,12 +716,7 @@ export class StreamManager extends AbortController {
         this.connection.sendManualStreamingHistory(
           this.streamId,
           this.lastLoadedIndex + 1,
-          loadAddressesCPUIntensive(
-            this.lastLoadedIndex + 1,
-            this.ADDRESSES_PER_MESSAGE,
-            this.xpubkey,
-            this.network
-          ),
+          this.deriveBatch(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE),
           true,
           this.gapLimit
         );
@@ -758,7 +822,15 @@ export async function streamSyncHistory(
   manager: StreamManager,
   shouldProcessHistory: boolean
 ): Promise<void> {
-  await manager.setupStream();
+  try {
+    await manager.setupStream();
+  } catch (err) {
+    // The stats interval starts in the constructor and setupStream runs before the try/finally
+    // below, so clean it here to avoid leaking the timer. No abort/emit: a setup failure must not
+    // touch the connection (it may hold another stream's lock).
+    manager.stats.clean();
+    throw err;
+  }
 
   // This is a try..finally so that we can always call the signal abort function
   // This is meant to prevent memory leaks
@@ -806,6 +878,8 @@ export async function streamSyncHistory(
       await manager.storage.processHistory();
     }
   } finally {
+    // shutdown() (which clears the interval) is skipped when sendStartMessage throws; clean() is idempotent.
+    manager.stats.clean();
     // Always abort on finally to avoid memory leaks
     manager.abort();
     manager.connection.emit('stream-end');

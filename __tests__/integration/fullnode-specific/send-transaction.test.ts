@@ -8,19 +8,26 @@
 /**
  * Fullnode-facade sendTransaction tests.
  *
- * Tests that rely on fullnode-only APIs: storage.getAddressInfo, multisig.
+ * Shared sendTransaction tests live in `shared/send-transaction.test.ts` and
+ * shared token tests in `shared/send-transaction-tokens.test.ts`. Both run
+ * against both facades via `describe.each(adapters)`.
  *
- * Shared sendTransaction tests live in `shared/send-transaction.test.ts`.
- * Shared token tests live in `shared/send-transaction-tokens.test.ts`.
- *
- * Why address tracking is NOT shared:
- * The wallet-service facade's `wallet.storage` is a plain Storage instance.
- * The `WalletServiceStorageProxy` (which maps `getAddressInfo` to the REST
- * API's `wallet/address/info` endpoint) is only created transiently inside
- * `handleSendPreparedTransaction` for nano contract signing — it does NOT
- * wrap `wallet.storage` permanently. Calling `wallet.storage.getAddressInfo()`
- * on the service facade returns null for addresses that haven't been locally
- * indexed, making `numTransactions` assertions impossible.
+ * Why these tests are NOT shared:
+ *   1. Address-tracking (`numTransactions`) assertions rely on
+ *      `wallet.storage.getAddressInfo(addr)`. On the wallet-service facade,
+ *      `wallet.storage` is a plain Storage instance — the
+ *      `WalletServiceStorageProxy` (which maps `getAddressInfo` to the REST
+ *      API's `wallet/address/info` endpoint) is only created transiently
+ *      inside `handleSendPreparedTransaction` for nano contract signing and
+ *      does NOT wrap `wallet.storage` permanently. Calling
+ *      `wallet.storage.getAddressInfo()` on the service facade returns null
+ *      for addresses that haven't been locally indexed, making
+ *      `numTransactions` assertions impossible there.
+ *   2. The multisig tests exercise `generateMultisigWalletHelper` and
+ *      P2SH-script signing via the fullnode-only multisig wallet helper.
+ *      The wallet-service facade has its own multisig flow that doesn't
+ *      share this code path; pairing the two would require adapter methods
+ *      that paper over a real protocol asymmetry for very few tests.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
