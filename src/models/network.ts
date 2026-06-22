@@ -14,18 +14,21 @@ const versionBytes = {
   mainnet: {
     p2pkh: 0x28,
     p2sh: 0x64,
+    shielded: 0x3c,
     xpriv: 0x03523b05, // htpr
     xpub: 0x0488b21e, // xpub // 0x03523a9c -> htpb
   },
   testnet: {
     p2pkh: 0x49,
     p2sh: 0x87,
+    shielded: 0x5d,
     xpriv: 0x0434c8c4, // tnpr
     xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
   privatenet: {
     p2pkh: 0x49,
     p2sh: 0x87,
+    shielded: 0x5d,
     xpriv: 0x0434c8c4, // tnpr
     xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
@@ -115,6 +118,7 @@ const networkOptions = {
 type versionBytesType = {
   p2pkh: number;
   p2sh: number;
+  shielded: number;
 };
 
 class Network {
@@ -164,7 +168,11 @@ class Network {
    */
   isVersionByteValid(version: number): boolean {
     const instanceVersionBytes = this.getVersionBytes();
-    return version === instanceVersionBytes.p2pkh || version === instanceVersionBytes.p2sh;
+    return (
+      version === instanceVersionBytes.p2pkh ||
+      version === instanceVersionBytes.p2sh ||
+      version === instanceVersionBytes.shielded
+    );
   }
 
   /**

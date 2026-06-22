@@ -11,7 +11,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { encryptData } from '../../src/utils/crypto';
-import { TokenVersion, WalletType } from '../../src/types';
+import { IHistoryTx, TokenVersion, WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';
 
 test('default values', async () => {
@@ -48,7 +48,7 @@ test('addresses methods', async () => {
   await expect(store.getAddressMeta('b')).resolves.toEqual(5);
   await expect(store.addressCount()).resolves.toEqual(3);
 
-  await expect(store.getCurrentAddress()).rejects.toThrow('Current address is not loaded');
+  await expect(store.getCurrentAddress()).rejects.toThrow('Current legacy address is not loaded');
   expect(store.walletData.currentAddressIndex).toEqual(-1);
   expect(store.walletData.lastLoadedAddressIndex).toEqual(0);
   await store.saveAddress({
@@ -74,6 +74,50 @@ test('addresses methods', async () => {
   await expect(store.getCurrentAddress()).resolves.toEqual('d');
   await expect(store.getCurrentAddress(true)).resolves.toEqual('d');
   await expect(store.getCurrentAddress()).resolves.toEqual('e');
+});
+
+test('addressIter chain-selection (legacy vs shielded)', async () => {
+  const store = new MemoryStore();
+
+  // Mixed-chain fixture: two legacy P2PKHs (with explicit + implicit
+  // addressType), one shielded receive, one shielded-spend (internal),
+  // and one P2SH. The iterator must filter strictly by chain.
+  await store.saveAddress({ base58: 'leg-0', bip32AddressIndex: 0, addressType: 'p2pkh' });
+  await store.saveAddress({ base58: 'leg-1', bip32AddressIndex: 1 }); // untyped → legacy
+  await store.saveAddress({ base58: 'p2sh-2', bip32AddressIndex: 2, addressType: 'p2sh' });
+  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
+  await store.saveAddress({
+    base58: 'shi-spend-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded-spend',
+  });
+
+  // Default (no opts) → legacy chain only. shielded + shielded-spend
+  // entries are filtered out (the receive pipeline relies on the
+  // shielded-spend P2PKH being invisible at this surface).
+  const defaultBases: string[] = [];
+  for await (const info of store.addressIter()) defaultBases.push(info.base58);
+  expect(defaultBases.sort()).toEqual(['leg-0', 'leg-1', 'p2sh-2'].sort());
+
+  // legacy: true is the explicit form of the default.
+  const legacyBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: true })) legacyBases.push(info.base58);
+  expect(legacyBases.sort()).toEqual(defaultBases.sort());
+
+  // legacy: false → user-facing shielded receive addresses only, in
+  // insertion (== BIP32-index) order. shielded-spend MUST NOT leak through
+  // (it's internal — surfacing it would let callers send to a wallet's
+  // spend P2PKH thinking it's a shielded address).
+  const shieldedBases: string[] = [];
+  for await (const info of store.addressIter({ legacy: false })) shieldedBases.push(info.base58);
+  expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
+
+  // addressCount is per-chain: legacy counts leg-0/leg-1/p2sh-2 (3), shielded
+  // counts shi-0/shi-1 (2); the internal shielded-spend is in neither.
+  await expect(store.addressCount()).resolves.toEqual(3);
+  await expect(store.addressCount({ legacy: true })).resolves.toEqual(3);
+  await expect(store.addressCount({ legacy: false })).resolves.toEqual(2);
 });
 
 test('history methods', async () => {
@@ -283,6 +327,163 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx02');
+
+  // Add a shielded UTXO
+  await store.saveUtxo({
+    txId: 'tx03',
+    index: 0,
+    token: '00',
+    address: 'addr3',
+    value: 30n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'aa'.repeat(32),
+  });
+
+  // Default (no shielded filter) returns all including shielded
+  buf = [];
+  for await (const u of store.selectUtxos({})) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(2); // tx01 (HTR) + tx03 (HTR shielded)
+
+  // shielded: true returns only shielded
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: true })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx03');
+  expect(buf[0].shielded).toBe(true);
+
+  // shielded: false returns only transparent
+  buf = [];
+  for await (const u of store.selectUtxos({ shielded: false })) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toEqual('tx01');
+  // Assert the transparent classification (filter treats both `undefined` and
+  // `false` as transparent), not the exact stored representation — a store
+  // that normalized transparent UTXOs to `shielded: false` is still correct.
+  expect(buf[0].shielded).not.toBe(true);
+});
+
+test('selectUtxos resolves a shielded filter_address to its spend P2PKH via ctMappingAddress', async () => {
+  const store = new MemoryStore();
+  // A shielded receive pair at index 0, cross-linked via ctMappingAddress the
+  // same way deriveShieldedAddressFromStorage sets it: the user-facing ct
+  // address points to its on-chain spend P2PKH and vice-versa.
+  await store.saveAddress({
+    base58: 'ct-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded',
+    ctMappingAddress: 'spend-0',
+  });
+  await store.saveAddress({
+    base58: 'spend-0',
+    bip32AddressIndex: 0,
+    addressType: 'shielded-spend',
+    ctMappingAddress: 'ct-0',
+  });
+  // The on-chain UTXO is labelled with the spend P2PKH, never the 71-byte ct form.
+  await store.saveUtxo({
+    txId: 'txS',
+    index: 0,
+    token: '00',
+    address: 'spend-0',
+    value: 50n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+    shielded: true,
+    blindingFactor: 'bb'.repeat(32),
+  });
+
+  // Filtering by the user-facing ct address must resolve (O(1) via
+  // ctMappingAddress) to the spend P2PKH and find the UTXO.
+  const byCt = [];
+  for await (const u of store.selectUtxos({ filter_address: 'ct-0' })) byCt.push(u);
+  expect(byCt).toHaveLength(1);
+  expect(byCt[0].txId).toEqual('txS');
+  expect(byCt[0].address).toEqual('spend-0');
+
+  // Filtering by the spend P2PKH directly also matches (no swap needed).
+  const bySpend = [];
+  for await (const u of store.selectUtxos({ filter_address: 'spend-0' })) bySpend.push(u);
+  expect(bySpend).toHaveLength(1);
+  expect(bySpend[0].txId).toEqual('txS');
+});
+
+test('addTx advances the shielded cursor only for a DECODED owned shielded receive', async () => {
+  const store = new MemoryStore();
+  // Own a shielded-spend P2PKH at index 7 (the on-chain form of a shielded
+  // receive). SEPARATED model: the receive lands in tx.shielded_outputs, NOT
+  // tx.outputs, so the address-index tracking must look there too.
+  await store.saveAddress({
+    base58: 'spend-7',
+    bip32AddressIndex: 7,
+    addressType: 'shielded-spend',
+    ctMappingAddress: 'ct-7',
+  });
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(-1);
+
+  // SECURITY: an UNDECODED shielded output (value undefined) that carries our
+  // spend P2PKH on the (untrusted) wire must NOT advance the cursor —
+  // decoded.address is not an ownership signal; only a decoded entry is ours.
+  await store.saveTx({
+    tx_id: 'a'.repeat(64),
+    version: 1,
+    weight: 1,
+    timestamp: 123,
+    is_voided: false,
+    inputs: [],
+    outputs: [],
+    shielded_outputs: [
+      {
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        ephemeral_pubkey: 'dd',
+        token_data: 0,
+        decoded: { address: 'spend-7' },
+      },
+    ],
+    parents: [],
+  } as unknown as IHistoryTx);
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(-1);
+
+  // A DECODED owned shielded receive (value written in place) DOES advance it.
+  await store.saveTx({
+    tx_id: 'b'.repeat(64),
+    version: 1,
+    weight: 1,
+    timestamp: 124,
+    is_voided: false,
+    inputs: [],
+    outputs: [],
+    shielded_outputs: [
+      {
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        ephemeral_pubkey: 'dd',
+        token_data: 0,
+        value: 50n,
+        token: '00',
+        decoded: { address: 'spend-7' },
+      },
+    ],
+    parents: [],
+  } as unknown as IHistoryTx);
+
+  // The shielded chain cursor advances to 7; the legacy cursor is untouched.
+  expect(store.walletData.shieldedLastUsedAddressIndex).toEqual(7);
+  expect(store.walletData.lastUsedAddressIndex).toEqual(-1);
 });
 
 test('access data methods', async () => {

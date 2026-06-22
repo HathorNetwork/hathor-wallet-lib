@@ -179,6 +179,7 @@ export async function generateWalletHelperRO(options) {
  *                                                       walletWords is used
  * @param {string[]} [parameters.pubkeys] Custom pubkeys if walletWords is used
  * @param {number} [parameters.numSignatures] Custom numSignatures if walletWords is used
+ * @param {HistorySyncMode} [parameters.historySyncMode] History sync mode to set before start
  *
  * @example
  * const multisigWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
@@ -201,6 +202,9 @@ export async function generateMultisigWalletHelper(parameters) {
     scanPolicy: getGapLimitConfig(),
   };
   const mhWallet = new HathorWallet(walletConfig);
+  if (parameters.historySyncMode) {
+    mhWallet.setHistorySyncMode(parameters.historySyncMode);
+  }
   await mhWallet.start();
   await waitForWalletReady(mhWallet);
   startedWallets.push(mhWallet);
