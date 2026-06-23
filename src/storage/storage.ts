@@ -59,6 +59,8 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+  TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
   DECIMAL_PLACES,
   DEFAULT_NATIVE_TOKEN_CONFIG,
 } from '../constants';
@@ -194,7 +196,9 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Return the deposit percentage for creating tokens.
+   * Return the deposit percentage as a float, for display purposes (wallet UI).
+   * Deposit/withdraw amounts use {@link getTokenDepositPercentageFraction} for exact integer math.
+   *
    * @returns {number}
    */
   getTokenDepositPercentage(): number {
@@ -203,6 +207,37 @@ export class Storage implements IStorage {
      *  Since this data is important for the wallets UI we will return the default value here.
      */
     return this.version?.token_deposit_percentage ?? TOKEN_DEPOSIT_PERCENTAGE;
+  }
+
+  /**
+   * Return the deposit percentage as an integer fraction (numerator/denominator).
+   *
+   * Prefers the `token_deposit_percentage_numerator`/`token_deposit_percentage_denominator`
+   * fields returned by the fullnode `/version` endpoint. When they're absent (older fullnodes
+   * that predate these fields), it falls back to deriving the numerator from the deprecated
+   * float percentage, keeping the standard 1e9 denominator, and ultimately to the defaults.
+   *
+   * @returns {{ numerator: bigint; denominator: bigint }}
+   */
+  getTokenDepositPercentageFraction(): { numerator: bigint; denominator: bigint } {
+    const numerator = this.version?.token_deposit_percentage_numerator;
+    const denominator = this.version?.token_deposit_percentage_denominator;
+    if (numerator != null && denominator != null) {
+      return { numerator: BigInt(numerator), denominator: BigInt(denominator) };
+    }
+
+    // Older fullnodes: derive the numerator from the deprecated float percentage.
+    const percentage = this.version?.token_deposit_percentage;
+    if (percentage == null) {
+      return {
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      };
+    }
+    return {
+      numerator: BigInt(Math.round(percentage * Number(TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR))),
+      denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+    };
   }
 
   /**

@@ -467,6 +467,8 @@ class HathorWallet extends EventEmitter {
       minTxWeightCoefficient: versionData.min_tx_weight_coefficient,
       minTxWeightK: versionData.min_tx_weight_k,
       tokenDepositPercentage: versionData.token_deposit_percentage,
+      tokenDepositPercentageNumerator: versionData.token_deposit_percentage_numerator,
+      tokenDepositPercentageDenominator: versionData.token_deposit_percentage_denominator,
       rewardSpendMinBlocks: versionData.reward_spend_min_blocks,
       maxNumberInputs: versionData.max_number_inputs,
       maxNumberOutputs: versionData.max_number_outputs,

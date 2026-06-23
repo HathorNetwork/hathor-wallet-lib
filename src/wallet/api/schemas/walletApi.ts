@@ -237,6 +237,8 @@ export const fullNodeVersionDataSchema = z
     minTxWeightCoefficient: z.number(),
     minTxWeightK: z.number(),
     tokenDepositPercentage: z.number(),
+    tokenDepositPercentageNumerator: z.number().optional(),
+    tokenDepositPercentageDenominator: z.number().optional(),
     rewardSpendMinBlocks: z.number(),
     maxNumberInputs: z.number(),
     maxNumberOutputs: z.number(),

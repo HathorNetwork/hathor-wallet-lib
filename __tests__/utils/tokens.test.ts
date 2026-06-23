@@ -178,3 +178,15 @@ test('Token withdraw', () => {
   expect(tokens.getWithdrawAmount(500n)).toBe(5n);
   expect(tokens.getWithdrawAmount(550n)).toBe(5n);
 });
+
+test('Token deposit keeps integer precision for large amounts', () => {
+  // Above 2**53, Number(amount) loses integer precision, so float math returns a wrong result.
+  // 9007199254741001 / 100 = 90071992547410.01 -> ceil = 90071992547411 (float returned ...410).
+  expect(tokens.getDepositAmount(9007199254741001n)).toBe(90071992547411n);
+});
+
+test('Token withdraw keeps integer precision for large amounts', () => {
+  // 9007199254740999 / 100 = 90071992547409.99 -> floor = 90071992547409
+  // Float path rounds the amount up to 9007199254741000 and returns 90071992547410.
+  expect(tokens.getWithdrawAmount(9007199254740999n)).toBe(90071992547409n);
+});

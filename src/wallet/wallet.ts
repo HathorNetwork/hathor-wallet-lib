@@ -557,6 +557,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         min_tx_weight_coefficient: v.minTxWeightCoefficient,
         min_tx_weight_k: v.minTxWeightK,
         token_deposit_percentage: v.tokenDepositPercentage,
+        token_deposit_percentage_numerator: v.tokenDepositPercentageNumerator,
+        token_deposit_percentage_denominator: v.tokenDepositPercentageDenominator,
         reward_spend_min_blocks: v.rewardSpendMinBlocks,
         max_number_inputs: v.maxNumberInputs,
         max_number_outputs: v.maxNumberOutputs,
@@ -1914,8 +1916,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR deposit needed
     let deposit = 0n;
     if (tokenVersion === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      deposit += tokens.getDepositAmount(amount, depositPercent);
+      const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+      deposit += tokens.getDepositAmount(amount, numerator, denominator);
     }
 
     if (newOptions.data && newOptions.data.length > 0) {
@@ -2252,8 +2254,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR deposit needed
     let deposit = 0n;
     if (tokenInfo?.version === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      deposit = tokens.getDepositAmount(amount, depositPercent);
+      const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+      deposit = tokens.getDepositAmount(amount, numerator, denominator);
     }
 
     // 2. Get mint authority
@@ -2424,8 +2426,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR withdraw
     let withdraw = 0n;
     if (tokenInfo?.version === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      withdraw = tokens.getWithdrawAmount(amount, depositPercent);
+      const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+      withdraw = tokens.getWithdrawAmount(amount, numerator, denominator);
     }
 
     // 2. Get utxos for custom token to melt
