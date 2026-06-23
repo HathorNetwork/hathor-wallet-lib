@@ -161,6 +161,54 @@ export const getPushData = (buff: Buffer): Buffer => {
 };
 
 /**
+ * Parse, sort and account-derive (m/45'/280'/0'/0) the participant xpubs of a P2SH MultiSig wallet.
+ *
+ * This work is invariant across address indexes, so callers deriving a range compute it once; the
+ * result defines the canonical participant order shared by every redeem script.
+ *
+ * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
+ * @return {HDPublicKey[]} The change-level nodes (m/45'/280'/0'/0) in canonical order
+ * @throws {XPubError} In case any of the given xpubs are invalid
+ */
+export function prepareP2SHChangeNodes(xpubs: string[]): HDPublicKey[] {
+  let sortedXpubs: HDPublicKey[];
+  try {
+    sortedXpubs = _.sortBy(
+      xpubs.map(xp => new HDPublicKey(xp)),
+      (xpub: HDPublicKey) => {
+        return xpub.publicKey.toString('hex');
+      }
+    );
+  } catch (e) {
+    throw new XPubError('Invalid xpub');
+  }
+
+  // xpub is already at m/45'/280'/0'; derive the change level m/45'/280'/0'/0.
+  return sortedXpubs.map(xpub => xpub.deriveChild(0));
+}
+
+/**
+ * Build the m-of-n P2SH redeem script for a single index from prepared change nodes.
+ *
+ * @param {HDPublicKey[]} changeNodes Change-level nodes from {@link prepareP2SHChangeNodes}
+ * @param {number} numSignatures Minimum number of signatures to send a transaction
+ * @param {number} index Index to derive the final public keys (m/45'/280'/0'/0/index)
+ *
+ * @return {Buffer} A buffer with the redeemScript
+ */
+export function buildP2SHRedeemScriptAtIndex(
+  changeNodes: HDPublicKey[],
+  numSignatures: number,
+  index: number
+): Buffer {
+  const pubkeys = changeNodes.map(node => node.deriveChild(index).publicKey);
+
+  // bitcore-lib sorts the public keys by default before building the script
+  // noSorting prevents that and keeps our canonical order
+  return Script.buildMultisigOut(pubkeys, numSignatures, { noSorting: true }).toBuffer();
+}
+
+/**
  * Create a P2SH MultiSig redeem script
  *
  * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
@@ -176,26 +224,7 @@ export function createP2SHRedeemScript(
   numSignatures: number,
   index: number
 ): Buffer {
-  let sortedXpubs: HDPublicKey[];
-  try {
-    sortedXpubs = _.sortBy(
-      xpubs.map(xp => new HDPublicKey(xp)),
-      (xpub: HDPublicKey) => {
-        return xpub.publicKey.toString('hex');
-      }
-    );
-  } catch (e) {
-    throw new XPubError('Invalid xpub');
-  }
-
-  // xpub comes derived to m/45'/280'/0'
-  // Derive to m/45'/280'/0'/0/index
-  const pubkeys = sortedXpubs.map(xpub => xpub.deriveChild(0).deriveChild(index).publicKey);
-
-  // bitcore-lib sorts the public keys by default before building the script
-  // noSorting prevents that and keeps our order
-  const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, { noSorting: true });
-  return redeemScript.toBuffer();
+  return buildP2SHRedeemScriptAtIndex(prepareP2SHChangeNodes(xpubs), numSignatures, index);
 }
 
 /**
