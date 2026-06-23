@@ -214,6 +214,6 @@ export class WalletPrecalculationHelper {
     if (!data?.words || !Array.isArray(data?.addresses)) {
       throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
     }
-    return { isUsed: false, words: data.words, addresses: data.addresses };
+    return { isUsed: true, words: data.words, addresses: data.addresses };
   }
 }
