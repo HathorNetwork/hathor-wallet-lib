@@ -2,84 +2,104 @@
  * Regression tests for the WebSocket socket leak + reconnect backoff.
  *
  * Bug: GenericWebSocket.closeWs() only called ws.close() when
- * readyState === OPEN. A socket killed while still CONNECTING (TCP established,
- * HTTP 101 upgrade not yet received) was dereferenced WITHOUT being closed, so
- * the underlying connection lingered ESTABLISHED. Under reconnect churn against
- * a connection-capped server, every retry leaked one ESTABLISHED socket.
+ * readyState === OPEN. A socket retired while still CONNECTING (TCP established,
+ * HTTP 101 upgrade not yet received) — or CLOSING — was dereferenced WITHOUT
+ * being closed, so the underlying connection lingered ESTABLISHED on the OS
+ * until keepalive eventually reaped it. Under reconnect churn against a
+ * connection-capped server (e.g. nginx limit_conn accepting the TCP connect but
+ * never completing the upgrade), every retry leaked one ESTABLISHED socket — a
+ * self-reinforcing loop that saturated the per-IP cap.
  */
 
 import http from 'http';
 import net, { AddressInfo } from 'net';
+import _WebSocket from 'isomorphic-ws';
 import GenericWebSocket from '../../src/websocket/index';
 
-/** Internal members we need to reach for white-box assertions. */
+/** A socket we can inspect/tear down regardless of which platform `ws` we got. */
+interface RawSocket {
+  readyState: number;
+  terminate?: () => void;
+  close: (code?: number, reason?: string) => void;
+}
+
+/** Internal members we override/read for the assertions. */
 interface SocketView {
-  ws: { readyState: number };
+  WebSocket: unknown;
   getReconnectDelay(): number;
 }
 
-/** Poll a predicate until it's true, or reject after `timeout` ms. */
-function waitFor(pred: () => boolean, timeout = 2000, interval = 20): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const start = Date.now();
-    const tick = (): void => {
-      if (pred()) {
-        resolve();
-        return;
-      }
-      if (Date.now() - start > timeout) {
-        reject(new Error('waitFor: condition not met within timeout'));
-        return;
-      }
-      setTimeout(tick, interval);
-    };
-    tick();
+function delay(ms: number): Promise<void> {
+  return new Promise<void>(resolve => {
+    setTimeout(resolve, ms);
   });
 }
 
-describe('BaseWebSocket socket leak (closeWs on a CONNECTING socket)', () => {
-  it('tears down the underlying socket even when it is still CONNECTING', async () => {
-    // Server that accepts the TCP connection and the upgrade request but never
-    // writes the 101 response and never destroys the socket — so the client
-    // stays in CONNECTING. Mirrors a fullnode whose nginx per-IP cap accepts the
-    // TCP connect but stalls/rejects the WS upgrade.
-    let tcpConnected = false;
-    const held: net.Socket[] = [];
+describe('BaseWebSocket socket leak under reconnect churn (integration)', () => {
+  it('closes every retired socket instead of accumulating them', async () => {
+    // A real server that accepts the TCP connection and the upgrade request but
+    // never writes the 101 response and never destroys the socket — so every
+    // client connection stays CONNECTING. This mirrors a fullnode whose nginx
+    // per-IP cap accepts the TCP connect but stalls/rejects the WS upgrade.
+    const heldUpgrades: net.Socket[] = [];
     const server = http.createServer();
-    server.on('connection', () => {
-      tcpConnected = true;
-    });
-    // Hold the upgrade open: no 101, no destroy (a missing 'upgrade' listener
-    // would make Node close the socket, which we explicitly do NOT want here).
     server.on('upgrade', (_req: http.IncomingMessage, socket: net.Socket) => {
-      held.push(socket);
+      heldUpgrades.push(socket);
     });
-
     await new Promise<void>(resolve => {
       server.listen(0, '127.0.0.1', () => resolve());
     });
     const { port } = server.address() as AddressInfo;
 
-    const ws = new GenericWebSocket({ wsURL: `ws://127.0.0.1:${port}/` });
+    // Track every underlying socket the library opens, so we can count — with
+    // real OS sockets — how many are left alive at the end.
+    const opened: RawSocket[] = [];
+    const WsCtor = _WebSocket as unknown as { new (url: string): RawSocket };
+    class TrackingWebSocket extends WsCtor {
+      constructor(url: string) {
+        super(url);
+        opened.push(this);
+      }
+    }
+
+    const ws = new GenericWebSocket({
+      wsURL: `ws://127.0.0.1:${port}/`,
+      retryConnectionInterval: 20,
+    });
+    (ws as unknown as SocketView).WebSocket = TrackingWebSocket;
+
+    // Open a connection, then retire-and-reopen several times — the churn an
+    // unhealthy/capped connection produces. endConnection() runs the same
+    // closeWs() teardown the reconnect path (onClose) uses.
     ws.setup();
-    const sock = (ws as unknown as SocketView).ws; // underlying isomorphic-ws
+    await delay(40);
+    const CYCLES = 8;
+    for (let i = 0; i < CYCLES; i += 1) {
+      ws.endConnection();
+      ws.setup();
+      await delay(40);
+    }
+    await delay(120);
 
-    // TCP is established but the handshake never completes -> CONNECTING (0).
-    await waitFor(() => tcpConnected);
-    expect(sock.readyState).toBe(0); // WebSocket.CONNECTING
-
-    // The fix under test: closeWs() must close/terminate regardless of
-    // readyState. Without it, a CONNECTING socket is only dereferenced and the
-    // underlying connection is leaked.
-    ws.closeWs();
-
-    // With the fix the socket is terminated -> readyState reaches CLOSED (3).
-    // Without the fix it stays CONNECTING (0) forever -> this times out.
-    await waitFor(() => sock.readyState === 3); // WebSocket.CLOSED
-    expect(sock.readyState).toBe(3);
+    // A socket still CONNECTING (0) or OPEN (1) is alive on the OS. With the fix
+    // only the final, current connection may be alive; every retired socket has
+    // been terminated. Without the fix retired CONNECTING sockets are merely
+    // dereferenced (never closed), so all of them stay alive and accumulate.
+    const alive = opened.filter(s => s.readyState === 0 || s.readyState === 1);
 
     ws.close();
-    held.forEach(s => {
+    opened.forEach(s => {
+      try {
+        if (typeof s.terminate === 'function') {
+          s.terminate();
+        } else {
+          s.close();
+        }
+      } catch (_e) {
+        // already gone
+      }
+    });
+    heldUpgrades.forEach(s => {
       try {
         s.destroy();
       } catch (_e) {
@@ -89,6 +109,11 @@ describe('BaseWebSocket socket leak (closeWs on a CONNECTING socket)', () => {
     await new Promise<void>(resolve => {
       server.close(() => resolve());
     });
+
+    // The churn actually happened: one initial + one per cycle.
+    expect(opened.length).toBe(CYCLES + 1);
+    // No accumulation: at most the single current connection is still alive.
+    expect(alive.length).toBeLessThanOrEqual(1);
   });
 });
 
