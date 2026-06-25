@@ -311,7 +311,7 @@ abstract class BaseWebSocket extends EventEmitter {
   getReconnectDelay() {
     const exp = Math.min(
       this.maxRetryConnectionInterval,
-      this.retryConnectionInterval * 2 ** this.retryAttempt,
+      this.retryConnectionInterval * 2 ** this.retryAttempt
     );
     // Full jitter on the top quarter of the interval keeps a healthy floor while
     // spreading retries out across clients.
