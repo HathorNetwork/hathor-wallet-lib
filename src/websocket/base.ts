@@ -14,6 +14,7 @@ export const DEFAULT_WS_OPTIONS = {
   heartbeatInterval: 3000,
   connectionTimeout: 5000,
   retryConnectionInterval: 1000,
+  maxRetryConnectionInterval: 30000,
   openConnectionTimeout: 20000,
   logger: getDefaultLogger(),
 };
@@ -23,6 +24,7 @@ export type WsOptions = {
   heartbeatInterval?: number;
   connectionTimeout?: number;
   retryConnectionInterval?: number;
+  maxRetryConnectionInterval?: number;
   openConnectionTimeout?: number;
   logger: ILogger;
 };
@@ -63,6 +65,14 @@ abstract class BaseWebSocket extends EventEmitter {
   // Retry connection interval in milliseconds
   private retryConnectionInterval: number;
 
+  // Maximum retry connection interval in milliseconds. The reconnection delay
+  // grows exponentially from retryConnectionInterval and is capped at this value.
+  private maxRetryConnectionInterval: number;
+
+  // Number of consecutive reconnection attempts since the last successful open.
+  // Drives the exponential backoff; reset to 0 in onOpen().
+  private retryAttempt: number;
+
   // Open connection timeout in milliseconds
   private openConnectionTimeout: number;
 
@@ -100,6 +110,7 @@ abstract class BaseWebSocket extends EventEmitter {
       heartbeatInterval,
       connectionTimeout,
       retryConnectionInterval,
+      maxRetryConnectionInterval,
       openConnectionTimeout,
       logger,
     } = {
@@ -115,6 +126,8 @@ abstract class BaseWebSocket extends EventEmitter {
     this.heartbeatInterval = heartbeatInterval;
     this.connectionTimeout = connectionTimeout;
     this.retryConnectionInterval = retryConnectionInterval;
+    this.maxRetryConnectionInterval = maxRetryConnectionInterval;
+    this.retryAttempt = 0;
     this.openConnectionTimeout = openConnectionTimeout;
     this.connectedDate = null;
     this.latestSetupDate = null;
@@ -187,8 +200,28 @@ abstract class BaseWebSocket extends EventEmitter {
     this.ws.onerror = () => {};
     this.ws.onmessage = () => {};
 
-    if (this.ws.readyState === _WebSocket.OPEN) {
-      this.ws.close();
+    // Always tear down the underlying socket, regardless of readyState. A socket
+    // still CONNECTING (TCP established, HTTP 101 upgrade not yet completed) — or
+    // CLOSING — was previously only dereferenced (this.ws = null) without being
+    // closed when readyState !== OPEN. The OS keeps that socket ESTABLISHED until
+    // keepalive eventually reaps it (can be hours), so under reconnect churn
+    // against a connection-capped server (e.g. nginx limit_conn rejecting the
+    // upgrade after the TCP connect) each retry leaks one ESTABLISHED connection,
+    // which in turn consumes more of the cap — a self-reinforcing loop.
+    try {
+      const sock = this.ws as unknown as {
+        terminate?: () => void;
+        close: (code?: number, reason?: string) => void;
+      };
+      if (typeof sock.terminate === 'function') {
+        // node 'ws': forcibly destroys the socket, including CONNECTING/half-open.
+        sock.terminate();
+      } else {
+        // browser WebSocket: close() also aborts an in-progress CONNECTING handshake.
+        sock.close();
+      }
+    } catch (err) {
+      this.logger.warn('Error while closing websocket', { error: `${err}` });
     }
 
     this.ws = null;
@@ -229,6 +262,9 @@ abstract class BaseWebSocket extends EventEmitter {
       return;
     }
 
+    // Connection established: reset the reconnection backoff so the next
+    // unexpected drop retries quickly again.
+    this.retryAttempt = 0;
     this.connected = true;
     this.connectedDate = new Date();
     this.heartbeat = setInterval(() => {
@@ -267,6 +303,24 @@ abstract class BaseWebSocket extends EventEmitter {
   }
 
   /**
+   * Compute the next reconnection delay using exponential backoff with jitter,
+   * capped at maxRetryConnectionInterval. A flat retry interval hammers a down
+   * or connection-capped server at a fixed rate with no relief; backoff lets the
+   * server recover and de-synchronizes many clients sharing one egress IP.
+   */
+  getReconnectDelay() {
+    const exp = Math.min(
+      this.maxRetryConnectionInterval,
+      this.retryConnectionInterval * 2 ** this.retryAttempt,
+    );
+    // Full jitter on the top quarter of the interval keeps a healthy floor while
+    // spreading retries out across clients.
+    const jitter = Math.floor(Math.random() * (exp / 4));
+    this.retryAttempt += 1;
+    return exp + jitter;
+  }
+
+  /**
    * Method called when websocket connection is closed
    */
   onClose() {
@@ -279,7 +333,7 @@ abstract class BaseWebSocket extends EventEmitter {
 
     this.clearSetupTimer();
     this.clearPongTimeoutTimer();
-    this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
+    this.setupTimer = setTimeout(() => this.setup(), this.getReconnectDelay());
     clearInterval(this.heartbeat || undefined); // XXX: We should probably handle a missing heartbeat
   }
 
