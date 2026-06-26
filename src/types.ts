@@ -746,6 +746,10 @@ export interface IStorage {
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  // Get the provider, or throw if it has not been configured. Confidential
+  // code paths require it; a missing provider is a setup error, not a
+  // condition to silently default around.
+  getShieldedCryptoProvider(): IShieldedCryptoProvider;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;

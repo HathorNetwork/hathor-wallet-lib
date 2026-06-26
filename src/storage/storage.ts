@@ -181,6 +181,21 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Get the shielded crypto provider, or throw if it has not been configured.
+   * Confidential-transaction code paths require the provider; a missing one is a
+   * setup error and must fail loudly rather than silently degrade.
+   */
+  getShieldedCryptoProvider(): IShieldedCryptoProvider {
+    if (!this.shieldedCryptoProvider) {
+      throw new Error(
+        'Shielded crypto provider is not set. It is required for confidential ' +
+          'transaction operations; configure it via setShieldedCryptoProvider().'
+      );
+    }
+    return this.shieldedCryptoProvider;
+  }
+
+  /**
    * Sign the transaction
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code

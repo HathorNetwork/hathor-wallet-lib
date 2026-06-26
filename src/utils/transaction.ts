@@ -1321,13 +1321,9 @@ const transaction = {
       }
 
       if (shieldedInputs.length > 0) {
-        const cryptoProvider = storage.shieldedCryptoProvider;
-        if (!cryptoProvider) {
-          throw new Error(
-            'Shielded crypto provider is not set. Cannot compute excess blinding ' +
-              'factor for a tx that spends shielded UTXOs without producing shielded outputs.'
-          );
-        }
+        // Spending shielded UTXOs without shielded outputs needs the provider to
+        // compute the excess blinding factor; fail loudly if it is missing.
+        const cryptoProvider = storage.getShieldedCryptoProvider();
         const transparentOutputEntries: Array<{
           value: bigint;
           valueBlindingFactor: Buffer;
