@@ -1246,4 +1246,31 @@ describe('shielded key access (smoke)', () => {
     storage.setShieldedCryptoProvider(undefined);
     expect(storage.shieldedCryptoProvider).toBeUndefined();
   });
+
+  it('getShieldedCryptoProvider returns the provider when one is set', () => {
+    const storage = new Storage(new MemoryStore());
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    expect(storage.getShieldedCryptoProvider()).toBe(provider);
+  });
+
+  it('getShieldedCryptoProvider throws (never silently defaults) when none is set', () => {
+    const storage = new Storage(new MemoryStore());
+    // Unset on a fresh storage.
+    expect(() => storage.getShieldedCryptoProvider()).toThrow(
+      'Shielded crypto provider is not set'
+    );
+    // And still throws after an explicit clear — a missing provider is a setup
+    // error that must fail loudly, not be defaulted around.
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    storage.setShieldedCryptoProvider(undefined);
+    expect(() => storage.getShieldedCryptoProvider()).toThrow(
+      'Shielded crypto provider is not set'
+    );
+  });
 });

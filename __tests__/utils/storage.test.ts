@@ -24,6 +24,7 @@ import {
   apiSyncHistory,
   addCreatedTokenFromTx,
   processNewTx,
+  processSingleTx,
 } from '../../src/utils/storage';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
@@ -77,6 +78,60 @@ describe('processNewTx — confidential (shielded) inputs', () => {
 
     expect(result.tokens.has('01')).toBe(false);
     expect(result.tokens.size).toBe(0);
+  });
+});
+
+describe('processSingleTx — SEPARATED-model spent-output resolution', () => {
+  // The spent-output loop resolves `input.index` (an absolute on-chain index
+  // spanning transparent then shielded outputs) via resolveSpentOutput, instead
+  // of a positional `outputs[index]` read. These cover the two index-driven
+  // branches (the transparent-delete branch needs an owned UTXO and is exercised
+  // by the integration suite).
+  const baseTx = (fields: Partial<IHistoryTx>): IHistoryTx =>
+    ({
+      tx_id: 'tx',
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      inputs: [],
+      outputs: [],
+      parents: [],
+      ...fields,
+    }) as unknown as IHistoryTx;
+
+  it('throws "Spending an unexistent output" when the input index is past all outputs', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 1 transparent output, no shielded → T + S = 1.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [{ value: 1n, token_data: 0, decoded: {} }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    // Spend absolute index 5 (>= T + S) → resolveSpentOutput returns undefined.
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 5 }],
+    } as unknown as Partial<IHistoryTx>);
+    await expect(processSingleTx(storage, spend)).rejects.toThrow('Spending an unexistent output');
+  });
+
+  it('skips a shielded input (index resolves into the shielded range) without throwing', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 0 transparent outputs, 1 shielded → absolute index 0 is shielded.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [],
+      shielded_outputs: [{ commitment: 'aa', decoded: {} }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 0, type: 'shielded' }],
+    } as unknown as Partial<IHistoryTx>);
+    // Resolves to a shielded slot → the transparent-spend loop skips it (the
+    // shielded UTXO lifecycle is the receive pipeline's), so no throw.
+    await expect(processSingleTx(storage, spend)).resolves.toBeUndefined();
   });
 });
 
