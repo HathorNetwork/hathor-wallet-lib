@@ -91,7 +91,7 @@ describe('createShieldedOutputs', () => {
       provider,
       network
     ).catch(e => e);
-    // VULN-1: the provider error is preserved as `cause`, NOT flattened into
+    // The provider error is preserved as `cause`, NOT flattened into
     // `.message` (which would re-leak provider-supplied strings to logs).
     expect(err).toBeInstanceOf(Error);
     expect(err.cause?.message).toContain('crypto failure on output 0');
@@ -170,7 +170,7 @@ describe('createShieldedOutputs validation guards', () => {
     // scanPubkey length guard.
     const proposals = [makeProposal({ scanPubkey: '02aa' /* 2 bytes */ }), makeProposal()];
 
-    // INP-02: the canonical-hex guard fires first for a non-66-hex string.
+    // The canonical-hex guard fires first for a non-66-hex string.
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
       /scanPubkey must be 66 hex characters/
     );
@@ -308,10 +308,9 @@ describe('createShieldedOutputs validation guards', () => {
   });
 });
 
-describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REVIEW)', () => {
+describe('createShieldedOutputs — security hardening', () => {
   const SECRET_TOKEN = 'ab'.repeat(32); // 32-byte FullShielded token UID (the hidden secret)
 
-  // VULN-1
   it('redacts the hidden token UID in a FullShielded build error (cause preserved)', async () => {
     const provider = makeMockProvider({
       createShieldedOutputWithBothBlindings: jest
@@ -347,7 +346,6 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     expect(err.message).toContain('token=00');
   });
 
-  // VULN-2 / DISC-02
   it.each([
     ['zero', 0n],
     ['negative', -1n],
@@ -367,7 +365,6 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     await expect(createShieldedOutputs(proposals, provider, network)).resolves.toHaveLength(2);
   });
 
-  // CRY-01
   it('rejects an oversized surjection domain before the uncatchable native abort', async () => {
     const provider = makeMockProvider();
     const proposals = [
@@ -380,7 +377,6 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     ).rejects.toThrow('surjection-proof');
   });
 
-  // INP-02
   it('rejects a truncated scanPubkey that still decodes to a valid byte length', async () => {
     const provider = makeMockProvider();
     // TEST_SCAN_PUBKEY is valid 66-hex; trailing 'zz' makes Buffer.from truncate
@@ -392,14 +388,12 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     );
   });
 
-  // INP-03
   it('rejects more than MAX_SHIELDED_OUTPUTS (32) proposals', async () => {
     const provider = makeMockProvider();
     const proposals = Array.from({ length: 33 }, () => makeProposal());
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow('At most 32');
   });
 
-  // INP-04
   it.each([
     ['too large', 2 ** 32],
     ['negative', -1],
@@ -410,7 +404,6 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow('timelock');
   });
 
-  // INP-07
   it('rejects a wrong-length assetBlindingFactor in inputGenerators', async () => {
     const provider = makeMockProvider();
     const proposals = [
@@ -424,7 +417,6 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     ).rejects.toThrow('assetBlindingFactor must be 32');
   });
 
-  // SUP-02
   it('rejects provider output with a wrong-length commitment', async () => {
     const provider = makeMockProvider({
       createAmountShieldedOutput: jest.fn().mockResolvedValue({
@@ -443,5 +435,42 @@ describe('createShieldedOutputs — security hardening (CREATION_TS_SECURITY_REV
     // The provider-shape error is thrown inside the per-output try → rewrapped;
     // the original is preserved as `cause`.
     expect(err.cause?.message ?? err.message).toContain('commitment');
+  });
+
+  it('rejects provider output whose commitment is a right-length string (not a byte view)', async () => {
+    // A length-only guard would wave a 33-char string through; the type gate
+    // rejects anything that is not a Buffer/Uint8Array.
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: 'a'.repeat(33), // 33 chars, but a string — not a byte view
+        rangeProof: Buffer.alloc(100, 0x04),
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.cause?.message ?? err.message).toContain('commitment');
+  });
+
+  it('accepts provider output returned as Uint8Array rather than Buffer', async () => {
+    // A structurally-conformant provider (e.g. the wasm backend) may hand back
+    // Uint8Array instead of Buffer; the guard must accept it (a Buffer IS a
+    // Uint8Array), not reject it as Buffer.isBuffer would.
+    const u8 = (len: number, fill: number) => Uint8Array.from(Buffer.alloc(len, fill));
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: u8(33, 0x02),
+        commitment: u8(33, 0x03),
+        rangeProof: u8(10, 0x04),
+        blindingFactor: u8(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    await expect(createShieldedOutputs(proposals, provider, network)).resolves.toHaveLength(2);
   });
 });

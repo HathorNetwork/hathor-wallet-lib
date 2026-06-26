@@ -56,16 +56,23 @@ interface FullShieldedBuildContext extends ShieldedOutputBuildContext {
   inputGenerators: InputGeneratorInfo[];
 }
 
-// ─── provider-output shape checks (SUP-02) ─────────────────────────────────
+// ─── provider-output shape checks ──────────────────────────────────────────
 //
 // We trust the crypto provider's MATH (re-verifying every proof would double
 // the cost and the provider is pinned), but a buggy or version-skewed provider
-// returning a wrong-size buffer would serialize to invalid wire data the
-// fullnode rejects only post-PoW. These cheap length asserts fail loud at the
-// boundary instead.
+// returning a wrong-size or wrong-type value would serialize to invalid wire
+// data the fullnode rejects only post-PoW. These cheap type+length asserts fail
+// loud at the boundary instead.
+//
+// The type gate is `instanceof Uint8Array`, not `Buffer.isBuffer`: a real Buffer
+// IS a Uint8Array (so the native and mobile providers pass), but a provider that
+// returns a bare Uint8Array — a structurally-conformant shape the wasm provider
+// already produces — is still accepted, while a string / plain object of the
+// right `.length` (which a length-only check would wave through) is rejected.
+// Downstream serialization (Buffer.concat / .length) accepts any Uint8Array.
 
 function assertProviderBuffer(buf: Buffer | undefined, expectedLen: number, name: string): void {
-  if (!buf || buf.length !== expectedLen) {
+  if (!(buf instanceof Uint8Array) || buf.length !== expectedLen) {
     throw new Error(
       `Crypto provider returned ${name} of ${buf?.length ?? 0} bytes, expected ${expectedLen}`
     );
@@ -73,7 +80,7 @@ function assertProviderBuffer(buf: Buffer | undefined, expectedLen: number, name
 }
 
 function assertProviderProof(buf: Buffer | undefined, maxLen: number, name: string): void {
-  if (!buf || buf.length < 1 || buf.length > maxLen) {
+  if (!(buf instanceof Uint8Array) || buf.length < 1 || buf.length > maxLen) {
     throw new Error(
       `Crypto provider returned ${name} of ${buf?.length ?? 0} bytes, expected [1, ${maxLen}]`
     );
@@ -128,7 +135,7 @@ async function buildAmountShieldedOutput(
     );
   }
 
-  // SUP-02: shape-check the provider output before it reaches the wire.
+  // Shape-check the provider output before it reaches the wire.
   assertProviderBuffer(
     cryptoResult.ephemeralPubkey,
     COMPRESSED_PUBKEY_SIZE_BYTES,
@@ -249,7 +256,7 @@ async function buildFullShieldedOutput(
     throw new Error('Crypto provider returned no assetCommitment for FullShielded output');
   }
 
-  // SUP-02: shape-check the provider output before it reaches the wire.
+  // Shape-check the provider output before it reaches the wire.
   assertProviderBuffer(
     cryptoResult.ephemeralPubkey,
     COMPRESSED_PUBKEY_SIZE_BYTES,
@@ -328,7 +335,7 @@ export async function createShieldedOutputs(
       'At least 2 shielded outputs are required (hathor-core trivial-commitment rule)'
     );
   }
-  // INP-03: bound the count up front. The build loop is synchronous-ish work
+  // Bound the count up front. The build loop is synchronous-ish work
   // per output; without this an oversized batch stalls the event loop on work
   // the fullnode rejects anyway (it enforces the same MAX_SHIELDED_OUTPUTS).
   if (proposals.length > MAX_SHIELDED_OUTPUTS) {
@@ -341,7 +348,7 @@ export async function createShieldedOutputs(
   // Validate inputs upfront before expensive crypto work
   const hasFullShielded = proposals.some(p => p.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED);
   for (const [idx, proposal] of proposals.entries()) {
-    // INP-02: reject a truncated/typo'd scanPubkey. `Buffer.from(hex)` silently
+    // Reject a truncated/typo'd scanPubkey. `Buffer.from(hex)` silently
     // truncates at the first non-hex pair (e.g. '02'+…+'zz' decodes to a
     // length-valid-but-WRONG key), so check the source string is canonical
     // 66-hex AND a real on-curve compressed point. A length-only gate would
@@ -366,15 +373,16 @@ export async function createShieldedOutputs(
       );
     }
 
-    // VULN-2 / DISC-02: bound the value to the range proof's domain. The
-    // fullnode enforces no explicit value ceiling (only a proof byte-size cap),
-    // so an over-cap value would build a node-accepted protocol violation and
-    // leak the amount magnitude via the on-wire proof length.
+    // Bound the value to the range proof's domain. The fullnode enforces no
+    // explicit value ceiling (only a proof byte-size cap), so an over-cap value
+    // would build a node-accepted protocol violation and leak the amount
+    // magnitude via the on-wire proof length. The error must not echo the value
+    // itself — it is exactly the secret a shielded output hides.
     if (proposal.value < 1n || proposal.value >= MAX_SHIELDED_OUTPUT_VALUE) {
-      throw new Error(`Shielded output ${idx}: value must be in [1, 2^40), got ${proposal.value}`);
+      throw new Error(`Shielded output ${idx}: value must be in [1, 2^40)`);
     }
 
-    // INP-04: timelock is silently coerced (setUint32, mod 2^32) into the
+    // Timelock is silently coerced (setUint32, mod 2^32) into the
     // on-chain script downstream; reject out-of-range values up front.
     if (
       proposal.timelock != null &&
@@ -392,7 +400,13 @@ export async function createShieldedOutputs(
       'FullShielded outputs require at least one input token UID for surjection proof domain'
     );
   }
-  // CRY-01: the surjection-proof domain has one entry per input generator;
+  // This inputGenerators validation is intentionally NOT gated behind
+  // `hasFullShielded`. The send path builds inputGenerators from every
+  // token-bearing input regardless of output mode, and rejecting malformed
+  // crypto-domain metadata at the boundary is the correct fail-loud behavior
+  // even for a batch that happens not to consume it.
+  //
+  // The surjection-proof domain has one entry per input generator;
   // exceeding the prover's limit triggers an UNCATCHABLE native abort (SIGABRT),
   // so reject an oversized domain here, before any crypto runs.
   if (inputGenerators.length > MAX_SURJECTION_DOMAIN) {
@@ -416,7 +430,7 @@ export async function createShieldedOutputs(
         `inputGenerators[${idx}]: token UID must be ${TX_HASH_SIZE_BYTES} bytes, got ${inputTokenBuf.length}`
       );
     }
-    // INP-07: a wrong-length assetBlindingFactor would feed a garbage scalar
+    // A wrong-length assetBlindingFactor would feed a garbage scalar
     // into createAssetCommitment; validate length symmetric with the token
     // check. (Its *correctness* vs the real tx input is the caller's job —
     // creation.ts has no access to the transaction's inputs.)
@@ -480,7 +494,7 @@ export async function createShieldedOutputs(
       createdOutputs.push(built.createdEntry);
     } catch (e) {
       const mode = ShieldedOutputMode[proposal.shieldedMode];
-      // VULN-1: the token UID is precisely the secret a FullShielded output
+      // The token UID is precisely the secret a FullShielded output
       // hides (it has no on-chain slot — it lives only inside asset_commitment).
       // Never leak it into the error MESSAGE (which flows to logs/telemetry):
       // redact it for FullShielded. The full inner error is preserved via
