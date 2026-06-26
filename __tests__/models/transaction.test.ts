@@ -662,3 +662,15 @@ test('getOutputsSum / weight exclude shielded output values (privacy: GAP1-01)',
   expect(txSmall.getOutputsSum()).toBe(txLarge.getOutputsSum());
   expect(txSmall.calculateWeight()).toBe(txLarge.calculateWeight());
 });
+
+test('shieldedOutputs getter returns a frozen empty array when there is no header', () => {
+  const tx = new Transaction([], [], { version: DEFAULT_TX_VERSION });
+  // Always an array (never undefined) so readers stay null-check-free.
+  expect(tx.shieldedOutputs).toEqual([]);
+  // Read-only: a stray push fails loudly at runtime instead of being silently
+  // dropped onto a throwaway array (a JS caller bypasses the `readonly` type, so
+  // we cast it away here to exercise the runtime freeze).
+  expect(() =>
+    (tx.shieldedOutputs as ShieldedOutput[]).push({} as unknown as ShieldedOutput)
+  ).toThrow();
+});

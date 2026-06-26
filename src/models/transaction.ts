@@ -73,6 +73,12 @@ type optionsType = {
  * - `helpers.createTxFromData`: creates from a standard lib data object
  * - `helpers.createTxFromHistoryObject`: creates from a tx populated by the HathorWallet history methods
  */
+
+// Shared frozen empty array returned by the `shieldedOutputs` getter when a tx
+// has no ShieldedOutputsHeader. Frozen so a stray push fails loudly at runtime
+// (JS callers) instead of being silently dropped onto a throwaway array.
+const EMPTY_SHIELDED_OUTPUTS: readonly ShieldedOutput[] = Object.freeze([]);
+
 class Transaction {
   inputs: Input[];
 
@@ -131,16 +137,26 @@ class Transaction {
   }
 
   /**
-   * Shielded outputs (SEPARATED model), read straight from the
-   * ShieldedOutputsHeader so there is a single source of truth: the header owns
-   * the array, mutating the returned array updates the header, and there is no
-   * separate cached field to drift. Empty when the tx carries no shielded
-   * outputs (no header). The header is produced by
-   * `transactionUtils._attachShieldedOutputsHeader`.
+   * Shielded outputs (SEPARATED model). READ-ONLY accessor backed by the
+   * ShieldedOutputsHeader, the single source of truth (no separate cached field
+   * to drift): returns the header's array when one is present, or a shared
+   * frozen empty array when the tx carries no shielded outputs. Never undefined
+   * — an empty result unambiguously means "no shielded outputs" (a header is
+   * only ever created with at least one output), and the always-an-array
+   * contract keeps callers like validate() and the local-history emission
+   * null-check-free.
+   *
+   * The return type is `readonly` (so a `.push` is a compile error) and the
+   * empty case is frozen (so a `.push` also throws at runtime). To ADD shielded
+   * outputs go through `transactionUtils._attachShieldedOutputsHeader` — pushing
+   * onto this getter's result is never the way to add them: with a header it
+   * would bypass that builder, and with no header it would be dropped.
    */
-  get shieldedOutputs(): ShieldedOutput[] {
+  get shieldedOutputs(): readonly ShieldedOutput[] {
     const header = this.headers.find(h => h instanceof ShieldedOutputsHeader);
-    return header instanceof ShieldedOutputsHeader ? header.shieldedOutputs : [];
+    return header instanceof ShieldedOutputsHeader
+      ? header.shieldedOutputs
+      : EMPTY_SHIELDED_OUTPUTS;
   }
 
   /**
