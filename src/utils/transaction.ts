@@ -611,15 +611,19 @@ const transaction = {
       if (!address || inputToken === undefined || inputValue === undefined) {
         const spentTx = await storage.getTx(input.tx_id);
         const resolved = spentTx ? this.resolveSpentOutput(spentTx, input.index) : undefined;
-        // Owned-marker gate: only a decrypted shielded slot (value defined) is
-        // a wallet spend we can debit; a non-owned/undecoded slot has value
-        // === undefined.
+        // We can only debit inputs the wallet OWNS. This block runs only for
+        // "bare" inputs (no inline value/token), which the fullnode emits only
+        // for shielded inputs. Anything that isn't an owned, decrypted shielded
+        // slot — a non-shielded resolve, or a shielded slot we never decrypted
+        // (value === undefined) — is not ours, so skip it.
         if (resolved?.kind !== 'shielded' || resolved.output.value === undefined) {
           continue;
         }
         const so = resolved.output;
         address = so.decoded?.address;
-        inputToken = so.token ?? NATIVE_TOKEN_UID;
+        // Token comes from the decrypted slot (an owned slot always carries it).
+        // No NATIVE_TOKEN_UID fallback — that would mislabel a custom token as HTR.
+        inputToken = so.token;
         inputValue = so.value;
         inputTokenData = so.token_data ?? 0;
       }
