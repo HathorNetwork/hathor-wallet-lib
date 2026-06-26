@@ -854,10 +854,11 @@ const transaction = {
   },
 
   /**
-   * Build a `ShieldedOutput` model for each entry in `txData.shieldedOutputs`,
-   * set them on `tx.shieldedOutputs` (SEPARATED model — shielded outputs live
-   * apart from `tx.outputs`), and push a ShieldedOutputsHeader (0x12). No-op
-   * when the tx carries no shielded outputs.
+   * Build a `ShieldedOutput` model for each entry in `txData.shieldedOutputs`
+   * and push a ShieldedOutputsHeader (0x12) carrying them (SEPARATED model —
+   * shielded outputs live apart from `tx.outputs`, and the `tx.shieldedOutputs`
+   * getter reads them back from the header). No-op when the tx carries no
+   * shielded outputs.
    */
   _attachShieldedOutputsHeader(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
     // Populate shielded outputs as a ShieldedOutputsHeader
@@ -900,8 +901,8 @@ const transaction = {
         );
       });
 
-      // eslint-disable-next-line no-param-reassign
-      tx.shieldedOutputs = shieldedModels;
+      // The ShieldedOutputsHeader owns the array; tx.shieldedOutputs is a getter
+      // that reads it back, so there is no separate field to assign.
       tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
     }
   },

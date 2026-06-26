@@ -78,8 +78,6 @@ class Transaction {
 
   outputs: Output[];
 
-  shieldedOutputs: ShieldedOutput[];
-
   signalBits: number;
 
   version: number;
@@ -118,7 +116,6 @@ class Transaction {
 
     this.inputs = inputs;
     this.outputs = outputs;
-    this.shieldedOutputs = [];
     this.signalBits = signalBits!;
     this.version = version!;
     this.weight = weight!;
@@ -131,6 +128,19 @@ class Transaction {
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
+  }
+
+  /**
+   * Shielded outputs (SEPARATED model), read straight from the
+   * ShieldedOutputsHeader so there is a single source of truth: the header owns
+   * the array, mutating the returned array updates the header, and there is no
+   * separate cached field to drift. Empty when the tx carries no shielded
+   * outputs (no header). The header is produced by
+   * `transactionUtils._attachShieldedOutputsHeader`.
+   */
+  get shieldedOutputs(): ShieldedOutput[] {
+    const header = this.headers.find(h => h instanceof ShieldedOutputsHeader);
+    return header instanceof ShieldedOutputsHeader ? header.shieldedOutputs : [];
   }
 
   /**
@@ -676,15 +686,8 @@ class Transaction {
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
     tx.getHeadersFromBytes(txBuffer, network);
-
-    // Hydrate shieldedOutputs from the ShieldedOutputsHeader (if present)
-    // so validate() and weight calculations use the correct count.
-    for (const header of tx.headers) {
-      if (header instanceof ShieldedOutputsHeader) {
-        tx.shieldedOutputs = header.shieldedOutputs;
-        break;
-      }
-    }
+    // No shieldedOutputs hydration needed: the `shieldedOutputs` getter reads
+    // the ShieldedOutputsHeader (parsed above) directly.
 
     tx.updateHash();
 

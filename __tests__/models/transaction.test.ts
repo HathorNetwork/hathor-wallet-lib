@@ -14,6 +14,7 @@ import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import ShieldedOutput from '../../src/models/shielded_output';
+import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
@@ -627,19 +628,24 @@ test('getOutputsSum / weight exclude shielded output values (privacy: GAP1-01)',
     const p2pkh = new P2PKH(address);
     const transparentOut = new Output(1000n, p2pkh.createScript());
     const tx = new Transaction([], [transparentOut], { version: DEFAULT_TX_VERSION });
-    tx.shieldedOutputs = shieldedValues.map(
-      value =>
-        ({
-          mode: 1,
-          commitment: Buffer.alloc(33),
-          rangeProof: Buffer.alloc(675),
-          tokenData: 0,
-          script: Buffer.alloc(25),
-          ephemeralPubkey: Buffer.alloc(33),
-          value,
-          serialize: () => [Buffer.alloc(1)],
-          serializeSighash: () => [Buffer.alloc(1)],
-        }) as unknown as ShieldedOutput
+    // shieldedOutputs is a header-backed getter; populate via the header.
+    tx.headers.push(
+      new ShieldedOutputsHeader(
+        shieldedValues.map(
+          value =>
+            ({
+              mode: 1,
+              commitment: Buffer.alloc(33),
+              rangeProof: Buffer.alloc(675),
+              tokenData: 0,
+              script: Buffer.alloc(25),
+              ephemeralPubkey: Buffer.alloc(33),
+              value,
+              serialize: () => [Buffer.alloc(1)],
+              serializeSighash: () => [Buffer.alloc(1)],
+            }) as unknown as ShieldedOutput
+        )
+      )
     );
     return tx;
   };
