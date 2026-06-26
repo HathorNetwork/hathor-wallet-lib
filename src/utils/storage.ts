@@ -434,11 +434,21 @@ export async function processSingleTx(
       continue;
     }
 
-    if (origTx.outputs.length <= input.index) {
+    // SEPARATED model: `input.index` is an absolute on-chain index spanning the
+    // transparent outputs then the shielded outputs, so resolve it via the
+    // arithmetic resolver rather than a positional `outputs[index]` read — which
+    // would wrongly reject (or misread) a shielded input whose index is
+    // >= outputs.length.
+    const resolved = transactionUtils.resolveSpentOutput(origTx, input.index);
+    if (!resolved) {
       throw new Error('Spending an unexistent output');
     }
-
-    const output = origTx.outputs[input.index];
+    if (resolved.kind !== 'transparent') {
+      // A shielded input's UTXO lifecycle is handled by the receive pipeline;
+      // this transparent-spend loop has nothing to delete for it.
+      continue;
+    }
+    const { output } = resolved;
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
       continue;
@@ -941,7 +951,12 @@ export async function processUtxoUnlock(
   const { store } = storage;
 
   const { tx } = lockedUtxo;
-  const output = tx.outputs[lockedUtxo.index];
+  // SEPARATED model: resolve via the arithmetic resolver, not a positional
+  // `outputs[index]` read (out of range for a shielded index). A shielded locked
+  // UTXO is handled by the receive pipeline, so there's nothing to unlock here.
+  const resolved = transactionUtils.resolveSpentOutput(tx, lockedUtxo.index);
+  if (!resolved || resolved.kind !== 'transparent') return;
+  const { output } = resolved;
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case
   if (!output.decoded.address) return;
