@@ -65,7 +65,7 @@ class ShieldedOutput {
    *   Required so callers can't silently get a 0n placeholder where a real
    *   value is known. It is NOT serialized on-chain and MUST NOT influence
    *   tx weight. For wire-format outputs whose value is hidden until rewind,
-   *   pass `0n` explicitly — see `ShieldedOutputsHeader.deserialize` in PR 3.
+   *   pass `0n` explicitly — see `ShieldedOutputsHeader.deserialize`.
    * @param options.assetCommitment / options.surjectionProof — required
    *   for FullShielded mode; absent for AmountShielded mode. Enforced at
    *   serialize time, not construction time, so deserializers can build
