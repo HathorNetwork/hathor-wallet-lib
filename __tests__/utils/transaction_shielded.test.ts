@@ -48,8 +48,9 @@ function makeTransparentOutput(value: bigint, address: string): IHistoryOutput {
 
 /**
  * Build a shielded_outputs[] entry. An OWNED entry carries the decoded
- * value/token/decoded.address fields (the single ownership gate is
- * `value !== undefined`). A non-owned entry leaves `value` undefined.
+ * value/token/decoded.address fields; getTxBalance gates an owned slot on
+ * `value !== undefined` (authoritative) plus isAddressMine(decoded.address). A
+ * non-owned entry leaves `value` undefined.
  */
 function makeShieldedEntry(
   commitment: string,
@@ -334,40 +335,6 @@ describe('getTxBalance (shielded)', () => {
 
     const balance = await transactionUtils.getTxBalance(spendingTx, storage);
     expect(balance['00'].tokens.unlocked).toBe(-300n);
-  });
-
-  it('credits an owned shielded receive even when its address is not a stored wallet address', async () => {
-    // `value !== undefined` is the sole ownership gate (written only when the
-    // wallet decrypts an output it owns). An owned slot whose spend-P2PKH is not
-    // a stored address must still be credited — the old isAddressMine second-gate
-    // would have skipped it and under-reported the balance.
-    const tx = makeTx(
-      [],
-      [makeShieldedEntry('owned-unstored', { value: 700n, address: 'W-not-stored', token: '00' })],
-      { tx_id: 'recv-unstored' }
-    );
-    // makeStorage's isAddressMine returns false for anything but OWNED.
-    const balance = await transactionUtils.getTxBalance(tx, makeStorage());
-    expect(balance['00'].tokens.unlocked).toBe(700n);
-  });
-
-  it('debits a bare shielded input even when its parent slot address is not stored', async () => {
-    // Same gate on the debit side: a bare shielded input proves ownership via
-    // its decrypted parent slot, so it is debited without the isAddressMine gate
-    // (which still applies to transparent inputs).
-    const parentTx = makeTx(
-      [],
-      [makeShieldedEntry('spent-unstored', { value: 250n, address: 'W-not-stored', token: '00' })],
-      { tx_id: 'parent-unstored' }
-    );
-    const spendingTx = makeTx([], undefined, {
-      tx_id: 'spend-unstored',
-      inputs: [{ tx_id: 'parent-unstored', index: 0, type: 'shielded' }],
-    });
-    const storage = makeStorage({ utxo: null });
-    (storage.getTx as jest.Mock).mockResolvedValue(parentTx);
-    const balance = await transactionUtils.getTxBalance(spendingTx, storage);
-    expect(balance['00'].tokens.unlocked).toBe(-250n);
   });
 });
 

@@ -577,19 +577,19 @@ const transaction = {
 
     // CREDIT loop over shielded outputs (SEPARATED model). Owned shielded
     // outputs live in tx.shielded_outputs[] with their value/token decrypted
-    // IN PLACE; the single ownership gate is `value !== undefined`. Without
-    // this loop an owned shielded RECEIVE would credit 0 in getTxHistory /
-    // getTxById. Mirrors the transparent loop's authority/lock/value handling.
+    // IN PLACE. `value !== undefined` is the authoritative ownership gate — it
+    // is written only when the wallet decrypts a slot it owns (see the
+    // owned-marker note on IHistoryShieldedOutput) — and we additionally require
+    // isAddressMine(decoded.address), the same check the transparent loop uses;
+    // authority/lock/value handling mirrors that loop too. Without this loop an
+    // owned shielded RECEIVE would credit 0 in getTxHistory / getTxById.
     for (const so of tx.shielded_outputs ?? []) {
-      // `value !== undefined` is the authoritative (and sole) ownership gate: it
-      // is written in place only when the wallet decrypts a shielded output it
-      // owns — the wire never carries a plaintext value, and the WS path wipes
-      // any incoming one. An extra isAddressMine(decoded.address) check would be
-      // redundant (the receive pipeline stores the spend-P2PKH whenever it
-      // decrypts), and worse: it would couple the credit to address-storage and
-      // throw if `decoded` were ever absent.
       if (so.value === undefined) {
         // Non-owned (or not-yet-decrypted) slot — excluded by the gate.
+        continue;
+      }
+      const { address } = so.decoded;
+      if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
       const isLocked = this.isOutputLocked(so, { refTs: nowTs }) || isHeightLocked;
@@ -611,15 +611,10 @@ const transaction = {
       // pipeline persists at receive time, via the SEPARATED-model resolver.
       // Without this the per-tx delta would credit change but never debit the
       // spend (e.g. +8.5M on a tx that actually sent 500K).
-      const address = input.decoded?.address;
+      let address = input.decoded?.address;
       let inputToken = input.token;
       let inputValue = input.value;
       let inputTokenData = input.token_data;
-      // Ownership of a bare shielded input is proven by its decrypted parent
-      // slot (`value !== undefined`, set only on outputs the wallet owns), so it
-      // does NOT need the isAddressMine gate below — that gate is for inline
-      // (transparent) inputs, whose ownership isn't otherwise established.
-      let owned = false;
 
       if (!address || inputToken === undefined || inputValue === undefined) {
         const spentTx = await storage.getTx(input.tx_id);
@@ -633,17 +628,15 @@ const transaction = {
           continue;
         }
         const so = resolved.output;
+        address = so.decoded?.address;
         // Token comes from the decrypted slot (an owned slot always carries it).
         // No NATIVE_TOKEN_UID fallback — that would mislabel a custom token as HTR.
         inputToken = so.token;
         inputValue = so.value;
         inputTokenData = so.token_data ?? 0;
-        owned = true;
       }
 
-      // Transparent inputs establish ownership via isAddressMine; a bare shielded
-      // input already established it via its decrypted parent slot (`owned`).
-      if (!owned && !(address && (await storage.isAddressMine(address)))) {
+      if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
       // Inputs debit (sign -1n); a spent output is never locked.
