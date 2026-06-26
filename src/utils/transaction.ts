@@ -590,9 +590,14 @@ const transaction = {
         continue;
       }
       const isLocked = this.isOutputLocked(so, { refTs: nowTs }) || isHeightLocked;
-      // token_data on a shielded output may be undefined (FullShielded hides
-      // the token); default to 0 so the authority check reads as funds.
-      accrue(so.token ?? NATIVE_TOKEN_UID, so.value, so.token_data ?? 0, isLocked, 1n);
+      // An owned (decrypted) shielded slot always carries its token: decryption
+      // recovers value and tokenUid together (IDecryptedShieldedOutput), and the
+      // `value !== undefined` gate above already proved ownership. So read the
+      // token directly — no NATIVE_TOKEN_UID fallback, which would mislabel a
+      // custom token as HTR (mirrors the input-debit path below). token_data may
+      // still be undefined (FullShielded hides it); default to 0 so the
+      // authority check reads as plain funds.
+      accrue(so.token!, so.value, so.token_data ?? 0, isLocked, 1n);
     }
 
     for (const input of tx.inputs) {
