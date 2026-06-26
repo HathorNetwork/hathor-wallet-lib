@@ -91,11 +91,8 @@ const transaction = {
    * (processHistory) also feeds bare {tx_id, index, type:'shielded'} inputs
    * from address_history, which this detects so they can be debited.
    */
-  isShieldedInputEntry(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    input: Record<string, any>
-  ): boolean {
-    return input != null && (input as { type?: string }).type === 'shielded';
+  isShieldedInputEntry(input: { type?: string } | null | undefined): boolean {
+    return input != null && input.type === 'shielded';
   },
 
   /**
