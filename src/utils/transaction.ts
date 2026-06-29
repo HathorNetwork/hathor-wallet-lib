@@ -139,28 +139,64 @@ const transaction = {
   },
 
   /**
-   * Normalize a transaction's shielded outputs: convert any base64-encoded
-   * confidential fields (commitment / range_proof / script / ephemeral_pubkey /
-   * asset_commitment / surjection_proof) to hex in place. Mutates the tx.
+   * Normalize a transaction's shielded outputs into the SEPARATED model and
+   * hex-encode their confidential wire fields. Mutates the tx in place.
    *
-   * The fullnode delivers shielded outputs in a dedicated `shielded_outputs[]`
-   * field (the separated model). Over the websocket real-time path their buffer
-   * fields arrive base64-encoded; without this conversion `Buffer.from(value,
-   * 'hex')` downstream parses them as garbage — making the native rewind throw
-   * "asset commitment verification failed" and the per-tx balance read as
-   * -input with no credit for the decoded shielded outputs.
+   * The fullnode delivers shielded outputs two ways:
+   *   • HTTP `/transaction` (to_json): already separated in `shielded_outputs[]`.
+   *   • `address_history` + the WS real-time path (to_json_extended): INLINE in
+   *     `outputs[]` with `type: 'shielded'` and a commitment instead of a value
+   *     (see schemas.ts IHistoryOutputSchema, whose union accepts that shape).
    *
-   * Idempotent: an already-hex field is left unchanged (ensureHex no-ops on it).
-   * The owned-marker fields (value / token / blindingFactor / assetBlindingFactor)
-   * are NOT on the wire — they are populated post-decryption on the slots the
-   * wallet owns — so this neither reads nor invents them.
+   * Step 1 relocates any inline shielded entries out of `outputs[]` into
+   * `shielded_outputs[]`, restoring the post-normalize invariant that
+   * `outputs[]` is transparent-only — so the rest of the wallet sees one shape.
+   * Without it, shielded receives arriving inline (history load / real-time
+   * onNewTx) never reach `shielded_outputs[]` and the wallet is blind to them.
+   *
+   * Step 2 converts every shielded output's base64 confidential fields
+   * (commitment / range_proof / script / ephemeral_pubkey / asset_commitment /
+   * surjection_proof) to hex; without this `Buffer.from(value, 'hex')`
+   * downstream parses them as garbage — making the native rewind throw "asset
+   * commitment verification failed" and the per-tx balance read as -input with
+   * no credit for the decoded shielded outputs.
+   *
+   * Idempotent: a tx with no inline entries and already-hex fields is unchanged
+   * (relocate is a no-op, ensureHex no-ops on hex). The owned-marker fields
+   * (value / token / blindingFactor / assetBlindingFactor) are NOT on the wire —
+   * they are populated post-decryption on the slots the wallet owns — so this
+   * neither reads nor invents them.
    */
   normalizeShieldedOutputs(tx: IHistoryTx): void {
+    // 1) Relocate inline shielded entries (type === 'shielded') out of
+    // `outputs[]` into `shielded_outputs[]`. A stable partition preserves the
+    // on-chain transparent-then-shielded ordering of the separated model.
+    if (
+      Array.isArray(tx.outputs) &&
+      tx.outputs.some(out => (out as { type?: string }).type === 'shielded')
+    ) {
+      const transparent: IHistoryOutput[] = [];
+      const inlineShielded: IHistoryShieldedOutput[] = [];
+      for (const out of tx.outputs) {
+        if ((out as { type?: string }).type === 'shielded') {
+          inlineShielded.push(out as unknown as IHistoryShieldedOutput);
+        } else {
+          transparent.push(out);
+        }
+      }
+      // eslint-disable-next-line no-param-reassign
+      tx.outputs = transparent;
+      // eslint-disable-next-line no-param-reassign
+      tx.shielded_outputs = [...(tx.shielded_outputs ?? []), ...inlineShielded];
+    }
+
     if (!tx.shielded_outputs) {
       // Transparent-only tx (no shielded_outputs) — nothing to normalize.
       return;
     }
 
+    // 2) Hex-encode the confidential wire fields of every shielded output
+    // (relocated inline entries + entries already separated by to_json).
     for (const so of tx.shielded_outputs) {
       // eslint-disable-next-line no-param-reassign
       so.commitment = ensureHex(so.commitment);
