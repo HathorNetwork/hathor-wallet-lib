@@ -319,8 +319,10 @@ const tokens = {
   ): OutputValueType {
     // Coerce to bigint so callers passing a number keep working (the API previously used Number()).
     const amount = BigInt(mintAmount);
-    const numerator = depositNumerator * (amount < 0n ? -amount : amount);
-    return ceilDiv(numerator, depositDenominator);
+    if (mintAmount < 0) {
+      throw new Error('mint amount should be a positive number');
+    }
+    return ceilDiv(depositNumerator * amount, depositDenominator);
   },
 
   /**
@@ -350,8 +352,7 @@ const tokens = {
   ): OutputValueType {
     // Coerce to bigint so callers passing a number keep working (the API previously used Number()).
     const amount = BigInt(meltAmount);
-    const numerator = depositNumerator * (amount < 0n ? -amount : amount);
-    return numerator / depositDenominator;
+    return (depositNumerator * amount) / depositDenominator;
   },
 
   /**

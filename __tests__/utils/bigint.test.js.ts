@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import {
+  abs,
   bigIntCoercibleSchema,
   ceilDiv,
   JSONBigInt,
@@ -153,5 +154,19 @@ describe('test ceilDiv', () => {
   test('should round up when the division has a remainder', () => {
     expect(ceilDiv(11n, 5n)).toStrictEqual(3n);
     expect(ceilDiv(1n, 5n)).toStrictEqual(1n);
+  });
+});
+
+describe('test abs', () => {
+  test('should return the magnitude of a negative value', () => {
+    expect(abs(-5n)).toStrictEqual(5n);
+  });
+
+  test('should return a positive value unchanged', () => {
+    expect(abs(5n)).toStrictEqual(5n);
+  });
+
+  test('should return zero for zero', () => {
+    expect(abs(0n)).toStrictEqual(0n);
   });
 });

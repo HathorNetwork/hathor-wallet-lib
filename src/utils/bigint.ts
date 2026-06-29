@@ -79,6 +79,13 @@ export function ceilDiv(a: bigint, b: bigint): bigint {
 }
 
 /**
+ * Absolute value for bigint (there is no `Math.abs` for bigint).
+ */
+export function abs(value: bigint): bigint {
+  return value < 0n ? -value : value;
+}
+
+/**
  * A utility Zod schema for `bigint` properties that can be instantiated from a coercible type, that is, a `number`, `string`, or `bigint` itself.
  */
 export const bigIntCoercibleSchema = z
