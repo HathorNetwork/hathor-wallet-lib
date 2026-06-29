@@ -4,9 +4,30 @@ import { OutputValueType } from '../types';
 import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../constants';
 import { prettyValue } from './numbers';
 
-const isHexa = (value: string): boolean => {
+export const isHexa = (value: string): boolean => {
   // test if value is string?
   return /^[0-9a-fA-F]*$/.test(value);
+};
+
+/**
+ * Return a hex-encoded copy of a string that may be either hex or base64.
+ *
+ * The fullnode serializes a shielded output's confidential fields with a fixed
+ * per-field encoding (`_shielded_output_to_json`): commitment / ephemeral_pubkey
+ * / asset_commitment as hex, and range_proof / script / surjection_proof as
+ * base64. So base64 is the only non-hex form we can receive. Downstream
+ * decryption does `Buffer.from(value, 'hex')`, so we normalize to hex first.
+ *
+ * Detection is character-set based: a string matching only [0-9a-fA-F] is taken
+ * as already-hex and returned unchanged — so this is idempotent on hex (and on
+ * the empty string). Anything containing a non-hex character (e.g. '+', '/',
+ * '=', or letters g-z/G-Z) is treated as base64, decoded, and re-encoded as hex.
+ */
+export const ensureHex = (value: string): string => {
+  if (isHexa(value)) {
+    return value;
+  }
+  return Buffer.from(value, 'base64').toString('hex');
 };
 
 /**
