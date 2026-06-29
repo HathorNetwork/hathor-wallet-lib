@@ -7,7 +7,13 @@
 
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
-import { HistorySyncMode, WalletType, TokenVersion, SCANNING_POLICY } from '../../src/types';
+import {
+  HistorySyncMode,
+  WalletType,
+  TokenVersion,
+  SCANNING_POLICY,
+  IHistoryTx,
+} from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   scanPolicyStartAddresses,
@@ -17,10 +23,117 @@ import {
   getHistorySyncMethod,
   apiSyncHistory,
   addCreatedTokenFromTx,
+  processNewTx,
+  processSingleTx,
 } from '../../src/utils/storage';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
+
+describe('processNewTx — confidential (shielded) inputs', () => {
+  // SEPARATED model: a shielded input carries NO transparent fields
+  // (value/token/token_data/decoded are hidden in commitments). processNewTx
+  // must skip it via the type-level guard — its balance handling is the
+  // receive pipeline's job (next PR). Without the guard the loop dereferences
+  // `input.decoded.address` and throws.
+  function spendTx(inputs): IHistoryTx {
+    return {
+      tx_id: 'spend-tx',
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      inputs,
+      outputs: [],
+      parents: [],
+    } as unknown as IHistoryTx;
+  }
+
+  it('skips a fully-confidential shielded input (all transparent fields absent)', async () => {
+    const storage = new Storage(new MemoryStore());
+    const tx = spendTx([{ tx_id: 'parent', index: 0, type: 'shielded' }]);
+
+    const result = await processNewTx(storage, tx, {
+      rewardLock: 0,
+      nowTs: 1,
+      currentHeight: 0,
+    });
+
+    // No throw, and the confidential input contributed no token to the metadata.
+    expect(result.tokens.size).toBe(0);
+  });
+
+  it('skips a partial input missing `decoded` even when token fields are present', async () => {
+    const storage = new Storage(new MemoryStore());
+    // value/token/token_data present but `decoded` undefined → still skipped by
+    // the OR-guard, so the token is never counted and `decoded.address` is
+    // never dereferenced.
+    const tx = spendTx([{ tx_id: 'parent', index: 0, value: 5n, token: '01', token_data: 1 }]);
+
+    const result = await processNewTx(storage, tx, {
+      rewardLock: 0,
+      nowTs: 1,
+      currentHeight: 0,
+    });
+
+    expect(result.tokens.has('01')).toBe(false);
+    expect(result.tokens.size).toBe(0);
+  });
+});
+
+describe('processSingleTx — SEPARATED-model spent-output resolution', () => {
+  // The spent-output loop resolves `input.index` (an absolute on-chain index
+  // spanning transparent then shielded outputs) via resolveSpentOutput, instead
+  // of a positional `outputs[index]` read. These cover the two index-driven
+  // branches (the transparent-delete branch needs an owned UTXO and is exercised
+  // by the integration suite).
+  const baseTx = (fields: Partial<IHistoryTx>): IHistoryTx =>
+    ({
+      tx_id: 'tx',
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      inputs: [],
+      outputs: [],
+      parents: [],
+      ...fields,
+    }) as unknown as IHistoryTx;
+
+  it('throws "Spending an unexistent output" when the input index is past all outputs', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 1 transparent output, no shielded → T + S = 1.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [{ value: 1n, token_data: 0, decoded: {} }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    // Spend absolute index 5 (>= T + S) → resolveSpentOutput returns undefined.
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 5 }],
+    } as unknown as Partial<IHistoryTx>);
+    await expect(processSingleTx(storage, spend)).rejects.toThrow('Spending an unexistent output');
+  });
+
+  it('skips a shielded input (index resolves into the shielded range) without throwing', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 0 transparent outputs, 1 shielded → absolute index 0 is shielded.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [],
+      shielded_outputs: [{ commitment: 'aa', decoded: {} }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 0, type: 'shielded' }],
+    } as unknown as Partial<IHistoryTx>);
+    // Resolves to a shielded slot → the transparent-spend loop skips it (the
+    // shielded UTXO lifecycle is the receive pipeline's), so no throw.
+    await expect(processSingleTx(storage, spend)).resolves.toBeUndefined();
+  });
+});
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {

@@ -51,14 +51,21 @@ class ShieldedOutput {
 
   surjectionProof?: Buffer;
 
-  /** The plaintext value, used for weight calculation. Not serialized on-chain. */
+  /**
+   * The wallet's locally-known plaintext value of this output. Not serialized
+   * on-chain (the value is hidden in the Pedersen commitment). MUST NOT be fed
+   * into tx-weight calculation — see `Transaction.getOutputsSum` — or it leaks
+   * the hidden amount through the public weight. `0n` for wire-format outputs
+   * whose value is not yet known (before rewind).
+   */
   value: OutputValueType;
 
   /**
-   * @param value Plaintext value (required so callers can't silently get
-   *   a 0n placeholder that would skew weight calculation). For wire-
-   *   format outputs whose value is hidden until rewind, pass `0n`
-   *   explicitly — see `ShieldedOutputsHeader.deserialize` in PR 3.
+   * @param value Plaintext value, for the wallet's local bookkeeping only.
+   *   Required so callers can't silently get a 0n placeholder where a real
+   *   value is known. It is NOT serialized on-chain and MUST NOT influence
+   *   tx weight. For wire-format outputs whose value is hidden until rewind,
+   *   pass `0n` explicitly — see `ShieldedOutputsHeader.deserialize`.
    * @param options.assetCommitment / options.surjectionProof — required
    *   for FullShielded mode; absent for AmountShielded mode. Enforced at
    *   serialize time, not construction time, so deserializers can build
