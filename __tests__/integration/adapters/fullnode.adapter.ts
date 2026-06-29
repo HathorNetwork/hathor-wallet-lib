@@ -39,6 +39,9 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
@@ -261,6 +264,44 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     });
     if (!result?.hash) {
       throw new Error('createToken: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.mintTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.meltTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
