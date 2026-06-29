@@ -86,9 +86,15 @@ describe('createShieldedOutputs', () => {
     });
     const proposals = [makeProposal(), makeProposal()];
 
-    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
-      'crypto failure on output 0'
-    );
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    // The provider error is preserved as `cause`, NOT flattened into
+    // `.message` (which would re-leak provider-supplied strings to logs).
+    expect(err).toBeInstanceOf(Error);
+    expect(err.cause?.message).toContain('crypto failure on output 0');
   });
 
   it('should propagate crypto provider error on second output', async () => {
@@ -109,9 +115,12 @@ describe('createShieldedOutputs', () => {
     });
     const proposals = [makeProposal({ value: 60n }), makeProposal({ value: 40n })];
 
-    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
-      'crypto failure on output 1'
-    );
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.cause?.message).toContain('crypto failure on output 1');
   });
 
   it('should create FullShielded outputs with surjection proofs', async () => {
@@ -161,8 +170,9 @@ describe('createShieldedOutputs validation guards', () => {
     // scanPubkey length guard.
     const proposals = [makeProposal({ scanPubkey: '02aa' /* 2 bytes */ }), makeProposal()];
 
+    // The canonical-hex guard fires first for a non-66-hex string.
     await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
-      /scanPubkey must be 33 bytes, got 2/
+      /scanPubkey must be 66 hex characters/
     );
     // Crypto provider must not have been called for the invalid input.
     expect(provider.createAmountShieldedOutput).not.toHaveBeenCalled();
@@ -224,9 +234,13 @@ describe('createShieldedOutputs validation guards', () => {
       makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
     ];
 
-    await expect(
-      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
-    ).rejects.toThrow(/no assetBlindingFactor for FullShielded output/);
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network,
+      [{ tokenUid: '00' }]
+    ).catch(e => e);
+    expect(err.cause?.message).toMatch(/no assetBlindingFactor for FullShielded output/);
   });
 
   it('rejects when provider returns FullShielded result without assetBlindingFactor (last)', async () => {
@@ -254,9 +268,13 @@ describe('createShieldedOutputs validation guards', () => {
       makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
     ];
 
-    await expect(
-      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
-    ).rejects.toThrow(/no assetBlindingFactor for FullShielded output/);
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network,
+      [{ tokenUid: '00' }]
+    ).catch(e => e);
+    expect(err.cause?.message).toMatch(/no assetBlindingFactor for FullShielded output/);
   });
 
   it('rejects when provider returns FullShielded result without assetCommitment', async () => {
@@ -280,8 +298,179 @@ describe('createShieldedOutputs validation guards', () => {
       makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, value: 40n }),
     ];
 
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network,
+      [{ tokenUid: '00' }]
+    ).catch(e => e);
+    expect(err.cause?.message).toMatch(/no assetCommitment for FullShielded output/);
+  });
+});
+
+describe('createShieldedOutputs — security hardening', () => {
+  const SECRET_TOKEN = 'ab'.repeat(32); // 32-byte FullShielded token UID (the hidden secret)
+
+  it('redacts the hidden token UID in a FullShielded build error (cause preserved)', async () => {
+    const provider = makeMockProvider({
+      createShieldedOutputWithBothBlindings: jest
+        .fn()
+        .mockRejectedValue(new Error('inner crypto failure')),
+    });
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, token: SECRET_TOKEN }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED, token: SECRET_TOKEN }),
+    ];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network,
+      [{ tokenUid: SECRET_TOKEN }]
+    ).catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).not.toContain(SECRET_TOKEN);
+    expect(err.message).toContain('<hidden>');
+    expect(err.cause).toBeInstanceOf(Error); // full inner error still available locally
+  });
+
+  it('still surfaces the (public) token for an AmountShielded build error', async () => {
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockRejectedValue(new Error('inner')),
+    });
+    const proposals = [makeProposal({ token: '00' }), makeProposal({ token: '00' })];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.message).toContain('token=00');
+  });
+
+  it.each([
+    ['zero', 0n],
+    ['negative', -1n],
+    ['exactly 2^40', 1n << 40n],
+    ['above 2^40', (1n << 40n) + 7n],
+  ])('rejects out-of-range value (%s)', async (_label, value) => {
+    const provider = makeMockProvider();
+    const proposals = [makeProposal({ value }), makeProposal()];
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
+      'value must be in [1, 2^40)'
+    );
+  });
+
+  it('accepts a value just below 2^40', async () => {
+    const provider = makeMockProvider();
+    const proposals = [makeProposal({ value: (1n << 40n) - 1n }), makeProposal({ value: 1n })];
+    await expect(createShieldedOutputs(proposals, provider, network)).resolves.toHaveLength(2);
+  });
+
+  it('rejects an oversized surjection domain before the uncatchable native abort', async () => {
+    const provider = makeMockProvider();
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+    ];
+    const inputGenerators = Array.from({ length: 257 }, () => ({ tokenUid: '00' }));
     await expect(
-      createShieldedOutputs(proposals, provider, network, [{ tokenUid: '00' }])
-    ).rejects.toThrow(/no assetCommitment for FullShielded output/);
+      createShieldedOutputs(proposals, provider, network, inputGenerators)
+    ).rejects.toThrow('surjection-proof');
+  });
+
+  it('rejects a truncated scanPubkey that still decodes to a valid byte length', async () => {
+    const provider = makeMockProvider();
+    // TEST_SCAN_PUBKEY is valid 66-hex; trailing 'zz' makes Buffer.from truncate
+    // back to the valid 33 bytes (the old length-only gate passed), but it is not
+    // canonical 66-hex → must be rejected (would otherwise be unspendable).
+    const proposals = [makeProposal({ scanPubkey: `${TEST_SCAN_PUBKEY}zz` }), makeProposal()];
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow(
+      'hex characters'
+    );
+  });
+
+  it('rejects more than MAX_SHIELDED_OUTPUTS (32) proposals', async () => {
+    const provider = makeMockProvider();
+    const proposals = Array.from({ length: 33 }, () => makeProposal());
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow('At most 32');
+  });
+
+  it.each([
+    ['too large', 2 ** 32],
+    ['negative', -1],
+    ['non-integer', 1.5],
+  ])('rejects invalid timelock (%s)', async (_label, timelock) => {
+    const provider = makeMockProvider();
+    const proposals = [makeProposal({ timelock }), makeProposal()];
+    await expect(createShieldedOutputs(proposals, provider, network)).rejects.toThrow('timelock');
+  });
+
+  it('rejects a wrong-length assetBlindingFactor in inputGenerators', async () => {
+    const provider = makeMockProvider();
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+    ];
+    await expect(
+      createShieldedOutputs(proposals, provider, network, [
+        { tokenUid: '00', assetBlindingFactor: Buffer.alloc(16) }, // 16 != 32
+      ])
+    ).rejects.toThrow('assetBlindingFactor must be 32');
+  });
+
+  it('rejects provider output with a wrong-length commitment', async () => {
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(10, 0x03), // wrong: should be 33
+        rangeProof: Buffer.alloc(100, 0x04),
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    // The provider-shape error is thrown inside the per-output try → rewrapped;
+    // the original is preserved as `cause`.
+    expect(err.cause?.message ?? err.message).toContain('commitment');
+  });
+
+  it('rejects provider output whose commitment is a right-length string (not a byte view)', async () => {
+    // A length-only guard would wave a 33-char string through; the type gate
+    // rejects anything that is not a Buffer/Uint8Array.
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: 'a'.repeat(33), // 33 chars, but a string — not a byte view
+        rangeProof: Buffer.alloc(100, 0x04),
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.cause?.message ?? err.message).toContain('commitment');
+  });
+
+  it('accepts provider output returned as Uint8Array rather than Buffer', async () => {
+    // A structurally-conformant provider (e.g. the wasm backend) may hand back
+    // Uint8Array instead of Buffer; the guard must accept it (a Buffer IS a
+    // Uint8Array), not reject it as Buffer.isBuffer would.
+    const u8 = (len: number, fill: number) => Uint8Array.from(Buffer.alloc(len, fill));
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: u8(33, 0x02),
+        commitment: u8(33, 0x03),
+        rangeProof: u8(10, 0x04),
+        blindingFactor: u8(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    await expect(createShieldedOutputs(proposals, provider, network)).resolves.toHaveLength(2);
   });
 });
