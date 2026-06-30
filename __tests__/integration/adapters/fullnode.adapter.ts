@@ -383,15 +383,12 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
-    // Cast — wallet-lib's signature is ProposedOutput[] (address only); the
-    // runtime mapper handles data outputs too (see HathorWallet.sendManyOutputsSendTransaction).
-    const result = await hWallet.sendManyOutputsTransaction(
-      outputs as unknown as Parameters<typeof hWallet.sendManyOutputsTransaction>[0],
-      {
-        pinCode: DEFAULT_PIN_CODE,
-        ...txOptions,
-      }
-    );
+    // wallet-lib's ProposedOutput[] is now a discriminated union (address |
+    // data), so AdapterOutput[] assigns directly — no cast needed.
+    const result = await hWallet.sendManyOutputsTransaction(outputs, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...txOptions,
+    });
     if (!result?.hash) {
       throw new Error('sendManyOutputsTransaction: transaction had no hash');
     }

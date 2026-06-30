@@ -30,6 +30,7 @@ import {
   processSingleTx,
   processHistory,
 } from '../../src/utils/storage';
+import * as storageUtils from '../../src/utils/storage';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
@@ -1101,5 +1102,130 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       spendXpubkey: undefined,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+});
+
+describe('apiSyncHistory — de-duplicated wallet-load-partial-update emit', () => {
+  // The for-await loop yields once per HTTP chunk. With shielded support a
+  // single address window can produce 2 chunks; if addressCount/historyCount
+  // did not change between chunks, the second emit is suppressed. We exercise
+  // the dedup against the REAL apiSyncHistory by:
+  //  - letting the real loadAddresses run as a harmless no-op: getAddressAtIndex
+  //    returns a fake (skips legacy derivation) and the scan/spend xpubs are
+  //    null (deriveShieldedAddressFromStorage short-circuits to null);
+  //  - mocking loadAddressHistory (module-internal but interceptable, same as
+  //    __tests__/new/hathorwallet.test.ts) to yield the desired chunks;
+  //  - driving addressCount/historyCount on the store to set the dedup key;
+  //  - controlling the outer while-loop via the real checkScanningPolicy by
+  //    choosing the scanning policy (SINGLE_ADDRESS => one window; GAP_LIMIT
+  //    with crafted wallet data => exactly one continuation, then stop).
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function buildConnection() {
+    return {
+      subscribeAddresses: jest.fn(),
+      emit: jest.fn(),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+  }
+
+  // Make the real loadAddresses a no-op that returns one fake address per index.
+  function stubLoadAddresses(storage: Storage) {
+    jest
+      .spyOn(storage, 'getAddressAtIndex')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation(async (i: number) => ({ base58: `addr${i}` }) as any);
+    // No shielded keys => deriveShieldedAddressFromStorage returns null.
+    jest.spyOn(storage, 'getScanXPubKey').mockResolvedValue(null);
+    jest.spyOn(storage, 'getSpendXPubKey').mockResolvedValue(null);
+  }
+
+  it('emits only ONCE when two chunks for the same window report identical counts', async () => {
+    const storage = new Storage(new MemoryStore());
+    stubLoadAddresses(storage);
+    // SINGLE_ADDRESS policy => the real checkScanningPolicy returns null, so the
+    // outer while-loop runs exactly one window.
+    jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.SINGLE_ADDRESS);
+    // TWO chunks (yields) for the SAME window.
+    jest.spyOn(storageUtils, 'loadAddressHistory').mockImplementation(async function* gen() {
+      yield false;
+      yield false;
+    });
+    // Counts are identical across both yields => dedup collapses to one emit.
+    jest.spyOn(storage.store, 'addressCount').mockResolvedValue(1);
+    jest.spyOn(storage.store, 'historyCount').mockResolvedValue(0);
+
+    const connection = buildConnection();
+    await apiSyncHistory(0, 1, storage, connection);
+
+    const partialUpdates = connection.emit.mock.calls.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any[]) => c[0] === 'wallet-load-partial-update'
+    );
+    expect(partialUpdates).toHaveLength(1);
+    expect(partialUpdates[0][1]).toEqual({ addressesFound: 1, historyLength: 0 });
+  });
+
+  it('emits a SECOND time when a later window reports a higher addressCount', async () => {
+    const storage = new Storage(new MemoryStore());
+    stubLoadAddresses(storage);
+    // GAP_LIMIT policy: drive the real checkScanningPolicy to ask for one more
+    // window (then stop). gapLimit=1, lastUsed=0, lastLoaded=0 => 0+1 > 0 =>
+    // first checkGapLimit returns a continuation; the call mutates nothing, so
+    // we bump lastLoaded between calls to terminate after the second window.
+    jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
+    jest
+      .spyOn(storage, 'getScanningPolicyData')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValue({ policy: 'gap-limit', gapLimit: 1 } as any);
+    // No shielded keys for the gap check.
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      {} as any
+    );
+    // First window: legacy lags (load=0) => continuation. Second window: legacy
+    // is now caught up (load=1 >= used+gap=1) => null => loop stops.
+    jest
+      .spyOn(storage, 'getWalletData')
+      .mockResolvedValueOnce(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        {
+          lastLoadedAddressIndex: 0,
+          lastUsedAddressIndex: 0,
+          shieldedLastLoadedAddressIndex: 0,
+          shieldedLastUsedAddressIndex: 0,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any
+      )
+      .mockResolvedValueOnce(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        {
+          lastLoadedAddressIndex: 1,
+          lastUsedAddressIndex: 0,
+          shieldedLastLoadedAddressIndex: 1,
+          shieldedLastUsedAddressIndex: 0,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any
+      );
+    // One chunk per window.
+    jest.spyOn(storageUtils, 'loadAddressHistory').mockImplementation(async function* gen() {
+      yield false;
+    });
+    // addressCount grows between windows => the dedup key changes => second emit.
+    jest.spyOn(storage.store, 'addressCount').mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+    jest.spyOn(storage.store, 'historyCount').mockResolvedValue(0);
+
+    const connection = buildConnection();
+    await apiSyncHistory(0, 1, storage, connection);
+
+    const partialUpdates = connection.emit.mock.calls.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (c: any[]) => c[0] === 'wallet-load-partial-update'
+    );
+    expect(partialUpdates).toHaveLength(2);
+    expect(partialUpdates[0][1]).toEqual({ addressesFound: 1, historyLength: 0 });
+    expect(partialUpdates[1][1]).toEqual({ addressesFound: 2, historyLength: 0 });
   });
 });

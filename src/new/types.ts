@@ -113,12 +113,10 @@ export interface UtxoOptions {
    */
   shielded?: boolean;
   /**
-   * Controls the iteration order of selected UTXOs. Defaults to `'desc'` when
-   * unset so that `max_utxos`/`max_amount` truncations keep the largest UTXOs
-   * — consumers building txs almost always want the smallest possible
-   * input count. Pass `'asc'` for low-value-first, or set to `undefined`
-   * (impossible via this option since unset defaults to desc; use
-   * selectUtxos directly for that) to get insertion order.
+   * Controls the iteration order of selected UTXOs. Defaults to `'desc'` so
+   * `max_utxos`/`max_amount` truncations keep the largest UTXOs — consumers
+   * building txs almost always want the smallest input count. Pass `'asc'` for
+   * low-value-first.
    */
   order_by_value?: 'asc' | 'desc';
 }
@@ -355,19 +353,43 @@ export interface UtxoDetails {
 }
 
 /**
- * Proposed output for a transaction
+ * A standard address output for a transaction. When `shielded` is set the
+ * value is shielded to `address`, which must then be a shielded address.
  * @property address Destination address for the output. Must be a shielded address when shielded mode is set.
  * @property value Value of the output
  * @property timelock Optional timelock for the output
  * @property token Token UID for the output
  * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or FULLY_SHIELDED)
  */
-export interface ProposedOutput {
+export interface ProposedAddressOutput {
   address: string;
   value: OutputValueType;
   timelock?: number;
   token: string;
   shielded?: ShieldedOutputMode;
+}
+
+/**
+ * A data-script output. Burns 0.01 HTR and stores `data` (a utf8 string) as
+ * the output script payload. Its value/token are fixed by the protocol, so
+ * they are not part of this shape.
+ * @property type Discriminant: always the literal `'data'`.
+ * @property data utf8 payload encoded into the data script
+ */
+export interface ProposedDataOutput {
+  type: 'data';
+  data: string;
+}
+
+/**
+ * Proposed output for a transaction: either an address output (optionally
+ * shielded) or a data-script output, discriminated by the `'data'` `type` tag.
+ */
+export type ProposedOutput = ProposedAddressOutput | ProposedDataOutput;
+
+/** Narrows a {@link ProposedOutput} to its data-script variant. */
+export function isProposedDataOutput(output: ProposedOutput): output is ProposedDataOutput {
+  return 'type' in output && output.type === 'data';
 }
 
 /**
