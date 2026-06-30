@@ -1820,11 +1820,6 @@ class HathorWallet extends EventEmitter {
           newShielded[s].blindingFactor = stored.blindingFactor;
           newShielded[s].assetBlindingFactor = stored.assetBlindingFactor;
         }
-        // Preserve a known spent_by stamp from storage if the re-delivery
-        // dropped it (the fullnode may omit it on metadata-only updates).
-        if (newShielded[s].spent_by == null && stored.spent_by != null) {
-          newShielded[s].spent_by = stored.spent_by;
-        }
       }
     }
 
