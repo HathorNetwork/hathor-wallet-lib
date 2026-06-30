@@ -351,21 +351,22 @@ describe('FeeBlueprint Template execution', () => {
     expect(nanoHeaders[0].actions[0].type).toBe(NanoContractHeaderActionType.DEPOSIT);
   });
 
-  it('should handle multiple FBT withdrawals using template', async () => {
+  it('should handle a merged FBT withdrawal using template', async () => {
+    // hathor-core forbids more than one action per token in a single
+    // nano-contract tx ("duplicate actions for token"). What used to be two
+    // separate FBT withdrawals (10n + 15n) is therefore merged into a single
+    // 25n withdrawal action.
     const ncStateBefore = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
     const fbtBalanceBefore = BigInt(ncStateBefore.balances[fbtUid].value);
-    const withdrawal1 = 10n;
-    const withdrawal2 = 15n;
-    // 2 FBT outputs = 2n fee
-    const feeAmount = 2n;
+    const withdrawal = 25n;
+    // 1 FBT output = 1n fee
+    const feeAmount = 1n;
 
     const address0 = await hWallet.getAddressAtIndex(0);
-    const address1 = await hWallet.getAddressAtIndex(1);
 
     const template = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'contract', value: contractId })
       .addSetVarAction({ name: 'addr0', value: address0 })
-      .addSetVarAction({ name: 'addr1', value: address1 })
       .addSetVarAction({ name: 'fbt', value: fbtUid })
       .addNanoMethodExecution({
         id: '{contract}',
@@ -375,14 +376,8 @@ describe('FeeBlueprint Template execution', () => {
           {
             action: 'withdrawal',
             token: '{fbt}',
-            amount: withdrawal1,
+            amount: withdrawal,
             address: '{addr0}',
-          },
-          {
-            action: 'withdrawal',
-            token: '{fbt}',
-            amount: withdrawal2,
-            address: '{addr1}',
           },
         ],
       })
@@ -393,22 +388,19 @@ describe('FeeBlueprint Template execution', () => {
     const tx = await hWallet.runTxTemplate(template, DEFAULT_PIN_CODE);
     await checkTxValid(hWallet, tx);
 
-    // Verify both FBT outputs exist
+    // Verify the single merged FBT output exists
     const fbtOutputs = tx.outputs.filter(o => o.tokenData === 1);
-    expect(fbtOutputs.length).toBe(2);
-    const amounts = fbtOutputs.map(o => o.value).sort((a, b) => Number(a - b));
-    expect(amounts).toEqual([withdrawal1, withdrawal2]);
+    expect(fbtOutputs.length).toBe(1);
+    expect(fbtOutputs[0].value).toBe(withdrawal);
 
     // Verify FeeHeader
     const feeHeader = tx.getFeeHeader();
     expect(feeHeader).not.toBeNull();
     expect(feeHeader!.entries[0].amount).toBe(feeAmount);
 
-    // Verify contract balance decreased by total withdrawal
+    // Verify contract balance decreased by the withdrawal
     const ncStateAfter = await ncApi.getNanoContractState(contractId, [], [fbtUid], []);
-    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(
-      fbtBalanceBefore - withdrawal1 - withdrawal2
-    );
+    expect(BigInt(ncStateAfter.balances[fbtUid].value)).toBe(fbtBalanceBefore - withdrawal);
   });
 
   it('should use template variables for dynamic fee token operations', async () => {

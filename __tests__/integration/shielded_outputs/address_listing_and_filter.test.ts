@@ -24,10 +24,9 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group Q: address listing + UTXO filter cross-chain plumbing', () => {
   jest.setTimeout(300_000);

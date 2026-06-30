@@ -27,10 +27,9 @@ import {
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import walletUtils from '../../../src/utils/wallet';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group M: access-data migration', () => {
   jest.setTimeout(300_000);

@@ -30,10 +30,9 @@ import {
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group U: Unshielding (shielded inputs → transparent outputs)', () => {
   jest.setTimeout(300_000);
@@ -140,9 +139,8 @@ describe('shielded outputs — Group U: Unshielding (shielded inputs → transpa
     // token balance check (`verify_token_rules` for non-HTR tokens) was summing
     // only transparent inputs vs transparent outputs + transparent fees and refused
     // the tx with "invalid surplus of <token>", even though Transaction.is_shielded()
-    // was true on the shielded input. Fixed in the latest
-    // experimental-shielded-outputs-alpha-v1 re-push: custom-token surplus/deficit
-    // must be skipped for shielded txs the same way HTR already was.
+    // was true on the shielded input. Fixed on the node side: custom-token
+    // surplus/deficit must be skipped for shielded txs the same way HTR already was.
     //
     // This differs from U.2 (mixed transparent+shielded custom-token inputs): here
     // the wallet has ZERO transparent TST available, so the UTXO selector MUST

@@ -28,12 +28,9 @@ import ShieldedOutputsHeader from '../../../src/headers/shielded_outputs';
 import Network from '../../../src/models/network';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// Increase Axios timeout for test environment — the fullnode is under load from continuous mining.
-// TIMEOUT is declared as `const` so we must cast to override it in tests.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 describe('shielded transactions', () => {
   jest.setTimeout(300_000);
@@ -1602,8 +1599,13 @@ describe('shielded transactions', () => {
     // Metadata-update check: re-deliver the wire-form (with shielded outputs
     // hidden, as the fullnode would re-send for any update event) to onNewTx
     // and verify the per-tx delta is preserved.
-    const wsLikeOutputs = (stored1!.shielded_outputs ?? []).map((so, idx) => ({
-      type: 'shielded',
+    // Re-deliver the SEPARATED wire form: transparent outputs[] kept
+    // (via the spread), confidential fields in a top-level shielded_outputs[] in
+    // wire encoding (mode present, range_proof/script/surjection_proof base64, no
+    // owned-marker fields) so normalizeShieldedOutputs hex-converts them like the
+    // real fullnode wire. The old wire inlined these into outputs[] with type:'shielded'.
+    const wsShieldedOutputs = (stored1!.shielded_outputs ?? []).map(so => ({
+      mode: so.mode,
       commitment: so.commitment,
       range_proof: Buffer.from(so.range_proof, 'hex').toString('base64'),
       script: Buffer.from(so.script, 'hex').toString('base64'),
@@ -1614,15 +1616,13 @@ describe('shielded transactions', () => {
       surjection_proof: so.surjection_proof
         ? Buffer.from(so.surjection_proof, 'hex').toString('base64')
         : undefined,
+      spent_by: so.spent_by ?? null,
     }));
     const wsLikePayload = {
       ...stored1,
-      // Strip the previously-decoded shielded entries — wire form has only
-      // the commitment-only versions.
-      outputs: wsLikeOutputs,
-      shielded_outputs: undefined,
+      shielded_outputs: wsShieldedOutputs,
       // Reset shielded input enrichment that processNewTx had added on first
-      // receipt — wire form has only {type, tx_id, index, decoded, commitment, ...}.
+      // receipt — wire form has only {type, tx_id, index, decoded}.
       inputs: stored1!.inputs.map(i => ({
         tx_id: i.tx_id,
         index: i.index,
@@ -1672,31 +1672,28 @@ describe('shielded transactions', () => {
     await waitForTxReceived(walletA, tx!.hash!);
     const fullForm = await walletA.getTx(tx!.hash!);
     expect(fullForm).not.toBeNull();
-    // Reconstruct the wire format by moving any decoded shielded entries
-    // back to outputs[] as raw shielded entries (reversing what
-    // normalizeShieldedOutputs would do server-side). Since walletA never
-    // decoded the outputs (it's the sender, not the receiver), fullForm
-    // already has them only in shielded_outputs[]. Build the wire form
-    // by inlining shielded_outputs into outputs[] with type:'shielded'.
+    // Reconstruct the SEPARATED wire form: transparent outputs[] kept
+    // (via the spread), confidential fields carried in a top-level
+    // shielded_outputs[] in wire encoding (mode present,
+    // range_proof/script/surjection_proof base64, no owned-marker fields) so
+    // normalizeShieldedOutputs hex-converts them. walletA is the sender (never
+    // decoded these), so fullForm already has them only in shielded_outputs[].
     const fullPayload = {
       ...fullForm,
-      outputs: [
-        ...fullForm!.outputs,
-        ...(fullForm!.shielded_outputs ?? []).map(so => ({
-          type: 'shielded',
-          commitment: so.commitment,
-          range_proof: Buffer.from(so.range_proof, 'hex').toString('base64'),
-          script: Buffer.from(so.script, 'hex').toString('base64'),
-          token_data: so.token_data,
-          ephemeral_pubkey: so.ephemeral_pubkey,
-          decoded: so.decoded,
-          asset_commitment: so.asset_commitment,
-          surjection_proof: so.surjection_proof
-            ? Buffer.from(so.surjection_proof, 'hex').toString('base64')
-            : undefined,
-        })),
-      ],
-      shielded_outputs: undefined,
+      shielded_outputs: (fullForm!.shielded_outputs ?? []).map(so => ({
+        mode: so.mode,
+        commitment: so.commitment,
+        range_proof: Buffer.from(so.range_proof, 'hex').toString('base64'),
+        script: Buffer.from(so.script, 'hex').toString('base64'),
+        token_data: so.token_data,
+        ephemeral_pubkey: so.ephemeral_pubkey,
+        decoded: so.decoded,
+        asset_commitment: so.asset_commitment,
+        surjection_proof: so.surjection_proof
+          ? Buffer.from(so.surjection_proof, 'hex').toString('base64')
+          : undefined,
+        spent_by: so.spent_by ?? null,
+      })),
     };
 
     // Stage 1: deliver a BARE ws msg (outputs=[], no shielded data) to

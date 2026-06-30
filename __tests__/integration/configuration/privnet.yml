@@ -8,7 +8,7 @@
 
 P2PKH_VERSION_BYTE: x49
 MULTISIG_VERSION_BYTE: x87
-NETWORK_NAME: nano-testnet-bravo
+NETWORK_NAME: privatenet
 BOOTSTRAP_DNS: []
 ENABLE_PEER_WHITELIST: false
 
@@ -40,7 +40,7 @@ NC_ON_CHAIN_BLUEPRINT_RESTRICTED: false
 AVG_TIME_BETWEEN_BLOCKS: 1
 FEE_PER_OUTPUT_V1: 1
 
-# alpha-v2 added a strict validator: if FEATURE_ACTIVATION has criteria for a
+# The fullnode has a strict validator: if FEATURE_ACTIVATION has criteria for a
 # feature, its ENABLE_X toggle must be `feature_activation` (not a static
 # `enabled` / `disabled`). The only user-controllable one is NANO_CONTRACTS
 # (INCREASE_MAX_MERKLE_PATH_LENGTH / COUNT_CHECKDATASIG_OP / FAILED_FEE_TOKENS
