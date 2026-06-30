@@ -440,11 +440,14 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
           adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 2)
         ).rejects.toThrow(/no-utxos-available|Not enough authority utxos/i);
 
-        // Destroying the only melt authority removes it.
+        // Destroying the only melt authority removes it...
         await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 1);
         expect(
           await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MELT)
         ).toHaveLength(0);
+
+        // ...and melting is no longer possible (mirrors the mint-authority case).
+        await expect(adapter.meltTokens(wallet, token.hash, 10n)).rejects.toThrow(/authority/i);
       } finally {
         await adapter.stopWallet(wallet);
       }
