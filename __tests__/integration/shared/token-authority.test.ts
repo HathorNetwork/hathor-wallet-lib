@@ -169,9 +169,10 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
 
         // 9 HTR remain after the 1 HTR deposit; minting 9000 needs a 90 HTR deposit.
         // fullnode raises "Not enough HTR tokens..."; wallet-service raises a
-        // UtxoError "No utxos available...". Match either message.
+        // UtxoError from selectUtxos ("Don't have enough utxos to fill total
+        // amount.") or "No utxos available...". Match any of them.
         await expect(adapter.mintTokens(wallet, token.hash, 9000n)).rejects.toThrow(
-          /Not enough HTR tokens|No utxos available/i
+          /Not enough HTR tokens|No utxos available|enough utxos to fill/i
         );
       } finally {
         await adapter.stopWallet(wallet);
@@ -193,9 +194,10 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
         // A FEE-token mint charges a flat 1 HTR fee regardless of amount; with 0
         // HTR available the mint is rejected. fullnode raises "Not enough HTR
         // tokens for deposit or fee: 1 required, 0 available"; wallet-service
-        // raises a UtxoError "No utxos available...". Match either message.
+        // raises a UtxoError from selectUtxos ("Don't have enough utxos to fill
+        // total amount.") or "No utxos available...". Match any of them.
         await expect(adapter.mintTokens(wallet, token.hash, 1000n)).rejects.toThrow(
-          /Not enough HTR tokens|No utxos available/i
+          /Not enough HTR tokens|No utxos available|enough utxos to fill/i
         );
       } finally {
         await adapter.stopWallet(wallet);
