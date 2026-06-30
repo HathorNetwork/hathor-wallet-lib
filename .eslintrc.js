@@ -18,6 +18,11 @@ module.exports = {
       },
       typescript: {}, // This loads <rootdir>/tsconfig.json to eslint
     },
+    // @hathor/ct-crypto-node is a native addon installed ON-DEMAND only for the
+    // shielded integration suite (see __tests__/integration/scripts/ensure-ct-crypto.js),
+    // so it is not a declared dependency and won't resolve at lint time. Whitelist
+    // it so import/no-unresolved doesn't flag the integration helper's import.
+    'import/core-modules': ['@hathor/ct-crypto-node', '@hathor/ct-crypto-node/provider'],
   },
   rules: {
     'prettier/prettier': 'error', // Add Prettier errors as ESLint errors
@@ -128,6 +133,18 @@ module.exports = {
             ],
           },
         ],
+      },
+    },
+    {
+      // Plain Node CommonJS scripts (e.g. the on-demand integration provider
+      // installer) aren't part of any tsconfig project — lint them without the
+      // type-aware project parser.
+      files: ['__tests__/integration/scripts/*.js'],
+      parserOptions: {
+        project: null,
+      },
+      rules: {
+        '@typescript-eslint/no-var-requires': 'off', // CommonJS Node script
       },
     },
   ],
