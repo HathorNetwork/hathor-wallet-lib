@@ -74,6 +74,9 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   networkName = NETWORK_NAME;
 
+  // e.g. "Not enough HTR tokens for deposit or fee: 90 required, 9 available"
+  insufficientHtrError = /^Not enough HTR tokens for deposit or fee: \d+ required, \d+ available$/;
+
   defaultPinCode = DEFAULT_PIN_CODE;
 
   defaultPassword = DEFAULT_PASSWORD;

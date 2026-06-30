@@ -80,6 +80,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   networkName = NETWORK_NAME;
 
+  // The HTR deposit/fee shortfall surfaces from selectUtxos while gathering the
+  // funding UTXOs: "Don't have enough utxos to fill total amount."
+  insufficientHtrError = /^Don't have enough utxos to fill total amount\.$/;
+
   defaultPinCode = SERVICE_PIN;
 
   defaultPassword = SERVICE_PASSWORD;

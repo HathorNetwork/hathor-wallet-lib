@@ -167,12 +167,11 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
         await adapter.injectFunds(wallet, addr0, 10n);
         const token = await adapter.createToken(wallet, 'NoFundsMint', 'NFM', 100n);
 
-        // 9 HTR remain after the 1 HTR deposit; minting 9000 needs a 90 HTR deposit.
-        // fullnode raises "Not enough HTR tokens..."; wallet-service raises a
-        // UtxoError from selectUtxos ("Don't have enough utxos to fill total
-        // amount.") or "No utxos available...". Match any of them.
+        // 9 HTR remain after the 1 HTR deposit; minting 9000 needs a 90 HTR
+        // deposit. Each facade words the shortfall differently — assert the exact
+        // message it raises (see IWalletTestAdapter.insufficientHtrError).
         await expect(adapter.mintTokens(wallet, token.hash, 9000n)).rejects.toThrow(
-          /Not enough HTR tokens|No utxos available|enough utxos to fill/i
+          adapter.insufficientHtrError
         );
       } finally {
         await adapter.stopWallet(wallet);
@@ -192,12 +191,10 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
         expect(await htrBalance(wallet)).toBe(0n);
 
         // A FEE-token mint charges a flat 1 HTR fee regardless of amount; with 0
-        // HTR available the mint is rejected. fullnode raises "Not enough HTR
-        // tokens for deposit or fee: 1 required, 0 available"; wallet-service
-        // raises a UtxoError from selectUtxos ("Don't have enough utxos to fill
-        // total amount.") or "No utxos available...". Match any of them.
+        // HTR available the mint is rejected with the same per-facade shortfall
+        // message as a deposit-token shortage (see insufficientHtrError).
         await expect(adapter.mintTokens(wallet, token.hash, 1000n)).rejects.toThrow(
-          /Not enough HTR tokens|No utxos available|enough utxos to fill/i
+          adapter.insufficientHtrError
         );
       } finally {
         await adapter.stopWallet(wallet);

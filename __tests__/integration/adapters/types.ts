@@ -94,6 +94,16 @@ export interface IWalletTestAdapter {
 
   /** Default credentials */
   defaultPinCode: string;
+
+  /**
+   * The exact error message this facade raises when a token mint/melt cannot be
+   * funded because the wallet lacks the required HTR (deposit or fee). The two
+   * facades word this differently, so cross-facade "insufficient HTR" tests
+   * assert against this per-adapter matcher rather than an alternation — a
+   * message change on either facade then fails loudly instead of silently
+   * matching a sibling pattern.
+   */
+  insufficientHtrError: RegExp;
   defaultPassword: string;
 
   /**
