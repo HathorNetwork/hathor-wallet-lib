@@ -17,6 +17,7 @@ import {
   DEFAULT_TX_VERSION,
   MAX_INPUTS,
   MAX_OUTPUTS,
+  MAX_SHIELDED_OUTPUTS,
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
@@ -33,6 +34,7 @@ import {
 } from '../utils/buffer';
 import Input from './input';
 import Output from './output';
+import ShieldedOutput from './shielded_output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
@@ -40,6 +42,7 @@ import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
 import FeeHeader from '../headers/fee';
 import HeaderParser from '../headers/parser';
+import ShieldedOutputsHeader from '../headers/shielded_outputs';
 import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
 enum txType {
@@ -70,6 +73,12 @@ type optionsType = {
  * - `helpers.createTxFromData`: creates from a standard lib data object
  * - `helpers.createTxFromHistoryObject`: creates from a tx populated by the HathorWallet history methods
  */
+
+// Shared frozen empty array returned by the `shieldedOutputs` getter when a tx
+// has no ShieldedOutputsHeader. Frozen so a stray push fails loudly at runtime
+// (JS callers) instead of being silently dropped onto a throwaway array.
+const EMPTY_SHIELDED_OUTPUTS: readonly ShieldedOutput[] = Object.freeze([]);
+
 class Transaction {
   inputs: Input[];
 
@@ -125,6 +134,29 @@ class Transaction {
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
+  }
+
+  /**
+   * Shielded outputs (SEPARATED model). READ-ONLY accessor backed by the
+   * ShieldedOutputsHeader, the single source of truth (no separate cached field
+   * to drift): returns the header's array when one is present, or a shared
+   * frozen empty array when the tx carries no shielded outputs. Never undefined
+   * — an empty result unambiguously means "no shielded outputs" (a header is
+   * only ever created with at least one output), and the always-an-array
+   * contract keeps callers like validate() and the local-history emission
+   * null-check-free.
+   *
+   * The return type is `readonly` (so a `.push` is a compile error) and the
+   * empty case is frozen (so a `.push` also throws at runtime). To ADD shielded
+   * outputs go through `transactionUtils._attachShieldedOutputsHeader` — pushing
+   * onto this getter's result is never the way to add them: with a header it
+   * would bypass that builder, and with no header it would be dropped.
+   */
+  get shieldedOutputs(): readonly ShieldedOutput[] {
+    const header = this.headers.find(h => h instanceof ShieldedOutputsHeader);
+    return header instanceof ShieldedOutputsHeader
+      ? header.shieldedOutputs
+      : EMPTY_SHIELDED_OUTPUTS;
   }
 
   /**
@@ -220,7 +252,7 @@ class Transaction {
     // Len inputs
     array.push(intToBytes(this.inputs.length, 1));
 
-    // Len outputs
+    // Len outputs (transparent only; shielded go in the ShieldedOutputsHeader)
     array.push(intToBytes(this.outputs.length, 1));
   }
 
@@ -238,6 +270,7 @@ class Transaction {
     for (const outputTx of this.outputs) {
       array.push(...outputTx.serialize());
     }
+    // Shielded outputs are serialized in the ShieldedOutputsHeader, not here.
   }
 
   /**
@@ -355,6 +388,14 @@ class Transaction {
   /**
    * Calculate the sum of outputs. Authority outputs are ignored.
    *
+   * Shielded outputs are intentionally excluded: hathor-core derives the
+   * minimum tx weight from the transparent `sum_outputs` only (see
+   * `hathor/daa.py::minimum_tx_weight` and `base_transaction.py::sum_outputs`),
+   * with shielded outputs living in a separate property that never enters the
+   * weight. Including their plaintext values here would leak the exact total
+   * shielded amount through the publicly-invertible weight formula. Keep this
+   * in lockstep with core.
+   *
    * @return {number} Sum of outputs
    * @memberof Transaction
    * @inner
@@ -415,6 +456,12 @@ class Transaction {
     if (this.outputs.length > MAX_OUTPUTS) {
       throw new MaximumNumberOutputsError(
         `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+      );
+    }
+
+    if (this.shieldedOutputs.length > MAX_SHIELDED_OUTPUTS) {
+      throw new MaximumNumberOutputsError(
+        `Transaction has ${this.shieldedOutputs.length} shielded outputs and can have at most ${MAX_SHIELDED_OUTPUTS}.`
       );
     }
   }
@@ -655,6 +702,8 @@ class Transaction {
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
     tx.getHeadersFromBytes(txBuffer, network);
+    // No shieldedOutputs hydration needed: the `shieldedOutputs` getter reads
+    // the ShieldedOutputsHeader (parsed above) directly.
 
     tx.updateHash();
 

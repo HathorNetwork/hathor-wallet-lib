@@ -174,6 +174,13 @@ export class WalletServiceStorageProxy {
   private convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
     const { tx, meta } = fullTxResponse;
 
+    // SEPARATED model: `outputs[]` is transparent-only. The dedicated
+    // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
+    // threaded through unchanged so shielded spends can still resolve their
+    // parent slots via getUtxo/resolveSpentOutput.
+    const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
+      .shielded_outputs;
+
     return {
       tx_id: tx.hash,
       signalBits: 0, // Default value since fullnode tx doesn't include signal bits
@@ -202,6 +209,7 @@ export class WalletServiceStorageProxy {
       first_block: meta.first_block,
       token_name: tx.token_name ?? undefined,
       token_symbol: tx.token_symbol ?? undefined,
+      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
     };
   }
 }

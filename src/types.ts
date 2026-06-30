@@ -10,7 +10,11 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
-import type { IShieldedCryptoProvider, IShieldedOutput } from './shielded/types';
+import type {
+  IShieldedCryptoProvider,
+  IShieldedOutput,
+  IDataShieldedOutput,
+} from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -285,6 +289,18 @@ export interface IHistoryShieldedOutput extends Omit<IShieldedOutput, 'decoded'>
   // the processNewTx decryption append so the wallet treats shielded
   // and transparent outputs identically when checking spend status.
   spent_by?: string | null;
+  // ─── owned-marker fields (SEPARATED model) ───────────────────────────────
+  // Populated IN PLACE on this entry when the wallet decrypts a shielded
+  // output it owns (received or change). The single ownership gate is
+  // `value !== undefined`: a slot with `value === undefined` is non-owned (or
+  // not yet decrypted) and is excluded from balance/credit/sign. `decoded`
+  // (address) is NOT an ownership signal — the fullnode emits a decoded
+  // address for non-owned outputs too, so keying ownership off `decoded`
+  // would let the wallet sign foreign inputs. `decoded` stays REQUIRED.
+  value?: OutputValueType;
+  token?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export enum TxHistoryProcessingStatus {
@@ -293,13 +309,28 @@ export enum TxHistoryProcessingStatus {
 }
 
 export interface IHistoryInput {
-  value: OutputValueType;
-  token_data: number;
-  script: string;
-  decoded: IHistoryOutputDecoded;
-  token: string;
+  // These fields are resolved from the spent output.
+  // For shielded inputs (spending shielded outputs), they may be absent
+  // because the spent output's value/token are hidden in commitments.
+  value?: OutputValueType;
+  token_data?: number;
+  script?: string;
+  decoded?: IHistoryOutputDecoded;
+  token?: string;
+  // Always present:
   tx_id: string;
   index: number;
+  // Set to 'shielded' when this input spends a shielded output. The
+  // fullnode emits this on the wire for inputs in `address_history` /
+  // `/transaction?id=…` responses; the wallet's sender-local insert
+  // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
+  // self-sent shielded spends carry the discriminator before any
+  // WebSocket re-delivery. Absent on transparent inputs.
+  type?: 'shielded';
+  // Shielded inputs carry their own commitment on the wire; surfaced
+  // here so the explorer's unblinding verifier (and any future
+  // re-derive flows) can read it without round-tripping the full tx.
+  commitment?: string;
 }
 
 // Obs: this will change with nano contracts
@@ -310,7 +341,7 @@ export interface IHistoryOutputDecoded {
   data?: string;
 }
 
-export interface IHistoryOutput {
+export interface ITransparentOutput {
   value: OutputValueType;
   token_data: number;
   script: string;
@@ -319,6 +350,14 @@ export interface IHistoryOutput {
   spent_by: string | null;
   selected_as_input?: boolean;
 }
+
+// SEPARATED model: `outputs[]` is transparent-only as a POST-NORMALIZE
+// internal invariant. Shielded outputs live in their own on-chain-ordered
+// `shielded_outputs[]` list (see `IHistoryShieldedOutput`); the on-chain
+// absolute index of `shielded_outputs[s]` is `outputs.length + s`. Resolve
+// "what does an input spend" via `resolveSpentOutput` (utils/transaction.ts),
+// never positional `outputs[idx]` for an idx that may be ≥ outputs.length.
+export type IHistoryOutput = ITransparentOutput;
 
 export interface IDataOutputData {
   type: 'data';
@@ -391,6 +430,20 @@ export interface IDataTx extends Partial<IDataTokenCreationTx> {
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
+  shieldedOutputs?: IDataShieldedOutput[];
+  /**
+   * 32-byte excess blinding factor for a full-unshield transaction
+   * (shielded inputs → transparent outputs only, no shielded outputs).
+   *
+   * When present, `prepareTransaction` attaches an `UnshieldBalanceHeader`
+   * (id 0x13) to the built Transaction. Mutually exclusive with
+   * `shieldedOutputs`; the fullnode rejects a tx that carries both, and
+   * rejects a tx with shielded inputs but no shielded outputs and no
+   * excess. See hathor-core
+   * `hathor/transaction/headers/unshield_balance_header.py` and
+   * Section 2.4 of the shielded outputs client guide.
+   */
+  excessBlindingFactor?: Buffer;
   weight?: number;
   nonce?: number;
   timestamp?: number;
@@ -693,6 +746,10 @@ export interface IStorage {
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  // Get the provider, or throw if it has not been configured. Confidential
+  // code paths require it; a missing provider is a setup error, not a
+  // condition to silently default around.
+  getShieldedCryptoProvider(): IShieldedCryptoProvider;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
