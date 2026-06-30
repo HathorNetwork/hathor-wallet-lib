@@ -41,7 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction, { ISendOutput } from './sendTransaction';
+import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -138,6 +138,7 @@ import {
   ISignature,
   IWalletInputInfo,
   ProposedOutput,
+  isProposedDataOutput,
   ShieldedOpening,
   ShieldedOpeningEntry,
   SendManyOutputsOptions,
@@ -1968,6 +1969,15 @@ class HathorWallet extends EventEmitter {
     // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
     const network = this.storage.config.getNetwork();
     const sendOutputs = outputs.map(o => {
+      if (isProposedDataOutput(o)) {
+        // Data outputs carry only a utf8 payload; prepareTxData fixes their
+        // value to 1n and token to HTR (the data-script burn output), so no
+        // caller-supplied value/token is threaded through here.
+        return {
+          type: OutputType.DATA as OutputType.DATA,
+          data: o.data,
+        };
+      }
       if (o.shielded) {
         const addressObj = new Address(o.address, { network });
         if (!addressObj.isShielded()) {
@@ -1985,19 +1995,6 @@ class HathorWallet extends EventEmitter {
           shieldedMode: o.shielded,
           ...(o.timelock != null ? { timelock: o.timelock } : {}),
         };
-      }
-      if ((o as unknown as { type?: string }).type === 'data') {
-        // Data outputs come in as { type: 'data', data: string|Buffer, ... }
-        // and ProposedOutput is typed for address outputs. SendTransaction's
-        // ISendDataOutput handles both Buffer and string at runtime; preserve
-        // the shape verbatim so prepareTxData routes through isDataOutput().
-        const d = o as unknown as { data: Buffer | string; value?: bigint; token?: string };
-        return {
-          type: OutputType.DATA,
-          data: d.data,
-          ...(d.value !== undefined ? { value: d.value } : {}),
-          ...(d.token !== undefined ? { token: d.token } : {}),
-        } as unknown as ISendOutput;
       }
       return {
         address: o.address,

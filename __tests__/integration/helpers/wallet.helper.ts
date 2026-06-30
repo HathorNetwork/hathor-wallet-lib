@@ -6,8 +6,11 @@
  */
 
 import { get, includes } from 'lodash';
-// `@hathor/ct-crypto-node` lives in devDependencies (not a runtime dep of
-// wallet-lib). Integration tests are the only consumer; production wallets
+// `@hathor/ct-crypto-node` is intentionally NOT declared as a dependency of
+// wallet-lib (neither dependencies nor devDependencies). The integration suite
+// installs it on demand via the `pretest_network_integration` hook
+// (scripts/ensure-ct-crypto.js; see __tests__/integration/README.md), and
+// .eslintrc whitelists it under import/core-modules. Production wallets
 // register their own provider per the post-migration contract.
 import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
@@ -121,10 +124,9 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, param);
   }
   const hWallet = new HathorWallet(walletConfig);
-  // Register the shielded crypto provider explicitly before start.
-  // wallet-lib no longer auto-detects after the @hathor/ct-crypto-provider
-  // migration; clients (including the integration suite) must wire it up.
-  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+  // wallet-lib no longer auto-registers the provider post-migration; wire it in
+  // explicitly before start (see registerShieldedProvider above).
+  registerShieldedProvider(hWallet);
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -155,7 +157,7 @@ export async function generateWalletHelperRO(options) {
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
-    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
+    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: NETWORK_NAME });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
     xpub = options.xpub;

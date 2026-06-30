@@ -54,7 +54,9 @@ export interface ISendInput {
 
 export interface ISendDataOutput {
   type: OutputType.DATA;
-  data: Buffer;
+  // utf8 payload for the data script. ScriptData encodes it via
+  // Buffer.from(data, 'utf8'), matching IDataOutputData.data (a string).
+  data: string;
   value?: number;
   token?: string;
 }
@@ -67,7 +69,7 @@ export interface ISendTokenOutput {
   // XXX: This type is ignored in the only place it is used
   // It was made optional because the ultimately the type is derived from the address at runtime,
   // see prepareTxData().
-  // Making it optional allows ProposedOutput to be passed directly as ISendOutput.
+  // Making it optional allows ProposedAddressOutput to be passed directly as ISendOutput.
   type?: OutputType.P2PKH | OutputType.P2SH;
   address: string;
   value: OutputValueType;
@@ -227,7 +229,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // Data output will always have value 1 (0.01) HTR
         txData.outputs.push({
           type: OutputType.DATA,
-          data: output.data.toString('hex'),
+          data: output.data,
           value: 1n,
           authorities: 0n,
           token: output.token,
