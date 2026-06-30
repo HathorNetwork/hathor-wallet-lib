@@ -471,7 +471,7 @@ export async function processHistory(
   //
   // No explicit per-tx input-deletion pass is needed: spent UTXOs are not
   // re-saved because processNewTx gates UTXO creation on `spent_by === null`,
-  // and alpha-v4 reliably stamps `spent_by` on both transparent and shielded
+  // and the fullnode reliably stamps `spent_by` on both transparent and shielded
   // outputs (to_json_extended), so a spend seen during the walk leaves the
   // parent's UTXO unsaved rather than resurrected.
   for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
@@ -583,6 +583,25 @@ export async function processSingleTx(
 }
 
 /**
+ * The shielded-only fields of a saved UTXO: the `shielded` marker plus the
+ * blinding factors a later unshield send needs to recompute the excess
+ * blinding factor (dropping them makes the fullnode reject the unshield tx).
+ * Shared by `creditOutput` and `processMetadataChanged` so the two save sites
+ * cannot drift.
+ */
+function shieldedUtxoSaveFields(o: { blindingFactor?: string; assetBlindingFactor?: string }): {
+  shielded: true;
+  blindingFactor?: string;
+  assetBlindingFactor?: string;
+} {
+  return {
+    shielded: true,
+    blindingFactor: o.blindingFactor,
+    assetBlindingFactor: o.assetBlindingFactor,
+  };
+}
+
+/**
  * Some metadata changed and may need processing.
  * void txs are not treated here.
  * Only idempodent changes should be processed here since this can be called multiple times.
@@ -652,9 +671,7 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
         value: so.value,
         timelock: so.decoded?.timelock || null,
         height: tx.height || null,
-        shielded: true,
-        blindingFactor: so.blindingFactor,
-        assetBlindingFactor: so.assetBlindingFactor,
+        ...shieldedUtxoSaveFields(so),
       });
     } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: onChainIndex })) {
       await storage.utxoSelectAsInput({ txId: tx.tx_id, index: onChainIndex }, false);
@@ -992,13 +1009,7 @@ export async function processNewTx(
         // Preserve the shielded marker + blinding factors so a later unshield
         // send can recompute the excess blinding factor. Dropping these makes
         // the fullnode reject the unshield tx.
-        ...(isShielded
-          ? {
-              shielded: true,
-              blindingFactor: output.blindingFactor,
-              assetBlindingFactor: output.assetBlindingFactor,
-            }
-          : {}),
+        ...(isShielded ? shieldedUtxoSaveFields(output) : {}),
       });
       if (isLocked) {
         // We will save this utxo on the index of locked utxos

@@ -50,24 +50,23 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
 }
 
 /**
- * Derive the scan private key for an address.
+ * Derive the per-address scan private key from an already-decrypted scan
+ * HDPrivateKey. The parent xpriv is unlocked once per tx by the caller; only the
+ * cheap per-address child derivation runs here.
  *
  * The scan key uses a separate account (m/44'/280'/1'/0) from legacy P2PKH (account 0').
  * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
-async function deriveScanPrivkeyForAddress(
-  storage: IStorage,
+function deriveScanChildPrivkey(
+  scanHdPrivKey: HDPrivateKey,
   addressIndex: number,
-  pinCode: string,
   logger: ILogger
-): Promise<Buffer | undefined> {
+): Buffer | undefined {
   try {
-    const xprivStr = await storage.getScanXPrivKey(pinCode);
-    const hdPrivKey = new HDPrivateKey(xprivStr);
     // deriveNonCompliantChild is required for private keys due to a historical
     // bitcore-lib serialization bug. Public key derivation (in shieldedAddress.ts)
     // uses standard deriveChild because it was always correct. Do not align these.
-    const childKey = hdPrivKey.deriveNonCompliantChild(addressIndex);
+    const childKey = scanHdPrivKey.deriveNonCompliantChild(addressIndex);
     // The native crypto provider (ECDH) needs raw 32-byte private key bytes.
     // Other wallet-lib code passes bitcore PrivateKey objects directly to bitcore
     // signing functions, but here we cross into the native ct-crypto boundary.
@@ -117,6 +116,13 @@ export async function processShieldedOutputs(
   const results: IProcessedShieldedOutput[] = [];
   const transparentCount = tx.outputs.length;
 
+  // Unlock the scan xpriv + build the HDPrivateKey ONCE per tx (lazily, on the
+  // first owned shielded output). The PBKDF2 unlock + HD construction are the
+  // expensive part; only the cheap per-address child derivation runs per output.
+  // Every wallet reloads its history from block 0, so this hot path walks every
+  // shielded tx on first sync.
+  let scanHdPrivKey: HDPrivateKey | undefined;
+
   for (const [sIndex, shieldedOutput] of shieldedOutputs.entries()) {
     const absoluteIndex = transparentCount + sIndex;
     const address = shieldedOutput.decoded?.address;
@@ -126,11 +132,18 @@ export async function processShieldedOutputs(
     const addressInfo = await storage.getAddressInfo(address);
     if (!addressInfo) continue;
 
-    // Derive the scan private key for this address (ECDH)
-    const privkey = await deriveScanPrivkeyForAddress(
-      storage,
+    if (!scanHdPrivKey) {
+      try {
+        scanHdPrivKey = new HDPrivateKey(await storage.getScanXPrivKey(pinCode));
+      } catch (e) {
+        storage.logger.warn('Failed to unlock scan xpriv for shielded outputs', e);
+        continue;
+      }
+    }
+    // Derive this address's scan private key (ECDH) from the cached HD key
+    const privkey = deriveScanChildPrivkey(
+      scanHdPrivKey,
       addressInfo.bip32AddressIndex,
-      pinCode,
       storage.logger
     );
     if (!privkey) continue;

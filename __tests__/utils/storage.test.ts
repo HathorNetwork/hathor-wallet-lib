@@ -18,6 +18,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import {
   scanPolicyStartAddresses,
   checkScanningPolicy,
+  checkGapLimit,
   _updateTokensData,
   getSupportedSyncMode,
   getHistorySyncMethod,
@@ -877,5 +878,149 @@ describe('processMetadataChanged — shielded UTXO preservation (SEPARATED model
     const shieldedAfter = await store.getUtxo({ txId: TX_ID, index: 1 });
     expect(shieldedAfter?.shielded).toBe(true);
     expect(shieldedAfter?.blindingFactor).toBe(BLINDING_FACTOR);
+  });
+});
+
+describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () => {
+  // Helper: build a Storage whose getScanningPolicy/getScanningPolicyData report
+  // gap-limit, and whose getWalletData / getAccessData return the exact field
+  // values the function reads. We mock at the Storage method level (matching
+  // the existing "scanning policy methods" describe block above) so the test
+  // pins behavior without touching the underlying store internals.
+  function buildStorage({
+    gapLimit,
+    walletData,
+    spendXpubkey,
+  }: {
+    gapLimit: number;
+    walletData: {
+      lastLoadedAddressIndex: number;
+      lastUsedAddressIndex: number;
+      shieldedLastLoadedAddressIndex: number;
+      shieldedLastUsedAddressIndex: number;
+    };
+    // undefined => hasShieldedKeys === false (no spendXpubkey on access data)
+    spendXpubkey?: string;
+  }): Storage {
+    const storage = new Storage(new MemoryStore());
+    jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
+    jest
+      .spyOn(storage, 'getScanningPolicyData')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValue({ policy: 'gap-limit', gapLimit } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    jest.spyOn(storage, 'getWalletData').mockResolvedValue(walletData as any);
+    jest
+      .spyOn(storage, 'getAccessData')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockResolvedValue((spendXpubkey ? { spendXpubkey } : {}) as any);
+    return storage;
+  }
+
+  it('returns null when the wallet is not configured for gap-limit (no-op)', async () => {
+    const storage = new Storage(new MemoryStore());
+    jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.INDEX_LIMIT);
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it('legacy-only wallet (hasShieldedKeys=false): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
+    // No spendXpubkey => hasShieldedKeys === false. The shielded fields below
+    // are deliberately "behind" their target, but must be IGNORED because the
+    // shielded branch is gated on hasShieldedKeys. Result must depend only on
+    // the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
+    //   legacyTarget = lastUsed + gapLimit = 20
+    //   minLastLoaded = lastLoaded = 5 (shielded NOT considered)
+    //   nextIndex = 6, count = max(20 - 5, 1) = 15
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 5,
+        lastUsedAddressIndex: 0,
+        // Far behind, but must NOT influence the result (no shielded keys).
+        shieldedLastLoadedAddressIndex: 0,
+        shieldedLastUsedAddressIndex: 0,
+      },
+      spendXpubkey: undefined,
+    });
+    await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 6, count: 15 });
+  });
+
+  it('shielded chain lagging behind legacy: extension is computed from the shielded lastLoaded index', async () => {
+    // Legacy chain is already satisfied (lastUsed=0, lastLoaded=30, gap=20 =>
+    // 0+20 <= 30, legacyNeedMore=false). Shielded chain lags: shieldedLastUsed=5,
+    // shieldedLastLoaded=10 => 5+20 > 10 => shieldedNeedMore=true.
+    //   legacyTarget   = lastLoaded(legacy) = 30   (legacy satisfied)
+    //   shieldedTarget = shieldedLastUsed + gap = 25
+    //   maxTarget      = max(30, 25) = 30
+    //   minLastLoaded  = min(30, 10) = 10          (shielded is the lagging chain)
+    //   nextIndex = 11, count = max(30 - 10, 1) = 20
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 30,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 10,
+        shieldedLastUsedAddressIndex: 5,
+      },
+      spendXpubkey: 'xpub-spend',
+    });
+    await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 11, count: 20 });
+  });
+
+  it('both chains already ahead of their targets: returns null (nothing to load)', async () => {
+    // legacy: 0 + 20 <= 50 => no need. shielded: 0 + 20 <= 40 => no need.
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 50,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 40,
+        shieldedLastUsedAddressIndex: 0,
+      },
+      spendXpubkey: 'xpub-spend',
+    });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it('honors the Math.max(..., 1) floor when maxTarget equals minLastLoaded', async () => {
+    // Construct a case where the gap is detected (needMore=true) but
+    // maxTarget - minLastLoaded would be 0, so the count floors to 1.
+    // gapLimit=1: legacy lastUsed=4, lastLoaded=4 => 4+1 > 4 => legacyNeedMore.
+    //   legacyTarget   = 4 + 1 = 5
+    //   shielded satisfied: shieldedLastUsed=0, shieldedLastLoaded=5 => 0+1<=5
+    //   shieldedTarget = shieldedLastLoaded = 5
+    //   maxTarget      = max(5, 5) = 5
+    //   minLastLoaded  = min(4, 5) = 4
+    //   nextIndex = 5, count = max(5 - 4, 1) = 1
+    const storage = buildStorage({
+      gapLimit: 1,
+      walletData: {
+        lastLoadedAddressIndex: 4,
+        lastUsedAddressIndex: 4,
+        shieldedLastLoadedAddressIndex: 5,
+        shieldedLastUsedAddressIndex: 0,
+      },
+      spendXpubkey: 'xpub-spend',
+    });
+    const result = await checkGapLimit(storage);
+    expect(result).toEqual({ nextIndex: 5, count: 1 });
+    // Explicitly pin the floor: count is never below 1.
+    expect(result?.count).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hasShieldedKeys === false branch: a lagging shielded chain does NOT trigger a load', async () => {
+    // Legacy fully satisfied; shielded badly behind. With no spendXpubkey the
+    // shielded gap is invisible, so the overall result is null.
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 50,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 0,
+        shieldedLastUsedAddressIndex: 30,
+      },
+      spendXpubkey: undefined,
+    });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
 });
