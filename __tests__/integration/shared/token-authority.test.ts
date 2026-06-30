@@ -219,6 +219,36 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
   });
 
   describe('delegateAuthority', () => {
+    it('should reject delegating an authority the wallet does not hold', async () => {
+      const { wallet } = await adapter.createWallet();
+      try {
+        // A real-shaped token UID the wallet holds no authority for.
+        const unheldToken = 'cafe'.repeat(16); // 64-char hex
+        const destAddr = (await wallet.getAddressAtIndex(1))!;
+
+        // The two facades raise different concrete classes for "no authority to
+        // delegate": fullnode throws a plain Error (its message is an opaque
+        // "[object Object]" from a known cast in prepareDelegateAuthorityData),
+        // wallet-service throws UtxoError. Both extend Error, so capture the
+        // rejection and assert by instanceof plus the postcondition below,
+        // rather than matching a message that differs per facade.
+        const err = await adapter
+          .delegateAuthority(wallet, unheldToken, AuthorityType.MINT, destAddr)
+          .then(
+            () => undefined,
+            (e: unknown) => e
+          );
+        expect(err).toBeInstanceOf(Error);
+
+        // The rejected delegation routed no authority to the destination.
+        expect(
+          await adapter.getAuthorityUtxos(wallet, unheldToken, AuthorityType.MINT)
+        ).toHaveLength(0);
+      } finally {
+        await adapter.stopWallet(wallet);
+      }
+    });
+
     it('should delegate mint and melt authorities to another wallet, keeping one', async () => {
       const { wallet: w1 } = await adapter.createWallet();
       const { wallet: w2 } = await adapter.createWallet();
