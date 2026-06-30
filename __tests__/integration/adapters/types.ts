@@ -502,6 +502,13 @@ export interface MintTokensAdapterOptions {
   address?: string;
   /** Address that receives the HTR change (default: next wallet address). */
   changeAddress?: string;
+  /**
+   * If provided, the adapter also waits until this wallet's index reflects the
+   * mint, so cross-wallet tests can read a mint authority routed to one of its
+   * addresses without hitting the wallet-service index lag. Not forwarded to the
+   * facade `mintTokens()` call.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**

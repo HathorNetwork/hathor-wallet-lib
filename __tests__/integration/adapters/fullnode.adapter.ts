@@ -380,14 +380,18 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     options?: MintTokensAdapterOptions
   ): Promise<MintTokensResult> {
     const hWallet = this.concrete(wallet);
+    const { recvWallet, ...mintOptions } = options ?? {};
     const result = await hWallet.mintTokens(tokenUid, amount, {
       pinCode: DEFAULT_PIN_CODE,
-      ...options,
+      ...mintOptions,
     });
     if (!result?.hash) {
       throw new Error('mintTokens: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
+    if (recvWallet) {
+      await waitForTxReceived(this.concrete(recvWallet), result.hash);
+    }
     await waitUntilNextTimestamp(hWallet, result.hash);
     return { hash: result.hash, transaction: result };
   }

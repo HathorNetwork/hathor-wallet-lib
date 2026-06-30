@@ -443,6 +443,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     options?: MintTokensAdapterOptions
   ): Promise<MintTokensResult> {
     const sw = this.concrete(wallet);
+    const { recvWallet, ...mintOptions } = options ?? {};
 
     // Capture the current token balance so we can wait for the UTXO/balance
     // index to reflect the mint. Minting increases the token balance by `amount`
@@ -453,7 +454,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     const expectedUnlocked = balanceBefore.balance.unlocked + amount;
 
     const result = await sw.mintTokens(tokenUid, amount, {
-      ...options,
+      ...mintOptions,
       pinCode: SERVICE_PIN,
     });
     if (!result?.hash) {
@@ -464,6 +465,20 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       const [balance] = await sw.getBalance(tokenUid);
       return balance.balance.unlocked >= expectedUnlocked;
     }, `token balance index reflects mint ${result.hash}`);
+
+    // When a recipient wallet is provided (mint authority routed to one of its
+    // addresses), also wait for ITS index to surface the new authority UTXO.
+    if (recvWallet) {
+      const recv = this.concrete(recvWallet);
+      await pollForTx(recv, result.hash);
+      await pollUntilCondition(async () => {
+        const utxos = await recv.getAuthorityUtxo(tokenUid, AuthorityType.MINT, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === result.hash);
+      }, `recipient mint authority index reflects mint ${result.hash}`);
+    }
 
     return { hash: result.hash, transaction: result };
   }

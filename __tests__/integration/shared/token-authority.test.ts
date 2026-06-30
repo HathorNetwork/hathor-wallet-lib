@@ -134,14 +134,26 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
         await adapter.mintTokens(wallet, token.hash, 100n, {
           mintAuthorityAddress: externalAddr,
           allowExternalMintAuthorityAddress: true,
+          recvWallet: external,
         });
 
         // Tokens were minted to the source wallet...
         expect(await tokenBalance(wallet, token.hash)).toBe(200n);
 
-        // ...but its only mint authority was routed out to the external address.
+        // ...its only mint authority left the source wallet...
         const remaining = await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MINT);
         expect(remaining).toHaveLength(0);
+
+        // ...and landed at the external wallet's target address.
+        const atExternal = await adapter.getAuthorityUtxos(
+          external,
+          token.hash,
+          AuthorityType.MINT,
+          { filter_address: externalAddr }
+        );
+        expect(atExternal).toHaveLength(1);
+        expect(atExternal[0].address).toBe(externalAddr);
+        expect(atExternal[0].authorities).toBe(TOKEN_MINT_MASK);
       } finally {
         await adapter.stopWallet(wallet);
         await adapter.stopWallet(external);
