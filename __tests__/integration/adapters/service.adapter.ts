@@ -400,12 +400,20 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     const sw = this.concrete(wallet);
     const createAnother = options?.createAnother ?? false;
 
-    // Capture the source authority count: with createAnother=false the source
-    // keeps NOTHING from the delegation tx, so its available count drops by one
-    // — that is the only settle signal available on the source for that case.
-    const sourceCountBefore = (
-      await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })
-    ).length;
+    // Snapshot the available authority UTXOs before delegating. A delegation
+    // ALWAYS spends one of them as input, so once the index settles at least one
+    // of these keys is gone — a settle signal that holds regardless of
+    // createAnother or whether the destination is this wallet or another one.
+    // (A count- or txId-based check does not: a within-wallet delegation moves
+    // the authority to a new address without changing the count, and a
+    // cross-wallet createAnother=false delegation leaves no source UTXO carrying
+    // the delegation txId.)
+    const authorityKey = (u: { txId: string; index: number }) => `${u.txId}:${u.index}`;
+    const beforeKeys = new Set(
+      (await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
+        authorityKey
+      )
+    );
 
     const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {
       pinCode: SERVICE_PIN,
@@ -417,22 +425,16 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
     await pollForTx(sw, result.hash);
 
-    // The wallet service UTXO index may lag behind tx visibility. Poll until the
-    // source index reflects the delegation. The signal depends on createAnother:
-    //   - true:  the delegation tx mints a fresh authority back to the source, so
-    //            a source UTXO with txId === delegationTxId appears;
-    //   - false: the source's authority is consumed and not replaced, so the
-    //            available authority count drops (no source UTXO carries the
-    //            delegation txId — waiting for one would hang).
+    // The wallet service UTXO index may lag behind tx visibility. Wait until the
+    // spent authority input is no longer in the available set.
     const delegationTxId = result.hash;
     await pollUntilCondition(async () => {
-      const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
-        many: true,
-        only_available_utxos: true,
-      });
-      return createAnother
-        ? utxos.some(u => u.txId === delegationTxId)
-        : utxos.length <= sourceCountBefore - 1;
+      const curKeys = new Set(
+        (await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
+          authorityKey
+        )
+      );
+      return [...beforeKeys].some(k => !curKeys.has(k));
     }, `authority UTXO index reflects delegation ${delegationTxId}`);
 
     // When a destination wallet is provided, also wait for ITS index to reflect
