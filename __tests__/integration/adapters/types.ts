@@ -275,6 +275,32 @@ export interface IWalletTestAdapter {
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;
+
+  // --- Token minting ---
+
+  /**
+   * Mints additional units of an existing token and waits for confirmation.
+   * Both facades support `mintTokens()`.
+   */
+  mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintTokensResult>;
+
+  // --- Authority destruction ---
+
+  /**
+   * Destroys `count` authority UTXOs (mint or melt) of a token and waits for
+   * confirmation. Both facades support `destroyAuthority()`.
+   */
+  destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult>;
 }
 
 /**
@@ -429,11 +455,53 @@ export interface GetAuthorityUtxosOptions {
  */
 export interface DelegateAuthorityAdapterOptions {
   createAnother?: boolean;
+  /**
+   * If provided, the adapter also waits until the destination wallet's index
+   * reflects the delegation, so cross-wallet tests can read the recipient's
+   * authority UTXOs without hitting the wallet-service index lag.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**
  * Result of delegating authority.
  */
 export interface DelegateAuthorityResult {
+  hash: string;
+}
+
+/**
+ * Options for minting tokens via the adapter.
+ *
+ * Only the fields exercised by the shared suite and supported by BOTH facades
+ * are exposed. The fullnode facade additionally accepts `data` / `unshiftData`
+ * (data-script outputs), but the wallet-service `mintTokens()` does not support
+ * them — those are covered in `fullnode-specific/mint-tokens.test.ts`.
+ */
+export interface MintTokensAdapterOptions {
+  /** Create a new mint authority alongside the minted tokens (facade default: true). */
+  createAnotherMint?: boolean;
+  /** Address that receives the new mint authority (default: an address of the wallet). */
+  mintAuthorityAddress?: string;
+  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMintAuthorityAddress?: boolean;
+  /** Address that receives the minted tokens (default: next wallet address). */
+  address?: string;
+  /** Address that receives the HTR change (default: next wallet address). */
+  changeAddress?: string;
+}
+
+/**
+ * Result of minting tokens.
+ */
+export interface MintTokensResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Result of destroying authority UTXOs.
+ */
+export interface DestroyAuthorityResult {
   hash: string;
 }

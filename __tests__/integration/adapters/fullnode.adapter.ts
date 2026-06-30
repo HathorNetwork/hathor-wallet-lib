@@ -49,6 +49,9 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  MintTokensAdapterOptions,
+  MintTokensResult,
+  DestroyAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
@@ -359,6 +362,46 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     });
     if (!result?.hash) {
       throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    if (options?.recvWallet) {
+      await waitForTxReceived(this.concrete(options.recvWallet), result.hash);
+    }
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintTokensResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.mintTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.destroyAuthority(tokenUid, type, count, {
+      pinCode: DEFAULT_PIN_CODE,
+    });
+    if (!result?.hash) {
+      throw new Error('destroyAuthority: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
