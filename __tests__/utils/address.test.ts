@@ -5,18 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPublicKey } from 'bitcore-lib';
+import { HDPublicKey, HDPrivateKey } from 'bitcore-lib';
 import Network from '../../src/models/network';
+import Address from '../../src/models/address';
+import P2PKH from '../../src/models/p2pkh';
 import { MemoryStore, Storage } from '../../src/storage';
 import { WalletType } from '../../src/types';
 import {
   getAddressType,
+  createOutputScriptFromAddress,
   deriveAddressFromDataP2SH,
   deriveAddressFromXPubP2PKH,
   deriveAddressP2PKH,
   deriveAddressP2SH,
   getAddressFromPubkey,
 } from '../../src/utils/address';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- These variables also serve as a documentation, even if unused */
 const seed =
@@ -99,6 +103,33 @@ test('Get address type', () => {
   expect(getAddressType(WALLET_DATA.multisig.addresses[3], testnet)).toEqual('p2sh');
 });
 
+test('getAddressType throws for shielded addresses with actionable guidance', () => {
+  const testnet = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x07), 'testnet');
+  const scanPubkey = root.deriveChild("m/0'/0").publicKey.toBuffer();
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey.toBuffer();
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnet);
+
+  expect(() => getAddressType(shieldedAddr, testnet)).toThrow(
+    /cannot be used directly as output script type.*getSpendAddress/s
+  );
+});
+
+test('createOutputScriptFromAddress builds the spend-P2PKH script for shielded addresses', () => {
+  const testnet = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x07), 'testnet');
+  const scanPubkey = root.deriveChild("m/0'/0").publicKey.toBuffer();
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey.toBuffer();
+  const shieldedAddr = encodeShieldedAddress(scanPubkey, spendPubkey, testnet);
+
+  const script = createOutputScriptFromAddress(shieldedAddr, testnet);
+  // Must equal the P2PKH script of the spend-derived address — the shielded
+  // address itself has no script form.
+  const spendAddress = new Address(shieldedAddr, { network: testnet }).getSpendAddress();
+  const expected = new P2PKH(spendAddress).createScript();
+  expect(script).toStrictEqual(expected);
+});
+
 test('Derive p2pkh address from xpub', () => {
   const xpub = new HDPublicKey(xpubkey);
   for (let i = 0; i < 5; i++) {
@@ -174,4 +205,79 @@ test('Get address from pubkey', async () => {
   expect(address.getType()).toBe(WalletType.P2PKH);
   expect(address.base58).toBe(base58);
   expect(address.validateAddress()).toBeTruthy();
+});
+
+test('deriveShieldedAddressFromStorage returns null when shielded keys unavailable', async () => {
+  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+  const { encryptData } = await import('../../src/utils/crypto');
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  // Provide minimal access data WITHOUT shielded keys (legacy-only wallet)
+  const xpriv = new HDPrivateKey();
+  await store.saveAccessData({
+    xpubkey: xpriv.xpubkey,
+    mainKey: encryptData(xpriv.xprivkey, '123'),
+    walletType: 'p2pkh' as const,
+    walletFlags: 0,
+    // No scanXpubkey, no spendXpubkey — shielded keys absent
+  });
+
+  const result = await deriveShieldedAddressFromStorage(0, storage);
+  expect(result).toBeNull();
+});
+
+test('deriveShieldedAddressFromStorage returns paired shielded + spend records', async () => {
+  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+  const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
+  const { encryptData } = await import('../../src/utils/crypto');
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+  const networkName = storage.config.getNetwork().name;
+
+  // Independent scan and spend public chains (the wallet derives both from
+  // hardened accounts; for this test any two xpubs exercise the same path).
+  const xpriv = new HDPrivateKey();
+  const scanXpubkey = new HDPrivateKey().xpubkey;
+  const spendXpubkey = new HDPrivateKey().xpubkey;
+  await store.saveAccessData({
+    xpubkey: xpriv.xpubkey,
+    mainKey: encryptData(xpriv.xprivkey, '123'),
+    walletType: 'p2pkh' as const,
+    walletFlags: 0,
+    scanXpubkey,
+    spendXpubkey,
+  });
+
+  const index = 5;
+  const result = await deriveShieldedAddressFromStorage(index, storage);
+  expect(result).not.toBeNull();
+
+  // Independent oracle: the same inputs through the pure derivation helper.
+  const expected = deriveShieldedAddress(scanXpubkey, spendXpubkey, index, networkName);
+
+  // User-facing shielded receive record (71-byte encoded form). Its
+  // ctMappingAddress links to the paired on-chain spend P2PKH.
+  expect(result!.shieldedAddress).toEqual({
+    base58: expected.base58,
+    bip32AddressIndex: index,
+    publicKey: expected.scanPubkey,
+    addressType: 'shielded',
+    ctMappingAddress: expected.spendAddress,
+  });
+
+  // Internal on-chain spend-derived P2PKH record (HASH160(spend_pubkey)). Its
+  // ctMappingAddress links back to the paired user-facing shielded address.
+  expect(result!.spendAddress).toEqual({
+    base58: expected.spendAddress,
+    bip32AddressIndex: index,
+    publicKey: expected.spendPubkey,
+    addressType: 'shielded-spend',
+    ctMappingAddress: expected.base58,
+  });
+
+  // Both records share the BIP32 index; the spend address is the on-chain
+  // P2PKH while the shielded address is the user-facing encoded form.
+  expect(result!.shieldedAddress.base58).not.toEqual(result!.spendAddress.base58);
 });

@@ -8,11 +8,24 @@
 /**
  * Service-facade start() tests.
  *
- * Defines service-specific tests that rely on {@link HathorWalletServiceWallet}-only
- * APIs (e.g. `isWsEnabled()`) or use mocks that don't belong in integration-level
- * shared tests.
+ * Shared start() tests live in `shared/start.test.ts` and run against both
+ * facades via `describe.each(adapters)`.
  *
- * Shared start() tests live in `shared/start.test.ts` and run via `describe.each`.
+ * Why these tests are NOT shared:
+ *   1. `isWsEnabled()` is exposed only on `HathorWalletServiceWallet` — the
+ *      fullnode-facade `HathorWallet` has no concept of an admin-toggled
+ *      websocket, so the assertion has no shared equivalent.
+ *   2. xpriv-based start, readonly (xpub) wallet rejection, and
+ *      `getAccessData` error-handling all exercise paths that flow through
+ *      the wallet-service auth derivation
+ *      (`WALLET_SERVICE_AUTH_DERIVATION_PATH`) and the service-side
+ *      `Storage` instance. The fullnode facade's start uses different
+ *      derivation semantics; sharing the assertions would force adapter
+ *      methods that paper over a real protocol asymmetry.
+ *   3. Several tests rely on `Storage` mocking and `decryptData` /
+ *      `deriveXpubFromSeed` introspection that operates on the service
+ *      facade's internals — fine here, but unsuitable for a shared
+ *      integration suite that should treat both facades as black boxes.
  */
 
 import Mnemonic from 'bitcore-mnemonic';
@@ -120,6 +133,24 @@ describe('[Service-specific] start', () => {
     const currentAddress = wallet.getCurrentAddress();
     expect(currentAddress.index).toBeDefined();
     expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+  });
+
+  it('should complete start() on a brand-new wallet that goes through creating→ready', async () => {
+    // This test exercises the full auth flow: createWallet returns 'creating',
+    // then pollForWalletStatus polls until 'ready'. Auth tokens are obtained
+    // on-demand by the axios interceptor during each polling call. This is
+    // the exact path where the old fire-and-forget pattern raced.
+    ({ wallet } = buildWalletInstance());
+
+    await wallet.start({ pinCode, password });
+
+    expect(wallet.isReady()).toBe(true);
+    expect(wallet.getAuthToken()).not.toBeNull();
+
+    // Verify the wallet is functional by checking it has an address
+    const currentAddress = wallet.getCurrentAddress();
+    expect(currentAddress.address).toBeDefined();
+    expect(currentAddress.index).toBeDefined();
   });
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {

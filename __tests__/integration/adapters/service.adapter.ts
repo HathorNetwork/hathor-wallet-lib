@@ -7,6 +7,7 @@
  */
 
 import { HathorWalletServiceWallet } from '../../../src';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import config from '../../../src/config';
 import { WalletTracker } from '../utils/wallet-tracker.util';
 import type Transaction from '../../../src/models/transaction';
@@ -16,20 +17,31 @@ import {
   pollForTx,
   pollForTokenDetails,
   pollUntilCondition,
+  retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
+import type { IHistoryTx } from '../../../src/types';
 import { AuthorityType } from '../../../src/types';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
   IWalletTestAdapter,
   WalletCapabilities,
   CreateWalletOptions,
   CreateWalletResult,
+  SendTransactionOptions,
+  SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  TokenDetailsResult,
+  GetUtxosAdapterOptions,
+  GetUtxosResult,
+  AdapterUtxo,
+  AdapterOutput,
+  SendManyOutputsAdapterOptions,
   AuthorityUtxoResult,
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
@@ -42,6 +54,13 @@ const SERVICE_PASSWORD = 'testpass';
 
 /** Stop options shared between {@link stopWallet} and the {@link WalletTracker}. */
 const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true };
+
+/**
+ * Like {@link CreateWalletResult}, but with `wallet` narrowed to the concrete
+ * {@link HathorWalletServiceWallet}. This adapter only ever builds service
+ * wallets, so service-specific tests can read `created.wallet` with no cast.
+ */
+type ServiceCreateWalletResult = CreateWalletResult & { wallet: HathorWalletServiceWallet };
 
 /**
  * Adapter for the wallet-service facade ({@link HathorWalletServiceWallet}).
@@ -112,7 +131,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     await GenesisWalletServiceHelper.stop();
   }
 
-  async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+  async createWallet(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // The wallet-service backend must know about the wallet before startReadOnly() can
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
@@ -135,7 +154,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
+  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
     const result = buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
@@ -150,7 +169,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
 
     return {
-      wallet: result.wallet as FuzzyWalletType,
+      wallet: result.wallet,
       storage: result.storage,
       words: result.words,
       addresses: result.addresses,
@@ -171,10 +190,13 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
     // Pass options through directly — do NOT fill defaults when the caller
     // explicitly passes undefined (used by validation tests).
-    await sw.start({
-      pinCode: options?.pinCode,
-      password: options?.password,
-    });
+    // Wrap in retryOnTransientWalletInit so a freshly-spawned wallet-service
+    // backend rejecting `POST wallet/init` doesn't fail the suite's beforeAll
+    // (Jest's retryTimes only re-runs it() bodies, not setup hooks).
+    await retryOnTransientWalletInit(
+      () => sw.start({ pinCode: options?.pinCode, password: options?.password }),
+      'ServiceWalletTestAdapter.startWallet'
+    );
   }
 
   async waitForReady(_wallet: FuzzyWalletType): Promise<void> {
@@ -216,12 +238,63 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return fundTx.hash;
   }
 
-  async waitForTx(wallet: FuzzyWalletType, txId: string): Promise<void> {
+  async waitForTx(
+    wallet: FuzzyWalletType,
+    txId: string,
+    recvWallet?: FuzzyWalletType
+  ): Promise<void> {
     await pollForTx(this.concrete(wallet), txId);
+    if (recvWallet) {
+      await pollForTx(this.concrete(recvWallet), txId);
+    }
   }
 
   getPrecalculatedWallet(): PrecalculatedWalletData {
     return precalculationHelpers.test!.getPrecalculatedWallet();
+  }
+
+  async sendTransaction(
+    wallet: FuzzyWalletType,
+    address: string,
+    amount: bigint,
+    options?: SendTransactionOptions
+  ): Promise<SendTransactionResult> {
+    const sw = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
+    const result = await sw.sendTransaction(address, amount, {
+      pinCode: SERVICE_PIN,
+      ...txOptions,
+    });
+    if (!result.hash) {
+      throw new Error('sendTransaction: transaction had no hash');
+    }
+    await this.waitForTx(wallet, result.hash, recvWallet);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getTx(wallet: FuzzyWalletType, txId: string) {
+    // HathorWalletServiceWallet.getTx() is not implemented — use fullnode API
+    // and map the response to IHistoryTx format (adding token UID to each output/input)
+    const fullNodeResponse = await this.concrete(wallet).getFullTxById(txId);
+    const { tx } = fullNodeResponse;
+    const tokenUids = tx.tokens.map(t => t.uid);
+    const resolveToken = (tokenData: number) =>
+      tokenData === 0 ? NATIVE_TOKEN_UID : tokenUids[tokenData - 1];
+    return {
+      tx_id: tx.hash,
+      version: tx.version,
+      timestamp: tx.timestamp,
+      inputs: tx.inputs.map(i => ({ ...i, token: resolveToken(i.token_data) })),
+      outputs: tx.outputs.map(o => ({ ...o, token: resolveToken(o.token_data) })),
+      parents: tx.parents,
+      tokens: tx.tokens,
+      weight: tx.weight,
+      nonce: Number(tx.nonce),
+    } as unknown as IHistoryTx;
+  }
+
+  async getFullTxById(wallet: FuzzyWalletType, txId: string): Promise<FullNodeTxResponse> {
+    return this.concrete(wallet).getFullTxById(txId);
   }
 
   async createToken(
@@ -232,16 +305,64 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult> {
     const sw = this.concrete(wallet);
-    const response = await sw.createNewToken(name, symbol, amount, {
+    const result = await sw.createNewToken(name, symbol, amount, {
       ...options,
       pinCode: SERVICE_PIN,
     });
-    if (!response.hash) {
+    if (!result?.hash) {
       throw new Error('createToken: transaction had no hash');
     }
-    await pollForTx(sw, response.hash);
-    await pollForTokenDetails(sw, response.hash);
-    return { hash: response.hash };
+    await pollForTx(sw, result.hash);
+    await pollForTokenDetails(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
+    return this.concrete(wallet).getTokenDetails(tokenUid);
+  }
+
+  async getUtxos(
+    wallet: FuzzyWalletType,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosResult> {
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxos({
+      token: tokenId,
+      filter_address: options?.address,
+    });
+
+    const utxos: AdapterUtxo[] = result.utxos.map(u => ({
+      txId: u.tx_id,
+      index: u.index,
+      value: u.amount,
+      address: u.address,
+      tokenId,
+      locked: u.locked,
+    }));
+
+    return {
+      total_amount_available: result.total_amount_available,
+      total_utxos_available: result.total_utxos_available,
+      utxos,
+    };
+  }
+
+  async sendManyOutputsTransaction(
+    wallet: FuzzyWalletType,
+    outputs: AdapterOutput[],
+    options?: SendManyOutputsAdapterOptions
+  ): Promise<SendTransactionResult> {
+    const sw = this.concrete(wallet);
+    const { recvWallet, ...txOptions } = options ?? {};
+    const result = await sw.sendManyOutputsTransaction(outputs, {
+      pinCode: SERVICE_PIN,
+      ...txOptions,
+    });
+    if (!result?.hash) {
+      throw new Error('sendManyOutputsTransaction: transaction had no hash');
+    }
+    await this.waitForTx(wallet, result.hash, recvWallet);
+    return { hash: result.hash, transaction: result };
   }
 
   async getAuthorityUtxos(

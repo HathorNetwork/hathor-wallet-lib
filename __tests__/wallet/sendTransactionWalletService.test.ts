@@ -6,7 +6,9 @@
  */
 
 import { NATIVE_TOKEN_UID, FEE_PER_OUTPUT } from '../../src/constants';
-import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
+import SendTransactionWalletService, {
+  AddressPathMap,
+} from '../../src/wallet/sendTransactionWalletService';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { OutputType } from '../../src/wallet/types';
 import Network from '../../src/models/network';
@@ -1079,6 +1081,118 @@ describe('prepareTxData', () => {
     const changeOutput = txData.outputs.find(o => o.value === 5n);
     expect(changeOutput).toBeDefined();
     expect(changeOutput.address).toBe(customChangeAddress);
+  });
+
+  it('should reject an HTR input via the token-not-on-outputs guard when outputs have no HTR', async () => {
+    // When an HTR input is provided but outputs only use custom tokens,
+    // prepareTxData / validateUtxos reject it via the generic
+    // token-not-on-outputs guard: NATIVE_TOKEN_UID is not in tokenAmountMap,
+    // so the input fails the membership check.
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId: 'token-tx',
+          index: 0,
+          value: 10n,
+          address: 'token-address',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'unnecessary-htr-tx' && index === 0) {
+        return {
+          txId: 'unnecessary-htr-tx',
+          index: 0,
+          value: 5n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [
+      { txId: 'token-tx', index: 0 },
+      { txId: 'unnecessary-htr-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    // Reuse a single promise so prepareTxData only runs once — the two
+    // assertions below check the class and message of the same rejection.
+    const promise = sendTransaction.prepareTxData();
+    await expect(promise).rejects.toBeInstanceOf(SendTxError);
+    await expect(promise).rejects.toThrow(
+      'Invalid input selection. Input unnecessary-htr-tx at index 0 has token 00 that is not on the outputs.'
+    );
+  });
+
+  it('should show a helpful error when HTR input is unneeded via prepareTx path', async () => {
+    // prepareTx has a separate code path where the two-pass validation skips
+    // HTR inputs entirely when htrAmount === 0. The rebuild guard should
+    // produce a user-friendly message explaining the root cause.
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId: 'token-tx',
+          index: 0,
+          value: 10n,
+          address: 'token-address',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'unnecessary-htr-tx' && index === 0) {
+        return {
+          txId: 'unnecessary-htr-tx',
+          index: 0,
+          value: 5n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [
+      { txId: 'token-tx', index: 0 },
+      { txId: 'unnecessary-htr-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(SendTxError);
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    await expect(sendTransaction.prepareTx()).rejects.toThrow(
+      'an HTR input was provided but no HTR is required'
+    );
   });
 });
 
@@ -2326,6 +2440,65 @@ describe('prepareTx - Fee Tokens', () => {
       `No UTXOs available for the token ${NATIVE_TOKEN_UID}.`
     );
   });
+
+  it('should preserve address path order when HTR inputs come before token inputs', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    // HTR input at index 0, fee token input at index 1
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId: 'htr-tx',
+          index: 0,
+          value: 10n,
+          address: 'htr-address',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      if (txId === 'fee-token-tx' && index === 0) {
+        return {
+          txId: 'fee-token-tx',
+          index: 0,
+          value: 100n,
+          address: 'fee-token-address',
+          tokenId: FEE_TOKEN_UID,
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/2",
+        };
+      }
+      return null;
+    });
+
+    // Inputs: HTR first, then fee token (triggers the ordering bug before fix)
+    const inputs = [
+      { txId: 'htr-tx', index: 0 },
+      { txId: 'fee-token-tx', index: 0 },
+    ];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: FEE_TOKEN_UID,
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    await sendTransaction.prepareTx();
+
+    // utxosAddressPath must follow this.inputs order:
+    // index 0 = HTR input, index 1 = fee token input.
+    // Length check first so dropped entries fail the test, not just reorders.
+    expect(sendTransaction.utxosAddressPath).toHaveLength(inputs.length);
+    expect(sendTransaction.utxosAddressPath[0]).toBe("m/44'/280'/0'/0/1");
+    expect(sendTransaction.utxosAddressPath[1]).toBe("m/44'/280'/0'/0/2");
+  });
 });
 
 describe('signTx preconditions', () => {
@@ -2374,5 +2547,280 @@ describe('signTx preconditions', () => {
     await expect(sendTransaction.signTx('1234')).rejects.toThrow(
       'utxosAddressPath length does not match transaction inputs. Call prepareTx() first.'
     );
+  });
+});
+
+describe('validateUtxos', () => {
+  let wallet;
+  let sendTransaction;
+
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  // AddressPathMap is exported with @internal solely so these tests can
+  // exercise validateUtxos against the real implementation rather than a
+  // duck-typed mock. If the class grows, tests stay in sync automatically.
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+    wallet.getUtxoFromId = jest.fn();
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+  });
+
+  it('populates addressPathMap for custom tokens and skips HTR when ignoreNative=true', async () => {
+    const tokenInput = { txId: 'token-tx', index: 0 };
+    const htrInput = { txId: 'htr-tx', index: 0 };
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 10n,
+          address: 'addr',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: 'm/token',
+        };
+      }
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 5n,
+          address: 'addr',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: 'm/htr',
+        };
+      }
+      return null;
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [tokenInput, htrInput],
+      outputs: [],
+    });
+
+    const map = new AddressPathMap();
+    const result = await sendTransaction.validateUtxos(
+      { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+      map,
+      { ignoreNative: true }
+    );
+
+    // Post-refactor contract: returns void
+    expect(result).toBeUndefined();
+    expect(map.get(tokenInput)).toBe('m/token');
+    expect(map.get(htrInput)).toBeUndefined();
+  });
+
+  it('populates addressPathMap for HTR and skips custom tokens when onlyNative=true', async () => {
+    const tokenInput = { txId: 'token-tx', index: 0 };
+    const htrInput = { txId: 'htr-tx', index: 0 };
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'token-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 10n,
+          address: 'addr',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: 'm/token',
+        };
+      }
+      if (txId === 'htr-tx' && index === 0) {
+        return {
+          txId,
+          index,
+          value: 5n,
+          address: 'addr',
+          tokenId: NATIVE_TOKEN_UID,
+          authorities: 0,
+          addressPath: 'm/htr',
+        };
+      }
+      return null;
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [tokenInput, htrInput],
+      outputs: [],
+    });
+
+    const map = new AddressPathMap();
+    await sendTransaction.validateUtxos(
+      { [NATIVE_TOKEN_UID]: { version: TokenVersion.NATIVE, amount: 5n } },
+      map,
+      { onlyNative: true }
+    );
+
+    expect(map.get(htrInput)).toBe('m/htr');
+    expect(map.get(tokenInput)).toBeUndefined();
+  });
+
+  it('creates a change output and still populates the map when inputs exceed the required amount', async () => {
+    const input = { txId: 'tx', index: 0 };
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 15n,
+      address: 'addr',
+      tokenId: '01',
+      authorities: 0,
+      addressPath: 'm/change',
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [input],
+      outputs: [],
+    });
+
+    const map = new AddressPathMap();
+    await sendTransaction.validateUtxos(
+      { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+      map
+    );
+
+    expect(map.get(input)).toBe('m/change');
+    const changeOutputs = sendTransaction.outputs.filter(o => o.token === '01' && o.value === 5n);
+    expect(changeOutputs).toHaveLength(1);
+    expect(changeOutputs[0].address).toBe('WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc');
+  });
+
+  it('increments _feeAmount by FEE_PER_OUTPUT when a fee-tagged token produces change', async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 15n,
+      address: 'addr',
+      tokenId: '02',
+      authorities: 0,
+      addressPath: 'm/fee',
+    });
+
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+    // Constructor initializes _feeAmount to 0n; asserting the absolute value
+    // directly verifies validateUtxos added exactly FEE_PER_OUTPUT.
+    expect(sendTransaction._feeAmount).toBe(0n);
+
+    await sendTransaction.validateUtxos(
+      { '02': { version: TokenVersion.FEE, amount: 10n } },
+      new AddressPathMap()
+    );
+
+    expect(sendTransaction._feeAmount).toBe(FEE_PER_OUTPUT);
+  });
+
+  it('throws UtxoError when wallet.getUtxoFromId returns null for an input', async () => {
+    wallet.getUtxoFromId.mockResolvedValue(null);
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'missing', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        new AddressPathMap()
+      )
+    ).rejects.toThrow('Invalid input selection. Input missing at index 0.');
+  });
+
+  it("throws SendTxError when an input's tokenId is not in the tokenAmountMap", async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 10n,
+      address: 'addr',
+      tokenId: 'wrong',
+      authorities: 0,
+      addressPath: 'm/wrong',
+    });
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        new AddressPathMap()
+      )
+    ).rejects.toThrow('has token wrong that is not on the outputs');
+  });
+
+  it('throws SendTxError when a token in the amount map has no matching inputs', async () => {
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        new AddressPathMap()
+      )
+    ).rejects.toThrow('Token 01 is in the outputs but there are no inputs for it.');
+  });
+
+  it('throws SendTxError when summed input value is below the required amount', async () => {
+    wallet.getUtxoFromId.mockResolvedValue({
+      txId: 'tx',
+      index: 0,
+      value: 5n,
+      address: 'addr',
+      tokenId: '01',
+      authorities: 0,
+      addressPath: 'm/short',
+    });
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      inputs: [{ txId: 'tx', index: 0 }],
+      outputs: [],
+    });
+
+    await expect(
+      sendTransaction.validateUtxos(
+        { '01': { version: TokenVersion.DEPOSIT, amount: 10n } },
+        new AddressPathMap()
+      )
+    ).rejects.toThrow('Sum of inputs for token 01 is smaller than the sum of outputs');
+  });
+});
+
+describe('AddressPathMap', () => {
+  it('overwrites the path when set is called twice with the same {txId, index}', () => {
+    // Pinned behavior: duplicate-input handling collapses to the last path.
+    // The duplicate is rejected later as a double-spend, so the map does not
+    // try to detect duplicates here.
+    const map = new AddressPathMap();
+    const input = { txId: 'tx', index: 0 };
+    map.set(input, 'm/first');
+    map.set(input, 'm/second');
+    expect(map.get(input)).toBe('m/second');
+  });
+
+  it('treats different indices on the same txId as distinct keys', () => {
+    const map = new AddressPathMap();
+    map.set({ txId: 'tx', index: 0 }, 'm/zero');
+    map.set({ txId: 'tx', index: 1 }, 'm/one');
+    expect(map.get({ txId: 'tx', index: 0 })).toBe('m/zero');
+    expect(map.get({ txId: 'tx', index: 1 })).toBe('m/one');
   });
 });

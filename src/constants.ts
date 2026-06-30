@@ -146,6 +146,17 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
 export const NATIVE_TOKEN_UID: string = '00';
 
 /**
+ * Native token uid as 32-byte hex (used in cryptographic operations such as shielded outputs)
+ */
+export const NATIVE_TOKEN_UID_HEX: string = '00'.repeat(32);
+
+/**
+ * Zero blinding factor (32 zero bytes) representing transparent (unblinded)
+ * inputs/outputs in Pedersen commitment balance equations.
+ */
+export const ZERO_TWEAK: Buffer = Buffer.alloc(32, 0);
+
+/**
  * Default HTR token config
  */
 export const DEFAULT_NATIVE_TOKEN_CONFIG = {
@@ -199,9 +210,23 @@ export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
 export const MIN_POLLING_INTERVAL: number = 0.5;
 
 /**
+ * Shape of the per-network weight constants consumed by
+ * {@link Transaction.calculateWeight}. Network values arrive via the
+ * fullnode's /version response and are normalised by
+ * `transactionUtils.getWeightConstantsFromStorage`; the hardcoded
+ * {@link TX_WEIGHT_CONSTANTS} below is the fallback used when the
+ * version data hasn't been fetched yet.
+ */
+export interface TxWeightConstants {
+  txMinWeight: number;
+  txWeightCoefficient: number;
+  txMinWeightK: number;
+}
+
+/**
  * Constants to calculate weight
  */
-export const TX_WEIGHT_CONSTANTS = {
+export const TX_WEIGHT_CONSTANTS: TxWeightConstants = {
   txMinWeight: 14,
   txWeightCoefficient: 1.6,
   txMinWeightK: 100,
@@ -213,9 +238,65 @@ export const TX_WEIGHT_CONSTANTS = {
 export const MAX_INPUTS: number = 255;
 
 /**
- * Maximum number of outputs
+ * Maximum number of transparent outputs
  */
 export const MAX_OUTPUTS: number = 255;
+
+/**
+ * Maximum number of shielded outputs
+ */
+export const MAX_SHIELDED_OUTPUTS: number = 32;
+
+/**
+ * Decoded byte length of a legacy (P2PKH/P2SH) address:
+ * version(1) + hash(20) + checksum(4)
+ */
+export const LEGACY_ADDRESS_SIZE_BYTES: number = 25;
+
+/**
+ * Decoded byte length of a shielded address:
+ * version(1) + scan_pubkey(33) + spend_pubkey(33) + checksum(4)
+ */
+export const SHIELDED_ADDRESS_SIZE_BYTES: number = 71;
+
+/**
+ * Maximum serialized size (bytes) of a shielded output's range proof.
+ * Mirrors hathor-core's MAX_RANGE_PROOF_SIZE.
+ */
+export const MAX_RANGE_PROOF_SIZE: number = 3328;
+
+/**
+ * Maximum serialized size (bytes) of a FullShielded output's surjection proof.
+ * Mirrors hathor-core's MAX_SURJECTION_PROOF_SIZE.
+ */
+export const MAX_SURJECTION_PROOF_SIZE: number = 4096;
+
+/**
+ * Maximum serialized size (bytes) of a shielded output's locking script.
+ * Mirrors hathor-core's MAX_SHIELDED_OUTPUT_SCRIPT_SIZE.
+ */
+export const MAX_SHIELDED_OUTPUT_SCRIPT_SIZE: number = 1024;
+
+/**
+ * Maximum surjection-proof domain size (one entry per input generator).
+ * secp256k1-zkp aborts UNCATCHABLY (SIGABRT) past this limit, so the wallet
+ * must reject oversized domains before calling the prover.
+ */
+export const MAX_SURJECTION_DOMAIN: number = 256;
+
+/**
+ * Exclusive upper bound for a shielded output value. The shipped range proof
+ * (`@hathor/ct-crypto-node`, min_bits=40) covers `[1, 2^40)`; the fullnode
+ * enforces no explicit value ceiling (only a range-proof byte-size cap), so the
+ * wallet is the only place an over-cap value can be caught (balance is verified
+ * by commitment, never by cleartext value).
+ */
+export const MAX_SHIELDED_OUTPUT_VALUE: OutputValueType = 1n << 40n;
+
+/**
+ * Byte length of a secp256k1 scalar (a blinding factor / tweak).
+ */
+export const BLINDING_FACTOR_SIZE_BYTES: number = 32;
 
 /**
  * Maximum number of fee entries in a FeeHeader
@@ -233,9 +314,21 @@ export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
 export const SELECT_OUTPUTS_TIMEOUT: number = 1000 * 60;
 
 /**
- * Size in bytes of a transaction hash (32 bytes)
+ * Size in bytes of a transaction hash (32 bytes).
+ *
+ * Also the size of a token UID, because a token's UID is the hash of the
+ * transaction that created it.
  */
 export const TX_HASH_SIZE_BYTES: number = 32;
+
+/**
+ * Size in bytes of a compressed SEC1-encoded EC public key (33 bytes:
+ * 1 prefix byte indicating Y parity + 32 X-coordinate bytes).
+ *
+ * Used for shielded scan/spend pubkeys and any other compressed
+ * secp256k1 public key the wallet validates at a trust boundary.
+ */
+export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
 
 /**
  * Maximum number of retries allowed when an error different
@@ -281,6 +374,21 @@ export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
 export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
 
 /**
+ * Account path for shielded scan keys (ECDH / view-only access to shielded outputs).
+ * Uses a separate account from legacy P2PKH (account 0') so that the scan key only
+ * grants read access to shielded outputs, not spending authority over legacy funds.
+ * This separation is critical for view key delegation (e.g., scanning services) and
+ * prevents compromising legacy address signing keys when debugging shielded decryption.
+ */
+export const SHIELDED_SCAN_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
+
+/**
+ * Account path for shielded spend keys (signing/spending authority).
+ * Uses account 2' to remain separate from both legacy (0') and scan (1') keys.
+ */
+export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
+
+/**
  * String to be prefixed before signed messages using bitcore-message
  */
 export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
@@ -294,6 +402,18 @@ export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLIC
  * Fee per output
  */
 export const FEE_PER_OUTPUT: bigint = 1n;
+
+/**
+ * Fee per AmountShielded output (in HTR base units).
+ * Defined by hathor-core shielded transaction protocol (no external docs yet).
+ */
+export const FEE_PER_AMOUNT_SHIELDED_OUTPUT: bigint = 1n;
+
+/**
+ * Fee per FullShielded output (in HTR base units).
+ * Defined by hathor-core shielded transaction protocol (no external docs yet).
+ */
+export const FEE_PER_FULL_SHIELDED_OUTPUT: bigint = 2n;
 
 /**
  * Fee divisor

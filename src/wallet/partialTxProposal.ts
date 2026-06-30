@@ -419,7 +419,7 @@ class PartialTxProposal {
       this.partialTx.inputs[index].setData(inputData);
     }
     this.transaction = this.partialTx.getTx();
-    this.transaction.prepareToSend();
+    this.transaction.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     return this.transaction;
   }
 }
