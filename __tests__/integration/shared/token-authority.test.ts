@@ -166,6 +166,30 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
       }
     });
 
+    it('should reject minting a FEE token when no HTR covers the fee', async () => {
+      const { wallet } = await adapter.createWallet();
+      try {
+        const addr0 = (await wallet.getAddressAtIndex(0))!;
+        // The flat 1 HTR FEE-token creation consumes the only injected HTR,
+        // leaving nothing for a subsequent mint fee.
+        await adapter.injectFunds(wallet, addr0, 1n);
+        const token = await adapter.createToken(wallet, 'FeeNoFundsMint', 'FNF', 100n, {
+          tokenVersion: TokenVersion.FEE,
+        });
+        expect(await htrBalance(wallet)).toBe(0n);
+
+        // A FEE-token mint charges a flat 1 HTR fee regardless of amount; with 0
+        // HTR available the mint is rejected. fullnode raises "Not enough HTR
+        // tokens for deposit or fee: 1 required, 0 available"; wallet-service
+        // raises a UtxoError "No utxos available...". Match either message.
+        await expect(adapter.mintTokens(wallet, token.hash, 1000n)).rejects.toThrow(
+          /Not enough HTR tokens|No utxos available/i
+        );
+      } finally {
+        await adapter.stopWallet(wallet);
+      }
+    });
+
     it('should consume the correct HTR deposit when minting', async () => {
       const { wallet } = await adapter.createWallet();
       try {
