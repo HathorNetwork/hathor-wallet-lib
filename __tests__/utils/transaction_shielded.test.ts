@@ -207,6 +207,7 @@ describe('normalizeShieldedOutputs', () => {
       [makeTransparentOutput(1n, 'A')],
       [
         {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
           commitment: 'ab'.repeat(33),
           range_proof: '0102ff',
           script: 'aa',
@@ -217,7 +218,7 @@ describe('normalizeShieldedOutputs', () => {
     );
     transactionUtils.normalizeShieldedOutputs(tx);
     expect(tx.outputs).toHaveLength(1);
-    // `mode` is derived for the alpha-v3 wire shape (no asset_commitment → AmountShielded).
+    // `mode` from the wire is preserved untouched.
     expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
     // A second pass is a no-op (true idempotency: f(f(x)) === f(x)).
     const afterFirst = JSON.stringify(tx.shielded_outputs);
@@ -290,64 +291,41 @@ describe('normalizeShieldedOutputs', () => {
     expect(tx.shielded_outputs![0].surjection_proof).toBe('bb');
   });
 
-  it('derives `mode` from asset_commitment when the fullnode omits it (alpha-v3 wire)', () => {
-    // alpha-v3 fullnodes don't emit `mode` (added to hathor-core's
-    // _shielded_output_to_json only in alpha-v4). Without derivation a WS
-    // re-delivery leaves `mode` undefined and clobbers the value the sender-local
-    // insert set — the sender_local_insert L.3 regression. Only FullShielded
-    // outputs carry an asset_commitment, so the shape disambiguates the mode.
-    const b64 = (byte: number) => Buffer.from([byte]).toString('base64');
-    const tx = makeTx([makeTransparentOutput(1n, 'A')], [
-      {
-        // FullShielded shape (asset_commitment present), no `mode` on the wire.
-        commitment: 'ab'.repeat(33),
-        range_proof: b64(0x01),
-        script: b64(0x02),
-        ephemeral_pubkey: b64(0x03),
-        asset_commitment: b64(0xaa),
-        surjection_proof: b64(0xbb),
-        decoded: {},
-        spent_by: null,
-      },
-      {
-        // AmountShielded shape (no asset_commitment), no `mode` on the wire.
-        commitment: 'cd'.repeat(33),
-        range_proof: b64(0x04),
-        script: b64(0x05),
-        ephemeral_pubkey: b64(0x06),
-        token_data: 0,
-        decoded: {},
-        spent_by: null,
-      },
-    ] as unknown as IHistoryShieldedOutput[]);
-
-    transactionUtils.normalizeShieldedOutputs(tx);
-    expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
-    expect(tx.shielded_outputs![1].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
-  });
-
-  it('keeps an explicit `mode` over the shape heuristic (alpha-v4 wire / local insert)', () => {
-    // A `mode` already on the entry must NOT be overwritten by the
-    // asset_commitment heuristic, so alpha-v4 (which sends `mode`) and the
-    // sender-local insert win — even in a contrived shape/mode mismatch.
+  it('preserves the wire `mode` on every entry untouched (v4 always sends it)', () => {
+    // alpha-v4 fullnodes always emit `mode`; normalizeShieldedOutputs is a
+    // hex-only pass and must leave `mode` verbatim on both FullShielded and
+    // AmountShielded entries (it neither derives nor overwrites it).
     const b64 = (byte: number) => Buffer.from([byte]).toString('base64');
     const tx = makeTx(
       [makeTransparentOutput(1n, 'A')],
       [
         {
-          mode: ShieldedOutputMode.AMOUNT_SHIELDED, // explicit, despite the asset_commitment below
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
           commitment: 'ab'.repeat(33),
           range_proof: b64(0x01),
           script: b64(0x02),
           ephemeral_pubkey: b64(0x03),
           asset_commitment: b64(0xaa),
+          surjection_proof: b64(0xbb),
+          decoded: {},
+          spent_by: null,
+        },
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'cd'.repeat(33),
+          range_proof: b64(0x04),
+          script: b64(0x05),
+          ephemeral_pubkey: b64(0x06),
+          token_data: 0,
           decoded: {},
           spent_by: null,
         },
       ]
     );
+
     transactionUtils.normalizeShieldedOutputs(tx);
-    expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+    expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+    expect(tx.shielded_outputs![1].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
   });
 });
 

@@ -139,64 +139,32 @@ const transaction = {
   },
 
   /**
-   * Normalize a transaction's shielded outputs into the SEPARATED model and
-   * hex-encode their confidential wire fields. Mutates the tx in place.
+   * Hex-encode the confidential wire fields of a transaction's shielded outputs,
+   * in place. The fullnode (alpha-v4+) delivers shielded outputs SEPARATED in a
+   * dedicated `shielded_outputs[]` array on BOTH the HTTP `/transaction`
+   * (to_json) and the `address_history` + WS real-time (to_json_extended) paths,
+   * so `outputs[]` is always transparent-only — no inline relocation needed —
+   * and `mode` is always present on the wire.
    *
-   * The fullnode delivers shielded outputs two ways:
-   *   • HTTP `/transaction` (to_json): already separated in `shielded_outputs[]`.
-   *   • `address_history` + the WS real-time path (to_json_extended): INLINE in
-   *     `outputs[]` with `type: 'shielded'` and a commitment instead of a value
-   *     (see schemas.ts IHistoryOutputSchema, whose union accepts that shape).
-   *
-   * Step 1 relocates any inline shielded entries out of `outputs[]` into
-   * `shielded_outputs[]`, restoring the post-normalize invariant that
-   * `outputs[]` is transparent-only — so the rest of the wallet sees one shape.
-   * Without it, shielded receives arriving inline (history load / real-time
-   * onNewTx) never reach `shielded_outputs[]` and the wallet is blind to them.
-   *
-   * Step 2 converts every shielded output's base64 confidential fields
-   * (commitment / range_proof / script / ephemeral_pubkey / asset_commitment /
+   * Converts every shielded output's base64 confidential fields (commitment /
+   * range_proof / script / ephemeral_pubkey / asset_commitment /
    * surjection_proof) to hex; without this `Buffer.from(value, 'hex')`
    * downstream parses them as garbage — making the native rewind throw "asset
    * commitment verification failed" and the per-tx balance read as -input with
    * no credit for the decoded shielded outputs.
    *
-   * Idempotent: a tx with no inline entries and already-hex fields is unchanged
-   * (relocate is a no-op, ensureHex no-ops on hex). The owned-marker fields
+   * Idempotent: ensureHex no-ops on already-hex fields. The owned-marker fields
    * (value / token / blindingFactor / assetBlindingFactor) are NOT on the wire —
    * they are populated post-decryption on the slots the wallet owns — so this
    * neither reads nor invents them.
    */
   normalizeShieldedOutputs(tx: IHistoryTx): void {
-    // 1) Relocate inline shielded entries (type === 'shielded') out of
-    // `outputs[]` into `shielded_outputs[]`. A stable partition preserves the
-    // on-chain transparent-then-shielded ordering of the separated model.
-    if (
-      Array.isArray(tx.outputs) &&
-      tx.outputs.some(out => (out as { type?: string }).type === 'shielded')
-    ) {
-      const transparent: IHistoryOutput[] = [];
-      const inlineShielded: IHistoryShieldedOutput[] = [];
-      for (const out of tx.outputs) {
-        if ((out as { type?: string }).type === 'shielded') {
-          inlineShielded.push(out as unknown as IHistoryShieldedOutput);
-        } else {
-          transparent.push(out);
-        }
-      }
-      // eslint-disable-next-line no-param-reassign
-      tx.outputs = transparent;
-      // eslint-disable-next-line no-param-reassign
-      tx.shielded_outputs = [...(tx.shielded_outputs ?? []), ...inlineShielded];
-    }
-
     if (!tx.shielded_outputs) {
       // Transparent-only tx (no shielded_outputs) — nothing to normalize.
       return;
     }
 
-    // 2) Hex-encode the confidential wire fields of every shielded output
-    // (relocated inline entries + entries already separated by to_json).
+    // Hex-encode the confidential wire fields of every shielded output.
     for (const so of tx.shielded_outputs) {
       // eslint-disable-next-line no-param-reassign
       so.commitment = ensureHex(so.commitment);
@@ -213,19 +181,6 @@ const transaction = {
       if (so.surjection_proof) {
         // eslint-disable-next-line no-param-reassign
         so.surjection_proof = ensureHex(so.surjection_proof);
-      }
-      // Derive `mode` when the fullnode omits it. alpha-v3 fullnodes don't emit
-      // `mode` (added to hathor-core's _shielded_output_to_json only in alpha-v4),
-      // so a WS re-delivery would otherwise clobber the locally-inserted mode with
-      // undefined (the per-slot merge in onNewTx doesn't restore it). Only
-      // FullShielded outputs carry an asset_commitment, so the shape is an
-      // unambiguous discriminator; a mode already present (alpha-v4 wire, or the
-      // sender-local insert) is kept.
-      if (so.mode === undefined) {
-        // eslint-disable-next-line no-param-reassign
-        so.mode = so.asset_commitment
-          ? ShieldedOutputMode.FULLY_SHIELDED
-          : ShieldedOutputMode.AMOUNT_SHIELDED;
       }
     }
   },

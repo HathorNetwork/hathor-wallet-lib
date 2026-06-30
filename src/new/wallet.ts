@@ -1739,9 +1739,8 @@ class HathorWallet extends EventEmitter {
     }
     const newTx = parseResult.data;
 
-    // Normalize: extract any shielded entries delivered INLINE in outputs[]
-    // into shielded_outputs[], converting base64 fields to hex (idempotent for
-    // already-separated deliveries).
+    // Normalize: convert the shielded outputs' base64 confidential fields to hex
+    // (alpha-v4 delivers them already separated in shielded_outputs[]).
     transactionUtils.normalizeShieldedOutputs(newTx);
 
     // SECURITY: the wire never legitimately carries decoded shielded values —
@@ -3459,8 +3458,8 @@ class HathorWallet extends EventEmitter {
     if (localTx) {
       balanceTx = localTx;
     } else {
-      // Normalize so any inline shielded entries move to shielded_outputs[] and
-      // base64 fields become hex (getTxBalance reads off the separated arrays).
+      // Normalize the shielded outputs' base64 confidential fields to hex
+      // (getTxBalance reads off the separated shielded_outputs[] array).
       transactionUtils.normalizeShieldedOutputs(fullTx.tx as unknown as IHistoryTx);
       balanceTx = fullTx.tx as unknown as IHistoryTx;
     }

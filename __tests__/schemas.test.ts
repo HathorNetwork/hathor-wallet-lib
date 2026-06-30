@@ -99,22 +99,22 @@ describe('addressHistorySchema — history input `type` discriminator', () => {
 });
 
 /**
- * Regression coverage for INLINE shielded outputs in `outputs[]`.
+ * Coverage for the SEPARATED-model wire (alpha-v4+).
  *
- * The alpha-v3 fullnode (and the WS real-time path) deliver shielded outputs
- * nested inside `outputs[]` with `type: 'shielded'` and a commitment instead of
- * a value. The SEPARATED-model schema briefly required `value` on every output,
- * which rejected the inline shielded shape and threw before
- * `normalizeShieldedOutputs` could relocate it into `shielded_outputs[]` —
- * bricking every tx that contains a shielded output. These tests pin both the
- * schema acceptance and the normalize relocation.
+ * The fullnode delivers shielded outputs in a dedicated top-level
+ * `shielded_outputs[]` array on every path (HTTP `/transaction` and
+ * `address_history` + WS), so `outputs[]` is transparent-only and
+ * `normalizeShieldedOutputs` is a hex-only pass — no inline `type: 'shielded'`
+ * entry in `outputs[]` to accept or relocate. These tests pin that invariant:
+ * the schema accepts the separated shape, rejects an inline shielded entry in
+ * `outputs[]`, and normalize converts the confidential fields in place.
  */
-describe('addressHistorySchema — inline shielded outputs in outputs[]', () => {
-  // A real inline shielded output as emitted by the fullnode: no `value`, a hex
+describe('addressHistorySchema — separated shielded_outputs[]', () => {
+  // A separated shielded output as emitted by the fullnode (alpha-v4): hex
   // commitment, base64 range_proof/script, hex ephemeral_pubkey, address-only
-  // decoded. `range_proof` is base64 "abcd" so we can assert hex conversion.
-  const inlineShieldedOutput = {
-    type: 'shielded',
+  // decoded, `mode` present. `range_proof` is base64 "abcd" to assert hex conversion.
+  const shieldedOutput = {
+    mode: 1,
     commitment: '09fbb71fb77f29184e414aa0ebda936eac97738b749247c6597be233697f1efc6c',
     range_proof: 'YWJjZA==', // base64("abcd") -> hex "61626364"
     script: 'dqkUF7S4s7xJDTbP3RtOd8pqL961GpaIrA==',
@@ -126,7 +126,7 @@ describe('addressHistorySchema — inline shielded outputs in outputs[]', () => 
   };
 
   // Plain number `value` (not bigint) so the JSON clone in the normalize test
-  // works; bigIntCoercibleSchema coerces it, and normalize never reads it.
+  // works; bigIntCoercibleSchema coerces it.
   const transparentOutput = {
     value: 60,
     token_data: 0,
@@ -143,12 +143,13 @@ describe('addressHistorySchema — inline shielded outputs in outputs[]', () => 
     timestamp: 1781756639,
     is_voided: false,
     inputs: [],
-    outputs: [transparentOutput, inlineShieldedOutput],
+    outputs: [transparentOutput],
+    shielded_outputs: [shieldedOutput],
     parents: [],
     tokens: [],
   };
 
-  it('accepts a tx whose outputs[] contains an inline shielded output', () => {
+  it('accepts a tx with transparent outputs[] and a separated shielded_outputs[]', () => {
     const result = addressHistorySchema.safeParse({
       success: true,
       history: [historyTx],
@@ -159,19 +160,35 @@ describe('addressHistorySchema — inline shielded outputs in outputs[]', () => 
     expect(result.success).toBe(true);
   });
 
-  it('normalizeShieldedOutputs relocates the inline entry into shielded_outputs[] (transparent-only outputs[], hex fields)', () => {
+  it('rejects an inline shielded entry (no `value`) in outputs[] — outputs[] is transparent-only', () => {
+    const badTx = {
+      ...historyTx,
+      outputs: [transparentOutput, { type: 'shielded', commitment: 'ab'.repeat(33) }],
+      shielded_outputs: [],
+    };
+    const result = addressHistorySchema.safeParse({
+      success: true,
+      history: [badTx],
+      has_more: false,
+      first_hash: null,
+      first_address: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('normalizeShieldedOutputs converts shielded_outputs[] confidential fields in place (no relocation)', () => {
     // Clone so the shared fixture is not mutated in place.
     const tx = JSON.parse(JSON.stringify(historyTx)) as unknown as IHistoryTx;
     transactionUtils.normalizeShieldedOutputs(tx);
 
-    // outputs[] is transparent-only post-normalize; the shielded entry moved out.
+    // outputs[] is untouched (transparent-only); the shielded entry stays put.
     expect(tx.outputs).toHaveLength(1);
     expect((tx.outputs[0] as { value?: unknown }).value).toBeDefined();
     expect(tx.shielded_outputs).toHaveLength(1);
 
     const so = tx.shielded_outputs![0];
     // commitment was already hex -> unchanged; range_proof base64 -> hex.
-    expect(so.commitment).toBe(inlineShieldedOutput.commitment);
+    expect(so.commitment).toBe(shieldedOutput.commitment);
     expect(so.range_proof).toBe('61626364');
     expect(so.range_proof).toMatch(/^[0-9a-f]+$/);
     expect(so.spent_by).toBeNull();
