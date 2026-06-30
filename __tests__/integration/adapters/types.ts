@@ -289,6 +289,19 @@ export interface IWalletTestAdapter {
     options?: MintTokensAdapterOptions
   ): Promise<MintTokensResult>;
 
+  // --- Token melting ---
+
+  /**
+   * Melts `amount` units of an existing token and waits for confirmation.
+   * Both facades support `meltTokens()`.
+   */
+  meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MeltTokensResult>;
+
   // --- Authority destruction ---
 
   /**
@@ -495,6 +508,35 @@ export interface MintTokensAdapterOptions {
  * Result of minting tokens.
  */
 export interface MintTokensResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for melting tokens via the adapter.
+ *
+ * Mirrors {@link MintTokensAdapterOptions}: only the fields supported by BOTH
+ * facades are exposed. The fullnode `data` / `unshiftData` data-script options
+ * are intentionally omitted (the wallet-service `meltTokens()` does not support
+ * them).
+ */
+export interface MeltTokensAdapterOptions {
+  /** Create a new melt authority alongside the melted tokens (facade default: true). */
+  createAnotherMelt?: boolean;
+  /** Address that receives the new melt authority (default: an address of the wallet). */
+  meltAuthorityAddress?: string;
+  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMeltAuthorityAddress?: boolean;
+  /** Address that receives the HTR returned by melting (default: next wallet address). */
+  address?: string;
+  /** Address that receives the token change (default: next wallet address). */
+  changeAddress?: string;
+}
+
+/**
+ * Result of melting tokens.
+ */
+export interface MeltTokensResult {
   hash: string;
   transaction: Transaction;
 }

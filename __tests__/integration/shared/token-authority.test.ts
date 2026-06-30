@@ -22,8 +22,8 @@
  * - Authority bits are compared as `bigint` (TOKEN_MINT_MASK / TOKEN_MELT_MASK),
  *   never `Number`.
  * - The wallet-service UTXO/balance index lags behind tx visibility; the adapter
- *   methods (`mintTokens`, `delegateAuthority`, `destroyAuthority`) poll
- *   internally so the assertions below can read derived state directly.
+ *   methods (`mintTokens`, `meltTokens`, `delegateAuthority`, `destroyAuthority`)
+ *   poll internally so the assertions below can read derived state directly.
  * - Fund-shortage and missing-authority errors raise different concrete classes
  *   per facade (plain `Error` on fullnode, `UtxoError` on wallet-service); the
  *   rejections below match by regex rather than by class.
@@ -314,6 +314,42 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
         await adapter.injectFunds(w2, w2addr, 10n);
         await adapter.mintTokens(w2, token.hash, 100n);
         expect(await tokenBalance(w2, token.hash)).toBe(100n);
+      } finally {
+        await adapter.stopWallet(w1);
+        await adapter.stopWallet(w2);
+      }
+    });
+
+    it('should delegate melt authority without keeping one', async () => {
+      const { wallet: w1 } = await adapter.createWallet();
+      const { wallet: w2 } = await adapter.createWallet();
+      try {
+        const a1 = (await w1.getAddressAtIndex(0))!;
+        await adapter.injectFunds(w1, a1, 10n);
+        const token = await adapter.createToken(w1, 'DelegMeltGiveToken', 'DMG', 100n);
+
+        // Fund the destination wallet with some of the tokens so it can actually
+        // melt once it holds the authority.
+        const w2tokenAddr = (await w2.getAddressAtIndex(0))!;
+        await adapter.sendTransaction(w1, w2tokenAddr, 60n, {
+          token: token.hash,
+          recvWallet: w2,
+        });
+
+        const w2meltAddr = (await w2.getAddressAtIndex(1))!;
+        await adapter.delegateAuthority(w1, token.hash, AuthorityType.MELT, w2meltAddr, {
+          createAnother: false,
+          recvWallet: w2,
+        });
+
+        // Source wallet no longer holds a melt authority and can no longer melt.
+        expect(await adapter.getAuthorityUtxos(w1, token.hash, AuthorityType.MELT)).toHaveLength(0);
+        await expect(adapter.meltTokens(w1, token.hash, 10n)).rejects.toThrow(/authority/i);
+
+        // Destination wallet received the authority and can melt its tokens.
+        expect(await adapter.getAuthorityUtxos(w2, token.hash, AuthorityType.MELT)).toHaveLength(1);
+        await adapter.meltTokens(w2, token.hash, 50n);
+        expect(await tokenBalance(w2, token.hash)).toBe(10n);
       } finally {
         await adapter.stopWallet(w1);
         await adapter.stopWallet(w2);

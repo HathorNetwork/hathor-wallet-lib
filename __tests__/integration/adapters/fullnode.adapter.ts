@@ -51,6 +51,8 @@ import type {
   DelegateAuthorityResult,
   MintTokensAdapterOptions,
   MintTokensResult,
+  MeltTokensAdapterOptions,
+  MeltTokensResult,
   DestroyAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
@@ -384,6 +386,25 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     });
     if (!result?.hash) {
       throw new Error('mintTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MeltTokensResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.meltTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);

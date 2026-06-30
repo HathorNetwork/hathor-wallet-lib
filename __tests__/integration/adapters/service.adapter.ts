@@ -48,6 +48,8 @@ import type {
   DelegateAuthorityResult,
   MintTokensAdapterOptions,
   MintTokensResult,
+  MeltTokensAdapterOptions,
+  MeltTokensResult,
   DestroyAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
@@ -462,6 +464,36 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       const [balance] = await sw.getBalance(tokenUid);
       return balance.balance.unlocked >= expectedUnlocked;
     }, `token balance index reflects mint ${result.hash}`);
+
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MeltTokensResult> {
+    const sw = this.concrete(wallet);
+
+    // Capture the current token balance so we can wait for the UTXO/balance
+    // index to reflect the melt. Melting decreases the token balance by `amount`
+    // on BOTH deposit- and fee-based tokens, so this is a robust settle signal.
+    const [balanceBefore] = await sw.getBalance(tokenUid);
+    const expectedUnlocked = balanceBefore.balance.unlocked - amount;
+
+    const result = await sw.meltTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    await pollUntilCondition(async () => {
+      const [balance] = await sw.getBalance(tokenUid);
+      return balance.balance.unlocked <= expectedUnlocked;
+    }, `token balance index reflects melt ${result.hash}`);
 
     return { hash: result.hash, transaction: result };
   }
