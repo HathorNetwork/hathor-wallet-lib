@@ -28,10 +28,9 @@ import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../help
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
 import transactionUtils from '../../../src/utils/transaction';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group L: sender-side local insert', () => {
   jest.setTimeout(300_000);

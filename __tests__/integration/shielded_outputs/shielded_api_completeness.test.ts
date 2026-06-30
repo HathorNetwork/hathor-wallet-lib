@@ -21,6 +21,9 @@ import { ShieldedOutputMode } from '../../../src/shielded/types';
 import Address from '../../../src/models/address';
 import { deriveShieldedAddress } from '../../../src/utils/shieldedAddress';
 import { IHistoryTx } from '../../../src/types';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
+
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group C: API completeness for shielded receives', () => {
   jest.setTimeout(300_000);

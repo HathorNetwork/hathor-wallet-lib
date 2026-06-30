@@ -13,7 +13,7 @@
  * cleanStorage re-fetch (which is what realtime_vs_reload / wallet_restart
  * exercise). This pins that reprocessing a dirty store does NOT resurrect a spent
  * shielded UTXO. It is the targeted regression for removing the old per-tx
- * input-deletion loop from processHistory: on alpha-v4 the parent's spent_by is
+ * input-deletion loop from processHistory: the parent's spent_by is
  * reliably stamped (to_json_extended on both the address_history and ws paths),
  * and the wallet owns the parent output (so it receives that update), so the
  * surviving credit-gate (spent_by === null) is sufficient on its own.
@@ -23,6 +23,9 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
+
+bumpShieldedTestTimeout();
 
 describe('shielded outputs — Group D: processHistory over a dirty store', () => {
   jest.setTimeout(300_000);
@@ -71,9 +74,8 @@ describe('shielded outputs — Group D: processHistory over a dirty store', () =
     // Reprocess history over the SAME (dirty) store — the processTxQueue path.
     // With the per-tx input-deletion loop removed, the spent shielded UTXO must
     // NOT be re-saved: the credit-gate skips it because the parent recv tx's
-    // stored spent_by is non-null (alpha-v4 stamps it via to_json_extended).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (walletB as any).storage.processHistory((walletB as any).pinCode ?? undefined);
+    // stored spent_by is non-null (the fullnode stamps it via to_json_extended).
+    await walletB.storage.processHistory(walletB.pinCode ?? undefined);
 
     const balanceAfterReprocess = (await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
     // No resurrection: reprocessing a dirty store leaves the balance unchanged.

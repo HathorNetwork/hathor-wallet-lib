@@ -18,10 +18,9 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
-import * as constants from '../../../src/constants';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-(constants as any).TIMEOUT = 30000;
+bumpShieldedTestTimeout();
 
 /**
  * Build a "bare" wsData payload (empty outputs[], undefined shielded_outputs)
@@ -42,13 +41,13 @@ function bareWsPayload(storedTx: any) {
 }
 
 /**
- * Build a "full" wsData payload reconstructing the alpha-v4 SEPARATED wire form:
+ * Build a "full" wsData payload reconstructing the SEPARATED wire form:
  * transparent outputs[] plus a top-level shielded_outputs[] carrying the
  * confidential fields in wire encoding (commitment / ephemeral_pubkey /
  * asset_commitment hex; range_proof / script / surjection_proof base64), `mode`
  * present and NO owned-marker fields — so normalizeShieldedOutputs hex-converts
- * them like the real fullnode wire. (Pre-v4 inlined these into outputs[] with
- * type:'shielded'; v4 never does, and the strict output schema rejects it.)
+ * them like the real fullnode wire. (The old wire inlined these into outputs[]
+ * with type:'shielded'; the current node never does, and the schema rejects it.)
  */
 function fullWsPayload(storedTx: any) {
   const wireShielded = (storedTx.shielded_outputs ?? []).map((so: any) => ({
