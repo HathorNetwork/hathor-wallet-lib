@@ -323,7 +323,14 @@ describe('[Fullnode] consolidateUtxos', () => {
       amount_bigger_than: 2,
       max_amount: 15,
     });
-    // FIXME: This result is not consistent, sometimes it fetches only utxo "20".
+    /*
+     * The selection is deterministic for this data, independent of UTXO
+     * iteration order: `amount_bigger_than: 2` drops the 1n utxo, and
+     * `max_amount: 15` is enforced cumulatively before each utxo is yielded
+     * (see `MemoryStore.selectUtxos`), so the 20n and 40n utxos — each already
+     * over the cap on their own — can never be picked. `{4n, 5n}` (sum 9n) is
+     * the only reachable set.
+     */
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 9n,
