@@ -1112,7 +1112,7 @@ export async function convertHtrChangeIfRequested(
 
   const HTR_UID = NATIVE_TOKEN_UID;
   const changeIdx = partialHtrTxData.outputs.findIndex(o => {
-    const withToken = o as IDataOutputWithToken & { isChange?: boolean };
+    const withToken = o as IDataOutputWithToken;
     return withToken.token === HTR_UID && withToken.isChange === true;
   });
   if (changeIdx === -1) return { addedFee: 0n };

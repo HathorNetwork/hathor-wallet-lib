@@ -94,7 +94,7 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   })
   .passthrough() as ZodSchema<IHistoryInput>;
 
-// SEPARATED model: `outputs[]` is transparent-only. The fullnode (alpha-v4+)
+// SEPARATED model: `outputs[]` is transparent-only. The fullnode
 // delivers shielded outputs in a dedicated top-level `shielded_outputs[]` array
 // on every path — HTTP `/transaction` (to_json) and `address_history` + the WS
 // real-time path (to_json_extended) — so a transparent-only output schema
@@ -161,32 +161,37 @@ export const IHistoryNanoContractContextSchema = z
   })
   .passthrough();
 
+// The wire fields shared by a shielded output on BOTH the fullnode tx API
+// (`fullnodeTxApiShieldedOutputSchema`, api/schemas/txApi.ts) and the wallet
+// history (`IHistoryShieldedOutputSchema` below). Only the `decoded` sub-schema
+// and the history-only owned-marker fields differ between the two, so each
+// composes this base via `z.object({ ...shieldedOutputWireShape, ... })`.
+//
+// `mode` stays OPTIONAL on purpose: older fullnodes omit it and downstream
+// readers fall back to `asset_commitment` presence to detect FullShielded — a
+// deliberate fail-open boundary, not something to tighten here. `token_data`
+// defaults to 0 (native-token slot) because FullShielded outputs hide the token
+// UID behind `asset_commitment` and may omit the field.
+export const shieldedOutputWireShape = {
+  mode: z.number().optional(),
+  commitment: z.string(),
+  range_proof: z.string(),
+  script: z.string(),
+  token_data: z.number().optional().default(0),
+  ephemeral_pubkey: z.string(),
+  asset_commitment: z.string().optional(),
+  surjection_proof: z.string().optional(),
+  spent_by: z.string().nullable().optional(),
+};
+
 // SEPARATED model: history shape of one entry in `tx.shielded_outputs[]`.
-// Mirrors `IHistoryShieldedOutput` (src/types.ts): the wire crypto fields plus
-// `spent_by` and the OPTIONAL owned-marker fields written in place when the
-// wallet decrypts an output it owns. `value !== undefined` is the single
-// ownership/decoded gate.
+// Mirrors `IHistoryShieldedOutput` (src/types.ts): the shared wire fields plus
+// the OPTIONAL owned-marker fields written in place when the wallet decrypts an
+// output it owns. `value !== undefined` is the single ownership/decoded gate.
 const IHistoryShieldedOutputSchema = z
   .object({
-    // `mode` was added to hathor-core's `_shielded_output_to_json` after
-    // 0.0.6-shielded; older fullnodes (still common on testnet) omit it.
-    // Downstream readers fall back to detecting FullShielded via the presence
-    // of `asset_commitment`, so we accept the missing-`mode` shape rather than
-    // fail-closed on every tx returned by an un-upgraded node.
-    mode: z.number().optional(),
-    commitment: z.string(),
-    range_proof: z.string(),
-    script: z.string(),
-    // FullShielded outputs sometimes ship without `token_data` (the token UID
-    // is hidden behind `asset_commitment`, so the field has no meaningful
-    // value). Default to 0 (native-token slot) so the existing token-symbol
-    // resolution path doesn't NPE on lookups.
-    token_data: z.number().optional().default(0),
-    ephemeral_pubkey: z.string(),
+    ...shieldedOutputWireShape,
     decoded: IHistoryOutputDecodedSchema,
-    asset_commitment: z.string().optional(),
-    surjection_proof: z.string().optional(),
-    spent_by: z.string().nullable().optional(),
     // ── owned-marker fields (SEPARATED model) ──
     // Written in place when the wallet decrypts an output it owns. A slot with
     // `value === undefined` is non-owned (or not yet decrypted).

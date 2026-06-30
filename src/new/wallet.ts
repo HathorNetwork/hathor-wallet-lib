@@ -138,6 +138,8 @@ import {
   ISignature,
   IWalletInputInfo,
   ProposedOutput,
+  ShieldedOpening,
+  ShieldedOpeningEntry,
   SendManyOutputsOptions,
   UtxoDetails,
   UtxoOptions,
@@ -1118,28 +1120,13 @@ class HathorWallet extends EventEmitter {
    * the on-chain absolute index of `shielded_outputs[s]` is
    * `tx.outputs.length + s`.
    */
-  async getShieldedUnblindingForTx(txId: string): Promise<{
-    outputs: Array<{
-      index: number;
-      value: bigint;
-      token: string;
-      vbf: string;
-      abf?: string;
-    }>;
-    inputs: Array<{
-      index: number;
-      value: bigint;
-      token: string;
-      vbf: string;
-      abf?: string;
-    }>;
-  }> {
+  async getShieldedUnblindingForTx(
+    txId: string
+  ): Promise<{ outputs: ShieldedOpeningEntry[]; inputs: ShieldedOpeningEntry[] }> {
     const tx = await this.storage.getTx(txId);
     if (!tx) return { outputs: [], inputs: [] };
 
-    const ownedOutputsOf = (
-      target: IHistoryTx
-    ): Map<number, { value: bigint; token: string; vbf: string; abf?: string }> => {
+    const ownedOutputsOf = (target: IHistoryTx): Map<number, ShieldedOpening> => {
       // Build a lookup keyed by on-chain absolute output index for shielded
       // outputs the wallet owns (decoded). Same shape used by both the outputs
       // path (this tx's shielded_outputs) and the inputs path (each input's
@@ -1149,7 +1136,7 @@ class HathorWallet extends EventEmitter {
       // they are excluded here. `blindingFactor` must also be present to
       // produce a usable opening.
       const transparentCount = (target.outputs ?? []).length;
-      const out = new Map<number, { value: bigint; token: string; vbf: string; abf?: string }>();
+      const out = new Map<number, ShieldedOpening>();
       const shielded = target.shielded_outputs ?? [];
       for (let s = 0; s < shielded.length; s += 1) {
         const output = shielded[s];
@@ -1157,7 +1144,7 @@ class HathorWallet extends EventEmitter {
         if (!output.blindingFactor || output.token === undefined) continue;
         const absIdx = transparentCount + s;
         out.set(absIdx, {
-          value: BigInt(output.value),
+          value: output.value,
           token: output.token,
           vbf: output.blindingFactor,
           ...(output.assetBlindingFactor ? { abf: output.assetBlindingFactor } : {}),
@@ -1166,13 +1153,7 @@ class HathorWallet extends EventEmitter {
       return out;
     };
 
-    const outputsResult: Array<{
-      index: number;
-      value: bigint;
-      token: string;
-      vbf: string;
-      abf?: string;
-    }> = [];
+    const outputsResult: ShieldedOpeningEntry[] = [];
     for (const [absIdx, opening] of ownedOutputsOf(tx).entries()) {
       outputsResult.push({ index: absIdx, ...opening });
     }
@@ -1183,17 +1164,8 @@ class HathorWallet extends EventEmitter {
     // owned-marker fields written on the slot), the same opening unblinds the
     // input. Inputs whose parent the wallet doesn't own stay opaque — the
     // wallet has no business disclosing someone else's blinding factors.
-    const inputsResult: Array<{
-      index: number;
-      value: bigint;
-      token: string;
-      vbf: string;
-      abf?: string;
-    }> = [];
-    const parentTxCache = new Map<
-      string,
-      Map<number, { value: bigint; token: string; vbf: string; abf?: string }>
-    >();
+    const inputsResult: ShieldedOpeningEntry[] = [];
+    const parentTxCache = new Map<string, Map<number, ShieldedOpening>>();
     for (const [inputIdx, input] of (tx.inputs ?? []).entries()) {
       // We don't gate on `input.type === 'shielded'`: the sender-local insert
       // path builds the IHistoryTx without setting `type` on inputs that spend
@@ -1202,8 +1174,7 @@ class HathorWallet extends EventEmitter {
       // referenced absolute index produce a hit, which is exactly the ownership
       // gate we want. Transparent inputs naturally miss (parents have no
       // shielded entry at that absolute index) and fall through.
-      const parentTxId = (input as { tx_id?: string }).tx_id;
-      const parentOutputIndex = (input as { index?: number }).index;
+      const { tx_id: parentTxId, index: parentOutputIndex } = input;
       if (!parentTxId || parentOutputIndex === undefined) continue;
       let parentOwned = parentTxCache.get(parentTxId);
       if (parentOwned === undefined) {
@@ -1274,6 +1245,11 @@ class HathorWallet extends EventEmitter {
       index,
     };
 
+    // Height-lock inputs are constant across the whole scan; read them once
+    // instead of per-output.
+    const nowHeight = await this.storage.getCurrentHeight();
+    const rewardLock = this.storage.version?.reward_spend_min_blocks;
+
     // Iterate through transactions
     for await (const tx of this.storage.txHistory()) {
       // Voided transactions should be ignored
@@ -1281,74 +1257,54 @@ class HathorWallet extends EventEmitter {
         continue;
       }
 
-      // Iterate through outputs
-      for (const output of tx.outputs) {
-        const is_address_valid = output.decoded && output.decoded.address === address;
-        const is_token_valid = token === output.token;
-        const is_authority = transactionUtils.isAuthorityOutput(output);
-        if (!is_address_valid || !is_token_valid || is_authority) {
-          continue;
-        }
+      // Shared per-output accounting for this address+token. hathor-core
+      // stamps `spent_by` and `decoded` on BOTH transparent and
+      // shielded outputs, so the two output kinds feed identical totals — only
+      // the field plumbing differs at the two call sites below.
+      const accrue = (
+        value: bigint,
+        decodedAddress: string | undefined,
+        outputToken: string,
+        spentBy: string | null | undefined,
+        lockable: Parameters<typeof transactionUtils.isOutputLocked>[0]
+      ): void => {
+        if (decodedAddress !== address || token !== outputToken) return;
+        const is_spent = (spentBy ?? null) !== null;
+        const is_locked =
+          transactionUtils.isOutputLocked(lockable) ||
+          transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
 
-        // hathor-core surfaces `spent_by` on both transparent and shielded
-        // outputs (see `_shielded_output_to_json` in base_transaction.py and
-        // `meta.get_output_spent_by`). normalizeShieldedOutputs + the
-        // processNewTx decryption block thread the field through onto the
-        // shielded_outputs[] entries, so the canonical "is this UTXO spent"
-        // check is the same regardless of output type.
-        const is_spent = output.spent_by !== null;
-        const is_time_locked = transactionUtils.isOutputLocked(output);
-        // XXX: we currently do not check heightlock on the helper, checking here for compatibility
-        const nowHeight = await this.storage.getCurrentHeight();
-        const rewardLock = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
-        const is_locked = is_time_locked || is_height_locked;
-
-        addressInfo.total_amount_received += output.value;
-
+        addressInfo.total_amount_received += value;
         if (is_spent) {
-          addressInfo.total_amount_sent += output.value;
-          continue;
+          addressInfo.total_amount_sent += value;
+          return;
         }
-
         if (is_locked) {
-          addressInfo.total_amount_locked += output.value;
+          addressInfo.total_amount_locked += value;
         } else {
-          addressInfo.total_amount_available += output.value;
+          addressInfo.total_amount_available += value;
         }
+      };
+
+      // Transparent outputs — authority outputs never count toward value totals.
+      for (const output of tx.outputs) {
+        if (transactionUtils.isAuthorityOutput(output)) continue;
+        accrue(output.value, output.decoded?.address, output.token, output.spent_by, output);
       }
 
       // SEPARATED model: owned shielded outputs live in tx.shielded_outputs[]
       // (value/token written in place after decryption), with decoded.address =
-      // the shielded-spend P2PKH. Mirror the transparent accounting so a
-      // shielded receive/spend on this address shows in the per-address totals.
+      // the shielded-spend P2PKH. Only wallet-owned slots (value !== undefined)
+      // carry an opening; the rest are skipped.
       for (const so of tx.shielded_outputs ?? []) {
         if (so.value === undefined) continue; // not owned / not yet decrypted
-        const is_address_valid = so.decoded?.address === address;
-        const is_token_valid = token === (so.token ?? NATIVE_TOKEN_UID);
-        if (!is_address_valid || !is_token_valid) {
-          continue;
-        }
-
-        const is_spent = (so.spent_by ?? null) !== null;
-        const is_time_locked = transactionUtils.isOutputLocked(so);
-        const nowHeight = await this.storage.getCurrentHeight();
-        const rewardLock = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked = transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
-        const is_locked = is_time_locked || is_height_locked;
-
-        addressInfo.total_amount_received += so.value;
-
-        if (is_spent) {
-          addressInfo.total_amount_sent += so.value;
-          continue;
-        }
-
-        if (is_locked) {
-          addressInfo.total_amount_locked += so.value;
-        } else {
-          addressInfo.total_amount_available += so.value;
-        }
+        accrue(
+          so.value,
+          so.decoded?.address,
+          so.token ?? NATIVE_TOKEN_UID,
+          so.spent_by ?? null,
+          so
+        );
       }
     }
 
@@ -1740,7 +1696,7 @@ class HathorWallet extends EventEmitter {
     const newTx = parseResult.data;
 
     // Normalize: convert the shielded outputs' base64 confidential fields to hex
-    // (alpha-v4 delivers them already separated in shielded_outputs[]).
+    // (the fullnode delivers them already separated in shielded_outputs[]).
     transactionUtils.normalizeShieldedOutputs(newTx);
 
     // SECURITY: the wire never legitimately carries decoded shielded values —

@@ -45,6 +45,7 @@ import {
 } from '../../constants';
 import { createOutputScriptFromAddress } from '../../utils/address';
 import { JSONBigInt } from '../../utils/bigint';
+import transactionUtils from '../../utils/transaction';
 import ScriptData from '../../models/script_data';
 import {
   getOracleScript,
@@ -146,12 +147,9 @@ export async function execRawInputInstruction(
 
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
-  // SEPARATED model: `outputs[]` is transparent-only; shielded outputs live in
-  // `shielded_outputs[]` at on-chain absolute index `outputs.length + s`.
   // Templates are a transparent-only flow; reject a shielded input index with a
   // clear message instead of a confusing `undefined` destructure below.
-  const shieldedCount = origTx.shielded_outputs?.length ?? 0;
-  if (index >= origTx.outputs.length && index < origTx.outputs.length + shieldedCount) {
+  if (transactionUtils.isShieldedOutputIndex(origTx, index)) {
     throw new Error('Shielded inputs are not supported in transaction templates');
   }
   // Cache the tokenVersion via addToken

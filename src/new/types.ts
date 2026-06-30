@@ -351,6 +351,23 @@ export interface ProposedOutput {
 }
 
 /**
+ * The unblinding data the wallet holds for a single shielded output/input it
+ * owns: the cleartext `value`/`token` plus the value blinding factor (`vbf`)
+ * and, for FullShielded slots, the asset blinding factor (`abf`).
+ */
+export interface ShieldedOpening {
+  value: bigint;
+  token: string;
+  vbf: string;
+  abf?: string;
+}
+
+/** A {@link ShieldedOpening} tagged with the on-chain absolute slot index. */
+export interface ShieldedOpeningEntry extends ShieldedOpening {
+  index: number;
+}
+
+/**
  * Proposed input for a transaction
  * @property txId Transaction ID of the input
  * @property index Index of the output being spent

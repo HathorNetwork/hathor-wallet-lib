@@ -291,8 +291,8 @@ describe('normalizeShieldedOutputs', () => {
     expect(tx.shielded_outputs![0].surjection_proof).toBe('bb');
   });
 
-  it('preserves the wire `mode` on every entry untouched (v4 always sends it)', () => {
-    // alpha-v4 fullnodes always emit `mode`; normalizeShieldedOutputs is a
+  it('preserves the wire `mode` on every entry untouched (fullnode always sends it)', () => {
+    // The fullnode always emits `mode`; normalizeShieldedOutputs is a
     // hex-only pass and must leave `mode` verbatim on both FullShielded and
     // AmountShielded entries (it neither derives nor overwrites it).
     const b64 = (byte: number) => Buffer.from([byte]).toString('base64');

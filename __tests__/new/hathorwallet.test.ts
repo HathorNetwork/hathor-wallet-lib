@@ -1937,3 +1937,131 @@ describe('hasTxOutsideFirstAddress', () => {
     }
   });
 });
+
+describe('getAddressInfo shielded accounting (SEPARATED model)', () => {
+  // SEPARATED model: owned shielded outputs are decoded in place onto
+  // tx.shielded_outputs[] (value/token written after decryption) with
+  // decoded.address = the shielded-spend P2PKH. getAddressInfo mirrors the
+  // transparent accounting over shielded_outputs so a shielded receive/spend on
+  // the queried address is reflected in the per-address totals.
+  //
+  // A shielded slot is wallet-OWNED only when so.value !== undefined; a slot is
+  // spent when so.spent_by is non-null; a slot is locked when its decoded
+  // timelock is in the future (height/reward lock stays off here since the
+  // store's bestBlockHeight is 0 and storage.version is undefined).
+  test('sums received/sent/locked/available over owned shielded outputs only', async () => {
+    const ownedAddress = 'addrOwned';
+    const token = '00';
+    const futureTimelock = Math.floor(Date.now() / 1000) + 3600;
+
+    // A history tx whose shielded_outputs[] cover every accounting branch for
+    // the queried (ownedAddress, token):
+    //   A: owned, unspent, unlocked  -> received + available
+    //   B: owned, spent              -> received + sent (and nothing else)
+    //   C: owned, locked (timelock)  -> received + locked (not available)
+    //   D: non-owned (value=undef)   -> excluded from every total
+    //   E: owned but wrong token     -> excluded (token filter)
+    //   F: owned but wrong address   -> excluded (address filter)
+    const tx = {
+      tx_id: 'shieldedTx',
+      timestamp: 1,
+      version: 1,
+      weight: 1,
+      nonce: 0,
+      height: 0,
+      is_voided: false,
+      parents: [],
+      inputs: [],
+      outputs: [],
+      shielded_outputs: [
+        // A: owned, unspent, unlocked
+        {
+          mode: 1,
+          commitment: 'aa',
+          spent_by: null,
+          token,
+          value: 250n,
+          blindingFactor: 'cafe',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // B: owned, spent
+        {
+          mode: 1,
+          commitment: 'bb',
+          spent_by: 'spendTx',
+          token,
+          value: 100n,
+          blindingFactor: 'beef',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // C: owned, time-locked
+        {
+          mode: 1,
+          commitment: 'cc',
+          spent_by: null,
+          token,
+          value: 70n,
+          blindingFactor: 'face',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: futureTimelock },
+        },
+        // D: non-owned (value undefined) -> skipped before any total
+        {
+          mode: 1,
+          commitment: 'dd',
+          spent_by: null,
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // E: owned but a different token -> token filter excludes it
+        {
+          mode: 1,
+          commitment: 'ee',
+          spent_by: null,
+          token: '0102',
+          value: 500n,
+          blindingFactor: 'dead',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // F: owned but a different address -> address filter excludes it
+        {
+          mode: 1,
+          commitment: 'ff',
+          spent_by: null,
+          token,
+          value: 999n,
+          blindingFactor: 'feed',
+          decoded: { type: 'P2PKH', address: 'addrOther', timelock: null },
+        },
+      ],
+    } as unknown as IHistoryTx;
+
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    async function* txHistoryMock() {
+      yield tx;
+    }
+    jest.spyOn(storage, 'txHistory').mockImplementation(txHistoryMock);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    jest
+      .spyOn(storage, 'getAddressInfo')
+      .mockResolvedValue({ bip32AddressIndex: 7 } as unknown as ReturnType<
+        typeof storage.getAddressInfo
+      >);
+
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    const info = await hWallet.getAddressInfo(ownedAddress, { token });
+
+    // Hand-computed expectations over the owned, matching-token slots A/B/C:
+    //   received  = 250 + 100 + 70 = 420
+    //   sent      = 100             (only the spent slot B)
+    //   locked    = 70              (only the time-locked slot C)
+    //   available = 250             (only the unspent, unlocked slot A)
+    expect(info.total_amount_received).toBe(420n);
+    expect(info.total_amount_sent).toBe(100n);
+    expect(info.total_amount_locked).toBe(70n);
+    expect(info.total_amount_available).toBe(250n);
+    expect(info.token).toBe(token);
+    expect(info.index).toBe(7);
+  });
+});

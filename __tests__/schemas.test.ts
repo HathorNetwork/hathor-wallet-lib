@@ -99,7 +99,7 @@ describe('addressHistorySchema — history input `type` discriminator', () => {
 });
 
 /**
- * Coverage for the SEPARATED-model wire (alpha-v4+).
+ * Coverage for the SEPARATED-model wire.
  *
  * The fullnode delivers shielded outputs in a dedicated top-level
  * `shielded_outputs[]` array on every path (HTTP `/transaction` and
@@ -110,7 +110,7 @@ describe('addressHistorySchema — history input `type` discriminator', () => {
  * `outputs[]`, and normalize converts the confidential fields in place.
  */
 describe('addressHistorySchema — separated shielded_outputs[]', () => {
-  // A separated shielded output as emitted by the fullnode (alpha-v4): hex
+  // A separated shielded output as emitted by the fullnode: hex
   // commitment, base64 range_proof/script, hex ephemeral_pubkey, address-only
   // decoded, `mode` present. `range_proof` is base64 "abcd" to assert hex conversion.
   const shieldedOutput = {

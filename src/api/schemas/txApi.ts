@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { bigIntCoercibleSchema } from '../../utils/bigint';
-import { IHistoryNanoContractContextSchema } from '../../schemas';
+import { IHistoryNanoContractContextSchema, shieldedOutputWireShape } from '../../schemas';
 
 const p2pkhDecodedScriptSchema = z.object({
   type: z.literal('P2PKH'),
@@ -95,31 +95,8 @@ const shieldedDecodedSchema = z
 // forward-compat fields the fullnode might add without rejecting the tx.
 export const fullnodeTxApiShieldedOutputSchema = z
   .object({
-    // 1 = AmountShielded, 2 = FullShielded (matches ShieldedOutputMode).
-    // Optional because hathor-core nodes pre-`_shielded_output_to_json`
-    // mode-field addition still send shielded outputs without it.
-    // Downstream readers fall back to detecting FullShielded via the
-    // presence of `asset_commitment`. Once every node consumers care
-    // about has shipped the field this can be tightened back.
-    mode: z.number().optional(),
-    commitment: z.string(), // hex, 33 bytes
-    range_proof: z.string(), // hex, variable
-    script: z.string(), // hex, P2PKH/P2SH script template
-    // FullShielded outputs may omit `token_data` (the token UID is
-    // hidden behind `asset_commitment`, so the field carries no
-    // meaningful value). Defaulting to 0 (native-token slot) matches
-    // the AmountShielded-when-uncertain fallback used elsewhere.
-    token_data: z.number().optional().default(0),
-    ephemeral_pubkey: z.string(), // hex, 33 bytes; used for ECDH decryption
+    ...shieldedOutputWireShape,
     decoded: shieldedDecodedSchema,
-    // FullShielded only — present when `mode === 2`.
-    asset_commitment: z.string().optional(), // hex, 33 bytes
-    surjection_proof: z.string().optional(), // hex, variable
-    // Set by the fullnode when this slot has been spent in another tx.
-    // Null when unspent. Same semantics as transparent
-    // `IHistoryOutput.spent_by`; missing on older fullnode builds that
-    // don't yet emit it, hence `.optional()`.
-    spent_by: z.string().nullable().optional(),
   })
   .passthrough();
 

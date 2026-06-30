@@ -139,8 +139,25 @@ const transaction = {
   },
 
   /**
+   * True when `index` is the on-chain absolute index of a SHIELDED output of
+   * `tx` — i.e. it falls in the shielded range `[outputs.length, outputs.length
+   * + shieldedCount)`. In the SEPARATED model transparent outputs occupy
+   * `outputs[0..N)` and shielded outputs occupy the slots immediately after.
+   * Transparent-only flows (partial txs, tx templates) use this to reject a
+   * shielded input index with a clear message instead of a misleading bounds
+   * error or an undefined output read.
+   */
+  isShieldedOutputIndex(
+    tx: { outputs: unknown[]; shielded_outputs?: unknown[] | null },
+    index: number
+  ): boolean {
+    const shieldedCount = tx.shielded_outputs?.length ?? 0;
+    return index >= tx.outputs.length && index < tx.outputs.length + shieldedCount;
+  },
+
+  /**
    * Hex-encode the confidential wire fields of a transaction's shielded outputs,
-   * in place. The fullnode (alpha-v4+) delivers shielded outputs SEPARATED in a
+   * in place. The fullnode delivers shielded outputs SEPARATED in a
    * dedicated `shielded_outputs[]` array on BOTH the HTTP `/transaction`
    * (to_json) and the `address_history` + WS real-time (to_json_extended) paths,
    * so `outputs[]` is always transparent-only — no inline relocation needed —
@@ -1546,22 +1563,18 @@ const transaction = {
 
     // SEPARATED model: `outputs[]` is transparent-only — hydrate each with its
     // token. Shielded outputs arrive in a dedicated `shielded_outputs[]` field
-    // (passthrough — not in the zod schema); convert their base64 buffer fields
-    // to hex so downstream decryption (Buffer.from(value, 'hex')) parses them.
+    // (passthrough — not in the zod schema); they are shallow-copied here and
+    // hex-normalized in one pass via normalizeShieldedOutputs(histTx) below.
     const outputs: IHistoryOutput[] = tx.outputs.map(
       o => this.hydrateIOWithToken(o, tx.tokens) as IHistoryOutput
     );
 
     const separateShielded = (tx as { shielded_outputs?: IHistoryShieldedOutput[] })
       .shielded_outputs;
+    // Shallow-copy each slot so the hex normalization below mutates our copies,
+    // not the caller's txResponse objects.
     const shieldedOutputs: IHistoryShieldedOutput[] = (separateShielded ?? []).map(so => ({
       ...so,
-      commitment: ensureHex(so.commitment),
-      range_proof: ensureHex(so.range_proof),
-      script: ensureHex(so.script),
-      ephemeral_pubkey: ensureHex(so.ephemeral_pubkey),
-      asset_commitment: so.asset_commitment ? ensureHex(so.asset_commitment) : undefined,
-      surjection_proof: so.surjection_proof ? ensureHex(so.surjection_proof) : undefined,
     }));
 
     const histTx: IHistoryTx = {
@@ -1590,6 +1603,10 @@ const transaction = {
     if (tx.nc_address) histTx.nc_address = tx.nc_address;
     if (tx.nc_context) histTx.nc_context = tx.nc_context;
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
+
+    // Hex-encode the confidential wire fields (commitment/range_proof/script/…)
+    // in one pass — the same normalization used by the realtime/ws path.
+    this.normalizeShieldedOutputs(histTx);
 
     return histTx;
   },
