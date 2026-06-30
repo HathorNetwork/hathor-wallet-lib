@@ -214,6 +214,19 @@ const transaction = {
         // eslint-disable-next-line no-param-reassign
         so.surjection_proof = ensureHex(so.surjection_proof);
       }
+      // Derive `mode` when the fullnode omits it. alpha-v3 fullnodes don't emit
+      // `mode` (added to hathor-core's _shielded_output_to_json only in alpha-v4),
+      // so a WS re-delivery would otherwise clobber the locally-inserted mode with
+      // undefined (the per-slot merge in onNewTx doesn't restore it). Only
+      // FullShielded outputs carry an asset_commitment, so the shape is an
+      // unambiguous discriminator; a mode already present (alpha-v4 wire, or the
+      // sender-local insert) is kept.
+      if (so.mode === undefined) {
+        // eslint-disable-next-line no-param-reassign
+        so.mode = so.asset_commitment
+          ? ShieldedOutputMode.FULLY_SHIELDED
+          : ShieldedOutputMode.AMOUNT_SHIELDED;
+      }
     }
   },
 
