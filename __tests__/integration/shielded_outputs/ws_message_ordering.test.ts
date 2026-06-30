@@ -42,13 +42,17 @@ function bareWsPayload(storedTx: any) {
 }
 
 /**
- * Build a "full" wsData payload by reconstructing the wire form: shielded
- * entries inlined into outputs[] with type:'shielded', shielded_outputs
- * undefined (so normalize re-extracts them like the fullnode would).
+ * Build a "full" wsData payload reconstructing the alpha-v4 SEPARATED wire form:
+ * transparent outputs[] plus a top-level shielded_outputs[] carrying the
+ * confidential fields in wire encoding (commitment / ephemeral_pubkey /
+ * asset_commitment hex; range_proof / script / surjection_proof base64), `mode`
+ * present and NO owned-marker fields — so normalizeShieldedOutputs hex-converts
+ * them like the real fullnode wire. (Pre-v4 inlined these into outputs[] with
+ * type:'shielded'; v4 never does, and the strict output schema rejects it.)
  */
 function fullWsPayload(storedTx: any) {
-  const inlinedShielded = (storedTx.shielded_outputs ?? []).map((so: any) => ({
-    type: 'shielded',
+  const wireShielded = (storedTx.shielded_outputs ?? []).map((so: any) => ({
+    mode: so.mode,
     commitment: so.commitment,
     range_proof: Buffer.from(so.range_proof, 'hex').toString('base64'),
     script: Buffer.from(so.script, 'hex').toString('base64'),
@@ -59,11 +63,12 @@ function fullWsPayload(storedTx: any) {
     surjection_proof: so.surjection_proof
       ? Buffer.from(so.surjection_proof, 'hex').toString('base64')
       : undefined,
+    spent_by: so.spent_by ?? null,
   }));
   return {
     ...storedTx,
-    outputs: [...storedTx.outputs.filter((o: any) => o?.type !== 'shielded'), ...inlinedShielded],
-    shielded_outputs: undefined,
+    outputs: storedTx.outputs.filter((o: any) => o?.type !== 'shielded'),
+    shielded_outputs: wireShielded,
   };
 }
 
