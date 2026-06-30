@@ -462,11 +462,18 @@ export async function processHistory(
   let legacyMaxIndexUsed = -1;
   let shieldedMaxIndexUsed = -1;
   // Iterate on all txs of the history updating the metadata as we go.
-  // Order chronologically (oldest first) so that a tx spending a previous tx's
-  // shielded UTXO finds that UTXO already saved (and its parent already
-  // decoded) when the wallet-owned shielded input is resolved. The store
-  // yields newest-first by default for UI purposes; pass `order: 'asc'` so we
-  // walk the timeline forward without buffering the whole history into memory.
+  // Order chronologically (oldest first) so a tx spending a previous tx's
+  // shielded UTXO finds the parent already decoded + persisted when the
+  // wallet-owned shielded input is enriched (processNewTx's bare-shielded-input
+  // lookback). The store yields newest-first by default for UI purposes; pass
+  // `order: 'asc'` so we walk the timeline forward without buffering the whole
+  // history into memory.
+  //
+  // No explicit per-tx input-deletion pass is needed: spent UTXOs are not
+  // re-saved because processNewTx gates UTXO creation on `spent_by === null`,
+  // and alpha-v4 reliably stamps `spent_by` on both transparent and shielded
+  // outputs (to_json_extended), so a spend seen during the walk leaves the
+  // parent's UTXO unsaved rather than resurrected.
   for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
     const processedData = await processNewTx(storage, tx, {
       rewardLock,
@@ -478,46 +485,6 @@ export async function processHistory(
     shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
     for (const token of processedData.tokens) {
       tokens.add(token);
-    }
-    // After cleanMetadata wipes UTXOs, processNewTx re-saves outputs based on
-    // their `spent_by` flag — but the fullnode doesn't always set spent_by on
-    // an output before we've seen the spending tx. So we also re-apply the
-    // per-tx input deletion: for each input, resolve the origin tx's spent
-    // output (via the SEPARATED-model resolver) and delete that UTXO from
-    // storage. Without this, processHistory can resurrect a UTXO already spent
-    // by a later tx and the next send picks it, producing "input already
-    // spent" at the fullnode.
-    for (const input of tx.inputs) {
-      const origTx = await storage.getTx(input.tx_id);
-      if (!origTx) continue;
-      const resolved = transactionUtils.resolveSpentOutput(origTx, input.index);
-      if (!resolved) continue;
-      if (resolved.kind === 'shielded') {
-        // Non-owned (or not-yet-decoded) shielded slot — nothing of ours to
-        // delete. Owned slots carry value/decoded.address once decrypted.
-        const so = resolved.output;
-        if (so.value === undefined || !so.decoded?.address) continue;
-        if (!(await storage.isAddressMine(so.decoded.address))) continue;
-        const shieldedUtxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
-        if (shieldedUtxo) {
-          await store.deleteUtxo(shieldedUtxo);
-        }
-        continue;
-      }
-      const { output } = resolved;
-      if (!output?.decoded?.address) continue;
-      if (!(await storage.isAddressMine(output.decoded.address))) continue;
-      await store.deleteUtxo({
-        txId: input.tx_id,
-        index: input.index,
-        token: output.token,
-        address: output.decoded.address,
-        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
-        value: output.value,
-        timelock: output.decoded.timelock ?? null,
-        type: origTx.version,
-        height: origTx.height ?? null,
-      });
     }
   }
 
