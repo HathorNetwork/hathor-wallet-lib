@@ -2,70 +2,65 @@
 
 Integration tests for wallet-lib run against a Docker-based Hathor network
 (see `configuration/docker-compose.yml`). The shielded-output suite additionally
-requires the native crypto provider, which is **not** declared as a dependency
-of wallet-lib.
+requires the native crypto provider `@hathor/ct-crypto-node`, which is installed
+**on demand, only for the integration suite** (it is not a declared dependency —
+see below).
 
-## One-time setup
+## Crypto provider — installed automatically
 
-### 1. Build the ct-crypto-node native artifact
+`@hathor/ct-crypto-node` is a native (NAPI) addon published to npm with platform
+prebuilds. You do **not** need to install it manually: the
+`pretest_network_integration` hook runs
+`__tests__/integration/scripts/ensure-ct-crypto.js` before the suite, which
+installs the pinned version (`--no-save`) if it isn't already present. The first
+integration run fetches it; later runs reuse the cached copy.
 
-Clone `hathor-ct-crypto-node` as a sibling of `hathor-wallet-lib`:
-
-```bash
-cd ..
-git clone git@github.com:HathorNetwork/hathor-ct-crypto-node.git hathor-ct-crypto
-cd hathor-ct-crypto
-npm run build              # builds the NAPI addon
-```
-
-Assemble the npm-publishable artifact at `hathor-ct-crypto/npm-package/`. CI
-normally produces this from prebuilt platform binaries; for local dev you can
-either fetch the latest prebuild artifact from the repo's GitHub Actions or
-build for your platform and copy the result yourself:
+To install it by hand (e.g. to pin a different prebuild):
 
 ```bash
-mkdir -p npm-package/prebuilds/$(node -p '`${process.platform}-${process.arch}`')
-cp target/release/libct_crypto.dylib \
-   npm-package/prebuilds/$(node -p '`${process.platform}-${process.arch}`')/ct-crypto.node
-cp index.js index.d.ts provider.js package.json npm-package/
+npm install --no-save @hathor/ct-crypto-node@0.0.1-shielded
 ```
 
-(Substitute `.dylib` with `.so` on Linux, `.dll` on Windows.)
-
-### 2. Install the artifact into wallet-lib
-
-```bash
-cd ../hathor-wallet-lib
-npm install ../hathor-ct-crypto/npm-package --no-save
-```
-
-`--no-save` keeps `package.json` clean. The package is wired up under
-`node_modules/@hathor/ct-crypto-node/` and resolves the import in
-`__tests__/integration/helpers/wallet.helper.ts`.
+The package resolves under `node_modules/@hathor/ct-crypto-node/` and satisfies
+the import in `__tests__/integration/helpers/wallet.helper.ts`.
 
 ## Running the suite
 
 ```bash
 npm run test_network_up           # start the Docker network
-npm run test_network_integration  # run all integration tests
+npm run test_network_integration  # auto-installs the provider, then runs the suite
 npm run test_network_down         # tear down the Docker network
 ```
 
-A specific test file:
+Or all three in sequence:
 
 ```bash
-SPECIFIC_INTEGRATION_TEST_FILE=shielded_outputs/core.test.ts \
+npm run test_integration
+```
+
+A specific test file (the value is matched as `**/<value>.test.ts`, so omit the
+`.test.ts` suffix):
+
+```bash
+SPECIFIC_INTEGRATION_TEST_FILE=shielded_outputs/core \
+  npm run test_network_integration
+
+# the whole shielded suite (23 files):
+SPECIFIC_INTEGRATION_TEST_FILE='shielded_outputs/*' \
   npm run test_network_integration
 ```
 
 ## Why is ct-crypto-node not a declared dependency?
 
-`@hathor/ct-crypto-node` is not yet published to npm — it's still under active
-development. Declaring it in `package.json` with a `file:` link or `git+` URL
-would either fragility-bind wallet-lib to a specific local layout (`file:`) or
-fetch the source tree without the prebuilt NAPI binary (`git+`), breaking
-runtime. Manual install gives consumers full control over which version /
-prebuild they pin to without locking wallet-lib into a particular workflow.
+`@hathor/ct-crypto-node` is a platform-specific native addon needed **only** by
+the shielded integration suite. Declaring it as a (dev)dependency would pull the
+native binary on every `npm install` — and *break* `npm install` on any platform
+without a published prebuild (npm falls back to building from source, which needs
+a Rust toolchain) — for contributors who only run unit tests or build the
+library. Unit tests never use it; they register a mock provider.
 
-Once ct-crypto-node ships to npm (or a private registry), this section will
-collapse into a normal `npm install`.
+Keeping it out of `package.json` and installing it on demand via the
+`pretest_network_integration` hook means a normal `npm install` never touches it,
+while the integration suite still gets it transparently. ESLint is told the
+module is available via `settings['import/core-modules']` in `.eslintrc.js`, so
+the integration helper's import doesn't trip `import/no-unresolved` at lint time.
