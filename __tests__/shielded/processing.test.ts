@@ -70,21 +70,21 @@ describe('resolveTokenUid', () => {
   it('should return NATIVE_TOKEN_UID_HEX for token_data 0', () => {
     const so = makeShieldedOutput({ token_data: 0 });
     const tx = makeHistoryTx();
-    expect(resolveTokenUid(so, tx)).toBe(NATIVE_TOKEN_UID_HEX);
+    expect(resolveTokenUid(so.token_data, tx)).toBe(NATIVE_TOKEN_UID_HEX);
   });
 
   it('should return NATIVE_TOKEN_UID_HEX for token_data with authority bit set but index 0', () => {
     // authority bit is 0x80, so 0x80 & 0x7f = 0
     const so = makeShieldedOutput({ token_data: 0x80 });
     const tx = makeHistoryTx();
-    expect(resolveTokenUid(so, tx)).toBe(NATIVE_TOKEN_UID_HEX);
+    expect(resolveTokenUid(so.token_data, tx)).toBe(NATIVE_TOKEN_UID_HEX);
   });
 
   it('should return token from tx.tokens for token_data 1', () => {
     const customToken = 'deadbeef'.repeat(8);
     const so = makeShieldedOutput({ token_data: 1 });
     const tx = makeHistoryTx({ tokens: [customToken] });
-    expect(resolveTokenUid(so, tx)).toBe(customToken);
+    expect(resolveTokenUid(so.token_data, tx)).toBe(customToken);
   });
 
   it('should return second token for token_data 2', () => {
@@ -92,13 +92,13 @@ describe('resolveTokenUid', () => {
     const tokenB = 'bbbb'.repeat(16);
     const so = makeShieldedOutput({ token_data: 2 });
     const tx = makeHistoryTx({ tokens: [tokenA, tokenB] });
-    expect(resolveTokenUid(so, tx)).toBe(tokenB);
+    expect(resolveTokenUid(so.token_data, tx)).toBe(tokenB);
   });
 
   it('should throw for out-of-range token_data', () => {
     const so = makeShieldedOutput({ token_data: 5 });
     const tx = makeHistoryTx({ tokens: ['aa'.repeat(32)] });
-    expect(() => resolveTokenUid(so, tx)).toThrow(/Invalid token_data index 5/);
+    expect(() => resolveTokenUid(so.token_data, tx)).toThrow(/Invalid token_data index 5/);
   });
 
   it('should mask authority bit when resolving', () => {
@@ -106,7 +106,7 @@ describe('resolveTokenUid', () => {
     const customToken = 'ff'.repeat(32);
     const so = makeShieldedOutput({ token_data: 0x81 });
     const tx = makeHistoryTx({ tokens: [customToken] });
-    expect(resolveTokenUid(so, tx)).toBe(customToken);
+    expect(resolveTokenUid(so.token_data, tx)).toBe(customToken);
   });
 
   it('should throw when an AmountShielded output is missing token_data', () => {
@@ -115,7 +115,7 @@ describe('resolveTokenUid', () => {
     // surfaced loudly rather than silently resolved to the native-token slot.
     const so = makeShieldedOutput({ token_data: undefined });
     const tx = makeHistoryTx({ tx_id: 'deadbeef' });
-    expect(() => resolveTokenUid(so, tx)).toThrow(/missing token_data/);
+    expect(() => resolveTokenUid(so.token_data, tx)).toThrow(/missing token_data/);
   });
 });
 
@@ -150,6 +150,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const so = makeShieldedOutput();
     const tx = makeHistoryTx({ shielded_outputs: [so] });
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(false),
       getAddressInfo: jest.fn().mockResolvedValue(null),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
@@ -159,7 +160,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     expect(tx.shielded_outputs![0].value).toBeUndefined();
   });
 
-  it('should skip output when scan key derivation fails and log warning', async () => {
+  it('should throw when the scan xpriv unlock fails (systemic error)', async () => {
     const so = makeShieldedOutput();
     const tx = makeHistoryTx({
       shielded_outputs: [so],
@@ -167,6 +168,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     });
 
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockRejectedValue(new Error('no key')),
       logger: { warn: jest.fn(), info: jest.fn(), debug: jest.fn() },
@@ -174,9 +176,9 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
 
     const provider = makeMockProvider();
 
-    const result = await processShieldedOutputs(storage, tx, provider, 'pin');
-    expect(result).toEqual([]);
-    expect(storage.logger.warn).toHaveBeenCalled();
+    // C4: a scan-xpriv unlock failure is SYSTEMIC (wrong PIN / missing key), so
+    // processShieldedOutputs fails loud rather than silently skipping owned outputs.
+    await expect(processShieldedOutputs(storage, tx, provider, 'pin')).rejects.toThrow('no key');
     expect(tx.shielded_outputs![0].value).toBeUndefined();
   });
 
@@ -192,6 +194,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
 
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -224,6 +227,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const bf = Buffer.alloc(32, 0x07);
 
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -259,6 +263,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
 
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -291,6 +296,9 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
 
     const storage = {
+      isAddressMine: jest
+        .fn()
+        .mockImplementation(async (addr: string) => addr === 'addr1' || addr === 'addr3'),
       getAddressInfo: jest.fn().mockImplementation(async (addr: string) => {
         if (addr === 'addr1') return { bip32AddressIndex: 0 };
         if (addr === 'addr3') return { bip32AddressIndex: 2 };
@@ -324,8 +332,13 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     expect(tx.shielded_outputs![1].value).toBeUndefined();
     expect(tx.shielded_outputs![2].value).toBeUndefined();
 
+    // Ownership is checked via isAddressMine for all 3; getAddressInfo (for the
+    // derivation index) is only fetched for the owned addresses (addr1, addr3).
+    expect(storage.isAddressMine).toHaveBeenCalledWith('addr1');
+    expect(storage.isAddressMine).toHaveBeenCalledWith('addr2');
+    expect(storage.isAddressMine).toHaveBeenCalledWith('addr3');
     expect(storage.getAddressInfo).toHaveBeenCalledWith('addr1');
-    expect(storage.getAddressInfo).toHaveBeenCalledWith('addr2');
+    expect(storage.getAddressInfo).not.toHaveBeenCalledWith('addr2');
     expect(storage.getAddressInfo).toHaveBeenCalledWith('addr3');
     expect(provider.rewindAmountShieldedOutput).toHaveBeenCalledTimes(2);
   });
@@ -343,6 +356,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const abf = Buffer.alloc(32, 0x04);
 
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
@@ -381,6 +395,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
 
     const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(mockXpriv),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },

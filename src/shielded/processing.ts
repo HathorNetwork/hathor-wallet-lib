@@ -9,38 +9,26 @@ import { HDPrivateKey } from 'bitcore-lib';
 import { IStorage, IHistoryTx, ILogger } from '../types';
 import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, PRIVATE_KEY_SIZE_BYTES } from '../constants';
 import tokenUtils from '../utils/tokens';
-import {
-  IShieldedCryptoProvider,
-  IShieldedOutput,
-  IProcessedShieldedOutput,
-  ShieldedOutputMode,
-} from './types';
+import { IShieldedCryptoProvider, IProcessedShieldedOutput, ShieldedOutputMode } from './types';
 
 /**
- * Resolve the token UID for a shielded output.
+ * Resolve the 32-byte hex token UID (NATIVE_TOKEN_UID_HEX for HTR) from an
+ * output's `token_data` and the tx's token list. Generic over any output — the
+ * same `token_data` → token-index convention transparent I/O uses (see
+ * transaction.ts `hydrateIOWithToken`).
  *
- * Uses the same token_data convention as transparent outputs (via getTokenIndexFromData).
- * Returns the 32-byte hex UID needed by the crypto layer (NATIVE_TOKEN_UID_HEX for HTR).
- * For FullShielded outputs, the token is unknown until decrypted.
+ * The caller must not call this for FullShielded outputs, whose token is hidden
+ * behind `asset_commitment` and only recovered by rewind (processShieldedOutputs
+ * routes them away before reaching here).
  */
-export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx): string {
-  // FullShielded outputs have hidden tokens — token UID is recovered from rewind, not token_data
-  if (shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED) {
-    throw new Error(
-      'resolveTokenUid must not be called for FullShielded outputs — ' +
-        'token UID is recovered from the range proof during rewind, not from token_data'
-    );
+export function resolveTokenUid(tokenData: number | undefined, tx: IHistoryTx): string {
+  // `token_data` is only ever absent on FullShielded outputs (handled by the
+  // caller), so a missing value here is a bug — fail loud rather than silently
+  // resolving to the native slot, which would misattribute a custom token as HTR.
+  if (tokenData === undefined) {
+    throw new Error(`Output on tx ${tx.tx_id} is missing token_data`);
   }
-  // Only FullShielded outputs omit token_data (the token is hidden behind
-  // asset_commitment), and the caller routes those away before calling this
-  // (see processShieldedOutputs). So on the AmountShielded path token_data is
-  // always present — fail loud rather than silently resolving a missing index
-  // to the native-token slot, which would misattribute a custom-token output
-  // as HTR.
-  if (shieldedOutput.token_data === undefined) {
-    throw new Error(`AmountShielded output on tx ${tx.tx_id} is missing token_data`);
-  }
-  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data);
+  const tokenIndex = tokenUtils.getTokenIndexFromData(tokenData);
   if (tokenIndex === 0) {
     return NATIVE_TOKEN_UID_HEX;
   }
@@ -131,24 +119,29 @@ export async function processShieldedOutputs(
   for (const [sIndex, shieldedOutput] of shieldedOutputs.entries()) {
     const absoluteIndex = transparentCount + sIndex;
     const address = shieldedOutput.decoded?.address;
+    // No decoded address means a data output or a non-canonical/non-P2PKH script,
+    // which can't be an owned shielded output — skip it. Shielded outputs are
+    // expected to carry a spend P2PKH address (the fullnode is believed to reject
+    // non-P2PKH shielded scripts — to confirm with core), so this is defensive.
     if (!address) continue;
 
     // Check if this address belongs to our wallet
-    const addressInfo = await storage.getAddressInfo(address);
-    if (!addressInfo) continue;
+    if (!(await storage.isAddressMine(address))) continue;
 
     if (!scanHdPrivKey) {
-      try {
-        scanHdPrivKey = new HDPrivateKey(await storage.getScanXPrivKey(pinCode));
-      } catch (e) {
-        storage.logger.warn('Failed to unlock scan xpriv for shielded outputs', e);
-        continue;
-      }
+      // Unlock the scan xpriv once per tx. A failure here (wrong PIN, or a
+      // missing/corrupted scan key) is systemic — it would fail for every owned
+      // shielded output — so let it propagate and fail loud rather than silently
+      // under-counting the wallet's shielded balance.
+      scanHdPrivKey = new HDPrivateKey(await storage.getScanXPrivKey(pinCode));
     }
-    // Derive this address's scan private key (ECDH) from the cached HD key
+    // Derive this address's scan private key (ECDH) from the cached HD key.
+    // isAddressMine above guarantees the address is in storage, so getAddressInfo
+    // is non-null; we fetch it here only for the bip32 derivation index.
+    const addressInfo = await storage.getAddressInfo(address);
     const privkey = deriveScanChildPrivkey(
       scanHdPrivKey,
-      addressInfo.bip32AddressIndex,
+      addressInfo!.bip32AddressIndex,
       storage.logger
     );
     if (!privkey) continue;
@@ -208,7 +201,7 @@ export async function processShieldedOutputs(
         }
       } else {
         // AmountShielded: token UID is known from the visible token_data field
-        const tokenUid = resolveTokenUid(shieldedOutput, tx);
+        const tokenUid = resolveTokenUid(shieldedOutput.token_data, tx);
         const result = await cryptoProvider.rewindAmountShieldedOutput(
           privkey,
           ephPk,
