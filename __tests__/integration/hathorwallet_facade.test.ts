@@ -63,6 +63,7 @@ describe('template methods', () => {
     // After mining and pushing, the hash should be set (it was null before mining)
     expect(tx.hash).not.toBeNull();
     expect(typeof tx.nonce).toBe('number');
+    expect(tx.nonce).toBeGreaterThan(0);
   });
 
   it('should send transactions from the template transaction', async () => {

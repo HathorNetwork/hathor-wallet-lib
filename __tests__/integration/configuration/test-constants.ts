@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import * as constants from '../../../src/constants';
+
 /**
  * @type {Record<string,{walletId:string,words:string,addresses:string[]}>}
  */
@@ -103,10 +105,23 @@ export const TOKEN_DATA = {
   TOKEN: 1,
 };
 
-export const FULLNODE_NETWORK_NAME = 'nano-testnet-bravo';
-export const NETWORK_NAME = 'testnet';
+export const FULLNODE_NETWORK_NAME = 'privatenet';
+export const NETWORK_NAME = 'privatenet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
 
-export const TX_TIMEOUT_DEFAULT = 5000;
+export const TX_TIMEOUT_DEFAULT = 30000;
 export const DEBUG_LOGGING = true;
+
+/**
+ * Raises wallet-lib's global request TIMEOUT for the shielded integration
+ * suites. The v4 docker-compose runs a real cpuminer (real PoW, no fixed
+ * block interval), so shielded txs confirm slower than the 10s library
+ * default. Every shielded suite must call this once at module load.
+ *
+ * The single typed cast here replaces the `(constants as any).TIMEOUT = 30000`
+ * line that was duplicated across every shielded test file.
+ */
+export function bumpShieldedTestTimeout(): void {
+  (constants as { TIMEOUT: number }).TIMEOUT = TX_TIMEOUT_DEFAULT;
+}
