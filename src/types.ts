@@ -638,7 +638,12 @@ export interface ApiVersion {
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;
+  /** @deprecated Use the numerator/denominator fraction below, which keeps integer precision. */
   token_deposit_percentage: number;
+  /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_numerator?: number;
+  /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_denominator?: number;
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
@@ -838,6 +843,7 @@ export interface IStorage {
     cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
+  getTokenDepositPercentageFraction(): { numerator: bigint; denominator: bigint };
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;

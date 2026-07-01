@@ -642,7 +642,12 @@ export interface FullNodeVersionData {
   minTxWeight: number;
   minTxWeightCoefficient: number;
   minTxWeightK: number;
+  /** @deprecated Use the numerator/denominator fraction below, which keeps integer precision. */
   tokenDepositPercentage: number;
+  /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
+  tokenDepositPercentageNumerator?: number;
+  /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */
+  tokenDepositPercentageDenominator?: number;
   rewardSpendMinBlocks: number;
   maxNumberInputs: number;
   maxNumberOutputs: number;

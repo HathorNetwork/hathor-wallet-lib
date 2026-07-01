@@ -167,6 +167,15 @@ test('Token deposit', () => {
   expect(tokens.getDepositAmount(550n)).toBe(6n);
 });
 
+test('Token deposit throws for a negative amount', () => {
+  // The executor handles the sign itself (created tokens are a negative balance), so this guard
+  // is safe; see the createToken deposit path in executor.ts.
+  expect(() => tokens.getDepositAmount(-1n)).toThrow('mint amount should be a positive number');
+  expect(() => tokens.getDepositAmount(-500n)).toThrow('mint amount should be a positive number');
+  // Zero is allowed: the guard is strictly negative.
+  expect(tokens.getDepositAmount(0n)).toBe(0n);
+});
+
 test('Fee for data script output', () => {
   expect(tokens.getDataScriptOutputFee()).toBe(1n);
 });
@@ -177,4 +186,25 @@ test('Token withdraw', () => {
   expect(tokens.getWithdrawAmount(99n)).toBe(0n);
   expect(tokens.getWithdrawAmount(500n)).toBe(5n);
   expect(tokens.getWithdrawAmount(550n)).toBe(5n);
+});
+
+test('Token withdraw preserves the sign of the amount', () => {
+  // Unlike getDepositAmount, getWithdrawAmount has no negative guard: BigInt division truncates
+  // toward zero, so a negative melt amount yields a negative withdraw with the magnitude floored.
+  expect(tokens.getWithdrawAmount(-100n)).toBe(-1n);
+  expect(tokens.getWithdrawAmount(-500n)).toBe(-5n);
+  expect(tokens.getWithdrawAmount(-550n)).toBe(-5n);
+  expect(tokens.getWithdrawAmount(0n)).toBe(0n);
+});
+
+test('Token deposit keeps integer precision for large amounts', () => {
+  // Above 2**53, Number(amount) loses integer precision, so float math returns a wrong result.
+  // 9007199254741001 / 100 = 90071992547410.01 -> ceil = 90071992547411 (float returned ...410).
+  expect(tokens.getDepositAmount(9007199254741001n)).toBe(90071992547411n);
+});
+
+test('Token withdraw keeps integer precision for large amounts', () => {
+  // 9007199254740999 / 100 = 90071992547409.99 -> floor = 90071992547409
+  // Float path rounds the amount up to 9007199254741000 and returns 90071992547410.
+  expect(tokens.getWithdrawAmount(9007199254740999n)).toBe(90071992547409n);
 });
