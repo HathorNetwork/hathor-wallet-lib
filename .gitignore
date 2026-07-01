@@ -14,3 +14,9 @@ tsconfig.tsbuildinfo
 tmp/
 .claude/settings.local.json
 .worktrees
+
+# Profiling output
+profiling/profiles/*.cpuprofile
+profiling/profiles/*.json
+.env
+.env.profile
