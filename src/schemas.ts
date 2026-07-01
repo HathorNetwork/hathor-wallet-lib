@@ -21,6 +21,10 @@ import {
   TxHistoryProcessingStatus,
 } from './types';
 import { bigIntCoercibleSchema, ZodSchema } from './utils/bigint';
+// Type-only: the enum's runtime value lives in the native @hathor/ct-crypto-provider
+// package; importing it as a value would pull that native module into every consumer
+// of this schema module. We only need it to type the `mode` wire field.
+import type { ShieldedOutputMode } from './shielded/types';
 
 /**
  * TxId schema
@@ -167,13 +171,14 @@ export const IHistoryNanoContractContextSchema = z
 // and the history-only owned-marker fields differ between the two, so each
 // composes this base via `z.object({ ...shieldedOutputWireShape, ... })`.
 //
-// `mode` stays OPTIONAL on purpose: older fullnodes omit it and downstream
-// readers fall back to `asset_commitment` presence to detect FullShielded — a
-// deliberate fail-open boundary, not something to tighten here. `token_data`
-// defaults to 0 (native-token slot) because FullShielded outputs hide the token
-// UID behind `asset_commitment` and may omit the field.
+// `mode` is REQUIRED: the fullnode always sets it on the wire, so readers
+// classify directly from it. `token_data` defaults to 0 (native-token slot)
+// because FullShielded outputs hide the token UID behind `asset_commitment`
+// and may omit the field.
 export const shieldedOutputWireShape = {
-  mode: z.number().optional(),
+  // Wire value is a raw number (1=AmountShielded, 2=FullShielded); type it as
+  // ShieldedOutputMode without pulling the native provider's runtime enum in.
+  mode: z.number() as unknown as z.ZodType<ShieldedOutputMode>,
   commitment: z.string(),
   range_proof: z.string(),
   script: z.string(),
