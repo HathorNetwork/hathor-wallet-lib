@@ -29,7 +29,7 @@ import {
   TokenVersion,
   UtxoSelectionAlgorithm,
 } from '../types';
-import { getAddressType } from './address';
+import { getAddressType, resolveOutputScriptAddress } from './address';
 import {
   InsufficientFundsError,
   SendTxError,
@@ -492,7 +492,14 @@ const tokens = {
 
       // get output change
       if (foundAmount > requiredAmount) {
-        const cAddress = await storage.getChangeAddress({ changeAddress });
+        // A shielded change address has no direct output script; resolve it to
+        // its spend-derived P2PKH (same as explicit shielded outputs in the send
+        // pipeline). Without this, getAddressType throws for a shielded
+        // changeAddress and token creation with a shielded change fails (K.2).
+        const cAddress = resolveOutputScriptAddress(
+          await storage.getChangeAddress({ changeAddress }),
+          storage.config.getNetwork()
+        );
 
         // place at the beginning of the array to keep the order of the outputs
         outputs.unshift({

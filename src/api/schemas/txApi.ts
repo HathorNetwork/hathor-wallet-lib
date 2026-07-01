@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { bigIntCoercibleSchema } from '../../utils/bigint';
-import { IHistoryNanoContractContextSchema } from '../../schemas';
+import { IHistoryNanoContractContextSchema, shieldedOutputWireShape } from '../../schemas';
 
 const p2pkhDecodedScriptSchema = z.object({
   type: z.literal('P2PKH'),
@@ -38,7 +38,7 @@ export const decodedSchema = z.discriminatedUnion('type', [
   unknownDecodedScriptSchema,
 ]);
 
-export const fullnodeTxApiInputSchema = z.object({
+const fullnodeTxApiTransparentInputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
   script: z.string(),
@@ -48,6 +48,22 @@ export const fullnodeTxApiInputSchema = z.object({
   token: z.string().nullish(),
 });
 
+// Shielded inputs expose only a commitment + range proof on the wire; the
+// amount, token and spender are hidden. Additional fields may be added by the
+// fullnode over time, so we passthrough unknown keys instead of rejecting.
+const fullnodeTxApiShieldedInputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    commitment: z.string(),
+    range_proof: z.string(),
+  })
+  .passthrough();
+
+export const fullnodeTxApiInputSchema = z.union([
+  fullnodeTxApiShieldedInputSchema,
+  fullnodeTxApiTransparentInputSchema,
+]);
+
 export const fullnodeTxApiOutputSchema = z.object({
   value: bigIntCoercibleSchema,
   token_data: z.number(),
@@ -56,6 +72,33 @@ export const fullnodeTxApiOutputSchema = z.object({
   token: z.string().nullish(),
   spent_by: z.string().nullable().default(null),
 });
+
+// Shielded outputs hide their value behind a Pedersen commitment, so the
+// `decoded` block carries only address-side fields (no `value` /
+// `token_data` like transparent outputs). Matches `IShieldedOutputDecoded`
+// in src/shielded/types.ts and what `_shielded_output_to_json` in
+// hathor-core's base_transaction.py emits.
+const shieldedDecodedSchema = z
+  .object({
+    type: z.string().optional(),
+    address: z.string().optional(),
+    timelock: z.number().nullish(),
+  })
+  .passthrough();
+
+// Shielded outputs as emitted by the fullnode's tx API. Mirrors
+// `IShieldedOutput` (src/shielded/types.ts) plus the optional FullShielded
+// extensions and the `spent_by` flag that the fullnode populates the same
+// way it does for transparent outputs (see hathor-core
+// `_shielded_output_to_json` in base_transaction.py and
+// `meta.get_output_spent_by`). `.passthrough()` keeps any new
+// forward-compat fields the fullnode might add without rejecting the tx.
+export const fullnodeTxApiShieldedOutputSchema = z
+  .object({
+    ...shieldedOutputWireShape,
+    decoded: shieldedDecodedSchema,
+  })
+  .passthrough();
 
 export const fullnodeTxApiTokenSchema = z.object({
   uid: z.string(),
@@ -80,6 +123,8 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_blueprint_id: z.string().nullish(),
   inputs: fullnodeTxApiInputSchema.array(),
   outputs: fullnodeTxApiOutputSchema.array(),
+  shielded_inputs: fullnodeTxApiShieldedInputSchema.array().nullish(),
+  shielded_outputs: fullnodeTxApiShieldedOutputSchema.array().nullish(),
   tokens: fullnodeTxApiTokenSchema.array(),
   token_name: z.string().nullish(),
   token_symbol: z.string().nullish(),

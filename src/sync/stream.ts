@@ -21,7 +21,7 @@ import Network from '../models/network';
 import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
 import { prepareP2SHChangeNodes, buildP2SHRedeemScriptAtIndex } from '../utils/scripts';
-import { redeemScriptToP2SHAddress } from '../utils/address';
+import { redeemScriptToP2SHAddress, deriveShieldedAddressFromStorage } from '../utils/address';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -298,7 +298,8 @@ export async function xpubStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -315,7 +316,7 @@ export async function xpubStreamSyncHistory(
     connection,
     HistorySyncMode.XPUB_STREAM_WS
   );
-  await streamSyncHistory(manager, shouldProcessHistory);
+  await streamSyncHistory(manager, shouldProcessHistory, pinCode);
 }
 
 export async function manualStreamSyncHistory(
@@ -323,7 +324,8 @@ export async function manualStreamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ) {
   let firstIndex = startIndex;
   const scanPolicyData = await storage.getScanningPolicyData();
@@ -340,7 +342,7 @@ export async function manualStreamSyncHistory(
     connection,
     HistorySyncMode.MANUAL_STREAM_WS
   );
-  await streamSyncHistory(manager, shouldProcessHistory);
+  await streamSyncHistory(manager, shouldProcessHistory, pinCode);
 }
 
 /**
@@ -629,6 +631,28 @@ export class StreamManager extends AbortController {
         if (!alreadyExists) {
           await this.storage.saveAddress(addr);
         }
+        // Generate shielded address pair at the same index (if keys are available).
+        // Wrapped in try/catch so derivation failures don't crash the queue.
+        try {
+          const shieldedResult = await deriveShieldedAddressFromStorage(
+            addr.bip32AddressIndex,
+            this.storage
+          );
+          if (shieldedResult) {
+            if (!(await this.storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
+              await this.storage.saveAddress(shieldedResult.shieldedAddress);
+            }
+            if (!(await this.storage.isAddressMine(shieldedResult.spendAddress.base58))) {
+              await this.storage.saveAddress(shieldedResult.spendAddress);
+            }
+          }
+        } catch (e) {
+          this.logger.error(
+            'Failed to derive shielded address at index',
+            addr.bip32AddressIndex,
+            e
+          );
+        }
       } else if (isStreamItemVertex(item)) {
         await this.storage.addTx(item.vertex);
       }
@@ -820,7 +844,8 @@ function buildListener(manager: StreamManager, resolve: () => void) {
  */
 export async function streamSyncHistory(
   manager: StreamManager,
-  shouldProcessHistory: boolean
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ): Promise<void> {
   try {
     await manager.setupStream();
@@ -875,7 +900,7 @@ export async function streamSyncHistory(
     await manager.shutdown();
 
     if (manager.foundAnyTx && shouldProcessHistory) {
-      await manager.storage.processHistory();
+      await manager.storage.processHistory(pinCode);
     }
   } finally {
     // shutdown() (which clears the interval) is skipped when sendStartMessage throws; clean() is idempotent.

@@ -1,0 +1,177 @@
+diff --git a/__tests__/storage/memory_store.test.ts b/__tests__/storage/memory_store.test.ts
+index f1969b88..d7828af6 100644
+--- a/__tests__/storage/memory_store.test.ts
++++ b/__tests__/storage/memory_store.test.ts
+@@ -114,6 +114,20 @@ test('addressIter chain-selection (legacy vs shielded)', async () => {
+   expect(shieldedBases).toEqual(['shi-0', 'shi-1']);
+ });
+ 
++test('addressIter shielded chain yields BIP32-index order even when saved out of order', async () => {
++  const store = new MemoryStore();
++  // Save shielded receive addresses with indices out of order to prove the
++  // iterator sorts by BIP32 index rather than relying on insertion order.
++  await store.saveAddress({ base58: 'shi-3', bip32AddressIndex: 3, addressType: 'shielded' });
++  await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
++  await store.saveAddress({ base58: 'shi-2', bip32AddressIndex: 2, addressType: 'shielded' });
++  await store.saveAddress({ base58: 'shi-1', bip32AddressIndex: 1, addressType: 'shielded' });
++
++  const bases: string[] = [];
++  for await (const info of store.addressIter({ legacy: false })) bases.push(info.base58);
++  expect(bases).toEqual(['shi-0', 'shi-1', 'shi-2', 'shi-3']);
++});
++
+ test('history methods', async () => {
+   const store = new MemoryStore();
+   await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
+@@ -360,7 +374,10 @@ test('utxo methods', async () => {
+   }
+   expect(buf).toHaveLength(1);
+   expect(buf[0].txId).toEqual('tx01');
+-  expect(buf[0].shielded).toBeUndefined();
++  // Assert the transparent classification (filter treats both `undefined` and
++  // `false` as transparent), not the exact stored representation — a store
++  // that normalized transparent UTXOs to `shielded: false` is still correct.
++  expect(buf[0].shielded).not.toBe(true);
+ });
+ 
+ test('access data methods', async () => {
+diff --git a/__tests__/storage/storage.test.ts b/__tests__/storage/storage.test.ts
+index 8a2f2c60..650a7873 100644
+--- a/__tests__/storage/storage.test.ts
++++ b/__tests__/storage/storage.test.ts
+@@ -714,6 +714,33 @@ describe('getChangeAddress', () => {
+     await getChangeAddressTest(store);
+   });
+ 
++  it('converts a wallet-owned shielded change address to its spend-derived P2PKH', async () => {
++    const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
++    const store = new MemoryStore();
++    const storage = new Storage(store);
++    storage.config.setNetwork('testnet');
++    const networkName = storage.config.getNetwork().name;
++
++    // A real 71-byte shielded address (encode validates on-curve pubkeys).
++    const scanXpubkey = new HDPrivateKey().xpubkey;
++    const spendXpubkey = new HDPrivateKey().xpubkey;
++    const info = deriveShieldedAddress(scanXpubkey, spendXpubkey, 0, networkName);
++
++    // Wallet owns the shielded address (saved during shielded derivation).
++    await store.saveAddress({
++      base58: info.base58,
++      bip32AddressIndex: 0,
++      addressType: 'shielded',
++    });
++
++    // A shielded address has no transparent output script form, so the change
++    // address must resolve to its on-chain spend-derived P2PKH (same pubkey
++    // hash) rather than be returned as-is or rejected.
++    await expect(storage.getChangeAddress({ changeAddress: info.base58 })).resolves.toEqual(
++      info.spendAddress
++    );
++  });
++
+   async function getChangeAddressTest(store) {
+     const storage = new Storage(store);
+     const addr0 = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
+diff --git a/__tests__/utils/address.test.ts b/__tests__/utils/address.test.ts
+index 391e100b..96ae530e 100644
+--- a/__tests__/utils/address.test.ts
++++ b/__tests__/utils/address.test.ts
+@@ -228,3 +228,54 @@ test('deriveShieldedAddressFromStorage returns null when shielded keys unavailab
+   const result = await deriveShieldedAddressFromStorage(0, storage);
+   expect(result).toBeNull();
+ });
++
++test('deriveShieldedAddressFromStorage returns paired shielded + spend records', async () => {
++  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
++  const { deriveShieldedAddress } = await import('../../src/utils/shieldedAddress');
++  const { encryptData } = await import('../../src/utils/crypto');
++  const store = new MemoryStore();
++  const storage = new Storage(store);
++  storage.config.setNetwork('testnet');
++  const networkName = storage.config.getNetwork().name;
++
++  // Independent scan and spend public chains (the wallet derives both from
++  // hardened accounts; for this test any two xpubs exercise the same path).
++  const xpriv = new HDPrivateKey();
++  const scanXpubkey = new HDPrivateKey().xpubkey;
++  const spendXpubkey = new HDPrivateKey().xpubkey;
++  await store.saveAccessData({
++    xpubkey: xpriv.xpubkey,
++    mainKey: encryptData(xpriv.xprivkey, '123'),
++    walletType: 'p2pkh' as const,
++    walletFlags: 0,
++    scanXpubkey,
++    spendXpubkey,
++  });
++
++  const index = 5;
++  const result = await deriveShieldedAddressFromStorage(index, storage);
++  expect(result).not.toBeNull();
++
++  // Independent oracle: the same inputs through the pure derivation helper.
++  const expected = deriveShieldedAddress(scanXpubkey, spendXpubkey, index, networkName);
++
++  // User-facing shielded receive record (71-byte encoded form).
++  expect(result!.shieldedAddress).toEqual({
++    base58: expected.base58,
++    bip32AddressIndex: index,
++    publicKey: expected.scanPubkey,
++    addressType: 'shielded',
++  });
++
++  // Internal on-chain spend-derived P2PKH record (HASH160(spend_pubkey)).
++  expect(result!.spendAddress).toEqual({
++    base58: expected.spendAddress,
++    bip32AddressIndex: index,
++    publicKey: expected.spendPubkey,
++    addressType: 'shielded-spend',
++  });
++
++  // Both records share the BIP32 index; the spend address is the on-chain
++  // P2PKH while the shielded address is the user-facing encoded form.
++  expect(result!.shieldedAddress.base58).not.toEqual(result!.spendAddress.base58);
++});
+diff --git a/src/storage/memory_store.ts b/src/storage/memory_store.ts
+index 45c74c2c..517d0b0e 100644
+--- a/src/storage/memory_store.ts
++++ b/src/storage/memory_store.ts
+@@ -241,19 +241,26 @@ export class MemoryStore implements IStore {
+    */
+   async *addressIter(opts: IAddressChainOptions = {}): AsyncGenerator<IAddressInfo, void, void> {
+     const legacy = opts.legacy ?? true;
++    if (!legacy) {
++      // Shielded chain: walk shieldedAddressIndexes in ascending BIP32-index
++      // order. Sorting the keys keeps the documented order even if shielded
++      // addresses were saved or restored out of order (the index map, like
++      // any Map, otherwise reflects insertion order). The map holds only the
++      // user-facing 'shielded' receive entries — legacy addresses and the
++      // internal shielded-spend P2PKHs are excluded by saveAddress routing.
++      const indexes = [...this.shieldedAddressIndexes.keys()].sort((a, b) => a - b);
++      for (const index of indexes) {
++        const base58 = this.shieldedAddressIndexes.get(index)!;
++        yield this.addresses.get(base58)!;
++      }
++      return;
++    }
+     for (const addrInfo of this.addresses.values()) {
+-      if (legacy) {
+-        // Legacy chain: skip shielded receive AND shielded-spend (the
+-        // latter is the internal P2PKH the receive pipeline uses to
+-        // match incoming shielded outputs — surfacing it under the
+-        // legacy chain would leak an internal address).
+-        if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
+-          continue;
+-        }
+-      } else if (addrInfo.addressType !== 'shielded') {
+-        // Shielded chain: only the user-facing shielded receive entry
+-        // (71-byte encoded form). Legacy entries and the internal
+-        // shielded-spend P2PKHs are skipped.
++      // Legacy chain: skip shielded receive AND shielded-spend (the latter is
++      // the internal P2PKH the receive pipeline uses to match incoming
++      // shielded outputs — surfacing it under the legacy chain would leak an
++      // internal address).
++      if (addrInfo.addressType === 'shielded' || addrInfo.addressType === 'shielded-spend') {
+         continue;
+       }
+       yield addrInfo;

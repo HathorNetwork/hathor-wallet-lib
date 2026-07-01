@@ -56,6 +56,10 @@ export interface IInputSignature {
   addressIndex: number;
   signature: Buffer;
   pubkey: Buffer;
+  // Address type of the signed input, so consumers can render the matching
+  // derivation path. 'shielded-spend' inputs are signed with the spend chain
+  // (m/44'/280'/2'); undefined/legacy use the P2PKH/P2SH chain.
+  addressType?: AddressType | 'shielded-spend';
 }
 
 export enum HistorySyncMode {
@@ -98,7 +102,10 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
+  // PIN code threaded so processHistory can derive the per-address scan key
+  // and decrypt wallet-owned shielded outputs after the history loads.
+  pinCode?: string
 ) => Promise<void>;
 
 /**
@@ -325,8 +332,9 @@ export interface IHistoryInput {
   // `/transaction?id=…` responses; the wallet's sender-local insert
   // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
   // self-sent shielded spends carry the discriminator before any
-  // WebSocket re-delivery. Absent on transparent inputs.
-  type?: 'shielded';
+  // WebSocket re-delivery. The alpha fullnode stamps 'transparent' on
+  // ordinary inputs; older nodes omit the field entirely.
+  type?: 'shielded' | 'transparent';
   // Shielded inputs carry their own commitment on the wire; surfaced
   // here so the explorer's unblinding verifier (and any future
   // re-derive flows) can read it without round-tripping the full tx.
@@ -777,8 +785,10 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  processHistory(): Promise<void>;
-  processNewTx(tx: IHistoryTx): Promise<void>;
+  // pinCode is threaded so the scan-key derivation can decrypt wallet-owned
+  // shielded outputs while (re)processing the history.
+  processHistory(pinCode?: string): Promise<void>;
+  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
   getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens

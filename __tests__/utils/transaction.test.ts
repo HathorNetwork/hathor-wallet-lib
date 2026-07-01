@@ -147,6 +147,9 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     addressIndex: 10,
     signature: expect.anything(),
     pubkey: xpriv.derive(10).publicKey.toDER(),
+    // Legacy (P2PKH) input → addressType undefined; shielded-spend inputs carry
+    // 'shielded-spend' so getSignatures can render the spend-chain path.
+    addressType: undefined,
   });
 
   const hashdata = tx.getDataToSignHash();
@@ -920,4 +923,54 @@ describe('prepareTransaction threads weight constants from storage', () => {
     // otherwise the test couldn't distinguish the two paths.
     expect(tx.weight).not.toBeCloseTo(tx.calculateWeight(), 1);
   });
+});
+
+test('getSignatureForTx uses spend key chain for shielded-spend addresses', async () => {
+  const legacyXpriv = new HDPrivateKey();
+  const spendXpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest.spyOn(storage, 'getMainXPrivKey').mockResolvedValue(legacyXpriv.xprivkey);
+  jest
+    .spyOn(storage, 'getSpendXPrivKey')
+    .mockResolvedValue(spendXpriv.deriveNonCompliantChild(0).xprivkey);
+
+  // Use a non-zero index to verify the derivation path actually uses bip32AddressIndex
+  // (index 0 can pass even if the production path ignores the index).
+  const shieldedAddr = 'shielded-spend-addr';
+  const addressIndex = 3;
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr => {
+    if (addr === shieldedAddr) {
+      return {
+        base58: addr,
+        bip32AddressIndex: addressIndex,
+        addressType: 'shielded-spend' as const,
+      };
+    }
+    return null;
+  });
+
+  // The spent output is transparent (positionally at index 0); resolveSpentOutput
+  // returns it as `{ kind: 'transparent', output }`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async function* getSpentMock(inputs: any) {
+    yield {
+      index: 0,
+      input: inputs[0],
+      tx: { outputs: [{ decoded: { address: shieldedAddr } }] },
+    };
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock as any);
+
+  const input = new Input('cafe'.repeat(8), 0);
+  const tx = new Transaction([input], []);
+
+  const sigData = await transaction.getSignatureForTx(tx, storage, '123');
+
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0].addressIndex).toBe(addressIndex);
+  // getSpendXPrivKey should have been called (not just getMainXPrivKey)
+  expect(storage.getSpendXPrivKey).toHaveBeenCalledWith('123');
 });

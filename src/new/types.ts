@@ -13,6 +13,7 @@ import {
   OutputValueType,
   TokenVersion,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
 import Address from '../models/address';
@@ -97,6 +98,13 @@ export interface UtxoOptions {
   amount_bigger_than?: bigint;
   max_amount?: bigint;
   only_available_utxos?: boolean;
+  /**
+   * Whether to include shielded UTXOs. Defaults to `false` (transparent-only):
+   * `getUtxos` feeds consolidation, which spends its results as TRANSPARENT
+   * inputs, so a shielded UTXO must never leak into that listing. Pass `true`
+   * to explicitly include shielded UTXOs.
+   */
+  shielded?: boolean;
 }
 
 /**
@@ -328,16 +336,35 @@ export interface UtxoDetails {
 
 /**
  * Proposed output for a transaction
- * @property address Destination address for the output
+ * @property address Destination address for the output. Must be a shielded address when shielded mode is set.
  * @property value Value of the output
  * @property timelock Optional timelock for the output
  * @property token Token UID for the output
+ * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or FULLY_SHIELDED)
  */
 export interface ProposedOutput {
   address: string;
   value: OutputValueType;
   timelock?: number;
   token: string;
+  shielded?: ShieldedOutputMode;
+}
+
+/**
+ * The unblinding data the wallet holds for a single shielded output/input it
+ * owns: the cleartext `value`/`token` plus the value blinding factor (`vbf`)
+ * and, for FullShielded slots, the asset blinding factor (`abf`).
+ */
+export interface ShieldedOpening {
+  value: bigint;
+  token: string;
+  vbf: string;
+  abf?: string;
+}
+
+/** A {@link ShieldedOpening} tagged with the on-chain absolute slot index. */
+export interface ShieldedOpeningEntry extends ShieldedOpening {
+  index: number;
 }
 
 /**
@@ -364,12 +391,19 @@ export interface SendTransactionFullnodeOptions {
  * @property changeAddress Address for change output
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
+ * @property changeShieldedMode If set, the HTR fee-change output (when
+ *   one would otherwise be created as transparent) is rewritten as a
+ *   shielded HTR output in the given mode. Mirrors the user-selected
+ *   privacy mode of the transaction so HTR change doesn't leak the
+ *   sender alongside an otherwise-private send. Undefined keeps the
+ *   default transparent change.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
   changeAddress?: string | null;
   startMiningTx?: boolean;
   pinCode?: string | null;
+  changeShieldedMode?: ShieldedOutputMode;
 }
 
 /**
@@ -435,6 +469,19 @@ export interface GetTxHistoryFullnodeFacadeReturnType {
   ncMethod?: string;
   ncCaller?: Address; // Address type
   firstBlock?: string;
+  /**
+   * Tx-level headers (FeeHeader, etc.) carried through unchanged from
+   * the on-chain payload so callers can compute network fees without
+   * a second `getTx` round-trip.
+   */
+  headers?: unknown[];
+  /**
+   * Shielded output entries from `tx.shielded_outputs[]`. Each entry's
+   * `mode` (1 = AmountShielded, 2 = FullShielded) is the only field
+   * the privacy-fee accumulator needs; others are passed through for
+   * future use.
+   */
+  shielded_outputs?: { mode?: number }[];
 }
 
 /**

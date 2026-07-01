@@ -513,6 +513,26 @@ export class MemoryStore implements IStore {
         yield tx;
         continue;
       }
+      // SEPARATED model: an owned shielded output lives in shielded_outputs[],
+      // not outputs[]. Without this loop a shielded-only receive (the wallet
+      // owns no transparent output of the tx) never appears in tokenHistory /
+      // getTxHistory (G.30/G.31). Owned slots carry value !== undefined and the
+      // decoded token after decryption; non-owned slots are value-less and skipped.
+      for (const so of tx.shielded_outputs ?? []) {
+        if (
+          so.value !== undefined &&
+          so.decoded?.address &&
+          this.addresses.has(so.decoded.address) &&
+          (so.token ?? NATIVE_TOKEN_UID) === tokenUid
+        ) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        yield tx;
+        continue;
+      }
     }
   }
 

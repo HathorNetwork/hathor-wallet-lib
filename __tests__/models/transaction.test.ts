@@ -17,7 +17,12 @@ import ShieldedOutput from '../../src/models/shielded_output';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
-import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
+import {
+  DEFAULT_TX_VERSION,
+  MAX_OUTPUTS,
+  MAX_SHIELDED_OUTPUTS,
+  DEFAULT_SIGNAL_BITS,
+} from '../../src/constants';
 import {
   CreateTokenTxInvalid,
   MaximumNumberInputsError,
@@ -673,4 +678,39 @@ test('shieldedOutputs getter returns a frozen empty array when there is no heade
   expect(() =>
     (tx.shieldedOutputs as ShieldedOutput[]).push({} as unknown as ShieldedOutput)
   ).toThrow();
+});
+
+describe('Transaction.validate shielded outputs', () => {
+  // shieldedOutputs is a header-backed read-only getter, so populate via the
+  // ShieldedOutputsHeader rather than assigning the property.
+  const fakeShielded = {
+    mode: 1,
+    commitment: Buffer.alloc(33),
+    rangeProof: Buffer.alloc(10),
+    tokenData: 0,
+    script: Buffer.alloc(25),
+    ephemeralPubkey: Buffer.alloc(33),
+    value: 1n,
+    serialize: () => [Buffer.alloc(1)],
+    serializeSighash: () => [Buffer.alloc(1)],
+  };
+  const txWithShielded = (count: number): Transaction => {
+    const tx = new Transaction([], [], { version: DEFAULT_TX_VERSION });
+    tx.headers.push(
+      new ShieldedOutputsHeader(
+        Array.from({ length: count }, () => ({ ...fakeShielded })) as unknown as ShieldedOutput[]
+      )
+    );
+    return tx;
+  };
+
+  it('should accept MAX_SHIELDED_OUTPUTS shielded outputs', () => {
+    expect(() => txWithShielded(MAX_SHIELDED_OUTPUTS).validate()).not.toThrow();
+  });
+
+  it('should reject more than MAX_SHIELDED_OUTPUTS shielded outputs', () => {
+    expect(() => txWithShielded(MAX_SHIELDED_OUTPUTS + 1).validate()).toThrow(
+      MaximumNumberOutputsError
+    );
+  });
 });
