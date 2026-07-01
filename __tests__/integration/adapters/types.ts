@@ -94,6 +94,16 @@ export interface IWalletTestAdapter {
 
   /** Default credentials */
   defaultPinCode: string;
+
+  /**
+   * The exact error message this facade raises when a token mint/melt cannot be
+   * funded because the wallet lacks the required HTR (deposit or fee). The two
+   * facades word this differently, so cross-facade "insufficient HTR" tests
+   * assert against this per-adapter matcher rather than an alternation — a
+   * message change on either facade then fails loudly instead of silently
+   * matching a sibling pattern.
+   */
+  insufficientHtrError: RegExp;
   defaultPassword: string;
 
   /**
@@ -275,6 +285,45 @@ export interface IWalletTestAdapter {
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;
+
+  // --- Token minting ---
+
+  /**
+   * Mints additional units of an existing token and waits for confirmation.
+   * Both facades support `mintTokens()`.
+   */
+  mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintTokensResult>;
+
+  // --- Token melting ---
+
+  /**
+   * Melts `amount` units of an existing token and waits for confirmation.
+   * Both facades support `meltTokens()`.
+   */
+  meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MeltTokensResult>;
+
+  // --- Authority destruction ---
+
+  /**
+   * Destroys `count` authority UTXOs (mint or melt) of a token and waits for
+   * confirmation. Both facades support `destroyAuthority()`.
+   */
+  destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult>;
 }
 
 /**
@@ -429,11 +478,89 @@ export interface GetAuthorityUtxosOptions {
  */
 export interface DelegateAuthorityAdapterOptions {
   createAnother?: boolean;
+  /**
+   * If provided, the adapter also waits until the destination wallet's index
+   * reflects the delegation, so cross-wallet tests can read the recipient's
+   * authority UTXOs without hitting the wallet-service index lag.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**
  * Result of delegating authority.
  */
 export interface DelegateAuthorityResult {
+  hash: string;
+}
+
+/**
+ * Options for minting tokens via the adapter.
+ *
+ * Only the fields exercised by the shared suite and supported by BOTH facades
+ * are exposed. The fullnode facade additionally accepts `data` / `unshiftData`
+ * (data-script outputs), but the wallet-service `mintTokens()` does not support
+ * them — those are covered in `fullnode-specific/mint-tokens.test.ts`.
+ */
+export interface MintTokensAdapterOptions {
+  /** Create a new mint authority alongside the minted tokens (facade default: true). */
+  createAnotherMint?: boolean;
+  /** Address that receives the new mint authority (default: an address of the wallet). */
+  mintAuthorityAddress?: string;
+  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMintAuthorityAddress?: boolean;
+  /** Address that receives the minted tokens (default: next wallet address). */
+  address?: string;
+  /** Address that receives the HTR change (default: next wallet address). */
+  changeAddress?: string;
+  /**
+   * If provided, the adapter also waits until this wallet's index reflects the
+   * mint, so cross-wallet tests can read a mint authority routed to one of its
+   * addresses without hitting the wallet-service index lag. Not forwarded to the
+   * facade `mintTokens()` call.
+   */
+  recvWallet?: FuzzyWalletType;
+}
+
+/**
+ * Result of minting tokens.
+ */
+export interface MintTokensResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for melting tokens via the adapter.
+ *
+ * Mirrors {@link MintTokensAdapterOptions}: only the fields supported by BOTH
+ * facades are exposed. The fullnode `data` / `unshiftData` data-script options
+ * are intentionally omitted (the wallet-service `meltTokens()` does not support
+ * them).
+ */
+export interface MeltTokensAdapterOptions {
+  /** Create a new melt authority alongside the melted tokens (facade default: true). */
+  createAnotherMelt?: boolean;
+  /** Address that receives the new melt authority (default: an address of the wallet). */
+  meltAuthorityAddress?: string;
+  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMeltAuthorityAddress?: boolean;
+  /** Address that receives the HTR returned by melting (default: next wallet address). */
+  address?: string;
+  /** Address that receives the token change (default: next wallet address). */
+  changeAddress?: string;
+}
+
+/**
+ * Result of melting tokens.
+ */
+export interface MeltTokensResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Result of destroying authority UTXOs.
+ */
+export interface DestroyAuthorityResult {
   hash: string;
 }

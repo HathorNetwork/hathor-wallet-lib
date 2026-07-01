@@ -46,6 +46,11 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  MintTokensAdapterOptions,
+  MintTokensResult,
+  MeltTokensAdapterOptions,
+  MeltTokensResult,
+  DestroyAuthorityResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -74,6 +79,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   name = 'Wallet Service';
 
   networkName = NETWORK_NAME;
+
+  // The HTR deposit/fee shortfall surfaces from selectUtxos while gathering the
+  // funding UTXOs: "Don't have enough utxos to fill total amount."
+  insufficientHtrError = /^Don't have enough utxos to fill total amount\.$/;
 
   defaultPinCode = SERVICE_PIN;
 
@@ -393,26 +402,165 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult> {
     const sw = this.concrete(wallet);
+    const createAnother = options?.createAnother ?? false;
+
+    // Snapshot the available authority UTXOs before delegating. A delegation
+    // ALWAYS spends one of them as input, so once the index settles at least one
+    // of these keys is gone — a settle signal that holds regardless of
+    // createAnother or whether the destination is this wallet or another one.
+    // (A count- or txId-based check does not: a within-wallet delegation moves
+    // the authority to a new address without changing the count, and a
+    // cross-wallet createAnother=false delegation leaves no source UTXO carrying
+    // the delegation txId.)
+    const authorityKey = (u: { txId: string; index: number }) => `${u.txId}:${u.index}`;
+    const beforeKeys = new Set(
+      (await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
+        authorityKey
+      )
+    );
+
     const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {
       pinCode: SERVICE_PIN,
       anotherAuthorityAddress: null,
-      createAnother: options?.createAnother ?? false,
+      createAnother,
     });
     if (!result?.hash) {
       throw new Error('delegateAuthority: transaction had no hash');
     }
     await pollForTx(sw, result.hash);
 
-    // The wallet service UTXO index may lag behind tx visibility.
-    // Poll until the delegation tx appears in the authority UTXO list.
+    // The wallet service UTXO index may lag behind tx visibility. Wait until the
+    // spent authority input is no longer in the available set.
     const delegationTxId = result.hash;
     await pollUntilCondition(async () => {
-      const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
-        many: true,
-        only_available_utxos: true,
-      });
-      return utxos.some(u => u.txId === delegationTxId);
+      const curKeys = new Set(
+        (await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
+          authorityKey
+        )
+      );
+      return [...beforeKeys].some(k => !curKeys.has(k));
     }, `authority UTXO index reflects delegation ${delegationTxId}`);
+
+    // When a destination wallet is provided, also wait for ITS index to reflect
+    // the delegation so cross-wallet tests can read the recipient's authorities.
+    if (options?.recvWallet) {
+      const recv = this.concrete(options.recvWallet);
+      await pollForTx(recv, delegationTxId);
+      await pollUntilCondition(async () => {
+        const utxos = await recv.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === delegationTxId);
+      }, `recipient authority UTXO index reflects delegation ${delegationTxId}`);
+    }
+
+    return { hash: result.hash };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintTokensResult> {
+    const sw = this.concrete(wallet);
+    const { recvWallet, ...mintOptions } = options ?? {};
+
+    // Capture the current token balance so we can wait for the UTXO/balance
+    // index to reflect the mint. Minting increases the token balance by `amount`
+    // on BOTH deposit- and fee-based tokens, regardless of where the new mint
+    // authority is routed — so this is a robust settle signal even when the
+    // authority is delegated to an external address.
+    const [balanceBefore] = await sw.getBalance(tokenUid);
+    const expectedUnlocked = balanceBefore.balance.unlocked + amount;
+
+    const result = await sw.mintTokens(tokenUid, amount, {
+      ...mintOptions,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    await pollUntilCondition(async () => {
+      const [balance] = await sw.getBalance(tokenUid);
+      return balance.balance.unlocked >= expectedUnlocked;
+    }, `token balance index reflects mint ${result.hash}`);
+
+    // When a recipient wallet is provided (mint authority routed to one of its
+    // addresses), also wait for ITS index to surface the new authority UTXO.
+    if (recvWallet) {
+      const recv = this.concrete(recvWallet);
+      await pollForTx(recv, result.hash);
+      await pollUntilCondition(async () => {
+        const utxos = await recv.getAuthorityUtxo(tokenUid, AuthorityType.MINT, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === result.hash);
+      }, `recipient mint authority index reflects mint ${result.hash}`);
+    }
+
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MeltTokensResult> {
+    const sw = this.concrete(wallet);
+
+    // Capture the current token balance so we can wait for the UTXO/balance
+    // index to reflect the melt. Melting decreases the token balance by `amount`
+    // on BOTH deposit- and fee-based tokens, so this is a robust settle signal.
+    const [balanceBefore] = await sw.getBalance(tokenUid);
+    const expectedUnlocked = balanceBefore.balance.unlocked - amount;
+
+    const result = await sw.meltTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    await pollUntilCondition(async () => {
+      const [balance] = await sw.getBalance(tokenUid);
+      return balance.balance.unlocked <= expectedUnlocked;
+    }, `token balance index reflects melt ${result.hash}`);
+
+    return { hash: result.hash, transaction: result };
+  }
+
+  async destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult> {
+    const sw = this.concrete(wallet);
+
+    // Capture the current authority count so we can wait for the UTXO index to
+    // reflect the destruction. `getAuthorityUtxo` throwing (e.g. count too high)
+    // surfaces before any polling, preserving the rejection for the caller.
+    const countBefore = (
+      await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })
+    ).length;
+
+    const result = await sw.destroyAuthority(tokenUid, type, count, { pinCode: SERVICE_PIN });
+    if (!result?.hash) {
+      throw new Error('destroyAuthority: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    await pollUntilCondition(async () => {
+      const remaining = (
+        await sw.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })
+      ).length;
+      return remaining <= countBefore - count;
+    }, `authority UTXO index reflects destroy ${result.hash}`);
 
     return { hash: result.hash };
   }
