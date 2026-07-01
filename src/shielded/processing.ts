@@ -31,11 +31,16 @@ export function resolveTokenUid(shieldedOutput: IShieldedOutput, tx: IHistoryTx)
         'token UID is recovered from the range proof during rewind, not from token_data'
     );
   }
-  // `token_data` is optional on the wire — older fullnodes may omit it
-  // for FullShielded outputs (where it has no meaning). Default to 0
-  // (native-token slot) for the AmountShielded path; this is only
-  // reached when the caller has already routed away from FullShielded.
-  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data ?? 0);
+  // Only FullShielded outputs omit token_data (the token is hidden behind
+  // asset_commitment), and the caller routes those away before calling this
+  // (see processShieldedOutputs). So on the AmountShielded path token_data is
+  // always present — fail loud rather than silently resolving a missing index
+  // to the native-token slot, which would misattribute a custom-token output
+  // as HTR.
+  if (shieldedOutput.token_data === undefined) {
+    throw new Error(`AmountShielded output on tx ${tx.tx_id} is missing token_data`);
+  }
+  const tokenIndex = tokenUtils.getTokenIndexFromData(shieldedOutput.token_data);
   if (tokenIndex === 0) {
     return NATIVE_TOKEN_UID_HEX;
   }

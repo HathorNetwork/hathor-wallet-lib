@@ -108,6 +108,15 @@ describe('resolveTokenUid', () => {
     const tx = makeHistoryTx({ tokens: [customToken] });
     expect(resolveTokenUid(so, tx)).toBe(customToken);
   });
+
+  it('should throw when an AmountShielded output is missing token_data', () => {
+    // Only FullShielded may omit token_data, and the caller routes those away
+    // before reaching resolveTokenUid — so an absent token_data here is a bug,
+    // surfaced loudly rather than silently resolved to the native-token slot.
+    const so = makeShieldedOutput({ token_data: undefined });
+    const tx = makeHistoryTx({ tx_id: 'deadbeef' });
+    expect(() => resolveTokenUid(so, tx)).toThrow(/missing token_data/);
+  });
 });
 
 describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
