@@ -16,8 +16,8 @@
   "dependencies": {
     "@hathor/ct-crypto-provider": "0.0.1-shielded",
     "axios": "1.7.7",
-    "bitcore-lib": "8.25.10",
-    "bitcore-mnemonic": "8.25.10",
+    "bitcore-lib": "10.10.7",
+    "bitcore-mnemonic": "10.10.7",
     "buffer": "6.0.3",
     "crypto-js": "4.2.0",
     "isomorphic-ws": "5.0.0",
