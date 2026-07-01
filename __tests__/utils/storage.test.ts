@@ -13,6 +13,7 @@ import {
   TokenVersion,
   SCANNING_POLICY,
   IHistoryTx,
+  IUtxo,
 } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
@@ -27,6 +28,7 @@ import {
   processMetadataChanged,
   processNewTx,
   processSingleTx,
+  processHistory,
 } from '../../src/utils/storage';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { ShieldedOutputMode } from '../../src/shielded/types';
@@ -136,6 +138,83 @@ describe('processSingleTx — SEPARATED-model spent-output resolution', () => {
     // Resolves to a shielded slot → the transparent-spend loop skips it (the
     // shielded UTXO lifecycle is the receive pipeline's), so no throw.
     await expect(processSingleTx(storage, spend)).resolves.toBeUndefined();
+  });
+
+  const savedUtxo = (): IUtxo =>
+    ({
+      txId: 'parent',
+      index: 0,
+      token: NATIVE_TOKEN_UID,
+      address: 'addr1',
+      authorities: 0n,
+      value: 5n,
+      timelock: null,
+      type: 1,
+      height: null,
+    }) as unknown as IUtxo;
+
+  it('deletes the spent transparent UTXO from the store', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 1 transparent output at absolute index 0, with a stored UTXO on it.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [{ value: 5n, token_data: 0, decoded: { address: 'addr1' } }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    await storage.store.saveUtxo(savedUtxo());
+    expect(await storage.store.getUtxo({ txId: 'parent', index: 0 })).not.toBeNull();
+
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 0 }],
+    } as unknown as Partial<IHistoryTx>);
+    await processSingleTx(storage, spend);
+
+    // fetch-and-delete removed it, so the selector can't re-offer a spent UTXO.
+    expect(await storage.store.getUtxo({ txId: 'parent', index: 0 })).toBeNull();
+  });
+
+  it('deletes the spent shielded UTXO from the store (absolute index)', async () => {
+    const storage = new Storage(new MemoryStore());
+    // Parent: 0 transparent + 1 shielded → the shielded UTXO is at absolute index 0.
+    const parent = baseTx({
+      tx_id: 'parent',
+      outputs: [],
+      shielded_outputs: [{ commitment: 'aa', decoded: { address: 'addr1' } }],
+    } as unknown as Partial<IHistoryTx>);
+    await storage.store.saveTx(parent);
+    await storage.store.saveUtxo(savedUtxo());
+    expect(await storage.store.getUtxo({ txId: 'parent', index: 0 })).not.toBeNull();
+
+    const spend = baseTx({
+      tx_id: 'spend',
+      inputs: [{ tx_id: 'parent', index: 0, type: 'shielded' }],
+    } as unknown as Partial<IHistoryTx>);
+    await processSingleTx(storage, spend);
+
+    expect(await storage.store.getUtxo({ txId: 'parent', index: 0 })).toBeNull();
+  });
+});
+
+describe('processHistory — orchestration', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('walks the history oldest-first (order: asc)', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const iterSpy = jest.spyOn(store, 'historyIter');
+    await processHistory(storage);
+    // asc is load-bearing: a spend's bare-shielded-input enrichment needs the
+    // parent decoded + persisted first (see processHistory comment).
+    expect(iterSpy).toHaveBeenCalledWith(undefined, { order: 'asc' });
+  });
+
+  it('cleans stale metadata before reprocessing (metadata updates are additive)', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const cleanSpy = jest.spyOn(store, 'cleanMetadata');
+    await processHistory(storage);
+    expect(cleanSpy).toHaveBeenCalled();
   });
 });
 

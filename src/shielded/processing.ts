@@ -144,6 +144,9 @@ export async function processShieldedOutputs(
       addressInfo!.bip32AddressIndex,
       storage.logger
     );
+    // Defensive: deriveScanChildPrivkey only returns undefined if bitcore's child
+    // derivation throws (it logs a warning inside), which shouldn't happen for a
+    // valid owned address at a valid index — skip rather than crash the sync.
     if (!privkey) continue;
 
     const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
