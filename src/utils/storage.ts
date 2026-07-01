@@ -1077,7 +1077,8 @@ export async function processNewTx(
         const so = resolved.output;
         if (so.decoded?.address && (await storage.isAddressMine(so.decoded.address))) {
           input.value = so.value;
-          input.token = so.token ?? NATIVE_TOKEN_UID;
+          // owned + decoded (value gate above) ⇒ token is set; no HTR-mislabel fallback.
+          input.token = so.token!;
           input.token_data = so.token_data ?? 0;
           input.decoded = so.decoded;
         }
