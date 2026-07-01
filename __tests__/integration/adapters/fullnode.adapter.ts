@@ -122,7 +122,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    * that just need a working wallet have zero setup friction.
    */
   async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
-    const built = this.buildWalletInstance(options);
+    const built = await this.buildWalletInstance(options);
 
     await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? DEFAULT_PIN_CODE,
@@ -133,8 +133,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
-    const walletData = this.resolveWordsAndAddresses(options);
+  async buildWalletInstance(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+    const walletData = await this.resolveWordsAndAddresses(options);
     const walletConfig = this.buildConfig(walletData, options);
 
     const hWallet = new HathorWallet(walletConfig);
@@ -210,7 +210,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     await waitUntilNextTimestamp(hWallet, txId);
   }
 
-  getPrecalculatedWallet(): PrecalculatedWalletData {
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     return precalculationHelpers.test!.getPrecalculatedWallet();
   }
 
@@ -374,12 +374,12 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    * For xpub/xpriv-only wallets, `words` will be `undefined` — that's intentional:
    * {@link buildConfig} spreads `xpub`/`xpriv` into the config independently of the seed.
    */
-  private resolveWordsAndAddresses(options?: CreateWalletOptions): {
+  private async resolveWordsAndAddresses(options?: CreateWalletOptions): Promise<{
     words?: string;
     addresses?: string[];
-  } {
+  }> {
     if (!options?.seed && !options?.xpub && !options?.xpriv) {
-      const precalc = this.getPrecalculatedWallet();
+      const precalc = await this.getPrecalculatedWallet();
       return { words: precalc.words, addresses: precalc.addresses };
     }
     return {

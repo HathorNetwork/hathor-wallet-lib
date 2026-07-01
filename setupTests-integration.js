@@ -128,9 +128,8 @@ beforeAll(async () => {
   testLogger.init({ filePrettyPrint: true });
   loggers.test = testLogger;
 
-  // Per-file setup: Loading pre-calculated wallets
-  precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
-  await precalculationHelpers.test.initWithWalletsFile();
+  // Per-file setup: the wallet helper fetches wallets from the provider service
+  precalculationHelpers.test = new WalletPrecalculationHelper();
 
   // One-time setup: Run only once across all test files (using shared state from CustomEnvironment)
   const sharedState = global.__SHARED_STATE__;
@@ -165,11 +164,6 @@ beforeAll(async () => {
   global.FEE_BLUEPRINT_ID = sharedState.blueprintIds.FEE_BLUEPRINT_ID;
   global.UPGRADE_TEST_V1_BLUEPRINT_ID = sharedState.blueprintIds.UPGRADE_TEST_V1_BLUEPRINT_ID;
   global.UPGRADE_TEST_V2_BLUEPRINT_ID = sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID;
-});
-
-afterAll(async () => {
-  // Storing data about used precalculated wallets for the next test suites
-  await precalculationHelpers.test.storeDbIntoWalletsFile();
 });
 
 expect.extend({
