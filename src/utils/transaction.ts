@@ -1156,7 +1156,10 @@ const transaction = {
           script: shieldedEntry.script ?? '',
           decoded: shieldedEntry.decoded ?? {},
           token_data: shieldedEntry.token_data ?? 0,
-          token: shieldedEntry.token ?? NATIVE_TOKEN_UID,
+          // Owned + decoded (gated by `value !== undefined` above): decryption
+          // always recovers the token, so no NATIVE_TOKEN_UID fallback — which
+          // would mislabel a custom token as HTR (matches the credit path).
+          token: shieldedEntry.token!,
           value: shieldedEntry.value,
         });
         continue;
