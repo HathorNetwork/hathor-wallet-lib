@@ -156,13 +156,8 @@ export async function processShieldedOutputs(
     const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
     const commitment = Buffer.from(shieldedOutput.commitment, 'hex');
     const rangeProof = Buffer.from(shieldedOutput.range_proof, 'hex');
-    // `mode` is optional on the wire (see IShieldedOutput). Fall back to
-    // `asset_commitment` presence — only FullShielded outputs carry it —
-    // so wallets sync correctly against fullnodes that haven't shipped
-    // the `_shielded_output_to_json` mode-field change yet.
-    const isFullShielded =
-      shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED ||
-      (shieldedOutput.mode === undefined && !!shieldedOutput.asset_commitment);
+    // The fullnode always sets `mode`, so classify directly from it.
+    const isFullShielded = shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED;
 
     try {
       let recoveredValue: bigint;
