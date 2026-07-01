@@ -315,6 +315,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<SendTransactionResult> {
     const hWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
+    // wallet-lib's ProposedOutput[] is now a discriminated union (address |
+    // data), so AdapterOutput[] assigns directly — no cast needed.
     const result = await hWallet.sendManyOutputsTransaction(outputs, {
       pinCode: DEFAULT_PIN_CODE,
       ...txOptions,

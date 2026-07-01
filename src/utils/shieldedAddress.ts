@@ -99,9 +99,9 @@ export function deriveShieldedAddress(
   const scanHdPub = new HDPublicKey(scanXpubkey);
   const spendHdPub = new HDPublicKey(spendXpubkey);
 
-  // Standard BIP32 derivation for public keys.
-  // Note: private key derivation (in processing.ts) uses deriveNonCompliantChild
-  // due to a historical bitcore-lib bug. Do not align these — the asymmetry is intentional.
+  // Compliant BIP32 derivation. The matching private keys (processing.ts scan,
+  // transaction.ts spend) use the same deriveChild, so the ECDH scan keypair and
+  // the spend signing key line up with the address.
   const scanKey = scanHdPub.deriveChild(index);
   const spendKey = spendHdPub.deriveChild(index);
 

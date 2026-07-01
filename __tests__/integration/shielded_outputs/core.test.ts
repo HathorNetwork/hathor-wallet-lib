@@ -11,6 +11,7 @@ import {
   createTokenHelper,
   generateConnection,
   generateWalletHelper,
+  registerShieldedProvider,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
@@ -686,6 +687,7 @@ describe('shielded transactions', () => {
       pinCode: DEFAULT_PIN_CODE,
       scanPolicy: getGapLimitConfig(),
     });
+    registerShieldedProvider(walletB2);
     await walletB2.start();
     await waitForWalletReady(walletB2);
 
@@ -997,6 +999,7 @@ describe('shielded transactions', () => {
       pinCode: DEFAULT_PIN_CODE,
       scanPolicy: getGapLimitConfig(),
     });
+    registerShieldedProvider(walletB2);
     await walletB2.start();
     await waitForWalletReady(walletB2);
 
@@ -1228,6 +1231,7 @@ describe('shielded transactions', () => {
       pinCode: DEFAULT_PIN_CODE,
       scanPolicy: getGapLimitConfig(),
     });
+    registerShieldedProvider(walletB2);
     await walletB2.start();
     await waitForWalletReady(walletB2);
 

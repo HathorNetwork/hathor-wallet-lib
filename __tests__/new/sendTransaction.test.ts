@@ -78,7 +78,7 @@ test('type methods', () => {
    */
   const dataOutput = {
     type: OutputType.DATA,
-    data: Buffer.alloc(0),
+    data: '',
   };
 
   expect(isDataOutput(dataOutput)).toBeTruthy();
@@ -144,7 +144,7 @@ test('prepareTxData', async () => {
    */
   const dataOutput = {
     type: OutputType.DATA,
-    data: Buffer.from('abcd', 'hex'),
+    data: 'abcd',
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];

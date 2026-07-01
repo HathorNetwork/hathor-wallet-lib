@@ -354,6 +354,8 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   ): Promise<SendTransactionResult> {
     const sw = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
+    // The service wallet accepts Array<OutputRequestObj | DataScriptOutputRequestObj>,
+    // which AdapterOutput[] (address | data) assigns to directly — no cast needed.
     const result = await sw.sendManyOutputsTransaction(outputs, {
       pinCode: SERVICE_PIN,
       ...txOptions,

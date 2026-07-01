@@ -138,6 +138,7 @@ import {
   ISignature,
   IWalletInputInfo,
   ProposedOutput,
+  isProposedDataOutput,
   ShieldedOpening,
   ShieldedOpeningEntry,
   SendManyOutputsOptions,
@@ -1332,6 +1333,10 @@ class HathorWallet extends EventEmitter {
       // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
       // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.
       shielded: options.shielded ?? false,
+      // Default to value-desc so max_utxos / max_amount truncation keeps the
+      // largest UTXOs — matches getUtxosForAmount and what any tx-builder
+      // consumer actually needs. Explicitly pass 'asc' to invert.
+      order_by_value: options.order_by_value ?? 'desc',
     };
     const utxoDetails: UtxoDetails = {
       total_amount_available: 0n,
@@ -1964,6 +1969,15 @@ class HathorWallet extends EventEmitter {
     // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
     const network = this.storage.config.getNetwork();
     const sendOutputs = outputs.map(o => {
+      if (isProposedDataOutput(o)) {
+        // Data outputs carry only a utf8 payload; prepareTxData fixes their
+        // value to 1n and token to HTR (the data-script burn output), so no
+        // caller-supplied value/token is threaded through here.
+        return {
+          type: OutputType.DATA as OutputType.DATA,
+          data: o.data,
+        };
+      }
       if (o.shielded) {
         const addressObj = new Address(o.address, { network });
         if (!addressObj.isShielded()) {

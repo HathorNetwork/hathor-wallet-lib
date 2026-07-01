@@ -6,10 +6,12 @@
  */
 
 import { get, includes } from 'lodash';
-// `@hathor/ct-crypto-node` is not declared in wallet-lib's package.json: it is
-// not on npm yet, and integration tests are the only consumer. Install it
-// manually before running the suite — see __tests__/integration/README.md.
-// eslint-disable-next-line import/no-unresolved, import/no-extraneous-dependencies
+// `@hathor/ct-crypto-node` is intentionally NOT declared as a dependency of
+// wallet-lib (neither dependencies nor devDependencies). The integration suite
+// installs it on demand via the `pretest_network_integration` hook
+// (scripts/ensure-ct-crypto.js; see __tests__/integration/README.md), and
+// .eslintrc whitelists it under import/core-modules. Production wallets
+// register their own provider per the post-migration contract.
 import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
 import {
@@ -87,6 +89,16 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
+/**
+ * Register the shielded crypto provider on a wallet. Tests that build a
+ * HathorWallet directly (rather than via generateWalletHelper) must call this
+ * before `wallet.start()` — wallet-lib does not auto-register the provider
+ * post-migration, the client is required to wire it in.
+ */
+export function registerShieldedProvider(hWallet) {
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+}
+
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
   let walletData = {};
@@ -112,10 +124,9 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, param);
   }
   const hWallet = new HathorWallet(walletConfig);
-  // Register the shielded crypto provider explicitly before start. wallet-lib
-  // no longer auto-detects; the provider lives in `@hathor/ct-crypto-node`,
-  // installed manually (see __tests__/integration/README.md).
-  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+  // wallet-lib no longer auto-registers the provider post-migration; wire it in
+  // explicitly before start (see registerShieldedProvider above).
+  registerShieldedProvider(hWallet);
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -146,7 +157,7 @@ export async function generateWalletHelperRO(options) {
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
-    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
+    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: NETWORK_NAME });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
     xpub = options.xpub;
