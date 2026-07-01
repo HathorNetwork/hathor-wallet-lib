@@ -8,7 +8,7 @@
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady } from './wallet.helper';
+import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
@@ -97,6 +97,12 @@ export class GenesisWalletHelper {
       }
 
       await waitForTxReceived(destinationWallet, txId, options.waitTimeout);
+      // Timestamps are per-second and a tx must be timestamped strictly after
+      // its parent. Without this wait, a test that spends the just-funded UTXO
+      // within the same second collides with the funding tx and flakes. Applied
+      // via the destination wallet (which now has the tx). The Wallet Service
+      // variant omits this deliberately — it handles timestamp ordering itself.
+      await waitUntilNextTimestamp(destinationWallet, txId);
       return result;
     } catch (e) {
       loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
@@ -218,11 +224,11 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    // Delegate broadcasting to the integration-test-helper's /fund (via ithService),
-    // then wait until the destination wallet observes the tx.
+    // Delegate broadcasting to the integration-test-helper's /fund (via ithService).
     const { txId } = await ithService.fund(address, amount);
     const fundTx = { hash: txId } as unknown as Transaction;
 
+    // Ensure the destination wallet is also aware of the transaction
     if (destinationWallet) {
       await pollForTx(destinationWallet, txId);
     }
