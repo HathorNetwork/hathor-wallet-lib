@@ -88,7 +88,7 @@ export async function generateWalletHelper(param) {
 
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!param) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = await precalculationHelpers.test.getPrecalculatedWallet();
   } else {
     walletData.words = param.seed;
     walletData.addresses = param.preCalculatedAddresses;
@@ -136,7 +136,7 @@ export async function generateWalletHelperRO(options) {
   let xpub;
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
