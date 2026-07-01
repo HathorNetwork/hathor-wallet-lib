@@ -188,8 +188,6 @@ export async function processShieldedOutputs(
         recoveredTokenUid = result.tokenUid;
         mode = ShieldedOutputMode.FULLY_SHIELDED;
 
-        // Cross-check token UID (Section 4.3 of the client guide):
-        // https://github.com/HathorNetwork/hathor-core/blob/feat/ct-amount-token-privacy/hathor-ct-crypto/SHIELDED-OUTPUTS-CLIENT-GUIDE.md
         // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
         const expectedTag = await cryptoProvider.deriveTag(Buffer.from(recoveredTokenUid, 'hex'));
         const expectedAc = await cryptoProvider.createAssetCommitment(
