@@ -7,7 +7,7 @@
 
 import { HDPrivateKey } from 'bitcore-lib';
 import { IStorage, IHistoryTx, ILogger } from '../types';
-import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, PRIVATE_KEY_SIZE_BYTES } from '../constants';
 import tokenUtils from '../utils/tokens';
 import {
   IShieldedCryptoProvider,
@@ -72,11 +72,11 @@ function deriveScanChildPrivkey(
     // bitcore-lib serialization bug. Public key derivation (in shieldedAddress.ts)
     // uses standard deriveChild because it was always correct. Do not align these.
     const childKey = scanHdPrivKey.deriveNonCompliantChild(addressIndex);
-    // The native crypto provider (ECDH) needs raw 32-byte private key bytes.
-    // Other wallet-lib code passes bitcore PrivateKey objects directly to bitcore
+    // The native crypto provider (ECDH) needs raw private key bytes. Other
+    // wallet-lib code passes bitcore PrivateKey objects directly to bitcore
     // signing functions, but here we cross into the native ct-crypto boundary.
-    // { size: 32 } ensures zero-padding for keys with leading zeros.
-    return childKey.privateKey.toBuffer({ size: 32 });
+    // { size } ensures zero-padding for keys with leading zeros.
+    return childKey.privateKey.toBuffer({ size: PRIVATE_KEY_SIZE_BYTES });
   } catch (e) {
     logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
     return undefined;
