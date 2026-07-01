@@ -22,7 +22,6 @@ import {
   HistorySyncMode,
   HistorySyncFunction,
   WalletType,
-  IUtxo,
   ITokenData,
   TokenVersion,
   OutputValueType,
@@ -525,53 +524,29 @@ export async function processSingleTx(
       continue;
     }
 
-    // SEPARATED model: `input.index` is an absolute on-chain index spanning the
-    // transparent outputs then the shielded outputs, so resolve it via the
-    // arithmetic resolver rather than a positional `outputs[index]` read — which
-    // would wrongly reject (or misread) a shielded input whose index is
-    // >= outputs.length.
+    // Validate that `input.index` (an absolute on-chain index spanning the
+    // transparent then shielded outputs, SEPARATED model) points at a real
+    // output of the parent — via the arithmetic resolver, not a positional
+    // `outputs[index]` read that would wrongly reject a shielded index
+    // >= outputs.length. We only need the existence check here; the UTXO itself
+    // is fetched by key below.
     const resolved = transactionUtils.resolveSpentOutput(origTx, input.index);
     if (!resolved) {
       throw new Error('Spending an unexistent output');
     }
 
-    if (resolved.kind === 'shielded') {
-      // Shielded input: the spent UTXO is keyed by its absolute on-chain index
-      // {tx_id, input.index}. Delete it so the selector can't keep offering a
-      // spent shielded UTXO (next send would fail "input already spent").
-      const shieldedUtxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
-      if (shieldedUtxo) {
-        await store.deleteUtxo(shieldedUtxo);
-      }
-      continue;
+    // Delete the spent UTXO — transparent or shielded alike — keyed by its
+    // absolute on-chain index {input.tx_id, input.index}, the same key both are
+    // saved under. The store only holds UTXOs this wallet owns (every saveUtxo is
+    // gated on isAddressMine), so a non-null getUtxo IS the ownership check — and
+    // it deletes the real stored record rather than one reconstructed from the
+    // output. If the output isn't ours (or was already removed) getUtxo returns
+    // undefined and there is nothing to delete. Removing it stops the selector
+    // from re-offering a spent UTXO ("input already spent" on the next send).
+    const spentUtxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
+    if (spentUtxo) {
+      await store.deleteUtxo(spentUtxo);
     }
-
-    const { output } = resolved;
-    if (!output.decoded.address) {
-      // Tx is ours but output is not from an address.
-      continue;
-    }
-
-    if (!(await storage.isAddressMine(output.decoded.address))) {
-      // Address is not ours.
-      continue;
-    }
-
-    // Now we get the utxo object to be deleted from the store
-    const utxo: IUtxo = {
-      txId: input.tx_id,
-      index: input.index,
-      token: output.token,
-      address: output.decoded.address,
-      authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
-      value: output.value,
-      timelock: output.decoded?.timelock ?? null,
-      type: origTx.version,
-      height: origTx.height ?? null,
-    };
-
-    // Delete utxo
-    await store.deleteUtxo(utxo);
   }
 
   // Update wallet data in the store
@@ -656,7 +631,7 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
     if (!(await storage.isAddressMine(address))) continue;
 
     const onChainIndex = transparentCount + sIndex;
-    if ((so.spent_by ?? null) === null) {
+    if (so.spent_by == null) {
       await store.saveUtxo({
         txId: tx.tx_id,
         index: onChainIndex,
@@ -667,7 +642,9 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
           ? so.value
           : 0n,
         address,
-        token: so.token ?? NATIVE_TOKEN_UID,
+        // owned + decoded (value gate above) ⇒ token is set; no NATIVE_TOKEN_UID
+        // fallback, which would mislabel a custom token as HTR.
+        token: so.token!,
         value: so.value,
         timelock: so.decoded?.timelock || null,
         height: tx.height || null,
@@ -995,7 +972,7 @@ export async function processNewTx(
 
     // Add utxo to the storage if unspent
     // This is idempotent so it's safe to call it multiple times
-    if ((output.spent_by ?? null) === null) {
+    if (output.spent_by == null) {
       await store.saveUtxo({
         txId: tx.tx_id,
         index: onChainIndex,
@@ -1073,7 +1050,7 @@ export async function processNewTx(
   for (const [sIndex, so] of (tx.shielded_outputs ?? []).entries()) {
     if (so.value === undefined) continue;
     await creditOutput(
-      { ...so, value: so.value, token: so.token ?? NATIVE_TOKEN_UID },
+      { ...so, value: so.value, token: so.token! },
       transparentCount + sIndex,
       true
     );
@@ -1255,11 +1232,13 @@ export async function processUtxoUnlock(
   const resolvedOutput = resolved.output;
   // Normalize to the fields used below. Owned shielded outputs carry
   // value/token only after decryption (value !== undefined); a non-owned slot
-  // has nothing to unlock for us. Default token to native + token_data to 0.
+  // has nothing to unlock for us. Owned ⇒ decoded, so `token` is set (assert it,
+  // no NATIVE_TOKEN_UID mislabel); `token_data` stays undefined for FullShielded,
+  // default to 0 for the authority check.
   if (resolvedOutput.value === undefined) return;
   const output = {
     value: resolvedOutput.value,
-    token: resolvedOutput.token ?? NATIVE_TOKEN_UID,
+    token: resolvedOutput.token!,
     token_data: resolvedOutput.token_data ?? 0,
     decoded: resolvedOutput.decoded,
   };
