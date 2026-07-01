@@ -5,11 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
 import { Address, Script } from 'bitcore-lib';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
-import testConfig from '../configuration/test.config';
+import { ithService } from './ith-service';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
 
@@ -208,12 +207,8 @@ export class WalletPrecalculationHelper {
    */
   // eslint-disable-next-line class-methods-use-this -- kept as an instance method to preserve the precalculationHelpers.test call sites
   async getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
-    const { data } = await axios.get(`${testConfig.walletProviderUrl}/simpleWallet`);
-    // Fail loudly with the raw payload if it ever returns an unexpected shape — otherwise a malformed
-    // response surfaces as a confusing error deep inside wallet construction.
-    if (!data?.words || !Array.isArray(data?.addresses)) {
-      throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
-    }
-    return { isUsed: true, words: data.words, addresses: data.addresses };
+    // Routed through ithService (timeout/retry/logging + shape validation).
+    const { words, addresses } = await ithService.getSimpleWallet();
+    return { isUsed: true, words, addresses };
   }
 }

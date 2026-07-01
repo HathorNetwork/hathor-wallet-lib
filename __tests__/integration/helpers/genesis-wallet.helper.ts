@@ -8,13 +8,14 @@
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import { waitForTxReceived, waitForWalletReady } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import { ithService } from './ith-service';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -76,6 +77,7 @@ export class GenesisWalletHelper {
    * @returns {Promise<Transaction>}
    * @private
    */
+  // eslint-disable-next-line class-methods-use-this -- funding is delegated to ithService; kept as an instance method to preserve call sites
   async _injectFunds(
     destinationWallet: HathorWallet,
     address: string,
@@ -83,21 +85,18 @@ export class GenesisWalletHelper {
     options: InjectFundsOptions = {}
   ): Promise<Transaction> {
     try {
-      const result = (await this.hWallet.sendTransaction(address, value, {
-        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
-      })) as SuccessfulInjectTransaction;
+      // Funding is delegated to the integration-test-helper's race-free /fund
+      // endpoint (via ithService), instead of broadcasting from a local genesis
+      // wallet. The helper returns once the tx is broadcast; we then wait until
+      // the destination wallet observes it — the bridge callers rely on.
+      const { txId } = await ithService.fund(address, value);
+      const result = { hash: txId } as unknown as SuccessfulInjectTransaction;
 
       if (options.waitTimeout === 0) {
         return result;
       }
 
-      if (!result.hash) {
-        throw new Error('Transaction had no hash');
-      }
-
-      await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
-      await waitForTxReceived(destinationWallet, result.hash, options.waitTimeout);
-      await waitUntilNextTimestamp(this.hWallet, result.hash);
+      await waitForTxReceived(destinationWallet, txId, options.waitTimeout);
       return result;
     } catch (e) {
       loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
@@ -219,17 +218,13 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    const gWallet = await GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(address, amount, {
-      pinCode: GenesisWalletServiceHelper.pinCode,
-    });
+    // Delegate broadcasting to the integration-test-helper's /fund (via ithService),
+    // then wait until the destination wallet observes the tx.
+    const { txId } = await ithService.fund(address, amount);
+    const fundTx = { hash: txId } as unknown as Transaction;
 
-    // Ensure the transaction was sent from the Genesis perspective
-    await pollForTx(gWallet, fundTx.hash!);
-
-    // Ensure the destination wallet is also aware of the transaction
     if (destinationWallet) {
-      await pollForTx(destinationWallet, fundTx.hash!);
+      await pollForTx(destinationWallet, txId);
     }
 
     return fundTx;

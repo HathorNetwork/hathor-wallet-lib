@@ -243,9 +243,27 @@ services:
       ${HATHOR_LIB_INTEGRATION_TESTS_WALLET_PROVIDER_IMAGE:-hathornetwork/hathor-integration-test-helper:latest}
     ports:
       - "3020:3020"
+    environment:
+      # Funding on: the helper syncs the genesis wallet, splits the pool, and
+      # serves /fund. Points at this compose's private network.
+      FUNDING_ENABLED: "true"
+      HATHOR_NODE_URL: http://fullnode:8080/v1a/
+      TX_MINING_URL: http://tx-mining-service:8035/
+      TX_MIN_WEIGHT: "1"
+    depends_on:
+      fullnode:
+        condition: service_healthy
+      tx-mining-service:
+        condition: service_started
     networks:
       - hathor-privnet
-    # TODO: add a healthcheck once the ITH exposes a readiness endpoint.
+    healthcheck:
+      # /ready gates the suite: 503 until genesis syncs + pool splits, then 200.
+      # Wide retries window covers genesis reward-lock maturity on a fresh net.
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3020/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
 
 networks:
   hathor-privnet:
