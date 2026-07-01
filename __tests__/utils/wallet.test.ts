@@ -584,10 +584,10 @@ test('access data from xpriv — shielded key chains', () => {
   // derived, at exactly the documented paths.
   const fromRoot = wallet.generateAccessDataFromXpriv(xprivkeyRoot, { pin: '123' });
   expect(fromRoot.scanXpubkey).toBe(
-    xprivRoot.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH).deriveNonCompliantChild(0).xpubkey
+    xprivRoot.deriveChild(SHIELDED_SCAN_ACCT_PATH).deriveChild(0).xpubkey
   );
   expect(fromRoot.spendXpubkey).toBe(
-    xprivRoot.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH).deriveNonCompliantChild(0).xpubkey
+    xprivRoot.deriveChild(SHIELDED_SPEND_ACCT_PATH).deriveChild(0).xpubkey
   );
   expect(checkPassword(fromRoot.scanMainKey!, '123')).toBe(true);
   expect(checkPassword(fromRoot.spendMainKey!, '123')).toBe(true);
