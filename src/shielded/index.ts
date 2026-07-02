@@ -25,3 +25,5 @@ export type {
 //
 // Install whichever crypto package matches your runtime, then wire it in via
 // `wallet.setShieldedCryptoProvider(createXxxShieldedCryptoProvider())`.
+
+export { processShieldedOutputs, resolveTokenUid } from './processing';
