@@ -414,9 +414,12 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // the delegation txId.)
     const authorityKey = (u: { txId: string; index: number }) => `${u.txId}:${u.index}`;
     const beforeKeys = new Set(
-      (await serviceWallet.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
-        authorityKey
-      )
+      (
+        await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        })
+      ).map(authorityKey)
     );
 
     const result = await serviceWallet.delegateAuthority(tokenUid, type, destinationAddress, {
@@ -434,9 +437,12 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     const delegationTxId = result.hash;
     await pollUntilCondition(async () => {
       const curKeys = new Set(
-        (await serviceWallet.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })).map(
-          authorityKey
-        )
+        (
+          await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+            many: true,
+            only_available_utxos: true,
+          })
+        ).map(authorityKey)
       );
       return [...beforeKeys].some(k => !curKeys.has(k));
     }, `authority UTXO index reflects delegation ${delegationTxId}`);
@@ -547,17 +553,25 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // reflect the destruction. `getAuthorityUtxo` throwing (e.g. count too high)
     // surfaces before any polling, preserving the rejection for the caller.
     const countBefore = (
-      await serviceWallet.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })
+      await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+        many: true,
+        only_available_utxos: true,
+      })
     ).length;
 
-    const result = await serviceWallet.destroyAuthority(tokenUid, type, count, { pinCode: SERVICE_PIN });
+    const result = await serviceWallet.destroyAuthority(tokenUid, type, count, {
+      pinCode: SERVICE_PIN,
+    });
     if (!result?.hash) {
       throw new Error('destroyAuthority: transaction had no hash');
     }
     await pollForTx(serviceWallet, result.hash);
     await pollUntilCondition(async () => {
       const remaining = (
-        await serviceWallet.getAuthorityUtxo(tokenUid, type, { many: true, only_available_utxos: true })
+        await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        })
       ).length;
       return remaining <= countBefore - count;
     }, `authority UTXO index reflects destroy ${result.hash}`);
