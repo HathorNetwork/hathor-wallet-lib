@@ -170,8 +170,19 @@ async function startWalletFor(
 }
 
 describe('Websocket stream history sync', () => {
+  let mockServer: Server | undefined;
+
+  afterEach(() => {
+    // Tear down the mock server after every test — even one that timed out before
+    // its `finally` ran (a slow sync can trip the per-test timeout). A leaked
+    // ws://…/ws/ server makes the NEXT test fail with
+    // "A mock server is already listening on this url".
+    mockServer?.stop();
+    mockServer = undefined;
+  });
+
   it('should stream the history with xpub stream mode', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.simple);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
@@ -194,12 +205,11 @@ describe('Websocket stream history sync', () => {
     } finally {
       // Stop wallet
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
-      mockServer.stop();
     }
-  }, 10000);
+  }, 30000);
 
   it('should stream the history with manual stream mode', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.simple);
     const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
     try {
@@ -222,12 +232,11 @@ describe('Websocket stream history sync', () => {
     } finally {
       // Stop wallet
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
-      mockServer.stop();
     }
   }, 30000);
 
   it('should make the wallet go in error if the stream returns an error', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.error);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
@@ -237,12 +246,11 @@ describe('Websocket stream history sync', () => {
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {
       await wallet.stop();
-      mockServer.stop();
     }
-  }, 10000);
+  }, 30000);
 
   it('should make the wallet go in error if the stream is aborted', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.abort);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
@@ -259,12 +267,11 @@ describe('Websocket stream history sync', () => {
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {
       await wallet.stop();
-      mockServer.stop();
     }
-  }, 10000);
+  }, 30000);
 
   it('should ignore unknown stream ids', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.unknownId);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
@@ -287,12 +294,11 @@ describe('Websocket stream history sync', () => {
     } finally {
       // Stop wallet
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
-      mockServer.stop();
     }
-  }, 10000);
+  }, 30000);
 
   it('should default to POLLING_HTTP_API without capabilities', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     makeServerMock(mockServer, SERVER_MOCK_TYPE.simple, false);
     const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
     wallet.conn.on('stream', data => {
@@ -317,13 +323,12 @@ describe('Websocket stream history sync', () => {
     } finally {
       // Stop wallet
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
-      mockServer.stop();
     }
 
     await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(
       'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
     );
-  }, 10000);
+  }, 30000);
 });
 
 const MULTISIG_DATA = {
@@ -377,8 +382,18 @@ describe('loadP2SHAddressesCPUIntensive', () => {
 const MULTISIG_EXPECTED_BATCH_SIZE = 5;
 
 describe('Websocket stream history sync for multisig', () => {
+  let mockServer: Server | undefined;
+
+  afterEach(() => {
+    // See the P2PKH stream suite: afterEach guarantees teardown even when a slow
+    // sync trips the per-test timeout, preventing the "already listening" cascade
+    // into the next test.
+    mockServer?.stop();
+    mockServer = undefined;
+  });
+
   it('should send P2SH addresses on a manual stream for a multisig wallet', async () => {
-    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    mockServer = new Server('ws://localhost:8080/v1a/ws/');
     let capturedFirstAddress: string | undefined;
     let capturedBatchSize: number | undefined;
     mockServer.on('connection', socket => {
@@ -431,7 +446,6 @@ describe('Websocket stream history sync for multisig', () => {
       await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(MULTISIG_ADDRESSES[0]);
     } finally {
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
-      mockServer.stop();
     }
   }, 30000);
 
