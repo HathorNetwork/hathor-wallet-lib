@@ -17,6 +17,7 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
@@ -92,6 +93,10 @@ export async function generateWalletHelper(param) {
   } else {
     walletData.words = param.seed;
     walletData.addresses = param.preCalculatedAddresses;
+    // Fixed in-repo seeds (genesis, multisig, ocb, ...) have committed shielded
+    // fixtures; unknown seeds resolve to undefined and the wallet derives live.
+    walletData.shieldedAddresses =
+      param.preCalculatedShieldedAddresses ?? getPrecalculatedShieldedForSeed(param.seed);
   }
 
   // Start the wallet
@@ -101,6 +106,7 @@ export async function generateWalletHelper(param) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
     scanPolicy: getGapLimitConfig(),
   };
   if (param) {
@@ -187,14 +193,19 @@ export async function generateWalletHelperRO(options) {
  * @return {Promise<HathorWallet>}
  */
 export async function generateMultisigWalletHelper(parameters) {
+  const seed = parameters.walletWords || multisigWalletsData.words[parameters.walletIndex];
   // Start the wallet
   const walletConfig = {
-    seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex],
+    seed,
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses:
       parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
+    // The multisig seeds are fixed in-repo, so their shielded pairs are
+    // committed fixtures (the shielded chain derives from the seed alone).
+    preCalculatedShieldedAddresses:
+      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed),
     multisig: {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,
