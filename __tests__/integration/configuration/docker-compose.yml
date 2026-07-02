@@ -114,6 +114,11 @@ services:
 
   ws-daemon:
     image: hathornetwork/hathor-wallet-service-sync-daemon:dev
+    # The daemon self-terminates after a fullnode-event idle timeout ("terminating
+    # process for Kubernetes restart"). Compose has no orchestrator, so restart it
+    # on failure — otherwise it stays dead and ws-serverless 500s for the rest of
+    # the run (the dominant local integration-suite failure).
+    restart: on-failure
     depends_on:
       ws-migrator:
         condition: service_completed_successfully
@@ -157,6 +162,8 @@ services:
 
   ws-serverless:
     image: hathornetwork/hathor-wallet-service-lambdas:dev
+    # Recover if it crashes (e.g. a 500 while ws-daemon is mid-restart).
+    restart: on-failure
     depends_on:
       fullnode:
         condition: service_healthy
