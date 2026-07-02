@@ -1,13 +1,9 @@
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { MemoryStore, Storage, Network } from '../../src';
-import { WALLET_CONSTANTS } from './configuration/test-constants';
 import {
   buildWalletInstance,
-  emptyWallet,
   initializeServiceGlobalConfigs,
 } from './helpers/service-facade.helper';
-import { WalletRequestError } from '../../src/errors';
-import { GetAddressesObject } from '../../src/wallet/types';
 import { WalletAddressMode } from '../../src/types';
 import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 
@@ -16,22 +12,6 @@ initializeServiceGlobalConfigs();
 
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
-const addressesWallet = {
-  words:
-    'pumpkin tank father organ can doll romance damage because barely vault pride will man rack horn lamp remove enemy brain desert exchange boil salon',
-  addresses: [
-    'WRsDG9VhM4N9DPSpbnpFKnngLEXonaBsuH',
-    'WSTMdCz4BuzGv5q6g8woaCHeyppTZdjXWx',
-    'WPbCV3Lrh28ntoQY2hvC2ppU5TimCZdRaw',
-    'WaAgCebJjWfQCKcDwtpffQ4kt2im7fbsUr',
-    'WXN2wRybweJY4xunPkz6pwfGUmoumCCcUP',
-    'WbEA4E7Rnx98TtRox3UazMQRm1yNoAJcfm',
-    'WZs2Ci9ZxyMzmfdbGfR2nTp9xsxS7rSsDN',
-    'Wf1waSNgXmMoitFjx7TADMemKyCWjhvLUb',
-    'WVTMecGGC9kGzUbQqjB4J7i4KVhLVyMagy',
-    'WjHom47afCW8qEFtBqMq3MT22zxLkuvQag',
-  ],
-};
 const singleAddressWallet1 = {
   words:
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
@@ -98,229 +78,13 @@ afterAll(async () => {
   await GenesisWalletServiceHelper.stop();
 });
 
-describe('empty wallet address methods', () => {
-  const knownAddresses = emptyWallet.addresses;
-  const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
-
-  beforeEach(async () => {
-    ({ wallet } = await buildWalletInstance({ words: emptyWallet.words }));
-    await wallet.start({ pinCode, password });
-  });
-
-  afterEach(async () => {
-    if (wallet) {
-      await wallet.stop({ cleanStorage: true });
-    }
-  });
-
-  it('getAddressIndex returns correct index for known address', async () => {
-    for (let i = 0; i < knownAddresses.length; i++) {
-      const index = await wallet.getAddressIndex(knownAddresses[i]);
-      expect(index).toBe(i);
-    }
-  });
-
-  it('getAddressIndex returns null for unknown address', async () => {
-    const index = await wallet.getAddressIndex(unknownAddress);
-    expect(index).toBeNull();
-  });
-
-  it('getAddressPathForIndex returns correct path for index', async () => {
-    for (let i = 0; i < knownAddresses.length; i++) {
-      const path = await wallet.getAddressPathForIndex(i);
-      expect(path.endsWith(`/${i}`)).toBe(true);
-      expect(path).toMatch(/m\/44'\/280'\/0'\/0\/[0-9]+/);
-    }
-  });
-
-  it('getAddressAtIndex returns correct address for index', async () => {
-    for (let i = 0; i < knownAddresses.length; i++) {
-      const address = await wallet.getAddressAtIndex(i);
-      expect(address).toBe(knownAddresses[i]);
-    }
-  });
-
-  it('getAddressPrivKey returns HDPrivateKey for known index', async () => {
-    for (let i = 0; i < knownAddresses.length; i++) {
-      const privKey = await wallet.getAddressPrivKey(pinCode, i);
-      expect(privKey.constructor.name).toBe('HDPrivateKey');
-      // Should have a publicKey and privateKey
-      expect(privKey.publicKey).toBeDefined();
-      expect(privKey.privateKey).toBeDefined();
-    }
-  });
-
-  it('isAddressMine returns true for known addresses', async () => {
-    for (const address of knownAddresses) {
-      const result = await wallet.isAddressMine(address);
-      expect(result).toBe(true);
-    }
-  });
-
-  it('isAddressMine returns false for unknown address', async () => {
-    const result = await wallet.isAddressMine(unknownAddress);
-    expect(result).toBe(false);
-  });
-
-  it('checkAddressesMine returns correct map for known and unknown addresses', async () => {
-    const addresses = [...knownAddresses, unknownAddress];
-    const result = await wallet.checkAddressesMine(addresses);
-    for (let i = 0; i < knownAddresses.length; i++) {
-      expect(result[knownAddresses[i]]).toBe(true);
-    }
-    expect(result[unknownAddress]).toBe(false);
-  });
-
-  it('getPrivateKeyFromAddress returns PrivateKey for known address', async () => {
-    for (const address of knownAddresses) {
-      const privKey = await wallet.getPrivateKeyFromAddress(address, { pinCode });
-      expect(privKey.constructor.name).toBe('PrivateKey');
-      expect(privKey.toString()).toMatch(/[A-Fa-f0-9]{64}/);
-    }
-  });
-
-  it('getPrivateKeyFromAddress throws for unknown address', async () => {
-    await expect(wallet.getPrivateKeyFromAddress(unknownAddress, { pinCode })).rejects.toThrow(
-      /does not belong to this wallet/
-    );
-  });
-});
+// empty wallet address method tests moved to shared/addresses.test.ts and service-specific/addresses.test.ts
 
 describe.skip('websocket events', () => {});
 
 // balances tests moved to shared/get-balance.test.ts and service-specific/get-balance.test.ts
 
-describe('address management methods', () => {
-  const knownAddresses = addressesWallet.addresses;
-
-  beforeEach(async () => {
-    ({ wallet } = await buildWalletInstance({ words: addressesWallet.words }));
-    await wallet.start({ pinCode, password });
-  });
-
-  afterEach(async () => {
-    if (wallet) {
-      await wallet.stop({ cleanStorage: true });
-    }
-  });
-
-  describe('getAllAddresses', () => {
-    it('should return expected addresses on getAllAddresses', async () => {
-      const allAddresses: GetAddressesObject[] = [];
-      for await (const addr of wallet.getAllAddresses()) {
-        allAddresses.push(addr);
-      }
-
-      // Should return an array of addresses
-      expect(allAddresses.length).toBeGreaterThan(0);
-
-      // Should include the known addresses from addressesWallet
-      allAddresses.forEach(addrObj => {
-        expect(knownAddresses).toContain(addrObj.address);
-      });
-
-      // Should be in order (index 0, 1, 2, etc.)
-      for (let i = 0; i < knownAddresses.length; i++) {
-        expect(allAddresses[i].address).toBe(knownAddresses[i]);
-      }
-    });
-
-    it('should return consistent results on multiple calls', async () => {
-      const allAddressesFirstCall: GetAddressesObject[] = [];
-      for await (const addr of wallet.getAllAddresses()) {
-        allAddressesFirstCall.push(addr);
-      }
-      const allAddressesSecondCall: GetAddressesObject[] = [];
-      for await (const addr of wallet.getAllAddresses()) {
-        allAddressesSecondCall.push(addr);
-      }
-
-      expect(allAddressesFirstCall.length).toBe(allAddressesSecondCall.length);
-      expect(allAddressesFirstCall).toEqual(allAddressesSecondCall);
-    });
-  });
-
-  describe('getCurrentAddress, getNextAddress', () => {
-    it('should return current address with index and address string', () => {
-      const currentAddress = wallet.getCurrentAddress();
-
-      // Should return an object with index and address
-      expect(currentAddress).toEqual(
-        expect.objectContaining({
-          index: expect.any(Number),
-          address: expect.any(String),
-        })
-      );
-
-      expect(currentAddress.index).toBeGreaterThanOrEqual(0);
-      expect(knownAddresses).toContain(currentAddress.address);
-      expect(currentAddress.addressPath).toMatch(/^m\/44'\/280'\/0'\/0\/\d+$/);
-      expect(currentAddress.info).toBeFalsy();
-    });
-
-    it('should return consistent results when called multiple times without changes', () => {
-      const first = wallet.getCurrentAddress();
-      const second = wallet.getCurrentAddress();
-
-      expect(first).toEqual(second);
-    });
-
-    it('should mark addresses as used and not return them anymore', async () => {
-      const initialCurrent = wallet.getCurrentAddress();
-      const secondCurrent = wallet.getCurrentAddress({ markAsUsed: true });
-      const thirdCurrent = wallet.getCurrentAddress();
-
-      expect(initialCurrent).toEqual(secondCurrent);
-      expect(thirdCurrent.index).toBe(secondCurrent.index + 1);
-      expect(thirdCurrent.address).not.toBe(secondCurrent.address);
-    });
-
-    it('should have the same mark as used behavior with getNextAddress', async () => {
-      const currentBefore = wallet.getCurrentAddress();
-      const nextAddress = wallet.getNextAddress();
-      const currentAfter = wallet.getCurrentAddress();
-
-      expect(nextAddress.index).toBe(currentBefore.index + 1);
-      expect(nextAddress.address).not.toBe(currentBefore.address);
-      expect(currentAfter).toEqual(nextAddress);
-    });
-
-    it('should inform when the limit for new addresses has been reached', async () => {
-      // Advance to near the end of known addresses
-      for (let i = 0; i < knownAddresses.length - 1; i++) {
-        wallet.getNextAddress();
-      }
-
-      const current = wallet.getNextAddress();
-      expect(current.index).toBe(knownAddresses.length - 1);
-      expect(current.address).toBe(knownAddresses[knownAddresses.length - 1]);
-      expect(current.info).toBe('GAP_LIMIT_REACHED');
-    });
-  });
-
-  describe('getAddressDetails', () => {
-    it('should return details for known addresses', async () => {
-      // Test first known addresses to verify index mapping
-      for (let i = 0; i < knownAddresses.length; i++) {
-        const details = await wallet.getAddressDetails(knownAddresses[i]);
-        expect(details).toEqual(
-          expect.objectContaining({
-            address: knownAddresses[i],
-            index: i,
-            transactions: 0,
-            seqnum: 0,
-          })
-        );
-      }
-    });
-
-    it('should throw error for unknown address', async () => {
-      const unknownAddress = WALLET_CONSTANTS.miner.addresses[0];
-
-      await expect(wallet.getAddressDetails(unknownAddress)).rejects.toThrow(WalletRequestError);
-    });
-  });
-});
+// address management method tests moved to shared/addresses.test.ts and service-specific/addresses.test.ts
 
 describe('single-address mode', () => {
   afterEach(async () => {
