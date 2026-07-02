@@ -119,10 +119,11 @@ export async function processShieldedOutputs(
   for (const [sIndex, shieldedOutput] of shieldedOutputs.entries()) {
     const absoluteIndex = transparentCount + sIndex;
     const address = shieldedOutput.decoded?.address;
-    // No decoded address means a data output or a non-canonical/non-P2PKH script,
-    // which can't be an owned shielded output — skip it. Shielded outputs are
-    // expected to carry a spend P2PKH address (the fullnode is believed to reject
-    // non-P2PKH shielded scripts — to confirm with core), so this is defensive.
+    // No decoded address: the fullnode accepts ANY script on a shielded output
+    // (consensus validates only the crypto material plus a script size cap) and
+    // fills `decoded.address` only when the script parses as a standard type.
+    // An output owned by this wallet always carries its spend P2PKH script, so
+    // a slot without a decoded address cannot be ours — skip it.
     if (!address) continue;
 
     // Check if this address belongs to our wallet

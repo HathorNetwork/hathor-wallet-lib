@@ -176,8 +176,9 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
 
     const provider = makeMockProvider();
 
-    // C4: a scan-xpriv unlock failure is SYSTEMIC (wrong PIN / missing key), so
-    // processShieldedOutputs fails loud rather than silently skipping owned outputs.
+    // A scan-xpriv unlock failure is systemic (wrong PIN / missing key would fail
+    // for every owned output), so processShieldedOutputs fails loud rather than
+    // silently skipping owned outputs and under-counting the balance.
     await expect(processShieldedOutputs(storage, tx, provider, 'pin')).rejects.toThrow('no key');
     expect(tx.shielded_outputs![0].value).toBeUndefined();
   });
