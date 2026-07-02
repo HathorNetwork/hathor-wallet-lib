@@ -98,7 +98,10 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
+  // PIN code threaded so processHistory can derive the per-address scan key
+  // and decrypt wallet-owned shielded outputs after the history loads.
+  pinCode?: string
 ) => Promise<void>;
 
 /**
@@ -777,8 +780,10 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  processHistory(): Promise<void>;
-  processNewTx(tx: IHistoryTx): Promise<void>;
+  // pinCode is threaded so the scan-key derivation can decrypt wallet-owned
+  // shielded outputs while (re)processing the history.
+  processHistory(pinCode?: string): Promise<void>;
+  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
   getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens
