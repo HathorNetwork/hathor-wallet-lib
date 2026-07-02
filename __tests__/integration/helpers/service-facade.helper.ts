@@ -50,7 +50,7 @@ export function initializeServiceGlobalConfigs() {
  * @param passwordForRequests - The password that will be returned by the mocked requestPassword function (default: 'test-password')
  * @returns The wallet instance along with its store and storage for eventual mocking/spying
  */
-export function buildWalletInstance({
+export async function buildWalletInstance({
   enableWs = false,
   words = '',
   xpub = '',
@@ -64,7 +64,7 @@ export function buildWalletInstance({
     if (!precalculationHelpers.test) {
       throw new Error('Precalculation helper not initialized');
     }
-    const preFetchedWallet = precalculationHelpers.test.getPrecalculatedWallet();
+    const preFetchedWallet = await precalculationHelpers.test.getPrecalculatedWallet();
     // eslint-disable-next-line no-param-reassign -- Simple way of setting a default value
     words = preFetchedWallet.words;
     addresses = preFetchedWallet.addresses;
@@ -212,7 +212,7 @@ export async function retryOnTransientWalletInit<T>(
  */
 export async function generateNewWalletAddress() {
   const newWords = walletUtils.generateWalletWords();
-  const { wallet: newWallet } = buildWalletInstance({ words: newWords });
+  const { wallet: newWallet } = await buildWalletInstance({ words: newWords });
   await newWallet.start({ pinCode, password });
 
   const addresses: string[] = [];
