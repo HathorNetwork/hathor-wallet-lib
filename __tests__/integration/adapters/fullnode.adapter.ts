@@ -49,6 +49,7 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
@@ -363,6 +364,57 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
     return { hash: result.hash };
+  }
+
+  async getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]> {
+    const hWallet = this.concrete(wallet);
+    const result: AdapterAddress[] = [];
+    for await (const entry of hWallet.getAllAddresses()) {
+      result.push({
+        address: entry.address,
+        index: entry.index,
+        addressPath: await hWallet.getAddressPathForIndex(entry.index),
+      });
+    }
+    return result;
+  }
+
+  async getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress> {
+    const hWallet = this.concrete(wallet);
+    const current = await hWallet.getCurrentAddress({ markAsUsed: options?.markAsUsed ?? false });
+    if (current.index === null) {
+      throw new Error('getCurrentAddress: address has no index');
+    }
+    return {
+      address: current.address,
+      index: current.index,
+      addressPath: current.addressPath,
+    };
+  }
+
+  async getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress> {
+    const hWallet = this.concrete(wallet);
+    const next = await hWallet.getNextAddress();
+    if (next.index === null) {
+      throw new Error('getNextAddress: address has no index');
+    }
+    return {
+      address: next.address,
+      index: next.index,
+      addressPath: next.addressPath,
+    };
+  }
+
+  async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
+    const index = await this.concrete(wallet).getAddressIndex(address);
+    return index === null ? undefined : index;
+  }
+
+  async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
+    return this.concrete(wallet).getAddressAtIndex(index);
   }
 
   // --- Private helpers ---
