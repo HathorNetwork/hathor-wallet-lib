@@ -194,17 +194,22 @@ describe('getTxById', () => {
     expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
     expect(firstTokenDetails.balance).toStrictEqual(10n);
 
+    // injectFunds now returns a minimal { hash } (funding is delegated to the
+    // integration-test-helper's /fund), so fetch the full tx to build a
+    // realistic malformed-tx mock for the token_data validation below.
+    const { tx: fullTx1 } = await hWallet.getFullTxById(tx1.hash);
+
     // throw error if token uid not found in tokens list
     jest.spyOn(hWallet, 'getFullTxById').mockResolvedValue({
       success: true,
       tx: {
-        ...tx1,
+        ...fullTx1,
         // impossible token_data
-        inputs: [{ ...tx1.inputs[0], token_data: -1 }],
+        inputs: [{ ...fullTx1.inputs[0], token_data: -1 }],
       },
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
-      'Invalid token_data undefined, token not found in tokens list'
+      'Invalid token_data -1, token not found in tokens list'
     );
     jest.spyOn(hWallet, 'getFullTxById').mockRestore();
 
