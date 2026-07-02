@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "3.1.1",
+  "version": "4.0.0",
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
@@ -33,10 +33,10 @@
     "build": "babel -d lib --extensions \".ts,.js\" src && tsc",
     "tsc": "tsc",
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
-    "test_network_up": "docker compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp && cp ./__tests__/integration/configuration/precalculated-wallets.json ./tmp/wallets.json",
+    "test_network_up": "docker compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp",
     "test_network_integration": "jest --config jest-integration.config.js --runInBand",
     "test_network_partial_down": "docker compose -f ./__tests__/integration/configuration/docker-compose.yml -p configuration stop cpuminer",
-    "test_network_down": "docker compose -f ./__tests__/integration/configuration/docker-compose.yml down && rm ./tmp/wallets.json",
+    "test_network_down": "docker compose -f ./__tests__/integration/configuration/docker-compose.yml down",
     "lint": "eslint 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}'",
     "lint:fix": "eslint 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}' --fix",
     "format": "prettier --write 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}'",

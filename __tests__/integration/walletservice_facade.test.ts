@@ -22,8 +22,8 @@ import { GenesisWalletServiceHelper } from './helpers/genesis-wallet.helper';
 // Set base URL for the wallet service API inside the privatenet test container
 initializeServiceGlobalConfigs();
 
-/** Genesis Wallet, used to fund all tests */
-const gWallet: HathorWalletServiceWallet = GenesisWalletServiceHelper.getSingleton();
+/** Genesis Wallet, used to fund all tests. Assigned in beforeAll. */
+let gWallet: HathorWalletServiceWallet;
 /** Wallet instance used in tests */
 let wallet: HathorWalletServiceWallet;
 // UTXO query tests moved to shared/utxos.test.ts and service-specific/utxos.test.ts
@@ -120,6 +120,7 @@ const password = 'testpass';
 
 beforeAll(async () => {
   await GenesisWalletServiceHelper.start();
+  gWallet = await GenesisWalletServiceHelper.getSingleton();
 });
 
 afterAll(async () => {
@@ -151,7 +152,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -200,7 +201,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -247,7 +248,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -295,7 +296,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -345,7 +346,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -400,7 +401,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -446,7 +447,9 @@ describe('Fee-based tokens', () => {
   it('should fail to create fee token when wallet has no HTR to pay the fee', async () => {
     // Use dedicated empty wallet that was never funded
     // This avoids race conditions from draining HTR to other wallets
-    const { wallet: emptyWalletInstance } = buildWalletInstance({ words: emptyFeeWallet.words });
+    const { wallet: emptyWalletInstance } = await buildWalletInstance({
+      words: emptyFeeWallet.words,
+    });
     await emptyWalletInstance.start({ pinCode, password });
 
     // Verify no HTR available (wallet was never funded)
@@ -470,7 +473,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -526,7 +529,7 @@ describe('Fee-based tokens', () => {
     });
     await pollForTx(gWallet, fundTx.hash!);
 
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
     await pollForTx(feeWallet, fundTx.hash!);
 
@@ -619,7 +622,7 @@ describe('Fee-based tokens', () => {
     // The fee header is correctly calculated considering all fee token outputs
 
     // Setup wallet
-    ({ wallet: feeWallet } = buildWalletInstance({ words: feeTokenWallet.words }));
+    ({ wallet: feeWallet } = await buildWalletInstance({ words: feeTokenWallet.words }));
     await feeWallet.start({ pinCode, password });
 
     // Fund wallet with HTR for token creation and transaction fees
@@ -742,7 +745,7 @@ describe('single-address mode', () => {
   });
 
   it('should enable single-address mode and keep index 0 as current address after receiving tx', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet1.words }));
+    ({ wallet } = await buildWalletInstance({ words: singleAddressWallet1.words }));
     await wallet.start({ pinCode, password });
 
     await wallet.enableSingleAddressMode();
@@ -763,7 +766,7 @@ describe('single-address mode', () => {
   });
 
   it('should succeed enabling single-address mode when wallet only has tx on index 0', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
+    ({ wallet } = await buildWalletInstance({ words: singleAddressWallet2.words }));
     await wallet.start({ pinCode, password });
 
     await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[0], 5n, wallet);
@@ -780,7 +783,7 @@ describe('single-address mode', () => {
   });
 
   it('should fail to enable single-address mode when wallet has tx on index > 0', async () => {
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
+    ({ wallet } = await buildWalletInstance({ words: singleAddressWallet2.words }));
     await wallet.start({ pinCode, password });
 
     await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);
@@ -792,7 +795,7 @@ describe('single-address mode', () => {
 
   it('should fallback to start in multi-address mode via constructor when wallet has tx on index > 0', async () => {
     // First, start wallet normally and fund index 1
-    ({ wallet } = buildWalletInstance({ words: singleAddressWallet2.words }));
+    ({ wallet } = await buildWalletInstance({ words: singleAddressWallet2.words }));
     await wallet.start({ pinCode, password });
 
     await GenesisWalletServiceHelper.injectFunds(singleAddressWallet2.addresses[1], 10n, wallet);

@@ -70,7 +70,7 @@ export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySy
     ];
   }
   if (walletType === WalletType.MULTISIG) {
-    return [HistorySyncMode.POLLING_HTTP_API];
+    return [HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.POLLING_HTTP_API];
   }
   return [];
 }
@@ -434,11 +434,21 @@ export async function processSingleTx(
       continue;
     }
 
-    if (origTx.outputs.length <= input.index) {
+    // SEPARATED model: `input.index` is an absolute on-chain index spanning the
+    // transparent outputs then the shielded outputs, so resolve it via the
+    // arithmetic resolver rather than a positional `outputs[index]` read — which
+    // would wrongly reject (or misread) a shielded input whose index is
+    // >= outputs.length.
+    const resolved = transactionUtils.resolveSpentOutput(origTx, input.index);
+    if (!resolved) {
       throw new Error('Spending an unexistent output');
     }
-
-    const output = origTx.outputs[input.index];
+    if (resolved.kind !== 'transparent') {
+      // A shielded input's UTXO lifecycle is handled by the receive pipeline;
+      // this transparent-spend loop has nothing to delete for it.
+      continue;
+    }
+    const { output } = resolved;
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
       continue;
@@ -780,6 +790,18 @@ export async function processNewTx(
   }
 
   for (const input of tx.inputs) {
+    // Inputs spending shielded outputs carry no transparent fields
+    // (value/token/decoded are hidden in commitments). Their balance
+    // handling lands with the receive pipeline in the next PR; here we
+    // only need the type-level guard so transparent processing narrows.
+    if (
+      input.value === undefined ||
+      input.token === undefined ||
+      input.token_data === undefined ||
+      input.decoded === undefined
+    ) {
+      continue;
+    }
     // We ignore data inputs since they do not have an address
     if (!input.decoded.address) continue;
 
@@ -787,7 +809,9 @@ export async function processNewTx(
     // This is not our address, ignore
     if (!addressInfo) continue;
 
-    const isAuthority: boolean = transactionUtils.isAuthorityOutput(input);
+    const isAuthority: boolean = transactionUtils.isAuthorityOutput({
+      token_data: input.token_data,
+    });
     let addressMeta = await store.getAddressMeta(input.decoded.address);
     let tokenMeta = await store.getTokenMeta(input.token);
 
@@ -813,11 +837,11 @@ export async function processNewTx(
     txAddresses.add(input.decoded.address);
 
     if (isAuthority) {
-      if (transactionUtils.isMint(input)) {
+      if (transactionUtils.isMint({ value: input.value, token_data: input.token_data })) {
         tokenMeta.balance.authorities.mint.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1n;
       }
-      if (transactionUtils.isMelt(input)) {
+      if (transactionUtils.isMelt({ value: input.value, token_data: input.token_data })) {
         tokenMeta.balance.authorities.melt.unlocked -= 1n;
         addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1n;
       }
@@ -927,7 +951,12 @@ export async function processUtxoUnlock(
   const { store } = storage;
 
   const { tx } = lockedUtxo;
-  const output = tx.outputs[lockedUtxo.index];
+  // SEPARATED model: resolve via the arithmetic resolver, not a positional
+  // `outputs[index]` read (out of range for a shielded index). A shielded locked
+  // UTXO is handled by the receive pipeline, so there's nothing to unlock here.
+  const resolved = transactionUtils.resolveSpentOutput(tx, lockedUtxo.index);
+  if (!resolved || resolved.kind !== 'transparent') return;
+  const { output } = resolved;
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case
   if (!output.decoded.address) return;
