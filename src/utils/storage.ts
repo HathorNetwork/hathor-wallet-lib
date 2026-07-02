@@ -7,6 +7,7 @@
 
 import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { HDPublicKey } from 'bitcore-lib';
 
 import FullnodeConnection from '../new/connection';
 import {
@@ -15,6 +16,7 @@ import {
   IHistoryTx,
   IBalance,
   ILockedUtxo,
+  IPrecalculatedShieldedAddress,
   isGapLimitScanPolicy,
   IScanPolicyLoadAddresses,
   isIndexLimitScanPolicy,
@@ -32,7 +34,7 @@ import transactionUtils from './transaction';
 import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
-  deriveShieldedAddressFromStorage,
+  deriveShieldedAddressPair,
   getAddressFromPubkey,
 } from './address';
 import { processShieldedOutputs } from '../shielded/processing';
@@ -95,6 +97,18 @@ export async function loadAddresses(
 ): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
+
+  // Shielded derivation setup, hoisted out of the loop: wallets without
+  // scan/spend xpubs (read-only, pre-shielded) skip the whole shielded branch,
+  // and for wallets that have them the parent HDPublicKeys are parsed ONCE per
+  // call — bitcore's xpub parsing is expensive and identical for every index.
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  const hasShieldedKeys = !!scanXpub && !!spendXpub;
+  const scanHdPub = hasShieldedKeys ? new HDPublicKey(scanXpub) : null;
+  const spendHdPub = hasShieldedKeys ? new HDPublicKey(spendXpub) : null;
+  const networkName = storage.config.getNetwork().name;
+
   for (let i = startIndex; i < stopIndex; i++) {
     const storageAddr = await storage.getAddressAtIndex(i);
     if (storageAddr !== null) {
@@ -112,28 +126,83 @@ export async function loadAddresses(
       addresses.push(address.base58);
     }
 
-    // Always generate the shielded address pair at the same BIP32 index (when
-    // shielded keys are available). deriveShieldedAddressFromStorage returns
-    // null on wallets without scan/spend xpubs, so legacy-only wallets are a
-    // no-op here. Check existence first to avoid "Already have this address"
-    // errors on re-loads.
-    const shieldedResult = await deriveShieldedAddressFromStorage(i, storage);
-    if (shieldedResult) {
-      if (!(await storage.isAddressMine(shieldedResult.shieldedAddress.base58))) {
-        await storage.saveAddress(shieldedResult.shieldedAddress);
+    // Generate the shielded address pair at the same BIP32 index (when shielded
+    // keys are available). Like the legacy branch above, an index already in
+    // storage (a previous load, or pre-calculated/injected addresses) skips the
+    // EC derivation entirely — re-walks from index 0 happen on every sync/reload,
+    // so without this skip the whole window would be re-derived each time.
+    if (hasShieldedKeys) {
+      const existingShielded = await storage.getAddressAtIndex(i, { legacy: false });
+      if (existingShielded?.addressType === 'shielded' && existingShielded.ctMappingAddress) {
+        // Already derived/injected: re-push the paired on-chain spend address
+        // (ctMappingAddress) so re-loads still subscribe and sync its history.
+        addresses.push(existingShielded.ctMappingAddress);
+      } else {
+        const { shieldedAddress, spendAddress } = deriveShieldedAddressPair(
+          scanHdPub!,
+          spendHdPub!,
+          i,
+          networkName
+        );
+        // Check existence first to avoid "Already have this address" errors on
+        // partial windows (e.g. one entry of the pair saved, the other not).
+        if (!(await storage.isAddressMine(shieldedAddress.base58))) {
+          await storage.saveAddress(shieldedAddress);
+        }
+        if (!(await storage.isAddressMine(spendAddress.base58))) {
+          await storage.saveAddress(spendAddress);
+        }
+        // Only the spend-derived P2PKH is subscribed for tx notifications.
+        // The user-facing shielded address (scan+spend pubkeys) is NOT subscribed
+        // because the fullnode indexes transactions by on-chain script address,
+        // not by the shielded address format.
+        addresses.push(spendAddress.base58);
       }
-      if (!(await storage.isAddressMine(shieldedResult.spendAddress.base58))) {
-        await storage.saveAddress(shieldedResult.spendAddress);
-      }
-      // Only the spend-derived P2PKH is subscribed for tx notifications.
-      // The user-facing shielded address (scan+spend pubkeys) is NOT subscribed
-      // because the fullnode indexes transactions by on-chain script address,
-      // not by the shielded address format.
-      addresses.push(shieldedResult.spendAddress.base58);
     }
   }
 
   return addresses;
+}
+
+/**
+ * Persist pre-calculated shielded address pairs into storage.
+ *
+ * Test tooling: mirrors the pre-calculated legacy address injection done at
+ * wallet start. Each entry produces the SAME two storage records that
+ * loadAddresses would derive live (see deriveShieldedAddressPair), so the
+ * already-loaded skip in loadAddresses treats injected indexes as derived.
+ *
+ * @param storage The wallet storage instance
+ * @param entries Pre-calculated shielded address pairs, one per BIP32 index
+ */
+export async function savePrecalculatedShieldedAddresses(
+  storage: IStorage,
+  entries: IPrecalculatedShieldedAddress[]
+): Promise<void> {
+  for (const entry of entries) {
+    const shieldedAddress: IAddressInfo = {
+      base58: entry.shieldedBase58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+      publicKey: entry.scanPubkey,
+      addressType: 'shielded',
+      ctMappingAddress: entry.spendBase58,
+    };
+    const spendAddress: IAddressInfo = {
+      base58: entry.spendBase58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+      publicKey: entry.spendPubkey,
+      addressType: 'shielded-spend',
+      ctMappingAddress: entry.shieldedBase58,
+    };
+    // saveAddress throws on duplicates — guard so re-injection on a wallet
+    // restart over existing storage is a no-op, like the loadAddresses guards.
+    if (!(await storage.isAddressMine(shieldedAddress.base58))) {
+      await storage.saveAddress(shieldedAddress);
+    }
+    if (!(await storage.isAddressMine(spendAddress.base58))) {
+      await storage.saveAddress(spendAddress);
+    }
+  }
 }
 
 /**
