@@ -47,8 +47,8 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
   let feeWallet: HathorWalletServiceWallet;
   let feeWalletAddresses: string[];
 
-  beforeEach(() => {
-    const built = buildWalletInstance();
+  beforeEach(async () => {
+    const built = await buildWalletInstance();
     feeWallet = built.wallet;
     feeWalletAddresses = built.addresses;
   });
@@ -91,7 +91,8 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     );
 
     // A fresh wallet that receives only the fee token, never any HTR.
-    const { wallet: emptyFeeWallet, addresses: emptyFeeWalletAddresses } = buildWalletInstance();
+    const { wallet: emptyFeeWallet, addresses: emptyFeeWalletAddresses } =
+      await buildWalletInstance();
     await emptyFeeWallet.start({ pinCode, password });
     try {
       // feeWallet pays the HTR fee to forward fee tokens into the empty wallet.
@@ -168,7 +169,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
     ];
 
     // External wallet to receive the outputs (so the FBT actually leaves).
-    const { addresses: externalAddresses } = buildWalletInstance();
+    const { addresses: externalAddresses } = await buildWalletInstance();
 
     // Outputs:
     // - 50n FBT to external (1n fee) -> generates FBT change (+1n fee = 2n total fee)
@@ -232,7 +233,7 @@ describe('[Service] fee tokens — pre-selected inputs', () => {
       { txId: htrUtxo!.tx_id, index: htrUtxo!.index },
     ];
 
-    const { addresses: externalAddresses } = buildWalletInstance();
+    const { addresses: externalAddresses } = await buildWalletInstance();
     const outputs = [
       { address: externalAddresses[1], value: 50n, token: tokenUid },
       { address: externalAddresses[0], value: 1n, token: NATIVE_TOKEN_UID },
