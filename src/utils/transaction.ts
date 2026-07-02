@@ -1554,7 +1554,6 @@ const transaction = {
       ephemeral_pubkey: ensureHex(so.ephemeral_pubkey),
       asset_commitment: so.asset_commitment ? ensureHex(so.asset_commitment) : undefined,
       surjection_proof: so.surjection_proof ? ensureHex(so.surjection_proof) : undefined,
-      spent_by: so.spent_by ?? null,
     }));
 
     const histTx: IHistoryTx = {
