@@ -25,10 +25,10 @@ describe('WalletService Nano Contract Fee Tests', () => {
   beforeAll(async () => {
     // 1. Start genesis wallet helper
     await GenesisWalletServiceHelper.start();
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
+    const gWallet = await GenesisWalletServiceHelper.getSingleton();
 
     // 2. Build and start wsWallet (uses precalculated wallet)
-    const buildResult = buildWalletInstance({});
+    const buildResult = await buildWalletInstance({});
     wsWallet = buildResult.wallet;
     walletAddresses = buildResult.addresses;
     await wsWallet.start({ pinCode, password });

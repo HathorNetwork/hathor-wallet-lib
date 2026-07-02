@@ -145,7 +145,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
     if (options?.xpub && options?.seed) {
-      const seedWallet = this.buildWalletInstance({ seed: options.seed });
+      const seedWallet = await this.buildWalletInstance({ seed: options.seed });
       await this.startWallet(seedWallet.wallet, {
         pinCode: options.pinCode ?? SERVICE_PIN,
         password: options.password ?? SERVICE_PASSWORD,
@@ -153,7 +153,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       await this.stopWallet(seedWallet.wallet);
     }
 
-    const built = this.buildWalletInstance(options);
+    const built = await this.buildWalletInstance(options);
 
     await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? SERVICE_PIN,
@@ -163,9 +163,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
+  async buildWalletInstance(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
-    const result = buildWalletInstance({
+    const result = await buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
       xpub: options?.xpub || '',
       enableWs: false,
@@ -258,7 +258,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
   }
 
-  getPrecalculatedWallet(): PrecalculatedWalletData {
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     return precalculationHelpers.test!.getPrecalculatedWallet();
   }
 

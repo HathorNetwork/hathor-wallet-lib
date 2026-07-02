@@ -168,7 +168,8 @@ export class GenesisWalletServiceHelper {
       try {
         // Executing a method that does not depend on the wallet being started,
         // but that ensures the Wallet Service Lambdas are receiving requests
-        await GenesisWalletServiceHelper.getSingleton().getVersionData();
+        const gWallet = await GenesisWalletServiceHelper.getSingleton();
+        await gWallet.getVersionData();
         isServerlessReady = true;
       } catch (e) {
         // Ignore errors, serverless app is probably not ready yet
@@ -186,12 +187,12 @@ export class GenesisWalletServiceHelper {
     loggers.test!.log(`Ws-Serverless became ready in ${(Date.now() - startTime) / 1000} seconds`);
   }
 
-  static getSingleton(): HathorWalletServiceWallet {
+  static async getSingleton(): Promise<HathorWalletServiceWallet> {
     if (singletonService) {
       return singletonService;
     }
 
-    const { wallet } = buildWalletInstance({
+    const { wallet } = await buildWalletInstance({
       words: WALLET_CONSTANTS.genesis.words,
     });
 
@@ -206,7 +207,7 @@ export class GenesisWalletServiceHelper {
     // Wait for serverless to be available before starting the wallet
     await GenesisWalletServiceHelper.pollForServerlessAvailable();
 
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
+    const gWallet = await GenesisWalletServiceHelper.getSingleton();
     await gWallet.start({
       pinCode: GenesisWalletServiceHelper.pinCode,
       password: GenesisWalletServiceHelper.password,
@@ -218,7 +219,7 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    const gWallet = GenesisWalletServiceHelper.getSingleton();
+    const gWallet = await GenesisWalletServiceHelper.getSingleton();
     const fundTx = await gWallet.sendTransaction(address, amount, {
       pinCode: GenesisWalletServiceHelper.pinCode,
     });
@@ -235,6 +236,7 @@ export class GenesisWalletServiceHelper {
   }
 
   static async stop() {
-    await GenesisWalletServiceHelper.getSingleton().stop({ cleanStorage: true });
+    const gWallet = await GenesisWalletServiceHelper.getSingleton();
+    await gWallet.stop({ cleanStorage: true });
   }
 }

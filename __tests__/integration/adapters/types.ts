@@ -140,7 +140,7 @@ export interface IWalletTestAdapter {
    * Builds a wallet instance WITHOUT starting it.
    * Used by validation tests that need to call start() manually.
    */
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult;
+  buildWalletInstance(options?: CreateWalletOptions): Promise<CreateWalletResult>;
 
   /**
    * Starts a wallet that was built with buildWalletInstance().
@@ -185,7 +185,7 @@ export interface IWalletTestAdapter {
   // --- Precalculated data ---
 
   /** Returns a fresh precalculated wallet for tests that need one */
-  getPrecalculatedWallet(): PrecalculatedWalletData;
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData>;
 
   // --- Transaction operations ---
 
