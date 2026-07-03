@@ -24,7 +24,9 @@ import { PRECALCULATED_SHIELDED_ADDRESSES } from './precalculated-shielded-addre
 import { NETWORK_NAME, WALLET_CONSTANTS } from './test-constants';
 import { multisigWalletsData } from '../helpers/wallet-precalculation.helper';
 
-const EXPECTED_WINDOW = 22; // mirrors the legacy precalculated address window
+// The shielded fixtures mirror the legacy precalculated address window, so the
+// expected count is exactly the number of legacy addresses per fixture wallet.
+const EXPECTED_WINDOW = WALLET_CONSTANTS.genesis.addresses.length;
 
 // Access-data generation is expensive under jest (hardened derivations +
 // PBKDF2) — do it once per seed, not once per compared index.
