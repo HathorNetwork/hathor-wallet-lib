@@ -138,14 +138,25 @@ export async function loadAddresses(
         // (ctMappingAddress) so re-loads still subscribe and sync its history.
         addresses.push(existingShielded.ctMappingAddress);
       } else {
+        // Reached for a genuinely new index, but ALSO whenever the stored state
+        // cannot be used as-is:
+        //   - a partial pair (only one record of the shielded/spend pair saved,
+        //     e.g. an interrupted previous load or an incomplete injection);
+        //   - a 'shielded' record missing its ctMappingAddress pair link, which
+        //     is what the branch above needs to push for subscription;
+        //   - a store that ignores the { legacy: false } option and returns the
+        //     legacy record instead (IStore is a public interface).
+        // Re-deriving is the safe recovery for all of these: the derivation is
+        // a pure function of the xpubs and the index, so it reproduces the
+        // exact same pair, and the isAddressMine guards below make the saves
+        // idempotent — whichever half already exists is skipped and the missing
+        // half is filled in.
         const { shieldedAddress, spendAddress } = deriveShieldedAddressPair(
           scanHdPub!,
           spendHdPub!,
           i,
           networkName
         );
-        // Check existence first to avoid "Already have this address" errors on
-        // partial windows (e.g. one entry of the pair saved, the other not).
         if (!(await storage.isAddressMine(shieldedAddress.base58))) {
           await storage.saveAddress(shieldedAddress);
         }
