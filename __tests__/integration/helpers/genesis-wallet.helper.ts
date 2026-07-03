@@ -6,6 +6,7 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
@@ -53,6 +54,10 @@ export class GenesisWalletHelper {
         pinCode: pin,
         multisig: null,
         preCalculatedAddresses: WALLET_CONSTANTS.genesis.addresses,
+        // The genesis seed is fixed in-repo, so its shielded pairs are committed
+        // fixtures — the genesis wallet starts in nearly every suite, making this
+        // the single hottest derivation site in the integration run.
+        preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(words),
         scanPolicy: getGapLimitConfig(),
       });
       await this.hWallet.start();

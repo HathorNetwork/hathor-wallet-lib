@@ -141,6 +141,26 @@ export interface IAddressChainOptions {
   legacy?: boolean; // default: true
 }
 
+/**
+ * A pre-calculated shielded address pair for one BIP32 index (test tooling).
+ *
+ * Mirrors the pre-calculated legacy addresses passed at wallet construction:
+ * carries exactly the fields needed to reconstruct the two storage records
+ * that live derivation (deriveShieldedAddressPair) would produce, so injected
+ * indexes skip the expensive EC derivation in loadAddresses.
+ */
+export interface IPrecalculatedShieldedAddress {
+  bip32AddressIndex: number;
+  /** The user-facing 71-byte shielded address (scan + spend pubkeys) */
+  shieldedBase58: string;
+  /** The paired on-chain P2PKH derived from HASH160(spend_pubkey) */
+  spendBase58: string;
+  /** Compressed scan child pubkey, hex */
+  scanPubkey: string;
+  /** Compressed spend child pubkey, hex */
+  spendPubkey: string;
+}
+
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;

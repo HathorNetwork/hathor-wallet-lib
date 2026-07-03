@@ -10,6 +10,7 @@ import {
   ILogger,
   AddressScanPolicyData,
   IHistoryTx,
+  IPrecalculatedShieldedAddress,
   OutputValueType,
   TokenVersion,
 } from '../types';
@@ -71,6 +72,12 @@ export interface HathorWalletConstructorParams {
   multisig?: { pubkeys: string[]; numSignatures: number } | null;
   /** Pre-calculated addresses to load into storage */
   preCalculatedAddresses?: string[] | null;
+  /**
+   * Pre-calculated shielded address pairs to load into storage (test tooling,
+   * mirrors preCalculatedAddresses). Injected indexes skip live EC derivation
+   * in address loading; indexes past the injected window still derive live.
+   */
+  preCalculatedShieldedAddresses?: IPrecalculatedShieldedAddress[] | null;
   /** Address scanning policy configuration */
   scanPolicy?: AddressScanPolicyData | null;
   /** Logger instance for wallet operations */

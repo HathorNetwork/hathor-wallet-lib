@@ -12,6 +12,7 @@ import { WalletTracker } from '../utils/wallet-tracker.util';
 import {
   AddressScanPolicyData,
   AuthorityType,
+  IPrecalculatedShieldedAddress,
   SCANNING_POLICY,
   WalletState,
 } from '../../../src/types';
@@ -26,6 +27,7 @@ import {
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
 import type { FullNodeTxResponse } from '../../../src/wallet/types';
@@ -470,19 +472,32 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   private async resolveWordsAndAddresses(options?: CreateWalletOptions): Promise<{
     words?: string;
     addresses?: string[];
+    shieldedAddresses?: IPrecalculatedShieldedAddress[];
   }> {
     if (!options?.seed && !options?.xpub && !options?.xpriv) {
       const precalc = await this.getPrecalculatedWallet();
-      return { words: precalc.words, addresses: precalc.addresses };
+      return {
+        words: precalc.words,
+        addresses: precalc.addresses,
+        shieldedAddresses: precalc.shieldedAddresses,
+      };
     }
     return {
       words: options?.seed,
       addresses: options?.preCalculatedAddresses,
+      // Explicit seeds are usually the fixed in-repo ones — resolve their
+      // committed shielded fixtures; unknown seeds resolve to undefined and
+      // the wallet derives the pairs live.
+      shieldedAddresses: getPrecalculatedShieldedForSeed(options?.seed),
     };
   }
 
   private buildConfig(
-    walletData: { words?: string; addresses?: string[] },
+    walletData: {
+      words?: string;
+      addresses?: string[];
+      shieldedAddresses?: IPrecalculatedShieldedAddress[];
+    },
     options?: CreateWalletOptions
   ) {
     // xpub/xpriv and seed are mutually exclusive in HathorWallet's constructor.
@@ -504,6 +519,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       ...(options?.password !== undefined && { password: options.password }),
       ...(options?.pinCode !== undefined && { pinCode: options.pinCode }),
       preCalculatedAddresses: walletData.addresses,
+      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
       ...(options?.xpub && { xpub: options.xpub }),
       ...(options?.xpriv && { xpriv: options.xpriv }),
       ...(options?.passphrase && { passphrase: options.passphrase }),

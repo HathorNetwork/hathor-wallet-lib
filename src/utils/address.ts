@@ -188,25 +188,23 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
 }
 
 /**
- * Derive shielded address and its on-chain spend address from storage at a given index.
+ * Derive the shielded address pair (user-facing shielded + on-chain spend P2PKH)
+ * at a given index from the scan/spend parent keys.
+ *
+ * The parents may be xpub strings or already-parsed HDPublicKey instances —
+ * callers deriving many indexes (address loading) should parse once and pass
+ * the instances (see deriveShieldedAddress).
  *
  * Returns two IAddressInfo entries:
  * 1. The shielded address (user-facing, 71-byte format)
  * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
- *
- * Returns null if the wallet doesn't have shielded key material.
  */
-export async function deriveShieldedAddressFromStorage(
+export function deriveShieldedAddressPair(
+  scanXpub: string | HDPublicKey,
+  spendXpub: string | HDPublicKey,
   index: number,
-  storage: IStorage
-): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
-  const scanXpub = await storage.getScanXPubKey();
-  const spendXpub = await storage.getSpendXPubKey();
-  if (!scanXpub || !spendXpub) {
-    return null;
-  }
-
-  const networkName = storage.config.getNetwork().name;
+  networkName: string
+): { shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } {
   const info = deriveShieldedAddress(scanXpub, spendXpub, index, networkName);
 
   // The user-facing shielded address encodes both scan and spend pubkeys.
@@ -233,4 +231,27 @@ export async function deriveShieldedAddressFromStorage(
   };
 
   return { shieldedAddress, spendAddress };
+}
+
+/**
+ * Derive shielded address and its on-chain spend address from storage at a given index.
+ *
+ * Returns two IAddressInfo entries:
+ * 1. The shielded address (user-facing, 71-byte format)
+ * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
+ *
+ * Returns null if the wallet doesn't have shielded key material.
+ */
+export async function deriveShieldedAddressFromStorage(
+  index: number,
+  storage: IStorage
+): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  if (!scanXpub || !spendXpub) {
+    return null;
+  }
+
+  const networkName = storage.config.getNetwork().name;
+  return deriveShieldedAddressPair(scanXpub, spendXpub, index, networkName);
 }
