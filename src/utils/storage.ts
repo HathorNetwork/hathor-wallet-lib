@@ -1137,10 +1137,39 @@ export async function processNewTx(
   }
 
   for (const input of tx.inputs) {
+    // Enrich a bare shielded input from the parent tx's decoded shielded output
+    // so the balance debit below treats it like a transparent input. The
+    // realtime path enriches shielded inputs before processing (sender-local
+    // insert / onNewTx per-slot merge), but the reload path (processHistory)
+    // feeds bare {tx_id, index, type:'shielded'} inputs straight from
+    // address_history. Without this, a spent wallet-owned shielded UTXO is never
+    // debited from the balance counter on reload, so reload over-counts it vs
+    // realtime (the spent-output value lingers in `getBalance`). Gated on
+    // `value === undefined` so an already-enriched (realtime) input is debited
+    // exactly once. processHistory walks txs oldest-first, so the parent's
+    // shielded output is already decoded + persisted when we resolve it here.
+    if (input.value === undefined && transactionUtils.isShieldedInputEntry(input)) {
+      const parentTx = await storage.getTx(input.tx_id);
+      const resolved = parentTx
+        ? transactionUtils.resolveSpentOutput(parentTx, input.index)
+        : undefined;
+      if (resolved?.kind === 'shielded' && resolved.output.value !== undefined) {
+        const so = resolved.output;
+        if (so.decoded?.address && (await storage.isAddressMine(so.decoded.address))) {
+          input.value = so.value;
+          // owned + decoded (value gate above) ⇒ token is set; no HTR-mislabel fallback.
+          input.token = so.token!;
+          input.token_data = so.token_data ?? 0;
+          input.decoded = so.decoded;
+        }
+      }
+    }
+
     // Inputs spending shielded outputs carry no transparent fields
-    // (value/token/decoded are hidden in commitments). Their balance
-    // handling lands with the receive pipeline in the next PR; here we
-    // only need the type-level guard so transparent processing narrows.
+    // (value/token/decoded are hidden in commitments) until enriched above.
+    // Anything still bare here is a shielded input we don't own (or whose parent
+    // tx isn't ours) — skip it; the type-level guard also narrows the union for
+    // the transparent processing below.
     if (
       input.value === undefined ||
       input.token === undefined ||
