@@ -112,7 +112,13 @@ import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/tr
 import Address from '../models/address';
 import type { HistoryTransactionOutput } from '../models/types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
-import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
+import {
+  ConnectionState,
+  FullNodeVersionData,
+  IHathorWallet,
+  OutputType,
+  Utxo,
+} from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -740,8 +746,14 @@ class HathorWallet extends EventEmitter {
     const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
+      // SEPARATED-model resolve so the P2SH signing path picks the correct
+      // address info when the spent output lives in shielded_outputs[] (its
+      // array position is not its on-chain index).
+      const resolved = transactionUtils.resolveSpentOutput(spentTx, input.index);
+      if (!resolved?.output.decoded?.address) {
+        continue;
+      }
+      const storageAddress = await this.storage.getAddressInfo(resolved.output.decoded.address);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -1904,6 +1916,7 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       startMiningTx: true,
       pinCode: null,
+      changeShieldedMode: null,
       ...options,
     };
 
@@ -1911,12 +1924,43 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress, changeShieldedMode } = newOptions;
+
+    // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
+    const network = this.storage.config.getNetwork();
+    const sendOutputs = outputs.map(o => {
+      if (o.shielded) {
+        const addressObj = new Address(o.address, { network });
+        if (!addressObj.isShielded()) {
+          throw new Error('Shielded output requires a shielded address');
+        }
+        // Extract scan pubkey from shielded address for ECDH.
+        // Use the spend-derived P2PKH as the on-chain address.
+        const spendAddress = addressObj.getSpendAddress();
+        return {
+          type: OutputType.P2PKH as OutputType.P2PKH,
+          address: spendAddress.base58,
+          value: o.value,
+          token: o.token,
+          scanPubkey: addressObj.getScanPubkey().toString('hex'),
+          shieldedMode: o.shielded,
+          ...(o.timelock != null ? { timelock: o.timelock } : {}),
+        };
+      }
+      return {
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        ...(o.timelock ? { timelock: o.timelock } : {}),
+      };
+    });
+
     return new SendTransaction({
       wallet: this,
-      outputs,
+      outputs: sendOutputs,
       inputs,
       changeAddress,
+      changeShieldedMode,
       pin,
     });
   }
@@ -3099,7 +3143,12 @@ class HathorWallet extends EventEmitter {
       if (addressInfo === null) {
         continue;
       }
-      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
+      // A shielded-spend input's key lives on the spend chain (m/44'/280'/2'),
+      // not the legacy P2PKH chain — select the right path so it matches the key
+      // that actually signs the input (see getSignatureForTx).
+      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex, {
+        legacy: addressInfo.addressType !== 'shielded-spend',
+      });
       walletInputs.push({
         inputIndex: index,
         addressIndex: addressInfo.bip32AddressIndex,
@@ -3137,7 +3186,11 @@ class HathorWallet extends EventEmitter {
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
         signature: sigData.signature.toString('hex'),
-        addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
+        // Render the path that matches the key that signed: a 'shielded-spend'
+        // input was signed with the spend chain, not the legacy P2PKH chain.
+        addressPath: await this.getAddressPathForIndex(sigData.addressIndex, {
+          legacy: sigData.addressType !== 'shielded-spend',
+        }),
       });
     }
     return sigInfoArray;
