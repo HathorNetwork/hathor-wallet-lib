@@ -965,3 +965,55 @@ describe('execFeeInstruction', () => {
     expect(ctx.fees.get(token2)).toBe(200n);
   });
 });
+
+describe('shielded inputs are rejected in templates (SEPARATED model)', () => {
+  it('execRawInputInstruction rejects an input whose index lands in the shielded range', async () => {
+    // Parent has 1 transparent output (T=1) and 1 shielded output. The on-chain
+    // absolute index of the shielded slot is T + 0 = 1, which is >= outputs.length.
+    const interpreter = {
+      getTx: jest.fn().mockResolvedValue({
+        outputs: [{ value: 10n, token, token_data: 1 }],
+        shielded_outputs: [
+          {
+            mode: 1,
+            commitment: 'aa',
+            range_proof: '',
+            script: '',
+            token_data: 0,
+            ephemeral_pubkey: '',
+            decoded: { type: 'P2PKH', address, timelock: null },
+          },
+        ],
+      }),
+    };
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const ins = RawInputInstruction.parse({ type: 'input/raw', index: 1, txId });
+
+    await expect(execRawInputInstruction(interpreter, ctx, ins)).rejects.toThrow(
+      'Shielded inputs are not supported in transaction templates'
+    );
+  });
+
+  it('addBalanceFromUtxo throws a clear error for a shielded slot index', () => {
+    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+    const tx = {
+      outputs: [{ value: 10n, token, token_data: 1, decoded: { address } }],
+      shielded_outputs: [
+        {
+          mode: 1,
+          commitment: 'aa',
+          range_proof: '',
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: '',
+          decoded: { type: 'P2PKH', address, timelock: null },
+        },
+      ],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any;
+    // index 1 == outputs.length + 0 → shielded slot
+    expect(() => ctx.balance.addBalanceFromUtxo(tx, 1)).toThrow(
+      'Shielded inputs are not supported in transaction templates'
+    );
+  });
+});
