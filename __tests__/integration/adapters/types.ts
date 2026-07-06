@@ -35,8 +35,8 @@ export interface CreateWalletOptions {
   xpub?: string;
   xpriv?: string;
   passphrase?: string;
-  password?: string | null;
-  pinCode?: string | null;
+  password?: string;
+  pinCode?: string;
   preCalculatedAddresses?: string[];
   multisig?: {
     pubkeys: string[];
@@ -218,6 +218,28 @@ export interface IWalletTestAdapter {
   ): Promise<CreateTokenResult>;
 
   /**
+   * Mints additional units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult>;
+
+  /**
+   * Melts units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult>;
+
+  /**
    * Retrieves token metadata for a given token UID.
    * Both facades expose `getTokenDetails()` with structurally identical results,
    * so the adapter returns the common shape directly.
@@ -348,6 +370,38 @@ export interface CreateTokenOptions {
  * Result of creating a new token.
  */
 export interface CreateTokenResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for minting tokens via the adapter.
+ */
+export interface MintTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMint?: boolean;
+  mintAuthorityAddress?: string;
+  data?: string[];
+  unshiftData?: boolean;
+}
+
+/**
+ * Options for melting tokens via the adapter.
+ */
+export interface MeltTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMelt?: boolean;
+  meltAuthorityAddress?: string;
+  data?: string[];
+  unshiftData?: boolean;
+}
+
+/**
+ * Result of minting or melting tokens via the adapter.
+ */
+export interface MintMeltResult {
   hash: string;
   transaction: Transaction;
 }

@@ -36,6 +36,9 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
@@ -315,6 +318,42 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
     await pollForTx(sw, result.hash);
     await pollForTokenDetails(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.mintTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.meltTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
     return { hash: result.hash, transaction: result };
   }
 
