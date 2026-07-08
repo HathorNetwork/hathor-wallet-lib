@@ -17,6 +17,7 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
@@ -88,10 +89,14 @@ export async function generateWalletHelper(param) {
 
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!param) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = await precalculationHelpers.test.getPrecalculatedWallet();
   } else {
     walletData.words = param.seed;
     walletData.addresses = param.preCalculatedAddresses;
+    // Fixed in-repo seeds (genesis, multisig, ocb, ...) have committed shielded
+    // fixtures; unknown seeds resolve to undefined and the wallet derives live.
+    walletData.shieldedAddresses =
+      param.preCalculatedShieldedAddresses ?? getPrecalculatedShieldedForSeed(param.seed);
   }
 
   // Start the wallet
@@ -101,6 +106,7 @@ export async function generateWalletHelper(param) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
     scanPolicy: getGapLimitConfig(),
   };
   if (param) {
@@ -136,7 +142,7 @@ export async function generateWalletHelperRO(options) {
   let xpub;
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
-    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
@@ -187,14 +193,19 @@ export async function generateWalletHelperRO(options) {
  * @return {Promise<HathorWallet>}
  */
 export async function generateMultisigWalletHelper(parameters) {
+  const seed = parameters.walletWords || multisigWalletsData.words[parameters.walletIndex];
   // Start the wallet
   const walletConfig = {
-    seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex],
+    seed,
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses:
       parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
+    // The multisig seeds are fixed in-repo, so their shielded pairs are
+    // committed fixtures (the shielded chain derives from the seed alone).
+    preCalculatedShieldedAddresses:
+      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed),
     multisig: {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,
@@ -315,8 +326,14 @@ export async function waitForTxReceived(
   }
 
   if (timeoutReached) {
-    // Throw error in case of timeout
-    throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+    // The timeout can fire while the loop is inside its 1s delay tick, right as
+    // the tx lands and finishes processing — re-check before declaring a
+    // timeout, so a received tx is never misreported as missing.
+    storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
+    if (!storageTx || storageTx.processingStatus !== TxHistoryProcessingStatus.FINISHED) {
+      // Throw error in case of timeout
+      throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+    }
   }
 
   if (!storageTx) {

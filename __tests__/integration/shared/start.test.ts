@@ -49,7 +49,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should reject when pinCode is not provided', async () => {
-      const built = adapter.buildWalletInstance();
+      const built = await adapter.buildWalletInstance();
       wallet = built.wallet;
 
       // Both facades throw an error mentioning "pin" (case-insensitive)
@@ -62,7 +62,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should reject when password is not provided for seed wallet', async () => {
-      const built = adapter.buildWalletInstance();
+      const built = await adapter.buildWalletInstance();
       wallet = built.wallet;
 
       // Both facades throw an error mentioning "password" (case-insensitive)
@@ -79,8 +79,8 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
   describe('successful start', () => {
     it('should start a wallet with no history', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
-      const built = adapter.buildWalletInstance({
+      const walletData = await adapter.getPrecalculatedWallet();
+      const built = await adapter.buildWalletInstance({
         seed: walletData.words,
         preCalculatedAddresses: walletData.addresses,
       });
@@ -120,14 +120,14 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should start with a transaction history', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
       const injectAddress = walletData.addresses[0];
       const injectValue = BigInt(getRandomInt(10, 1));
 
       // Inject funds BEFORE the wallet starts
       const txHash = await adapter.injectFundsBeforeStart(injectAddress, injectValue);
 
-      const built = adapter.buildWalletInstance({
+      const built = await adapter.buildWalletInstance({
         seed: walletData.words,
         preCalculatedAddresses: walletData.addresses,
       });
@@ -159,7 +159,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     it('should emit state events during startup', async () => {
       const { loading, ready } = adapter.capabilities.stateEventValues;
       const events: Array<string | number> = [];
-      const built = adapter.buildWalletInstance();
+      const built = await adapter.buildWalletInstance();
       const { wallet } = built;
 
       // Attach state listener before start
@@ -198,7 +198,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
   readonlyDescribe('readonly wallet (xpub)', () => {
     it('should start an xpub wallet in readonly mode', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
       const xpub = deriveXpubFromSeed(walletData.words);
 
       // Pass seed alongside xpub so adapters that require backend pre-registration
@@ -218,7 +218,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should report zero balance on a fresh readonly wallet', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
       const xpub = deriveXpubFromSeed(walletData.words);
 
       const { wallet } = await adapter.createWallet({
@@ -242,7 +242,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should reflect injected funds in balance', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
       const xpub = deriveXpubFromSeed(walletData.words);
 
       const { wallet } = await adapter.createWallet({
@@ -270,7 +270,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should be able to start in single address mode', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
       const xpub = deriveXpubFromSeed(walletData.words);
 
       const { wallet } = await adapter.createWallet({
@@ -306,7 +306,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should tolerate stopping a wallet that was never started', async () => {
-      const { wallet } = adapter.buildWalletInstance();
+      const { wallet } = await adapter.buildWalletInstance();
       await expect(adapter.stopWallet(wallet)).resolves.not.toThrow();
     });
 
@@ -321,7 +321,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
 
   describe('single address mode', () => {
     it('should be able to receive txs on index 0 and keep in single address mode', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
 
       const { wallet } = await adapter.createWallet({
         seed: walletData.words,
@@ -358,7 +358,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should be able to switch between modes', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
 
       const { wallet } = await adapter.createWallet({
         seed: walletData.words,
@@ -382,7 +382,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should not be able to switch with tx outside index 0', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
 
       try {
         const { wallet: walletMulti } = await adapter.createWallet({
@@ -416,7 +416,7 @@ describe.each(adapters)('[Shared] start — $name', adapter => {
     });
 
     it('should not respond to tx on not-loaded index', async () => {
-      const walletData = adapter.getPrecalculatedWallet();
+      const walletData = await adapter.getPrecalculatedWallet();
 
       try {
         const { wallet: walletMulti } = await adapter.createWallet({

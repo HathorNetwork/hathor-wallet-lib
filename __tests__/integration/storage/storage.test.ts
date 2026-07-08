@@ -45,6 +45,7 @@ async function startWallet(storage, walletData) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
     storage,
     scanPolicy: getGapLimitConfig(),
   };
@@ -104,14 +105,14 @@ describe('locked utxos', () => {
 
   it('should unselect as input when spent', async () => {
     // memory store
-    const walletDataMem = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletDataMem = await precalculationHelpers.test.getPrecalculatedWallet();
     const storeMem = new MemoryStore();
     const storageMem = new Storage(storeMem);
     await testUnlockWhenSpent(storageMem, walletDataMem);
   });
 
   it('should wrap prepareTx errors into SendTxError', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const store = new MemoryStore();
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
@@ -143,7 +144,7 @@ describe('run(until) state machine', () => {
   });
 
   it('should stop at prepare-tx and resume to completion', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const store = new MemoryStore();
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
@@ -178,7 +179,7 @@ describe('run(until) state machine', () => {
   });
 
   it('should stop at sign-tx and resume to completion', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const store = new MemoryStore();
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
@@ -212,7 +213,7 @@ describe('run(until) state machine', () => {
   });
 
   it('should complete the full flow with run(null)', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const store = new MemoryStore();
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);

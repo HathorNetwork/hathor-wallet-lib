@@ -278,6 +278,27 @@ export const MAX_SURJECTION_PROOF_SIZE: number = 4096;
 export const MAX_SHIELDED_OUTPUT_SCRIPT_SIZE: number = 1024;
 
 /**
+ * Maximum surjection-proof domain size (one entry per input generator).
+ * secp256k1-zkp aborts UNCATCHABLY (SIGABRT) past this limit, so the wallet
+ * must reject oversized domains before calling the prover.
+ */
+export const MAX_SURJECTION_DOMAIN: number = 256;
+
+/**
+ * Exclusive upper bound for a shielded output value. The shipped range proof
+ * (`@hathor/ct-crypto-node`, min_bits=40) covers `[1, 2^40)`; the fullnode
+ * enforces no explicit value ceiling (only a range-proof byte-size cap), so the
+ * wallet is the only place an over-cap value can be caught (balance is verified
+ * by commitment, never by cleartext value).
+ */
+export const MAX_SHIELDED_OUTPUT_VALUE: OutputValueType = 1n << 40n;
+
+/**
+ * Byte length of a secp256k1 scalar (a blinding factor / tweak).
+ */
+export const BLINDING_FACTOR_SIZE_BYTES: number = 32;
+
+/**
  * Maximum number of fee entries in a FeeHeader
  */
 export const MAX_FEE_HEADER_ENTRIES: number = 16;
@@ -320,6 +341,16 @@ export const TX_HASH_SIZE_BYTES: number = 32;
  * secp256k1 public key the wallet validates at a trust boundary.
  */
 export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
+
+/**
+ * Byte length of a raw secp256k1 private key (a 32-byte scalar).
+ *
+ * Used when materializing a derived key as raw bytes for the native ct-crypto
+ * (ECDH) boundary, where `{ size }` zero-pads keys with leading zeros.
+ * Numerically equal to BLINDING_FACTOR_SIZE_BYTES (both are secp256k1 scalars)
+ * but kept distinct for call-site clarity.
+ */
+export const PRIVATE_KEY_SIZE_BYTES: number = 32;
 
 /**
  * Maximum number of retries allowed when an error different

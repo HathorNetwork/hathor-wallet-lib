@@ -37,6 +37,7 @@ import {
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
@@ -65,8 +66,8 @@ describe('[Fullnode-specific] start', () => {
     await adapter.stopAllWallets();
   });
 
-  it('should reject with invalid constructor parameters', () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+  it('should reject with invalid constructor parameters', async () => {
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const connection = generateConnection();
 
     // No arguments at all
@@ -160,7 +161,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should resolve precalculated addresses via getAddressAtIndex', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     const hWallet = new HathorWallet({
       seed: walletData.words,
@@ -168,6 +169,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -181,7 +183,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it("should calculate the wallet's addresses on start (no precalculated)", async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     const walletConfig = {
       seed: walletData.words,
@@ -209,6 +211,7 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
+      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
@@ -230,7 +233,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start a wallet to manage a specific token', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Create a wallet and mint a custom token
     let hWallet = await generateWalletHelper({
@@ -279,13 +282,11 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should generate correct addresses from xpub (readonly)', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Fullnode derives addresses locally from xpub — verify all 20 match precalculated.
@@ -295,13 +296,11 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Methods requiring private key should throw WalletFromXPubGuard.
@@ -328,7 +327,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start an externally signed wallet', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -336,8 +335,6 @@ describe('[Fullnode-specific] start', () => {
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
     // @ts-expect-error -- Simplified mock: real EcdsaTxSign has a different signature
     hWallet.setExternalTxSigningMethod(async () => {});
@@ -348,7 +345,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start an externally signed wallet from storage', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -362,8 +359,6 @@ describe('[Fullnode-specific] start', () => {
     const hWallet = await generateWalletHelper({
       xpub,
       storage,
-      password: null,
-      pinCode: null,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
     await expect(hWallet.isReadonly()).resolves.toBe(false);
@@ -372,7 +367,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start a wallet without pin (hack test)', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const hWallet = await generateWalletHelper({
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,

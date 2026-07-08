@@ -233,5 +233,19 @@ services:
     networks:
       - hathor-privnet
 
+  # Wallet Provider section
+  # Serves precalculated wallets on demand (GET /simpleWallet), replacing the
+  # former static precalculated-wallets.json. ADDRESS_COUNT defaults to 22 in
+  # the image, matching the old static set.
+  # https://github.com/HathorNetwork/hathor-integration-test-helper
+  wallet-provider:
+    image:
+      ${HATHOR_LIB_INTEGRATION_TESTS_WALLET_PROVIDER_IMAGE:-hathornetwork/hathor-integration-test-helper:latest}
+    ports:
+      - "3020:3020"
+    networks:
+      - hathor-privnet
+    # TODO: add a healthcheck once the ITH exposes a readiness endpoint.
+
 networks:
   hathor-privnet:

@@ -183,6 +183,21 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Get the shielded crypto provider, or throw if it has not been configured.
+   * Confidential-transaction code paths require the provider; a missing one is a
+   * setup error and must fail loudly rather than silently degrade.
+   */
+  getShieldedCryptoProvider(): IShieldedCryptoProvider {
+    if (!this.shieldedCryptoProvider) {
+      throw new Error(
+        'Shielded crypto provider is not set. It is required for confidential ' +
+          'transaction operations; configure it via setShieldedCryptoProvider().'
+      );
+    }
+    return this.shieldedCryptoProvider;
+  }
+
+  /**
    * Sign the transaction
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
@@ -426,6 +441,10 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
+    // Normalize: convert base64-encoded confidential fields to hex in
+    // tx.shielded_outputs[] (the fullnode delivers the transparent/shielded
+    // split; this does not move or extract entries).
+    transactionUtils.normalizeShieldedOutputs(tx);
     await this.store.saveTx(tx);
   }
 
@@ -433,21 +452,25 @@ export class Storage implements IStorage {
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processHistory(): Promise<void> {
+  async processHistory(pinCode?: string): Promise<void> {
     await this.store.preProcessHistory();
-    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
+    await processHistoryUtil(this, {
+      rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
+    });
   }
 
   /**
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processNewTx(tx: IHistoryTx): Promise<void> {
+  async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
     // Keep tx-timestamp index sorted
     await this.store.preProcessHistory();
     // Process the single tx we received
     await processSingleTxUtil(this, tx, {
       rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
     });
   }
 
@@ -795,12 +818,20 @@ export class Storage implements IStorage {
     if (!tx) {
       return;
     }
-    const output = tx.outputs[utxo.index];
-    if (!output) {
+    // Resolve the actual output the UTXO record refers to via the
+    // SEPARATED-model resolver. A shielded UTXO has on-chain index
+    // outputs.length + s, so a positional `tx.outputs[utxo.index]` would read
+    // the wrong (or no) entry — the `.spent_by` check below would then consult
+    // the wrong entry's flag.
+    const resolved = transactionUtils.resolveSpentOutput(tx, utxo.index);
+    if (!resolved) {
       return;
     }
 
-    if (markAs && output.spent_by !== null) {
+    // Both transparent (`string | null`) and shielded (`string | null |
+    // undefined`) outputs carry spent_by; treat undefined as unspent.
+    const spentBy = resolved.output.spent_by ?? null;
+    if (markAs && spentBy !== null) {
       // Already spent, no need to mark as selected_as_input
       return;
     }
