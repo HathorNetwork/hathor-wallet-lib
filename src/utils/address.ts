@@ -14,6 +14,7 @@ import {
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
+import P2WEBAUTHN from '../models/p2webauthn';
 import Network from '../models/network';
 import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
@@ -36,9 +37,12 @@ import { deriveShieldedAddress } from './shieldedAddress';
  * @param {string} address
  * @param {Network} network
  *
- * @returns {'p2pkh' | 'p2sh'} output script type of the address
+ * @returns {'p2pkh' | 'p2sh' | 'p2webauthn'} output script type of the address
  */
-export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' {
+export function getAddressType(
+  address: string,
+  network: Network
+): 'p2pkh' | 'p2sh' | 'p2webauthn' {
   const addressObj = new Address(address, { network });
   const addrType = addressObj.getType();
   if (addrType === 'shielded') {
@@ -167,6 +171,11 @@ export function createOutputScriptFromAddress(address: string, network: Network)
     const spendAddress = addressObj.getSpendAddress();
     const p2pkh = new P2PKH(spendAddress);
     return p2pkh.createScript();
+  }
+  if (addressType === 'p2webauthn') {
+    // PoC: passkey account output
+    const p2webauthn = new P2WEBAUTHN(addressObj);
+    return p2webauthn.createScript();
   }
   throw new Error('Invalid address type');
 }

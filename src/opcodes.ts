@@ -44,6 +44,12 @@ export const OP_EQUALVERIFY = hexToBuffer('88');
 export const OP_CHECKSIG = hexToBuffer('ac');
 
 /**
+ * Verifies a WebAuthn (passkey) assertion over the tx sighash (P-256).
+ * PoC: see hathor-core branch experimental/passkey-webauthn-poc.
+ */
+export const OP_CHECKSIG_WEBAUTHN = hexToBuffer('b0');
+
+/**
  * Shows that pushdata will need length value
  */
 export const OP_PUSHDATA1 = hexToBuffer('4c');

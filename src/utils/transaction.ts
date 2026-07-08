@@ -48,6 +48,7 @@ import {
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
+import P2WEBAUTHN from '../models/p2webauthn';
 import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
@@ -579,6 +580,14 @@ const transaction = {
       address.validateAddress();
       const p2pkh = new P2PKH(address, { timelock: output.timelock });
       return p2pkh.createScript();
+    }
+    if (getAddressType(output.address, network) === 'p2webauthn') {
+      // PoC: passkey account output (e.g. change back to a passkey wallet's own address)
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
+      const p2webauthn = new P2WEBAUTHN(address, { timelock: output.timelock });
+      return p2webauthn.createScript();
     }
     throw new Error('Invalid output for creating script.');
   },

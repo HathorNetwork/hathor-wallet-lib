@@ -16,6 +16,7 @@ import Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
+import P2WEBAUTHN from '../models/p2webauthn';
 import ScriptData from '../models/script_data';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -233,6 +234,25 @@ const helpers = {
   },
 
   /**
+   * Get encoded P2WEBAUTHN address (passkey account, PoC) from a 20-byte pubkey hash.
+   * Same as encodeAddress but with the p2webauthn version byte (0x37).
+   *
+   * @param {Buffer} addressHash 20-byte hash160 of the compressed P-256 passkey pubkey
+   * @param {Network} network
+   * @return {Address}
+   */
+  encodeAddressP2WEBAUTHN(addressHash: Buffer, network: Network): Address {
+    if (addressHash.length !== 20) {
+      throw new Error('Expect address hash that must have 20 bytes.');
+    }
+    const addressVersionBytes = buffer.Buffer.from([network.versionBytes.p2webauthn]);
+    const slicedAddress = buffer.Buffer.concat([addressVersionBytes, addressHash]);
+    const checksum = this.getChecksum(slicedAddress);
+    const addressBytes = buffer.Buffer.concat([slicedAddress, checksum]);
+    return new Address(encoding.Base58.encode(addressBytes), { network });
+  },
+
+  /**
    * Get encoded address object from script hash (20 bytes) and network.
    * We use bitcore's Address module to build the address from the hash.
    *
@@ -376,6 +396,12 @@ const helpers = {
         const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
         const p2pkhScript = p2pkh.createScript();
         outputObj = new Output(output.value, p2pkhScript, { tokenData: output.tokenData });
+      } else if (output.type === 'p2webauthn') {
+        // P2WEBAUTHN (passkey account, PoC)
+        const address = new Address(output.address, { network });
+        address.validateAddress();
+        const p2webauthn = new P2WEBAUTHN(address, { timelock: output.timelock || null });
+        outputObj = new Output(output.value, p2webauthn.createScript(), { tokenData: output.tokenData });
       } else {
         throw new Error('Invalid output type.');
       }

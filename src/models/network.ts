@@ -15,6 +15,7 @@ const versionBytes = {
     p2pkh: 0x28,
     p2sh: 0x64,
     shielded: 0x3c,
+    p2webauthn: 0x37,
     xpriv: 0x03523b05, // htpr
     xpub: 0x0488b21e, // xpub // 0x03523a9c -> htpb
   },
@@ -22,6 +23,7 @@ const versionBytes = {
     p2pkh: 0x49,
     p2sh: 0x87,
     shielded: 0x5d,
+    p2webauthn: 0x37,
     xpriv: 0x0434c8c4, // tnpr
     xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
@@ -29,6 +31,7 @@ const versionBytes = {
     p2pkh: 0x49,
     p2sh: 0x87,
     shielded: 0x5d,
+    p2webauthn: 0x37,
     xpriv: 0x0434c8c4, // tnpr
     xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
@@ -119,6 +122,7 @@ type versionBytesType = {
   p2pkh: number;
   p2sh: number;
   shielded: number;
+  p2webauthn: number;
 };
 
 class Network {
@@ -171,7 +175,8 @@ class Network {
     return (
       version === instanceVersionBytes.p2pkh ||
       version === instanceVersionBytes.p2sh ||
-      version === instanceVersionBytes.shielded
+      version === instanceVersionBytes.shielded ||
+      version === instanceVersionBytes.p2webauthn
     );
   }
 

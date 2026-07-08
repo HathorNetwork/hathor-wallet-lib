@@ -16,6 +16,7 @@ import HathorWalletServiceWallet from './wallet';
 import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
+import P2WEBAUTHN from '../models/p2webauthn';
 import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
@@ -570,15 +571,19 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const tokenData = tokens.indexOf(output.token) > -1 ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData };
 
-    // Create the appropriate script based on address type (P2PKH or P2SH)
+    // Create the appropriate script based on address type. Branch explicitly and throw on
+    // anything unknown — a catch-all `else => P2SH` silently mis-encodes a p2webauthn (or any
+    // future) address as P2SH over the same 20-byte hash (unspendable, wrong bytes).
     const addressType = address.getType();
     let script: Buffer;
     if (addressType === 'p2pkh') {
-      const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
-      script = p2pkh.createScript();
+      script = new P2PKH(address, { timelock: output.timelock || null }).createScript();
+    } else if (addressType === 'p2webauthn') {
+      script = new P2WEBAUTHN(address, { timelock: output.timelock || null }).createScript();
+    } else if (addressType === 'p2sh') {
+      script = new P2SH(address, { timelock: output.timelock || null }).createScript();
     } else {
-      const p2sh = new P2SH(address, { timelock: output.timelock || null });
-      script = p2sh.createScript();
+      throw new SendTxError(`Unsupported address type '${addressType}' for output script.`);
     }
 
     return new Output(output.value, script, outputOptions);

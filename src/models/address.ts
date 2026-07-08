@@ -16,6 +16,7 @@ import { AddressError } from '../errors';
 import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
+import P2WEBAUTHN from './p2webauthn';
 import helpers from '../utils/helpers';
 import {
   COMPRESSED_PUBKEY_SIZE_BYTES,
@@ -152,6 +153,7 @@ class Address {
       [this.network.versionBytes.p2pkh]: LEGACY_ADDRESS_SIZE_BYTES,
       [this.network.versionBytes.p2sh]: LEGACY_ADDRESS_SIZE_BYTES,
       [this.network.versionBytes.shielded]: SHIELDED_ADDRESS_SIZE_BYTES,
+      [this.network.versionBytes.p2webauthn]: LEGACY_ADDRESS_SIZE_BYTES,
     };
     const expectedLength = sizeByVersionByte[firstByte];
     if (expectedLength === undefined) {
@@ -192,6 +194,9 @@ class Address {
     }
     if (firstByte === this.network.versionBytes.p2sh) {
       return 'p2sh';
+    }
+    if (firstByte === this.network.versionBytes.p2webauthn) {
+      return 'p2webauthn';
     }
     throw new AddressError('Invalid address type.');
   }
@@ -338,6 +343,10 @@ class Address {
     if (addressType === 'p2pkh') {
       const p2pkh = new P2PKH(this);
       return p2pkh.createScript();
+    }
+    if (addressType === 'p2webauthn') {
+      const p2webauthn = new P2WEBAUTHN(this);
+      return p2webauthn.createScript();
     }
     const p2sh = new P2SH(this);
     return p2sh.createScript();

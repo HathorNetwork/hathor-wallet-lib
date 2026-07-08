@@ -101,7 +101,7 @@ export type HistorySyncFunction = (
  * Valid address types, as returned by `Address.getType()`:
  * the two legacy script types plus the 71-byte shielded address format.
  */
-export type AddressType = 'p2pkh' | 'p2sh' | 'shielded';
+export type AddressType = 'p2pkh' | 'p2sh' | 'shielded' | 'p2webauthn';
 
 export interface IAddressInfo {
   base58: string;
@@ -333,7 +333,7 @@ export function isDataOutputData(output: IDataOutput): output is IDataOutputData
 }
 
 export interface IDataOutputAddress {
-  type: 'p2pkh' | 'p2sh';
+  type: 'p2pkh' | 'p2sh' | 'p2webauthn';
   token: string;
   value: OutputValueType;
   authorities: OutputValueType;
@@ -342,7 +342,7 @@ export interface IDataOutputAddress {
 }
 
 export function isDataOutputAddress(output: IDataOutput): output is IDataOutputAddress {
-  return ['p2pkh', 'p2sh'].includes(output.type);
+  return ['p2pkh', 'p2sh', 'p2webauthn'].includes(output.type);
 }
 
 // This is for create token transactions, where we dont have a token uid yet

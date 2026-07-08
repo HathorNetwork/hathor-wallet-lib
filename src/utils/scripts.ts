@@ -2,6 +2,7 @@ import _ from 'lodash';
 import { Script, HDPublicKey } from 'bitcore-lib';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
+import P2WEBAUTHN from '../models/p2webauthn';
 import ScriptData from '../models/script_data';
 import Network from '../models/network';
 import helpers from './helpers';
@@ -37,6 +38,31 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
   const [addressHash] = unpackLen(20, scriptBuf.slice(3 + offset));
 
   return new P2PKH(helpers.encodeAddress(addressHash, network), { timelock });
+};
+
+/**
+ * Parse a P2WEBAUTHN output script (passkey account, PoC). Same layout as P2PKH but the
+ * final opcode is OP_CHECKSIG_WEBAUTHN and the address uses the p2webauthn version byte.
+ *
+ * @param {Buffer} buff Output script
+ * @param {Network} network
+ * @return {P2WEBAUTHN}
+ */
+export const parseP2WEBAUTHN = (buff: Buffer, network: Network): P2WEBAUTHN => {
+  let timelock: number | null = null;
+  let offset = 0;
+
+  let scriptBuf = _.clone(buff);
+  if (scriptBuf.length === 31) {
+    [timelock, scriptBuf] = unpackToInt(4, false, scriptBuf.slice(1));
+    offset = 1;
+  } else if (scriptBuf.length !== 25) {
+    throw new ParseScriptError('Invalid output script.');
+  }
+
+  const [addressHash] = unpackLen(20, scriptBuf.slice(3 + offset));
+
+  return new P2WEBAUTHN(helpers.encodeAddressP2WEBAUTHN(addressHash, network), { timelock });
 };
 
 /**
@@ -235,7 +261,10 @@ export function createP2SHRedeemScript(
  *
  * @return {P2PKH | P2SH | ScriptData | null} Parsed script object
  */
-export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | ScriptData | null => {
+export const parseScript = (
+  script: Buffer,
+  network: Network
+): P2PKH | P2SH | P2WEBAUTHN | ScriptData | null => {
   // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
   // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
   // we can keep throwing the error. Otherwise, we should just return null
@@ -246,6 +275,9 @@ export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | Sc
     if (P2PKH.identify(script)) {
       // This is a P2PKH script
       parsedScript = parseP2PKH(script, network);
+    } else if (P2WEBAUTHN.identify(script)) {
+      // This is a P2WEBAUTHN script (passkey account, PoC)
+      parsedScript = parseP2WEBAUTHN(script, network);
     } else if (P2SH.identify(script)) {
       // This is a P2SH script
       parsedScript = parseP2SH(script, network);

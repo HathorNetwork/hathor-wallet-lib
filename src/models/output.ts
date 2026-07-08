@@ -15,6 +15,7 @@ import {
 import { OutputValueError } from '../errors';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
+import P2WEBAUTHN from './p2webauthn';
 import ScriptData from './script_data';
 import Network from './network';
 import {
@@ -50,7 +51,7 @@ class Output {
   script: Buffer;
 
   // Decoded output script
-  decodedScript: P2PKH | P2SH | ScriptData | null;
+  decodedScript: P2PKH | P2SH | P2WEBAUTHN | ScriptData | null;
 
   constructor(value: OutputValueType, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
@@ -169,7 +170,7 @@ class Output {
     return arr;
   }
 
-  parseScript(network: Network): P2PKH | P2SH | ScriptData | null {
+  parseScript(network: Network): P2PKH | P2SH | P2WEBAUTHN | ScriptData | null {
     this.decodedScript = utilsParseScript(this.script, network);
     return this.decodedScript;
   }
