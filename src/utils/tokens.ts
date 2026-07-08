@@ -320,7 +320,7 @@ const tokens = {
     // Coerce to bigint so callers passing a number keep working (the API previously used Number()).
     const amount = BigInt(mintAmount);
     if (mintAmount < 0) {
-      throw new Error('mint amount should be a positive number');
+      throw new Error('mint amount should not be negative');
     }
     return ceilDiv(depositNumerator * amount, depositDenominator);
   },

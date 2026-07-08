@@ -585,8 +585,8 @@ export interface ApiVersion {
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;
-  /** @deprecated Use the numerator/denominator fraction below, which keeps integer precision. */
-  token_deposit_percentage: number;
+  /** @deprecated Prefer the numerator/denominator fraction below (integer precision). Optional: fullnodes will stop sending it. */
+  token_deposit_percentage?: number;
   /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
   token_deposit_percentage_numerator?: number;
   /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */

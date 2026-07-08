@@ -2551,6 +2551,40 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * HTR deposit required to mint the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getDepositAmount(mintAmount: OutputValueType): OutputValueType {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokenUtils.getDepositAmount(mintAmount, numerator, denominator);
+  }
+
+  /**
+   * HTR withdrawal returned when melting the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getWithdrawAmount(meltAmount: OutputValueType): OutputValueType {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokenUtils.getWithdrawAmount(meltAmount, numerator, denominator);
+  }
+
+  /**
    * Check if address is from the loaded wallet
    *
    * @param address Address to check

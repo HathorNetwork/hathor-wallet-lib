@@ -170,9 +170,9 @@ test('Token deposit', () => {
 test('Token deposit throws for a negative amount', () => {
   // The executor handles the sign itself (created tokens are a negative balance), so this guard
   // is safe; see the createToken deposit path in executor.ts.
-  expect(() => tokens.getDepositAmount(-1n)).toThrow('mint amount should be a positive number');
-  expect(() => tokens.getDepositAmount(-500n)).toThrow('mint amount should be a positive number');
-  // Zero is allowed: the guard is strictly negative.
+  expect(() => tokens.getDepositAmount(-1n)).toThrow('mint amount should not be negative');
+  expect(() => tokens.getDepositAmount(-500n)).toThrow('mint amount should not be negative');
+  // Zero is allowed and yields a zero deposit.
   expect(tokens.getDepositAmount(0n)).toBe(0n);
 });
 

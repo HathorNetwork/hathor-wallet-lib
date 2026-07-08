@@ -236,7 +236,8 @@ export const fullNodeVersionDataSchema = z
     minTxWeight: z.number(),
     minTxWeightCoefficient: z.number(),
     minTxWeightK: z.number(),
-    tokenDepositPercentage: z.number(),
+    /** @deprecated Prefer the numerator/denominator fraction below. Optional: fullnodes will stop sending it. */
+    tokenDepositPercentage: z.number().optional(),
     tokenDepositPercentageNumerator: z.number().optional(),
     tokenDepositPercentageDenominator: z.number().optional(),
     rewardSpendMinBlocks: z.number(),
