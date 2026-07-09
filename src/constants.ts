@@ -331,6 +331,16 @@ export const TX_HASH_SIZE_BYTES: number = 32;
 export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
 
 /**
+ * Byte length of a raw secp256k1 private key (a 32-byte scalar).
+ *
+ * Used when materializing a derived key as raw bytes for the native ct-crypto
+ * (ECDH) boundary, where `{ size }` zero-pads keys with leading zeros.
+ * Numerically equal to BLINDING_FACTOR_SIZE_BYTES (both are secp256k1 scalars)
+ * but kept distinct for call-site clarity.
+ */
+export const PRIVATE_KEY_SIZE_BYTES: number = 32;
+
+/**
  * Maximum number of retries allowed when an error different
  * from client timeout happens when loading wallet history
  */

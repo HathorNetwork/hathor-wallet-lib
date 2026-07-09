@@ -12,6 +12,7 @@ import { NETWORK_NAME } from '../configuration/test-constants';
 import testConfig from '../configuration/test.config';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
+import { IPrecalculatedShieldedAddress } from '../../../src/types';
 
 /**
  * Precalculated wallet data containing addresses and related information
@@ -23,6 +24,11 @@ export interface PrecalculatedWalletData {
   words: string;
   /** List of pre-calculated addresses */
   addresses: string[];
+  /**
+   * Pre-calculated shielded address pairs (optional — older wallet-provider
+   * payloads don't include them; wallets then derive the pairs live).
+   */
+  shieldedAddresses?: IPrecalculatedShieldedAddress[];
   /** Optional multisig debug information */
   multisigDebugData?: {
     /** Amount of pubkeys composing this multisig wallet */
@@ -214,6 +220,14 @@ export class WalletPrecalculationHelper {
     if (!data?.words || !Array.isArray(data?.addresses)) {
       throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
     }
-    return { isUsed: true, words: data.words, addresses: data.addresses };
+    return {
+      isUsed: true,
+      words: data.words,
+      addresses: data.addresses,
+      // Optional: newer wallet-provider versions also precalculate the shielded
+      // address pairs, sparing the wallet the per-index EC derivation (slow
+      // under jest). Absent on older providers — the wallet then derives live.
+      ...(Array.isArray(data.shieldedAddresses) && { shieldedAddresses: data.shieldedAddresses }),
+    };
   }
 }

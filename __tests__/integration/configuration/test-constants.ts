@@ -108,5 +108,10 @@ export const NETWORK_NAME = 'testnet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
 
-export const TX_TIMEOUT_DEFAULT = 5000;
+// Generous budget: on a healthy run a tx is received in well under a second
+// (waiters return as soon as it lands), but on a saturated CI runner the event
+// loop can be starved for several seconds by synchronous EC derivation during
+// wallet starts and gap-limit extensions — 5s produced false timeouts for txs
+// that were already mined and on their way.
+export const TX_TIMEOUT_DEFAULT = 30000;
 export const DEBUG_LOGGING = true;

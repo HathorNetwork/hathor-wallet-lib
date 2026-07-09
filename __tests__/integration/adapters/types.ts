@@ -35,8 +35,8 @@ export interface CreateWalletOptions {
   xpub?: string;
   xpriv?: string;
   passphrase?: string;
-  password?: string | null;
-  pinCode?: string | null;
+  password?: string;
+  pinCode?: string;
   preCalculatedAddresses?: string[];
   multisig?: {
     pubkeys: string[];
@@ -228,6 +228,28 @@ export interface IWalletTestAdapter {
   ): Promise<CreateTokenResult>;
 
   /**
+   * Mints additional units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult>;
+
+  /**
+   * Melts units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult>;
+
+  /**
    * Retrieves token metadata for a given token UID.
    * Both facades expose `getTokenDetails()` with structurally identical results,
    * so the adapter returns the common shape directly.
@@ -246,6 +268,23 @@ export interface IWalletTestAdapter {
    * Both are mapped to the shared {@link AdapterUtxo} shape.
    */
   getUtxos(wallet: FuzzyWalletType, options?: GetUtxosAdapterOptions): Promise<GetUtxosResult>;
+
+  /**
+   * Selects unspent outputs that cover `amount` for a given token, returning the
+   * chosen UTXOs and any change.
+   *
+   * Both facades implement `getUtxosForAmount()` with the same
+   * `{ utxos, changeAmount }` contract and raise the same {@link UtxoError}
+   * (with identical messages) from the shared `selectUtxos`, so the behavior is
+   * shared. Only the per-UTXO shape differs between facades — it is normalized
+   * into {@link AdapterUtxo}. The `address` option maps to the facades'
+   * `filter_address` filter.
+   */
+  getUtxosForAmount(
+    wallet: FuzzyWalletType,
+    amount: bigint,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosForAmountResult>;
 
   // --- Multi-output transactions ---
 
@@ -286,32 +325,6 @@ export interface IWalletTestAdapter {
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;
 
-  // --- Token minting ---
-
-  /**
-   * Mints additional units of an existing token and waits for confirmation.
-   * Both facades support `mintTokens()`.
-   */
-  mintTokens(
-    wallet: FuzzyWalletType,
-    tokenUid: string,
-    amount: bigint,
-    options?: MintTokensAdapterOptions
-  ): Promise<MintTokensResult>;
-
-  // --- Token melting ---
-
-  /**
-   * Melts `amount` units of an existing token and waits for confirmation.
-   * Both facades support `meltTokens()`.
-   */
-  meltTokens(
-    wallet: FuzzyWalletType,
-    tokenUid: string,
-    amount: bigint,
-    options?: MeltTokensAdapterOptions
-  ): Promise<MeltTokensResult>;
-
   // --- Authority destruction ---
 
   /**
@@ -324,6 +337,41 @@ export interface IWalletTestAdapter {
     type: AuthorityType,
     count: number
   ): Promise<DestroyAuthorityResult>;
+
+  // --- Address methods ---
+
+  /**
+   * Lists every address known to the wallet, in derivation-index order.
+   * Both facades expose `getAllAddresses()` as an async generator with
+   * different element shapes — the adapter normalizes them to {@link AdapterAddress}.
+   */
+  getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]>;
+
+  /**
+   * Returns the current address (the next unused one) for the wallet.
+   * When `markAsUsed` is true, the wallet advances past this address
+   * so subsequent calls return the next one.
+   */
+  getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress>;
+
+  /**
+   * Advances the current address pointer and returns the next address.
+   */
+  getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress>;
+
+  /**
+   * Returns the derivation index for an address that belongs to the wallet,
+   * or `undefined` when the address is not part of this wallet.
+   */
+  getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined>;
+
+  /**
+   * Returns the address at a specific derivation index.
+   */
+  getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string>;
 }
 
 /**
@@ -362,6 +410,49 @@ export interface CreateTokenOptions {
  * Result of creating a new token.
  */
 export interface CreateTokenResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for minting tokens via the adapter.
+ */
+export interface MintTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMint?: boolean;
+  mintAuthorityAddress?: string;
+  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMintAuthorityAddress?: boolean;
+  data?: string[];
+  unshiftData?: boolean;
+  /**
+   * If provided, the adapter also waits until this wallet's index reflects the
+   * mint, so cross-wallet tests can read a mint authority routed to one of its
+   * addresses without hitting the wallet-service index lag. Not forwarded to the
+   * facade `mintTokens()` call.
+   */
+  recvWallet?: FuzzyWalletType;
+}
+
+/**
+ * Options for melting tokens via the adapter.
+ */
+export interface MeltTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMelt?: boolean;
+  meltAuthorityAddress?: string;
+  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[];
+  unshiftData?: boolean;
+}
+
+/**
+ * Result of minting or melting tokens via the adapter.
+ */
+export interface MintMeltResult {
   hash: string;
   transaction: Transaction;
 }
@@ -422,6 +513,19 @@ export interface AdapterUtxo {
 export interface GetUtxosResult {
   total_amount_available: bigint;
   total_utxos_available: bigint;
+  utxos: AdapterUtxo[];
+}
+
+/**
+ * Result of an adapter `getUtxosForAmount` query.
+ *
+ * Both facades return `{ utxos, changeAmount }`, but the per-UTXO shapes differ
+ * (fullnode yields `IUtxo` with `addressPath`/`height` extras; wallet-service
+ * yields its own `Utxo`). The adapter maps both into the shared
+ * {@link AdapterUtxo} shape so callers assert against a single contract.
+ */
+export interface GetUtxosForAmountResult {
+  changeAmount: bigint;
   utxos: AdapterUtxo[];
 }
 
@@ -494,73 +598,27 @@ export interface DelegateAuthorityResult {
 }
 
 /**
- * Options for minting tokens via the adapter.
- *
- * Only the fields exercised by the shared suite and supported by BOTH facades
- * are exposed. The fullnode facade additionally accepts `data` / `unshiftData`
- * (data-script outputs), but the wallet-service `mintTokens()` does not support
- * them — those are covered in `fullnode-specific/mint-tokens.test.ts`.
- */
-export interface MintTokensAdapterOptions {
-  /** Create a new mint authority alongside the minted tokens (facade default: true). */
-  createAnotherMint?: boolean;
-  /** Address that receives the new mint authority (default: an address of the wallet). */
-  mintAuthorityAddress?: string;
-  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
-  allowExternalMintAuthorityAddress?: boolean;
-  /** Address that receives the minted tokens (default: next wallet address). */
-  address?: string;
-  /** Address that receives the HTR change (default: next wallet address). */
-  changeAddress?: string;
-  /**
-   * If provided, the adapter also waits until this wallet's index reflects the
-   * mint, so cross-wallet tests can read a mint authority routed to one of its
-   * addresses without hitting the wallet-service index lag. Not forwarded to the
-   * facade `mintTokens()` call.
-   */
-  recvWallet?: FuzzyWalletType;
-}
-
-/**
- * Result of minting tokens.
- */
-export interface MintTokensResult {
-  hash: string;
-  transaction: Transaction;
-}
-
-/**
- * Options for melting tokens via the adapter.
- *
- * Mirrors {@link MintTokensAdapterOptions}: only the fields supported by BOTH
- * facades are exposed. The fullnode `data` / `unshiftData` data-script options
- * are intentionally omitted (the wallet-service `meltTokens()` does not support
- * them).
- */
-export interface MeltTokensAdapterOptions {
-  /** Create a new melt authority alongside the melted tokens (facade default: true). */
-  createAnotherMelt?: boolean;
-  /** Address that receives the new melt authority (default: an address of the wallet). */
-  meltAuthorityAddress?: string;
-  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
-  allowExternalMeltAuthorityAddress?: boolean;
-  /** Address that receives the HTR returned by melting (default: next wallet address). */
-  address?: string;
-  /** Address that receives the token change (default: next wallet address). */
-  changeAddress?: string;
-}
-
-/**
- * Result of melting tokens.
- */
-export interface MeltTokensResult {
-  hash: string;
-  transaction: Transaction;
-}
-
-/**
  * Result of destroying authority UTXOs.
  */
 export interface DestroyAuthorityResult {
   hash: string;
+}
+
+/**
+ * Normalized address entry returned by the adapter's address methods.
+ *
+ * Both facades expose address objects with subtly different shapes:
+ * - Fullnode `getAllAddresses()` yields `{ address, index, transactions }`.
+ * - Service `getAllAddresses()` yields `{ address, index, transactions }` too,
+ *   but `getCurrentAddress()` / `getNextAddress()` return `{ address, index, addressPath, info? }`.
+ *
+ * `AdapterAddress` keeps only the fields that are unambiguous on both facades.
+ * Callers that need facade-specific extras (like `info: 'GAP_LIMIT_REACHED'`
+ * or `transactions`) should use facade-specific tests.
+ */
+export interface AdapterAddress {
+  address: string;
+  index: number;
+  /** Derivation path (e.g. `m/44'/280'/0'/0/3`); both facades expose this. */
+  addressPath: string;
 }

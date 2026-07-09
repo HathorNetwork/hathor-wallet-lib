@@ -45,6 +45,7 @@ async function startWallet(storage, walletData) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
+    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
     storage,
     scanPolicy: getGapLimitConfig(),
   };

@@ -37,6 +37,7 @@ import {
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
@@ -168,6 +169,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -209,6 +211,7 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
+      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
@@ -284,8 +287,6 @@ describe('[Fullnode-specific] start', () => {
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Fullnode derives addresses locally from xpub — verify all 20 match precalculated.
@@ -300,8 +301,6 @@ describe('[Fullnode-specific] start', () => {
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Methods requiring private key should throw WalletFromXPubGuard.
@@ -336,8 +335,6 @@ describe('[Fullnode-specific] start', () => {
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
     // @ts-expect-error -- Simplified mock: real EcdsaTxSign has a different signature
     hWallet.setExternalTxSigningMethod(async () => {});
@@ -362,8 +359,6 @@ describe('[Fullnode-specific] start', () => {
     const hWallet = await generateWalletHelper({
       xpub,
       storage,
-      password: null,
-      pinCode: null,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
     await expect(hWallet.isReadonly()).resolves.toBe(false);

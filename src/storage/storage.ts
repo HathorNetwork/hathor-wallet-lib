@@ -417,21 +417,25 @@ export class Storage implements IStorage {
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processHistory(): Promise<void> {
+  async processHistory(pinCode?: string): Promise<void> {
     await this.store.preProcessHistory();
-    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
+    await processHistoryUtil(this, {
+      rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
+    });
   }
 
   /**
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processNewTx(tx: IHistoryTx): Promise<void> {
+  async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
     // Keep tx-timestamp index sorted
     await this.store.preProcessHistory();
     // Process the single tx we received
     await processSingleTxUtil(this, tx, {
       rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
     });
   }
 

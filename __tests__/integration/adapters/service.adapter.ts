@@ -36,9 +36,13 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  GetUtxosForAmountResult,
   AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
@@ -46,11 +50,8 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
-  MintTokensAdapterOptions,
-  MintTokensResult,
-  MeltTokensAdapterOptions,
-  MeltTokensResult,
   DestroyAuthorityResult,
+  AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -356,6 +357,29 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     };
   }
 
+  async getUtxosForAmount(
+    wallet: FuzzyWalletType,
+    amount: bigint,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosForAmountResult> {
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxosForAmount(amount, {
+      token: tokenId,
+      filter_address: options?.address,
+    });
+    return {
+      changeAmount: result.changeAmount,
+      utxos: result.utxos.map(utxo => ({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        tokenId,
+        locked: utxo.locked,
+      })),
+    };
+  }
+
   async sendManyOutputsTransaction(
     wallet: FuzzyWalletType,
     outputs: AdapterOutput[],
@@ -469,7 +493,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     tokenUid: string,
     amount: bigint,
     options?: MintTokensAdapterOptions
-  ): Promise<MintTokensResult> {
+  ): Promise<MintMeltResult> {
     const serviceWallet = this.concrete(wallet);
     const { recvWallet, ...mintOptions } = options ?? {};
 
@@ -516,7 +540,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     tokenUid: string,
     amount: bigint,
     options?: MeltTokensAdapterOptions
-  ): Promise<MeltTokensResult> {
+  ): Promise<MintMeltResult> {
     const serviceWallet = this.concrete(wallet);
 
     // Capture the current token balance so we can wait for the UTXO/balance
@@ -577,5 +601,49 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }, `authority UTXO index reflects destroy ${result.hash}`);
 
     return { hash: result.hash };
+  }
+
+  async getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]> {
+    const sw = this.concrete(wallet);
+    const result: AdapterAddress[] = [];
+    for await (const entry of sw.getAllAddresses()) {
+      result.push({
+        address: entry.address,
+        index: entry.index,
+        addressPath: await sw.getAddressPathForIndex(entry.index),
+      });
+    }
+    return result;
+  }
+
+  async getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress> {
+    const sw = this.concrete(wallet);
+    const current = sw.getCurrentAddress({ markAsUsed: options?.markAsUsed ?? false });
+    return {
+      address: current.address,
+      index: current.index,
+      addressPath: current.addressPath,
+    };
+  }
+
+  async getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress> {
+    const next = this.concrete(wallet).getNextAddress();
+    return {
+      address: next.address,
+      index: next.index,
+      addressPath: next.addressPath,
+    };
+  }
+
+  async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
+    const index = await this.concrete(wallet).getAddressIndex(address);
+    return index === null ? undefined : index;
+  }
+
+  async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
+    return this.concrete(wallet).getAddressAtIndex(index);
   }
 }
