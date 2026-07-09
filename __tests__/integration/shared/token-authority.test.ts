@@ -397,20 +397,31 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
       const { wallet } = await adapter.createWallet();
       try {
         const addr0 = (await wallet.getAddressAtIndex(0))!;
+        const addr1 = (await wallet.getAddressAtIndex(1))!;
         await adapter.injectFunds(wallet, addr0, 10n);
         const token = await adapter.createToken(wallet, 'DestroyMintToken', 'DMT', 100n);
 
-        // Token creation yields exactly one mint authority.
+        // Seed a second mint authority: delegate to another address of the same
+        // wallet while keeping the original, so the wallet holds two.
+        await adapter.delegateAuthority(wallet, token.hash, AuthorityType.MINT, addr1, {
+          createAnother: true,
+        });
+        expect(
+          await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MINT)
+        ).toHaveLength(2);
+
+        // Cannot destroy more authorities than exist.
+        await expect(
+          adapter.destroyAuthority(wallet, token.hash, AuthorityType.MINT, 3)
+        ).rejects.toThrow(/no-utxos-available|Not enough authority utxos/i);
+
+        // A partial destroy removes exactly `count`, leaving the remainder.
+        await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MINT, 1);
         expect(
           await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MINT)
         ).toHaveLength(1);
 
-        // Cannot destroy more authorities than exist.
-        await expect(
-          adapter.destroyAuthority(wallet, token.hash, AuthorityType.MINT, 2)
-        ).rejects.toThrow(/no-utxos-available|Not enough authority utxos/i);
-
-        // Destroying the only mint authority removes it...
+        // Destroying the last mint authority removes it...
         await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MINT, 1);
         expect(
           await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MINT)
@@ -427,20 +438,31 @@ describe.each(adapters)('[Shared] token authorities — $name', adapter => {
       const { wallet } = await adapter.createWallet();
       try {
         const addr0 = (await wallet.getAddressAtIndex(0))!;
+        const addr1 = (await wallet.getAddressAtIndex(1))!;
         await adapter.injectFunds(wallet, addr0, 10n);
         const token = await adapter.createToken(wallet, 'DestroyMeltToken', 'DLT', 100n);
 
-        // Token creation yields exactly one melt authority.
+        // Seed a second melt authority: delegate to another address of the same
+        // wallet while keeping the original, so the wallet holds two.
+        await adapter.delegateAuthority(wallet, token.hash, AuthorityType.MELT, addr1, {
+          createAnother: true,
+        });
+        expect(
+          await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MELT)
+        ).toHaveLength(2);
+
+        // Cannot destroy more authorities than exist.
+        await expect(
+          adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 3)
+        ).rejects.toThrow(/no-utxos-available|Not enough authority utxos/i);
+
+        // A partial destroy removes exactly `count`, leaving the remainder.
+        await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 1);
         expect(
           await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MELT)
         ).toHaveLength(1);
 
-        // Cannot destroy more authorities than exist.
-        await expect(
-          adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 2)
-        ).rejects.toThrow(/no-utxos-available|Not enough authority utxos/i);
-
-        // Destroying the only melt authority removes it...
+        // Destroying the last melt authority removes it...
         await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 1);
         expect(
           await adapter.getAuthorityUtxos(wallet, token.hash, AuthorityType.MELT)
