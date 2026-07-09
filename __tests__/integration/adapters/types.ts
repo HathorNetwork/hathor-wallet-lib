@@ -259,6 +259,23 @@ export interface IWalletTestAdapter {
    */
   getUtxos(wallet: FuzzyWalletType, options?: GetUtxosAdapterOptions): Promise<GetUtxosResult>;
 
+  /**
+   * Selects unspent outputs that cover `amount` for a given token, returning the
+   * chosen UTXOs and any change.
+   *
+   * Both facades implement `getUtxosForAmount()` with the same
+   * `{ utxos, changeAmount }` contract and raise the same {@link UtxoError}
+   * (with identical messages) from the shared `selectUtxos`, so the behavior is
+   * shared. Only the per-UTXO shape differs between facades — it is normalized
+   * into {@link AdapterUtxo}. The `address` option maps to the facades'
+   * `filter_address` filter.
+   */
+  getUtxosForAmount(
+    wallet: FuzzyWalletType,
+    amount: bigint,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosForAmountResult>;
+
   // --- Multi-output transactions ---
 
   /**
@@ -462,6 +479,19 @@ export interface AdapterUtxo {
 export interface GetUtxosResult {
   total_amount_available: bigint;
   total_utxos_available: bigint;
+  utxos: AdapterUtxo[];
+}
+
+/**
+ * Result of an adapter `getUtxosForAmount` query.
+ *
+ * Both facades return `{ utxos, changeAmount }`, but the per-UTXO shapes differ
+ * (fullnode yields `IUtxo` with `addressPath`/`height` extras; wallet-service
+ * yields its own `Utxo`). The adapter maps both into the shared
+ * {@link AdapterUtxo} shape so callers assert against a single contract.
+ */
+export interface GetUtxosForAmountResult {
+  changeAmount: bigint;
   utxos: AdapterUtxo[];
 }
 
