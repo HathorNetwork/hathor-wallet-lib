@@ -35,8 +35,8 @@ export interface CreateWalletOptions {
   xpub?: string;
   xpriv?: string;
   passphrase?: string;
-  password?: string | null;
-  pinCode?: string | null;
+  password?: string;
+  pinCode?: string;
   preCalculatedAddresses?: string[];
   multisig?: {
     pubkeys: string[];
@@ -130,7 +130,7 @@ export interface IWalletTestAdapter {
    * Builds a wallet instance WITHOUT starting it.
    * Used by validation tests that need to call start() manually.
    */
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult;
+  buildWalletInstance(options?: CreateWalletOptions): Promise<CreateWalletResult>;
 
   /**
    * Starts a wallet that was built with buildWalletInstance().
@@ -175,7 +175,7 @@ export interface IWalletTestAdapter {
   // --- Precalculated data ---
 
   /** Returns a fresh precalculated wallet for tests that need one */
-  getPrecalculatedWallet(): PrecalculatedWalletData;
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData>;
 
   // --- Transaction operations ---
 
@@ -216,6 +216,28 @@ export interface IWalletTestAdapter {
     amount: bigint,
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult>;
+
+  /**
+   * Mints additional units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult>;
+
+  /**
+   * Melts units of an existing token and waits for the tx.
+   * Handles pinCode injection and tx-waiting differences between facades.
+   */
+  meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult>;
 
   /**
    * Retrieves token metadata for a given token UID.
@@ -292,6 +314,41 @@ export interface IWalletTestAdapter {
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;
+
+  // --- Address methods ---
+
+  /**
+   * Lists every address known to the wallet, in derivation-index order.
+   * Both facades expose `getAllAddresses()` as an async generator with
+   * different element shapes — the adapter normalizes them to {@link AdapterAddress}.
+   */
+  getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]>;
+
+  /**
+   * Returns the current address (the next unused one) for the wallet.
+   * When `markAsUsed` is true, the wallet advances past this address
+   * so subsequent calls return the next one.
+   */
+  getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress>;
+
+  /**
+   * Advances the current address pointer and returns the next address.
+   */
+  getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress>;
+
+  /**
+   * Returns the derivation index for an address that belongs to the wallet,
+   * or `undefined` when the address is not part of this wallet.
+   */
+  getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined>;
+
+  /**
+   * Returns the address at a specific derivation index.
+   */
+  getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string>;
 }
 
 /**
@@ -330,6 +387,38 @@ export interface CreateTokenOptions {
  * Result of creating a new token.
  */
 export interface CreateTokenResult {
+  hash: string;
+  transaction: Transaction;
+}
+
+/**
+ * Options for minting tokens via the adapter.
+ */
+export interface MintTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMint?: boolean;
+  mintAuthorityAddress?: string;
+  data?: string[];
+  unshiftData?: boolean;
+}
+
+/**
+ * Options for melting tokens via the adapter.
+ */
+export interface MeltTokensAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createAnotherMelt?: boolean;
+  meltAuthorityAddress?: string;
+  data?: string[];
+  unshiftData?: boolean;
+}
+
+/**
+ * Result of minting or melting tokens via the adapter.
+ */
+export interface MintMeltResult {
   hash: string;
   transaction: Transaction;
 }
@@ -466,4 +555,23 @@ export interface DelegateAuthorityAdapterOptions {
  */
 export interface DelegateAuthorityResult {
   hash: string;
+}
+
+/**
+ * Normalized address entry returned by the adapter's address methods.
+ *
+ * Both facades expose address objects with subtly different shapes:
+ * - Fullnode `getAllAddresses()` yields `{ address, index, transactions }`.
+ * - Service `getAllAddresses()` yields `{ address, index, transactions }` too,
+ *   but `getCurrentAddress()` / `getNextAddress()` return `{ address, index, addressPath, info? }`.
+ *
+ * `AdapterAddress` keeps only the fields that are unambiguous on both facades.
+ * Callers that need facade-specific extras (like `info: 'GAP_LIMIT_REACHED'`
+ * or `transactions`) should use facade-specific tests.
+ */
+export interface AdapterAddress {
+  address: string;
+  index: number;
+  /** Derivation path (e.g. `m/44'/280'/0'/0/3`); both facades expose this. */
+  addressPath: string;
 }

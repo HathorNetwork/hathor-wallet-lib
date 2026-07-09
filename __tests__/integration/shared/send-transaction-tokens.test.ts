@@ -19,26 +19,12 @@ import { TokenVersion } from '../../../src/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { TOKEN_DATA } from '../configuration/test-constants';
-import FeeHeader from '../../../src/headers/fee';
-import Header from '../../../src/headers/base';
+import { expectFeeAmount } from '../utils/fee-headers.util';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
   new ServiceWalletTestAdapter(),
 ];
-
-/**
- * Validates that the fee header contains exactly one entry with the expected amount.
- * This is the expected result for createToken / sendTransaction methods, which interact with only
- * one token per tx.
- */
-function validateFeeAmount(headers: Header[], expectedFee: bigint) {
-  const feeHeaders = headers.filter(h => h instanceof FeeHeader);
-  expect(feeHeaders).toHaveLength(1);
-  const { entries } = feeHeaders[0] as FeeHeader;
-  expect(entries).toHaveLength(1);
-  expect(entries[0].amount).toBe(expectedFee);
-}
 
 describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', adapter => {
   /** Creates a funded wallet and an external wallet for receiving. */
@@ -108,7 +94,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       8000n,
       { token: tokenUid, changeAddress: (await wallet.getAddressAtIndex(6))! }
     );
-    validateFeeAmount(tx1.headers, 2n);
+    expectFeeAmount(tx1.headers, 2n);
 
     // Full FBT and 7n HTR remaining after first send
     let fbtBalance = await wallet.getBalance(tokenUid);
@@ -121,7 +107,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       82n,
       { token: tokenUid }
     );
-    validateFeeAmount(tx2.headers, 2n);
+    expectFeeAmount(tx2.headers, 2n);
 
     // 8500n FBT remaining on original wallet after second send
     fbtBalance = await wallet.getBalance(tokenUid);
@@ -147,7 +133,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
       200n,
       { token: tokenUid }
     );
-    validateFeeAmount(tx.headers, 1n);
+    expectFeeAmount(tx.headers, 1n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     // Exactly one token output (destination, no change)
@@ -181,7 +167,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
 
     // 5 token outputs × 1n HTR each = 5n HTR fee, 4n HTR remaining
     const { transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, outputs);
-    validateFeeAmount(tx.headers, 5n);
+    expectFeeAmount(tx.headers, 5n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     const tokenOutputs = fullTx.tx.outputs.filter(
@@ -226,7 +212,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
         ],
       }
     );
-    validateFeeAmount(tx.headers, 2n);
+    expectFeeAmount(tx.headers, 2n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);
@@ -276,7 +262,7 @@ describe.each(adapters)('[Shared] sendTransaction — custom tokens — $name', 
         ],
       }
     );
-    validateFeeAmount(tx.headers, 2n);
+    expectFeeAmount(tx.headers, 2n);
 
     const fullTx = await adapter.getFullTxById(wallet, tx.hash!);
     expect(fullTx.tx.inputs).toHaveLength(2);

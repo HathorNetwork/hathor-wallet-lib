@@ -7,6 +7,7 @@
 
 import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { HDPublicKey } from 'bitcore-lib';
 
 import FullnodeConnection from '../new/connection';
 import {
@@ -15,6 +16,7 @@ import {
   IHistoryTx,
   IBalance,
   ILockedUtxo,
+  IPrecalculatedShieldedAddress,
   isGapLimitScanPolicy,
   IScanPolicyLoadAddresses,
   isIndexLimitScanPolicy,
@@ -22,14 +24,20 @@ import {
   HistorySyncMode,
   HistorySyncFunction,
   WalletType,
-  IUtxo,
   ITokenData,
   TokenVersion,
+  OutputValueType,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
+import {
+  deriveAddressP2PKH,
+  deriveAddressP2SH,
+  deriveShieldedAddressPair,
+  getAddressFromPubkey,
+} from './address';
+import { processShieldedOutputs } from '../shielded/processing';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
@@ -89,25 +97,123 @@ export async function loadAddresses(
 ): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
+
+  // Shielded derivation setup, hoisted out of the loop: wallets without
+  // scan/spend xpubs (read-only, pre-shielded) skip the whole shielded branch,
+  // and for wallets that have them the parent HDPublicKeys are parsed ONCE per
+  // call — bitcore's xpub parsing is expensive and identical for every index.
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  const hasShieldedKeys = !!scanXpub && !!spendXpub;
+  const scanHdPub = hasShieldedKeys ? new HDPublicKey(scanXpub) : null;
+  const spendHdPub = hasShieldedKeys ? new HDPublicKey(spendXpub) : null;
+  const networkName = storage.config.getNetwork().name;
+
   for (let i = startIndex; i < stopIndex; i++) {
     const storageAddr = await storage.getAddressAtIndex(i);
     if (storageAddr !== null) {
-      // This address is already generated, we can skip derivation
+      // This address is already generated, we can skip legacy derivation
       addresses.push(storageAddr.base58);
-      continue;
-    }
-    // derive address at index i
-    let address: IAddressInfo;
-    if ((await storage.getWalletType()) === 'p2pkh') {
-      address = await deriveAddressP2PKH(i, storage);
     } else {
-      address = await deriveAddressP2SH(i, storage);
+      // derive legacy address at index i
+      let address: IAddressInfo;
+      if ((await storage.getWalletType()) === 'p2pkh') {
+        address = await deriveAddressP2PKH(i, storage);
+      } else {
+        address = await deriveAddressP2SH(i, storage);
+      }
+      await storage.saveAddress(address);
+      addresses.push(address.base58);
     }
-    await storage.saveAddress(address);
-    addresses.push(address.base58);
+
+    // Generate the shielded address pair at the same BIP32 index (when shielded
+    // keys are available). Like the legacy branch above, an index already in
+    // storage (a previous load, or pre-calculated/injected addresses) skips the
+    // EC derivation entirely — re-walks from index 0 happen on every sync/reload,
+    // so without this skip the whole window would be re-derived each time.
+    if (hasShieldedKeys) {
+      const existingShielded = await storage.getAddressAtIndex(i, { legacy: false });
+      if (existingShielded?.addressType === 'shielded' && existingShielded.ctMappingAddress) {
+        // Already derived/injected: re-push the paired on-chain spend address
+        // (ctMappingAddress) so re-loads still subscribe and sync its history.
+        addresses.push(existingShielded.ctMappingAddress);
+      } else {
+        // Reached for a genuinely new index, but ALSO whenever the stored state
+        // cannot be used as-is:
+        //   - a partial pair (only one record of the shielded/spend pair saved,
+        //     e.g. an interrupted previous load or an incomplete injection);
+        //   - a 'shielded' record missing its ctMappingAddress pair link, which
+        //     is what the branch above needs to push for subscription;
+        //   - a store that ignores the { legacy: false } option and returns the
+        //     legacy record instead (IStore is a public interface).
+        // Re-deriving is the safe recovery for all of these: the derivation is
+        // a pure function of the xpubs and the index, so it reproduces the
+        // exact same pair, and the isAddressMine guards below make the saves
+        // idempotent — whichever half already exists is skipped and the missing
+        // half is filled in.
+        const { shieldedAddress, spendAddress } = deriveShieldedAddressPair(
+          scanHdPub!,
+          spendHdPub!,
+          i,
+          networkName
+        );
+        if (!(await storage.isAddressMine(shieldedAddress.base58))) {
+          await storage.saveAddress(shieldedAddress);
+        }
+        if (!(await storage.isAddressMine(spendAddress.base58))) {
+          await storage.saveAddress(spendAddress);
+        }
+        // Only the spend-derived P2PKH is subscribed for tx notifications.
+        // The user-facing shielded address (scan+spend pubkeys) is NOT subscribed
+        // because the fullnode indexes transactions by on-chain script address,
+        // not by the shielded address format.
+        addresses.push(spendAddress.base58);
+      }
+    }
   }
 
   return addresses;
+}
+
+/**
+ * Persist pre-calculated shielded address pairs into storage.
+ *
+ * Test tooling: mirrors the pre-calculated legacy address injection done at
+ * wallet start. Each entry produces the SAME two storage records that
+ * loadAddresses would derive live (see deriveShieldedAddressPair), so the
+ * already-loaded skip in loadAddresses treats injected indexes as derived.
+ *
+ * @param storage The wallet storage instance
+ * @param entries Pre-calculated shielded address pairs, one per BIP32 index
+ */
+export async function savePrecalculatedShieldedAddresses(
+  storage: IStorage,
+  entries: IPrecalculatedShieldedAddress[]
+): Promise<void> {
+  for (const entry of entries) {
+    const shieldedAddress: IAddressInfo = {
+      base58: entry.shieldedBase58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+      publicKey: entry.scanPubkey,
+      addressType: 'shielded',
+      ctMappingAddress: entry.spendBase58,
+    };
+    const spendAddress: IAddressInfo = {
+      base58: entry.spendBase58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+      publicKey: entry.spendPubkey,
+      addressType: 'shielded-spend',
+      ctMappingAddress: entry.shieldedBase58,
+    };
+    // saveAddress throws on duplicates — guard so re-injection on a wallet
+    // restart over existing storage is a no-op, like the loadAddresses guards.
+    if (!(await storage.isAddressMine(shieldedAddress.base58))) {
+      await storage.saveAddress(shieldedAddress);
+    }
+    if (!(await storage.isAddressMine(spendAddress.base58))) {
+      await storage.saveAddress(spendAddress);
+    }
+  }
 }
 
 /**
@@ -125,7 +231,8 @@ export async function apiSyncHistory(
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false
+  shouldProcessHistory?: boolean,
+  pinCode?: string
 ) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -158,7 +265,7 @@ export async function apiSyncHistory(
     itCount = loadMoreAddresses.count;
   }
   if (foundAnyTx && shouldProcessHistory) {
-    await storage.processHistory();
+    await storage.processHistory(pinCode);
   }
 }
 
@@ -355,7 +462,12 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     return null;
   }
   // check gap limit
-  const { lastLoadedAddressIndex, lastUsedAddressIndex } = await storage.getWalletData();
+  const {
+    lastLoadedAddressIndex,
+    lastUsedAddressIndex,
+    shieldedLastLoadedAddressIndex,
+    shieldedLastUsedAddressIndex,
+  } = await storage.getWalletData();
   const scanPolicyData = await storage.getScanningPolicyData();
   if (!isGapLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
@@ -364,14 +476,43 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     );
   }
   const { gapLimit } = scanPolicyData;
-  if (lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex) {
-    // we need to generate more addresses to fill the gap limit
-    return {
-      nextIndex: lastLoadedAddressIndex + 1,
-      count: lastUsedAddressIndex + gapLimit - lastLoadedAddressIndex,
-    };
+
+  // Check both the legacy and shielded chains independently. loadAddresses
+  // derives a legacy + shielded pair at each BIP32 index, so we extend
+  // whichever chain is furthest behind its gap. Omitting the shielded chain
+  // here silently caps owned shielded-address discovery at the legacy chain's
+  // loaded range, so a wallet receiving on shielded indexes beyond the
+  // legacy-used range would never load (and thus never decrypt) them.
+  const legacyNeedMore = lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex;
+  // Only check the shielded gap when shielded keys are available.
+  const hasShieldedKeys = !!(await storage.getAccessData())?.spendXpubkey;
+  const shieldedNeedMore =
+    hasShieldedKeys && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
+
+  if (!legacyNeedMore && !shieldedNeedMore) {
+    return null;
   }
-  return null;
+
+  // Use the minimum of the two lastLoaded indexes as the starting point so the
+  // lagging chain catches up, and extend up to whichever target is furthest.
+  const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
+  let shieldedTarget: number;
+  if (!hasShieldedKeys) {
+    shieldedTarget = legacyTarget;
+  } else if (shieldedNeedMore) {
+    shieldedTarget = shieldedLastUsedAddressIndex + gapLimit;
+  } else {
+    shieldedTarget = shieldedLastLoadedAddressIndex;
+  }
+  const maxTarget = Math.max(legacyTarget, shieldedTarget);
+  const minLastLoaded = hasShieldedKeys
+    ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
+    : lastLoadedAddressIndex;
+
+  const nextIndex = minLastLoaded + 1;
+  const count = Math.max(maxTarget - minLastLoaded, 1);
+
+  return { nextIndex, count };
 }
 
 /**
@@ -387,7 +528,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  */
 export async function processHistory(
   storage: IStorage,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock, pinCode }: { rewardLock?: number; pinCode?: string } = {}
 ): Promise<void> {
   const { store } = storage;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
@@ -397,32 +538,61 @@ export async function processHistory(
   const currentHeight = await store.getCurrentHeight();
 
   const tokens = new Set<string>();
-  let maxIndexUsed = -1;
-  // Iterate on all txs of the history updating the metadata as we go
-  for await (const tx of store.historyIter()) {
-    const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
-    maxIndexUsed = Math.max(maxIndexUsed, processedData.maxAddressIndex);
+  let legacyMaxIndexUsed = -1;
+  let shieldedMaxIndexUsed = -1;
+  // Iterate on all txs of the history updating the metadata as we go.
+  // Order chronologically (oldest first) so a tx spending a previous tx's
+  // shielded UTXO finds the parent already decoded + persisted when the
+  // wallet-owned shielded input is enriched (processNewTx's bare-shielded-input
+  // lookback). The store yields newest-first by default for UI purposes; pass
+  // `order: 'asc'` so we walk the timeline forward without buffering the whole
+  // history into memory.
+  //
+  // No explicit per-tx input-deletion pass is needed: spent UTXOs are not
+  // re-saved because processNewTx gates UTXO creation on `spent_by === null`,
+  // and the fullnode reliably stamps `spent_by` on both transparent and shielded
+  // outputs (to_json_extended), so a spend seen during the walk leaves the
+  // parent's UTXO unsaved rather than resurrected.
+  for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
+    const processedData = await processNewTx(storage, tx, {
+      rewardLock,
+      nowTs,
+      currentHeight,
+      pinCode,
+    });
+    legacyMaxIndexUsed = Math.max(legacyMaxIndexUsed, processedData.legacyMaxAddressIndex);
+    shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
     for (const token of processedData.tokens) {
       tokens.add(token);
     }
   }
 
   // Update wallet data
-  await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
+  await updateWalletMetadataFromProcessedTxData(storage, {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  });
 }
 
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
-  { rewardLock }: { rewardLock?: number } = {}
+  { rewardLock, pinCode }: { rewardLock?: number; pinCode?: string } = {}
 ): Promise<void> {
   const { store } = storage;
   const nowTs = Math.floor(Date.now() / 1000);
   const currentHeight = await store.getCurrentHeight();
 
   const tokens = new Set<string>();
-  const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
-  const maxIndexUsed = processedData.maxAddressIndex;
+  const processedData = await processNewTx(storage, tx, {
+    rewardLock,
+    nowTs,
+    currentHeight,
+    pinCode,
+  });
+  const legacyMaxIndexUsed = processedData.legacyMaxAddressIndex;
+  const shieldedMaxIndexUsed = processedData.shieldedMaxAddressIndex;
   for (const token of processedData.tokens) {
     tokens.add(token);
   }
@@ -434,50 +604,56 @@ export async function processSingleTx(
       continue;
     }
 
-    // SEPARATED model: `input.index` is an absolute on-chain index spanning the
-    // transparent outputs then the shielded outputs, so resolve it via the
-    // arithmetic resolver rather than a positional `outputs[index]` read — which
-    // would wrongly reject (or misread) a shielded input whose index is
-    // >= outputs.length.
+    // Validate that `input.index` (an absolute on-chain index spanning the
+    // transparent then shielded outputs, SEPARATED model) points at a real
+    // output of the parent — via the arithmetic resolver, not a positional
+    // `outputs[index]` read that would wrongly reject a shielded index
+    // >= outputs.length. We only need the existence check here; the UTXO itself
+    // is fetched by key below.
     const resolved = transactionUtils.resolveSpentOutput(origTx, input.index);
     if (!resolved) {
       throw new Error('Spending an unexistent output');
     }
-    if (resolved.kind !== 'transparent') {
-      // A shielded input's UTXO lifecycle is handled by the receive pipeline;
-      // this transparent-spend loop has nothing to delete for it.
-      continue;
-    }
-    const { output } = resolved;
-    if (!output.decoded.address) {
-      // Tx is ours but output is not from an address.
-      continue;
-    }
 
-    if (!(await storage.isAddressMine(output.decoded.address))) {
-      // Address is not ours.
-      continue;
+    // Delete the spent UTXO — transparent or shielded alike — keyed by its
+    // absolute on-chain index {input.tx_id, input.index}, the same key both are
+    // saved under. The store only holds UTXOs this wallet owns (every saveUtxo is
+    // gated on isAddressMine), so a non-null getUtxo IS the ownership check — and
+    // it deletes the real stored record rather than one reconstructed from the
+    // output. If the output isn't ours (or was already removed) getUtxo returns
+    // undefined and there is nothing to delete. Removing it stops the selector
+    // from re-offering a spent UTXO ("input already spent" on the next send).
+    const spentUtxo = await storage.getUtxo({ txId: input.tx_id, index: input.index });
+    if (spentUtxo) {
+      await store.deleteUtxo(spentUtxo);
     }
-
-    // Now we get the utxo object to be deleted from the store
-    const utxo: IUtxo = {
-      txId: input.tx_id,
-      index: input.index,
-      token: output.token,
-      address: output.decoded.address,
-      authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
-      value: output.value,
-      timelock: output.decoded?.timelock ?? null,
-      type: origTx.version,
-      height: origTx.height ?? null,
-    };
-
-    // Delete utxo
-    await store.deleteUtxo(utxo);
   }
 
   // Update wallet data in the store
-  await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
+  await updateWalletMetadataFromProcessedTxData(storage, {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  });
+}
+
+/**
+ * The shielded-only fields of a saved UTXO: the `shielded` marker plus the
+ * blinding factors a later unshield send needs to recompute the excess
+ * blinding factor (dropping them makes the fullnode reject the unshield tx).
+ * Shared by `creditOutput` and `processMetadataChanged` so the two save sites
+ * cannot drift.
+ */
+function shieldedUtxoSaveFields(o: { blindingFactor?: string; assetBlindingFactor?: string }): {
+  shielded: true;
+  blindingFactor?: string;
+  assetBlindingFactor?: string;
+} {
+  return {
+    shielded: true,
+    blindingFactor: o.blindingFactor,
+    assetBlindingFactor: o.assetBlindingFactor,
+  };
 }
 
 /**
@@ -516,6 +692,46 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
     } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
       await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
+    }
+  }
+
+  // Parallel loop over owned shielded outputs (SEPARATED model). A metadata
+  // update (first_block confirmation, height change, …) must re-save the
+  // shielded UTXO at its absolute on-chain index `T + s` while PRESERVING
+  // `shielded: true` + the blinding factors. Dropping the shielded handling
+  // here strips those fields on confirmation, so the next unshield send can't
+  // compute the excess blinding factor and the fullnode rejects the tx
+  // ("full-unshield tx … must carry an unshield balance header"). Owned slots
+  // are gated on the decoded marker `value !== undefined`.
+  const transparentCount = tx.outputs.length;
+  for (const [sIndex, so] of (tx.shielded_outputs ?? []).entries()) {
+    if (so.value === undefined) continue;
+    const address = so.decoded?.address;
+    if (!address) continue;
+    if (!(await storage.isAddressMine(address))) continue;
+
+    const onChainIndex = transparentCount + sIndex;
+    if (so.spent_by == null) {
+      await store.saveUtxo({
+        txId: tx.tx_id,
+        index: onChainIndex,
+        type: tx.version,
+        authorities: transactionUtils.isAuthorityOutput({
+          token_data: so.token_data ?? 0,
+        })
+          ? so.value
+          : 0n,
+        address,
+        // owned + decoded (value gate above) ⇒ token is set; no NATIVE_TOKEN_UID
+        // fallback, which would mislabel a custom token as HTR.
+        token: so.token!,
+        value: so.value,
+        timelock: so.decoded?.timelock || null,
+        height: tx.height || null,
+        ...shieldedUtxoSaveFields(so),
+      });
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: onChainIndex })) {
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index: onChainIndex }, false);
     }
   }
 }
@@ -597,20 +813,41 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
  */
 async function updateWalletMetadataFromProcessedTxData(
   storage: IStorage,
-  { maxIndexUsed, tokens }: { maxIndexUsed: number; tokens: Set<string> }
+  {
+    legacyMaxIndexUsed,
+    shieldedMaxIndexUsed,
+    tokens,
+  }: { legacyMaxIndexUsed: number; shieldedMaxIndexUsed: number; tokens: Set<string> }
 ): Promise<void> {
   const { store } = storage;
   // Update wallet data
   const walletData = await store.getWalletData();
-  if (maxIndexUsed > -1) {
-    // If maxIndexUsed is -1 it means we didn't find any tx, so we don't need to update the wallet data
-    if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
-      if (walletData.currentAddressIndex <= maxIndexUsed) {
+
+  // Update the legacy chain tracking
+  if (legacyMaxIndexUsed > -1) {
+    // If legacyMaxIndexUsed is -1 it means we didn't find any tx, so we don't need to update the wallet data
+    if (walletData.lastUsedAddressIndex <= legacyMaxIndexUsed) {
+      if (walletData.currentAddressIndex <= legacyMaxIndexUsed) {
         await store.setCurrentAddressIndex(
-          Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex)
+          Math.min(legacyMaxIndexUsed + 1, walletData.lastLoadedAddressIndex)
         );
       }
-      await store.setLastUsedAddressIndex(maxIndexUsed);
+      await store.setLastUsedAddressIndex(legacyMaxIndexUsed);
+    }
+  }
+
+  // Update the shielded chain tracking. Without this the wallet's shielded
+  // gap-limit never advances and owned shielded addresses beyond the gap are
+  // never loaded/decrypted.
+  if (shieldedMaxIndexUsed > -1) {
+    if (walletData.shieldedLastUsedAddressIndex <= shieldedMaxIndexUsed) {
+      if (walletData.shieldedCurrentAddressIndex <= shieldedMaxIndexUsed) {
+        await store.setCurrentAddressIndex(
+          Math.min(shieldedMaxIndexUsed + 1, walletData.shieldedLastLoadedAddressIndex),
+          { legacy: false }
+        );
+      }
+      await store.setLastUsedAddressIndex(shieldedMaxIndexUsed, { legacy: false });
     }
   }
 
@@ -631,7 +868,8 @@ async function updateWalletMetadataFromProcessedTxData(
  * @param {number} [options.rewardLock] The reward lock of the network
  * @param {number} [options.nowTs] The current timestamp
  * @param {number} [options.currentHeight] The current height of the best chain
- * @returns {Promise<{ maxAddressIndex: number, tokens: Set<string> }>}
+ * @param {string} [options.pinCode] PIN code for shielded-output decryption
+ * @returns {Promise<{ legacyMaxAddressIndex: number, shieldedMaxAddressIndex: number, tokens: Set<string> }>}
  */
 export async function processNewTx(
   storage: IStorage,
@@ -640,9 +878,11 @@ export async function processNewTx(
     rewardLock,
     nowTs,
     currentHeight,
-  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {}
+    pinCode,
+  }: { rewardLock?: number; nowTs?: number; currentHeight?: number; pinCode?: string } = {}
 ): Promise<{
-  maxAddressIndex: number;
+  legacyMaxAddressIndex: number;
+  shieldedMaxAddressIndex: number;
   tokens: Set<string>;
 }> {
   function getEmptyBalance(): IBalance {
@@ -683,33 +923,74 @@ export async function processNewTx(
   // We ignore voided transactions
   if (tx.is_voided)
     return {
-      maxAddressIndex: -1,
+      legacyMaxAddressIndex: -1,
+      shieldedMaxAddressIndex: -1,
       tokens: new Set(),
     };
 
   const isHeightLocked = transactionUtils.isHeightLocked(tx.height, currentHeight, rewardLock);
   const txAddresses = new Set<string>();
   const txTokens = new Set<string>();
-  let maxIndexUsed = -1;
+  let legacyMaxIndexUsed = -1;
+  let shieldedMaxIndexUsed = -1;
 
-  for (const [index, output] of tx.outputs.entries()) {
+  /**
+   * Per-output processing body shared by the transparent output loop and the
+   * owned-shielded output loop. Performs: balance credit (locked/unlocked,
+   * authority mint/melt accounting), per-chain max-index advance, address +
+   * token metadata creation, txTokens/txAddresses tracking (drives
+   * numTransactions), UTXO save gated on `spent_by === null` (with shielded
+   * flag + blinding factors for shielded outputs), locked-UTXO save, and the
+   * spent → `utxoSelectAsInput(false)` cleanup.
+   *
+   * @param output The output to credit. For transparent outputs this is the
+   *   `ITransparentOutput`; for owned shielded outputs it is the in-place
+   *   decoded `IHistoryShieldedOutput` (value/token/decoded/blindingFactor set).
+   * @param onChainIndex The absolute on-chain index of the output. For
+   *   transparent outputs this is the position in `tx.outputs[]`; for shielded
+   *   outputs it is `tx.outputs.length + sIndex`.
+   * @param isShielded Whether the output is a (decoded, owned) shielded output.
+   */
+  async function creditOutput(
+    output: {
+      value: OutputValueType;
+      token: string;
+      token_data?: number;
+      decoded: { address?: string; timelock?: number | null };
+      spent_by?: string | null;
+      blindingFactor?: string;
+      assetBlindingFactor?: string;
+    },
+    onChainIndex: number,
+    isShielded: boolean
+  ): Promise<void> {
     // Skip data outputs since they do not have an address and do not "belong" in a wallet
-    if (!output.decoded.address) continue;
-    const addressInfo = await store.getAddress(output.decoded.address);
+    const { address } = output.decoded;
+    if (!address) return;
+    const addressInfo = await store.getAddress(address);
     // if address is not in wallet, ignore
-    if (!addressInfo) continue;
+    if (!addressInfo) return;
 
     // Check if this output is locked
     const isLocked = transactionUtils.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked;
 
-    const isAuthority: boolean = transactionUtils.isAuthorityOutput(output);
-    let addressMeta = await store.getAddressMeta(output.decoded.address);
+    const isAuthority: boolean = transactionUtils.isAuthorityOutput({
+      token_data: output.token_data ?? 0,
+    });
+    let addressMeta = await store.getAddressMeta(address);
     let tokenMeta = await store.getTokenMeta(output.token);
 
-    // check if the current address is the highest index used
-    // Update the max index used if it is
-    if (addressInfo.bip32AddressIndex > maxIndexUsed) {
-      maxIndexUsed = addressInfo.bip32AddressIndex;
+    // Track the max address index per chain. The shielded chain tracking is
+    // essential: omitting it caps owned shielded-address discovery at the
+    // legacy gap limit, so funds received on shielded indexes beyond the gap
+    // are never re-loaded and never decrypted.
+    if (addressInfo.addressType === 'shielded-spend') {
+      if (addressInfo.bip32AddressIndex > shieldedMaxIndexUsed) {
+        shieldedMaxIndexUsed = addressInfo.bip32AddressIndex;
+      }
+    } else if (addressInfo.bip32AddressIndex > legacyMaxIndexUsed) {
+      // Legacy chain: undefined addressType (pre-shielded wallets), 'p2pkh' or 'p2sh'.
+      legacyMaxIndexUsed = addressInfo.bip32AddressIndex;
     }
 
     // create metadata for address and token if it does not exist
@@ -726,29 +1007,37 @@ export async function processNewTx(
 
     // update metadata
     txTokens.add(output.token);
-    txAddresses.add(output.decoded.address);
+    txAddresses.add(address);
 
     // calculate balance
     // The balance for authority outputs is the count of outputs
     // While the balance for non-authority outputs is the sum of the value.
     // The balance will also be split into unlocked and locked.
     // We will update both the address and token metadata separately.
+    const isMint = transactionUtils.isMint({
+      value: output.value,
+      token_data: output.token_data ?? 0,
+    });
+    const isMelt = transactionUtils.isMelt({
+      value: output.value,
+      token_data: output.token_data ?? 0,
+    });
     if (isAuthority) {
       if (isLocked) {
-        if (transactionUtils.isMint(output)) {
+        if (isMint) {
           tokenMeta.balance.authorities.mint.locked += 1n;
           addressMeta.balance.get(output.token)!.authorities.mint.locked += 1n;
         }
-        if (transactionUtils.isMelt(output)) {
+        if (isMelt) {
           tokenMeta.balance.authorities.melt.locked += 1n;
           addressMeta.balance.get(output.token)!.authorities.melt.locked += 1n;
         }
       } else {
-        if (transactionUtils.isMint(output)) {
+        if (isMint) {
           tokenMeta.balance.authorities.mint.unlocked += 1n;
           addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1n;
         }
-        if (transactionUtils.isMelt(output)) {
+        if (isMelt) {
           tokenMeta.balance.authorities.melt.unlocked += 1n;
           addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
         }
@@ -763,30 +1052,88 @@ export async function processNewTx(
 
     // Add utxo to the storage if unspent
     // This is idempotent so it's safe to call it multiple times
-    if (output.spent_by === null) {
+    if (output.spent_by == null) {
       await store.saveUtxo({
         txId: tx.tx_id,
-        index,
+        index: onChainIndex,
         type: tx.version,
-        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
-        address: output.decoded.address,
+        authorities: isAuthority ? output.value : 0n,
+        address,
         token: output.token,
         value: output.value,
         timelock: output.decoded.timelock || null,
         height: tx.height || null,
+        // Preserve the shielded marker + blinding factors so a later unshield
+        // send can recompute the excess blinding factor. Dropping these makes
+        // the fullnode reject the unshield tx.
+        ...(isShielded ? shieldedUtxoSaveFields(output) : {}),
       });
       if (isLocked) {
         // We will save this utxo on the index of locked utxos
         // So that later when it becomes unlocked we can update the balances with processUtxoUnlock
-        await store.saveLockedUtxo({ tx, index });
+        await store.saveLockedUtxo({ tx, index: onChainIndex });
       }
-    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: onChainIndex })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
-      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index: onChainIndex }, false);
     }
 
     await store.editTokenMeta(output.token, tokenMeta);
-    await store.editAddressMeta(output.decoded.address, addressMeta);
+    await store.editAddressMeta(address, addressMeta);
+  }
+
+  // Decrypt wallet-owned shielded outputs IN PLACE before the output loops so
+  // the owned-shielded loop can credit them. Skip when already decoded (e.g.
+  // processHistory re-running on a previously decoded tx) — the gate is
+  // `shielded_outputs.some(value !== undefined)`, the SEPARATED decoded marker.
+  const alreadyDecoded = (tx.shielded_outputs ?? []).some(so => so.value !== undefined);
+  if (
+    !alreadyDecoded &&
+    storage.shieldedCryptoProvider &&
+    tx.shielded_outputs?.length &&
+    pinCode !== undefined
+  ) {
+    try {
+      const decoded = await processShieldedOutputs(
+        storage,
+        tx,
+        storage.shieldedCryptoProvider,
+        pinCode
+      );
+      if (decoded.length > 0) {
+        // Persist the in-place decoded fields so later reads (getTxBalance,
+        // re-processing) see the owned-marker fields without re-decrypting.
+        await store.saveTx(tx);
+      }
+    } catch (e) {
+      // processShieldedOutputs handles per-output rewind failures internally.
+      // Reaching here means something unexpected went wrong at the
+      // infrastructure level.
+      storage.logger.error(
+        'Unexpected error processing shielded outputs for tx',
+        tx.tx_id,
+        '- wallet may be missing shielded funds.',
+        e
+      );
+    }
+  }
+
+  // Transparent outputs: on-chain index === position in tx.outputs[].
+  for (const [index, output] of tx.outputs.entries()) {
+    await creditOutput(output, index, false);
+  }
+
+  // Owned shielded outputs: credit each decoded slot at its absolute on-chain
+  // index `T + s`. Non-owned/undecoded slots (value === undefined) are skipped
+  // — the single ownership gate.
+  const transparentCount = tx.outputs.length;
+  for (const [sIndex, so] of (tx.shielded_outputs ?? []).entries()) {
+    if (so.value === undefined) continue;
+    await creditOutput(
+      { ...so, value: so.value, token: so.token! },
+      transparentCount + sIndex,
+      true
+    );
   }
 
   for (const input of tx.inputs) {
@@ -815,9 +1162,14 @@ export async function processNewTx(
     let addressMeta = await store.getAddressMeta(input.decoded.address);
     let tokenMeta = await store.getTokenMeta(input.token);
 
-    // We also check the index of the input addresses, but they should have been processed as outputs of another transaction.
-    if (addressInfo.bip32AddressIndex > maxIndexUsed) {
-      maxIndexUsed = addressInfo.bip32AddressIndex;
+    // We also check the index of the input addresses, but they should have
+    // been processed as outputs of another transaction. Track per chain.
+    if (addressInfo.addressType === 'shielded-spend') {
+      if (addressInfo.bip32AddressIndex > shieldedMaxIndexUsed) {
+        shieldedMaxIndexUsed = addressInfo.bip32AddressIndex;
+      }
+    } else if (addressInfo.bip32AddressIndex > legacyMaxIndexUsed) {
+      legacyMaxIndexUsed = addressInfo.bip32AddressIndex;
     }
 
     // create metadata for address and token if it does not exist
@@ -912,7 +1264,8 @@ export async function processNewTx(
   }
 
   return {
-    maxAddressIndex: maxIndexUsed,
+    legacyMaxAddressIndex: legacyMaxIndexUsed,
+    shieldedMaxAddressIndex: shieldedMaxIndexUsed,
     tokens: txTokens,
   };
 }
@@ -951,12 +1304,24 @@ export async function processUtxoUnlock(
   const { store } = storage;
 
   const { tx } = lockedUtxo;
-  // SEPARATED model: resolve via the arithmetic resolver, not a positional
-  // `outputs[index]` read (out of range for a shielded index). A shielded locked
-  // UTXO is handled by the receive pipeline, so there's nothing to unlock here.
+  // Resolve via the SEPARATED-model arithmetic resolver so a locked shielded
+  // UTXO (on-chain index `T + s` >= outputs.length) lands on the right
+  // shielded_outputs[] slot instead of an out-of-bounds positional read.
   const resolved = transactionUtils.resolveSpentOutput(tx, lockedUtxo.index);
-  if (!resolved || resolved.kind !== 'transparent') return;
-  const { output } = resolved;
+  if (!resolved) return;
+  const resolvedOutput = resolved.output;
+  // Normalize to the fields used below. Owned shielded outputs carry
+  // value/token only after decryption (value !== undefined); a non-owned slot
+  // has nothing to unlock for us. Owned ⇒ decoded, so `token` is set (assert it,
+  // no NATIVE_TOKEN_UID mislabel); `token_data` stays undefined for FullShielded,
+  // default to 0 for the authority check.
+  if (resolvedOutput.value === undefined) return;
+  const output = {
+    value: resolvedOutput.value,
+    token: resolvedOutput.token!,
+    token_data: resolvedOutput.token_data ?? 0,
+    decoded: resolvedOutput.decoded,
+  };
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case
   if (!output.decoded.address) return;

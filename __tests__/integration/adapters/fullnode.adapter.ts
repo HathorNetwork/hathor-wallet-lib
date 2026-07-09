@@ -12,6 +12,7 @@ import { WalletTracker } from '../utils/wallet-tracker.util';
 import {
   AddressScanPolicyData,
   AuthorityType,
+  IPrecalculatedShieldedAddress,
   SCANNING_POLICY,
   WalletState,
 } from '../../../src/types';
@@ -26,6 +27,7 @@ import {
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
 import type { FullNodeTxResponse } from '../../../src/wallet/types';
@@ -39,6 +41,9 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
@@ -50,6 +55,7 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
@@ -123,7 +129,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    * that just need a working wallet have zero setup friction.
    */
   async createWallet(options?: CreateWalletOptions): Promise<CreateWalletResult> {
-    const built = this.buildWalletInstance(options);
+    const built = await this.buildWalletInstance(options);
 
     await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? DEFAULT_PIN_CODE,
@@ -134,8 +140,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): CreateWalletResult {
-    const walletData = this.resolveWordsAndAddresses(options);
+  async buildWalletInstance(options?: CreateWalletOptions): Promise<CreateWalletResult> {
+    const walletData = await this.resolveWordsAndAddresses(options);
     const walletConfig = this.buildConfig(walletData, options);
 
     const hWallet = new HathorWallet(walletConfig);
@@ -211,7 +217,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     await waitUntilNextTimestamp(hWallet, txId);
   }
 
-  getPrecalculatedWallet(): PrecalculatedWalletData {
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     return precalculationHelpers.test!.getPrecalculatedWallet();
   }
 
@@ -262,6 +268,44 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     });
     if (!result?.hash) {
       throw new Error('createToken: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.mintTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.meltTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
@@ -389,6 +433,57 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return { hash: result.hash };
   }
 
+  async getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]> {
+    const hWallet = this.concrete(wallet);
+    const result: AdapterAddress[] = [];
+    for await (const entry of hWallet.getAllAddresses()) {
+      result.push({
+        address: entry.address,
+        index: entry.index,
+        addressPath: await hWallet.getAddressPathForIndex(entry.index),
+      });
+    }
+    return result;
+  }
+
+  async getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress> {
+    const hWallet = this.concrete(wallet);
+    const current = await hWallet.getCurrentAddress({ markAsUsed: options?.markAsUsed ?? false });
+    if (current.index === null) {
+      throw new Error('getCurrentAddress: address has no index');
+    }
+    return {
+      address: current.address,
+      index: current.index,
+      addressPath: current.addressPath,
+    };
+  }
+
+  async getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress> {
+    const hWallet = this.concrete(wallet);
+    const next = await hWallet.getNextAddress();
+    if (next.index === null) {
+      throw new Error('getNextAddress: address has no index');
+    }
+    return {
+      address: next.address,
+      index: next.index,
+      addressPath: next.addressPath,
+    };
+  }
+
+  async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
+    const index = await this.concrete(wallet).getAddressIndex(address);
+    return index === null ? undefined : index;
+  }
+
+  async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
+    return this.concrete(wallet).getAddressAtIndex(index);
+  }
+
   // --- Private helpers ---
 
   /**
@@ -398,22 +493,35 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    * For xpub/xpriv-only wallets, `words` will be `undefined` — that's intentional:
    * {@link buildConfig} spreads `xpub`/`xpriv` into the config independently of the seed.
    */
-  private resolveWordsAndAddresses(options?: CreateWalletOptions): {
+  private async resolveWordsAndAddresses(options?: CreateWalletOptions): Promise<{
     words?: string;
     addresses?: string[];
-  } {
+    shieldedAddresses?: IPrecalculatedShieldedAddress[];
+  }> {
     if (!options?.seed && !options?.xpub && !options?.xpriv) {
-      const precalc = this.getPrecalculatedWallet();
-      return { words: precalc.words, addresses: precalc.addresses };
+      const precalc = await this.getPrecalculatedWallet();
+      return {
+        words: precalc.words,
+        addresses: precalc.addresses,
+        shieldedAddresses: precalc.shieldedAddresses,
+      };
     }
     return {
       words: options?.seed,
       addresses: options?.preCalculatedAddresses,
+      // Explicit seeds are usually the fixed in-repo ones — resolve their
+      // committed shielded fixtures; unknown seeds resolve to undefined and
+      // the wallet derives the pairs live.
+      shieldedAddresses: getPrecalculatedShieldedForSeed(options?.seed),
     };
   }
 
   private buildConfig(
-    walletData: { words?: string; addresses?: string[] },
+    walletData: {
+      words?: string;
+      addresses?: string[];
+      shieldedAddresses?: IPrecalculatedShieldedAddress[];
+    },
     options?: CreateWalletOptions
   ) {
     // xpub/xpriv and seed are mutually exclusive in HathorWallet's constructor.
@@ -435,6 +543,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       ...(options?.password !== undefined && { password: options.password }),
       ...(options?.pinCode !== undefined && { pinCode: options.pinCode }),
       preCalculatedAddresses: walletData.addresses,
+      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
       ...(options?.xpub && { xpub: options.xpub }),
       ...(options?.xpriv && { xpriv: options.xpriv }),
       ...(options?.passphrase && { passphrase: options.passphrase }),

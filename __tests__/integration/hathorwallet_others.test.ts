@@ -719,7 +719,7 @@ describe('index-limit address scanning policy', () => {
   /** @type HathorWallet */
   let hWallet;
   beforeAll(async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     hWallet = await generateWalletHelper({
       seed: walletData.words,
       addresses: walletData.addresses,

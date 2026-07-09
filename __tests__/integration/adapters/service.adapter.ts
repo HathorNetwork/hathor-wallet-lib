@@ -36,6 +36,9 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
@@ -47,6 +50,7 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -137,7 +141,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
     if (options?.xpub && options?.seed) {
-      const seedWallet = this.buildWalletInstance({ seed: options.seed });
+      const seedWallet = await this.buildWalletInstance({ seed: options.seed });
       await this.startWallet(seedWallet.wallet, {
         pinCode: options.pinCode ?? SERVICE_PIN,
         password: options.password ?? SERVICE_PASSWORD,
@@ -145,7 +149,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       await this.stopWallet(seedWallet.wallet);
     }
 
-    const built = this.buildWalletInstance(options);
+    const built = await this.buildWalletInstance(options);
 
     await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? SERVICE_PIN,
@@ -155,9 +159,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
+  async buildWalletInstance(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
-    const result = buildWalletInstance({
+    const result = await buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
       xpub: options?.xpub || '',
       enableWs: false,
@@ -250,7 +254,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
   }
 
-  getPrecalculatedWallet(): PrecalculatedWalletData {
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     return precalculationHelpers.test!.getPrecalculatedWallet();
   }
 
@@ -315,6 +319,42 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
     await pollForTx(sw, result.hash);
     await pollForTokenDetails(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.mintTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const sw = this.concrete(wallet);
+    const result = await sw.meltTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await pollForTx(sw, result.hash);
     return { hash: result.hash, transaction: result };
   }
 
@@ -439,5 +479,49 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }, `authority UTXO index reflects delegation ${delegationTxId}`);
 
     return { hash: result.hash };
+  }
+
+  async getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]> {
+    const sw = this.concrete(wallet);
+    const result: AdapterAddress[] = [];
+    for await (const entry of sw.getAllAddresses()) {
+      result.push({
+        address: entry.address,
+        index: entry.index,
+        addressPath: await sw.getAddressPathForIndex(entry.index),
+      });
+    }
+    return result;
+  }
+
+  async getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress> {
+    const sw = this.concrete(wallet);
+    const current = sw.getCurrentAddress({ markAsUsed: options?.markAsUsed ?? false });
+    return {
+      address: current.address,
+      index: current.index,
+      addressPath: current.addressPath,
+    };
+  }
+
+  async getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress> {
+    const next = this.concrete(wallet).getNextAddress();
+    return {
+      address: next.address,
+      index: next.index,
+      addressPath: next.addressPath,
+    };
+  }
+
+  async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
+    const index = await this.concrete(wallet).getAddressIndex(address);
+    return index === null ? undefined : index;
+  }
+
+  async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
+    return this.concrete(wallet).getAddressAtIndex(index);
   }
 }

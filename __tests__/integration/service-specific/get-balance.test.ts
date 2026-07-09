@@ -18,6 +18,7 @@ import type { HathorWalletServiceWallet } from '../../../src';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { loggers } from '../utils/logger.util';
 
 const adapter = new ServiceWalletTestAdapter();
 
@@ -36,8 +37,13 @@ describe('[Service] getBalance', () => {
     if (wallet) {
       try {
         await wallet.stop({ cleanStorage: true });
-      } catch {
-        // Wallet may already be stopped
+      } catch (e) {
+        // Teardown is best-effort: the wallet may already be stopped, but a real
+        // failure here (network, storage corruption, a bug in stop() itself) could
+        // leak state into the next test, so surface it instead of swallowing.
+        loggers.test!.warn('Failed to stop wallet during cleanup', {
+          error: (e as Error).message,
+        });
       }
     }
   });
@@ -63,7 +69,7 @@ describe('[Service] getBalance', () => {
   // entry with 0 balance for the native token, but currently returns an empty array.
   // Ref: https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
   it.skip('should return balance array for empty wallet', async () => {
-    ({ wallet } = buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet } = await buildWalletInstance({ words: emptyWallet.words }));
     await wallet.start({ pinCode: adapter.defaultPinCode, password: adapter.defaultPassword });
 
     const balances = await wallet.getBalance();
@@ -77,7 +83,7 @@ describe('[Service] getBalance', () => {
   });
 
   it('should throw error when wallet is not ready', async () => {
-    const { wallet: notReadyWallet } = buildWalletInstance({ words: emptyWallet.words });
+    const { wallet: notReadyWallet } = await buildWalletInstance({ words: emptyWallet.words });
     await expect(notReadyWallet.getBalance()).rejects.toThrow('Wallet not ready');
   });
 });

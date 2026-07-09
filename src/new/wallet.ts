@@ -64,6 +64,7 @@ import {
   IIndexLimitAddressScanPolicy,
   ILogger,
   IMultisigData,
+  IPrecalculatedShieldedAddress,
   IStorage,
   ITokenData,
   IUtxo,
@@ -84,6 +85,7 @@ import {
   getSupportedSyncMode,
   loadAddressHistory,
   processMetadataChanged,
+  savePrecalculatedShieldedAddresses,
   scanPolicyStartAddresses,
 } from '../utils/storage';
 import txApi from '../api/txApi';
@@ -201,6 +203,8 @@ class HathorWallet extends EventEmitter {
   // Address management
   preCalculatedAddresses: string[] | null;
 
+  preCalculatedShieldedAddresses: IPrecalculatedShieldedAddress[] | null;
+
   // Connection state
   firstConnection: boolean;
 
@@ -313,6 +317,7 @@ class HathorWallet extends EventEmitter {
       beforeReloadCallback = null,
       multisig = null,
       preCalculatedAddresses = null,
+      preCalculatedShieldedAddresses = null,
       scanPolicy = null,
       logger = null,
     }: HathorWalletConstructorParams = {} as HathorWalletConstructorParams
@@ -374,6 +379,7 @@ class HathorWallet extends EventEmitter {
     this.password = password;
 
     this.preCalculatedAddresses = preCalculatedAddresses;
+    this.preCalculatedShieldedAddresses = preCalculatedShieldedAddresses;
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
@@ -1664,6 +1670,12 @@ class HathorWallet extends EventEmitter {
           bip32AddressIndex: index,
         });
       }
+    }
+
+    if (this.preCalculatedShieldedAddresses) {
+      // Mirrors the legacy injection above: pre-populates the shielded chain so
+      // loadAddresses skips the per-index EC derivation for these indexes.
+      await savePrecalculatedShieldedAddresses(this.storage, this.preCalculatedShieldedAddresses);
     }
 
     let accessData = await this.storage.getAccessData();
