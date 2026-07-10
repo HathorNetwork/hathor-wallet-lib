@@ -97,6 +97,14 @@ describe('addressHistorySchema — history input `type` discriminator', () => {
     ).toBe(true);
   });
 
+  it('treats an unknown `type` string as transparent (never fail-closed on the discriminator)', () => {
+    // The discriminant is normalized to 'transparent' for any non-'shielded'
+    // value, so a full transparent input with a surprise `type` still validates.
+    const result = IHistoryInputSchema.safeParse({ ...transparentInput, type: 'surprise' });
+    expect(result.success).toBe(true);
+    expect((result as { data: { type: string } }).data.type).toBe('transparent');
+  });
+
   it('rejects a transparent input missing its echoed fields (e.g. `value`)', () => {
     // Only shielded inputs may omit the spent output's fields; a transparent
     // input without them is malformed and must fail at the boundary instead of
@@ -244,6 +252,14 @@ describe('addressHistorySchema — separated shielded_outputs[]', () => {
 
   it('accepts a FullShielded entry (asset_commitment + surjection_proof, no token_data)', () => {
     expect(parseWith(fullShieldedOutput)).toBe(true);
+  });
+
+  it('rejects a shielded output whose `mode` is not a known wire value (1 or 2)', () => {
+    // `mode` is the on-chain discriminator; only 1 (AmountShielded) and 2
+    // (FullShielded) exist. Anything else is malformed and must not validate.
+    expect(parseWith({ ...shieldedOutput, mode: 3 })).toBe(false);
+    expect(parseWith({ ...shieldedOutput, mode: 0 })).toBe(false);
+    expect(parseWith({ ...shieldedOutput, mode: undefined })).toBe(false);
   });
 
   it('rejects an AmountShielded entry missing token_data (always on the wire)', () => {

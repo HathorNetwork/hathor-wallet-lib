@@ -88,11 +88,11 @@ const transparentHistoryInputSchema = z
     token: z.string(),
     tx_id: txIdSchema,
     index: z.number(),
-    // The alpha fullnode stamps 'transparent'; older nodes omit the field.
-    // Accept any string and never fail-closed on this external discriminator:
-    // the wallet's only semantic use is `=== 'shielded'` (see
-    // utils/transaction.ts:isShieldedInputEntry).
-    type: z.string().optional(),
+    // Discriminant, normalized by the preprocess below (see IHistoryInputSchema)
+    // to 'transparent' for every non-shielded input — the alpha fullnode already
+    // stamps it, older nodes omit it, and any other value is coerced here so we
+    // never fail-closed on an unknown external discriminator.
+    type: z.literal('transparent'),
   })
   .passthrough();
 
@@ -118,14 +118,25 @@ const shieldedHistoryInputSchema = z
   })
   .passthrough();
 
-// A plain union, NOT z.discriminatedUnion: older nodes omit `type` on
-// transparent inputs and a discriminated union requires the key. Shielded
-// comes first so a locally-enriched shielded input (which also carries the
-// transparent fields) still matches its literal branch.
-export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z.union([
-  shieldedHistoryInputSchema,
-  transparentHistoryInputSchema,
-]) as unknown as ZodSchema<IHistoryInput>;
+// Normalize the discriminant, THEN discriminate. A discriminated union needs
+// the `type` key present, but older fullnodes omit it on transparent inputs;
+// coerce every non-'shielded' input to `type: 'transparent'` first (this also
+// keeps the old "never fail-closed on an unknown discriminator" leniency — an
+// unexpected type string is treated as transparent, not rejected). With the key
+// guaranteed we use z.discriminatedUnion for its narrowing + faster, clearer
+// validation instead of a try-every-branch z.union.
+export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z.preprocess(
+  input => {
+    if (input && typeof input === 'object') {
+      const { type } = input as { type?: unknown };
+      if (type !== 'shielded') {
+        return { ...(input as Record<string, unknown>), type: 'transparent' };
+      }
+    }
+    return input;
+  },
+  z.discriminatedUnion('type', [shieldedHistoryInputSchema, transparentHistoryInputSchema])
+) as unknown as ZodSchema<IHistoryInput>;
 
 // SEPARATED model: `outputs[]` is transparent-only. The fullnode
 // delivers shielded outputs in a dedicated top-level `shielded_outputs[]` array
