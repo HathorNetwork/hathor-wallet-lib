@@ -13,8 +13,10 @@
  *
  * Shared UTXO tests live in `shared/utxos.test.ts`.
  *
- * `getUtxosForAmount` and `consolidateUtxos` are exclusively fullnode APIs and
- * still live in `hathorwallet_others.test.ts`.
+ * UTXO selection tests live in `shared/utxo-selection.test.ts`
+ * (`getUtxosForAmount`, supported by both facades) and
+ * `fullnode-specific/utxo-selection.test.ts` (`consolidateUtxos`, which the
+ * wallet-service facade does not implement).
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
