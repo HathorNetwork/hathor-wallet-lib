@@ -96,12 +96,14 @@ const transparentHistoryInputSchema = z
   })
   .passthrough();
 
-// Shielded input (spends a shielded output): the spent value/token are hidden
-// in commitments, so the wire carries only `{type: 'shielded', commitment,
-// script, tx_id, index}` (hathor-core `to_json_extended`). The sender-local
-// insert (utils/transaction.ts:convertTransactionToHistoryTx) instead stamps
-// the decrypted value/token/decoded and no commitment — so every echoed field
-// is optional here; only the discriminator and the outpoint are guaranteed.
+// Shielded input (spends a shielded output): the wire echoes the spent
+// output's confidential fields (type='shielded', mode, commitment,
+// range_proof, script, per-mode extras) plus tx_id/index — never its
+// value/token, which stay hidden in the commitments (hathor-core
+// `to_json_extended`). The sender-local insert
+// (utils/transaction.ts:convertTransactionToHistoryTx) instead stamps the
+// decrypted value/token/decoded and no commitment — so every echoed field is
+// optional here; only the discriminator and the outpoint are guaranteed.
 const shieldedHistoryInputSchema = z
   .object({
     type: z.literal('shielded'),
@@ -223,7 +225,10 @@ export const shieldedOutputWireShape = {
 // Written in place — all together — when the wallet decrypts an output it
 // owns (shielded/processing.ts): `value` + `token` + `blindingFactor` for
 // both modes, plus `assetBlindingFactor` for FullShielded only. The wire
-// never carries them. `value !== undefined` is the single ownership/decoded
+// never carries `value`/`blindingFactor`/`assetBlindingFactor`; `token`,
+// however, IS wire-stamped on AmountShielded entries (the asset is public —
+// hathor-core `to_json_extended`), so for that mode its presence does not
+// imply ownership. `value !== undefined` is the single ownership/decoded
 // gate.
 const shieldedOwnedMarkerShape = {
   value: bigIntCoercibleSchema.optional(),
@@ -270,10 +275,13 @@ const IHistoryFullShieldedOutputSchema = z
 
 // SEPARATED model: history shape of one entry in `tx.shielded_outputs[]`,
 // discriminated by the required wire `mode`. Mirrors `IHistoryShieldedOutput`
-// (src/types.ts). The owned markers are all-or-nothing: every writer stamps
-// them together (decode in shielded/processing.ts, the re-delivery merge in
-// new/wallet.ts) and the wire never carries them, so a partially-marked slot
-// is invalid input.
+// (src/types.ts). Decode-only fields must be consistent with the ownership
+// gate: every writer stamps them together (shielded/processing.ts, the
+// re-delivery merge in new/wallet.ts). For FullShielded that covers
+// token/blindingFactor/assetBlindingFactor; for AmountShielded only
+// blindingFactor is decode-only — the fullnode wire-stamps the public `token`
+// on entries the wallet does not own, so an owned slot must have it but its
+// presence alone proves nothing.
 const IHistoryShieldedOutputSchema = z
   .discriminatedUnion('mode', [
     IHistoryAmountShieldedOutputSchema,
@@ -281,15 +289,15 @@ const IHistoryShieldedOutputSchema = z
   ])
   .superRefine((so, ctx) => {
     const owned = so.value !== undefined;
-    const markers = [so.token !== undefined, so.blindingFactor !== undefined];
-    if (so.mode === 2) {
-      markers.push(so.assetBlindingFactor !== undefined);
-    }
-    if (markers.some(present => present !== owned)) {
+    const inconsistent =
+      (so.blindingFactor !== undefined) !== owned ||
+      (so.mode === 2
+        ? (so.token !== undefined) !== owned || (so.assetBlindingFactor !== undefined) !== owned
+        : owned && so.token === undefined);
+    if (inconsistent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message:
-          'owned-marker fields (value/token/blindingFactor[/assetBlindingFactor]) must be present all-or-nothing',
+        message: 'decode-only fields must be consistent with the `value` ownership gate',
       });
     }
   }) as unknown as ZodSchema<IHistoryShieldedOutput>;

@@ -134,9 +134,11 @@ describe('addressHistorySchema — history input `type` discriminator', () => {
  * `outputs[]`, and normalize converts the confidential fields in place.
  */
 describe('addressHistorySchema — separated shielded_outputs[]', () => {
-  // A separated shielded output as emitted by the fullnode: hex
+  // A separated AmountShielded output as emitted by the fullnode: hex
   // commitment, base64 range_proof/script, hex ephemeral_pubkey, address-only
-  // decoded, `mode` present. `range_proof` is base64 "abcd" to assert hex conversion.
+  // decoded, `mode` present — and the public `token` the fullnode stamps on
+  // AmountShielded entries regardless of ownership (to_json_extended).
+  // `range_proof` is base64 "abcd" to assert hex conversion.
   const shieldedOutput = {
     mode: 1,
     commitment: '09fbb71fb77f29184e414aa0ebda936eac97738b749247c6597be233697f1efc6c',
@@ -144,6 +146,7 @@ describe('addressHistorySchema — separated shielded_outputs[]', () => {
     script: 'dqkUF7S4s7xJDTbP3RtOd8pqL961GpaIrA==',
     ephemeral_pubkey: '02f924f2c619c63bfebb3657a6d464fd7358bace065d804a8e3c37a9c8c996a05b',
     token_data: 0,
+    token: '00',
     decoded: { address: 'WQqNv68SWbgULkMXfNtwM7gdRGcgUa5oab' },
     spent_by: null,
   };
@@ -235,6 +238,8 @@ describe('addressHistorySchema — separated shielded_outputs[]', () => {
     asset_commitment: '0a'.repeat(33),
     surjection_proof: 'ab'.repeat(20),
     token_data: undefined,
+    // Hidden asset: FullShielded entries never carry a wire token.
+    token: undefined,
   };
 
   it('accepts a FullShielded entry (asset_commitment + surjection_proof, no token_data)', () => {
@@ -261,13 +266,24 @@ describe('addressHistorySchema — separated shielded_outputs[]', () => {
     expect(parseWith({ ...shieldedOutput, decoded: undefined })).toBe(true);
   });
 
-  // Owned markers are written all together on decode (shielded/processing.ts)
-  // and never arrive on the wire — a partially-marked slot is invalid.
+  // Decode-only fields are written all together on decode
+  // (shielded/processing.ts) and must be consistent with the `value` gate.
+  // `token` on AmountShielded is the exception: the fullnode wire-stamps the
+  // public asset on non-owned entries too (to_json_extended).
+  it('accepts a wire-stamped token on a non-owned AmountShielded entry', () => {
+    expect(parseWith(shieldedOutput)).toBe(true); // fixture carries token, no value
+    expect(parseWith({ ...shieldedOutput, token: undefined })).toBe(true); // /transaction path omits it
+  });
+
   it('accepts a fully-marked owned AmountShielded slot and rejects a partial one', () => {
-    const owned = { ...shieldedOutput, value: 500, token: '00', blindingFactor: 'cd'.repeat(32) };
+    const owned = { ...shieldedOutput, value: 500, blindingFactor: 'cd'.repeat(32) };
     expect(parseWith(owned)).toBe(true);
-    expect(parseWith({ ...shieldedOutput, token: '00' })).toBe(false);
+    // value without blindingFactor: no writer produces this.
     expect(parseWith({ ...shieldedOutput, value: 500 })).toBe(false);
+    // blindingFactor without value: no writer produces this.
+    expect(parseWith({ ...shieldedOutput, blindingFactor: 'cd'.repeat(32) })).toBe(false);
+    // owned but token missing: decode always recovers the token.
+    expect(parseWith({ ...owned, token: undefined })).toBe(false);
   });
 
   it('requires assetBlindingFactor on an owned FullShielded slot (and forbids it on amount)', () => {
@@ -283,10 +299,13 @@ describe('addressHistorySchema — separated shielded_outputs[]', () => {
       parseWith({
         ...shieldedOutput,
         value: 500,
-        token: '00',
         blindingFactor: 'cd'.repeat(32),
         assetBlindingFactor: 'ef'.repeat(32),
       })
     ).toBe(false); // amount mode never has an asset blinding factor
+  });
+
+  it('rejects a non-owned FullShielded entry carrying a token (hidden asset is decode-only)', () => {
+    expect(parseWith({ ...fullShieldedOutput, token: '00' })).toBe(false);
   });
 });

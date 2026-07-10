@@ -84,11 +84,12 @@ const transaction = {
   },
 
   /**
-   * Marks an input that spends a shielded output. On the wire these carry
-   * type='shielded' with commitment/script + tx_id/index, but none of the
-   * value/token/token_data/decoded fields that transparent inputs echo
-   * (hathor-core `to_json_extended`) — call sites that read those fields
-   * must filter shielded entries out first.
+   * Marks an input that spends a shielded output. On the wire these carry the
+   * spent output's confidential fields (type='shielded', mode, commitment,
+   * range_proof, script and the per-mode extras) plus tx_id/index — but never
+   * its value/token, which stay hidden in the commitments (hathor-core
+   * `to_json_extended` / `/transaction`). Call sites that read the echoed
+   * value/token must filter shielded entries out first.
    */
   isShieldedInputEntry(input: { type?: string } | null | undefined): boolean {
     return input != null && input.type === 'shielded';
@@ -169,10 +170,11 @@ const transaction = {
    * commitment verification failed" and the per-tx balance read as -input with
    * no credit for the decoded shielded outputs.
    *
-   * Idempotent: ensureHex no-ops on already-hex fields. The owned-marker fields
-   * (value / token / blindingFactor / assetBlindingFactor) are NOT on the wire —
-   * they are populated post-decryption on the slots the wallet owns — so this
-   * neither reads nor invents them.
+   * Idempotent: ensureHex no-ops on already-hex fields. The decode-only fields
+   * (value / blindingFactor / assetBlindingFactor — and token on FullShielded)
+   * are NOT on the wire; they are populated post-decryption on the slots the
+   * wallet owns. AmountShielded entries do arrive with a wire-stamped public
+   * `token`. This function neither reads nor invents any of them.
    */
   normalizeShieldedOutputs(tx: IHistoryTx): void {
     if (!tx.shielded_outputs) {
