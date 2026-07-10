@@ -206,6 +206,89 @@ const transaction = {
   },
 
   /**
+   * Clear the decode-only shielded fields the wallet must NEVER trust from an
+   * external source (a fullnode WS event or address-history response): a
+   * shielded output's `value`/`token`/`blindingFactor`/`assetBlindingFactor`,
+   * and the echoed `value`/`token`/`decoded` of a shielded input. None of these
+   * can be legitimately known by the fullnode (they are hidden in the
+   * commitment), so a hostile source could pre-fill them to forge a credit or a
+   * debit that skips the ECDH-rewind verification. Ownership is re-established
+   * ONLY from the wallet's own rewind or its own storage. Call this at every
+   * wire-ingress point before persisting. No-op for honest deliveries (which
+   * carry these bare) and for transparent txs.
+   */
+  clearUntrustedShieldedData(tx: IHistoryTx): void {
+    for (const so of tx.shielded_outputs ?? []) {
+      // eslint-disable-next-line no-param-reassign
+      so.value = undefined;
+      // eslint-disable-next-line no-param-reassign
+      so.token = undefined;
+      // eslint-disable-next-line no-param-reassign
+      so.blindingFactor = undefined;
+      // eslint-disable-next-line no-param-reassign
+      so.assetBlindingFactor = undefined;
+    }
+    for (const input of tx.inputs) {
+      if (this.isShieldedInputEntry(input)) {
+        // eslint-disable-next-line no-param-reassign
+        input.value = undefined;
+        // eslint-disable-next-line no-param-reassign
+        input.token = undefined;
+        // eslint-disable-next-line no-param-reassign
+        input.decoded = undefined;
+      }
+    }
+  },
+
+  /**
+   * Restore the wallet's own decode-only shielded data from a previously-stored
+   * copy of the same tx into an incoming (wire) copy, keyed by on-chain slot /
+   * outpoint. The fullnode never re-sends these fields, so without this a
+   * re-fetch (WS re-delivery, gap-limit history reload, stream re-sync) would
+   * clobber the wallet's decoded balance. Only fields the incoming copy lacks
+   * are filled — delivered wire fields (e.g. `spent_by`) are kept. Values come
+   * from our own storage, so they are trusted (unlike the wire, cleared above).
+   */
+  restoreStoredShieldedData(tx: IHistoryTx, storedTx: IHistoryTx): void {
+    // Shielded inputs: fill a bare input from the stored enriched copy.
+    for (const input of tx.inputs) {
+      if (input.decoded?.address && input.token !== undefined) continue;
+      const stored = storedTx.inputs?.find(
+        si => si.tx_id === input.tx_id && si.index === input.index
+      );
+      if (stored?.decoded?.address && stored.token !== undefined) {
+        // eslint-disable-next-line no-param-reassign
+        input.decoded = stored.decoded;
+        // eslint-disable-next-line no-param-reassign
+        input.value = stored.value;
+        // eslint-disable-next-line no-param-reassign
+        input.token = stored.token;
+        // eslint-disable-next-line no-param-reassign
+        input.token_data = stored.token_data ?? 0;
+      }
+    }
+    // Shielded outputs: per-slot restore of the decode-only fields, keyed by
+    // on-chain position. A slot absent from the delivery is restored whole.
+    const stored = storedTx.shielded_outputs ?? [];
+    if (stored.length === 0) return;
+    // eslint-disable-next-line no-param-reassign
+    tx.shielded_outputs = tx.shielded_outputs ?? [];
+    const cur = tx.shielded_outputs;
+    for (let s = 0; s < stored.length; s += 1) {
+      if (!stored[s]) continue;
+      if (!cur[s]) {
+        cur[s] = cloneDeep(stored[s]);
+      } else if (cur[s].value === undefined && stored[s].value !== undefined) {
+        cur[s].value = stored[s].value;
+        cur[s].token = stored[s].token;
+        cur[s].decoded = stored[s].decoded;
+        cur[s].blindingFactor = stored[s].blindingFactor;
+        cur[s].assetBlindingFactor = stored[s].assetBlindingFactor;
+      }
+    }
+  },
+
+  /**
    * Check if the output is an authority output
    *
    * @param {Pick<HistoryTransactionOutput, 'token_data'>} output An output with the token_data field

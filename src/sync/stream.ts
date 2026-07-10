@@ -22,6 +22,7 @@ import Queue from '../models/queue';
 import { IHistoryTxSchema } from '../schemas';
 import { prepareP2SHChangeNodes, buildP2SHRedeemScriptAtIndex } from '../utils/scripts';
 import { redeemScriptToP2SHAddress, deriveShieldedAddressFromStorage } from '../utils/address';
+import transactionUtils from '../utils/transaction';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -654,6 +655,9 @@ export class StreamManager extends AbortController {
           );
         }
       } else if (isStreamItemVertex(item)) {
+        // Wire ingress: strip untrusted decode-only shielded fields (addTx
+        // restores the wallet's own decoded data from storage).
+        transactionUtils.clearUntrustedShieldedData(item.vertex);
         await this.storage.addTx(item.vertex);
       }
       this.stats.proc();

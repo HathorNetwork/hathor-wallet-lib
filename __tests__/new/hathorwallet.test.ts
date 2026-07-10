@@ -1261,6 +1261,54 @@ describe('onNewTx shielded handling (SEPARATED model)', () => {
     // processHistory because the only shielded tx in storage is fully foreign.
     expect(processHistorySpy).not.toHaveBeenCalled();
   });
+
+  test('strips forged value/token/decoded off an incoming shielded input', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.state = HathorWallet.READY;
+    hWallet.pinCode = null;
+    hWallet.emit = () => {};
+    hWallet.scanAddressesToLoad = jest.fn().mockResolvedValue(undefined);
+    jest.spyOn(storage, 'processNewTx').mockResolvedValue(undefined);
+
+    // A hostile payload: a NEW tx whose shielded input pre-fills the spent
+    // output's value/token/decoded — fields the fullnode can never legitimately
+    // know for a shielded output. The schema accepts them (all optional), so
+    // onNewTx must strip them before the debit path can trust them.
+    const forged = {
+      tx_id: 'ba'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      inputs: [
+        {
+          type: 'shielded',
+          tx_id: 'cc'.repeat(32),
+          index: 0,
+          value: 5000000n,
+          token: '00',
+          token_data: 0,
+          decoded: { type: 'P2PKH', address: 'addrOwned', timelock: null },
+        },
+      ],
+      outputs: [],
+      parents: [],
+    };
+    await hWallet.onNewTx({ type: 'wallet:address_history', history: forged });
+
+    const persisted = await storage.getTx('ba'.repeat(32));
+    const input = persisted.inputs[0];
+    expect(input.type).toBe('shielded');
+    // The forged confidential fields are gone; the outpoint is kept.
+    expect(input.value).toBeUndefined();
+    expect(input.token).toBeUndefined();
+    expect(input.decoded).toBeUndefined();
+    expect(input.tx_id).toBe('cc'.repeat(32));
+  });
 });
 
 test('isHardwareWallet', async () => {

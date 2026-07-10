@@ -233,6 +233,10 @@ class HathorWallet extends EventEmitter {
 
   newTxPromise: Promise<void>;
 
+  // Whether the once-per-session shielded decryption retry (onNewTx's safety
+  // net) already ran. Reset on start().
+  shieldedDecryptRetryDone: boolean;
+
   // Scanning & sync configuration
   scanPolicy: AddressScanPolicyData | null;
 
@@ -421,6 +425,7 @@ class HathorWallet extends EventEmitter {
 
     this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
+    this.shieldedDecryptRetryDone = false;
 
     // Defaults to single address scanning policy
     if (scanPolicy == null) {
@@ -1697,106 +1702,24 @@ class HathorWallet extends EventEmitter {
     // (the fullnode delivers them already separated in shielded_outputs[]).
     transactionUtils.normalizeShieldedOutputs(newTx);
 
-    // SECURITY: the wire never legitimately carries decoded shielded VALUES —
-    // the fullnode hides them behind commitments (the one exception is `token`
-    // on AmountShielded entries, a public asset stamp). Any value/blinding on
-    // an incoming WS payload is therefore UNTRUSTED: a malicious or compromised
-    // data source could pre-fill them to forge a credit that bypasses the ECDH
-    // rewind (processNewTx's `alreadyDecoded` gate would skip verification).
-    // Strip the owned-marker fields here — `token` included, since decode
-    // rewrites it and nothing reads it on non-owned slots — so ownership is
-    // re-established ONLY from our own rewind or the per-slot merge from our
-    // own storage (below). commitment / range_proof / ephemeral_pubkey / script /
-    // decoded.address are kept — they're public and required to rewind.
-    for (const so of newTx.shielded_outputs ?? []) {
-      so.value = undefined;
-      so.token = undefined;
-      so.blindingFactor = undefined;
-      so.assetBlindingFactor = undefined;
-    }
+    // SECURITY: strip the decode-only shielded fields the fullnode can never
+    // legitimately provide (a shielded output's value/token/blinding and a
+    // shielded input's echoed value/token/decoded). Ownership is re-established
+    // only from our own ECDH rewind (processNewTx) or, for a known tx, restored
+    // from our own storage inside storage.addTx. Honest deliveries carry these
+    // bare, so this is a no-op there. See transactionUtils for the rationale.
+    transactionUtils.clearUntrustedShieldedData(newTx);
 
-    // Later we will compare the storageTx and the received tx.
-    // To avoid reference issues we clone the current storageTx.
-    const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
+    const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // On re-delivery, the wire form typically strips previously-decoded data:
-    //   - shielded INPUTS lose value/token/token_data (the UTXO was deleted on
-    //     first receipt, so the fullnode just sends the bare reference);
-    //   - shielded OUTPUTS come back as bare wire entries in shielded_outputs[]
-    //     — no `value`/blinding factors (AmountShielded entries do keep their
-    //     wire-stamped public `token`) — the whole array is PRESENT but
-    //     value-less.
-    //
-    // The `addTx` below unconditionally persists `newTx`, so we must merge the
-    // decoded fields from the previously-stored tx INTO newTx before that save.
-    // A whole-array `if (!newTx.shielded_outputs)` guard is INSUFFICIENT: a bare
-    // WS re-delivery has the array present-but-value-less and would clobber the
-    // decoded data. We merge PER-SLOT instead, keyed by on-chain position.
-    if (!isNewTx && storageTx) {
-      // Merge shielded input enrichment (value/token/etc.) from storage.
-      for (let i = 0; i < newTx.inputs.length; i += 1) {
-        const input = newTx.inputs[i];
-        if (input.decoded?.address && input.token !== undefined) continue;
-        const storedInput = storageTx.inputs?.find(
-          si => si.tx_id === input.tx_id && si.index === input.index
-        );
-        if (storedInput?.decoded?.address && storedInput.token !== undefined) {
-          input.decoded = storedInput.decoded;
-          input.value = storedInput.value;
-          input.token = storedInput.token;
-          input.token_data = storedInput.token_data ?? 0;
-        }
-      }
-      // Restore shielded slots dropped by a metadata-only re-delivery. The
-      // fullnode can re-send a known tx WITHOUT its shielded_outputs (or with
-      // fewer slots) — a bare metadata ping. The unconditional addTx below would
-      // then overwrite the decoded array with nothing, eroding the balance to
-      // undefined on every such update. Re-base on the stored array so
-      // the per-slot merge can preserve every decoded slot; values copied here
-      // come from our own storage, so they are trusted (unlike wire-provided
-      // values, which were stripped above).
-      const storedShielded = storageTx.shielded_outputs ?? [];
-      if (storedShielded.length > (newTx.shielded_outputs?.length ?? 0)) {
-        newTx.shielded_outputs = cloneDeep(storedShielded);
-      }
-      // PER-SLOT merge of shielded_outputs[]: for each slot whose incoming
-      // value is undefined (non-owned or bare re-delivery), copy the
-      // owned-marker + decoded fields the wallet already decrypted on a prior
-      // receipt. This preserves balance + unblinding data across re-deliveries.
-      const newShielded = newTx.shielded_outputs ?? [];
-      for (let s = 0; s < newShielded.length; s += 1) {
-        const stored = storedShielded[s];
-        if (!stored) continue;
-        if (newShielded[s].value === undefined && stored.value !== undefined) {
-          newShielded[s].value = stored.value;
-          newShielded[s].token = stored.token;
-          newShielded[s].decoded = stored.decoded;
-          newShielded[s].blindingFactor = stored.blindingFactor;
-          newShielded[s].assetBlindingFactor = stored.assetBlindingFactor;
-        }
-      }
-    }
-
+    // storage.addTx restores the wallet's decoded shielded data (stripped above)
+    // from the previously-stored copy before persisting, so a bare re-delivery
+    // never clobbers the decoded balance.
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
-
-    // Detect when an "update" event for a known tx is actually delivering
-    // shielded outputs that weren't decoded on the first receipt. The fullnode
-    // sometimes sends a tx in two stages — first a bare announcement, then a
-    // follow-up carrying the full shielded data. Without this branch the second
-    // message would route to processMetadataChanged (which doesn't decrypt) and
-    // the per-tx delta would forever read as -input until the next full reload.
-    // Gate on the SEPARATED decoded marker `value !== undefined`.
-    const storedHasDecodedShielded = (storageTx?.shielded_outputs ?? []).some(
-      so => so.value !== undefined
-    );
-    const newHasUndecodedShielded = (newTx.shielded_outputs ?? []).some(
-      so => so.value === undefined
-    );
-    const shieldedNewlyAvailable = !isNewTx && newHasUndecodedShielded && !storedHasDecodedShielded;
 
     // set state to processing and save current state.
     const previousState = this.state;
@@ -1806,10 +1729,9 @@ class HathorWallet extends EventEmitter {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
       await this.storage.processNewTx(newTx, this.pinCode ?? undefined);
-    } else if (storageTx.is_voided !== newTx.is_voided || shieldedNewlyAvailable) {
-      // Voided change OR shielded data only now arriving — both require a full
-      // history reprocess to avoid double-counting from the prior partial
-      // processNewTx.
+    } else if (storageTx.is_voided !== newTx.is_voided) {
+      // Voided flag changed — a full history reprocess is required to avoid
+      // double-counting from the prior processNewTx.
       await this.storage.processHistory(this.pinCode ?? undefined);
       didProcessHistory = true;
     } else if (!newTx.is_voided) {
@@ -1817,37 +1739,32 @@ class HathorWallet extends EventEmitter {
       await processMetadataChanged(this.storage, newTx);
     }
 
-    // Safety net: if any stored tx has an OWNED-but-undecoded shielded slot,
-    // decryption silently failed at some point (e.g. the recipient address
-    // wasn't in the wallet cache when processNewTx's decryption loop ran).
-    // Retry decryption with current wallet state — the same recovery path a
-    // reload takes.
-    //
-    // Two gates, both required:
-    //   (a) DECODED gate: at least one slot the wallet OWNS is still undecoded
-    //       (`value === undefined`) — a tx the wallet owns NO output of must
-    //       NOT trigger processHistory on every unrelated onNewTx event.
-    //   (b) OWNERSHIP gate: the undecoded slot's `decoded.address` is one of
-    //       the wallet's addresses. Without this, fully-non-owned shielded txs
-    //       (every slot value-less but foreign) would retry forever.
-    // Only runs when crypto provider + pinCode are available, and skips if we
-    // already reran processHistory above.
-    if (!didProcessHistory && this.storage.shieldedCryptoProvider && this.pinCode) {
+    // Recovery for shielded slots the wallet OWNS but did not decrypt at
+    // receipt — e.g. the crypto provider/PIN became available only after the tx
+    // arrived, or an address became ours after a gap-limit extension. Current
+    // fullnodes always deliver the complete tx on first receipt (so there is no
+    // "second stage" to wait for); the only reason an owned slot stays
+    // value-less is that decryption could not run. Scan history at most ONCE
+    // per session and rerun processHistory if anything decodable is pending —
+    // the same catch-up a reload does. The single-shot bound keeps a malicious
+    // undecodable output paying one of our addresses from forcing a full
+    // reprocess on every incoming tx. Foreign slots (decoded.address not ours)
+    // are value-less by design and never count.
+    if (
+      !didProcessHistory &&
+      !this.shieldedDecryptRetryDone &&
+      this.storage.shieldedCryptoProvider &&
+      this.pinCode
+    ) {
+      this.shieldedDecryptRetryDone = true;
       let needsRetry = false;
       // eslint-disable-next-line no-restricted-syntax
       for await (const storedTx of this.storage.txHistory()) {
-        const shielded = storedTx.shielded_outputs ?? [];
-        if (shielded.length === 0) continue;
-        for (const so of shielded) {
-          // Already decoded — nothing to retry for this slot.
+        for (const so of storedTx.shielded_outputs ?? []) {
           if (so.value !== undefined) continue;
-          // Ownership gate: only retry for slots the wallet owns but hasn't
-          // decoded yet. A value-less slot whose decoded.address is foreign (or
-          // absent) is not ours and must be skipped.
           const addr = so.decoded?.address;
-          if (!addr) continue;
           // eslint-disable-next-line no-await-in-loop
-          if (await this.storage.isAddressMine(addr)) {
+          if (addr && (await this.storage.isAddressMine(addr))) {
             needsRetry = true;
             break;
           }
@@ -1861,14 +1778,14 @@ class HathorWallet extends EventEmitter {
     // restore previous state
     this.state = previousState;
 
-    // Trust storage as the source of truth for the final save. The processing
-    // branches above (processNewTx / processHistory / processMetadataChanged)
-    // have persisted the authoritative post-decryption state — including the
-    // owned-marker fields written in place onto shielded_outputs[], enriched
-    // shielded inputs, saved UTXOs, and updated address/token metadata. The
-    // `newTx` object in scope still carries the (merged) wire form. Re-read the
-    // persisted tx, update only the processingStatus flag, and save that. Works
-    // for any input/output mix (transparent / AmountShielded / FullShielded).
+    // Flip PROCESSING -> FINISHED. The tx was deliberately saved as PROCESSING
+    // before the branches above so a crash mid-processing is detectable; this
+    // final save publishes the flag. It re-reads the PERSISTED tx (not the
+    // in-scope `newTx`) because storage holds the authoritative
+    // post-processing state — decode markers written in place, enriched
+    // inputs — and after a processHistory branch the local object is stale.
+    // The addTx round-trip also pushes the in-place decode mutations through
+    // an explicit store.saveTx instead of relying on object aliasing.
     const persisted = await this.storage.getTx(newTx.tx_id);
     const txToSave = persisted ?? newTx;
     txToSave.processingStatus = TxHistoryProcessingStatus.FINISHED;
@@ -2077,6 +1994,7 @@ class HathorWallet extends EventEmitter {
     this.clearSensitiveData();
     this.getTokenData();
     this.walletStopped = false;
+    this.shieldedDecryptRetryDone = false;
     this.setState(HathorWallet.CONNECTING);
 
     const info = await new Promise<ApiVersion>((resolve, reject) => {

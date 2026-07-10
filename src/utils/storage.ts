@@ -335,6 +335,10 @@ export async function* loadAddressHistory(
         for (const tx of result.history) {
           foundAnyTx = true;
           if (saveTxs) {
+            // Wire ingress: never trust decode-only shielded fields off the
+            // address-history response; addTx restores them from our own
+            // storage and processHistory re-derives the rest via ECDH rewind.
+            transactionUtils.clearUntrustedShieldedData(tx);
             await storage.addTx(tx);
           }
         }
@@ -1083,12 +1087,14 @@ export async function processNewTx(
   }
 
   // Decrypt wallet-owned shielded outputs IN PLACE before the output loops so
-  // the owned-shielded loop can credit them. Skip when already decoded (e.g.
-  // processHistory re-running on a previously decoded tx) — the gate is
-  // `shielded_outputs.some(value !== undefined)`, the SEPARATED decoded marker.
-  const alreadyDecoded = (tx.shielded_outputs ?? []).some(so => so.value !== undefined);
+  // the owned-shielded loop can credit them. Skip only when EVERY slot is
+  // already decoded (`value !== undefined`, the SEPARATED decoded marker):
+  // gating per-slot lets a tx with one still-undecoded owned slot (e.g. a
+  // transient rewind failure on a prior pass) complete its decoding, while
+  // processShieldedOutputs itself no-ops the slots already done.
+  const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
   if (
-    !alreadyDecoded &&
+    hasUndecodedSlot &&
     storage.shieldedCryptoProvider &&
     tx.shielded_outputs?.length &&
     pinCode !== undefined
