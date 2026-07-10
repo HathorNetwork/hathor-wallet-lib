@@ -110,6 +110,7 @@ import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
+import type { HistoryTransactionOutput } from '../models/types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
 import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
@@ -836,14 +837,17 @@ class HathorWallet extends EventEmitter {
     let address = await this.storage.getAddressAtIndex(index, opts);
 
     if (address === null) {
+      // Derivation on a storage miss is a pure PEEK: the address is returned
+      // without being persisted. Persisting belongs to loadAddresses /
+      // scanAddressesToLoad, which manage the loaded window, its tracking
+      // cursors and the WS subscriptions coherently — saving here would leave
+      // holes in the window and claim ownership of an unwatched address.
       if (opts?.legacy === false) {
-        // Shielded address not yet derived at this index — derive and save
+        // Shielded address not yet derived at this index
         const result = await deriveShieldedAddressFromStorage(index, this.storage);
         if (!result) {
           throw new Error('Shielded keys not available');
         }
-        await this.storage.saveAddress(result.shieldedAddress);
-        await this.storage.saveAddress(result.spendAddress);
         return result.shieldedAddress.base58;
       }
       // Legacy address derivation
@@ -852,7 +856,6 @@ class HathorWallet extends EventEmitter {
       } else {
         address = await deriveAddressP2SH(index, this.storage);
       }
-      await this.storage.saveAddress(address);
     }
     return address.base58;
   }
@@ -867,20 +870,19 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    let acctPath: string;
     if (opts?.legacy === false) {
       // Shielded addresses are formed by scanPubkey (account 1') + spendPubkey (account 2').
       // We return the spend path since it's used for on-chain scripts and signing.
-      return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
-    }
-
-    const walletType = await this.storage.getWalletType();
-    if (walletType === WalletType.MULTISIG) {
+      acctPath = SHIELDED_SPEND_ACCT_PATH;
+    } else if ((await this.storage.getWalletType()) === WalletType.MULTISIG) {
       // P2SH
-      return `${P2SH_ACCT_PATH}/0/${index}`;
+      acctPath = P2SH_ACCT_PATH;
+    } else {
+      // P2PKH
+      acctPath = P2PKH_ACCT_PATH;
     }
-
-    // P2PKH
-    return `${P2PKH_ACCT_PATH}/0/${index}`;
+    return `${acctPath}/0/${index}`;
   }
 
   /**
@@ -1261,11 +1263,15 @@ class HathorWallet extends EventEmitter {
         value: bigint,
         decodedAddress: string | undefined,
         outputToken: string,
+        // Absent on entries the wallet inserted locally (spent_by cannot be
+        // reconstructed there); the wire always stamps it (hex or null).
         spentBy: string | null | undefined,
-        lockable: Parameters<typeof transactionUtils.isOutputLocked>[0]
+        // Only `decoded` is consumed (timelock check) — passing the full
+        // output object at the call sites is fine.
+        lockable: Pick<HistoryTransactionOutput, 'decoded'>
       ): void => {
         if (decodedAddress !== address || token !== outputToken) return;
-        const is_spent = (spentBy ?? null) !== null;
+        const is_spent = spentBy != null;
         const is_locked =
           transactionUtils.isOutputLocked(lockable) ||
           transactionUtils.isHeightLocked(tx.height, nowHeight, rewardLock);
@@ -1294,13 +1300,9 @@ class HathorWallet extends EventEmitter {
       // carry an opening; the rest are skipped.
       for (const so of tx.shielded_outputs ?? []) {
         if (so.value === undefined) continue; // not owned / not yet decrypted
-        accrue(
-          so.value,
-          so.decoded?.address,
-          so.token ?? NATIVE_TOKEN_UID,
-          so.spent_by ?? null,
-          so
-        );
+        // The `value` gate above proves the slot was decrypted, and decode
+        // writes value+token together — so `token` is always present here.
+        accrue(so.value, so.decoded?.address, so.token!, so.spent_by, so);
       }
     }
 
@@ -1695,13 +1697,15 @@ class HathorWallet extends EventEmitter {
     // (the fullnode delivers them already separated in shielded_outputs[]).
     transactionUtils.normalizeShieldedOutputs(newTx);
 
-    // SECURITY: the wire never legitimately carries decoded shielded values —
-    // the fullnode hides them behind commitments. Any value/token/blinding on an
-    // incoming WS payload is therefore UNTRUSTED: a malicious or compromised
+    // SECURITY: the wire never legitimately carries decoded shielded VALUES —
+    // the fullnode hides them behind commitments (the one exception is `token`
+    // on AmountShielded entries, a public asset stamp). Any value/blinding on
+    // an incoming WS payload is therefore UNTRUSTED: a malicious or compromised
     // data source could pre-fill them to forge a credit that bypasses the ECDH
-    // rewind (processNewTx's `alreadyDecoded` gate would skip verification). See
-    // crypto_failures J.40–J.43. Strip the owned-marker fields here so ownership
-    // is re-established ONLY from our own rewind or the per-slot merge from our
+    // rewind (processNewTx's `alreadyDecoded` gate would skip verification).
+    // Strip the owned-marker fields here — `token` included, since decode
+    // rewrites it and nothing reads it on non-owned slots — so ownership is
+    // re-established ONLY from our own rewind or the per-slot merge from our
     // own storage (below). commitment / range_proof / ephemeral_pubkey / script /
     // decoded.address are kept — they're public and required to rewind.
     for (const so of newTx.shielded_outputs ?? []) {
@@ -1722,8 +1726,9 @@ class HathorWallet extends EventEmitter {
     //   - shielded INPUTS lose value/token/token_data (the UTXO was deleted on
     //     first receipt, so the fullnode just sends the bare reference);
     //   - shielded OUTPUTS come back as bare wire entries in shielded_outputs[]
-    //     (commitment/range_proof only, no `value`/`token`/blinding) — the
-    //     whole array is PRESENT but value-less.
+    //     — no `value`/blinding factors (AmountShielded entries do keep their
+    //     wire-stamped public `token`) — the whole array is PRESENT but
+    //     value-less.
     //
     // The `addTx` below unconditionally persists `newTx`, so we must merge the
     // decoded fields from the previously-stored tx INTO newTx before that save.
