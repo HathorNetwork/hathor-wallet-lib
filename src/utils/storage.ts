@@ -601,7 +601,14 @@ export async function processSingleTx(
     tokens.add(token);
   }
 
+  // A voided tx does not actually spend its inputs (processNewTx above skipped
+  // it for the same reason), so it must NOT delete their UTXOs. Deleting them
+  // for a tx that arrives already-voided (e.g. a mempool double-spend conflict)
+  // would drop a still-spendable UTXO while its balance is still counted,
+  // breaking coin selection until a full reload. The voided-flip case restores
+  // UTXOs via a full processHistory (see onNewTx).
   for (const input of tx.inputs) {
+    if (tx.is_voided) break;
     const origTx = await storage.getTx(input.tx_id);
     if (!origTx) {
       // The tx being spent is not from the wallet.

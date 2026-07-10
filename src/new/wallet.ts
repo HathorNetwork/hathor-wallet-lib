@@ -1675,10 +1675,15 @@ class HathorWallet extends EventEmitter {
    * messages while keeping the underlying failure visible.
    *
    * @param wsData WebSocket message data containing transaction history
+   * @param txPin Optional PIN for THIS message's shielded decryption. The
+   *   sender-local insert passes the pin it used for the send so a wallet
+   *   constructed without a stored `pinCode` (per-call-pin flow) still decodes
+   *   and credits its own shielded change. WebSocket-delivered messages omit it
+   *   and fall back to `this.pinCode`.
    */
-  enqueueOnNewTx(wsData: WalletWebSocketData): void {
+  enqueueOnNewTx(wsData: WalletWebSocketData, txPin?: string): void {
     this.newTxPromise = this.newTxPromise
-      .then(() => this.onNewTx(wsData))
+      .then(() => this.onNewTx(wsData, txPin))
       .catch(err => {
         const txId = wsData?.history?.tx_id ?? '<unknown>';
         this.logger.error(`enqueueOnNewTx: onNewTx failed for tx ${txId}: ${err?.stack ?? err}`);
@@ -1689,8 +1694,10 @@ class HathorWallet extends EventEmitter {
    * Process a new transaction received from websocket.
    *
    * @param wsData WebSocket message data containing transaction history
+   * @param txPin Optional PIN for this tx's shielded decryption (see
+   *   enqueueOnNewTx); falls back to the wallet's stored `pinCode`.
    */
-  async onNewTx(wsData: WalletWebSocketData): Promise<void> {
+  async onNewTx(wsData: WalletWebSocketData, txPin?: string): Promise<void> {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
       this.logger.error(parseResult.error);
@@ -1721,6 +1728,11 @@ class HathorWallet extends EventEmitter {
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
 
+    // Prefer the per-message pin (sender-local insert) so a wallet with no
+    // stored pinCode still decrypts its own shielded change; fall back to the
+    // stored pin for WebSocket-delivered txs.
+    const pin = txPin ?? this.pinCode ?? undefined;
+
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
@@ -1728,11 +1740,11 @@ class HathorWallet extends EventEmitter {
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
-      await this.storage.processNewTx(newTx, this.pinCode ?? undefined);
+      await this.storage.processNewTx(newTx, pin);
     } else if (storageTx.is_voided !== newTx.is_voided) {
       // Voided flag changed — a full history reprocess is required to avoid
       // double-counting from the prior processNewTx.
-      await this.storage.processHistory(this.pinCode ?? undefined);
+      await this.storage.processHistory(pin);
       didProcessHistory = true;
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
@@ -1775,6 +1787,16 @@ class HathorWallet extends EventEmitter {
         await this.storage.processHistory(this.pinCode);
       }
     }
+
+    // If the wallet was stopped while this tx was mid-processing (a concurrent
+    // stop()/logout, possibly with cleanStorage), bail before the final save
+    // and emit: re-inserting the tx would resurrect it — including any decoded
+    // shielded value/blinding restored above — into the storage the user just
+    // wiped, and 'update-tx'/'new-tx' would fire on a closed wallet.
+    if (this.walletStopped) {
+      return;
+    }
+
     // restore previous state
     this.state = previousState;
 
