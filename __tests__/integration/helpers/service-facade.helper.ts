@@ -153,6 +153,42 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
 }
 
 /**
+ * Polls the wallet-service until its UTXO index fully reflects `tx`: the UTXOs
+ * `tx` spends are no longer offered as available, AND `tx`'s own (wallet-owned)
+ * output has become available.
+ *
+ * `pollForTx` only confirms a tx is INDEXED; the service updates its UTXO index
+ * in a separate, non-atomic step. Issuing the next send before that catch-up
+ * makes input selection either pick an already-spent UTXO — rejected as the
+ * generic `Error sending tx proposal` — or find nothing yet — `No UTXOs
+ * available for the token ...`. Both are the same lag, and both are `beforeAll`
+ * failures that jest.retryTimes cannot recover.
+ *
+ * Requires `tx` to have at least one wallet-owned output (e.g. a change output),
+ * which holds for the change-producing sends this guards.
+ *
+ * @param wallet Service wallet to poll
+ * @param tx The just-sent transaction whose effects must be reflected
+ */
+export async function pollForUtxoConsistency(
+  wallet: HathorWalletServiceWallet,
+  tx: { hash?: string | null; inputs: { hash: string; index: number }[] }
+): Promise<void> {
+  const spent = new Set(tx.inputs.map(input => `${input.hash}:${input.index}`));
+  await pollUntilCondition(
+    async () => {
+      const { utxos } = await wallet.getUtxos();
+      const noStaleInput = utxos.every(utxo => !spent.has(`${utxo.tx_id}:${utxo.index}`));
+      const ownOutputAvailable = tx.hash != null && utxos.some(utxo => utxo.tx_id === tx.hash);
+      return noStaleInput && ownOutputAvailable;
+    },
+    'wallet-service UTXO index reflects sent tx',
+    20,
+    500
+  );
+}
+
+/**
  * Backoff sequence between retry attempts on a transient `wallet/init` failure.
  * 4 total attempts (initial + 3 backoffs), ~3.5s worst-case added latency.
  */
