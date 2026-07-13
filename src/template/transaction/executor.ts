@@ -44,7 +44,7 @@ import {
   TOKEN_MINT_MASK,
 } from '../../constants';
 import { createOutputScriptFromAddress } from '../../utils/address';
-import { JSONBigInt } from '../../utils/bigint';
+import { abs, JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
 import {
   getOracleScript,
@@ -626,8 +626,10 @@ export async function execCompleteTxInstruction(
     let deposit = 0n;
 
     if (ctx.tokenVersion === TokenVersion.DEPOSIT) {
-      const amount = ctx.balance.createdTokenBalance!.tokens;
-      deposit = interpreter.getHTRDeposit(amount);
+      // createdTokenBalance is negative, so we use its absolute value.
+      const mintAmount = abs(ctx.balance.createdTokenBalance!.tokens);
+      // The balance is negative, so the deposit must be negative too.
+      deposit = -interpreter.getHTRDeposit(mintAmount);
     }
 
     // Add the required HTR to create the tokens
