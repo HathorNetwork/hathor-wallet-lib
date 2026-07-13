@@ -390,6 +390,8 @@ export interface IHathorWallet {
   mintTokens(token: string, amount: OutputValueType, options): Promise<Transaction>;
   prepareMeltTokensData(token: string, amount: OutputValueType, options): Promise<Transaction>;
   meltTokens(token: string, amount: OutputValueType, options): Promise<Transaction>;
+  getDepositAmount(mintAmount: OutputValueType): OutputValueType;
+  getWithdrawAmount(meltAmount: OutputValueType): OutputValueType;
   prepareDelegateAuthorityData(
     token: string,
     type: string,
@@ -642,7 +644,12 @@ export interface FullNodeVersionData {
   minTxWeight: number;
   minTxWeightCoefficient: number;
   minTxWeightK: number;
-  tokenDepositPercentage: number;
+  /** @deprecated Prefer the numerator/denominator fraction below (integer precision). Optional: fullnodes will stop sending it. */
+  tokenDepositPercentage?: number;
+  /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
+  tokenDepositPercentageNumerator?: number;
+  /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */
+  tokenDepositPercentageDenominator?: number;
   rewardSpendMinBlocks: number;
   maxNumberInputs: number;
   maxNumberOutputs: number;

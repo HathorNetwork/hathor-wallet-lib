@@ -1606,3 +1606,30 @@ describe('hasTxOutsideFirstAddress', () => {
     }
   });
 });
+
+describe('deposit/withdraw facade methods', () => {
+  const buildWallet = (state: number) => {
+    const storage = new Storage(new MemoryStore());
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.state = state;
+    return hWallet;
+  };
+
+  test('delegate to the util with the fraction from storage', () => {
+    const hWallet = buildWallet(HathorWallet.READY);
+    // 3% deposit percentage; deposit rounds up and withdraw rounds down for 1010.
+    jest
+      .spyOn(hWallet.storage, 'getTokenDepositPercentageFraction')
+      .mockReturnValue({ numerator: 3n, denominator: 100n });
+
+    expect(hWallet.getDepositAmount(1010n)).toBe(31n); // ceil(30.3)
+    expect(hWallet.getWithdrawAmount(1010n)).toBe(30n); // floor(30.3)
+  });
+
+  test('throw when the wallet is not ready', () => {
+    const hWallet = buildWallet(HathorWallet.CLOSED);
+    expect(() => hWallet.getDepositAmount(1010n)).toThrow('Wallet not ready');
+    expect(() => hWallet.getWithdrawAmount(1010n)).toThrow('Wallet not ready');
+  });
+});

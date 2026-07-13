@@ -473,6 +473,8 @@ class HathorWallet extends EventEmitter {
       minTxWeightCoefficient: versionData.min_tx_weight_coefficient,
       minTxWeightK: versionData.min_tx_weight_k,
       tokenDepositPercentage: versionData.token_deposit_percentage,
+      tokenDepositPercentageNumerator: versionData.token_deposit_percentage_numerator,
+      tokenDepositPercentageDenominator: versionData.token_deposit_percentage_denominator,
       rewardSpendMinBlocks: versionData.reward_spend_min_blocks,
       maxNumberInputs: versionData.max_number_inputs,
       maxNumberOutputs: versionData.max_number_outputs,
@@ -2558,6 +2560,40 @@ class HathorWallet extends EventEmitter {
 
   isReady(): boolean {
     return this.state === HathorWallet.READY;
+  }
+
+  /**
+   * HTR deposit required to mint the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getDepositAmount(mintAmount: OutputValueType): OutputValueType {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokenUtils.getDepositAmount(mintAmount, numerator, denominator);
+  }
+
+  /**
+   * HTR withdrawal returned when melting the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getWithdrawAmount(meltAmount: OutputValueType): OutputValueType {
+    if (!this.isReady()) {
+      throw new WalletError('Wallet not ready');
+    }
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokenUtils.getWithdrawAmount(meltAmount, numerator, denominator);
   }
 
   /**
