@@ -56,6 +56,10 @@ export interface IInputSignature {
   addressIndex: number;
   signature: Buffer;
   pubkey: Buffer;
+  // Address type of the signed input, so consumers can render the matching
+  // derivation path. 'shielded-spend' inputs are signed with the spend chain
+  // (m/44'/280'/2'); undefined/legacy use the P2PKH/P2SH chain.
+  addressType?: AddressType | 'shielded-spend';
 }
 
 export enum HistorySyncMode {
@@ -348,8 +352,9 @@ export interface IHistoryInput {
   // `/transaction?id=…` responses; the wallet's sender-local insert
   // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
   // self-sent shielded spends carry the discriminator before any
-  // WebSocket re-delivery. Absent on transparent inputs.
-  type?: 'shielded';
+  // WebSocket re-delivery. The alpha fullnode stamps 'transparent' on
+  // ordinary inputs; older nodes omit the field entirely.
+  type?: 'shielded' | 'transparent';
   // Shielded inputs carry their own commitment on the wire; surfaced
   // here so the explorer's unblinding verifier (and any future
   // re-derive flows) can read it without round-tripping the full tx.
@@ -661,7 +666,12 @@ export interface ApiVersion {
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;
-  token_deposit_percentage: number;
+  /** @deprecated Prefer the numerator/denominator fraction below (integer precision). Optional: fullnodes will stop sending it. */
+  token_deposit_percentage?: number;
+  /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_numerator?: number;
+  /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_denominator?: number;
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
@@ -863,6 +873,7 @@ export interface IStorage {
     cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
+  getTokenDepositPercentageFraction(): { numerator: bigint; denominator: bigint };
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;

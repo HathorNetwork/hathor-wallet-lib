@@ -128,6 +128,11 @@ export class TxBalance {
    * @param index - The output index
    */
   addBalanceFromUtxo(tx: IHistoryTx, index: number) {
+    // Templates are a transparent-only flow; reject an index that lands in the
+    // shielded range with a clear message rather than a misleading bounds error.
+    if (transactionUtils.isShieldedOutputIndex(tx, index)) {
+      throw new Error('Shielded inputs are not supported in transaction templates');
+    }
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }

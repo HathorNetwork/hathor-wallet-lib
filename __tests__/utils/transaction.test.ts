@@ -147,6 +147,9 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     addressIndex: 10,
     signature: expect.anything(),
     pubkey: xpriv.derive(10).publicKey.toDER(),
+    // Legacy (P2PKH) input → addressType undefined; shielded-spend inputs carry
+    // 'shielded-spend' so getSignatures can render the spend-chain path.
+    addressType: undefined,
   });
 
   const hashdata = tx.getDataToSignHash();
@@ -205,7 +208,13 @@ test('getSignatureForTx uses the spend key chain for a shielded-spend input', as
   // The spend chain was lazily loaded and used for the signature.
   expect(getSpendSpy).toHaveBeenCalledWith('123');
   expect(sigData.inputSignatures).toHaveLength(1);
-  expect(sigData.inputSignatures[0]).toMatchObject({ inputIndex: 0, addressIndex: idx });
+  expect(sigData.inputSignatures[0]).toMatchObject({
+    inputIndex: 0,
+    addressIndex: idx,
+    // The signature carries the input's address type so getSignatures can
+    // render the spend-chain derivation path (m/44'/280'/2').
+    addressType: 'shielded-spend',
+  });
   expect(sigData.inputSignatures[0].pubkey).toStrictEqual(
     spendXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
   );

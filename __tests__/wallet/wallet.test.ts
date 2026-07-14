@@ -5394,3 +5394,35 @@ describe('Input signing addressIndex tests', () => {
     });
   });
 });
+
+describe('deposit/withdraw facade methods', () => {
+  const network = new Network('testnet');
+
+  const buildWallet = () =>
+    new HathorWalletServiceWallet({
+      requestPassword: jest.fn(),
+      seed: defaultWalletSeed,
+      network,
+      passphrase: '',
+      xpriv: null,
+      xpub: null,
+    });
+
+  it('delegate to the util with the fraction from storage', () => {
+    const wallet = buildWallet();
+    wallet.setState('Ready');
+    // 3% deposit percentage; deposit rounds up and withdraw rounds down for 1010.
+    jest
+      .spyOn(wallet.storage, 'getTokenDepositPercentageFraction')
+      .mockReturnValue({ numerator: 3n, denominator: 100n });
+
+    expect(wallet.getDepositAmount(1010n)).toBe(31n); // ceil(30.3)
+    expect(wallet.getWithdrawAmount(1010n)).toBe(30n); // floor(30.3)
+  });
+
+  it('throw when the wallet is not ready', () => {
+    const wallet = buildWallet(); // default state is NOT_STARTED
+    expect(() => wallet.getDepositAmount(1010n)).toThrow('Wallet not ready');
+    expect(() => wallet.getWithdrawAmount(1010n)).toThrow('Wallet not ready');
+  });
+});

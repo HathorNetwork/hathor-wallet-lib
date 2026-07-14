@@ -304,9 +304,21 @@ export const BLINDING_FACTOR_SIZE_BYTES: number = 32;
 export const MAX_FEE_HEADER_ENTRIES: number = 16;
 
 /**
- * Percentage of Hathor to deposit when creating a token
+ * Percentage of Hathor to deposit when creating a token.
+ *
+ * Kept as a float for display purposes and backwards compatibility. Deposit and withdraw
+ * amounts are computed from the integer {@link TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR} /
+ * {@link TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR} fraction to avoid float precision loss.
  */
 export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
+
+/**
+ * Token deposit/withdraw percentage expressed as an integer fraction in parts per billion,
+ * where 10**7 / 10**9 = 0.01 = 1%. Representing the percentage as a numerator/denominator pair
+ * (instead of a float) lets the deposit and withdraw amounts be computed with exact integer math.
+ */
+export const TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR: bigint = 10n ** 7n;
+export const TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR: bigint = 10n ** 9n;
 
 /**
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
@@ -428,7 +440,9 @@ export const FEE_PER_FULL_SHIELDED_OUTPUT: bigint = 2n;
 /**
  * Fee divisor
  */
-export const FEE_DIVISOR: number = 1 / TOKEN_DEPOSIT_PERCENTAGE;
+export const FEE_DIVISOR: number = Number(
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR
+);
 
 /**
  * Max argument length in bytes (64Kib)

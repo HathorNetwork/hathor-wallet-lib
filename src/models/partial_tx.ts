@@ -480,6 +480,12 @@ export class PartialTx {
               return resolve(false);
             }
 
+            // Partial transactions are a transparent-only flow; reject an input
+            // whose index lands in the shielded range with a clear error rather
+            // than silently resolving false (which would look like a mismatch).
+            if (transactionUtils.isShieldedOutputIndex(data.tx, input.index)) {
+              return reject(new Error('Shielded inputs are not supported in partial transactions'));
+            }
             if (data.tx.outputs.length <= input.index) {
               return resolve(false);
             }
