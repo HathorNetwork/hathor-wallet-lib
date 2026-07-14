@@ -98,7 +98,11 @@ const shieldedDecodedSchema = z
 export const fullnodeTxApiShieldedOutputSchema = z
   .object({
     ...shieldedOutputWireShape,
-    decoded: shieldedDecodedSchema,
+    // The fullnode only emits `decoded` when the shielded script parses as a
+    // standard type; consensus does not restrict shielded scripts, so a
+    // non-standard script omits it. Default to {} (matching the history schema
+    // in src/schemas.ts) so one such output doesn't reject the whole tx.
+    decoded: shieldedDecodedSchema.default({}),
   })
   .passthrough();
 

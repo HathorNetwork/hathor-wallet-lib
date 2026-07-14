@@ -1233,6 +1233,15 @@ class HathorWallet extends EventEmitter {
     const addressData = await this.storage.getAddressInfo(address);
     const index = addressData!.bip32AddressIndex;
 
+    // A user-facing shielded address is the 71-byte 'shielded' record, but its
+    // owned shielded outputs carry decoded.address = the spend-derived P2PKH
+    // (ctMappingAddress). Translate so the shielded accounting below matches —
+    // the same swap the store's selectUtxos filter does for getUtxos. A
+    // non-shielded query keeps `address` (a legacy address owns no shielded
+    // outputs anyway).
+    const shieldedMatchAddress =
+      addressData?.addressType === 'shielded' ? addressData.ctMappingAddress : address;
+
     // Address information that will be calculated below
     const addressInfo = {
       total_amount_received: 0n,
@@ -1268,9 +1277,13 @@ class HathorWallet extends EventEmitter {
         spentBy: string | null | undefined,
         // Only `decoded` is consumed (timelock check) — passing the full
         // output object at the call sites is fine.
-        lockable: Pick<HistoryTransactionOutput, 'decoded'>
+        lockable: Pick<HistoryTransactionOutput, 'decoded'>,
+        // The address decodedAddress must equal for this output to count: the
+        // query `address` for transparent outputs, the spend-P2PKH
+        // (ctMappingAddress) for shielded outputs.
+        matchAddress: string | undefined = address
       ): void => {
-        if (decodedAddress !== address || token !== outputToken) return;
+        if (decodedAddress !== matchAddress || token !== outputToken) return;
         const is_spent = spentBy != null;
         const is_locked =
           transactionUtils.isOutputLocked(lockable) ||
@@ -1302,7 +1315,7 @@ class HathorWallet extends EventEmitter {
         if (so.value === undefined) continue; // not owned / not yet decrypted
         // The `value` gate above proves the slot was decrypted, and decode
         // writes value+token together — so `token` is always present here.
-        accrue(so.value, so.decoded?.address, so.token!, so.spent_by, so);
+        accrue(so.value, so.decoded?.address, so.token!, so.spent_by, so, shieldedMatchAddress);
       }
     }
 
@@ -1379,8 +1392,16 @@ class HathorWallet extends EventEmitter {
    * @yields all available utxos
    */
   async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}): AsyncGenerator<IUtxo> {
-    // This method only returns available utxos
-    for await (const utxo of this.storage.selectUtxos({ ...options, only_available_utxos: true })) {
+    // This method only returns available utxos. Transparent-only: it feeds
+    // getUtxosForAmount (tx-template interpreter, nano-contract deposit
+    // selection), which spend inputs as transparent and hard-fail on a shielded
+    // outpoint — so a shielded UTXO must never leak in. Shielded-aware callers
+    // use bestUtxoSelection / getUtxos({ shielded: true }) instead.
+    for await (const utxo of this.storage.selectUtxos({
+      ...options,
+      shielded: false,
+      only_available_utxos: true,
+    })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex!);
       // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object.
@@ -1712,6 +1733,14 @@ class HathorWallet extends EventEmitter {
     // bare, so this is a no-op there. See transactionUtils for the rationale.
     transactionUtils.clearUntrustedShieldedData(newTx);
 
+    // Bail before touching storage if the wallet was already stopped. stop()
+    // sets walletStopped synchronously as its first statement (before the
+    // awaited storage wipe), so this entry check wins the race — the addTx
+    // below cannot resurrect a tx into a just-cleaned store.
+    if (this.walletStopped) {
+      return;
+    }
+
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
@@ -1731,55 +1760,66 @@ class HathorWallet extends EventEmitter {
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
-    if (isNewTx) {
-      // Process this single transaction.
-      // Handling new metadatas and deleting utxos that are not available anymore
-      await this.storage.processNewTx(newTx, pin);
-    } else if (storageTx.is_voided !== newTx.is_voided) {
-      // Voided flag changed — a full history reprocess is required to avoid
-      // double-counting from the prior processNewTx.
-      await this.storage.processHistory(pin);
-    } else if (!newTx.is_voided) {
-      // Process other types of metadata updates.
-      await processMetadataChanged(this.storage, newTx);
-    }
+    try {
+      if (isNewTx) {
+        // Process this single transaction.
+        // Handling new metadatas and deleting utxos that are not available anymore
+        await this.storage.processNewTx(newTx, pin);
+      } else if (storageTx.is_voided !== newTx.is_voided) {
+        // Voided flag changed — a full history reprocess is required to avoid
+        // double-counting from the prior processNewTx.
+        await this.storage.processHistory(pin);
+      } else if (!newTx.is_voided) {
+        // Process other types of metadata updates.
+        await processMetadataChanged(this.storage, newTx);
+      }
 
-    // If the wallet was stopped while this tx was mid-processing (a concurrent
-    // stop()/logout, possibly with cleanStorage), bail before the final save
-    // and emit: re-inserting the tx would resurrect it — including any decoded
-    // shielded value/blinding restored above — into the storage the user just
-    // wiped, and 'update-tx'/'new-tx' would fire on a closed wallet.
-    if (this.walletStopped) {
-      return;
-    }
+      // If the wallet was stopped while this tx was mid-processing (a concurrent
+      // stop()/logout, possibly with cleanStorage), bail before the final save
+      // and emit: re-inserting the tx would resurrect it — including any decoded
+      // shielded value/blinding restored above — into the storage the user just
+      // wiped, and 'update-tx'/'new-tx' would fire on a closed wallet.
+      if (this.walletStopped) {
+        return;
+      }
 
-    // restore previous state
-    this.state = previousState;
+      // restore previous state before the final save/emit
+      this.state = previousState;
 
-    // Flip PROCESSING -> FINISHED. The tx was deliberately saved as PROCESSING
-    // before the branches above so a crash mid-processing is detectable; this
-    // final save publishes the flag. It re-reads the PERSISTED tx (not the
-    // in-scope `newTx`) because storage holds the authoritative
-    // post-processing state — decode markers written in place, enriched
-    // inputs — and after a processHistory branch the local object is stale.
-    // The addTx round-trip also pushes the in-place decode mutations through
-    // an explicit store.saveTx instead of relying on object aliasing.
-    const persisted = await this.storage.getTx(newTx.tx_id);
-    // If the tx vanished under us — a concurrent stop({cleanStorage}) wiped the
-    // store between the walletStopped guard above and this read — do NOT
-    // resurrect it. Re-saving the in-scope `newTx` would re-insert a value-less
-    // (undecoded, wire-form) tx into the cleaned store; a restart re-adds it
-    // correctly from the fullnode.
-    if (!persisted) {
-      return;
-    }
-    persisted.processingStatus = TxHistoryProcessingStatus.FINISHED;
-    await this.storage.addTx(persisted);
+      // Flip PROCESSING -> FINISHED. The tx was deliberately saved as PROCESSING
+      // before the branches above so a crash mid-processing is detectable; this
+      // final save publishes the flag. It re-reads the PERSISTED tx (not the
+      // in-scope `newTx`) because storage holds the authoritative
+      // post-processing state — decode markers written in place, enriched
+      // inputs — and after a processHistory branch the local object is stale.
+      // The addTx round-trip also pushes the in-place decode mutations through
+      // an explicit store.saveTx instead of relying on object aliasing.
+      const persisted = await this.storage.getTx(newTx.tx_id);
+      // If the tx vanished under us — a concurrent stop({cleanStorage}) wiped
+      // the store between the walletStopped guard above and this read — do NOT
+      // resurrect it. Re-saving the in-scope `newTx` would re-insert a
+      // value-less (undecoded, wire-form) tx into the cleaned store; a restart
+      // re-adds it correctly from the fullnode.
+      if (!persisted) {
+        return;
+      }
+      persisted.processingStatus = TxHistoryProcessingStatus.FINISHED;
+      await this.storage.addTx(persisted);
 
-    if (isNewTx) {
-      this.emit('new-tx', persisted);
-    } else {
-      this.emit('update-tx', persisted);
+      if (isNewTx) {
+        this.emit('new-tx', persisted);
+      } else {
+        this.emit('update-tx', persisted);
+      }
+    } finally {
+      // Safety net: if the block above threw before restoring the state (the
+      // enqueueOnNewTx .catch then logs+swallows it), un-stick it here.
+      // Otherwise the wallet stays at PROCESSING forever and handleWebsocketMsg
+      // parks every later WS tx in wsTxQueue with nothing to drain it. A
+      // deliberate CLOSED from a concurrent stop() is left untouched.
+      if (this.state === HathorWallet.PROCESSING && !this.walletStopped) {
+        this.state = previousState;
+      }
     }
   }
 
@@ -2014,6 +2054,10 @@ class HathorWallet extends EventEmitter {
     cleanAddresses = false,
     cleanTokens = false,
   }: WalletStopOptions = {}): Promise<void> {
+    // Set synchronously, BEFORE the awaited handleStop() wipe, so an in-flight
+    // onNewTx cannot pass its walletStopped guard during the wipe and resurrect
+    // a tx (with decoded shielded secrets) into the just-cleaned storage.
+    this.walletStopped = true;
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
@@ -2025,7 +2069,6 @@ class HathorWallet extends EventEmitter {
     });
 
     this.firstConnection = true;
-    this.walletStopped = true;
     this.conn.stop();
   }
 
@@ -3033,9 +3076,16 @@ class HathorWallet extends EventEmitter {
     const walletInputs: IWalletInputInfo[] = [];
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const addressInfo = await this.storage.getAddressInfo(
-        spentTx.outputs[input.index].decoded.address!
-      );
+      // SEPARATED model: a shielded input's on-chain index is >= outputs.length,
+      // so a positional `spentTx.outputs[input.index]` read is undefined and
+      // throws. Resolve arithmetically (mirrors getSignatureForTx); the
+      // spend-derived decoded.address is on the wire for every output.
+      const resolved = transactionUtils.resolveSpentOutput(spentTx, input.index);
+      const spentAddress = resolved?.output?.decoded?.address;
+      if (!spentAddress) {
+        continue;
+      }
+      const addressInfo = await this.storage.getAddressInfo(spentAddress);
       if (addressInfo === null) {
         continue;
       }

@@ -1643,8 +1643,16 @@ const transaction = {
       throw new Error(`trying to convert a tx from a failed api request: ${txResponse.message}`);
     }
     const { tx, meta } = txResponse;
-    const inputs: IHistoryInput[] = tx.inputs.map(
-      i => this.hydrateIOWithToken(i as { token_data: number }, tx.tokens) as IHistoryInput
+    // Shielded inputs (type: 'shielded') carry no remappable token_data — a
+    // FullShielded entry omits it and an AmountShielded entry echoes the PARENT
+    // tx's raw token_data — so hydrateIOWithToken would throw
+    // ("token not found in tokens list"). Pass them through untouched; the
+    // wallet re-derives their value/token/decoded from its own storage
+    // (clearUntrustedShieldedData + processNewTx), never from this wire copy.
+    const inputs: IHistoryInput[] = tx.inputs.map(i =>
+      this.isShieldedInputEntry(i as { type?: string })
+        ? (i as unknown as IHistoryInput)
+        : (this.hydrateIOWithToken(i as { token_data: number }, tx.tokens) as IHistoryInput)
     );
 
     // SEPARATED model: `outputs[]` is transparent-only — hydrate each with its
