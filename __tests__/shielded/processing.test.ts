@@ -146,6 +146,33 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     expect(tx.shielded_outputs![0].value).toBeUndefined();
   });
 
+  it('should skip an output with no ephemeral_pubkey before any storage/key access', async () => {
+    // On-chain the ECDH pubkey is a fixed 33 bytes that is all-zeros when
+    // absent, and the fullnode omits the JSON key in that case. Such an output
+    // can never be rewound, so processShieldedOutputs skips it up front — no
+    // ownership check, no scan-key unlock, no rewind.
+    const so = makeShieldedOutput({
+      ephemeral_pubkey: undefined,
+      decoded: { type: 'P2PKH', address: 'addr1' },
+    });
+    const tx = makeHistoryTx({ shielded_outputs: [so], outputs: [] });
+    const storage = {
+      isAddressMine: jest.fn().mockResolvedValue(true),
+      getAddressInfo: jest.fn(),
+      getScanXPrivKey: jest.fn(),
+      logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+    } as any;
+    const provider = makeMockProvider();
+
+    const result = await processShieldedOutputs(storage, tx, provider, 'pin');
+    expect(result).toEqual([]);
+    expect(tx.shielded_outputs![0].value).toBeUndefined();
+    // Skipped before touching storage, keys, or the crypto provider.
+    expect(storage.isAddressMine).not.toHaveBeenCalled();
+    expect(storage.getScanXPrivKey).not.toHaveBeenCalled();
+    expect(provider.rewindAmountShieldedOutput).not.toHaveBeenCalled();
+  });
+
   it('should skip outputs for unknown addresses (no in-place write)', async () => {
     const so = makeShieldedOutput();
     const tx = makeHistoryTx({ shielded_outputs: [so] });
