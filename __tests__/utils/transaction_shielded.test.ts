@@ -207,6 +207,7 @@ describe('normalizeShieldedOutputs', () => {
       [makeTransparentOutput(1n, 'A')],
       [
         {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
           commitment: 'ab'.repeat(33),
           range_proof: '0102ff',
           script: 'aa',
@@ -215,10 +216,14 @@ describe('normalizeShieldedOutputs', () => {
         },
       ]
     );
-    const before = JSON.stringify(tx.shielded_outputs);
     transactionUtils.normalizeShieldedOutputs(tx);
     expect(tx.outputs).toHaveLength(1);
-    expect(JSON.stringify(tx.shielded_outputs)).toBe(before);
+    // `mode` from the wire is preserved untouched.
+    expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+    // A second pass is a no-op (true idempotency: f(f(x)) === f(x)).
+    const afterFirst = JSON.stringify(tx.shielded_outputs);
+    transactionUtils.normalizeShieldedOutputs(tx);
+    expect(JSON.stringify(tx.shielded_outputs)).toBe(afterFirst);
   });
 
   it('preserves owned-marker fields while converting an owned shielded entry', () => {
@@ -284,6 +289,43 @@ describe('normalizeShieldedOutputs', () => {
     transactionUtils.normalizeShieldedOutputs(tx);
     expect(tx.shielded_outputs![0].asset_commitment).toBe('aa');
     expect(tx.shielded_outputs![0].surjection_proof).toBe('bb');
+  });
+
+  it('preserves the wire `mode` on every entry untouched (fullnode always sends it)', () => {
+    // The fullnode always emits `mode`; normalizeShieldedOutputs is a
+    // hex-only pass and must leave `mode` verbatim on both FullShielded and
+    // AmountShielded entries (it neither derives nor overwrites it).
+    const b64 = (byte: number) => Buffer.from([byte]).toString('base64');
+    const tx = makeTx(
+      [makeTransparentOutput(1n, 'A')],
+      [
+        {
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
+          commitment: 'ab'.repeat(33),
+          range_proof: b64(0x01),
+          script: b64(0x02),
+          ephemeral_pubkey: b64(0x03),
+          asset_commitment: b64(0xaa),
+          surjection_proof: b64(0xbb),
+          decoded: {},
+          spent_by: null,
+        },
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'cd'.repeat(33),
+          range_proof: b64(0x04),
+          script: b64(0x05),
+          ephemeral_pubkey: b64(0x06),
+          token_data: 0,
+          decoded: {},
+          spent_by: null,
+        },
+      ]
+    );
+
+    transactionUtils.normalizeShieldedOutputs(tx);
+    expect(tx.shielded_outputs![0].mode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+    expect(tx.shielded_outputs![1].mode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
   });
 });
 

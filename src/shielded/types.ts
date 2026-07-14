@@ -43,19 +43,20 @@ export type {
 export interface IShieldedOutputProofs {
   commitment: string; // hex, 33 bytes
   range_proof: string; // hex, variable (~675 bytes)
-  ephemeral_pubkey: string; // hex, 33 bytes
+  // hex, 33 bytes. Protocol-optional: on-chain the field is all-zeros when
+  // absent and the fullnode omits the JSON key. Without it the output can
+  // never be rewound via ECDH (see shielded/processing.ts).
+  ephemeral_pubkey?: string;
   // FullShielded only:
   asset_commitment?: string; // hex, 33 bytes
   surjection_proof?: string; // hex, variable
 }
 
 export interface IShieldedOutput extends IShieldedOutputProofs {
-  // Optional because hathor-core nodes pre-`_shielded_output_to_json`
-  // mode-field addition still send shielded outputs without `mode`.
-  // Readers must fall back to detecting FullShielded via the presence
-  // of `asset_commitment` (the same pattern already used in the
-  // explorer's `TxData.isFullShielded`).
-  mode?: ShieldedOutputMode;
+  // First byte of every shielded output on the wire (see
+  // ShieldedOutput.serialize/deserialize): the fullnode always sets it
+  // (1=AmountShielded, 2=FullShielded), so readers classify directly from it.
+  mode: ShieldedOutputMode;
   script: string; // hex, output script (P2PKH/P2SH)
   // FullShielded outputs may omit `token_data` (the token UID is hidden
   // behind `asset_commitment`, so the field has no meaningful value).
