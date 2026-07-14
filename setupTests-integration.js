@@ -17,7 +17,7 @@ import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests__/integration/helpers/wallet.helper';
+import { generateWalletHelper, waitNextBlock, waitTxConfirmed, waitUntilNextTimestamp } from './__tests__/integration/helpers/wallet.helper';
 import { stopGLLBackgroundTask } from './src/sync/gll';
 import Transaction from './src/models/transaction';
 
@@ -57,16 +57,26 @@ async function createOCBs(sharedState) {
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
   const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
   await waitTxConfirmed(ocbWallet, txBet.hash, null);
+  // Advance the wall clock past this blueprint tx before creating the next one.
+  // The blueprint txs are created back-to-back and each may select the previous
+  // as a DAG parent; a tx may not share its parent's timestamp (1-second
+  // granularity), so without this the fullnode intermittently rejects the next
+  // tx with "full validation failed: tx.timestamp == parent.timestamp". Waiting
+  // for the confirming block is not enough — the dev miner can confirm within the
+  // same second.
+  await waitUntilNextTimestamp(ocbWallet, txBet.hash);
   sharedState.blueprintIds.BET_BLUEPRINT_ID = txBet.hash;
 
   const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
   const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
   await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
+  await waitUntilNextTimestamp(ocbWallet, txAuthority.hash);
   sharedState.blueprintIds.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
 
   const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
   const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
   await waitTxConfirmed(ocbWallet, txFull.hash, null);
+  await waitUntilNextTimestamp(ocbWallet, txFull.hash);
   sharedState.blueprintIds.FULL_BLUEPRINT_ID = txFull.hash;
 
   const codeParent = fs.readFileSync(
@@ -76,6 +86,7 @@ async function createOCBs(sharedState) {
 
   const txParent = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeParent, address0);
   await waitTxConfirmed(ocbWallet, txParent.hash);
+  await waitUntilNextTimestamp(ocbWallet, txParent.hash);
   sharedState.blueprintIds.PARENT_BLUEPRINT_ID = txParent.hash;
 
   const codeChildren = fs.readFileSync(
@@ -87,6 +98,7 @@ async function createOCBs(sharedState) {
     address0
   );
   await waitTxConfirmed(ocbWallet, txChildren.hash);
+  await waitUntilNextTimestamp(ocbWallet, txChildren.hash);
   sharedState.blueprintIds.CHILDREN_BLUEPRINT_ID = txChildren.hash;
 
   const codeFee = fs.readFileSync(
@@ -95,6 +107,7 @@ async function createOCBs(sharedState) {
   );
   const txFee = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFee, address0);
   await waitTxConfirmed(ocbWallet, txFee.hash, null);
+  await waitUntilNextTimestamp(ocbWallet, txFee.hash);
   sharedState.blueprintIds.FEE_BLUEPRINT_ID = txFee.hash;
 
   const codeUpgradeV1 = fs.readFileSync(
@@ -106,6 +119,7 @@ async function createOCBs(sharedState) {
     address0
   );
   await waitTxConfirmed(ocbWallet, txUpgradeV1.hash, null);
+  await waitUntilNextTimestamp(ocbWallet, txUpgradeV1.hash);
   sharedState.blueprintIds.UPGRADE_TEST_V1_BLUEPRINT_ID = txUpgradeV1.hash;
 
   const codeUpgradeV2 = fs.readFileSync(
@@ -117,6 +131,7 @@ async function createOCBs(sharedState) {
     address0
   );
   await waitTxConfirmed(ocbWallet, txUpgradeV2.hash, null);
+  await waitUntilNextTimestamp(ocbWallet, txUpgradeV2.hash);
   sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID = txUpgradeV2.hash;
 }
 

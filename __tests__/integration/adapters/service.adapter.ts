@@ -16,6 +16,7 @@ import {
   initializeServiceGlobalConfigs,
   pollForTx,
   pollForTokenDetails,
+  pollForUtxoConsistency,
   pollUntilCondition,
   retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
@@ -252,6 +253,17 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     if (recvWallet) {
       await pollForTx(this.concrete(recvWallet), txId);
     }
+  }
+
+  /**
+   * Waits until the wallet-service's UTXO index fully reflects `tx` (spent inputs
+   * gone, own output available). Use between consecutive sends whose input
+   * selection depends on the previous send's outputs — the service's UTXO index
+   * lags its tx index, so `waitForTx` alone is not enough. See
+   * {@link pollForUtxoConsistency}.
+   */
+  async waitForUtxoConsistency(wallet: FuzzyWalletType, tx: Transaction): Promise<void> {
+    await pollForUtxoConsistency(this.concrete(wallet), tx);
   }
 
   getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
