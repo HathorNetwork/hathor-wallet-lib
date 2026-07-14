@@ -54,7 +54,7 @@ describe('shielded outputs — Group M: access-data migration', () => {
    * the fully-populated record back before any address-loading runs.
    */
   it('M.int.1 — pre-shielded accessData upgrades on start() and yields a shielded address', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const seed = walletData.words;
 
     // Build the "pre-shielded" state: fresh-generate then strip the four
@@ -120,7 +120,7 @@ describe('shielded outputs — Group M: access-data migration', () => {
    * (which would invalidate anything the consumer cached).
    */
   it('M.int.2 — fresh wallet with all shielded fields is not re-migrated', async () => {
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test.getPrecalculatedWallet();
     const seed = walletData.words;
 
     const freshAccessData = walletUtils.generateAccessDataFromSeed(seed, {

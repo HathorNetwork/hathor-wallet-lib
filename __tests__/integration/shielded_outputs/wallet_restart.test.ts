@@ -62,7 +62,7 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
 
   it('F.27 — AmountShielded balance recovered after restart', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -99,7 +99,7 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
 
   it('F.28 — Shielded UTXO remains spendable after restart', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -163,7 +163,7 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
 
   it('F.29 — FullShielded balance recovered after restart', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -198,7 +198,7 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
 
   it('F.30 — Many shielded txs: all recovered after restart', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -248,7 +248,7 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
    * path is exercised and the recovered UTXO is truly spendable.
    */
   it('F.13 — sparse-decode UTXO is spendable after restart', async () => {
-    const walletDataA = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataA = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletA = await generateWalletHelper({
       seed: walletDataA.words,
       preCalculatedAddresses: walletDataA.addresses,

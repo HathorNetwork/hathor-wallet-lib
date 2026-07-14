@@ -108,7 +108,7 @@ describe('shielded outputs — Group D: Address derivation', () => {
   });
 
   it('D.22 — Wallet reload preserves previously derived shielded addresses', async () => {
-    const precalculated = precalculationHelpers.test!.getPrecalculatedWallet();
+    const precalculated = await precalculationHelpers.test!.getPrecalculatedWallet();
     const wallet = new HathorWallet({
       seed: precalculated.words,
       connection: generateConnection(),

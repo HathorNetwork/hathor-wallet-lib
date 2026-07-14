@@ -641,7 +641,7 @@ describe('shielded transactions', () => {
     const walletA = await generateWalletHelper();
 
     // Use a precalculated wallet so we know the seed for restart
-    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -956,7 +956,7 @@ describe('shielded transactions', () => {
   it('should recover FullShielded balance after wallet restart', async () => {
     const walletA = await generateWalletHelper();
 
-    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -1186,7 +1186,7 @@ describe('shielded transactions', () => {
 
   it('should spend shielded UTXOs after wallet restart', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -1356,7 +1356,7 @@ describe('shielded transactions', () => {
     const walletA = await generateWalletHelper();
 
     // Create a read-only wallet from xpub (no pinCode, can't decrypt shielded)
-    const walletDataB = precalculationHelpers.test.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,

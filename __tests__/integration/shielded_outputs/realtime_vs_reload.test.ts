@@ -125,7 +125,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.1 — T → T: pure transparent tx (baseline)', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -141,7 +141,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.2 — T → AS: transparent input, AmountShielded outputs', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -171,7 +171,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.3 — T → FS: transparent input, FullShielded outputs', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -209,7 +209,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.4 — T → AS+FS: mixed shielded output modes in one tx', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -245,7 +245,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.5 — T → T+AS: transparent + AmountShielded outputs together', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -277,7 +277,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.6 — AS → T: unshielding HTR (shielded input, transparent output)', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -318,7 +318,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     // -input_value (no credit for the decoded shielded outputs), while
     // reload returned the correct near-zero self-send delta.
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -380,7 +380,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.8 — AS → T+AS: shielded input, mixed transparent + shielded outputs', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -431,7 +431,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.9 — FS → FS: FullShielded input and outputs (custom-token self-send)', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -498,7 +498,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     // validating custom-token balance, so a chain of FS→FS for a custom
     // token gets rejected at the fullnode ("no inputs for token X"). The
     // mobile reproduction uses HTR anyway.
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -574,7 +574,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
 
   it('R.10 — AS+T → AS+T: mixed input types, mixed output types', async () => {
     const walletA = await generateWalletHelper();
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
@@ -641,7 +641,7 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
    * update is guaranteed to have arrived and been processed.
    */
   it('R.12 — confirmed shielded receive can still unshield (processMetadataChanged regression)', async () => {
-    const walletDataB = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
       preCalculatedAddresses: walletDataB.addresses,
