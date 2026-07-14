@@ -174,12 +174,21 @@ export async function pollForUtxoConsistency(
   wallet: HathorWalletServiceWallet,
   tx: { hash?: string | null; inputs: { hash: string; index: number }[] }
 ): Promise<void> {
+  // A mined tx is required: without a hash there is no tx to reflect, and the
+  // predicate below could never become true — fail fast instead of exhausting
+  // every retry only to throw a generic timeout.
+  if (tx.hash == null) {
+    throw new Error(
+      'pollForUtxoConsistency requires a mined tx: tx.hash is missing (call after the send resolves)'
+    );
+  }
+  const txHash = tx.hash;
   const spent = new Set(tx.inputs.map(input => `${input.hash}:${input.index}`));
   await pollUntilCondition(
     async () => {
       const { utxos } = await wallet.getUtxos();
       const noStaleInput = utxos.every(utxo => !spent.has(`${utxo.tx_id}:${utxo.index}`));
-      const ownOutputAvailable = tx.hash != null && utxos.some(utxo => utxo.tx_id === tx.hash);
+      const ownOutputAvailable = utxos.some(utxo => utxo.tx_id === txHash);
       return noStaleInput && ownOutputAvailable;
     },
     'wallet-service UTXO index reflects sent tx',
