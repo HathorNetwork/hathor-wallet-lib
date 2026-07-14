@@ -117,10 +117,14 @@ export interface UtxoOptions {
  * Options for filtering available UTXOs
  * @property token Search for UTXOs of this token UID
  * @property filter_address Address to filter the utxos
+ * @property shielded Include shielded UTXOs. Defaults to `false`
+ *   (transparent-only) because the results feed transparent-only input
+ *   selection; pass `true` to explicitly include shielded UTXOs.
  */
 export interface GetAvailableUtxosOptions {
   token?: string;
   filter_address?: string;
+  shielded?: boolean;
 }
 
 /**

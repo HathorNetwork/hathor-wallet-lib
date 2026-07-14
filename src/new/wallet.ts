@@ -1392,14 +1392,16 @@ class HathorWallet extends EventEmitter {
    * @yields all available utxos
    */
   async *getAvailableUtxos(options: GetAvailableUtxosOptions = {}): AsyncGenerator<IUtxo> {
-    // This method only returns available utxos. Transparent-only: it feeds
-    // getUtxosForAmount (tx-template interpreter, nano-contract deposit
-    // selection), which spend inputs as transparent and hard-fail on a shielded
-    // outpoint — so a shielded UTXO must never leak in. Shielded-aware callers
-    // use bestUtxoSelection / getUtxos({ shielded: true }) instead.
+    // Defaults to transparent-only (shielded ?? false): the main consumer,
+    // getUtxosForAmount, feeds the tx-template interpreter and nano-contract
+    // deposit selection, which spend inputs as transparent and hard-fail on a
+    // shielded outpoint — so shielded must not leak into an unqualified call
+    // (the store returns both kinds when the flag is absent). A caller that
+    // explicitly wants shielded available UTXOs passes { shielded: true };
+    // shielded-aware spending uses bestUtxoSelection.
     for await (const utxo of this.storage.selectUtxos({
       ...options,
-      shielded: false,
+      shielded: options.shielded ?? false,
       only_available_utxos: true,
     })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
