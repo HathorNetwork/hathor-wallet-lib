@@ -67,6 +67,25 @@ export const JSONBigInt = {
 };
 
 /**
+ * Ceil division using integer math for non-negative operands, equivalent to `ceil(a / b)`.
+ *
+ * Avoids the precision loss of `Math.ceil(a / b)` with floats for large values.
+ */
+export function ceilDiv(a: bigint, b: bigint): bigint {
+  if (a < 0n || b <= 0n) {
+    throw new Error('ceilDiv expects a non-negative dividend and a positive divisor');
+  }
+  return (a + b - 1n) / b;
+}
+
+/**
+ * Absolute value for bigint (there is no `Math.abs` for bigint).
+ */
+export function abs(value: bigint): bigint {
+  return value < 0n ? -value : value;
+}
+
+/**
  * A utility Zod schema for `bigint` properties that can be instantiated from a coercible type, that is, a `number`, `string`, or `bigint` itself.
  */
 export const bigIntCoercibleSchema = z

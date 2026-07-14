@@ -47,6 +47,7 @@ import type {
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  GetUtxosForAmountResult,
   AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
@@ -349,6 +350,29 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       total_amount_available: totalAmount,
       total_utxos_available: totalUtxos,
       utxos,
+    };
+  }
+
+  async getUtxosForAmount(
+    wallet: FuzzyWalletType,
+    amount: bigint,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosForAmountResult> {
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxosForAmount(amount, {
+      token: tokenId,
+      filter_address: options?.address,
+    });
+    return {
+      changeAmount: result.changeAmount,
+      utxos: result.utxos.map(utxo => ({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        tokenId,
+        locked: utxo.locked,
+      })),
     };
   }
 
