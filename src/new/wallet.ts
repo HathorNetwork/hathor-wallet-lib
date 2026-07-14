@@ -233,10 +233,6 @@ class HathorWallet extends EventEmitter {
 
   newTxPromise: Promise<void>;
 
-  // Whether the once-per-session shielded decryption retry (onNewTx's safety
-  // net) already ran. Reset on start().
-  shieldedDecryptRetryDone: boolean;
-
   // Scanning & sync configuration
   scanPolicy: AddressScanPolicyData | null;
 
@@ -425,7 +421,6 @@ class HathorWallet extends EventEmitter {
 
     this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
-    this.shieldedDecryptRetryDone = false;
 
     // Defaults to single address scanning policy
     if (scanPolicy == null) {
@@ -1736,7 +1731,6 @@ class HathorWallet extends EventEmitter {
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
-    let didProcessHistory = false;
     if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
@@ -1745,47 +1739,9 @@ class HathorWallet extends EventEmitter {
       // Voided flag changed — a full history reprocess is required to avoid
       // double-counting from the prior processNewTx.
       await this.storage.processHistory(pin);
-      didProcessHistory = true;
     } else if (!newTx.is_voided) {
       // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
-    }
-
-    // Recovery for shielded slots the wallet OWNS but did not decrypt at
-    // receipt — e.g. the crypto provider/PIN became available only after the tx
-    // arrived, or an address became ours after a gap-limit extension. Current
-    // fullnodes always deliver the complete tx on first receipt (so there is no
-    // "second stage" to wait for); the only reason an owned slot stays
-    // value-less is that decryption could not run. Scan history at most ONCE
-    // per session and rerun processHistory if anything decodable is pending —
-    // the same catch-up a reload does. The single-shot bound keeps a malicious
-    // undecodable output paying one of our addresses from forcing a full
-    // reprocess on every incoming tx. Foreign slots (decoded.address not ours)
-    // are value-less by design and never count.
-    if (
-      !didProcessHistory &&
-      !this.shieldedDecryptRetryDone &&
-      this.storage.shieldedCryptoProvider &&
-      this.pinCode
-    ) {
-      this.shieldedDecryptRetryDone = true;
-      let needsRetry = false;
-      // eslint-disable-next-line no-restricted-syntax
-      for await (const storedTx of this.storage.txHistory()) {
-        for (const so of storedTx.shielded_outputs ?? []) {
-          if (so.value !== undefined) continue;
-          const addr = so.decoded?.address;
-          // eslint-disable-next-line no-await-in-loop
-          if (addr && (await this.storage.isAddressMine(addr))) {
-            needsRetry = true;
-            break;
-          }
-        }
-        if (needsRetry) break;
-      }
-      if (needsRetry) {
-        await this.storage.processHistory(this.pinCode);
-      }
     }
 
     // If the wallet was stopped while this tx was mid-processing (a concurrent
@@ -1809,14 +1765,21 @@ class HathorWallet extends EventEmitter {
     // The addTx round-trip also pushes the in-place decode mutations through
     // an explicit store.saveTx instead of relying on object aliasing.
     const persisted = await this.storage.getTx(newTx.tx_id);
-    const txToSave = persisted ?? newTx;
-    txToSave.processingStatus = TxHistoryProcessingStatus.FINISHED;
-    await this.storage.addTx(txToSave);
+    // If the tx vanished under us — a concurrent stop({cleanStorage}) wiped the
+    // store between the walletStopped guard above and this read — do NOT
+    // resurrect it. Re-saving the in-scope `newTx` would re-insert a value-less
+    // (undecoded, wire-form) tx into the cleaned store; a restart re-adds it
+    // correctly from the fullnode.
+    if (!persisted) {
+      return;
+    }
+    persisted.processingStatus = TxHistoryProcessingStatus.FINISHED;
+    await this.storage.addTx(persisted);
 
     if (isNewTx) {
-      this.emit('new-tx', txToSave);
+      this.emit('new-tx', persisted);
     } else {
-      this.emit('update-tx', txToSave);
+      this.emit('update-tx', persisted);
     }
   }
 
@@ -2016,7 +1979,6 @@ class HathorWallet extends EventEmitter {
     this.clearSensitiveData();
     this.getTokenData();
     this.walletStopped = false;
-    this.shieldedDecryptRetryDone = false;
     this.setState(HathorWallet.CONNECTING);
 
     const info = await new Promise<ApiVersion>((resolve, reject) => {

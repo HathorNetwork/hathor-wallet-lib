@@ -1208,60 +1208,6 @@ describe('onNewTx shielded handling (SEPARATED model)', () => {
     expect(persisted.outputs[0].value).toBe(100n);
   });
 
-  test('needsRetry does NOT run processHistory for a tx the wallet owns no shielded output of', async () => {
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-    const hWallet = new FakeHathorWallet();
-    hWallet.storage = storage;
-    hWallet.state = HathorWallet.READY;
-    // Crypto provider + pinCode present so the safety-net branch is reachable.
-    hWallet.pinCode = '1234';
-    storage.shieldedCryptoProvider = {} as never;
-    hWallet.emit = () => {};
-    hWallet.scanAddressesToLoad = jest.fn().mockResolvedValue(undefined);
-
-    const processHistorySpy = jest.spyOn(storage, 'processHistory').mockResolvedValue(undefined);
-    jest.spyOn(storage, 'processNewTx').mockResolvedValue(undefined);
-    jest.spyOn(storageUtils, 'processMetadataChanged').mockResolvedValue(undefined);
-    // The stored undecoded shielded slot's address is FOREIGN — not ours.
-    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(false);
-
-    // Storage holds a tx with a value-less shielded slot whose decoded.address
-    // is not one of the wallet's addresses (fully non-owned shielded tx).
-    const foreignTx = {
-      ...reDeliveredWire(),
-      tx_id: 'cd'.repeat(32),
-    };
-    await storage.addTx(foreignTx as unknown as IHistoryTx);
-
-    // An unrelated new tx arrives (no shielded data).
-    const unrelated = {
-      tx_id: 'ef'.repeat(32),
-      version: 1,
-      weight: 1,
-      timestamp: 2,
-      is_voided: false,
-      nonce: 0,
-      inputs: [],
-      outputs: [
-        {
-          value: 5n,
-          token_data: 0,
-          token: '00',
-          script: '',
-          spent_by: null,
-          decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
-        },
-      ],
-      parents: [],
-    };
-    await hWallet.onNewTx({ type: 'wallet:address_history', history: unrelated });
-
-    // isNewTx path calls processNewTx, but the safety-net must NOT trigger a
-    // processHistory because the only shielded tx in storage is fully foreign.
-    expect(processHistorySpy).not.toHaveBeenCalled();
-  });
-
   test('strips forged value/token/decoded off an incoming shielded input', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
