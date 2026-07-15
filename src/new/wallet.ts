@@ -1417,7 +1417,14 @@ class HathorWallet extends EventEmitter {
       only_available_utxos: true,
     })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
-      const addressPath = await this.getAddressPathForIndex(addressIndex!);
+      // A shielded-spend UTXO's key lives on the spend chain (m/44'/280'/2'), not
+      // the legacy P2PKH chain — report the matching path so an external signer
+      // derives the pubkey that actually locks it (mirrors getWalletInputInfo /
+      // getSignatures).
+      const addressInfo = await this.storage.getAddressInfo(utxo.address);
+      const addressPath = await this.getAddressPathForIndex(addressIndex!, {
+        legacy: addressInfo?.addressType !== 'shielded-spend',
+      });
       // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object.
       yield {
         txId: utxo.txId,
@@ -1792,8 +1799,11 @@ class HathorWallet extends EventEmitter {
         // double-counting from the prior processNewTx.
         await this.storage.processHistory(pin);
       } else if (!newTx.is_voided) {
-        // Process other types of metadata updates.
-        await processMetadataChanged(this.storage, newTx);
+        // Process other types of metadata updates. Pass the pin so an owned
+        // shielded slot that was persisted undecoded (e.g. a WS event beat the
+        // sender-local insert on a per-call-pin wallet) is decrypted here rather
+        // than staying uncredited — decryption is thus ordering-independent.
+        await processMetadataChanged(this.storage, newTx, pin);
       }
 
       // If the wallet was stopped while this tx was mid-processing (a concurrent
