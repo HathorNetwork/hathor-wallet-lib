@@ -1491,7 +1491,15 @@ class HathorWallet extends EventEmitter {
     utxos: UtxoDetails['utxos'];
     total_amount: bigint;
   }> {
-    const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
+    // Consolidation spends its selected UTXOs as transparent inputs, so a
+    // shielded UTXO must never be selected here (a SEPARATED-model shielded
+    // input index would fall past outputs.length). Force shielded:false even if
+    // a caller passes shielded:true — the literal after the spread wins.
+    const utxoDetails = await this.getUtxos({
+      ...options,
+      only_available_utxos: true,
+      shielded: false,
+    });
     const inputs: { txId: string; index: number; token: string }[] = [];
     const utxos: UtxoDetails['utxos'] = [];
     let total_amount = 0n;

@@ -22,6 +22,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -342,7 +343,8 @@ export interface IHathorWallet {
   start(options: { pinCode: string; password: string; waitReady?: boolean }): Promise<void>;
   startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void>;
   getReadOnlyAuthToken(): Promise<string>;
-  getAllAddresses(): AsyncGenerator<GetAddressesObject>;
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
   getTxHistory(options: {
@@ -435,7 +437,7 @@ export interface IHathorWallet {
   changeServer(newServer: string): Promise<void>;
   getServerUrl(): string;
   getNetwork(): string;
-  getAddressPathForIndex(index: number): Promise<string>;
+  getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string>;
   sendManyOutputsSendTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
     options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string }
