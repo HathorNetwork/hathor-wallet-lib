@@ -445,6 +445,15 @@ export class Storage implements IStorage {
     // tx.shielded_outputs[] (the fullnode delivers the transparent/shielded
     // split; this does not move or extract entries).
     transactionUtils.normalizeShieldedOutputs(tx);
+    // Preserve the wallet's own decoded shielded data across a re-save. The
+    // fullnode never re-sends it, so a wire-sourced overwrite (WS re-delivery,
+    // gap-limit history reload, stream re-sync) would otherwise erase the
+    // decoded balance of an already-processed tx. This is the single choke
+    // point every save passes through.
+    const storedTx = await this.store.getTx(tx.tx_id);
+    if (storedTx) {
+      transactionUtils.restoreStoredShieldedData(tx, storedTx);
+    }
     await this.store.saveTx(tx);
   }
 

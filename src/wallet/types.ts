@@ -13,6 +13,7 @@ import {
   IHistoryTx,
   IDataTx,
   WalletAddressMode,
+  IAddressChainOptions,
 } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -21,6 +22,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -341,7 +343,8 @@ export interface IHathorWallet {
   start(options: { pinCode: string; password: string; waitReady?: boolean }): Promise<void>;
   startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void>;
   getReadOnlyAuthToken(): Promise<string>;
-  getAllAddresses(): AsyncGenerator<GetAddressesObject>;
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
   getTxHistory(options: {
@@ -359,12 +362,15 @@ export interface IHathorWallet {
     options: { token?: string; changeAddress?: string }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
-  getAddressAtIndex(index: number): Promise<string>;
+  getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string>;
   getAddressIndex(address: string): Promise<number | null>;
-  getCurrentAddress(options?: {
-    markAsUsed: boolean;
-  }): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
-  getNextAddress(): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
+  getCurrentAddress(
+    options?: {
+      markAsUsed: boolean;
+    },
+    opts?: IAddressChainOptions
+  ): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
+  getNextAddress(opts?: IAddressChainOptions): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(
@@ -431,7 +437,7 @@ export interface IHathorWallet {
   changeServer(newServer: string): Promise<void>;
   getServerUrl(): string;
   getNetwork(): string;
-  getAddressPathForIndex(index: number): Promise<string>;
+  getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string>;
   sendManyOutputsSendTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
     options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string }
@@ -731,6 +737,8 @@ export interface FullNodeOutput {
   decoded: FullNodeDecodedOutput;
   token?: string | null;
   spent_by?: string | null;
+  // Shielded entries appended by fullnode's to_json_extended() have type='shielded'
+  type?: string;
 }
 
 export interface FullNodeTx {

@@ -71,6 +71,7 @@ import {
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
 } from './types';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
   UtxoError,
@@ -1820,6 +1821,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   /* eslint-disable class-methods-use-this */
   getFullHistory(): TransactionFullObject[] {
+    throw new WalletError('Not implemented.');
+  }
+
+  /* eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars */
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
+    // Shielded outputs are not supported on the wallet-service backend.
     throw new WalletError('Not implemented.');
   }
 
