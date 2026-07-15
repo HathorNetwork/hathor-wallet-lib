@@ -218,26 +218,21 @@ const transaction = {
    * carry these bare) and for transparent txs.
    */
   clearUntrustedShieldedData(tx: IHistoryTx): void {
+    /* eslint-disable no-param-reassign */
     for (const so of tx.shielded_outputs ?? []) {
-      // eslint-disable-next-line no-param-reassign
       so.value = undefined;
-      // eslint-disable-next-line no-param-reassign
       so.token = undefined;
-      // eslint-disable-next-line no-param-reassign
       so.blindingFactor = undefined;
-      // eslint-disable-next-line no-param-reassign
       so.assetBlindingFactor = undefined;
     }
     for (const input of tx.inputs) {
       if (this.isShieldedInputEntry(input)) {
-        // eslint-disable-next-line no-param-reassign
         input.value = undefined;
-        // eslint-disable-next-line no-param-reassign
         input.token = undefined;
-        // eslint-disable-next-line no-param-reassign
         input.decoded = undefined;
       }
     }
+    /* eslint-enable no-param-reassign */
   },
 
   /**
