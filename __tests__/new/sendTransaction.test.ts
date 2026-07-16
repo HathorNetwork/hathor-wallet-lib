@@ -60,6 +60,89 @@ test('prepareTxData rejects a shielded address in a transparent output', async (
   );
 });
 
+test('prepareTxData rejects a shieldedMode output with a non-shielded address', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      {
+        // A transparent P2PKH address cannot carry a shielded output.
+        address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ],
+  });
+
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    /Shielded output requires a shielded address/
+  );
+});
+
+test('prepareTxData resolves 71-byte shielded addresses internally', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  // Two genuine shielded addresses (on-curve scan/spend pubkeys) passed RAW —
+  // the pipeline must extract the spend-derived P2PKH + scan pubkey itself.
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x0a), 'testnet');
+  const buildAddr = (i: number) =>
+    encodeShieldedAddress(
+      root.deriveChild(`m/0'/${i}`).publicKey.toBuffer(),
+      root.deriveChild(`m/1'/${i}`).publicKey.toBuffer(),
+      new Network('testnet')
+    );
+
+  async function* selectUtxoMock(options) {
+    if (options.token === NATIVE_TOKEN_UID) {
+      yield {
+        txId: 'htr-funding-tx',
+        index: 0,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        address: 'htr-funding-address',
+        authorities: 0n,
+      };
+    }
+  }
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
+  jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'));
+  jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      {
+        address: buildAddr(0),
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: buildAddr(1),
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ],
+  });
+
+  // Both raw 71-byte addresses must be accepted and resolved (spend P2PKH
+  // phantom outputs + scan pubkeys), carrying the pipeline all the way to the
+  // crypto boundary — which is the first thing this provider-less storage
+  // cannot satisfy. Reaching THIS error proves the resolution worked; the old
+  // API would have failed the address up front instead.
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    /Shielded crypto provider is not set/
+  );
+});
+
 test('type methods', () => {
   // The ISendInput and ISendOutput were created to satisfy the old facade methods while using typescript
 
@@ -578,8 +661,9 @@ describe('convertHtrChangeIfRequested', () => {
     isChange: true,
   });
 
+  // Resolved defs (spend P2PKH + scanPubkey), the shape the pipeline hands
+  // to convertHtrChangeIfRequested after resolving the 71-byte addresses.
   const buildShieldedDef = (mode: ShieldedOutputMode) => ({
-    type: OutputType.P2PKH as OutputType.P2PKH,
     address: 'spend-P2PKH-of-recipient',
     value: 10n,
     token: '01',

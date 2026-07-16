@@ -34,7 +34,12 @@ import {
   OutputValueType,
   WalletType,
 } from '../types';
-import { IDataShieldedOutput, InputGeneratorInfo, ShieldedOutputMode } from '../shielded/types';
+import {
+  IDataShieldedOutput,
+  InputGeneratorInfo,
+  ShieldedOutputMode,
+  ShieldedOutputProposal,
+} from '../shielded/types';
 import { createShieldedOutputs } from '../shielded/creation';
 import helpers from '../utils/helpers';
 import { addCreatedTokenFromTx } from '../utils/storage';
@@ -60,7 +65,7 @@ export interface ISendDataOutput {
 }
 
 export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
-  return output.type === OutputType.DATA;
+  return 'type' in output && output.type === OutputType.DATA;
 }
 
 export interface ISendTokenOutput {
@@ -76,12 +81,29 @@ export interface ISendTokenOutput {
 }
 
 export interface ISendShieldedOutput {
-  type: OutputType.P2PKH | OutputType.P2SH;
+  /**
+   * The recipient's shielded address exactly as handed to the user (71-byte
+   * base58). The pipeline derives the on-chain spend-derived P2PKH and the
+   * ECDH scan pubkey from it internally — callers never pre-derive anything.
+   * No `type` field: a shielded output's on-chain script is always the
+   * spend-derived P2PKH; P2SH is structurally impossible (the address embeds
+   * only scan + spend pubkeys).
+   */
   address: string;
   value: OutputValueType;
   token: string;
-  scanPubkey: string; // hex, 33 bytes compressed EC scan pubkey for ECDH
   shieldedMode: ShieldedOutputMode;
+  timelock?: number | null;
+}
+
+/**
+ * A shielded output definition resolved for the crypto pipeline: `address` is
+ * the on-chain spend-derived P2PKH and `scanPubkey` the ECDH key, both
+ * extracted from the caller-supplied 71-byte shielded address. The original
+ * shielded address is kept in `shieldedAddress` for error/debug context.
+ */
+export interface IResolvedShieldedOutputDef extends ShieldedOutputProposal {
+  shieldedAddress?: string;
 }
 
 export function isShieldedOutput(output: ISendOutput): output is ISendShieldedOutput {
@@ -120,15 +142,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   changeAddress: string | null;
 
   /**
-   * If set, the HTR fee-change output that `prepareSendTokensData` would
-   * have emitted as transparent is rewritten as a shielded HTR output in
-   * the given mode (FullShielded or AmountShielded). Defaults to `null`,
-   * which preserves the long-standing transparent-change behavior.
+   * If set, the transparent HTR change output that the HTR pass
+   * (`prepareSendTokensData`) would otherwise emit is rewritten as a
+   * shielded HTR output in the given mode (FullShielded or AmountShielded).
+   * That single change output covers the surplus over everything
+   * HTR-denominated in the tx: any HTR being sent plus ALL fees — fees are
+   * always charged in HTR, including the per-shielded-output fees. Defaults
+   * to `null`, which preserves the long-standing transparent-change behavior.
    *
-   * Used by callers that also pass shielded recipient outputs and want
-   * the HTR change for the per-shielded-output fee to match the same
-   * privacy mode the user selected — otherwise the transparent HTR
-   * change would correlate the sender with an otherwise-private send.
+   * Used by callers that also pass shielded recipient outputs and want the
+   * HTR change to match the same privacy mode the user selected — otherwise
+   * the transparent HTR change would correlate the sender with an
+   * otherwise-private send. Note: only the HTR change is converted; change
+   * outputs of custom tokens always remain transparent. Best-effort: when
+   * the change is too small to fund its own shielded-output fee it is kept
+   * transparent (see convertHtrChangeIfRequested).
    */
   changeShieldedMode: ShieldedOutputMode | null;
 
@@ -149,7 +177,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
-   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set, the HTR fee-change is emitted shielded in this mode instead of transparent
+   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set, the transparent HTR change (surplus over HTR sends + all fees) is emitted shielded in this mode; custom-token change always stays transparent
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -214,8 +242,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // Map of token uid to the chooseInputs value of this token
     const tokenMap = new Map<string, boolean>();
 
-    // Collect shielded output definitions separately
-    const shieldedOutputDefs: ISendShieldedOutput[] = [];
+    // Collect shielded output definitions separately (resolved from the
+    // caller-supplied 71-byte shielded addresses below)
+    const shieldedOutputDefs: IResolvedShieldedOutputDef[] = [];
     // Track phantom outputs for removal after UTXO selection and shuffle
     const phantomOutputs = new Set<IDataOutput>();
 
@@ -233,20 +262,38 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           token: output.token,
         });
       } else if (isShieldedOutput(output)) {
-        // Shielded output: store definition and add a phantom transparent output
-        // so UTXO selection accounts for this value
-        shieldedOutputDefs.push(output);
+        // Shielded output: the caller passes the 71-byte shielded address
+        // exactly as handed to the user. Resolve it here — extract the ECDH
+        // scan pubkey and the spend-derived P2PKH (the on-chain script
+        // address) — so direct SendTransaction consumers never pre-derive
+        // anything. Mirrors convertHtrChangeIfRequested's own resolution.
+        const shieldedAddressObj = new Address(output.address, { network });
+        if (!shieldedAddressObj.isShielded()) {
+          throw new SendTxError(
+            `Shielded output requires a shielded address, got '${output.address}'.`
+          );
+        }
+        const spendBase58 = shieldedAddressObj.getSpendAddress().base58;
+        shieldedOutputDefs.push({
+          address: spendBase58,
+          value: output.value,
+          token: output.token,
+          scanPubkey: shieldedAddressObj.getScanPubkey().toString('hex'),
+          shieldedMode: output.shieldedMode,
+          ...(output.timelock != null ? { timelock: output.timelock } : {}),
+          shieldedAddress: output.address,
+        });
         tokenMap.set(output.token, true);
 
-        // Phantom output for UTXO selection (removed after shuffle).
-        // output.address is already the spend-derived P2PKH (resolved in sendManyOutputsSendTransaction).
+        // Phantom output for UTXO selection (removed after shuffle), at the
+        // resolved spend-derived P2PKH so selection accounts for this value.
         const phantom: IDataOutput = {
-          address: output.address,
+          address: spendBase58,
           value: output.value,
           timelock: null,
           authorities: 0n,
           token: output.token,
-          type: getAddressType(output.address, network),
+          type: getAddressType(spendBase58, network),
         };
         phantomOutputs.add(phantom);
         txData.outputs.push(phantom);
@@ -290,8 +337,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
       // Resolve value/token/address/authorities by kind. For a shielded spend
       // the public token/value live in the owned-marker fields written in
-      // place on the slot; fall back to the stored UTXO when the parent tx
-      // entry has not been decoded (e.g. spent UTXO already pruned).
+      // place on the slot (slot-first read: the UTXO record may already be
+      // pruned for a spent output). The stored-UTXO fallback covers the
+      // reverse inconsistency — slot undecoded but UTXO decoded — which only
+      // a fallible pluggable IStore can produce (a swallowed saveTx failure
+      // after decrypt); the UTXO is also the sole source of `authorities`.
       let spentValue: OutputValueType;
       let spentToken: string;
       let spentAddress: string;
@@ -455,7 +505,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       outputs = outputs.filter(out => !phantomOutputs.has(out));
     }
 
-    // Walk every input (user-supplied + HTR-picked) once, regardless of
+    // Walk every input (user-supplied + auto-selected per token, including
+    // the HTR fee inputs) once, regardless of
     // whether we're building shielded outputs. We need these both for:
     //   (a) surjection-proof domain construction (shielded-outputs path), and
     //   (b) excess-blinding-factor computation (full-unshield path).
@@ -509,6 +560,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         blindedInputsArr.push({
           value: utxo.value,
           valueBlindingFactor: Buffer.from(utxo.blindingFactor, 'hex'),
+          // AmountShielded inputs carry no assetBlindingFactor — their token
+          // is public, so the asset-generator tweak is zero (explicit
+          // generator, matching how the commitment was created). Only
+          // FullShielded UTXOs store an assetBlindingFactor.
           generatorBlindingFactor: utxo.assetBlindingFactor
             ? Buffer.from(utxo.assetBlindingFactor, 'hex')
             : ZERO_TWEAK,
@@ -1106,7 +1161,7 @@ export async function prepareSendTokensData(
  */
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
-  shieldedOutputDefs: ISendShieldedOutput[],
+  shieldedOutputDefs: IResolvedShieldedOutputDef[],
   mode: ShieldedOutputMode | null,
   wallet: HathorWallet | null,
   network: ReturnType<IStorage['config']['getNetwork']>
@@ -1147,12 +1202,12 @@ export async function convertHtrChangeIfRequested(
   partialHtrTxData.outputs.splice(changeIdx, 1);
 
   shieldedOutputDefs.push({
-    type: OutputType.P2PKH,
     address: spendAddress.base58,
     value: transparentChange.value - additionalFee,
     token: HTR_UID,
     scanPubkey: addressObj.getScanPubkey().toString('hex'),
     shieldedMode: mode,
+    shieldedAddress,
   });
 
   return { addedFee: additionalFee };

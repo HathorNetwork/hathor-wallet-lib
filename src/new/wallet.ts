@@ -112,13 +112,7 @@ import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/tr
 import Address from '../models/address';
 import type { HistoryTransactionOutput } from '../models/types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
-import {
-  ConnectionState,
-  FullNodeVersionData,
-  IHathorWallet,
-  OutputType,
-  Utxo,
-} from '../wallet/types';
+import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
   CreateNFTOptions,
@@ -1936,23 +1930,16 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
 
-    // Map ProposedOutput[] to ISendOutput[], handling shielded outputs
-    const network = this.storage.config.getNetwork();
+    // Map ProposedOutput[] to ISendOutput[]. Shielded outputs pass the
+    // 71-byte shielded address through as-is — SendTransaction resolves the
+    // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
+    // non-shielded address with a SendTxError at prepare time).
     const sendOutputs = outputs.map(o => {
       if (o.shielded) {
-        const addressObj = new Address(o.address, { network });
-        if (!addressObj.isShielded()) {
-          throw new Error('Shielded output requires a shielded address');
-        }
-        // Extract scan pubkey from shielded address for ECDH.
-        // Use the spend-derived P2PKH as the on-chain address.
-        const spendAddress = addressObj.getSpendAddress();
         return {
-          type: OutputType.P2PKH as OutputType.P2PKH,
-          address: spendAddress.base58,
+          address: o.address,
           value: o.value,
           token: o.token,
-          scanPubkey: addressObj.getScanPubkey().toString('hex'),
           shieldedMode: o.shielded,
           ...(o.timelock != null ? { timelock: o.timelock } : {}),
         };
