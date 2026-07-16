@@ -372,7 +372,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     const pinToUse = pin ?? this.pin ?? '';
     try {
-      if (!pinToUse) {
+      // The pin is only needed to decrypt the local private key; an external tx-signing
+      // method (e.g. a hardware or passkey signer) signs without it, so it is optional then.
+      if (!pinToUse && !this.storage.hasTxSignatureMethod()) {
         throw new SendTxError('Pin is not set.');
       }
 
