@@ -1934,23 +1934,17 @@ class HathorWallet extends EventEmitter {
     // 71-byte shielded address through as-is — SendTransaction resolves the
     // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
     // non-shielded address with a SendTxError at prepare time).
-    const sendOutputs = outputs.map(o => {
-      if (o.shielded) {
-        return {
-          address: o.address,
-          value: o.value,
-          token: o.token,
-          shieldedMode: o.shielded,
-          ...(o.timelock != null ? { timelock: o.timelock } : {}),
-        };
-      }
-      return {
-        address: o.address,
-        value: o.value,
-        token: o.token,
-        ...(o.timelock ? { timelock: o.timelock } : {}),
-      };
-    });
+    const sendOutputs = outputs.map(o => ({
+      address: o.address,
+      value: o.value,
+      token: o.token,
+      // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
+      // for both branches.
+      ...(o.timelock != null ? { timelock: o.timelock } : {}),
+      // Shielded-only field: carry the mode through so SendTransaction resolves
+      // the 71-byte address; absent for transparent outputs.
+      ...(o.shielded ? { shieldedMode: o.shielded } : {}),
+    }));
 
     return new SendTransaction({
       wallet: this,
