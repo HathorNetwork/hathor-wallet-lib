@@ -672,11 +672,7 @@ function shieldedUtxoSaveFields(o: { blindingFactor?: string; assetBlindingFacto
  * void txs are not treated here.
  * Only idempodent changes should be processed here since this can be called multiple times.
  */
-export async function processMetadataChanged(
-  storage: IStorage,
-  tx: IHistoryTx,
-  pinCode?: string
-): Promise<void> {
+export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx): Promise<void> {
   const { store } = storage;
 
   for (let index = 0; index < tx.outputs.length; index++) {
@@ -707,43 +703,6 @@ export async function processMetadataChanged(
     } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
       await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
-    }
-  }
-
-  // Decrypt wallet-owned shielded slots that were persisted still-undecoded.
-  // This happens when a WS 'new-tx' event is processed with no pin (so the
-  // processNewTx decrypt gate was skipped) BEFORE the sender-local insert that
-  // carries the per-call pin arrives — by then the tx already exists, so it
-  // routes here as a metadata update instead of through processNewTx. Decrypt
-  // in place now that a pin is available so the owned-shielded loop below credits
-  // the change; without this the wallet's own shielded change stays uncredited.
-  // Gated per-slot; processShieldedOutputs no-ops slots already decoded.
-  const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
-  if (
-    hasUndecodedSlot &&
-    storage.shieldedCryptoProvider &&
-    tx.shielded_outputs?.length &&
-    pinCode !== undefined
-  ) {
-    try {
-      const decoded = await processShieldedOutputs(
-        storage,
-        tx,
-        storage.shieldedCryptoProvider,
-        pinCode
-      );
-      if (decoded.length > 0) {
-        // Persist the in-place decoded fields so the loop below and later reads
-        // see the owned-marker fields without re-decrypting.
-        await store.saveTx(tx);
-      }
-    } catch (e) {
-      storage.logger.error(
-        'Unexpected error processing shielded outputs for tx',
-        tx.tx_id,
-        '- wallet may be missing shielded funds.',
-        e
-      );
     }
   }
 

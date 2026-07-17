@@ -1793,11 +1793,8 @@ class HathorWallet extends EventEmitter {
         // double-counting from the prior processNewTx.
         await this.storage.processHistory(pin);
       } else if (!newTx.is_voided) {
-        // Process other types of metadata updates. Pass the pin so an owned
-        // shielded slot that was persisted undecoded (e.g. a WS event beat the
-        // sender-local insert on a per-call-pin wallet) is decrypted here rather
-        // than staying uncredited — decryption is thus ordering-independent.
-        await processMetadataChanged(this.storage, newTx, pin);
+        // Process other metadata updates (first_block confirmation, height, …).
+        await processMetadataChanged(this.storage, newTx);
       }
 
       // If the wallet was stopped while this tx was mid-processing (a concurrent
