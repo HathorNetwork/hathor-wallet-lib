@@ -343,30 +343,31 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
 
       // Resolve value/token/address/authorities by kind. For a shielded spend
-      // the public token/value live in the owned-marker fields written in
-      // place on the slot (slot-first read: the UTXO record may already be
-      // pruned for a spent output). The stored-UTXO fallback covers the
-      // reverse inconsistency — slot undecoded but UTXO decoded — which only
-      // a fallible pluggable IStore can produce (a swallowed saveTx failure
-      // after decrypt); the UTXO is also the sole source of `authorities`.
+      // the public token/value/address live in the owned-marker fields written
+      // in place on the slot when the wallet decrypted it.
       let spentValue: OutputValueType;
       let spentToken: string;
       let spentAddress: string;
       let spentAuthorities: bigint;
       if (resolved.kind === 'shielded') {
         const so = resolved.output;
-        const utxo = await this.storage.getUtxo({ txId: input.txId, index: input.index });
-        if (so.value === undefined && !utxo) {
-          // Non-owned / undecoded shielded slot with no stored UTXO — the
-          // wallet cannot spend it (no value/blinding to sign with).
+        const decodedAddress = so.decoded?.address;
+        if (so.value === undefined || decodedAddress === undefined) {
+          // A shielded slot the wallet doesn't own / hasn't decoded carries no
+          // value, address or blinding factor to sign with, so it cannot be
+          // spent. A caller-provided input can point at any slot, including one
+          // that isn't ours — reject it with a clear error.
           const err = new SendTxError(ErrorMessages.INVALID_INPUT);
           err.errorData = { txId: input.txId, index: input.index };
           throw err;
         }
-        spentValue = so.value ?? utxo!.value;
-        spentToken = so.token ?? utxo!.token;
-        spentAddress = so.decoded?.address ?? utxo!.address;
-        spentAuthorities = utxo ? utxo.authorities ?? 0n : 0n;
+        // Owned + decoded: decrypt writes value/token/decoded together, so both
+        // are present here. Shielded outputs are never authority outputs (the
+        // fullnode rejects that with ShieldedAuthorityError), so no authorities.
+        spentValue = so.value;
+        spentToken = so.token!;
+        spentAddress = decodedAddress;
+        spentAuthorities = 0n;
       } else {
         const spentOut = resolved.output;
         spentValue = spentOut.value;

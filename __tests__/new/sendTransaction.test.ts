@@ -974,6 +974,32 @@ describe('convertHtrChangeIfRequested', () => {
   });
 });
 
+test('prepareTxData rejects a caller input that spends an undecoded shielded slot', async () => {
+  const storage = new Storage(new MemoryStore());
+  storage.config.setNetwork('testnet');
+  // Parent tx: no transparent outputs and a single shielded slot at on-chain
+  // index 0 that this wallet does not own / has not decoded (value === undefined).
+  // A caller-provided input can point at any slot; without decoded value/address
+  // there is nothing to sign with, so the send must be rejected — not silently
+  // recovered from a stored UTXO.
+  jest.spyOn(storage, 'getTx').mockResolvedValue({
+    tx_id: 'parent',
+    outputs: [],
+    shielded_outputs: [
+      { mode: 1, commitment: '', range_proof: '', script: '', ephemeral_pubkey: '', decoded: {} },
+    ],
+    inputs: [],
+  } as never);
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [],
+    inputs: [{ txId: 'parent', index: 0 }],
+  });
+
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow('invalid-input');
+});
+
 describe('changeShieldedMode applies to all change outputs (prepareTxData)', () => {
   const testnetNetwork = new Network('testnet');
   const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x1a), 'testnet');
