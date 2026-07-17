@@ -151,8 +151,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * tx: any HTR being sent plus ALL fees (fees are always charged in HTR,
    * including the per-shielded-output fees), so its shielded value is the
    * change minus its own shielded-output fee. Custom-token change carries its
-   * FULL value — the fee is HTR, a different token. Defaults to unset
-   * (`undefined`), which preserves the long-standing transparent-change behavior.
+   * FULL value — the fee is HTR, a different token. Defaults to `null`, which
+   * preserves the long-standing transparent-change behavior.
    *
    * Only takes effect when the tx already carries caller-requested shielded
    * outputs: on a purely transparent send, shielding the change adds no
@@ -165,7 +165,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * rather than downgrade to transparent change (see
    * convertHtrChangeIfRequested).
    */
-  changeShieldedMode?: ShieldedOutputMode;
+  changeShieldedMode: ShieldedOutputMode | null;
 
   pin: string | null;
 
@@ -184,7 +184,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
-   * @param {ShieldedOutputMode} [options.changeShieldedMode] If set (and the tx has explicit shielded outputs), every change output — HTR fee-change and custom-token change — is emitted shielded in this mode
+   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set (and the tx has explicit shielded outputs), every change output — HTR fee-change and custom-token change — is emitted shielded in this mode
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -195,7 +195,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     outputs = [],
     inputs = [],
     changeAddress = null,
-    changeShieldedMode,
+    changeShieldedMode = null,
     pin = null,
   }: {
     wallet?: HathorWallet | null;
@@ -204,7 +204,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     inputs?: ISendInput[];
     outputs?: ISendOutput[];
     changeAddress?: string | null;
-    changeShieldedMode?: ShieldedOutputMode;
+    changeShieldedMode?: ShieldedOutputMode | null;
     pin?: string | null;
   } = {}) {
     super();
@@ -1240,7 +1240,7 @@ export async function prepareSendTokensData(
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
   shieldedOutputDefs: IResolvedShieldedOutputDef[],
-  mode: ShieldedOutputMode | undefined,
+  mode: ShieldedOutputMode | null,
   wallet: HathorWallet | null,
   network: ReturnType<IStorage['config']['getNetwork']>,
   storage: IStorage,
