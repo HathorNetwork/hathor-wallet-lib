@@ -744,6 +744,13 @@ class HathorWallet extends EventEmitter {
       // address info when the spent output lives in shielded_outputs[] (its
       // array position is not its on-chain index).
       const resolved = transactionUtils.resolveSpentOutput(spentTx, input.index);
+      if (resolved?.kind === 'shielded') {
+        // A shielded spend is a single-signature P2PKH on the spend chain, not a
+        // P2SH multisig input, and needs confidential-spend machinery a
+        // transparent partial transaction cannot carry — assembling P2SH input
+        // data for it would produce an invalid transaction. Reject instead.
+        throw new Error('Shielded inputs are not supported in partial transactions');
+      }
       if (!resolved?.output.decoded?.address) {
         continue;
       }
@@ -1917,7 +1924,6 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       startMiningTx: true,
       pinCode: null,
-      changeShieldedMode: null,
       ...options,
     };
 

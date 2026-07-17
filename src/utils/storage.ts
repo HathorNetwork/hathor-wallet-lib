@@ -1119,15 +1119,18 @@ export async function processNewTx(
         await store.saveTx(tx);
       }
     } catch (e) {
-      // processShieldedOutputs handles per-output rewind failures internally.
-      // Reaching here means something unexpected went wrong at the
-      // infrastructure level.
+      // processShieldedOutputs handles per-output rewind failures internally, so
+      // a throw here is a SYSTEMIC failure (wrong PIN, missing/corrupt scan key).
+      // Rethrow so onNewTx does not flip the tx to FINISHED with owned shielded
+      // outputs left uncredited: leaving it PROCESSING keeps it retryable on the
+      // next reload/sync, and the WS queue survives via enqueueOnNewTx's .catch.
       storage.logger.error(
         'Unexpected error processing shielded outputs for tx',
         tx.tx_id,
         '- wallet may be missing shielded funds.',
         e
       );
+      throw e;
     }
   }
 

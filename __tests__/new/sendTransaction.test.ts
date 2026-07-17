@@ -9,6 +9,7 @@ import { HDPrivateKey, PrivateKey } from 'bitcore-lib';
 import {
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
+  MAX_SHIELDED_OUTPUTS,
   NATIVE_TOKEN_UID,
   TOKEN_AUTHORITY_MASK,
 } from '../../src/constants';
@@ -971,6 +972,33 @@ describe('convertHtrChangeIfRequested', () => {
     expect(result.addedFee).toBe(0n);
     expect(partialHtrTxData.outputs).toHaveLength(1);
     expect(defs).toHaveLength(0);
+  });
+
+  test('H.7 — throws when the shielded-output cap is already reached', async () => {
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    // Already at MAX_SHIELDED_OUTPUTS explicit shielded outputs: shielding the
+    // HTR change would push past the cap, so the helper must throw a clear
+    // error before pulling any HTR or deriving an address.
+    const defs = Array.from({ length: MAX_SHIELDED_OUTPUTS }, () =>
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED)
+    );
+
+    await expect(
+      convertHtrChangeIfRequested(
+        partialHtrTxData,
+        defs,
+        ShieldedOutputMode.FULLY_SHIELDED,
+        mockWallet(buildShieldedAddress()),
+        testnetNetwork,
+        mockStorage()
+      )
+    ).rejects.toThrow('maximum');
+    // Untouched: transparent change kept, no def appended.
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(defs).toHaveLength(MAX_SHIELDED_OUTPUTS);
   });
 });
 

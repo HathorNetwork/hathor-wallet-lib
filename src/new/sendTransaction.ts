@@ -151,8 +151,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * tx: any HTR being sent plus ALL fees (fees are always charged in HTR,
    * including the per-shielded-output fees), so its shielded value is the
    * change minus its own shielded-output fee. Custom-token change carries its
-   * FULL value — the fee is HTR, a different token. Defaults to `null`, which
-   * preserves the long-standing transparent-change behavior.
+   * FULL value — the fee is HTR, a different token. Defaults to unset
+   * (`undefined`), which preserves the long-standing transparent-change behavior.
    *
    * Only takes effect when the tx already carries caller-requested shielded
    * outputs: on a purely transparent send, shielding the change adds no
@@ -165,7 +165,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * rather than downgrade to transparent change (see
    * convertHtrChangeIfRequested).
    */
-  changeShieldedMode: ShieldedOutputMode | null;
+  changeShieldedMode?: ShieldedOutputMode;
 
   pin: string | null;
 
@@ -184,7 +184,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
-   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set (and the tx has explicit shielded outputs), every change output — HTR fee-change and custom-token change — is emitted shielded in this mode
+   * @param {ShieldedOutputMode} [options.changeShieldedMode] If set (and the tx has explicit shielded outputs), every change output — HTR fee-change and custom-token change — is emitted shielded in this mode
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -195,7 +195,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     outputs = [],
     inputs = [],
     changeAddress = null,
-    changeShieldedMode = null,
+    changeShieldedMode,
     pin = null,
   }: {
     wallet?: HathorWallet | null;
@@ -204,7 +204,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     inputs?: ISendInput[];
     outputs?: ISendOutput[];
     changeAddress?: string | null;
-    changeShieldedMode?: ShieldedOutputMode | null;
+    changeShieldedMode?: ShieldedOutputMode;
     pin?: string | null;
   } = {}) {
     super();
@@ -439,6 +439,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       for (const out of partialTxData.outputs) {
         const withToken = out as IDataOutputWithToken;
         if (withToken.token !== HTR_UID && out.isChange === true) {
+          if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+            throw new SendTxError(
+              `Cannot shield custom-token change: the transaction already has the ` +
+                `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
+            );
+          }
           const { address: shieldedAddress } = await changeWallet.getCurrentAddress(
             {},
             { legacy: false }
@@ -475,12 +481,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
     );
 
-    if (requiresFees.length > 0 && fee === 0n) {
-      const err = new SendTxError(ErrorMessages.INVALID_INPUT);
-      err.errorData = requiresFees;
-      throw err;
-    }
-
     // Calculate shielded output fee
     let shieldedFee = 0n;
     for (const def of shieldedOutputDefs) {
@@ -492,6 +492,16 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     }
 
     let totalFee = fee + shieldedFee;
+
+    // An explicit input that pays only shielded-output fees is legitimate, so
+    // validate against the TOTAL fee (transparent + shielded), not the
+    // transparent `fee` alone — otherwise a fee-only HTR input on a custom-token
+    // shielded send (whose transparent fee is 0n) is wrongly rejected.
+    if (requiresFees.length > 0 && totalFee === 0n) {
+      const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+      err.errorData = requiresFees;
+      throw err;
+    }
 
     // Decide whether to auto-pick HTR inputs based on the original
     // totalFee (the value `prepareSendTokensData` is about to use for
@@ -1230,7 +1240,7 @@ export async function prepareSendTokensData(
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
   shieldedOutputDefs: IResolvedShieldedOutputDef[],
-  mode: ShieldedOutputMode | null,
+  mode: ShieldedOutputMode | undefined,
   wallet: HathorWallet | null,
   network: ReturnType<IStorage['config']['getNetwork']>,
   storage: IStorage,
@@ -1251,6 +1261,17 @@ export async function convertHtrChangeIfRequested(
     return withToken.token === HTR_UID && withToken.isChange === true;
   });
   if (changeIdx === -1) return { addedFee: 0n };
+
+  // There is an HTR change to shield, but the tx already carries the maximum
+  // number of shielded outputs — adding one more would exceed the cap the
+  // fullnode enforces. Fail clearly (and before pulling extra HTR UTXOs below)
+  // rather than with a late, generic over-limit error downstream.
+  if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+    throw new SendTxError(
+      `Cannot shield the HTR change: the transaction already has the maximum ` +
+        `${MAX_SHIELDED_OUTPUTS} shielded outputs.`
+    );
+  }
 
   const transparentChange = partialHtrTxData.outputs[changeIdx];
   let changeValue = transparentChange.value;
