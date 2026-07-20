@@ -15,6 +15,8 @@ import walletUtils from '../../src/utils/wallet';
 import {
   P2PKH_ACCT_PATH,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
@@ -214,6 +216,65 @@ describe('config version', () => {
     expect(storage.getTokenDepositPercentage()).toEqual(0.5);
     storage.setApiVersion(null);
     expect(storage.getTokenDepositPercentage()).toEqual(TOKEN_DEPOSIT_PERCENTAGE);
+  });
+
+  describe('getTokenDepositPercentageFraction', () => {
+    it('should prefer the numerator/denominator fields from the version', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({
+        token_deposit_percentage: 0.02,
+        token_deposit_percentage_numerator: 3,
+        token_deposit_percentage_denominator: 100,
+      } as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: 3n,
+        denominator: 100n,
+      });
+    });
+
+    it('should derive the fraction from the float percentage when the fields are absent', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({ token_deposit_percentage: 0.5 } as ApiVersion); // 50%
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / 2n,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should derive the fraction from the float percentage when only one field is present', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      // Only the numerator is provided, so the field-based branch must not be taken.
+      storage.setApiVersion({
+        token_deposit_percentage: 0.5,
+        token_deposit_percentage_numerator: 3,
+      } as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / 2n,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should fall back to the default fraction when no version is set', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should fall back to the default fraction when the version has no deposit data', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({ foo: 'bar' } as unknown as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
   });
 
   it('should get native token from version', async () => {

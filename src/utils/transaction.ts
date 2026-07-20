@@ -84,12 +84,12 @@ const transaction = {
   },
 
   /**
-   * Shielded inputs arrive from the fullnode inline in tx.inputs[] with
-   * type='shielded' and only a commitment + range_proof — none of the
-   * token_data/decoded/tx_id fields that transparent inputs carry. Call sites
-   * that read those fields must filter these out first. The reload path
-   * (processHistory) also feeds bare {tx_id, index, type:'shielded'} inputs
-   * from address_history, which this detects so they can be debited.
+   * Marks an input that spends a shielded output. On the wire these carry the
+   * spent output's confidential fields (type='shielded', mode, commitment,
+   * range_proof, script and the per-mode extras) plus tx_id/index — but never
+   * its value/token, which stay hidden in the commitments (hathor-core
+   * `to_json_extended` / `/transaction`). Call sites that read the echoed
+   * value/token must filter shielded entries out first.
    */
   isShieldedInputEntry(input: { type?: string } | null | undefined): boolean {
     return input != null && input.type === 'shielded';
@@ -139,21 +139,42 @@ const transaction = {
   },
 
   /**
-   * Normalize a transaction's shielded outputs: convert any base64-encoded
-   * confidential fields (commitment / range_proof / script / ephemeral_pubkey /
-   * asset_commitment / surjection_proof) to hex in place. Mutates the tx.
+   * True when `index` is the on-chain absolute index of a SHIELDED output of
+   * `tx` — i.e. it falls in the shielded range `[outputs.length, outputs.length
+   * + shieldedCount)`. In the SEPARATED model transparent outputs occupy
+   * `outputs[0..N)` and shielded outputs occupy the slots immediately after.
+   * Transparent-only flows (partial txs, tx templates) use this to reject a
+   * shielded input index with a clear message instead of a misleading bounds
+   * error or an undefined output read.
+   */
+  isShieldedOutputIndex(
+    tx: { outputs: unknown[]; shielded_outputs?: unknown[] | null },
+    index: number
+  ): boolean {
+    const shieldedCount = tx.shielded_outputs?.length ?? 0;
+    return index >= tx.outputs.length && index < tx.outputs.length + shieldedCount;
+  },
+
+  /**
+   * Hex-encode the confidential wire fields of a transaction's shielded outputs,
+   * in place. The fullnode delivers shielded outputs SEPARATED in a
+   * dedicated `shielded_outputs[]` array on BOTH the HTTP `/transaction`
+   * (to_json) and the `address_history` + WS real-time (to_json_extended) paths,
+   * so `outputs[]` is always transparent-only — no inline relocation needed —
+   * and `mode` is always present on the wire.
    *
-   * The fullnode delivers shielded outputs in a dedicated `shielded_outputs[]`
-   * field (the separated model). Over the websocket real-time path their buffer
-   * fields arrive base64-encoded; without this conversion `Buffer.from(value,
-   * 'hex')` downstream parses them as garbage — making the native rewind throw
-   * "asset commitment verification failed" and the per-tx balance read as
-   * -input with no credit for the decoded shielded outputs.
+   * Converts every shielded output's base64 confidential fields (commitment /
+   * range_proof / script / ephemeral_pubkey / asset_commitment /
+   * surjection_proof) to hex; without this `Buffer.from(value, 'hex')`
+   * downstream parses them as garbage — making the native rewind throw "asset
+   * commitment verification failed" and the per-tx balance read as -input with
+   * no credit for the decoded shielded outputs.
    *
-   * Idempotent: an already-hex field is left unchanged (ensureHex no-ops on it).
-   * The owned-marker fields (value / token / blindingFactor / assetBlindingFactor)
-   * are NOT on the wire — they are populated post-decryption on the slots the
-   * wallet owns — so this neither reads nor invents them.
+   * Idempotent: ensureHex no-ops on already-hex fields. The decode-only fields
+   * (value / blindingFactor / assetBlindingFactor — and token on FullShielded)
+   * are NOT on the wire; they are populated post-decryption on the slots the
+   * wallet owns. AmountShielded entries do arrive with a wire-stamped public
+   * `token`. This function neither reads nor invents any of them.
    */
   normalizeShieldedOutputs(tx: IHistoryTx): void {
     if (!tx.shielded_outputs) {
@@ -161,6 +182,7 @@ const transaction = {
       return;
     }
 
+    // Hex-encode the confidential wire fields of every shielded output.
     for (const so of tx.shielded_outputs) {
       // eslint-disable-next-line no-param-reassign
       so.commitment = ensureHex(so.commitment);
@@ -168,8 +190,10 @@ const transaction = {
       so.range_proof = ensureHex(so.range_proof);
       // eslint-disable-next-line no-param-reassign
       so.script = ensureHex(so.script);
-      // eslint-disable-next-line no-param-reassign
-      so.ephemeral_pubkey = ensureHex(so.ephemeral_pubkey);
+      if (so.ephemeral_pubkey) {
+        // eslint-disable-next-line no-param-reassign
+        so.ephemeral_pubkey = ensureHex(so.ephemeral_pubkey);
+      }
       if (so.asset_commitment) {
         // eslint-disable-next-line no-param-reassign
         so.asset_commitment = ensureHex(so.asset_commitment);
@@ -177,6 +201,84 @@ const transaction = {
       if (so.surjection_proof) {
         // eslint-disable-next-line no-param-reassign
         so.surjection_proof = ensureHex(so.surjection_proof);
+      }
+    }
+  },
+
+  /**
+   * Clear the decode-only shielded fields the wallet must NEVER trust from an
+   * external source (a fullnode WS event or address-history response): a
+   * shielded output's `value`/`token`/`blindingFactor`/`assetBlindingFactor`,
+   * and the echoed `value`/`token`/`decoded` of a shielded input. None of these
+   * can be legitimately known by the fullnode (they are hidden in the
+   * commitment), so a hostile source could pre-fill them to forge a credit or a
+   * debit that skips the ECDH-rewind verification. Ownership is re-established
+   * ONLY from the wallet's own rewind or its own storage. Call this at every
+   * wire-ingress point before persisting. No-op for honest deliveries (which
+   * carry these bare) and for transparent txs.
+   */
+  clearUntrustedShieldedData(tx: IHistoryTx): void {
+    /* eslint-disable no-param-reassign */
+    for (const so of tx.shielded_outputs ?? []) {
+      so.value = undefined;
+      so.token = undefined;
+      so.blindingFactor = undefined;
+      so.assetBlindingFactor = undefined;
+    }
+    for (const input of tx.inputs) {
+      if (this.isShieldedInputEntry(input)) {
+        input.value = undefined;
+        input.token = undefined;
+        input.decoded = undefined;
+      }
+    }
+    /* eslint-enable no-param-reassign */
+  },
+
+  /**
+   * Restore the wallet's own decode-only shielded data from a previously-stored
+   * copy of the same tx into an incoming (wire) copy, keyed by on-chain slot /
+   * outpoint. The fullnode never re-sends these fields, so without this a
+   * re-fetch (WS re-delivery, gap-limit history reload, stream re-sync) would
+   * clobber the wallet's decoded balance. Only fields the incoming copy lacks
+   * are filled — delivered wire fields (e.g. `spent_by`) are kept. Values come
+   * from our own storage, so they are trusted (unlike the wire, cleared above).
+   */
+  restoreStoredShieldedData(tx: IHistoryTx, storedTx: IHistoryTx): void {
+    // Shielded inputs: fill a bare input from the stored enriched copy.
+    for (const input of tx.inputs) {
+      if (input.decoded?.address && input.token !== undefined) continue;
+      const stored = storedTx.inputs?.find(
+        si => si.tx_id === input.tx_id && si.index === input.index
+      );
+      if (stored?.decoded?.address && stored.token !== undefined) {
+        // eslint-disable-next-line no-param-reassign
+        input.decoded = stored.decoded;
+        // eslint-disable-next-line no-param-reassign
+        input.value = stored.value;
+        // eslint-disable-next-line no-param-reassign
+        input.token = stored.token;
+        // eslint-disable-next-line no-param-reassign
+        input.token_data = stored.token_data ?? 0;
+      }
+    }
+    // Shielded outputs: per-slot restore of the decode-only fields, keyed by
+    // on-chain position. A slot absent from the delivery is restored whole.
+    const stored = storedTx.shielded_outputs ?? [];
+    if (stored.length === 0) return;
+    // eslint-disable-next-line no-param-reassign
+    tx.shielded_outputs = tx.shielded_outputs ?? [];
+    const cur = tx.shielded_outputs;
+    for (let s = 0; s < stored.length; s += 1) {
+      if (!stored[s]) continue;
+      if (!cur[s]) {
+        cur[s] = cloneDeep(stored[s]);
+      } else if (cur[s].value === undefined && stored[s].value !== undefined) {
+        cur[s].value = stored[s].value;
+        cur[s].token = stored[s].token;
+        cur[s].decoded = stored[s].decoded;
+        cur[s].blindingFactor = stored[s].blindingFactor;
+        cur[s].assetBlindingFactor = stored[s].assetBlindingFactor;
       }
     }
   },
@@ -339,6 +441,10 @@ const transaction = {
         addressIndex: addressInfo.bip32AddressIndex,
         signature: this.getSignature(dataToSignHash, derivedKey.privateKey),
         pubkey: derivedKey.publicKey.toDER(),
+        // Carry the address type so callers (getSignatures) can render the
+        // matching derivation path: a 'shielded-spend' input was signed with the
+        // spend chain (m/44'/280'/2'), not the legacy P2PKH chain.
+        addressType: addressInfo.addressType,
       });
     }
 
@@ -1131,7 +1237,7 @@ const transaction = {
           script: shieldedEntry.script ?? '',
           decoded: shieldedEntry.decoded ?? {},
           token_data: shieldedEntry.token_data ?? 0,
-          token: shieldedEntry.token ?? NATIVE_TOKEN_UID,
+          token: shieldedEntry.token!,
           value: shieldedEntry.value,
         });
         continue;
@@ -1189,7 +1295,7 @@ const transaction = {
     // decryption gate is skipped entirely (shieldedCount=0) — the wallet
     // debits the input but never credits back the self-sent shielded outputs,
     // leaving the per-tx balance stuck at -input_value until a full
-    // processHistory reload. See TODO_FIX_33.
+    // processHistory reload.
     const shieldedOutputs: IHistoryShieldedOutput[] | undefined =
       tx.shieldedOutputs && tx.shieldedOutputs.length > 0
         ? tx.shieldedOutputs.map(so => {
@@ -1532,28 +1638,32 @@ const transaction = {
       throw new Error(`trying to convert a tx from a failed api request: ${txResponse.message}`);
     }
     const { tx, meta } = txResponse;
-    const inputs: IHistoryInput[] = tx.inputs.map(
-      i => this.hydrateIOWithToken(i as { token_data: number }, tx.tokens) as IHistoryInput
+    // Shielded inputs (type: 'shielded') carry no remappable token_data — a
+    // FullShielded entry omits it and an AmountShielded entry echoes the PARENT
+    // tx's raw token_data — so hydrateIOWithToken would throw
+    // ("token not found in tokens list"). Pass them through untouched; the
+    // wallet re-derives their value/token/decoded from its own storage
+    // (clearUntrustedShieldedData + processNewTx), never from this wire copy.
+    const inputs: IHistoryInput[] = tx.inputs.map(i =>
+      this.isShieldedInputEntry(i as { type?: string })
+        ? (i as unknown as IHistoryInput)
+        : (this.hydrateIOWithToken(i as { token_data: number }, tx.tokens) as IHistoryInput)
     );
 
     // SEPARATED model: `outputs[]` is transparent-only — hydrate each with its
     // token. Shielded outputs arrive in a dedicated `shielded_outputs[]` field
-    // (passthrough — not in the zod schema); convert their base64 buffer fields
-    // to hex so downstream decryption (Buffer.from(value, 'hex')) parses them.
+    // (passthrough — not in the zod schema); they are shallow-copied here and
+    // hex-normalized in one pass via normalizeShieldedOutputs(histTx) below.
     const outputs: IHistoryOutput[] = tx.outputs.map(
       o => this.hydrateIOWithToken(o, tx.tokens) as IHistoryOutput
     );
 
     const separateShielded = (tx as { shielded_outputs?: IHistoryShieldedOutput[] })
       .shielded_outputs;
+    // Shallow-copy each slot so the hex normalization below mutates our copies,
+    // not the caller's txResponse objects.
     const shieldedOutputs: IHistoryShieldedOutput[] = (separateShielded ?? []).map(so => ({
       ...so,
-      commitment: ensureHex(so.commitment),
-      range_proof: ensureHex(so.range_proof),
-      script: ensureHex(so.script),
-      ephemeral_pubkey: ensureHex(so.ephemeral_pubkey),
-      asset_commitment: so.asset_commitment ? ensureHex(so.asset_commitment) : undefined,
-      surjection_proof: so.surjection_proof ? ensureHex(so.surjection_proof) : undefined,
     }));
 
     const histTx: IHistoryTx = {
@@ -1582,6 +1692,10 @@ const transaction = {
     if (tx.nc_address) histTx.nc_address = tx.nc_address;
     if (tx.nc_context) histTx.nc_context = tx.nc_context;
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
+
+    // Hex-encode the confidential wire fields (commitment/range_proof/script/…)
+    // in one pass — the same normalization used by the realtime/ws path.
+    this.normalizeShieldedOutputs(histTx);
 
     return histTx;
   },

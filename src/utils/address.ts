@@ -52,6 +52,28 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 }
 
 /**
+ * Resolve an address to the form usable as a transparent output script.
+ *
+ * Shielded addresses have no direct output script (on-chain they use the
+ * spend-derived P2PKH), so this returns the spend address base58 for a shielded
+ * input and the address unchanged otherwise. Use it before `getAddressType` /
+ * output building wherever a caller-supplied address may be shielded — e.g. a
+ * shielded change address in token creation (otherwise getAddressType throws).
+ * Mirrors the conversion the send pipeline applies to explicit shielded outputs.
+ *
+ * @param {string} address base58 address (may be shielded)
+ * @param {Network} network
+ * @returns {string} spend-derived P2PKH base58 if shielded, else `address`
+ */
+export function resolveOutputScriptAddress(address: string, network: Network): string {
+  const addressObj = new Address(address, { network });
+  if (addressObj.getType() === 'shielded') {
+    return addressObj.getSpendAddress().base58;
+  }
+  return address;
+}
+
+/**
  * Convert a bitcore PublicKey to a base58 P2PKH address string.
  */
 export function publicKeyToP2PKH(

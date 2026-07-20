@@ -533,4 +533,45 @@ describe('PartialTx.validate', () => {
 
     await expect(partialTx.validate()).resolves.toEqual(false);
   });
+
+  it('should reject (clear error) an input referencing a shielded output slot', async () => {
+    // SEPARATED model: parent tx has 1 transparent output (T=1) and 1 shielded
+    // output. The shielded slot's on-chain absolute index is T + 0 = 1, which
+    // lands in the shielded range. Partial transactions are transparent-only;
+    // such an input must be rejected with a clear error rather than silently
+    // resolving false.
+    spy.mockImplementation(async (txId, cb) => {
+      return new Promise(resolve => {
+        process.nextTick(() => {
+          resolve({
+            success: true,
+            tx: {
+              outputs: [{ token_data: 0, value: 27n, decoded: { address: addr1 } }],
+              shielded_outputs: [
+                {
+                  mode: 1,
+                  commitment: 'aa',
+                  range_proof: '',
+                  script: '',
+                  token_data: 0,
+                  ephemeral_pubkey: '',
+                  decoded: { type: 'P2PKH', address: addr1, timelock: null },
+                },
+              ],
+            },
+          });
+        });
+      }).then(data => {
+        cb(data);
+      });
+    });
+
+    const partialTx = new PartialTx(testnet);
+    // index 1 == outputs.length + 0 → shielded slot
+    partialTx.inputs = [new ProposalInput(txId1, 1, 27n, addr1)];
+
+    await expect(partialTx.validate()).rejects.toThrow(
+      'Shielded inputs are not supported in partial transactions'
+    );
+  });
 });

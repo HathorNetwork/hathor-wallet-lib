@@ -6,7 +6,13 @@
  */
 
 import { z } from 'zod';
-import { bigIntCoercibleSchema, JSONBigInt, parseJsonBigInt } from '../../src/utils/bigint';
+import {
+  abs,
+  bigIntCoercibleSchema,
+  ceilDiv,
+  JSONBigInt,
+  parseJsonBigInt,
+} from '../../src/utils/bigint';
 
 const obj = {
   a: 123,
@@ -115,5 +121,52 @@ describe('test parseJsonBigInt', () => {
 
   test('should parse object with small and large bigints', () => {
     expect(parseJsonBigInt(bigIntJson, bigIntObjSchema)).toStrictEqual(bigIntCoercedObj);
+  });
+});
+
+describe('test ceilDiv', () => {
+  test('should throw on a negative dividend', () => {
+    expect(() => ceilDiv(-1n, 2n)).toThrow(
+      'ceilDiv expects a non-negative dividend and a positive divisor'
+    );
+  });
+
+  test('should throw on a zero divisor', () => {
+    expect(() => ceilDiv(1n, 0n)).toThrow(
+      'ceilDiv expects a non-negative dividend and a positive divisor'
+    );
+  });
+
+  test('should throw on a negative divisor', () => {
+    expect(() => ceilDiv(1n, -2n)).toThrow(
+      'ceilDiv expects a non-negative dividend and a positive divisor'
+    );
+  });
+
+  test('should return zero when the dividend is zero', () => {
+    expect(ceilDiv(0n, 5n)).toStrictEqual(0n);
+  });
+
+  test('should return the exact quotient when the division has no remainder', () => {
+    expect(ceilDiv(10n, 5n)).toStrictEqual(2n);
+  });
+
+  test('should round up when the division has a remainder', () => {
+    expect(ceilDiv(11n, 5n)).toStrictEqual(3n);
+    expect(ceilDiv(1n, 5n)).toStrictEqual(1n);
+  });
+});
+
+describe('test abs', () => {
+  test('should return the magnitude of a negative value', () => {
+    expect(abs(-5n)).toStrictEqual(5n);
+  });
+
+  test('should return a positive value unchanged', () => {
+    expect(abs(5n)).toStrictEqual(5n);
+  });
+
+  test('should return zero for zero', () => {
+    expect(abs(0n)).toStrictEqual(0n);
   });
 });

@@ -335,6 +335,10 @@ export async function* loadAddressHistory(
         for (const tx of result.history) {
           foundAnyTx = true;
           if (saveTxs) {
+            // Wire ingress: never trust decode-only shielded fields off the
+            // address-history response; addTx restores them from our own
+            // storage and processHistory re-derives the rest via ECDH rewind.
+            transactionUtils.clearUntrustedShieldedData(tx);
             await storage.addTx(tx);
           }
         }
@@ -597,7 +601,14 @@ export async function processSingleTx(
     tokens.add(token);
   }
 
+  // A voided tx does not actually spend its inputs (processNewTx above skipped
+  // it for the same reason), so it must NOT delete their UTXOs. Deleting them
+  // for a tx that arrives already-voided (e.g. a mempool double-spend conflict)
+  // would drop a still-spendable UTXO while its balance is still counted,
+  // breaking coin selection until a full reload. The voided-flip case restores
+  // UTXOs via a full processHistory (see onNewTx).
   for (const input of tx.inputs) {
+    if (tx.is_voided) break;
     const origTx = await storage.getTx(input.tx_id);
     if (!origTx) {
       // The tx being spent is not from the wallet.
@@ -1083,12 +1094,14 @@ export async function processNewTx(
   }
 
   // Decrypt wallet-owned shielded outputs IN PLACE before the output loops so
-  // the owned-shielded loop can credit them. Skip when already decoded (e.g.
-  // processHistory re-running on a previously decoded tx) — the gate is
-  // `shielded_outputs.some(value !== undefined)`, the SEPARATED decoded marker.
-  const alreadyDecoded = (tx.shielded_outputs ?? []).some(so => so.value !== undefined);
+  // the owned-shielded loop can credit them. Skip only when EVERY slot is
+  // already decoded (`value !== undefined`, the SEPARATED decoded marker):
+  // gating per-slot lets a tx with one still-undecoded owned slot (e.g. a
+  // transient rewind failure on a prior pass) complete its decoding, while
+  // processShieldedOutputs itself no-ops the slots already done.
+  const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
   if (
-    !alreadyDecoded &&
+    hasUndecodedSlot &&
     storage.shieldedCryptoProvider &&
     tx.shielded_outputs?.length &&
     pinCode !== undefined
@@ -1137,10 +1150,39 @@ export async function processNewTx(
   }
 
   for (const input of tx.inputs) {
+    // Enrich a bare shielded input from the parent tx's decoded shielded output
+    // so the balance debit below treats it like a transparent input. The
+    // realtime path enriches shielded inputs before processing (sender-local
+    // insert / onNewTx per-slot merge), but the reload path (processHistory)
+    // feeds bare {tx_id, index, type:'shielded'} inputs straight from
+    // address_history. Without this, a spent wallet-owned shielded UTXO is never
+    // debited from the balance counter on reload, so reload over-counts it vs
+    // realtime (the spent-output value lingers in `getBalance`). Gated on
+    // `value === undefined` so an already-enriched (realtime) input is debited
+    // exactly once. processHistory walks txs oldest-first, so the parent's
+    // shielded output is already decoded + persisted when we resolve it here.
+    if (input.value === undefined && transactionUtils.isShieldedInputEntry(input)) {
+      const parentTx = await storage.getTx(input.tx_id);
+      const resolved = parentTx
+        ? transactionUtils.resolveSpentOutput(parentTx, input.index)
+        : undefined;
+      if (resolved?.kind === 'shielded' && resolved.output.value !== undefined) {
+        const so = resolved.output;
+        if (so.decoded?.address && (await storage.isAddressMine(so.decoded.address))) {
+          input.value = so.value;
+          // owned + decoded (value gate above) ⇒ token is set; no HTR-mislabel fallback.
+          input.token = so.token!;
+          input.token_data = so.token_data ?? 0;
+          input.decoded = so.decoded;
+        }
+      }
+    }
+
     // Inputs spending shielded outputs carry no transparent fields
-    // (value/token/decoded are hidden in commitments). Their balance
-    // handling lands with the receive pipeline in the next PR; here we
-    // only need the type-level guard so transparent processing narrows.
+    // (value/token/decoded are hidden in commitments) until enriched above.
+    // Anything still bare here is a shielded input we don't own (or whose parent
+    // tx isn't ours) — skip it; the type-level guard also narrows the union for
+    // the transparent processing below.
     if (
       input.value === undefined ||
       input.token === undefined ||

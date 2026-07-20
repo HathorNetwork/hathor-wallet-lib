@@ -13,6 +13,7 @@ import {
   IHistoryInput,
   IHistoryOutput,
   IHistoryOutputDecoded,
+  IHistoryShieldedOutput,
   IHistoryTx,
   ILockedUtxo,
   ITokenBalance,
@@ -21,6 +22,10 @@ import {
   TxHistoryProcessingStatus,
 } from './types';
 import { bigIntCoercibleSchema, ZodSchema } from './utils/bigint';
+// Type-only: the enum's runtime value lives in the native @hathor/ct-crypto-provider
+// package; importing it as a value would pull that native module into every consumer
+// of this schema module. We only need it to type the `mode` wire field.
+import type { ShieldedOutputMode } from './shielded/types';
 
 /**
  * TxId schema
@@ -72,7 +77,9 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
   })
   .passthrough();
 
-export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
+// Transparent input: the spent output's fields are echoed inline in full,
+// with the same strictness they always had before shielded outputs existed.
+const transparentHistoryInputSchema = z
   .object({
     value: bigIntCoercibleSchema,
     token_data: z.number(),
@@ -81,9 +88,62 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
     token: z.string(),
     tx_id: txIdSchema,
     index: z.number(),
+    // Discriminant, normalized by the preprocess below (see IHistoryInputSchema)
+    // to 'transparent' for every non-shielded input — the alpha fullnode already
+    // stamps it, older nodes omit it, and any other value is coerced here so we
+    // never fail-closed on an unknown external discriminator.
+    type: z.literal('transparent'),
   })
   .passthrough();
 
+// Shielded input (spends a shielded output): the wire echoes the spent
+// output's confidential fields (type='shielded', mode, commitment,
+// range_proof, script, per-mode extras) plus tx_id/index — never its
+// value/token, which stay hidden in the commitments (hathor-core
+// `to_json_extended`). The sender-local insert
+// (utils/transaction.ts:convertTransactionToHistoryTx) instead stamps the
+// decrypted value/token/decoded and no commitment — so every echoed field is
+// optional here; only the discriminator and the outpoint are guaranteed.
+const shieldedHistoryInputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    tx_id: txIdSchema,
+    index: z.number(),
+    commitment: z.string().optional(),
+    script: z.string().optional(),
+    decoded: IHistoryOutputDecodedSchema.optional(),
+    value: bigIntCoercibleSchema.optional(),
+    token_data: z.number().optional(),
+    token: z.string().optional(),
+  })
+  .passthrough();
+
+// Normalize the discriminant, THEN discriminate. A discriminated union needs
+// the `type` key present, but older fullnodes omit it on transparent inputs;
+// coerce every non-'shielded' input to `type: 'transparent'` first (this also
+// keeps the old "never fail-closed on an unknown discriminator" leniency — an
+// unexpected type string is treated as transparent, not rejected). With the key
+// guaranteed we use z.discriminatedUnion for its narrowing + faster, clearer
+// validation instead of a try-every-branch z.union.
+export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z.preprocess(
+  input => {
+    if (input && typeof input === 'object') {
+      const { type } = input as { type?: unknown };
+      if (type !== 'shielded') {
+        return { ...(input as Record<string, unknown>), type: 'transparent' };
+      }
+    }
+    return input;
+  },
+  z.discriminatedUnion('type', [shieldedHistoryInputSchema, transparentHistoryInputSchema])
+) as unknown as ZodSchema<IHistoryInput>;
+
+// SEPARATED model: `outputs[]` is transparent-only. The fullnode
+// delivers shielded outputs in a dedicated top-level `shielded_outputs[]` array
+// on every path — HTTP `/transaction` (to_json) and `address_history` + the WS
+// real-time path (to_json_extended) — so a transparent-only output schema
+// validates the raw wire directly; there are no inline `type: 'shielded'`
+// entries in `outputs[]` to accommodate.
 export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   .object({
     value: bigIntCoercibleSchema,
@@ -142,6 +202,117 @@ export const IHistoryNanoContractContextSchema = z
   })
   .passthrough();
 
+// The mode-independent wire fields every shielded output carries.
+const shieldedOutputWireShapeCommon = {
+  commitment: z.string(),
+  range_proof: z.string(),
+  script: z.string(),
+  // Protocol-optional: on-chain the field is a fixed 33 bytes where all-zeros
+  // means "not present", and the fullnode omits the JSON key in that case
+  // (hathor-core `serialize_shielded_output`). An output without an ECDH hint
+  // can never be rewound by the wallet (see shielded/processing.ts).
+  ephemeral_pubkey: z.string().optional(),
+  spent_by: z.string().nullable().optional(),
+};
+
+// The wire fields shared by a shielded output on BOTH the fullnode tx API
+// (`fullnodeTxApiShieldedOutputSchema`, api/schemas/txApi.ts) and the wallet
+// history (`IHistoryShieldedOutputSchema` below, which additionally splits
+// per mode). `mode` is REQUIRED: the fullnode always sets it on the wire, so
+// readers classify directly from it. `token_data` defaults to 0 (native-token
+// slot) because FullShielded outputs hide the token UID behind
+// `asset_commitment` and may omit the field.
+export const shieldedOutputWireShape = {
+  // Wire value is a raw number (1=AmountShielded, 2=FullShielded); type it as
+  // ShieldedOutputMode without pulling the native provider's runtime enum in.
+  mode: z.number() as unknown as z.ZodType<ShieldedOutputMode>,
+  ...shieldedOutputWireShapeCommon,
+  token_data: z.number().optional().default(0),
+  asset_commitment: z.string().optional(),
+  surjection_proof: z.string().optional(),
+};
+
+// ── owned-marker fields (SEPARATED model) ──
+// Written in place — all together — when the wallet decrypts an output it
+// owns (shielded/processing.ts): `value` + `token` + `blindingFactor` for
+// both modes, plus `assetBlindingFactor` for FullShielded only. The wire
+// never carries `value`/`blindingFactor`/`assetBlindingFactor`; `token`,
+// however, IS wire-stamped on AmountShielded entries (the asset is public —
+// hathor-core `to_json_extended`), so for that mode its presence does not
+// imply ownership. `value !== undefined` is the single ownership/decoded
+// gate.
+const shieldedOwnedMarkerShape = {
+  value: bigIntCoercibleSchema.optional(),
+  token: z.string().optional(),
+  blindingFactor: z.string().optional(),
+};
+
+// AmountShielded (wire mode byte 1): the value is hidden, the asset is
+// public — the fullnode always emits `token_data` and never emits
+// `asset_commitment`/`surjection_proof` (hathor-core
+// `serialize_shielded_output`), and decode never recovers an asset blinding
+// factor.
+const IHistoryAmountShieldedOutputSchema = z
+  .object({
+    mode: z.literal(1), // ShieldedOutputMode.AMOUNT_SHIELDED
+    ...shieldedOutputWireShapeCommon,
+    token_data: z.number(),
+    // Emitted only when the script parses as a standard type; consensus does
+    // not restrict shielded scripts, so absence must not reject the tx.
+    decoded: IHistoryOutputDecodedSchema.default({}),
+    ...shieldedOwnedMarkerShape,
+    // FullShielded-only fields — must not appear on an AmountShielded entry.
+    asset_commitment: z.undefined(),
+    surjection_proof: z.undefined(),
+    assetBlindingFactor: z.undefined(),
+  })
+  .passthrough();
+
+// FullShielded (wire mode byte 2): the value AND the asset are hidden — the
+// fullnode always emits `asset_commitment` + `surjection_proof` and omits
+// `token_data`.
+const IHistoryFullShieldedOutputSchema = z
+  .object({
+    mode: z.literal(2), // ShieldedOutputMode.FULLY_SHIELDED
+    ...shieldedOutputWireShapeCommon,
+    asset_commitment: z.string(),
+    surjection_proof: z.string(),
+    token_data: z.number().optional().default(0),
+    decoded: IHistoryOutputDecodedSchema.default({}),
+    ...shieldedOwnedMarkerShape,
+    assetBlindingFactor: z.string().optional(),
+  })
+  .passthrough();
+
+// SEPARATED model: history shape of one entry in `tx.shielded_outputs[]`,
+// discriminated by the required wire `mode`. Mirrors `IHistoryShieldedOutput`
+// (src/types.ts). Decode-only fields must be consistent with the ownership
+// gate: every writer stamps them together (shielded/processing.ts, the
+// re-delivery merge in new/wallet.ts). For FullShielded that covers
+// token/blindingFactor/assetBlindingFactor; for AmountShielded only
+// blindingFactor is decode-only — the fullnode wire-stamps the public `token`
+// on entries the wallet does not own, so an owned slot must have it but its
+// presence alone proves nothing.
+const IHistoryShieldedOutputSchema = z
+  .discriminatedUnion('mode', [
+    IHistoryAmountShieldedOutputSchema,
+    IHistoryFullShieldedOutputSchema,
+  ])
+  .superRefine((so, ctx) => {
+    const owned = so.value !== undefined;
+    const inconsistent =
+      (so.blindingFactor !== undefined) !== owned ||
+      (so.mode === 2
+        ? (so.token !== undefined) !== owned || (so.assetBlindingFactor !== undefined) !== owned
+        : owned && so.token === undefined);
+    if (inconsistent) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'decode-only fields must be consistent with the `value` ownership gate',
+      });
+    }
+  }) as unknown as ZodSchema<IHistoryShieldedOutput>;
+
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
     tx_id: txIdSchema,
@@ -158,6 +329,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     token_symbol: z.string().optional(),
     tokens: z.string().array().optional(),
     height: z.number().optional(),
+    shielded_outputs: IHistoryShieldedOutputSchema.array().optional(),
     processingStatus: z.nativeEnum(TxHistoryProcessingStatus).optional(),
     nc_id: z.string().optional(),
     nc_blueprint_id: z.string().optional(),
