@@ -545,7 +545,17 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
                 // This just returns if the transaction is not a CREATE_TOKEN_TX
                 await addCreatedTokenFromTx(transaction as CreateTokenTransaction, storage);
                 // Add new transaction to the wallet's storage.
-                wallet.enqueueOnNewTx({ type: '', history: historyTx }); // FIXME: Add a type here
+                // Pass the pin used for this send so the wallet can decrypt and
+                // credit its own shielded change even when it holds no stored
+                // pinCode (per-call-pin flow).
+                // The type labels the WS event this sender-local insert emulates
+                // (the fullnode will deliver the real one for this tx shortly);
+                // only the handleWebsocketMsg router inspects it, and this path
+                // bypasses the router.
+                wallet.enqueueOnNewTx(
+                  { type: 'wallet:address_history', history: historyTx },
+                  this.pin ?? undefined
+                );
               })(this.wallet, this.storage, this.transaction);
             }
             this.emit('send-tx-success', this.transaction);

@@ -118,6 +118,11 @@ export async function processShieldedOutputs(
 
   for (const [sIndex, shieldedOutput] of shieldedOutputs.entries()) {
     const absoluteIndex = transparentCount + sIndex;
+    // Already decoded on a prior pass — idempotent skip. Gating per SLOT (not
+    // per tx) lets a tx whose other owned slot failed a transient rewind be
+    // completed on a later attempt, without re-rewinding the ones that worked.
+    if (shieldedOutput.value !== undefined) continue;
+
     // No ECDH hint (the on-chain field was all-zeros, so the fullnode omitted
     // it): the output can never be rewound by this wallet — treat as non-owned.
     // Checked first: it needs no storage access or key material, and skipping
