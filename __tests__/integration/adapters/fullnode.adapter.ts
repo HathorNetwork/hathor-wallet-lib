@@ -55,6 +55,7 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  DestroyAuthorityResult,
   AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
@@ -75,6 +76,9 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   name = 'Fullnode';
 
   networkName = NETWORK_NAME;
+
+  // e.g. "Not enough HTR tokens for deposit or fee: 90 required, 9 available"
+  insufficientHtrError = /^Not enough HTR tokens for deposit or fee: \d+ required, \d+ available$/;
 
   defaultPinCode = DEFAULT_PIN_CODE;
 
@@ -274,44 +278,6 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     return { hash: result.hash, transaction: result };
   }
 
-  async mintTokens(
-    wallet: FuzzyWalletType,
-    tokenUid: string,
-    amount: bigint,
-    options?: MintTokensAdapterOptions
-  ): Promise<MintMeltResult> {
-    const hWallet = this.concrete(wallet);
-    const result = await hWallet.mintTokens(tokenUid, amount, {
-      pinCode: DEFAULT_PIN_CODE,
-      ...options,
-    });
-    if (!result?.hash) {
-      throw new Error('mintTokens: transaction had no hash');
-    }
-    await waitForTxReceived(hWallet, result.hash);
-    await waitUntilNextTimestamp(hWallet, result.hash);
-    return { hash: result.hash, transaction: result };
-  }
-
-  async meltTokens(
-    wallet: FuzzyWalletType,
-    tokenUid: string,
-    amount: bigint,
-    options?: MeltTokensAdapterOptions
-  ): Promise<MintMeltResult> {
-    const hWallet = this.concrete(wallet);
-    const result = await hWallet.meltTokens(tokenUid, amount, {
-      pinCode: DEFAULT_PIN_CODE,
-      ...options,
-    });
-    if (!result?.hash) {
-      throw new Error('meltTokens: transaction had no hash');
-    }
-    await waitForTxReceived(hWallet, result.hash);
-    await waitUntilNextTimestamp(hWallet, result.hash);
-    return { hash: result.hash, transaction: result };
-  }
-
   async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
     return this.concrete(wallet).getTokenDetails(tokenUid);
   }
@@ -427,6 +393,69 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     });
     if (!result?.hash) {
       throw new Error('delegateAuthority: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    if (options?.recvWallet) {
+      await waitForTxReceived(this.concrete(options.recvWallet), result.hash);
+    }
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const { recvWallet, ...mintOptions } = options ?? {};
+    const result = await hWallet.mintTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...mintOptions,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    if (recvWallet) {
+      await waitForTxReceived(this.concrete(recvWallet), result.hash);
+    }
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.meltTokens(tokenUid, amount, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...options,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
+  }
+
+  async destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult> {
+    const hWallet = this.concrete(wallet);
+    const result = await hWallet.destroyAuthority(tokenUid, type, count, {
+      pinCode: DEFAULT_PIN_CODE,
+    });
+    if (!result?.hash) {
+      throw new Error('destroyAuthority: transaction had no hash');
     }
     await waitForTxReceived(hWallet, result.hash);
     await waitUntilNextTimestamp(hWallet, result.hash);
