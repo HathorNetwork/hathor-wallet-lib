@@ -3157,11 +3157,14 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('signTx');
     }
     const pinCode = options.pinCode ?? this.pinCode;
-    if (!pinCode) {
+    // The pin is only used to decrypt the local private key. When an external tx-signing
+    // method is registered (e.g. a hardware or passkey signer), signatures are produced
+    // without it, so the pin is optional in that case.
+    if (!pinCode && !this.storage.hasTxSignatureMethod()) {
       throw new Error('Pin code is required to sign a transaction');
     }
 
-    const signedTx = await transactionUtils.signTransaction(tx, this.storage, pinCode);
+    const signedTx = await transactionUtils.signTransaction(tx, this.storage, pinCode ?? '');
     signedTx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }
