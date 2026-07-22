@@ -1411,21 +1411,24 @@ describe('prepare transactions without signature', () => {
 
   test('createNanoContractCreateTokenTransaction does not require a pin with an external tx-signing method', async () => {
     const hWallet = new FakeHathorWallet();
+    // Real passkey scenario: xpub-only (readOnly) storage — no private key to decrypt.
     hWallet.storage = getStorage({
-      readOnly: false,
+      readOnly: true,
       currentAddress: fakeAddress.base58,
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
-    // Register an external signer (mirrors a passkey wallet), which makes the pin optional.
+    // Register an external signer (mirrors a passkey wallet): this flips isSignedExternally, so the
+    // wallet-level isReadonly() returns false and the pin becomes optional.
     hWallet.setExternalTxSigningMethod(async () => ({
       inputSignatures: [],
       ncCallerSignature: null,
     }));
 
-    // With the external signer the "Pin is required." guard must NOT fire. The build fails later
-    // (resolving a non-existent nano contract), but the failure is NOT the pin guard — which is
-    // what pins the relaxation: reverting the condition to `if (!pin)` makes this reject with
-    // 'Pin is required.' and the test fails.
+    // The method must get PAST both guards: the xpub guard (honored by the external signer) AND the
+    // "Pin is required." guard. It fails later resolving the non-existent nano contract, but with
+    // neither guard error. This pins both fixes: using storage.isReadonly() here would reject with
+    // WalletFromXPubGuard, and reverting the condition to `if (!pin)` would reject with
+    // 'Pin is required.'.
     const err = await hWallet
       .createNanoContractCreateTokenTransaction(
         'noop',
@@ -1436,6 +1439,7 @@ describe('prepare transactions without signature', () => {
       )
       .catch(e => e);
     expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
     expect(err.message).not.toContain('Pin is required');
   });
 

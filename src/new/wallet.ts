@@ -3584,7 +3584,10 @@ class HathorWallet extends EventEmitter {
     createTokenOptions: CreateNanoTokenTxOptions,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
-    if (await this.storage.isReadonly()) {
+    // Use the wallet-level isReadonly() (not storage.isReadonly()): it returns false when an
+    // external tx-signing method is registered, so an xpub-only passkey wallet is allowed here and
+    // actually reaches the pin-optional guard below. Mirrors prepareCreateNewToken.
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
     }
     const newOptions = { pinCode: null, signTx: true, ...options };

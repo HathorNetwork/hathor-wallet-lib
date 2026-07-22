@@ -376,7 +376,8 @@ const transaction = {
 
   /**
    * Produce the signatures for every wallet-owned input of a transaction (plus the nano/OCB
-   * caller signature), given a resolver that returns the account xpriv for each key chain.
+   * caller signature), given a resolver that returns the change-path xpriv for each key chain
+   * (m/.../0, from which per-input keys are derived — see getXpriv).
    *
    * This is the core of getSignatureForTx, factored out so external signers — e.g. a passkey
    * signer that derives keys from a biometric ceremony instead of decrypting a stored key — can
