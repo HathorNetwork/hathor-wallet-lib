@@ -272,8 +272,11 @@ test('signTxInputs sources keys from the resolver, not from storage', async () =
   const sigData = await transaction.signTxInputs(tx, storage, resolver);
 
   // Keys came from the resolver, never from storage.
-  expect(resolver).toHaveBeenCalledWith('legacy');
   expect(resolver).toHaveBeenCalledWith('spend');
+  // The only input is shielded-spend and there is no nano/OCB header, so the legacy chain is
+  // never needed — the resolver must not be asked for it (lazy fetch; matters for passkey signers
+  // where each resolver call is a biometric ceremony).
+  expect(resolver).not.toHaveBeenCalledWith('legacy');
   expect(getMainSpy).not.toHaveBeenCalled();
   expect(getSpendSpy).not.toHaveBeenCalled();
 
