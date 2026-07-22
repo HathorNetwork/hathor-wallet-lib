@@ -25,6 +25,7 @@ import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   IDataInput,
+  IHistoryTx,
   IStorage,
   IUtxo,
   IUtxoFilterOptions,
@@ -92,6 +93,36 @@ test('prepareTxData rejects a shieldedMode output with a non-shielded address', 
   await expect(sendTransaction.prepareTxData()).rejects.toThrow(
     /Shielded output requires a shielded address/
   );
+});
+
+test('prepareTxData rejects an invalid shieldedMode value', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  // A genuine shielded address, so the rejection is on the mode, not the address.
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x0b), 'testnet');
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    root.deriveChild("m/1'/0").publicKey.toBuffer(),
+    new Network('testnet')
+  );
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      {
+        address: shieldedAddress,
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        // Passes isShieldedOutput (the field exists) but is not an accepted
+        // mode — must be rejected up front, not deep in the crypto layer.
+        shieldedMode: 999 as unknown as ShieldedOutputMode,
+      },
+    ],
+  });
+
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(/Invalid shieldedMode/);
 });
 
 test('prepareTxData resolves 71-byte shielded addresses internally', async () => {
@@ -942,6 +973,48 @@ describe('convertHtrChangeIfRequested', () => {
     expect(defs).toHaveLength(2);
   });
 
+  test('H.4d — change <= fee but HTR user-supplied (canSelectMoreHtr=false) → throws without pulling', async () => {
+    const partialHtrTxData = {
+      inputs: [] as IDataInput[],
+      outputs: [buildHtrChangeOutput(1n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+    // A spare HTR UTXO IS available — but because HTR inputs were user-supplied
+    // we must NOT pull it: the wallet respects the "user supplies inputs ->
+    // choose nothing more" contract and fails instead of selecting.
+    const storageWithHtr = mockStorage([
+      {
+        txId: 'spare-htr',
+        index: 0,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        address: 'spare-addr',
+        authorities: 0n,
+      },
+    ]);
+
+    await expect(
+      convertHtrChangeIfRequested(
+        partialHtrTxData,
+        defs,
+        ShieldedOutputMode.FULLY_SHIELDED,
+        mockWallet(buildShieldedAddress()),
+        testnetNetwork,
+        storageWithHtr,
+        [], // existingInputs
+        false // canSelectMoreHtr → throw rather than pull the spare UTXO
+      )
+    ).rejects.toThrow(/user-supplied so no additional HTR can be selected/);
+
+    // Nothing mutated, and the available UTXO was NOT pulled.
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(partialHtrTxData.inputs).toHaveLength(0);
+    expect(defs).toHaveLength(2);
+  });
+
   test('H.5 — no-op when no HTR change output present', async () => {
     // All HTR was consumed exactly by the fee — `prepareSendTokensData`
     // would have emitted no `isChange: true` HTR entry, so there's
@@ -1197,6 +1270,119 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     // HTR selection funded the shielded fee; custom UTXO funded the sends.
     expect(result.inputs).toHaveLength(2);
     expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-tx', 'htr-tx']);
+  });
+
+  test('A1b — shielded outputs are shuffled (change not at a predictable index)', async () => {
+    async function* selectUtxoMock(options: IUtxoFilterOptions) {
+      if (options.token === NATIVE_TOKEN_UID) {
+        yield {
+          txId: 'htr-tx',
+          index: 0,
+          value: 2n,
+          token: NATIVE_TOKEN_UID,
+          address: 'htr-addr',
+          authorities: 0n,
+        };
+      } else if (options.token === CUSTOM_TOKEN) {
+        yield {
+          txId: 'custom-tx',
+          index: 0,
+          value: 30n,
+          token: CUSTOM_TOKEN,
+          address: 'custom-addr',
+          authorities: 0n,
+        };
+      }
+    }
+    const storage = buildStorage(selectUtxoMock);
+    const wallet = buildWallet(storage, buildShieldedAddr(0));
+    const sendTransaction = new SendTransaction({
+      wallet,
+      outputs: [
+        {
+          address: buildShieldedAddr(1),
+          value: 10n,
+          token: CUSTOM_TOKEN,
+          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+    });
+
+    // Force shuffle to reverse so its effect is observable: the defs are built
+    // [recipient(10n), change(20n)], so a reversing shuffle must flip the
+    // on-chain shielded-output order — proving the shuffle result is used, not
+    // discarded. (A no-op shuffle would leave [10n, 20n].)
+    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
+    const lodash = require('lodash');
+    const shuffleSpy = jest
+      .spyOn(lodash, 'shuffle')
+      .mockImplementation((arr: unknown) => [...(arr as unknown[])].reverse());
+    try {
+      const result = await sendTransaction.prepareTxData();
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([20n, 10n]);
+    } finally {
+      shuffleSpy.mockRestore();
+    }
+  });
+
+  test('R2 — a shielded send rejects a user-supplied input not owned by the wallet', async () => {
+    // r4mmer's question: for a shielded tx all inputs must be wallet-owned. They
+    // are — a foreign user-supplied input is rejected UPSTREAM (checkUnspentInput
+    // via isAddressMine), before the shielded input-collection loop ever runs.
+    // This test documents that the shielded path benefits from that guard.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, require-yield
+    async function* selectUtxoMock(_options: IUtxoFilterOptions) {
+      // yields nothing
+    }
+    const storage = buildStorage(selectUtxoMock);
+    // A tx the wallet knows (getTx succeeds, resolveSpentOutput resolves output
+    // 0) but whose output 0 is paid to another address — not isAddressMine.
+    await storage.store.saveTx({
+      tx_id: 'known-but-unowned-tx',
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 1,
+      tokens: [],
+      outputs: [
+        {
+          value: 100n,
+          token_data: 0,
+          token: NATIVE_TOKEN_UID,
+          decoded: { address: 'W-someone-else', timelock: null },
+          script: '',
+          spent_by: null,
+        },
+      ],
+      shielded_outputs: [],
+    } as unknown as IHistoryTx);
+
+    const wallet = buildWallet(storage, buildShieldedAddr(0));
+    const sendTransaction = new SendTransaction({
+      wallet,
+      inputs: [{ txId: 'known-but-unowned-tx', index: 0 }],
+      outputs: [
+        {
+          address: buildShieldedAddr(1),
+          value: 10n,
+          token: NATIVE_TOKEN_UID,
+          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: buildShieldedAddr(2),
+          value: 10n,
+          token: NATIVE_TOKEN_UID,
+          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+    });
+
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(/is not from the wallet/);
   });
 
   test('A2 — HTR change <= fee pulls an extra HTR UTXO; tx stays balanced', async () => {

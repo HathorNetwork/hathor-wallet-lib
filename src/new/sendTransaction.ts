@@ -274,6 +274,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // scan pubkey and the spend-derived P2PKH (the on-chain script
         // address) — so direct SendTransaction consumers never pre-derive
         // anything. Mirrors convertHtrChangeIfRequested's own resolution.
+        // isShieldedOutput only asserts the field exists, not that its value is
+        // a valid mode. Reject an unknown mode here rather than let it fail
+        // deep in the crypto layer with an opaque error.
+        if (
+          output.shieldedMode !== ShieldedOutputMode.AMOUNT_SHIELDED &&
+          output.shieldedMode !== ShieldedOutputMode.FULLY_SHIELDED
+        ) {
+          throw new SendTxError(
+            `Invalid shieldedMode '${String(output.shieldedMode)}': expected AMOUNT_SHIELDED or ` +
+              `FULLY_SHIELDED.`
+          );
+        }
         const shieldedAddressObj = new Address(output.address, { network });
         if (!shieldedAddressObj.isShielded()) {
           throw new SendTxError(
@@ -545,7 +557,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.wallet,
       network,
       this.storage,
-      partialInputs
+      partialInputs,
+      // Only pull extra HTR to fund the shielded-change fee when the wallet is
+      // already auto-selecting HTR; if the caller supplied the HTR inputs,
+      // convertHtrChangeIfRequested throws rather than choosing more.
+      shouldChooseHTRInputs
     );
     totalFee += addedFee;
 
@@ -601,6 +617,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       generatorBlindingFactor: Buffer;
     }> = [];
 
+    // Every input here is wallet-owned: user-supplied inputs are validated
+    // upstream (checkUnspentInput rejects a transparent output that is not
+    // isAddressMine with "... is not from the wallet"; the input-resolve step
+    // rejects a non-owned/undecoded shielded slot), and auto-selected inputs
+    // come from the wallet's own UTXO set. So getUtxo below is always found.
     for (const inp of allInputs) {
       const utxo = await this.storage.getUtxo({
         txId: inp.txId,
@@ -670,8 +691,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
 
+      // Shuffle the shielded outputs so a change output isn't at a predictable
+      // index. Unlike transparent outputs (shuffled above), shielded outputs
+      // hide amount + token but NOT the destination address — the spend-derived
+      // P2PKH is on-chain in the output script — so change sent to the wallet's
+      // own address stays identifiable by position. The balance equation is a
+      // sum over all outputs, so order is cryptographically irrelevant
+      // (createShieldedOutputs assigns the balancing blinding factor to whichever
+      // def ends up last). inputGenerators/blindedInputsArr are input-side and
+      // order-independent of the outputs.
+      const shuffledShieldedDefs = shuffle(shieldedOutputDefs);
       shieldedOutputs = await createShieldedOutputs(
-        shieldedOutputDefs,
+        shuffledShieldedDefs,
         cryptoProvider,
         network,
         inputGenerators,
@@ -690,8 +721,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // sum of input values to equal sum of other-output values plus the
     // last-output value, so transparent inputs MUST be included when the
     // wallet pulls from a mixed transparent+shielded pool — otherwise the
-    // function returns a bf that doesn't satisfy the equation and the
-    // fullnode panics trying to build the excess commitment at verify time.
+    // function returns a bf that doesn't satisfy the equation and the fullnode
+    // rejects the tx: its balance verification fails when it builds the excess
+    // commitment at verify time.
     //
     // Mutually exclusive with shielded outputs (hathor-core enforces this at
     // verify time). We gate on `shieldedOutputs.length === 0` to skip this
@@ -1247,7 +1279,8 @@ export async function convertHtrChangeIfRequested(
   wallet: HathorWallet | null,
   network: ReturnType<IStorage['config']['getNetwork']>,
   storage: IStorage,
-  existingInputs: IDataInput[] = []
+  existingInputs: IDataInput[] = [],
+  canSelectMoreHtr: boolean = true
 ): Promise<{ addedFee: bigint }> {
   if (!mode) return { addedFee: 0n };
   if (!wallet) return { addedFee: 0n };
@@ -1280,10 +1313,20 @@ export async function convertHtrChangeIfRequested(
   let changeValue = transparentChange.value;
 
   if (changeValue <= additionalFee) {
-    // The change alone can't fund the shielded-output fee. Pull extra HTR
-    // UTXOs (excluding those already consumed by this tx) until the change
-    // strictly exceeds the fee, so the resulting shielded value is > 0. The
-    // pulled value flows entirely into the change; it adds no shielded
+    // The change alone can't fund the shielded-output fee. If the wallet is NOT
+    // auto-selecting HTR (the caller supplied the HTR inputs), pulling extra
+    // UTXOs would break the "user-supplied inputs -> wallet selects nothing
+    // more" contract — fail instead so the caller keeps control of the input
+    // set (they can add HTR, send less, or drop changeShieldedMode).
+    if (!canSelectMoreHtr) {
+      throw new SendTxError(
+        'HTR change is too small to fund its shielded-output fee, and HTR inputs were ' +
+          'user-supplied so no additional HTR can be selected to cover the difference.'
+      );
+    }
+    // Pull extra HTR UTXOs (excluding those already consumed by this tx) until
+    // the change strictly exceeds the fee, so the resulting shielded value is
+    // > 0. The pulled value flows entirely into the change; it adds no shielded
     // output, so the fee does not grow again — no re-selection loop.
     const usedUtxos = new Set<string>();
     for (const inp of existingInputs) {
