@@ -1409,6 +1409,55 @@ describe('prepare transactions without signature', () => {
     ).rejects.toThrow('Pin is required.');
   });
 
+  test('createNanoContractCreateTokenTransaction does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    // Register an external signer (mirrors a passkey wallet), which makes the pin optional.
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // With the external signer the "Pin is required." guard must NOT fire. The build fails later
+    // (resolving a non-existent nano contract), but the failure is NOT the pin guard — which is
+    // what pins the relaxation: reverting the condition to `if (!pin)` makes this reject with
+    // 'Pin is required.' and the test fails.
+    const err = await hWallet
+      .createNanoContractCreateTokenTransaction(
+        'noop',
+        fakeAddress.base58,
+        { ncId: 'a'.repeat(64), args: [], actions: [] },
+        { name: '01', symbol: 'my01', amount: 100n, mintAddress: fakeAddress.base58 },
+        { signTx: false }
+      )
+      .catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).not.toContain('Pin is required');
+  });
+
+  test('createNanoContractCreateTokenTransaction still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(
+      hWallet.createNanoContractCreateTokenTransaction(
+        'noop',
+        fakeAddress.base58,
+        { ncId: 'a'.repeat(64), args: [], actions: [] },
+        { name: '01', symbol: 'my01', amount: 100n, mintAddress: fakeAddress.base58 },
+        { signTx: false }
+      )
+    ).rejects.toThrow('Pin is required.');
+  });
+
   test('prepareMintTokensData', async () => {
     // fake stuff to support the test
     const fakeMintAuthority = [
