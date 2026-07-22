@@ -49,7 +49,7 @@ import {
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
-import { DEFAULT_ADDRESS_META } from '../storage/storage';
+import { getDefaultAddressMeta } from '../storage/storage';
 import { ShieldedDecodeSystemicError } from '../errors';
 
 /**
@@ -1046,7 +1046,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { ...DEFAULT_ADDRESS_META };
+      addressMeta = getDefaultAddressMeta();
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -1268,7 +1268,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { ...DEFAULT_ADDRESS_META };
+      addressMeta = getDefaultAddressMeta();
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -1328,7 +1328,7 @@ export async function processNewTx(
       if (!addressMeta) {
         // Save address meta in store, because the caller might be
         // the first transaction for this address
-        addressMeta = { ...DEFAULT_ADDRESS_META };
+        addressMeta = getDefaultAddressMeta();
         await store.editAddressMeta(caller, addressMeta);
       }
 
@@ -1438,7 +1438,7 @@ export async function processUtxoUnlock(
   // create metadata for address and token if it does not exist
   // This should not happen, but we check so that typescript compiler can guarantee the type
   if (!addressMeta) {
-    addressMeta = { ...DEFAULT_ADDRESS_META };
+    addressMeta = getDefaultAddressMeta();
   }
   if (!tokenMeta) {
     tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
