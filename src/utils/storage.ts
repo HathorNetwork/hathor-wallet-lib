@@ -50,6 +50,7 @@ import {
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { DEFAULT_ADDRESS_META } from '../storage/storage';
+import { ShieldedDecodeSystemicError } from '../errors';
 
 /**
  * Get history sync method for a given mode
@@ -557,6 +558,7 @@ export async function processHistory(
   // and the fullnode reliably stamps `spent_by` on both transparent and shielded
   // outputs (to_json_extended), so a spend seen during the walk leaves the
   // parent's UTXO unsaved rather than resurrected.
+  const skippedTxIds: string[] = [];
   for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
     try {
       const processedData = await processNewTx(storage, tx, {
@@ -571,17 +573,27 @@ export async function processHistory(
         tokens.add(token);
       }
     } catch (e) {
-      // A single tx must not strand the entire history walk. processNewTx
-      // rethrows a SYSTEMIC shielded-decode failure (wrong PIN / missing scan
-      // key) for the realtime onNewTx path so it stays retryable; but here we
-      // are re-walking the whole history after cleanMetadata() already wiped the
-      // metadata, so aborting would leave the wallet with empty balances. Log
-      // and skip this tx — the rest of the history still rebuilds its metadata,
-      // and the skipped tx is re-processed on the next reload (once the
-      // PIN/scan key is available). Skipping here loses that tx's transparent
-      // credit too, but only until the next reload, whereas aborting loses
-      // everything now.
-      storage.logger.error('Error processing tx during history reload, skipping', tx.tx_id, e);
+      // SCOPED skip: only a systemic shielded-decode failure (wrong PIN /
+      // missing scan key) is skipped so it can't strand the whole reload after
+      // cleanMetadata() wiped the metadata — that throw fires BEFORE any
+      // crediting, so the skip is atomic. Every OTHER error (a store-write
+      // failure, a corrupt nano/OCB entry) is rethrown to fail LOUD: swallowing
+      // those would leave the wallet READY with partially-credited or empty
+      // balances, the exact silent-stranded outcome this walk must avoid.
+      if (!(e instanceof ShieldedDecodeSystemicError)) {
+        throw e;
+      }
+      // The skipped tx's address-index / token contributions never reach
+      // updateWalletMetadataFromProcessedTxData below, so a skip can also shrink
+      // gap-limit discovery. Record it and surface a summary after the walk
+      // rather than relying on a per-tx log line — nothing else retries this
+      // path automatically (a correct-PIN reload does).
+      skippedTxIds.push(tx.tx_id);
+      storage.logger.error(
+        'Shielded decode failed during history reload, skipping tx',
+        tx.tx_id,
+        e
+      );
     }
   }
 
@@ -591,6 +603,20 @@ export async function processHistory(
     shieldedMaxIndexUsed,
     tokens,
   });
+
+  // Surface a partial-history signal: the wallet is READY but some shielded txs
+  // could not be decoded, so balances are understated and discovery may have
+  // shrunk. Persisted on storage so the caller (HathorWallet) can emit an event
+  // / warn the user, and cleared to null when a reload completes with no skips.
+  // eslint-disable-next-line no-param-reassign
+  storage.shieldedDecodeSkippedTxIds = skippedTxIds.length > 0 ? skippedTxIds : null;
+  if (skippedTxIds.length > 0) {
+    storage.logger.error(
+      `processHistory finished with ${skippedTxIds.length} shielded tx(s) skipped ` +
+        `(undecodable — wrong PIN or missing scan key). Balances are understated and ` +
+        `gap-limit discovery may be short until a reload with a valid PIN.`
+    );
+  }
 }
 
 export async function processSingleTx(
@@ -1135,21 +1161,25 @@ export async function processNewTx(
     } catch (e) {
       // processShieldedOutputs handles per-output rewind failures internally, so
       // a throw here is a SYSTEMIC failure (wrong PIN, missing/corrupt scan key).
-      // Rethrow for the REALTIME single-tx caller (processSingleTx <- onNewTx's
-      // isNewTx path): it must NOT flip the tx to FINISHED with owned shielded
-      // outputs left uncredited — leaving it PROCESSING keeps it retryable on the
-      // next reload/sync, and the WS queue survives via enqueueOnNewTx's .catch.
-      // The RELOAD caller (processHistory: startup / scanAddressesToLoad /
-      // voided-flip reprocess) deliberately catches this per-tx and continues,
-      // so one undecodable tx can't strand a full history walk after
-      // cleanMetadata() has already wiped the metadata.
+      // Wrap it in a TYPED error so callers can distinguish "this tx's shielded
+      // side is undecodable" from any other failure (store write, corrupt
+      // nano/OCB entry):
+      //   - the REALTIME single-tx caller (processSingleTx <- onNewTx's isNewTx
+      //     path) lets it propagate, keeping the tx PROCESSING (retryable on the
+      //     next reload/sync; the WS queue survives via enqueueOnNewTx's .catch);
+      //   - the RELOAD caller (processHistory) skips ONLY this typed error and
+      //     rethrows everything else — so a store/nano failure still fails loud
+      //     instead of being swallowed as a silent per-tx skip.
       storage.logger.error(
         'Unexpected error processing shielded outputs for tx',
         tx.tx_id,
         '- wallet may be missing shielded funds.',
         e
       );
-      throw e;
+      throw new ShieldedDecodeSystemicError(
+        `Systemic shielded-decode failure for tx ${tx.tx_id} (wrong PIN or missing/corrupt scan key)`,
+        e
+      );
     }
   }
 

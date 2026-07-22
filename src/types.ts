@@ -778,6 +778,12 @@ export interface IStorage {
 
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
+  // Non-null after a processHistory reload that could not decode one or more
+  // owned shielded txs (systemic: wrong PIN / missing scan key): the list of
+  // skipped tx ids. A "partial history" flag the wallet can surface — reported
+  // balances are understated (and gap-limit discovery may be short) until a
+  // reload with a valid PIN. Reset to null when a reload completes with no skips.
+  shieldedDecodeSkippedTxIds?: string[] | null;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
   // Get the provider, or throw if it has not been configured. Confidential
   // code paths require it; a missing provider is a setup error, not a

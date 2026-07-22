@@ -732,13 +732,22 @@ describe('convertHtrChangeIfRequested', () => {
   };
 
   // Storage stub whose `selectUtxos` yields the given HTR UTXOs, honoring the
-  // caller's `filter_method` so the exclusion of already-used UTXOs is
-  // exercised the same way the real storage does.
+  // caller's `filter_method` (exclusion of already-used UTXOs) AND
+  // `order_by_value` (value sort) the same way the real storage does — so a
+  // regression in the pull-loop's ordering is observable.
   const mockStorage = (utxos: FakeUtxo[] = []) =>
     ({
       // eslint-disable-next-line @typescript-eslint/require-await
       async *selectUtxos(options: IUtxoFilterOptions) {
-        for (const utxo of utxos) {
+        let ordered = utxos;
+        if (options.order_by_value) {
+          const dir = options.order_by_value === 'asc' ? 1 : -1;
+          ordered = [...utxos].sort((a, b) => {
+            if (a.value === b.value) return 0;
+            return a.value < b.value ? -dir : dir;
+          });
+        }
+        for (const utxo of ordered) {
           if (options.filter_method && !options.filter_method(utxo as unknown as IUtxo)) continue;
           yield utxo;
         }
@@ -944,6 +953,64 @@ describe('convertHtrChangeIfRequested', () => {
     expect(partialHtrTxData.inputs).toHaveLength(2);
     expect(partialHtrTxData.inputs.map(i => i.txId)).toEqual(['used-htrpass-tx', 'free-htr-tx']);
     // newChange = change (1) + pulled (3) = 4; shielded value = 4 - fee (2) = 2.
+    expect(defs[2].value).toBe(2n);
+  });
+
+  test('H.4e — pulls the SMALLEST sufficient HTR UTXO (order_by_value asc), not the largest', async () => {
+    // deficit = fee(2) - change(1) = 1 → any single UTXO > 1 suffices. With
+    // several pullable UTXOs of different values, the asc ordering must pick the
+    // smallest sufficient one so a trivial change doesn't sweep the wallet's
+    // largest HTR UTXO into the shielded change. A regression to 'desc' would
+    // pull the 100n UTXO and this test would fail.
+    const big: FakeUtxo = {
+      txId: 'big-htr-tx',
+      index: 0,
+      value: 100n,
+      token: NATIVE_TOKEN_UID,
+      address: 'big-addr',
+      authorities: 0n,
+    };
+    const mid: FakeUtxo = {
+      txId: 'mid-htr-tx',
+      index: 0,
+      value: 5n,
+      token: NATIVE_TOKEN_UID,
+      address: 'mid-addr',
+      authorities: 0n,
+    };
+    const small: FakeUtxo = {
+      txId: 'small-htr-tx',
+      index: 0,
+      value: 3n,
+      token: NATIVE_TOKEN_UID,
+      address: 'small-addr',
+      authorities: 0n,
+    };
+    const partialHtrTxData = {
+      inputs: [] as IDataInput[],
+      outputs: [buildHtrChangeOutput(1n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      ShieldedOutputMode.FULLY_SHIELDED,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork,
+      // Offered out of ascending order to prove the helper sorts, not luck.
+      mockStorage([big, mid, small])
+    );
+
+    expect(result.addedFee).toBe(FEE_PER_FULL_SHIELDED_OUTPUT);
+    // Only the smallest sufficient UTXO (3n) was pulled — not 5n and not 100n.
+    expect(partialHtrTxData.inputs).toHaveLength(1);
+    expect(partialHtrTxData.inputs[0].txId).toBe('small-htr-tx');
+    // shielded change = change(1) + pulled(3) - fee(2) = 2. Under 'desc' it would
+    // be 1 + 100 - 2 = 99.
     expect(defs[2].value).toBe(2n);
   });
 
