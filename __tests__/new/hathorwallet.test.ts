@@ -21,7 +21,7 @@ import {
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
-import { IHistoryTx, WalletType } from '../../src/types';
+import { EcdsaTxSign, IHistoryTx, WalletType } from '../../src/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
@@ -418,6 +418,45 @@ test('signTx throws when pinCode is not provided', async () => {
   await expect(hWallet.signTx(tx, { pinCode: null })).rejects.toThrow(
     'Pin code is required to sign a transaction'
   );
+});
+
+test('signTx does not require a pinCode when an external signing method is registered', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  // No pin available anywhere: the external signer must cover for it.
+  hWallet.pinCode = null;
+
+  const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
+  const tx = new Transaction([new Input(txId, 0)], [], {
+    version: DEFAULT_TX_VERSION,
+    tokens: [],
+  });
+
+  // An external signer produces signatures without using the pin.
+  const externalSigner = jest.fn(async () => ({
+    ncCallerSignature: null,
+    inputSignatures: [
+      {
+        signature: Buffer.from('ca', 'hex'),
+        pubkey: Buffer.from('fe', 'hex'),
+        inputIndex: 0,
+        addressIndex: 0,
+      },
+    ],
+  }));
+  storage.setTxSignatureMethod(externalSigner as unknown as EcdsaTxSign);
+
+  // Must NOT throw the pin-required error, and must sign through the external method.
+  const returnedTx = await hWallet.signTx(tx);
+  expect(returnedTx).toBe(tx);
+  expect(externalSigner).toHaveBeenCalledTimes(1);
+  // The pin is unused by the external signer; the lib forwards an empty string.
+  expect(externalSigner).toHaveBeenCalledWith(tx, storage, '');
+  expect(tx.inputs[0].data.toString('hex')).toEqual('01ca01fe');
 });
 
 test('getWalletInputInfo', async () => {
