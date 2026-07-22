@@ -233,6 +233,62 @@ test('getSignatureForTx uses the spend key chain for a shielded-spend input', as
   ).toBe(true);
 });
 
+test('signTxInputs sources keys from the resolver, not from storage', async () => {
+  // Proves an external signer (e.g. a passkey signer) can supply the signing xprivs directly:
+  // signTxInputs uses the resolver's keys and never calls storage.getMainXPrivKey /
+  // getSpendXPrivKey. Reuses the shielded-spend setup so both chains are exercised.
+  const mainXpriv = new HDPrivateKey();
+  const spendXpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const shieldedSpendAddr = 'W-shielded-spend-p2pkh';
+  const idx = 7;
+
+  const getMainSpy = jest.spyOn(storage, 'getMainXPrivKey');
+  const getSpendSpy = jest.spyOn(storage, 'getSpendXPrivKey');
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr =>
+    addr === shieldedSpendAddr
+      ? {
+          base58: addr,
+          bip32AddressIndex: idx,
+          addressType: 'shielded-spend',
+          numTransactions: 1,
+          balance: new Map(),
+        }
+      : null
+  );
+  const spentTx = {
+    outputs: [],
+    shielded_outputs: [{ decoded: { address: shieldedSpendAddr } }],
+  };
+  async function* getSpentMock(inputs) {
+    yield { index: 0, input: inputs[0], tx: spentTx };
+  }
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
+  const input = new Input('cafe', 0);
+  const tx = new Transaction([input], []);
+
+  const resolver = jest.fn(async chain => (chain === 'spend' ? spendXpriv : mainXpriv));
+  const sigData = await transaction.signTxInputs(tx, storage, resolver);
+
+  // Keys came from the resolver, never from storage.
+  expect(resolver).toHaveBeenCalledWith('legacy');
+  expect(resolver).toHaveBeenCalledWith('spend');
+  expect(getMainSpy).not.toHaveBeenCalled();
+  expect(getSpendSpy).not.toHaveBeenCalled();
+
+  // The shielded input was signed with the resolver's spend key.
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0]).toMatchObject({
+    inputIndex: 0,
+    addressIndex: idx,
+    addressType: 'shielded-spend',
+  });
+  expect(sigData.inputSignatures[0].pubkey).toStrictEqual(
+    spendXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
+  );
+});
+
 test('signTransaction', async () => {
   const xpriv = new HDPrivateKey();
   const store = new MemoryStore();
