@@ -1370,6 +1370,45 @@ describe('prepare transactions without signature', () => {
     );
   });
 
+  test('prepareCreateNewToken does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    // Register an external signer (mirrors a passkey wallet), which makes the pin optional.
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // No pinCode passed: without the external signer this throws 'Pin is required.'; with it,
+    // the build proceeds (signing is delegated to the external method).
+    const txData = await hWallet.prepareCreateNewToken('01', 'my01', 100n, {
+      address: fakeAddress.base58,
+      signTx: false,
+    });
+
+    expect(txData.inputs).toHaveLength(1);
+  });
+
+  test('prepareCreateNewToken still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(
+      hWallet.prepareCreateNewToken('01', 'my01', 100n, {
+        address: fakeAddress.base58,
+        signTx: false,
+      })
+    ).rejects.toThrow('Pin is required.');
+  });
+
   test('prepareMintTokensData', async () => {
     // fake stuff to support the test
     const fakeMintAuthority = [

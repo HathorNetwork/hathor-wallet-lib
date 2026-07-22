@@ -2168,7 +2168,10 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    // The pin is only used to decrypt the local key for signing. When an external tx-signing
+    // method is registered (e.g. a passkey signer), signing does not use it, so it is optional
+    // — mirrors signTx.
+    if (!pin && !this.storage.hasTxSignatureMethod()) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2207,7 +2210,7 @@ class HathorWallet extends EventEmitter {
         tokenVersion: newOptions.tokenVersion,
       }
     );
-    return transactionUtils.prepareTransaction(txData, pin, this.storage, {
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage, {
       signTx: newOptions.signTx,
     });
   }
@@ -3586,7 +3589,9 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    // Optional when an external tx-signing method is registered (e.g. a passkey signer) —
+    // mirrors signTx.
+    if (!pin && !this.storage.hasTxSignatureMethod()) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3667,7 +3672,7 @@ class HathorWallet extends EventEmitter {
 
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
-      return prepareNanoSendTransaction(nc, pin, this.storage);
+      return prepareNanoSendTransaction(nc, pin ?? '', this.storage);
     }
     return new SendTransaction({
       storage: this.storage,
