@@ -14,6 +14,7 @@ import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import {
   DEFAULT_TX_VERSION,
+  NATIVE_TOKEN_UID,
   P2PKH_ACCT_PATH,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
@@ -29,6 +30,7 @@ import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
+import { ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
@@ -238,6 +240,72 @@ test('Protected xpub wallet methods', async () => {
   await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
   await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
   await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
+});
+
+test('sendManyOutputsSendTransaction maps shielded and transparent outputs', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendManyOutputsSendTransaction([
+    // Shielded, timelock 0 → shieldedMode carried, timelock preserved.
+    {
+      address: 'shielded-addr',
+      value: 10n,
+      token: NATIVE_TOKEN_UID,
+      shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      timelock: 0,
+    },
+    // Transparent, timelock 0 → preserved via the unified `!= null` guard
+    // (the old `o.timelock ?` guard would have dropped it).
+    {
+      address: 'transparent-timelock0-addr',
+      value: 20n,
+      token: NATIVE_TOKEN_UID,
+      timelock: 0,
+    },
+    // Transparent, no timelock → no timelock key, no shieldedMode.
+    {
+      address: 'transparent-addr',
+      value: 30n,
+      token: '01',
+    },
+    // Shielded, no timelock → shieldedMode carried, no timelock key.
+    {
+      address: 'shielded-no-timelock-addr',
+      value: 40n,
+      token: '01',
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    },
+  ]);
+
+  expect(sendTx.outputs).toHaveLength(4);
+  expect(sendTx.outputs[0]).toEqual({
+    address: 'shielded-addr',
+    value: 10n,
+    token: NATIVE_TOKEN_UID,
+    timelock: 0,
+    shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+  });
+  expect(sendTx.outputs[1]).toEqual({
+    address: 'transparent-timelock0-addr',
+    value: 20n,
+    token: NATIVE_TOKEN_UID,
+    timelock: 0,
+  });
+  expect(sendTx.outputs[2]).toEqual({
+    address: 'transparent-addr',
+    value: 30n,
+    token: '01',
+  });
+  expect(sendTx.outputs[3]).toEqual({
+    address: 'shielded-no-timelock-addr',
+    value: 40n,
+    token: '01',
+    shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+  });
 });
 
 test('getSignatures', async () => {

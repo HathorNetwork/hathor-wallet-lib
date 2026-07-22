@@ -100,6 +100,28 @@ export class MaximumNumberInputsError extends Error {}
 export class MaximumNumberOutputsError extends Error {}
 
 /**
+ * Thrown by processNewTx when decoding a tx's owned shielded outputs fails
+ * SYSTEMICALLY (wrong PIN, or a missing/corrupt scan key) — as opposed to a
+ * per-output rewind failure, which processShieldedOutputs handles internally.
+ * It is a distinct type so callers can tell "this tx's shielded side could not
+ * be decoded" apart from an unrelated failure (store write, corrupt nano/OCB
+ * entry): the reload walk (processHistory) skips ONLY this error and rethrows
+ * everything else. Carries the original error as `cause`.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ShieldedDecodeSystemicError extends Error {
+  cause: unknown;
+
+  constructor(message: string, cause: unknown) {
+    super(message);
+    this.name = 'ShieldedDecodeSystemicError';
+    this.cause = cause;
+  }
+}
+
+/**
  * Error thrown when transaction has invalid outputs
  *
  * @memberof Errors

@@ -740,8 +740,21 @@ class HathorWallet extends EventEmitter {
     const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
     for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
-      const spentUtxo = spentTx.outputs[input.index];
-      const storageAddress = await this.storage.getAddressInfo(spentUtxo.decoded.address!);
+      // SEPARATED-model resolve so the P2SH signing path picks the correct
+      // address info when the spent output lives in shielded_outputs[] (its
+      // array position is not its on-chain index).
+      const resolved = transactionUtils.resolveSpentOutput(spentTx, input.index);
+      if (resolved?.kind === 'shielded') {
+        // A shielded spend is a single-signature P2PKH on the spend chain, not a
+        // P2SH multisig input, and needs confidential-spend machinery a
+        // transparent partial transaction cannot carry — assembling P2SH input
+        // data for it would produce an invalid transaction. Reject instead.
+        throw new Error('Shielded inputs are not supported in partial transactions');
+      }
+      if (!resolved?.output.decoded?.address) {
+        continue;
+      }
+      const storageAddress = await this.storage.getAddressInfo(resolved.output.decoded.address);
       if (storageAddress === null) {
         // The transaction is on our history but this input is not ours
         continue;
@@ -1405,7 +1418,14 @@ class HathorWallet extends EventEmitter {
       only_available_utxos: true,
     })) {
       const addressIndex = await this.getAddressIndex(utxo.address);
-      const addressPath = await this.getAddressPathForIndex(addressIndex!);
+      // A shielded-spend UTXO's key lives on the spend chain (m/44'/280'/2'), not
+      // the legacy P2PKH chain — report the matching path so an external signer
+      // derives the pubkey that actually locks it (mirrors getWalletInputInfo /
+      // getSignatures).
+      const addressInfo = await this.storage.getAddressInfo(utxo.address);
+      const addressPath = await this.getAddressPathForIndex(addressIndex!, {
+        legacy: addressInfo?.addressType !== 'shielded-spend',
+      });
       // XXX: selectUtxos is supposed to return IUtxos, but here we re-create the entire object.
       yield {
         txId: utxo.txId,
@@ -1780,7 +1800,7 @@ class HathorWallet extends EventEmitter {
         // double-counting from the prior processNewTx.
         await this.storage.processHistory(pin);
       } else if (!newTx.is_voided) {
-        // Process other types of metadata updates.
+        // Process other metadata updates (first_block confirmation, height, …).
         await processMetadataChanged(this.storage, newTx);
       }
 
@@ -1904,6 +1924,7 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       startMiningTx: true,
       pinCode: null,
+      changeShieldedMode: null,
       ...options,
     };
 
@@ -1911,12 +1932,30 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress, changeShieldedMode } = newOptions;
+
+    // Map ProposedOutput[] to ISendOutput[]. Shielded outputs pass the
+    // 71-byte shielded address through as-is — SendTransaction resolves the
+    // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
+    // non-shielded address with a SendTxError at prepare time).
+    const sendOutputs = outputs.map(o => ({
+      address: o.address,
+      value: o.value,
+      token: o.token,
+      // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
+      // for both branches.
+      ...(o.timelock != null ? { timelock: o.timelock } : {}),
+      // Shielded-only field: carry the mode through so SendTransaction resolves
+      // the 71-byte address; absent for transparent outputs.
+      ...(o.shielded ? { shieldedMode: o.shielded } : {}),
+    }));
+
     return new SendTransaction({
       wallet: this,
-      outputs,
+      outputs: sendOutputs,
       inputs,
       changeAddress,
+      changeShieldedMode,
       pin,
     });
   }
@@ -3102,7 +3141,12 @@ class HathorWallet extends EventEmitter {
       if (addressInfo === null) {
         continue;
       }
-      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex);
+      // A shielded-spend input's key lives on the spend chain (m/44'/280'/2'),
+      // not the legacy P2PKH chain — select the right path so it matches the key
+      // that actually signs the input (see getSignatureForTx).
+      const addressPath = await this.getAddressPathForIndex(addressInfo.bip32AddressIndex, {
+        legacy: addressInfo.addressType !== 'shielded-spend',
+      });
       walletInputs.push({
         inputIndex: index,
         addressIndex: addressInfo.bip32AddressIndex,
@@ -3140,7 +3184,11 @@ class HathorWallet extends EventEmitter {
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
         signature: sigData.signature.toString('hex'),
-        addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
+        // Render the path that matches the key that signed: a 'shielded-spend'
+        // input was signed with the spend chain, not the legacy P2PKH chain.
+        addressPath: await this.getAddressPathForIndex(sigData.addressIndex, {
+          legacy: sigData.addressType !== 'shielded-spend',
+        }),
       });
     }
     return sigInfoArray;
