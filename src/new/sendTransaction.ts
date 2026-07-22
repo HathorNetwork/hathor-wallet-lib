@@ -592,8 +592,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // mix of transparent + shielded UTXOs of the same token: the fullnode's
     // balance verifier sums ALL inputs (transparent + shielded) against all
     // outputs, so computeBalancingBlindingFactor must see the transparent
-    // inputs too or it returns a bf that doesn't satisfy the equation (the
-    // fullnode then panics when it tries to build the excess commitment).
+    // inputs too or it returns a bf that doesn't satisfy the equation, and the
+    // fullnode rejects the tx: its balance verification fails when it builds
+    // the excess commitment.
     const transparentInputEntries: Array<{
       value: bigint;
       valueBlindingFactor: Buffer;
@@ -1296,11 +1297,16 @@ export async function convertHtrChangeIfRequested(
     const deficit = additionalFee - changeValue;
     const pulledInputs: IDataInput[] = [];
     let pulledSum = 0n;
+    // Ascending value: the whole pulled sum flows into the shielded change
+    // (changeValue += pulledSum), so pulling smallest-first — and stopping as
+    // soon as pulledSum > deficit (a tiny value, <= FEE_PER_FULL_SHIELDED_OUTPUT)
+    // — shields the least extra HTR. 'desc' would sweep the largest UTXO into
+    // the shielded change, silently shielding most of the wallet's HTR balance.
     const selectOptions: IUtxoFilterOptions = {
       token: HTR_UID,
       authorities: 0n,
       only_available_utxos: true,
-      order_by_value: 'desc',
+      order_by_value: 'asc',
       filter_method: (utxo: IUtxo) => !usedUtxos.has(`${utxo.txId}:${utxo.index}`),
     };
     for await (const utxo of storage.selectUtxos(selectOptions)) {
@@ -1312,6 +1318,12 @@ export async function convertHtrChangeIfRequested(
     }
 
     if (pulledSum <= deficit) {
+      // Deliberate hard failure, NOT a silent transparent downgrade: the caller
+      // asked to shield this change, so quietly leaving it transparent to
+      // "rescue" the send would publish the change (and link the sender)
+      // against their stated privacy intent. Fail loudly so the caller can
+      // decide (send less, consolidate HTR, or drop changeShieldedMode) rather
+      // than have privacy silently downgraded.
       throw new SendTxError(
         'HTR change is too small to fund its shielded-output fee and no additional ' +
           'HTR is available to cover the difference.'

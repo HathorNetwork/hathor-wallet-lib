@@ -14,6 +14,7 @@ import {
   TOKEN_AUTHORITY_MASK,
 } from '../../src/constants';
 import Network from '../../src/models/network';
+import Address from '../../src/models/address';
 import SendTransaction, {
   isDataOutput,
   checkUnspentInput,
@@ -723,11 +724,23 @@ describe('convertHtrChangeIfRequested', () => {
       buildShieldedDef(ShieldedOutputMode.FULLY_SHIELDED),
     ];
 
+    // Known scan/spend keys so the emitted def can be bound to them. Both keys
+    // are 33-byte compressed pubkeys and the spend address is a valid P2PKH, so
+    // a scan<->spend swap in the conversion would pass a shape-only check while
+    // making the change output undetectable (and unrecoverable) by the receiver.
+    const knownScanPubkey = new PrivateKey().toPublicKey().toBuffer();
+    const knownSpendPubkey = new PrivateKey().toPublicKey().toBuffer();
+    const knownShieldedAddr = encodeShieldedAddress(
+      knownScanPubkey,
+      knownSpendPubkey,
+      testnetNetwork
+    );
+
     const result = await convertHtrChangeIfRequested(
       partialHtrTxData,
       defs,
       ShieldedOutputMode.FULLY_SHIELDED,
-      mockWallet(buildShieldedAddress()),
+      mockWallet(knownShieldedAddr),
       testnetNetwork,
       mockStorage()
     );
@@ -741,8 +754,14 @@ describe('convertHtrChangeIfRequested', () => {
     expect(htrChange.token).toBe(NATIVE_TOKEN_UID);
     expect(htrChange.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
     expect(htrChange.value).toBe(100n - FEE_PER_FULL_SHIELDED_OUTPUT);
-    // scanPubkey is hex-encoded 33 bytes (66 hex chars).
-    expect(htrChange.scanPubkey).toMatch(/^[0-9a-f]{66}$/);
+    // Bind the emitted keys to the known address: scanPubkey must be the scan
+    // key (the ECDH key the receiver scans with) and address must be the
+    // spend-derived P2PKH — not swapped. This is what makes the change output
+    // recoverable, so assert identity, not just shape.
+    expect(htrChange.scanPubkey).toBe(knownScanPubkey.toString('hex'));
+    expect(htrChange.address).toBe(
+      new Address(knownShieldedAddr, { network: testnetNetwork }).getSpendAddress().base58
+    );
   });
 
   test('H.2 — converts transparent HTR change to AS', async () => {
@@ -1158,6 +1177,18 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     const values = result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b));
     expect(values).toEqual([10n, 20n]);
     expect(result.shieldedOutputs!.every(o => o.token === CUSTOM_TOKEN)).toBe(true);
+    // Bind the converted change output (20n) to the wallet's known change-address
+    // keys: scanPubkey must be the scan key and address the spend-derived P2PKH.
+    // A scan<->spend swap in the custom-token conversion (sendTransaction.ts
+    // ~459/462) would pass the value/count checks above while making the change
+    // undetectable/unrecoverable by the receiver.
+    const changeOutput = result.shieldedOutputs!.find(o => o.value === 20n)!;
+    expect(changeOutput.scanPubkey).toBe(
+      root.deriveChild("m/0'/0").publicKey.toBuffer().toString('hex')
+    );
+    expect(changeOutput.address).toBe(
+      new Address(buildShieldedAddr(0), { network: testnetNetwork }).getSpendAddress().base58
+    );
     // No transparent change survives.
     expect(result.outputs).toHaveLength(0);
     // Fee header carries both per-output shielded fees (AMOUNT = 1n each).

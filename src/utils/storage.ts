@@ -558,16 +558,30 @@ export async function processHistory(
   // outputs (to_json_extended), so a spend seen during the walk leaves the
   // parent's UTXO unsaved rather than resurrected.
   for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
-    const processedData = await processNewTx(storage, tx, {
-      rewardLock,
-      nowTs,
-      currentHeight,
-      pinCode,
-    });
-    legacyMaxIndexUsed = Math.max(legacyMaxIndexUsed, processedData.legacyMaxAddressIndex);
-    shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
-    for (const token of processedData.tokens) {
-      tokens.add(token);
+    try {
+      const processedData = await processNewTx(storage, tx, {
+        rewardLock,
+        nowTs,
+        currentHeight,
+        pinCode,
+      });
+      legacyMaxIndexUsed = Math.max(legacyMaxIndexUsed, processedData.legacyMaxAddressIndex);
+      shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
+      for (const token of processedData.tokens) {
+        tokens.add(token);
+      }
+    } catch (e) {
+      // A single tx must not strand the entire history walk. processNewTx
+      // rethrows a SYSTEMIC shielded-decode failure (wrong PIN / missing scan
+      // key) for the realtime onNewTx path so it stays retryable; but here we
+      // are re-walking the whole history after cleanMetadata() already wiped the
+      // metadata, so aborting would leave the wallet with empty balances. Log
+      // and skip this tx — the rest of the history still rebuilds its metadata,
+      // and the skipped tx is re-processed on the next reload (once the
+      // PIN/scan key is available). Skipping here loses that tx's transparent
+      // credit too, but only until the next reload, whereas aborting loses
+      // everything now.
+      storage.logger.error('Error processing tx during history reload, skipping', tx.tx_id, e);
     }
   }
 
@@ -1121,9 +1135,14 @@ export async function processNewTx(
     } catch (e) {
       // processShieldedOutputs handles per-output rewind failures internally, so
       // a throw here is a SYSTEMIC failure (wrong PIN, missing/corrupt scan key).
-      // Rethrow so onNewTx does not flip the tx to FINISHED with owned shielded
-      // outputs left uncredited: leaving it PROCESSING keeps it retryable on the
+      // Rethrow for the REALTIME single-tx caller (processSingleTx <- onNewTx's
+      // isNewTx path): it must NOT flip the tx to FINISHED with owned shielded
+      // outputs left uncredited — leaving it PROCESSING keeps it retryable on the
       // next reload/sync, and the WS queue survives via enqueueOnNewTx's .catch.
+      // The RELOAD caller (processHistory: startup / scanAddressesToLoad /
+      // voided-flip reprocess) deliberately catches this per-tx and continues,
+      // so one undecodable tx can't strand a full history walk after
+      // cleanMetadata() has already wiped the metadata.
       storage.logger.error(
         'Unexpected error processing shielded outputs for tx',
         tx.tx_id,

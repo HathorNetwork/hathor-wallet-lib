@@ -501,10 +501,13 @@ const tokens = {
 
       // get output change
       if (foundAmount > requiredAmount) {
-        // A shielded change address has no direct output script; resolve it to
-        // its spend-derived P2PKH (same as explicit shielded outputs in the send
-        // pipeline). Without this, getAddressType throws for a shielded
-        // changeAddress and token creation with a shielded change fails.
+        // The change address may be in the wallet's 71-byte universal format,
+        // which has no single transparent output script. This deposit change is
+        // a plain TRANSPARENT output (shielded token-creation change is out of
+        // scope), so resolve the address to its spend-derived P2PKH — the same
+        // uniform address->script resolution the transaction layer applies to
+        // every output address. Without this, getAddressType throws for a
+        // 71-byte changeAddress.
         const cAddress = resolveOutputScriptAddress(
           await storage.getChangeAddress({ changeAddress }),
           storage.config.getNetwork()

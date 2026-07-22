@@ -216,6 +216,73 @@ describe('processHistory — orchestration', () => {
     await processHistory(storage);
     expect(cleanSpy).toHaveBeenCalled();
   });
+
+  it('skips (does not abort on) a tx whose shielded decode fails systemically, and keeps walking', async () => {
+    // A systemic shielded-decode failure — here getScanXPrivKey rejecting, as a
+    // wrong-PIN / corrupt-scan-key would — makes processNewTx rethrow. During a
+    // full reload that rethrow must NOT abort the whole walk: cleanMetadata() has
+    // already wiped balances, so aborting would strand the wallet empty.
+    // processHistory catches per-tx, logs, and continues.
+    const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+    const TX_A = 'aa'.repeat(32);
+    const TX_B = 'bb'.repeat(32);
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: SHIELDED_ADDR,
+      bip32AddressIndex: 3,
+      publicKey: '02'.repeat(33),
+      addressType: 'shielded-spend',
+    });
+
+    const buildOwnedShieldedTx = (txId: string, timestamp: number): IHistoryTx =>
+      ({
+        tx_id: txId,
+        version: 1,
+        timestamp,
+        is_voided: false,
+        nonce: 0,
+        weight: 1,
+        parents: [],
+        inputs: [],
+        height: 100,
+        tokens: [],
+        outputs: [],
+        shielded_outputs: [
+          {
+            mode: ShieldedOutputMode.FULLY_SHIELDED,
+            commitment: 'aa'.repeat(33),
+            range_proof: 'bb'.repeat(10),
+            script: '',
+            token_data: 0,
+            ephemeral_pubkey: 'cc'.repeat(33),
+            asset_commitment: 'dd'.repeat(33),
+            decoded: { address: SHIELDED_ADDR, timelock: null },
+            spent_by: null,
+          },
+        ],
+      }) as unknown as IHistoryTx;
+
+    await store.saveTx(buildOwnedShieldedTx(TX_A, 1));
+    await store.saveTx(buildOwnedShieldedTx(TX_B, 2));
+
+    // Minimal provider only to pass processNewTx's decode gate; the throw comes
+    // from getScanXPrivKey, unlocked once per tx before any provider rewind runs.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    storage.shieldedCryptoProvider = {} as any;
+    jest.spyOn(storage, 'getScanXPrivKey').mockRejectedValue(new Error('wrong pin'));
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+
+    // Must resolve, not reject: the systemic failure does not abort the reload.
+    await expect(processHistory(storage, { pinCode: 'pin' })).resolves.toBeUndefined();
+
+    // Both txs were walked and skipped — proves the loop continued past the first
+    // failure (chronological asc order) rather than aborting on it.
+    const skipCalls = (storage.logger.error as jest.Mock).mock.calls.filter(
+      c => c[0] === 'Error processing tx during history reload, skipping'
+    );
+    expect(skipCalls.map(c => c[1])).toEqual([TX_A, TX_B]);
+  });
 });
 
 describe('scanning policy methods', () => {
