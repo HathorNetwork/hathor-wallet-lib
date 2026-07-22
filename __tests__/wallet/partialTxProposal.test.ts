@@ -152,7 +152,7 @@ test('addSend', async () => {
     markAsSelected: true,
   });
   expect(spyOutput).not.toHaveBeenCalled();
-  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n });
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n, shielded: false });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Mock cleanup
@@ -193,7 +193,7 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 8n, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n });
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n, shielded: false });
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10n, ADDR1, {
     token: FAKE_UID,
     authorities: 0n,

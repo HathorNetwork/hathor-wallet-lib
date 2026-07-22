@@ -85,6 +85,10 @@ export class Storage implements IStorage {
 
   shieldedCryptoProvider?: IShieldedCryptoProvider;
 
+  // See IStorage.shieldedDecodeSkippedTxIds — the "partial history" flag set by
+  // processHistory when some owned shielded txs could not be decoded.
+  shieldedDecodeSkippedTxIds?: string[] | null;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -105,6 +109,7 @@ export class Storage implements IStorage {
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
     this.shieldedCryptoProvider = undefined;
+    this.shieldedDecodeSkippedTxIds = null;
     this.logger = getDefaultLogger();
   }
 
