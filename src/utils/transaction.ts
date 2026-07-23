@@ -449,9 +449,11 @@ const transaction = {
 
       let derivedKey;
       if (addressInfo.addressType === 'shielded-spend') {
-        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs
+        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs.
+        // Shielded keys use compliant derivation (deriveChild), per #1132 — must match how the
+        // shielded-spend addresses are derived, or signatures fail on-chain.
         const spendXpriv = await getSpendXpriv();
-        derivedKey = spendXpriv.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+        derivedKey = spendXpriv.deriveChild(addressInfo.bip32AddressIndex);
       } else {
         // Use legacy key chain (m/44'/280'/0'/0) for regular addresses
         const legacyXpriv = await getLegacyXpriv();
