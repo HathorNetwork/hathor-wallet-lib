@@ -37,6 +37,7 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  CreateNftAdapterOptions,
   MintTokensAdapterOptions,
   MeltTokensAdapterOptions,
   MintMeltResult,
@@ -85,6 +86,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   // The HTR deposit/fee shortfall surfaces from selectUtxos while gathering the
   // funding UTXOs: "Don't have enough utxos to fill total amount."
   insufficientHtrError = /^Don't have enough utxos to fill total amount\.$/;
+
+  // An unknown token surfaces as WalletRequestError from walletApi.getTokenDetails.
+  unknownTokenError = /^Error getting token [0-9a-f]{64} details\.$/;
 
   defaultPinCode = SERVICE_PIN;
 
@@ -341,6 +345,62 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
 
   async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
     return this.concrete(wallet).getTokenDetails(tokenUid);
+  }
+
+  async getTokens(wallet: FuzzyWalletType): Promise<string[]> {
+    return this.concrete(wallet).getTokens();
+  }
+
+  async createNFT(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    data: string,
+    options?: CreateNftAdapterOptions
+  ): Promise<CreateTokenResult> {
+    const serviceWallet = this.concrete(wallet);
+    const { recvWallet, ...nftOptions } = options ?? {};
+    // Explicit createMint/createMelt normalize the facades' divergent defaults —
+    // see the CreateNftAdapterOptions JSDoc in types.ts.
+    const result = await serviceWallet.createNFT(name, symbol, amount, data, {
+      ...nftOptions,
+      createMint: nftOptions.createMint ?? false,
+      createMelt: nftOptions.createMelt ?? false,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('createNFT: transaction had no hash');
+    }
+    const nftTxId = result.hash;
+    await pollForTx(serviceWallet, nftTxId);
+    await pollForTokenDetails(serviceWallet, nftTxId);
+
+    // When a recipient wallet is provided (authority outputs routed to its
+    // addresses), also wait for ITS index to surface them, mirroring mintTokens.
+    if (recvWallet) {
+      const recv = this.concrete(recvWallet);
+      await pollForTx(recv, nftTxId);
+
+      const routedAuthorityTypes: AuthorityType[] = [];
+      if (nftOptions.createMint && nftOptions.mintAuthorityAddress) {
+        routedAuthorityTypes.push(AuthorityType.MINT);
+      }
+      if (nftOptions.createMelt && nftOptions.meltAuthorityAddress) {
+        routedAuthorityTypes.push(AuthorityType.MELT);
+      }
+      for (const authorityType of routedAuthorityTypes) {
+        await pollUntilCondition(async () => {
+          const utxos = await recv.getAuthorityUtxo(nftTxId, authorityType, {
+            many: true,
+            only_available_utxos: true,
+          });
+          return utxos.some(u => u.txId === nftTxId);
+        }, `recipient ${authorityType} authority index reflects NFT creation ${nftTxId}`);
+      }
+    }
+
+    return { hash: nftTxId, transaction: result };
   }
 
   async getUtxos(

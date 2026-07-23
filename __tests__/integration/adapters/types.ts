@@ -104,6 +104,15 @@ export interface IWalletTestAdapter {
    * matching a sibling pattern.
    */
   insufficientHtrError: RegExp;
+
+  /**
+   * The exact error message this facade raises when `getTokenDetails()` is
+   * called for a token the network does not know. The fullnode surfaces the
+   * node's "Unknown token" message in a plain `Error`, while the wallet-service
+   * raises `WalletRequestError` with its own wording — so cross-facade
+   * unknown-token tests assert against this per-adapter matcher.
+   */
+  unknownTokenError: RegExp;
   defaultPassword: string;
 
   /**
@@ -228,6 +237,22 @@ export interface IWalletTestAdapter {
   ): Promise<CreateTokenResult>;
 
   /**
+   * Creates an NFT (a token whose first output is a data output holding `data`)
+   * and waits for it to be confirmed.
+   * Handles pinCode injection and tx-waiting differences between facades, and
+   * normalizes the facades' divergent authority defaults (see
+   * {@link CreateNftAdapterOptions}).
+   */
+  createNFT(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    data: string,
+    options?: CreateNftAdapterOptions
+  ): Promise<CreateTokenResult>;
+
+  /**
    * Mints additional units of an existing token and waits for the tx.
    * Handles pinCode injection and tx-waiting differences between facades.
    */
@@ -255,6 +280,13 @@ export interface IWalletTestAdapter {
    * so the adapter returns the common shape directly.
    */
   getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult>;
+
+  /**
+   * Lists the uids of every token the wallet has transactions with, including
+   * the native token. Both facades expose `getTokens()` returning `string[]`;
+   * element ordering is not part of the contract.
+   */
+  getTokens(wallet: FuzzyWalletType): Promise<string[]>;
 
   // --- UTXO queries ---
 
@@ -412,6 +444,38 @@ export interface CreateTokenOptions {
 export interface CreateTokenResult {
   hash: string;
   transaction: Transaction;
+}
+
+/**
+ * Options for creating an NFT via the adapter.
+ *
+ * Cross-facade divergence the adapter papers over: the fullnode facade's
+ * `createNFT()` takes `createMint`/`createMelt` (both defaulting to `false`),
+ * while the wallet-service facade declares `createMintAuthority`/
+ * `createMeltAuthority` — but its underlying `prepareCreateNewToken()` still
+ * reads pass-through `createMint`/`createMelt`, which default to `true` there.
+ * Both adapters therefore always forward explicit `createMint`/`createMelt`
+ * booleans (defaulting to `false`, the fullnode behavior) so shared tests see
+ * one contract.
+ */
+export interface CreateNftAdapterOptions {
+  address?: string;
+  changeAddress?: string;
+  createMint?: boolean;
+  mintAuthorityAddress?: string;
+  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string;
+  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMeltAuthorityAddress?: boolean;
+  /**
+   * If provided, the adapter also waits until this wallet's index reflects the
+   * NFT creation (including any authority outputs routed to its addresses), so
+   * cross-wallet tests can read them without hitting the wallet-service index
+   * lag. Not forwarded to the facade `createNFT()` call.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**
