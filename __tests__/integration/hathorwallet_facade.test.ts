@@ -11,7 +11,7 @@ import {
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { NftValidationError, TxNotFoundError } from '../../src/errors';
+import { NftValidationError } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import transaction from '../../src/utils/transaction';
 import { WalletType, TokenVersion } from '../../src/types';
@@ -135,148 +135,8 @@ describe('getWalletInputInfo', () => {
 
 // getTxById, getFullHistory and getTxBalance tests moved to fullnode-specific/history-query.test.ts
 
-describe('getFullTxById', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  let gWallet;
-  beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
-  });
-
-  it('should download an existing transaction from the fullnode', async () => {
-    const hWallet = await generateWalletHelper();
-
-    const tx1 = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
-
-    const fullTx = await hWallet.getFullTxById(tx1.hash);
-    expect(fullTx.success).toStrictEqual(true);
-
-    const fullTxKeys = Object.keys(fullTx);
-    expect(fullTxKeys).toContain('meta');
-    expect(fullTxKeys).toContain('tx');
-    expect(fullTxKeys).toContain('success');
-    expect(fullTxKeys).toContain('spent_outputs');
-  });
-
-  it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
-    );
-  });
-
-  it('should throw an error on valid but not found transaction', async () => {
-    await expect(
-      gWallet.getFullTxById('0011371a7c07f7e8017c52c0a4f5293ccf30c865d96255d1b515f96f7a6a6299')
-    ).rejects.toThrow(TxNotFoundError);
-  });
-});
-
-describe('getTxConfirmationData', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  let gWallet;
-  beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
-  });
-
-  it('should download confirmation data for an existing transaction from the fullnode', async () => {
-    const hWallet = await generateWalletHelper();
-
-    const tx1 = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
-
-    const confirmationData = await hWallet.getTxConfirmationData(tx1.hash);
-
-    expect(confirmationData.success).toStrictEqual(true);
-
-    const confirmationDataKeys = Object.keys(confirmationData);
-    expect(confirmationDataKeys).toContain('accumulated_bigger');
-    expect(confirmationDataKeys).toContain('accumulated_weight');
-    expect(confirmationDataKeys).toContain('confirmation_level');
-    expect(confirmationDataKeys).toContain('success');
-  });
-
-  it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
-    );
-  });
-
-  it('should throw TxNotFoundError on valid hash but not found transaction', async () => {
-    await expect(
-      gWallet.getTxConfirmationData(
-        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
-      )
-    ).rejects.toThrow(TxNotFoundError);
-  });
-});
-
-describe('graphvizNeighborsQuery', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  let gWallet;
-  beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
-  });
-
-  it('should download graphviz neighbors data for a existing transaction from the fullnode', async () => {
-    const hWallet = await generateWalletHelper();
-    const tx1 = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
-    const neighborsData = await hWallet.graphvizNeighborsQuery(tx1.hash, 'funds', 1);
-
-    expect(neighborsData).toMatch(/digraph {/);
-  });
-
-  it('should capture errors when graphviz returns error', async () => {
-    const hWallet = await generateWalletHelper();
-    const tx1 = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
-
-    await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrow(
-      'Request failed with status code 500'
-    );
-  });
-
-  it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
-    );
-  });
-
-  it('should throw TxNotFoundError on valid but not found transaction', async () => {
-    await expect(
-      gWallet.graphvizNeighborsQuery(
-        '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
-      )
-    ).rejects.toThrow(TxNotFoundError);
-  });
-});
+// getFullTxById, getTxConfirmationData and graphvizNeighborsQuery tests moved
+// to fullnode-specific/fullnode-api-query.test.ts
 
 // sendTransaction tests moved to:
 //   shared/send-transaction.test.ts, shared/send-transaction-tokens.test.ts,
