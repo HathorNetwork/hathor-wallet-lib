@@ -375,21 +375,45 @@ const transaction = {
   },
 
   /**
-   * Get the signatures for a transaction
+   * Produce the signatures for every wallet-owned input of a transaction (plus the nano/OCB
+   * caller signature), given a resolver that returns the change-path xpriv for each key chain
+   * (m/.../0, from which per-input keys are derived — see getXpriv).
+   *
+   * This is the core of getSignatureForTx, factored out so external signers — e.g. a passkey
+   * signer that derives keys from a biometric ceremony instead of decrypting a stored key — can
+   * reuse the exact same input selection, shielded-spend handling and encoding instead of
+   * duplicating it (and drifting from it).
+   *
    * @param tx Transaction to sign
    * @param storage Storage of the wallet
-   * @param pinCode Pin to unlock the mainKey for signatures
+   * @param getXpriv Resolver returning the change-path xpriv for a chain: 'legacy' is the P2PKH
+   *   chain (m/44'/280'/0'/0), 'spend' is the shielded spend chain (m/44'/280'/2'/0). Each chain is
+   *   fetched lazily and at most once: 'legacy' only when a legacy input, a nano-contract caller or
+   *   an OCB pubkey needs it; 'spend' only when a shielded-spend input is present. This matters for
+   *   a passkey signer, where each resolver call may be a biometric ceremony — an all-shielded tx
+   *   with no nano/OCB header never triggers the 'legacy' prompt.
    */
-  async getSignatureForTx(
+  async signTxInputs(
     tx: Transaction,
     storage: IStorage,
-    pinCode: string
+    getXpriv: (chain: 'legacy' | 'spend') => Promise<HDPrivateKey>
   ): Promise<ITxSignatureData> {
-    const xprivstr = await storage.getMainXPrivKey(pinCode);
-    const xprivkey = HDPrivateKey.fromString(xprivstr);
-
-    // Lazily load the spend key chain for shielded-spend addresses
-    let spendXprivkey: typeof xprivkey | null = null;
+    // Lazily load each key chain (see getXpriv doc). Cache the first fetch so a chain used by
+    // many inputs still resolves it only once.
+    let legacyXprivkey: HDPrivateKey | null = null;
+    const getLegacyXpriv = async (): Promise<HDPrivateKey> => {
+      if (!legacyXprivkey) {
+        legacyXprivkey = await getXpriv('legacy');
+      }
+      return legacyXprivkey;
+    };
+    let spendXprivkey: HDPrivateKey | null = null;
+    const getSpendXpriv = async (): Promise<HDPrivateKey> => {
+      if (!spendXprivkey) {
+        spendXprivkey = await getXpriv('spend');
+      }
+      return spendXprivkey;
+    };
 
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
@@ -425,15 +449,15 @@ const transaction = {
 
       let derivedKey;
       if (addressInfo.addressType === 'shielded-spend') {
-        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs
-        if (!spendXprivkey) {
-          const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
-          spendXprivkey = HDPrivateKey.fromString(spendXprivStr);
-        }
-        derivedKey = spendXprivkey.deriveChild(addressInfo.bip32AddressIndex);
+        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs.
+        // Shielded keys use compliant derivation (deriveChild), per #1132 — must match how the
+        // shielded-spend addresses are derived, or signatures fail on-chain.
+        const spendXpriv = await getSpendXpriv();
+        derivedKey = spendXpriv.deriveChild(addressInfo.bip32AddressIndex);
       } else {
         // Use legacy key chain (m/44'/280'/0'/0) for regular addresses
-        derivedKey = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+        const legacyXpriv = await getLegacyXpriv();
+        derivedKey = legacyXpriv.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
       }
 
       signatures.push({
@@ -466,7 +490,8 @@ const transaction = {
         // The nano contract address or OCB pubkey are not from our wallet.
         return { inputSignatures: signatures, ncCallerSignature };
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      const legacyXpriv = await getLegacyXpriv();
+      const xpriv = legacyXpriv.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
 
       if (tx.isNanoContract()) {
         // Nano contract
@@ -482,6 +507,27 @@ const transaction = {
       inputSignatures: signatures,
       ncCallerSignature,
     };
+  },
+
+  /**
+   * Get the signatures for a transaction, sourcing the signing keys from the wallet's stored
+   * (PIN-decrypted) xprivs. Thin wrapper over signTxInputs.
+   * @param tx Transaction to sign
+   * @param storage Storage of the wallet
+   * @param pinCode Pin to unlock the mainKey for signatures
+   */
+  async getSignatureForTx(
+    tx: Transaction,
+    storage: IStorage,
+    pinCode: string
+  ): Promise<ITxSignatureData> {
+    return this.signTxInputs(tx, storage, async chain =>
+      HDPrivateKey.fromString(
+        chain === 'spend'
+          ? await storage.getSpendXPrivKey(pinCode)
+          : await storage.getMainXPrivKey(pinCode)
+      )
+    );
   },
 
   /**
