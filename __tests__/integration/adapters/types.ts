@@ -369,6 +369,20 @@ export interface IWalletTestAdapter {
   getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined>;
 
   /**
+   * Maps each queried address to whether it belongs to the wallet.
+   * Both facades expose `checkAddressesMine()` with the same result shape —
+   * the fullnode resolves it locally from storage, the wallet-service via its
+   * REST API. Callers must pass well-formed base58 addresses: the
+   * wallet-service response schema only admits base58 keys, so malformed
+   * address strings are a fullnode-only scenario
+   * (see `fullnode-specific/address-info.test.ts`).
+   */
+  checkAddressesMine(
+    wallet: FuzzyWalletType,
+    addresses: string[]
+  ): Promise<CheckAddressesMineResult>;
+
+  /**
    * Returns the address at a specific derivation index.
    */
   getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string>;
@@ -621,4 +635,14 @@ export interface AdapterAddress {
   index: number;
   /** Derivation path (e.g. `m/44'/280'/0'/0/3`); both facades expose this. */
   addressPath: string;
+}
+
+/**
+ * Result of an adapter `checkAddressesMine` query: each queried address mapped
+ * to whether it belongs to the wallet. The two facades already agree on this
+ * shape — the fullnode returns `Record<string, boolean>` and the
+ * wallet-service returns its structurally identical `WalletAddressMap`.
+ */
+export interface CheckAddressesMineResult {
+  [address: string]: boolean;
 }
