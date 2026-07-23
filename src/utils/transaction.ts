@@ -430,7 +430,7 @@ const transaction = {
           const spendXprivStr = await storage.getSpendXPrivKey(pinCode);
           spendXprivkey = HDPrivateKey.fromString(spendXprivStr);
         }
-        derivedKey = spendXprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+        derivedKey = spendXprivkey.deriveChild(addressInfo.bip32AddressIndex);
       } else {
         // Use legacy key chain (m/44'/280'/0'/0) for regular addresses
         derivedKey = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);

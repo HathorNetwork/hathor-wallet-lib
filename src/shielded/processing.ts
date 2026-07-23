@@ -56,10 +56,11 @@ function deriveScanChildPrivkey(
   logger: ILogger
 ): Buffer | undefined {
   try {
-    // deriveNonCompliantChild is required for private keys due to a historical
-    // bitcore-lib serialization bug. Public key derivation (in shieldedAddress.ts)
-    // uses standard deriveChild because it was always correct. Do not align these.
-    const childKey = scanHdPrivKey.deriveNonCompliantChild(addressIndex);
+    // Compliant BIP32 derivation, matching the scan PUBLIC key put into the
+    // shielded address (shieldedAddress.ts). Shielded keys are new — there is no
+    // legacy key material to stay bug-compatible with — so unlike the legacy
+    // P2PKH chain (still on deriveNonCompliantChild) they use the correct method.
+    const childKey = scanHdPrivKey.deriveChild(addressIndex);
     // The native crypto provider (ECDH) needs raw private key bytes. Other
     // wallet-lib code passes bitcore PrivateKey objects directly to bitcore
     // signing functions, but here we cross into the native ct-crypto boundary.
