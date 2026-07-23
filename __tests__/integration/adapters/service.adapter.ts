@@ -376,27 +376,53 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     await pollForTx(serviceWallet, nftTxId);
     await pollForTokenDetails(serviceWallet, nftTxId);
 
-    // When a recipient wallet is provided (authority outputs routed to its
-    // addresses), also wait for ITS index to surface them, mirroring mintTokens.
-    if (recvWallet) {
+    // pollForTx (tx-store) and pollForTokenDetails (token-details endpoint) both
+    // settle before the per-address authority-UTXO index does on wallet-service,
+    // so a read of the created authorities right after this returns can miss
+    // them. Wait for each authority UTXO to surface in its owner's index,
+    // mirroring mintTokens' own-index wait.
+    const waitForAuthority = (
+      indexWallet: HathorWalletServiceWallet,
+      authorityType: AuthorityType,
+      owner: string
+    ): Promise<void> =>
+      pollUntilCondition(async () => {
+        const utxos = await indexWallet.getAuthorityUtxo(nftTxId, authorityType, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === nftTxId);
+      }, `${owner} ${authorityType} authority index reflects NFT creation ${nftTxId}`);
+
+    // Authorities land on a separate recipient wallet only when recvWallet is
+    // set AND an authority address routes them there. Routing to another address
+    // of the creating wallet itself keeps them on the creating wallet.
+    const routedAuthorityTypes: AuthorityType[] = [];
+    if (recvWallet && nftOptions.createMint && nftOptions.mintAuthorityAddress) {
+      routedAuthorityTypes.push(AuthorityType.MINT);
+    }
+    if (recvWallet && nftOptions.createMelt && nftOptions.meltAuthorityAddress) {
+      routedAuthorityTypes.push(AuthorityType.MELT);
+    }
+
+    // Self-poll the creating wallet for every authority it retains (created and
+    // not routed away).
+    const createdAuthorityTypes: AuthorityType[] = [];
+    if (nftOptions.createMint) createdAuthorityTypes.push(AuthorityType.MINT);
+    if (nftOptions.createMelt) createdAuthorityTypes.push(AuthorityType.MELT);
+    for (const authorityType of createdAuthorityTypes) {
+      if (!routedAuthorityTypes.includes(authorityType)) {
+        await waitForAuthority(serviceWallet, authorityType, 'creating wallet');
+      }
+    }
+
+    // When a recipient wallet is provided, also wait for ITS index to surface
+    // the routed authorities.
+    if (recvWallet && routedAuthorityTypes.length > 0) {
       const recv = this.concrete(recvWallet);
       await pollForTx(recv, nftTxId);
-
-      const routedAuthorityTypes: AuthorityType[] = [];
-      if (nftOptions.createMint && nftOptions.mintAuthorityAddress) {
-        routedAuthorityTypes.push(AuthorityType.MINT);
-      }
-      if (nftOptions.createMelt && nftOptions.meltAuthorityAddress) {
-        routedAuthorityTypes.push(AuthorityType.MELT);
-      }
       for (const authorityType of routedAuthorityTypes) {
-        await pollUntilCondition(async () => {
-          const utxos = await recv.getAuthorityUtxo(nftTxId, authorityType, {
-            many: true,
-            only_available_utxos: true,
-          });
-          return utxos.some(u => u.txId === nftTxId);
-        }, `recipient ${authorityType} authority index reflects NFT creation ${nftTxId}`);
+        await waitForAuthority(recv, authorityType, 'recipient');
       }
     }
 
