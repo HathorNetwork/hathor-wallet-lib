@@ -67,10 +67,22 @@ import {
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
 
-export const DEFAULT_ADDRESS_META: IAddressMetadata = {
-  numTransactions: 0,
-  balance: new Map<string, IBalance>(),
-};
+/**
+ * Build a fresh address-metadata object.
+ *
+ * The `balance` Map MUST be a new instance per call. The previous
+ * `export const DEFAULT_ADDRESS_META` created ONE Map at module load, and every
+ * `{ ...DEFAULT_ADDRESS_META }` shallow-spread copied that same Map REFERENCE
+ * into each address's metadata — so a `balance.set(...)` for one address mutated
+ * a Map shared by every address AND every wallet instance in the process,
+ * leaking balances across addresses and surviving wallet reloads.
+ */
+export function getDefaultAddressMeta(): IAddressMetadata {
+  return {
+    numTransactions: 0,
+    balance: new Map<string, IBalance>(),
+  };
+}
 
 export class Storage implements IStorage {
   store: IStore;
@@ -84,6 +96,10 @@ export class Storage implements IStorage {
   txSignFunc: EcdsaTxSign | null;
 
   shieldedCryptoProvider?: IShieldedCryptoProvider;
+
+  // See IStorage.shieldedDecodeSkippedTxIds — the "partial history" flag set by
+  // processHistory when some owned shielded txs could not be decoded.
+  shieldedDecodeSkippedTxIds?: string[] | null;
 
   /**
    * This promise is used to chain the calls to process unlocked utxos.
@@ -105,6 +121,7 @@ export class Storage implements IStorage {
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
     this.shieldedCryptoProvider = undefined;
+    this.shieldedDecodeSkippedTxIds = null;
     this.logger = getDefaultLogger();
   }
 
@@ -273,7 +290,7 @@ export class Storage implements IStorage {
   ): AsyncGenerator<IAddressInfo & IAddressMetadata> {
     for await (const address of this.store.addressIter(opts)) {
       const meta = await this.store.getAddressMeta(address.base58);
-      yield { ...address, ...DEFAULT_ADDRESS_META, ...meta };
+      yield { ...address, ...getDefaultAddressMeta(), ...meta };
     }
   }
 
@@ -293,7 +310,7 @@ export class Storage implements IStorage {
     }
     const meta = await this.store.getAddressMeta(base58);
     const seqnum = (await this.store.getSeqnumMeta(base58)) ?? -1;
-    return { ...address, ...DEFAULT_ADDRESS_META, ...meta, seqnum };
+    return { ...address, ...getDefaultAddressMeta(), ...meta, seqnum };
   }
 
   /**
@@ -445,6 +462,15 @@ export class Storage implements IStorage {
     // tx.shielded_outputs[] (the fullnode delivers the transparent/shielded
     // split; this does not move or extract entries).
     transactionUtils.normalizeShieldedOutputs(tx);
+    // Preserve the wallet's own decoded shielded data across a re-save. The
+    // fullnode never re-sends it, so a wire-sourced overwrite (WS re-delivery,
+    // gap-limit history reload, stream re-sync) would otherwise erase the
+    // decoded balance of an already-processed tx. This is the single choke
+    // point every save passes through.
+    const storedTx = await this.store.getTx(tx.tx_id);
+    if (storedTx) {
+      transactionUtils.restoreStoredShieldedData(tx, storedTx);
+    }
     await this.store.saveTx(tx);
   }
 

@@ -133,3 +133,43 @@ describe('deriveShieldedAddress', () => {
     expect(spend.getType()).toBe('p2pkh');
   });
 });
+
+describe('shielded derivation — private key ↔ address pubkey agreement', () => {
+  // `deriveChild` (compliant) and `deriveNonCompliantChild` (the legacy bitcore
+  // bug) are identical for non-hardened children and for ~255/256 seeds, so most
+  // seeds could NOT tell a revert to the non-compliant method apart. This seed is
+  // chosen because its HARDENED shielded account paths (m/44'/280'/1' and /2')
+  // DO diverge between the two methods — which makes "use the compliant method"
+  // load-bearing here, so a revert is caught instead of sneaking through green.
+  const divRoot = HDPrivateKey.fromSeed(Buffer.alloc(32, 0xa4), 'testnet');
+  const scanAcctPriv = divRoot.deriveChild("m/44'/280'/1'").deriveChild(0);
+  const spendAcctPriv = divRoot.deriveChild("m/44'/280'/2'").deriveChild(0);
+  const scanXpub: string = scanAcctPriv.hdPublicKey.xpubkey;
+  const spendXpub: string = spendAcctPriv.hdPublicKey.xpubkey;
+
+  it('the private scan/spend child pubkey equals the on-chain address pubkey at every index', () => {
+    // The key processing.ts derives to DETECT owned outputs (scan) and the key
+    // transaction.ts derives to SIGN a shielded-spend input (spend) must equal the
+    // pubkey deriveShieldedAddress bakes into the on-chain address — otherwise owned
+    // outputs are undetectable and unspendable at the divergent indices.
+    for (let i = 0; i < 8; i++) {
+      const info = deriveShieldedAddress(scanXpub, spendXpub, i, 'testnet');
+      expect(scanAcctPriv.deriveChild(i).publicKey.toString()).toBe(info.scanPubkey);
+      expect(spendAcctPriv.deriveChild(i).publicKey.toString()).toBe(info.spendPubkey);
+    }
+  });
+
+  it('the non-compliant account derivation produces different keys (the fix is load-bearing)', () => {
+    // Reverting the account derivation in src/utils/wallet.ts to deriveNonCompliantChild
+    // changes the entire scan/spend xpub for this seed, which would break the agreement
+    // above. Pin the divergence so that revert cannot land green.
+    expect(
+      divRoot.deriveNonCompliantChild("m/44'/280'/1'").deriveNonCompliantChild(0).hdPublicKey
+        .xpubkey
+    ).not.toBe(scanXpub);
+    expect(
+      divRoot.deriveNonCompliantChild("m/44'/280'/2'").deriveNonCompliantChild(0).hdPublicKey
+        .xpubkey
+    ).not.toBe(spendXpub);
+  });
+});

@@ -625,13 +625,13 @@ const wallet = {
     // Scan (account 1') and spend (account 2') use separate derivation paths from legacy (account 0')
     // so the scan key only grants view access, not spending authority over legacy funds.
     if (argXpriv.depth === 0) {
-      const scanAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
-      const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
+      const scanAcctXpriv = argXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
+      const scanXpriv = scanAcctXpriv.deriveChild(0);
       accessData.scanXpubkey = scanXpriv.xpubkey;
       accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
 
-      const spendAcctXpriv = argXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
-      const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+      const spendAcctXpriv = argXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
+      const spendXpriv = spendAcctXpriv.deriveChild(0);
       accessData.spendXpubkey = spendXpriv.xpubkey;
       accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
     }
@@ -709,10 +709,10 @@ const wallet = {
 
     // Derive shielded scan (account 1') and spend (account 2') keys.
     // Separate from legacy (account 0') so scan key only grants view access.
-    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
-    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
-    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
-    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+    const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveChild(0);
+    const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveChild(0);
 
     return {
       walletType,
@@ -825,10 +825,10 @@ const wallet = {
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
 
     // Paths + encryption must match `generateAccessDataFromSeed` exactly.
-    const scanAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH);
-    const scanXpriv = scanAcctXpriv.deriveNonCompliantChild(0);
-    const spendAcctXpriv = rootXpriv.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH);
-    const spendXpriv = spendAcctXpriv.deriveNonCompliantChild(0);
+    const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
+    const scanXpriv = scanAcctXpriv.deriveChild(0);
+    const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
+    const spendXpriv = spendAcctXpriv.deriveChild(0);
 
     /* eslint-disable no-param-reassign */
     accessData.scanXpubkey = scanXpriv.xpubkey;

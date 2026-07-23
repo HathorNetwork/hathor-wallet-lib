@@ -94,6 +94,16 @@ export interface IWalletTestAdapter {
 
   /** Default credentials */
   defaultPinCode: string;
+
+  /**
+   * The exact error message this facade raises when a token mint/melt cannot be
+   * funded because the wallet lacks the required HTR (deposit or fee). The two
+   * facades word this differently, so cross-facade "insufficient HTR" tests
+   * assert against this per-adapter matcher rather than an alternation — a
+   * message change on either facade then fails loudly instead of silently
+   * matching a sibling pattern.
+   */
+  insufficientHtrError: RegExp;
   defaultPassword: string;
 
   /**
@@ -315,6 +325,19 @@ export interface IWalletTestAdapter {
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult>;
 
+  // --- Authority destruction ---
+
+  /**
+   * Destroys `count` authority UTXOs (mint or melt) of a token and waits for
+   * confirmation. Both facades support `destroyAuthority()`.
+   */
+  destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult>;
+
   // --- Address methods ---
 
   /**
@@ -399,8 +422,17 @@ export interface MintTokensAdapterOptions {
   changeAddress?: string;
   createAnotherMint?: boolean;
   mintAuthorityAddress?: string;
+  /** Allow `mintAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMintAuthorityAddress?: boolean;
   data?: string[];
   unshiftData?: boolean;
+  /**
+   * If provided, the adapter also waits until this wallet's index reflects the
+   * mint, so cross-wallet tests can read a mint authority routed to one of its
+   * addresses without hitting the wallet-service index lag. Not forwarded to the
+   * facade `mintTokens()` call.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**
@@ -411,6 +443,8 @@ export interface MeltTokensAdapterOptions {
   changeAddress?: string;
   createAnotherMelt?: boolean;
   meltAuthorityAddress?: string;
+  /** Allow `meltAuthorityAddress` to belong to another wallet (default: false). */
+  allowExternalMeltAuthorityAddress?: boolean;
   data?: string[];
   unshiftData?: boolean;
 }
@@ -548,12 +582,25 @@ export interface GetAuthorityUtxosOptions {
  */
 export interface DelegateAuthorityAdapterOptions {
   createAnother?: boolean;
+  /**
+   * If provided, the adapter also waits until the destination wallet's index
+   * reflects the delegation, so cross-wallet tests can read the recipient's
+   * authority UTXOs without hitting the wallet-service index lag.
+   */
+  recvWallet?: FuzzyWalletType;
 }
 
 /**
  * Result of delegating authority.
  */
 export interface DelegateAuthorityResult {
+  hash: string;
+}
+
+/**
+ * Result of destroying authority UTXOs.
+ */
+export interface DestroyAuthorityResult {
   hash: string;
 }
 

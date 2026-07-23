@@ -215,10 +215,12 @@ test('getSignatureForTx uses the spend key chain for a shielded-spend input', as
     // render the spend-chain derivation path (m/44'/280'/2').
     addressType: 'shielded-spend',
   });
+  // Shielded-spend inputs sign with the COMPLIANT deriveChild key (new key
+  // material, no deployed wallet to stay bug-compatible with)...
   expect(sigData.inputSignatures[0].pubkey).toStrictEqual(
-    spendXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
+    spendXpriv.deriveChild(idx).publicKey.toDER()
   );
-  // And NOT the legacy/main-chain key at the same index.
+  // ...and NOT the legacy/main-chain key, which stays on deriveNonCompliantChild.
   expect(sigData.inputSignatures[0].pubkey).not.toStrictEqual(
     mainXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
   );
@@ -228,7 +230,7 @@ test('getSignatureForTx uses the spend key chain for a shielded-spend input', as
     crypto.ECDSA.verify(
       hashdata,
       crypto.Signature.fromDER(sigData.inputSignatures[0].signature),
-      spendXpriv.deriveNonCompliantChild(idx).publicKey
+      spendXpriv.deriveChild(idx).publicKey
     )
   ).toBe(true);
 });
