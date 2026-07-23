@@ -59,6 +59,7 @@ import {
   AddressScanPolicyData,
   AuthorityType,
   EcdsaTxSign,
+  PrivateKeyProvider,
   getDefaultLogger,
   HistorySyncMode,
   IHistoryTx,
@@ -2147,11 +2148,19 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
-      privateKey: unknown;
-    };
-    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
+    let privateKey: unknown;
+    if (this.storage.hasPrivateKeyMethod()) {
+      // External provider (e.g. passkey signer): derive the key on demand by index; no pin
+      // needed, and no storage address lookup required.
+      privateKey = await this.storage.getExternalPrivateKey(index, { pinCode });
+    } else {
+      const addressHDPrivKey = (await this.getAddressPrivKey(pinCode as string, index)) as {
+        privateKey: unknown;
+      };
+      privateKey = addressHDPrivKey.privateKey;
+    }
+    const signedMessage = signMessage(message, privateKey as bitcore.PrivateKey);
 
     return signedMessage;
   }
@@ -3732,6 +3741,16 @@ class HathorWallet extends EventEmitter {
    *                          Optional but required if not set in instance
    */
   async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
+    // External provider path (e.g. passkey signer): no stored key and no pin are needed.
+    // This is what lets an xpub-only wallet sign messages and oracle data.
+    if (this.storage.hasPrivateKeyMethod()) {
+      const externalIndex = await this.getAddressIndex(address);
+      if (externalIndex === null) {
+        throw new AddressError('Address does not belong to the wallet.');
+      }
+      return this.storage.getExternalPrivateKey(externalIndex, options);
+    }
+
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
@@ -3761,6 +3780,18 @@ class HathorWallet extends EventEmitter {
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set an external private-key provider used by getPrivateKeyFromAddress (and therefore by
+   * message and oracle-data signing). Lets a keyless wallet (e.g. a passkey signer) supply the
+   * address private key on demand. NOTE: this intentionally does NOT flip isSignedExternally /
+   * isReadonly — it does not enable transaction sending, which uses the tx-signing method.
+   *
+   * @param getPrivKey The external provider, or null to clear
+   */
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.storage.setPrivateKeyMethod(getPrivKey);
   }
 
   /**
