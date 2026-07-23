@@ -24,6 +24,14 @@
  *   (fullnode: plain `Error` with the node's "Unknown token" message;
  *   wallet-service: `WalletRequestError`), asserted via the per-adapter
  *   `unknownTokenError` matcher.
+ * - `getTokenDetails().totalTransactions` diverges across facades for
+ *   authority-destroy transactions: the fullnode token-details `total` counts
+ *   only value transactions (create/mint/melt) while the wallet-service indexer
+ *   also counts authority-destroy transactions. This suite therefore asserts the
+ *   count only through create/melt (where both facades agree) and drops it after
+ *   the destroy steps. Each facade's exact post-destroy count is pinned down in
+ *   `fullnode-specific/token-details-tx-count.test.ts` and
+ *   `service-specific/token-details-tx-count.test.ts`.
  */
 
 import type { IWalletTestAdapter } from '../adapters/types';
@@ -104,19 +112,21 @@ describe.each(adapters)('[Shared] getTokens & getTokenDetails — $name', adapte
         authorities: { mint: true, melt: true },
       });
 
-      // Destroying the mint authority is reflected in the details...
+      // Destroying the mint authority clears the mint flag. totalTransactions is
+      // deliberately not asserted here — it diverges across facades for
+      // authority-destroy transactions (see the header note and the
+      // token-details-tx-count facade-specific tests).
       await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MINT, 1);
       details = await adapter.getTokenDetails(wallet, token.hash);
       expect(details).toMatchObject({
-        totalTransactions: 2,
         authorities: { mint: false, melt: true },
       });
 
-      // ...and so is destroying the melt authority.
+      // ...and destroying the melt authority clears the melt flag (count again
+      // omitted for the same cross-facade reason).
       await adapter.destroyAuthority(wallet, token.hash, AuthorityType.MELT, 1);
       details = await adapter.getTokenDetails(wallet, token.hash);
       expect(details).toMatchObject({
-        totalTransactions: 2,
         authorities: { mint: false, melt: false },
       });
 
