@@ -79,8 +79,11 @@ describe.each(adapters)('[Shared] getTokens & getTokenDetails — $name', adapte
       expect(tokens).toHaveLength(2);
       expect(tokens).toEqual(expect.arrayContaining([NATIVE_TOKEN_UID, token.hash]));
 
+      // Strict equality is achievable cross-facade: the fullnode builds this
+      // exact literal and the wallet-service response schema strips unknown
+      // keys, so both yield the identical 4-field shape.
       let details = await adapter.getTokenDetails(wallet, token.hash);
-      expect(details).toMatchObject({
+      expect(details).toStrictEqual({
         totalSupply: 100n,
         totalTransactions: 1,
         tokenInfo: {
