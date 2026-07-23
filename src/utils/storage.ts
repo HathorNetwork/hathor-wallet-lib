@@ -819,7 +819,11 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
         });
         return result;
       } catch (err: unknown) {
-        storage.logger.error(err);
+        // Log a string form: passing a raw Error object to the logger routes
+        // through console.error → util.format, which throws on Node 24 for
+        // objects with non-trivial getters (e.g. ZodError). That throw would
+        // escape this catch and skip the backoff scheduled below.
+        storage.logger.error(err instanceof Error ? err.stack ?? err.message : String(err));
         // This delay will give us the exponential backoff intervals of
         // 500ms, 1s, 2s, 4s and 8s
         const delay = 500 * 2 ** retryCount;
