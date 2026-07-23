@@ -9,9 +9,9 @@
  * Service-facade address-method tests.
  *
  * Tests for service-only behavior: REST-API-backed methods such as
- * `getAddressDetails`, `isAddressMine`, `checkAddressesMine`,
- * `getPrivateKeyFromAddress`, and the GAP_LIMIT_REACHED signal returned by
- * `getNextAddress`.
+ * `getAddressDetails`, `isAddressMine`, `getPrivateKeyFromAddress`, and the
+ * GAP_LIMIT_REACHED signal returned by `getNextAddress`.
+ * (`checkAddressesMine` is covered cross-facade in `shared/addresses.test.ts`.)
  *
  * Shared address tests live in `shared/addresses.test.ts`.
  */
@@ -116,15 +116,6 @@ describe('[Service] addresses methods', () => {
   it('isAddressMine returns false for an unknown address', async () => {
     const result = await wallet.isAddressMine(unknownAddress);
     expect(result).toBe(false);
-  });
-
-  it('checkAddressesMine maps known addresses to true and unknown to false', async () => {
-    const addresses = [...knownAddresses, unknownAddress];
-    const result = await wallet.checkAddressesMine(addresses);
-    for (const known of knownAddresses) {
-      expect(result[known]).toBe(true);
-    }
-    expect(result[unknownAddress]).toBe(false);
   });
 
   it('getPrivateKeyFromAddress returns a PrivateKey for known addresses', async () => {
