@@ -8,9 +8,9 @@
 /**
  * Shared address-method tests.
  *
- * Validates address derivation and pointer behavior common to both the fullnode
- * ({@link HathorWallet}) and wallet-service ({@link HathorWalletServiceWallet})
- * facades.
+ * Validates address derivation, pointer behavior and address-ownership checks
+ * (`checkAddressesMine`) common to both the fullnode ({@link HathorWallet})
+ * and wallet-service ({@link HathorWalletServiceWallet}) facades.
  *
  * Facade-specific tests live in:
  * - `fullnode-specific/addresses.test.ts`
@@ -20,6 +20,7 @@
 import type { IWalletTestAdapter } from '../adapters/types';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
+import { WALLET_CONSTANTS } from '../configuration/test-constants';
 
 const adapters: IWalletTestAdapter[] = [
   new FullnodeWalletTestAdapter(),
@@ -176,6 +177,35 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
         const address = await adapter.getAddressAtIndex(wallet, i);
         expect(address).toBe(expected[i]);
       }
+    } finally {
+      await adapter.stopWallet(wallet);
+    }
+  });
+
+  it('checkAddressesMine maps wallet addresses to true and a foreign address to false', async () => {
+    const { wallet } = await adapter.createWallet();
+
+    try {
+      // Indices 1..3 are comfortably inside every facade's address window
+      // (see SHARED_ADDRESS_SAMPLE).
+      const address1 = await adapter.getAddressAtIndex(wallet, 1);
+      const address2 = await adapter.getAddressAtIndex(wallet, 2);
+      const address3 = await adapter.getAddressAtIndex(wallet, 3);
+
+      // A well-formed base58 address that belongs to another wallet. Malformed
+      // address strings are deliberately NOT exercised here: the wallet-service
+      // response schema only admits base58 keys, so that case is fullnode-only
+      // (see fullnode-specific/address-info.test.ts).
+      const foreignAddress = WALLET_CONSTANTS.genesis.addresses[0];
+
+      await expect(
+        adapter.checkAddressesMine(wallet, [address1, address2, address3, foreignAddress])
+      ).resolves.toStrictEqual({
+        [address1]: true,
+        [address2]: true,
+        [address3]: true,
+        [foreignAddress]: false,
+      });
     } finally {
       await adapter.stopWallet(wallet);
     }
