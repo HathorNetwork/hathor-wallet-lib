@@ -9,19 +9,23 @@
  * Fullnode-facade API query tests: getFullTxById, getTxConfirmationData and
  * graphvizNeighborsQuery.
  *
- * These stay fullnode-specific because of concrete wallet-service divergences.
- * The wallet-service facade proxies all three methods through its own backend
- * (`wallet/proxy/*` endpoints in src/wallet/api/walletApi.ts) with a different
- * error contract, so the failure-path assertions here are fullnode-only:
- * - `getFullTxById()` failures raise the fullnode facade's plain
- *   `Invalid transaction <txId>` error (src/new/wallet.ts), while the
- *   wallet-service proxy raises `WalletRequestError` with its own message.
- * - `getTxConfirmationData()` failures likewise raise the fullnode facade's
- *   `Invalid transaction <txId>` error instead of the proxy's
- *   `WalletRequestError`.
- * - `graphvizNeighborsQuery()` is exercised without `graphType`/`maxLevel` to
- *   assert the raw fullnode HTTP failure (`Request failed with status code
- *   500`), an axios error shape the wallet-service proxy never surfaces.
+ * The wallet-service facade implements all three methods too, proxied through
+ * its own backend (`wallet/proxy/*` endpoints in src/wallet/api/walletApi.ts).
+ * What keeps this file fullnode-specific are the tests bound to fullnode-only
+ * contracts:
+ * - The `success: false` failure paths assert the fullnode facade's plain
+ *   `Invalid transaction <txId>` error (src/new/wallet.ts); the wallet-service
+ *   proxy raises `WalletRequestError` with its own message instead.
+ * - The graphviz "capture errors" case calls `graphvizNeighborsQuery()` without
+ *   `graphType`/`maxLevel`; the wallet-service signature requires those
+ *   parameters (src/wallet/wallet.ts), so this call shape only exists on the
+ *   fullnode facade.
+ *
+ * The happy-path and `TxNotFoundError` cases DO behave the same on both
+ * facades (the proxy schemas preserve the asserted keys, and both facades
+ * throw TxNotFoundError for not-found hashes). They are kept here with their
+ * fullnode-only siblings for now and are candidates for a future `shared/`
+ * migration once `IWalletTestAdapter` grows query-method support.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
@@ -60,7 +64,7 @@ describe('[Fullnode] getFullTxById', () => {
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      'Invalid transaction invalid-tx-hash'
     );
   });
 
@@ -104,7 +108,7 @@ describe('[Fullnode] getTxConfirmationData', () => {
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      'Invalid transaction invalid-tx-hash'
     );
   });
 
@@ -128,7 +132,7 @@ describe('[Fullnode] graphvizNeighborsQuery', () => {
     gWallet = hWallet;
   });
 
-  it('should download graphviz neighbors data for a existing transaction from the fullnode', async () => {
+  it('should download graphviz neighbors data for an existing transaction from the fullnode', async () => {
     const hWallet = await generateWalletHelper();
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
@@ -155,7 +159,7 @@ describe('[Fullnode] graphvizNeighborsQuery', () => {
 
   it('should throw an error if success is false on response', async () => {
     await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrow(
-      `Invalid transaction invalid-tx-hash`
+      'Invalid transaction invalid-tx-hash'
     );
   });
 
