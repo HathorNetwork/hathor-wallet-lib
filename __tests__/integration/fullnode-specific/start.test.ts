@@ -16,6 +16,7 @@
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import HathorWallet from '../../../src/new/wallet';
+import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
@@ -31,6 +32,7 @@ import {
   DEFAULT_PIN_CODE,
   generateConnection,
   generateWalletHelper,
+  waitForTxReceived,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import {
@@ -364,6 +366,48 @@ describe('[Fullnode-specific] start', () => {
     await expect(hWallet.isReadonly()).resolves.toBe(false);
     hWallet.setExternalTxSigningMethod(null);
     await expect(hWallet.isReadonly()).resolves.toBe(true);
+  });
+
+  it('should create a token with an external signer and no pin (signTx: true)', async () => {
+    // Reproduces the passkey-wallet flow end to end: an xpub-only wallet with an external
+    // tx-signing method registered builds AND signs a create-token transaction (signTx defaults
+    // to true) with NO pin. The signer derives keys the way a passkey ceremony would and reuses
+    // transactionUtils.signTxInputs — the same primitive getSignatureForTx wraps — so it must
+    // NOT hit the "Pin is required." guard, and the produced signatures must be valid on-chain.
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+    const rootXpriv = new Mnemonic(walletData.words).toHDPrivateKey('', new Network('testnet'));
+    const acctXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    // signTxInputs asks for the change-path xpriv (m/44'/280'/0'/0) and derives per-input keys.
+    const changeXpriv = acctXpriv.deriveNonCompliantChild(0);
+
+    const hWallet = await generateWalletHelper({ xpub: acctXpriv.xpubkey });
+    hWallet.setExternalTxSigningMethod((tx, storage) =>
+      transactionUtils.signTxInputs(tx, storage, async () => changeXpriv)
+    );
+    // The external signer, not a stored key, makes the wallet spendable.
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
+
+    // No pinCode passed: createNewToken -> prepareCreateNewToken({ signTx: true }) -> signed by
+    // the external method -> mined and pushed. Must not throw "Pin is required.".
+    const tokenTx = await hWallet.createNewToken('External Signer Token', 'EST', 100n);
+    expect(tokenTx).not.toBeNull();
+    const tokenUid = tokenTx!.hash!;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    // Every input carries real signature data — the fullnode accepted the tx, so the external
+    // signer produced valid signatures without a pin.
+    expect(tokenTx!.inputs.length).toBeGreaterThan(0);
+    for (const input of tokenTx!.inputs) {
+      expect(input.data).not.toBeNull();
+      expect(input.data!.length).toBeGreaterThan(0);
+    }
+
+    const balance = await hWallet.getBalance(tokenUid);
+    expect(balance[0].balance).toStrictEqual({ unlocked: 100n, locked: 0n });
+
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
   it('should start a wallet without pin (hack test)', async () => {
