@@ -16,6 +16,7 @@ import {
   IHistoryTx,
   IBalance,
   ILockedUtxo,
+  IPrecalculatedAddress,
   IPrecalculatedShieldedAddress,
   isGapLimitScanPolicy,
   IScanPolicyLoadAddresses,
@@ -174,6 +175,46 @@ export async function loadAddresses(
   }
 
   return addresses;
+}
+
+/**
+ * Persist pre-calculated legacy addresses into storage.
+ *
+ * Sibling of savePrecalculatedShieldedAddresses: the two together are what
+ * wallet start injects for the unified `preCalculatedAddresses` option.
+ *
+ * Skips indexes already present so re-injecting the same list over populated
+ * storage is a no-op — `saveAddress` throws on a duplicate base58, which would
+ * otherwise abort startup when a wallet is stopped (which keeps addresses by
+ * default) and started again. The skip is keyed on the BIP32 index rather than
+ * on the address, matching how loadAddresses guards the legacy chain
+ * (`getAddressAtIndex(i) !== null`); an index already holding a DIFFERENT
+ * address means the injected list disagrees with storage, which stays a loud
+ * error instead of being silently skipped.
+ *
+ * @param storage The wallet storage instance
+ * @param entries Pre-calculated addresses, one per BIP32 index
+ */
+export async function savePrecalculatedLegacyAddresses(
+  storage: IStorage,
+  entries: IPrecalculatedAddress[]
+): Promise<void> {
+  for (const entry of entries) {
+    const existing = await storage.getAddressAtIndex(entry.bip32AddressIndex);
+    if (existing !== null) {
+      if (existing.base58 !== entry.base58) {
+        throw new Error(
+          `Pre-calculated address mismatch at index ${entry.bip32AddressIndex}: ` +
+            `storage holds ${existing.base58}, injected list declares ${entry.base58}.`
+        );
+      }
+      continue;
+    }
+    await storage.saveAddress({
+      base58: entry.base58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+    });
+  }
 }
 
 /**

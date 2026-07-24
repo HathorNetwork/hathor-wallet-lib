@@ -87,6 +87,7 @@ import {
   getSupportedSyncMode,
   loadAddressHistory,
   processMetadataChanged,
+  savePrecalculatedLegacyAddresses,
   savePrecalculatedShieldedAddresses,
   scanPolicyStartAddresses,
 } from '../utils/storage';
@@ -2023,12 +2024,7 @@ class HathorWallet extends EventEmitter {
     // plus an optional shielded pair. An index with no shielded pair persists
     // legacy-only; nothing is derived here.
     const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
-    for (const entry of injectedAddresses) {
-      await this.storage.saveAddress({
-        base58: entry.base58,
-        bip32AddressIndex: entry.bip32AddressIndex,
-      });
-    }
+    await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
     const injectedShieldedPairs = injectedAddresses
       .filter(entry => entry.shielded)
       .map(entry => ({ bip32AddressIndex: entry.bip32AddressIndex, ...entry.shielded! }));
