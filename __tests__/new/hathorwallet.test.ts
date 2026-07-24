@@ -1530,6 +1530,136 @@ describe('prepare transactions without signature', () => {
     ).rejects.toThrow('Pin is required.');
   });
 
+  test('prepareMintTokensData does not require a pin with an external tx-signing method', async () => {
+    const fakeMintAuthority = [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        value: 1n,
+        token: '01',
+        address: fakeAddress.base58,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        locked: false,
+      },
+    ];
+    const hWallet = new FakeHathorWallet();
+    // Real passkey scenario: xpub-only (readOnly) storage + external signer.
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
+
+    // No pinCode: the external signer makes the pin optional and isReadonly() honors it, so the
+    // build proceeds. Reverting the guard to `if (!pin)` would reject with 'Pin is required.'.
+    const txData = await hWallet.prepareMintTokensData('01', 100n, {
+      address: fakeAddress.base58,
+      signTx: false,
+    });
+    expect(txData.inputs.length).toBeGreaterThan(0);
+  });
+
+  test('prepareMintTokensData still requires a pin without an external signing method', async () => {
+    const fakeMintAuthority = [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        value: 1n,
+        token: '01',
+        address: fakeAddress.base58,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        locked: false,
+      },
+    ];
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
+
+    await expect(
+      hWallet.prepareMintTokensData('01', 100n, { address: fakeAddress.base58, signTx: false })
+    ).rejects.toThrow('Pin is required.');
+  });
+
+  test('createNanoContractTransaction does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // Must clear BOTH the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the pin
+    // guard; it fails later on the non-existent nano contract, with neither guard error.
+    // Default signTx:true so the pin guard (which is conditional on signTx !== false) is exercised.
+    const err = await hWallet
+      .createNanoContractTransaction('noop', fakeAddress.base58, {
+        ncId: 'a'.repeat(64),
+        args: [],
+        actions: [],
+      })
+      .catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
+    expect(err.message).not.toContain('Pin is required');
+  });
+
+  test('createNanoContractTransaction still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    // Default signTx:true → the pin guard fires without a pin and without an external signer.
+    await expect(
+      hWallet.createNanoContractTransaction('noop', fakeAddress.base58, {
+        ncId: 'a'.repeat(64),
+        args: [],
+        actions: [],
+      })
+    ).rejects.toThrow('Pin is required.');
+  });
+
+  test('createOnChainBlueprintTransaction does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // Must clear the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the pin guard;
+    // it fails later building from the dummy code, with neither guard error.
+    const err = await hWallet
+      .createOnChainBlueprintTransaction('0123abcd', fakeAddress.base58)
+      .catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
+    expect(err.message).not.toContain('Pin is required');
+  });
+
   test('prepareMintTokensData', async () => {
     // fake stuff to support the test
     const fakeMintAuthority = [
