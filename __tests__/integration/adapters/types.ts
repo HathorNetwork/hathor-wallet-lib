@@ -6,7 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
+import type {
+  IHathorWallet,
+  FullNodeTxResponse,
+  WalletAddressMap,
+} from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
 import type { IHistoryTx, IStorage, TokenVersion, AuthorityType } from '../../../src/types';
@@ -639,10 +643,11 @@ export interface AdapterAddress {
 
 /**
  * Result of an adapter `checkAddressesMine` query: each queried address mapped
- * to whether it belongs to the wallet. The two facades already agree on this
- * shape — the fullnode returns `Record<string, boolean>` and the
- * wallet-service returns its structurally identical `WalletAddressMap`.
+ * to whether it belongs to the wallet.
+ *
+ * Aliases the library's own {@link WalletAddressMap} rather than restating its
+ * shape: `IHathorWallet.checkAddressesMine` already declares that type as the
+ * return value for both facades, and the fullnode's `Record<string, boolean>`
+ * is structurally identical to it.
  */
-export interface CheckAddressesMineResult {
-  [address: string]: boolean;
-}
+export type CheckAddressesMineResult = WalletAddressMap;
