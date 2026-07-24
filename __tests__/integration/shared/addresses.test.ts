@@ -14,6 +14,8 @@
  *
  * Facade-specific tests live in:
  * - `fullnode-specific/addresses.test.ts`
+ * - `fullnode-specific/address-info.test.ts` (holds the malformed-address case
+ *   of `checkAddressesMine`, which only the fullnode facade accepts)
  * - `service-specific/addresses.test.ts`
  */
 
@@ -182,7 +184,7 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
     }
   });
 
-  it('checkAddressesMine maps wallet addresses to true and a foreign address to false', async () => {
+  it('checkAddressesMine maps wallet addresses to true, a foreign address to false, and an empty query to an empty map', async () => {
     const { wallet } = await adapter.createWallet();
 
     try {
@@ -206,6 +208,12 @@ describe.each(adapters)('[Shared] addresses — $name', adapter => {
         [address3]: true,
         [foreignAddress]: false,
       });
+
+      // Empty in, empty out. Both facades agree on the result but reach it
+      // differently — the wallet-service short-circuits before its HTTP call,
+      // the fullnode falls out of its per-address loop — so the contract is
+      // worth pinning here rather than in either facade-specific suite.
+      await expect(adapter.checkAddressesMine(wallet, [])).resolves.toStrictEqual({});
     } finally {
       await adapter.stopWallet(wallet);
     }
