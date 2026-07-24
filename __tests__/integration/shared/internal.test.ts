@@ -80,7 +80,7 @@ describe.each(adapters)('[Shared] internal methods — $name', adapter => {
         versionBytes: { p2pkh: 73, p2sh: 135 },
         bitcoreNetwork: {
           name: expect.stringContaining(NETWORK_NAME),
-          alias: 'test',
+          alias: 'privatenet',
           pubkeyhash: 73,
           scripthash: 135,
         },
