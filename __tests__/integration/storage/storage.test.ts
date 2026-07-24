@@ -1,5 +1,8 @@
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import {
+  mergePrecalculatedAddresses,
+  precalculationHelpers,
+} from '../helpers/wallet-precalculation.helper';
 import {
   DEFAULT_PIN_CODE,
   DEFAULT_PASSWORD,
@@ -44,8 +47,10 @@ async function startWallet(storage, walletData) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    preCalculatedAddresses: walletData.addresses,
-    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+    preCalculatedAddresses: mergePrecalculatedAddresses(
+      walletData.addresses,
+      walletData.shieldedAddresses
+    ),
     storage,
     scanPolicy: getGapLimitConfig(),
   };

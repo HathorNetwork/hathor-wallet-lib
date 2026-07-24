@@ -36,6 +36,7 @@ import {
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import {
+  mergePrecalculatedAddresses,
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
@@ -170,8 +171,10 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: walletData.addresses,
-      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        walletData.addresses,
+        walletData.shieldedAddresses
+      ),
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -213,7 +216,10 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        WALLET_CONSTANTS.multisig.addresses,
+        getPrecalculatedShieldedForSeed(multisigWalletsData.words[0])
+      ),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,

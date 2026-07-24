@@ -65,7 +65,7 @@ import {
   IIndexLimitAddressScanPolicy,
   ILogger,
   IMultisigData,
-  IPrecalculatedShieldedAddress,
+  IPrecalculatedAddress,
   IStorage,
   ITokenData,
   IUtxo,
@@ -163,6 +163,25 @@ const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
 
 /**
+ * Normalize the `preCalculatedAddresses` option into per-index entries.
+ *
+ * Back-compat: a `string[]` is legacy-only, index = array position. The unified
+ * `IPrecalculatedAddress[]` shape (each index's legacy address plus an optional
+ * shielded pair) passes through unchanged.
+ */
+export function normalizePreCalculatedAddresses(
+  input: string[] | IPrecalculatedAddress[] | null
+): IPrecalculatedAddress[] {
+  if (!input || input.length === 0) {
+    return [];
+  }
+  if (typeof input[0] === 'string') {
+    return (input as string[]).map((base58, index) => ({ bip32AddressIndex: index, base58 }));
+  }
+  return input as IPrecalculatedAddress[];
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -212,9 +231,7 @@ class HathorWallet extends EventEmitter {
   password: string | null;
 
   // Address management
-  preCalculatedAddresses: string[] | null;
-
-  preCalculatedShieldedAddresses: IPrecalculatedShieldedAddress[] | null;
+  preCalculatedAddresses: string[] | IPrecalculatedAddress[] | null;
 
   // Connection state
   firstConnection: boolean;
@@ -328,7 +345,6 @@ class HathorWallet extends EventEmitter {
       beforeReloadCallback = null,
       multisig = null,
       preCalculatedAddresses = null,
-      preCalculatedShieldedAddresses = null,
       scanPolicy = null,
       logger = null,
     }: HathorWalletConstructorParams = {} as HathorWalletConstructorParams
@@ -390,7 +406,6 @@ class HathorWallet extends EventEmitter {
     this.password = password;
 
     this.preCalculatedAddresses = preCalculatedAddresses;
-    this.preCalculatedShieldedAddresses = preCalculatedShieldedAddresses;
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
@@ -2002,19 +2017,23 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    if (this.preCalculatedAddresses) {
-      for (const [index, addr] of this.preCalculatedAddresses.entries()) {
-        await this.storage.saveAddress({
-          base58: addr,
-          bip32AddressIndex: index,
-        });
-      }
+    // Persist the injected pre-calculated addresses exactly as provided — the
+    // caller's list is authoritative. Back-compat: a string[] is legacy-only;
+    // the unified IPrecalculatedAddress[] carries each index's legacy address
+    // plus an optional shielded pair. An index with no shielded pair persists
+    // legacy-only; nothing is derived here.
+    const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
+    for (const entry of injectedAddresses) {
+      await this.storage.saveAddress({
+        base58: entry.base58,
+        bip32AddressIndex: entry.bip32AddressIndex,
+      });
     }
-
-    if (this.preCalculatedShieldedAddresses) {
-      // Mirrors the legacy injection above: pre-populates the shielded chain so
-      // loadAddresses skips the per-index EC derivation for these indexes.
-      await savePrecalculatedShieldedAddresses(this.storage, this.preCalculatedShieldedAddresses);
+    const injectedShieldedPairs = injectedAddresses
+      .filter(entry => entry.shielded)
+      .map(entry => ({ bip32AddressIndex: entry.bip32AddressIndex, ...entry.shielded! }));
+    if (injectedShieldedPairs.length > 0) {
+      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
     }
 
     let accessData = await this.storage.getAccessData();
