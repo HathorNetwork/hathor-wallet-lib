@@ -8,7 +8,7 @@
 
 P2PKH_VERSION_BYTE: x49
 MULTISIG_VERSION_BYTE: x87
-NETWORK_NAME: nano-testnet-bravo
+NETWORK_NAME: privatenet
 BOOTSTRAP_DNS: []
 ENABLE_PEER_WHITELIST: false
 
@@ -29,10 +29,41 @@ REWARD_SPEND_MIN_BLOCKS: 1
 
 CHECKPOINTS: []
 
-ENABLE_NANO_CONTRACTS: enabled
-ENABLE_FEE_BASED_TOKENS: enabled
+ENABLE_NANO_CONTRACTS: feature_activation
+# v4 (post-uv-migration master) made FEE_TOKENS a feature-activation-gated
+# feature, so its toggle must be `feature_activation` (a static `enabled`
+# trips the strict validator: "FEE_TOKENS configured but it's unused: enabled").
+# We override its criteria below to activate at genesis on privnet.
+ENABLE_FEE_BASED_TOKENS: feature_activation
+ENABLE_SHIELDED_TRANSACTIONS: enabled
 NC_ON_CHAIN_BLUEPRINT_RESTRICTED: false
 AVG_TIME_BETWEEN_BLOCKS: 1
-FEE_PER_OUTPUT: 1
+FEE_PER_OUTPUT_V1: 1
+
+# The fullnode has a strict validator: if FEATURE_ACTIVATION has criteria for a
+# feature, its ENABLE_X toggle must be `feature_activation` (not a static
+# `enabled` / `disabled`). The only user-controllable one is NANO_CONTRACTS
+# (INCREASE_MAX_MERKLE_PATH_LENGTH / COUNT_CHECKDATASIG_OP / FAILED_FEE_TOKENS
+# / FAILED_OPCODES_V2 are hardcoded to FEATURE_ACTIVATION in the feature
+# service), so we switch it to feature_activation and override the criteria
+# below so it activates at genesis (height 0) on privnet.
+FEATURE_ACTIVATION:
+  evaluation_interval: 4
+  default_threshold: 1
+  features:
+    NANO_CONTRACTS:
+      start_height: 0
+      minimum_activation_height: 0
+      timeout_height: 100
+      lock_in_on_timeout: true
+    # FEE_TOKENS inherits a high mainnet start_height via `extends: mainnet.yml`;
+    # override it to activate at genesis (height 0) on privnet, mirroring
+    # NANO_CONTRACTS. Its bit (0) differs from NANO_CONTRACTS (1), so the two
+    # genesis-active features don't collide.
+    FEE_TOKENS:
+      start_height: 0
+      minimum_activation_height: 0
+      timeout_height: 100
+      lock_in_on_timeout: true
 
 extends: mainnet.yml
