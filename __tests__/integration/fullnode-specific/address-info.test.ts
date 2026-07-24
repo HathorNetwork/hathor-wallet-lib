@@ -111,8 +111,10 @@ describe('[Fullnode] getAddressInfo', () => {
     expect((await hWallet.getAddressInfo(addr2)).total_amount_received).toStrictEqual(0n);
     expect((await hWallet.getAddressInfo(addr3)).total_amount_received).toStrictEqual(0n);
 
-    // Fund addr2 with all the amounts the assertions below track
-    const fundTx = await GenesisWalletHelper.injectFunds(hWallet, addr2, 10n);
+    // Fund addr2 with all the amounts the assertions below track. injectFunds
+    // already waits past the funding tx's timestamp before returning, so the
+    // spend below needs no extra wait.
+    await GenesisWalletHelper.injectFunds(hWallet, addr2, 10n);
     await expect(hWallet.getAddressInfo(addr2)).resolves.toMatchObject({
       total_amount_received: 10n,
       total_amount_sent: 0n,
@@ -120,7 +122,6 @@ describe('[Fullnode] getAddressInfo', () => {
     });
 
     // Move only a part of the funds to addr3, the change is returned to addr2
-    await waitUntilNextTimestamp(hWallet, fundTx.hash);
     const tx = await hWallet.sendTransaction(addr3, 4n, { changeAddress: addr2 });
     await waitForTxReceived(hWallet, tx.hash);
     await expect(hWallet.getAddressInfo(addr2)).resolves.toMatchObject({
@@ -141,8 +142,9 @@ describe('[Fullnode] getAddressInfo', () => {
     const timelock1 = Date.now().valueOf() + 5000; // 5 seconds of locked resources
     const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
 
-    const fundTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
-    await waitUntilNextTimestamp(hWallet, fundTx.hash);
+    // injectFunds already waits past the funding tx's timestamp before
+    // returning, so the spend below needs no extra wait.
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
     const rawTimelockTx = await hWallet.sendManyOutputsTransaction([
       {
         address: addr0,
