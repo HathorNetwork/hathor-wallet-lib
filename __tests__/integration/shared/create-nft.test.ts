@@ -191,8 +191,13 @@ describe.each(adapters)('[Shared] createNFT & data outputs — $name', adapter =
       const { wallet } = await adapter.createWallet();
       try {
         const addr0 = (await wallet.getAddressAtIndex(0))!;
-        const mintAuthorityAddr = (await wallet.getAddressAtIndex(10))!;
-        const meltAuthorityAddr = (await wallet.getAddressAtIndex(11))!;
+        // Indices must stay within MAX_ADDRESS_GAP (10 in the itest wallet-service,
+        // see docker-compose.yml): a fresh, transaction-less wallet has only
+        // indices 0-9 derived, so the service rejects a read past that. The
+        // fullnode facade derives on demand and is unaffected. These just need to
+        // be two distinct wallet addresses to route the authorities to.
+        const mintAuthorityAddr = (await wallet.getAddressAtIndex(1))!;
+        const meltAuthorityAddr = (await wallet.getAddressAtIndex(2))!;
         await adapter.injectFunds(wallet, addr0, 10n);
 
         const nft = await adapter.createNFT(wallet, 'New Token', 'NTKN', 100n, sampleNftData, {
