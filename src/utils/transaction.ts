@@ -24,11 +24,18 @@ import {
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
   TxWeightConstants,
+  ZERO_TWEAK,
 } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
+import ShieldedOutput from '../models/shielded_output';
+import ShieldedOutputsHeader from '../headers/shielded_outputs';
+import UnshieldBalanceHeader from '../headers/unshield_balance';
+import FeeHeader from '../headers/fee';
+import { MintHeader } from '../headers/mint_header';
+import { MeltHeader } from '../headers/melt_header';
 import Network from '../models/network';
 import {
   IBalance,
@@ -38,19 +45,24 @@ import {
   IDataTx,
   isDataOutputCreateToken,
   IHistoryOutput,
+  ITransparentOutput,
   IUtxoId,
   IInputSignature,
   ITxSignatureData,
   OutputValueType,
   IHistoryInput,
+  IHistoryShieldedOutput,
   AuthorityType,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
+import { ensureHex } from './buffer';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
+import { parseScript } from './scripts';
 import helpers from './helpers';
-import { getAddressType, getAddressFromPubkey } from './address';
+import { getAddressFromPubkey } from './address';
 import txApi from '../api/txApi';
 import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
@@ -69,6 +81,206 @@ const transaction = {
       tx.version === MERGED_MINED_BLOCK_VERSION ||
       tx.version === POA_BLOCK_VERSION
     );
+  },
+
+  /**
+   * Marks an input that spends a shielded output. On the wire these carry the
+   * spent output's confidential fields (type='shielded', mode, commitment,
+   * range_proof, script and the per-mode extras) plus tx_id/index — but never
+   * its value/token, which stay hidden in the commitments (hathor-core
+   * `to_json_extended` / `/transaction`). Call sites that read the echoed
+   * value/token must filter shielded entries out first.
+   */
+  isShieldedInputEntry(input: { type?: string } | null | undefined): boolean {
+    return input != null && input.type === 'shielded';
+  },
+
+  /**
+   * Resolve the on-chain output of the spent tx that an input with absolute
+   * on-chain index `idx` spends, using the SEPARATED / arithmetic model that
+   * mirrors hathor-core (`base_transaction.py:347-363`).
+   *
+   * The spent tx has `T = outputs.length` transparent outputs followed by
+   * `S = shielded_outputs.length` shielded outputs. The on-chain absolute
+   * index of `shielded_outputs[s]` is `T + s`. Resolution is pure arithmetic
+   * — NO scan, NO commitment-match, NO `onChainIndex`:
+   *   - `idx in [0, T)`     → `{ kind: 'transparent', output }`
+   *   - `idx in [T, T + S)` → `{ kind: 'shielded', sIndex: idx - T, output }`
+   *       for EVERY slot regardless of decoded state. A non-owned slot
+   *       (`output.value === undefined`) still resolves to a valid `shielded`
+   *       result; callers gate ownership off `value !== undefined`, not off
+   *       resolver kind.
+   *   - otherwise (`idx >= T + S` or `idx < 0`) → `undefined`
+   *
+   * The full `shielded_outputs[]` list MUST be present (owned + non-owned) for
+   * the arithmetic to land on the right slot — a partial list would shift
+   * `idx - T` onto the wrong entry.
+   */
+  resolveSpentOutput(
+    spentTx: IHistoryTx,
+    idx: number
+  ):
+    | { kind: 'transparent'; output: ITransparentOutput }
+    | { kind: 'shielded'; sIndex: number; output: IHistoryShieldedOutput }
+    | undefined {
+    const outputs = spentTx.outputs ?? [];
+    const shieldedOutputs = spentTx.shielded_outputs ?? [];
+    const T = outputs.length;
+    const S = shieldedOutputs.length;
+    if (idx < 0) return undefined;
+    if (idx < T) {
+      return { kind: 'transparent', output: outputs[idx] };
+    }
+    if (idx < T + S) {
+      const sIndex = idx - T;
+      return { kind: 'shielded', sIndex, output: shieldedOutputs[sIndex] };
+    }
+    return undefined;
+  },
+
+  /**
+   * True when `index` is the on-chain absolute index of a SHIELDED output of
+   * `tx` — i.e. it falls in the shielded range `[outputs.length, outputs.length
+   * + shieldedCount)`. In the SEPARATED model transparent outputs occupy
+   * `outputs[0..N)` and shielded outputs occupy the slots immediately after.
+   * Transparent-only flows (partial txs, tx templates) use this to reject a
+   * shielded input index with a clear message instead of a misleading bounds
+   * error or an undefined output read.
+   */
+  isShieldedOutputIndex(
+    tx: { outputs: unknown[]; shielded_outputs?: unknown[] | null },
+    index: number
+  ): boolean {
+    const shieldedCount = tx.shielded_outputs?.length ?? 0;
+    return index >= tx.outputs.length && index < tx.outputs.length + shieldedCount;
+  },
+
+  /**
+   * Hex-encode the confidential wire fields of a transaction's shielded outputs,
+   * in place. The fullnode delivers shielded outputs SEPARATED in a
+   * dedicated `shielded_outputs[]` array on BOTH the HTTP `/transaction`
+   * (to_json) and the `address_history` + WS real-time (to_json_extended) paths,
+   * so `outputs[]` is always transparent-only — no inline relocation needed —
+   * and `mode` is always present on the wire.
+   *
+   * Converts every shielded output's base64 confidential fields (commitment /
+   * range_proof / script / ephemeral_pubkey / asset_commitment /
+   * surjection_proof) to hex; without this `Buffer.from(value, 'hex')`
+   * downstream parses them as garbage — making the native rewind throw "asset
+   * commitment verification failed" and the per-tx balance read as -input with
+   * no credit for the decoded shielded outputs.
+   *
+   * Idempotent: ensureHex no-ops on already-hex fields. The decode-only fields
+   * (value / blindingFactor / assetBlindingFactor — and token on FullShielded)
+   * are NOT on the wire; they are populated post-decryption on the slots the
+   * wallet owns. AmountShielded entries do arrive with a wire-stamped public
+   * `token`. This function neither reads nor invents any of them.
+   */
+  normalizeShieldedOutputs(tx: IHistoryTx): void {
+    if (!tx.shielded_outputs) {
+      // Transparent-only tx (no shielded_outputs) — nothing to normalize.
+      return;
+    }
+
+    // Hex-encode the confidential wire fields of every shielded output.
+    for (const so of tx.shielded_outputs) {
+      // eslint-disable-next-line no-param-reassign
+      so.commitment = ensureHex(so.commitment);
+      // eslint-disable-next-line no-param-reassign
+      so.range_proof = ensureHex(so.range_proof);
+      // eslint-disable-next-line no-param-reassign
+      so.script = ensureHex(so.script);
+      if (so.ephemeral_pubkey) {
+        // eslint-disable-next-line no-param-reassign
+        so.ephemeral_pubkey = ensureHex(so.ephemeral_pubkey);
+      }
+      if (so.asset_commitment) {
+        // eslint-disable-next-line no-param-reassign
+        so.asset_commitment = ensureHex(so.asset_commitment);
+      }
+      if (so.surjection_proof) {
+        // eslint-disable-next-line no-param-reassign
+        so.surjection_proof = ensureHex(so.surjection_proof);
+      }
+    }
+  },
+
+  /**
+   * Clear the decode-only shielded fields the wallet must NEVER trust from an
+   * external source (a fullnode WS event or address-history response): a
+   * shielded output's `value`/`token`/`blindingFactor`/`assetBlindingFactor`,
+   * and the echoed `value`/`token`/`decoded` of a shielded input. None of these
+   * can be legitimately known by the fullnode (they are hidden in the
+   * commitment), so a hostile source could pre-fill them to forge a credit or a
+   * debit that skips the ECDH-rewind verification. Ownership is re-established
+   * ONLY from the wallet's own rewind or its own storage. Call this at every
+   * wire-ingress point before persisting. No-op for honest deliveries (which
+   * carry these bare) and for transparent txs.
+   */
+  clearUntrustedShieldedData(tx: IHistoryTx): void {
+    /* eslint-disable no-param-reassign */
+    for (const so of tx.shielded_outputs ?? []) {
+      so.value = undefined;
+      so.token = undefined;
+      so.blindingFactor = undefined;
+      so.assetBlindingFactor = undefined;
+    }
+    for (const input of tx.inputs) {
+      if (this.isShieldedInputEntry(input)) {
+        input.value = undefined;
+        input.token = undefined;
+        input.decoded = undefined;
+      }
+    }
+    /* eslint-enable no-param-reassign */
+  },
+
+  /**
+   * Restore the wallet's own decode-only shielded data from a previously-stored
+   * copy of the same tx into an incoming (wire) copy, keyed by on-chain slot /
+   * outpoint. The fullnode never re-sends these fields, so without this a
+   * re-fetch (WS re-delivery, gap-limit history reload, stream re-sync) would
+   * clobber the wallet's decoded balance. Only fields the incoming copy lacks
+   * are filled — delivered wire fields (e.g. `spent_by`) are kept. Values come
+   * from our own storage, so they are trusted (unlike the wire, cleared above).
+   */
+  restoreStoredShieldedData(tx: IHistoryTx, storedTx: IHistoryTx): void {
+    // Shielded inputs: fill a bare input from the stored enriched copy.
+    for (const input of tx.inputs) {
+      if (input.decoded?.address && input.token !== undefined) continue;
+      const stored = storedTx.inputs?.find(
+        si => si.tx_id === input.tx_id && si.index === input.index
+      );
+      if (stored?.decoded?.address && stored.token !== undefined) {
+        // eslint-disable-next-line no-param-reassign
+        input.decoded = stored.decoded;
+        // eslint-disable-next-line no-param-reassign
+        input.value = stored.value;
+        // eslint-disable-next-line no-param-reassign
+        input.token = stored.token;
+        // eslint-disable-next-line no-param-reassign
+        input.token_data = stored.token_data ?? 0;
+      }
+    }
+    // Shielded outputs: per-slot restore of the decode-only fields, keyed by
+    // on-chain position. A slot absent from the delivery is restored whole.
+    const stored = storedTx.shielded_outputs ?? [];
+    if (stored.length === 0) return;
+    // eslint-disable-next-line no-param-reassign
+    tx.shielded_outputs = tx.shielded_outputs ?? [];
+    const cur = tx.shielded_outputs;
+    for (let s = 0; s < stored.length; s += 1) {
+      if (!stored[s]) continue;
+      if (!cur[s]) {
+        cur[s] = cloneDeep(stored[s]);
+      } else if (cur[s].value === undefined && stored[s].value !== undefined) {
+        cur[s].value = stored[s].value;
+        cur[s].token = stored[s].token;
+        cur[s].decoded = stored[s].decoded;
+        cur[s].blindingFactor = stored[s].blindingFactor;
+        cur[s].assetBlindingFactor = stored[s].assetBlindingFactor;
+      }
+    }
   },
 
   /**
@@ -163,18 +375,46 @@ const transaction = {
   },
 
   /**
-   * Get the signatures for a transaction
+   * Produce the signatures for every wallet-owned input of a transaction (plus the nano/OCB
+   * caller signature), given a resolver that returns the change-path xpriv for each key chain
+   * (m/.../0, from which per-input keys are derived — see getXpriv).
+   *
+   * This is the core of getSignatureForTx, factored out so external signers — e.g. a passkey
+   * signer that derives keys from a biometric ceremony instead of decrypting a stored key — can
+   * reuse the exact same input selection, shielded-spend handling and encoding instead of
+   * duplicating it (and drifting from it).
+   *
    * @param tx Transaction to sign
    * @param storage Storage of the wallet
-   * @param pinCode Pin to unlock the mainKey for signatures
+   * @param getXpriv Resolver returning the change-path xpriv for a chain: 'legacy' is the P2PKH
+   *   chain (m/44'/280'/0'/0), 'spend' is the shielded spend chain (m/44'/280'/2'/0). Each chain is
+   *   fetched lazily and at most once: 'legacy' only when a legacy input, a nano-contract caller or
+   *   an OCB pubkey needs it; 'spend' only when a shielded-spend input is present. This matters for
+   *   a passkey signer, where each resolver call may be a biometric ceremony — an all-shielded tx
+   *   with no nano/OCB header never triggers the 'legacy' prompt.
    */
-  async getSignatureForTx(
+  async signTxInputs(
     tx: Transaction,
     storage: IStorage,
-    pinCode: string
+    getXpriv: (chain: 'legacy' | 'spend') => Promise<HDPrivateKey>
   ): Promise<ITxSignatureData> {
-    const xprivstr = await storage.getMainXPrivKey(pinCode);
-    const xprivkey = HDPrivateKey.fromString(xprivstr);
+    // Lazily load each key chain (see getXpriv doc). Cache the first fetch so a chain used by
+    // many inputs still resolves it only once.
+    let legacyXprivkey: HDPrivateKey | null = null;
+    const getLegacyXpriv = async (): Promise<HDPrivateKey> => {
+      if (!legacyXprivkey) {
+        legacyXprivkey = await getXpriv('legacy');
+      }
+      return legacyXprivkey;
+    };
+    let spendXprivkey: HDPrivateKey | null = null;
+    const getSpendXpriv = async (): Promise<HDPrivateKey> => {
+      if (!spendXprivkey) {
+        spendXprivkey = await getXpriv('spend');
+      }
+      return spendXprivkey;
+    };
+
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
     let ncCallerSignature: Buffer | null = null;
@@ -185,9 +425,20 @@ const transaction = {
         continue;
       }
 
-      const spentOut = spentTx.outputs[input.index];
-      if (!spentOut.decoded.address) {
-        // This is not a wallet output
+      // Resolve the spent output via the SEPARATED-model resolver. A
+      // positional `spentTx.outputs[input.index]` would return the wrong
+      // entry for a shielded input (whose on-chain index is ≥ outputs.length)
+      // and the signature would be computed for the wrong pubkey, failing
+      // OP_EQUALVERIFY at the fullnode with "Failed to verify if elements are
+      // equal".
+      const resolved = this.resolveSpentOutput(spentTx, input.index);
+      const spentOut = resolved?.output;
+      // A shielded output's spend-derived P2PKH (decoded.address) is on the wire
+      // for every output (owned or not) and persisted on the stored entry, so
+      // the resolver always supplies the address needed to select the signing
+      // key — no UTXO lookup required.
+      if (!spentOut?.decoded?.address) {
+        // Not a wallet output (or an unresolvable index)
         continue;
       }
       const addressInfo = await storage.getAddressInfo(spentOut.decoded.address);
@@ -195,12 +446,29 @@ const transaction = {
         // Not a wallet address
         continue;
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+
+      let derivedKey;
+      if (addressInfo.addressType === 'shielded-spend') {
+        // Use spend key chain (m/44'/280'/2'/0) for shielded UTXO inputs.
+        // Shielded keys use compliant derivation (deriveChild), per #1132 — must match how the
+        // shielded-spend addresses are derived, or signatures fail on-chain.
+        const spendXpriv = await getSpendXpriv();
+        derivedKey = spendXpriv.deriveChild(addressInfo.bip32AddressIndex);
+      } else {
+        // Use legacy key chain (m/44'/280'/0'/0) for regular addresses
+        const legacyXpriv = await getLegacyXpriv();
+        derivedKey = legacyXpriv.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      }
+
       signatures.push({
         inputIndex,
         addressIndex: addressInfo.bip32AddressIndex,
-        signature: this.getSignature(dataToSignHash, xpriv.privateKey),
-        pubkey: xpriv.publicKey.toDER(),
+        signature: this.getSignature(dataToSignHash, derivedKey.privateKey),
+        pubkey: derivedKey.publicKey.toDER(),
+        // Carry the address type so callers (getSignatures) can render the
+        // matching derivation path: a 'shielded-spend' input was signed with the
+        // spend chain (m/44'/280'/2'), not the legacy P2PKH chain.
+        addressType: addressInfo.addressType,
       });
     }
 
@@ -222,7 +490,8 @@ const transaction = {
         // The nano contract address or OCB pubkey are not from our wallet.
         return { inputSignatures: signatures, ncCallerSignature };
       }
-      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      const legacyXpriv = await getLegacyXpriv();
+      const xpriv = legacyXpriv.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
 
       if (tx.isNanoContract()) {
         // Nano contract
@@ -238,6 +507,27 @@ const transaction = {
       inputSignatures: signatures,
       ncCallerSignature,
     };
+  },
+
+  /**
+   * Get the signatures for a transaction, sourcing the signing keys from the wallet's stored
+   * (PIN-decrypted) xprivs. Thin wrapper over signTxInputs.
+   * @param tx Transaction to sign
+   * @param storage Storage of the wallet
+   * @param pinCode Pin to unlock the mainKey for signatures
+   */
+  async getSignatureForTx(
+    tx: Transaction,
+    storage: IStorage,
+    pinCode: string
+  ): Promise<ITxSignatureData> {
+    return this.signTxInputs(tx, storage, async chain =>
+      HDPrivateKey.fromString(
+        chain === 'spend'
+          ? await storage.getSpendXPrivKey(pinCode)
+          : await storage.getMainXPrivKey(pinCode)
+      )
+    );
   },
 
   /**
@@ -397,57 +687,112 @@ const transaction = {
     const rewardLock = storage.version?.reward_spend_min_blocks;
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
+    // Accrue one output/input into the running balance. `sign` is +1n to credit
+    // (outputs) or -1n to debit (inputs): authority entries move by `sign`, token
+    // amounts by `sign * value`. Shared by the transparent-output, shielded-output
+    // and input loops below so the authority/lock/value handling lives in one place.
+    const accrue = (
+      token: string,
+      value: bigint,
+      tokenData: number,
+      isLocked: boolean,
+      sign: bigint
+    ): void => {
+      if (!balance[token]) {
+        balance[token] = getEmptyBalance();
+      }
+      const entry = balance[token];
+      if (this.isAuthorityOutput({ token_data: tokenData })) {
+        if (this.isMint({ value, token_data: tokenData })) {
+          if (isLocked) entry.authorities.mint.locked += sign;
+          else entry.authorities.mint.unlocked += sign;
+        }
+        if (this.isMelt({ value, token_data: tokenData })) {
+          if (isLocked) entry.authorities.melt.locked += sign;
+          else entry.authorities.melt.unlocked += sign;
+        }
+      } else if (isLocked) {
+        entry.tokens.locked += sign * value;
+      } else {
+        entry.tokens.unlocked += sign * value;
+      }
+    };
+
     for (const output of tx.outputs) {
       const { address } = output.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      if (!balance[output.token]) {
-        balance[output.token] = getEmptyBalance();
-      }
       const isLocked = this.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked;
-
-      if (this.isAuthorityOutput(output)) {
-        if (this.isMint(output)) {
-          if (isLocked) {
-            balance[output.token].authorities.mint.locked += 1n;
-          } else {
-            balance[output.token].authorities.mint.unlocked += 1n;
-          }
-        }
-        if (this.isMelt(output)) {
-          if (isLocked) {
-            balance[output.token].authorities.melt.locked += 1n;
-          } else {
-            balance[output.token].authorities.melt.unlocked += 1n;
-          }
-        }
-      } else if (isLocked) {
-        balance[output.token].tokens.locked += output.value;
-      } else {
-        balance[output.token].tokens.unlocked += output.value;
-      }
+      accrue(output.token, output.value, output.token_data, isLocked, 1n);
     }
 
-    for (const input of tx.inputs) {
-      const { address } = input.decoded;
+    // CREDIT loop over shielded outputs (SEPARATED model). Owned shielded
+    // outputs live in tx.shielded_outputs[] with their value/token decrypted
+    // IN PLACE. `value !== undefined` is the authoritative ownership gate — it
+    // is written only when the wallet decrypts a slot it owns (see the
+    // owned-marker note on IHistoryShieldedOutput) — and we additionally require
+    // isAddressMine(decoded.address), the same check the transparent loop uses;
+    // authority/lock/value handling mirrors that loop too. Without this loop an
+    // owned shielded RECEIVE would credit 0 in getTxHistory / getTxById.
+    for (const so of tx.shielded_outputs ?? []) {
+      if (so.value === undefined) {
+        // Non-owned (or not-yet-decrypted) slot — excluded by the gate.
+        continue;
+      }
+      const { address } = so.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
-      if (!balance[input.token]) {
-        balance[input.token] = getEmptyBalance();
+      const isLocked = this.isOutputLocked(so, { refTs: nowTs }) || isHeightLocked;
+      // An owned (decrypted) shielded slot always carries its token: decryption
+      // recovers value and tokenUid together (IDecryptedShieldedOutput), and the
+      // `value !== undefined` gate above already proved ownership. So read the
+      // token directly — no NATIVE_TOKEN_UID fallback, which would mislabel a
+      // custom token as HTR (mirrors the input-debit path below). token_data may
+      // still be undefined (FullShielded hides it); default to 0 so the
+      // authority check reads as plain funds.
+      accrue(so.token!, so.value, so.token_data ?? 0, isLocked, 1n);
+    }
+
+    for (const input of tx.inputs) {
+      // Determine the spent value/token/address. Transparent (or already
+      // enriched) inputs carry these inline. A shielded input is bare — its
+      // amount is hidden in the on-chain commitment — so read them off the
+      // parent tx's owned, decrypted shielded output, which the receive
+      // pipeline persists at receive time, via the SEPARATED-model resolver.
+      // Without this the per-tx delta would credit change but never debit the
+      // spend (e.g. +8.5M on a tx that actually sent 500K).
+      let address = input.decoded?.address;
+      let inputToken = input.token;
+      let inputValue = input.value;
+      let inputTokenData = input.token_data;
+
+      if (!address || inputToken === undefined || inputValue === undefined) {
+        const spentTx = await storage.getTx(input.tx_id);
+        const resolved = spentTx ? this.resolveSpentOutput(spentTx, input.index) : undefined;
+        // We can only debit inputs the wallet OWNS. This block runs only for
+        // "bare" inputs (no inline value/token), which the fullnode emits only
+        // for shielded inputs. Anything that isn't an owned, decrypted shielded
+        // slot — a non-shielded resolve, or a shielded slot we never decrypted
+        // (value === undefined) — is not ours, so skip it.
+        if (resolved?.kind !== 'shielded' || resolved.output.value === undefined) {
+          continue;
+        }
+        const so = resolved.output;
+        address = so.decoded?.address;
+        // Token comes from the decrypted slot (an owned slot always carries it).
+        // No NATIVE_TOKEN_UID fallback — that would mislabel a custom token as HTR.
+        inputToken = so.token;
+        inputValue = so.value;
+        inputTokenData = so.token_data ?? 0;
       }
 
-      if (this.isAuthorityOutput(input)) {
-        if (this.isMint(input)) {
-          balance[input.token].authorities.mint.unlocked -= 1n;
-        }
-        if (this.isMelt(input)) {
-          balance[input.token].authorities.melt.unlocked -= 1n;
-        }
-      } else {
-        balance[input.token].tokens.unlocked -= input.value;
+      if (!(address && (await storage.isAddressMine(address)))) {
+        continue;
       }
+      // Inputs debit (sign -1n); a spent output is never locked.
+      accrue(inputToken!, inputValue!, inputTokenData!, false, -1n);
     }
 
     return balance;
@@ -564,20 +909,23 @@ const transaction = {
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
     }
-    if (getAddressType(output.address, network) === 'p2sh') {
-      // P2SH
-      const address = new Address(output.address, { network });
-      // This will throw AddressError in case the address is invalid
-      address.validateAddress();
-      const p2sh = new P2SH(address, { timelock: output.timelock });
+    const addressObj = new Address(output.address, { network });
+    addressObj.validateAddress();
+    const addrType = addressObj.getType();
+    if (addrType === 'p2sh') {
+      const p2sh = new P2SH(addressObj, { timelock: output.timelock });
       return p2sh.createScript();
     }
-    if (getAddressType(output.address, network) === 'p2pkh') {
-      // P2PKH
-      const address = new Address(output.address, { network });
-      // This will throw AddressError in case the address is invalid
-      address.validateAddress();
-      const p2pkh = new P2PKH(address, { timelock: output.timelock });
+    if (addrType === 'p2pkh') {
+      const p2pkh = new P2PKH(addressObj, { timelock: output.timelock });
+      return p2pkh.createScript();
+    }
+    if (addrType === 'shielded') {
+      // Shielded addresses are a recipient-facing encoding of scan + spend
+      // public keys. On-chain, the transparent script is the P2PKH derived
+      // from the spend pubkey — same convention as createOutputScriptFromAddress.
+      const spendAddress = addressObj.getSpendAddress();
+      const p2pkh = new P2PKH(spendAddress, { timelock: output.timelock });
       return p2pkh.createScript();
     }
     throw new Error('Invalid output for creating script.');
@@ -621,18 +969,237 @@ const transaction = {
         ...options,
         tokenVersion: txData.tokenVersion,
       };
-      return new CreateTokenTransaction(
+      const ctTx = new CreateTokenTransaction(
         txData.name!,
         txData.symbol!,
         inputs,
         outputs,
         createTokenOptions
       );
+      // Attach shielded-related headers identically to the regular tx
+      // branch below so a TCT funded by shielded HTR carries the
+      // UnshieldBalanceHeader + MintHeader the fullnode requires.
+      this._attachShieldedHeaders(ctTx, txData);
+      return ctTx;
     }
     if (options.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, options);
+      const tx = new Transaction(inputs, outputs, options);
+      this._attachShieldedHeaders(tx, txData);
+      return tx;
     }
     throw new ParseError('Invalid transaction version.');
+  },
+
+  /**
+   * Attach the shielded-related headers onto a freshly-built tx based on what
+   * `txData` carries. Shared by both regular `Transaction` and
+   * `CreateTokenTransaction` paths, which need the same headers.
+   *
+   * Delegates to one helper per header, invoked in canonical header-id order so
+   * `tx.headers` stays sorted: Fee(0x11) ≤ Shielded(0x12) ≤ Unshield(0x13) ≤
+   * Mint(0x14) ≤ Melt(0x15).
+   *
+   * @param tx The Transaction (or CreateTokenTransaction) to attach to.
+   * @param txData The data the tx was built from.
+   */
+  _attachShieldedHeaders(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    this._attachShieldedOutputsHeader(tx, txData);
+    this._attachUnshieldBalanceHeader(tx, txData);
+    this._attachMintMeltHeaders(tx, txData);
+  },
+
+  /**
+   * Build a `ShieldedOutput` model for each entry in `txData.shieldedOutputs`
+   * and push a ShieldedOutputsHeader (0x12) carrying them (SEPARATED model —
+   * shielded outputs live apart from `tx.outputs`, and the `tx.shieldedOutputs`
+   * getter reads them back from the header). No-op when the tx carries no
+   * shielded outputs.
+   */
+  _attachShieldedOutputsHeader(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    // Populate shielded outputs as a ShieldedOutputsHeader
+    if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+      const shieldedModels = txData.shieldedOutputs.map(so => {
+        if (!so.commitment || !so.rangeProof || !so.script || !so.ephemeralPubkey) {
+          throw new Error(
+            'Shielded output missing required crypto fields (commitment, rangeProof, script, ephemeralPubkey)'
+          );
+        }
+        const tokenData = this.getTokenDataFromOutput(
+          {
+            type: 'p2pkh',
+            token: so.token,
+            value: so.value,
+            authorities: 0n,
+            address: so.address,
+            timelock: null,
+          },
+          txData.tokens
+        );
+
+        // assetCommitment / surjectionProof only exist on the FullShielded
+        // variant of the discriminated union — narrow with `shieldedMode`
+        // before reading them, otherwise tsc rejects the access.
+        const options =
+          so.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED
+            ? { assetCommitment: so.assetCommitment, surjectionProof: so.surjectionProof }
+            : {};
+
+        return new ShieldedOutput(
+          so.shieldedMode,
+          so.commitment,
+          so.rangeProof,
+          tokenData,
+          Buffer.from(so.script, 'hex'),
+          so.ephemeralPubkey,
+          so.value,
+          options
+        );
+      });
+
+      // The ShieldedOutputsHeader owns the array; tx.shieldedOutputs is a getter
+      // that reads it back, so there is no separate field to assign.
+      tx.headers.push(new ShieldedOutputsHeader(shieldedModels));
+    }
+  },
+
+  /**
+   * Push an UnshieldBalanceHeader (0x13) for a full-unshield tx (shielded
+   * inputs, no shielded outputs): the excess scalar closes the Pedersen balance
+   * `sum(C_in) = sum(C_out) + excess·G`. Mutually exclusive with shielded
+   * outputs — asserts the caller never set both (surfaces the bug before PoW).
+   * No-op when there's no excess blinding factor.
+   */
+  _attachUnshieldBalanceHeader(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    // Attach UnshieldBalanceHeader for pure-unshield txs. The fullnode
+    // requires it when a tx has shielded inputs and no shielded outputs
+    // (full unshield): the excess scalar closes the Pedersen balance
+    // equation. Mutually exclusive with shielded outputs — the caller must
+    // not set both, and we assert that here to surface the bug early
+    // instead of letting the fullnode reject the tx post-PoW.
+    if (txData.excessBlindingFactor) {
+      if (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) {
+        throw new Error(
+          'A transaction cannot carry both shielded outputs and an excess ' +
+            'blinding factor (UnshieldBalanceHeader is mutually exclusive with ' +
+            'ShieldedOutputsHeader).'
+        );
+      }
+      tx.headers.push(new UnshieldBalanceHeader(txData.excessBlindingFactor));
+    }
+  },
+
+  /**
+   * Declare real supply changes for non-HTR tokens in a shielded tx via
+   * MintHeader (0x14) / MeltHeader (0x15). A pure shielding move (T↔F) preserves
+   * supply and declares nothing; a header is emitted only when an explicit
+   * mint/melt authority is exercised (see the detection rule in the body).
+   */
+  _attachMintMeltHeaders(tx: Transaction | CreateTokenTransaction, txData: IDataTx): void {
+    // Mint/Melt headers for shielded txs.
+    // The wallet MUST publicly declare any *real* supply change for a
+    // non-HTR token in a shielded tx. "Real" here means an explicit
+    // mint or melt authority is being exercised — a simple T→F or F→T
+    // shielding move preserves supply (the transparent surplus/deficit
+    // is balanced via Pedersen on the shielded side) and MUST NOT
+    // declare anything; otherwise the verifier's authority check
+    // (`_check_token_permissions`) demands the matching authority
+    // input we don't have and rejects with ForbiddenMint/ForbiddenMelt.
+    //
+    // Detection rule, per non-HTR token in `tokensArray`:
+    //   - createToken (CREATE_TOKEN_TX_VERSION): the tx itself
+    //     authorizes mint for the new token; declare the positive
+    //     transparent delta as MintHeader.
+    //   - regular tx: declare MintHeader iff inputs carry a mint
+    //     authority for the token AND transparent delta > 0;
+    //     symmetric for MeltHeader (melt authority + delta < 0).
+    //   - otherwise: no header.
+    //
+    // Pushed last so the canonical header-id-ascending order holds:
+    // Fee(0x11) ≤ Shielded(0x12) ≤ Unshield(0x13) ≤ Mint(0x14) ≤ Melt(0x15).
+    const isShieldedTx =
+      (txData.shieldedOutputs && txData.shieldedOutputs.length > 0) ||
+      !!txData.excessBlindingFactor;
+    if (isShieldedTx && !tx.headers.some(h => h instanceof MintHeader || h instanceof MeltHeader)) {
+      // For createToken the new token's outputs are
+      // `IDataOutputCreateToken` (no `token` field), and tokensArray
+      // on-chain is `[tx.hash]`. Use a sentinel locally and remap to
+      // tokenIndex=1.
+      const NEW_TOKEN_KEY = '__create_token__';
+      const isCreateToken = txData.version === CREATE_TOKEN_TX_VERSION;
+      const tokensArray: string[] = isCreateToken ? [NEW_TOKEN_KEY] : txData.tokens ?? [];
+      // Outputs from `prepareMintTxData` use `IDataOutputCreateToken`
+      // (no `token` field) for the minted token in BOTH createToken
+      // and mintTokens flows. Resolve "the implicit token" to either
+      // the sentinel new-token key (createToken) or the first entry
+      // of tokensArray (mintTokens).
+      const implicitTokenKey = isCreateToken ? NEW_TOKEN_KEY : tokensArray[0];
+
+      const tokenDelta = new Map<string, bigint>();
+      const mintAuthorityTokens = new Set<string>();
+      const meltAuthorityTokens = new Set<string>();
+      const bumpDelta = (token: string | undefined, delta: bigint) => {
+        if (!token) return;
+        if (token === NATIVE_TOKEN_UID) return;
+        if (tokensArray.indexOf(token) < 0) return;
+        tokenDelta.set(token, (tokenDelta.get(token) ?? 0n) + delta);
+      };
+
+      // Outputs add to amount; inputs subtract. Both transparent AND
+      // shielded sides count: the verifier (`_fold_mint_melt_entry` +
+      // `verify_balance` in hathor-core) injects synthetic unblinded
+      // `(amount, token)` entries from MeltHeader on the OUTPUT side
+      // and from MintHeader on the INPUT side, then sums *all*
+      // commitments — including shielded inputs/outputs that contribute
+      // `value · H_TOKEN + vbf · G`. So per-token net = total_in −
+      // total_out across both sides; positive ⇒ melt, negative ⇒ mint.
+      for (const out of txData.outputs) {
+        if (out.value <= 0n) continue;
+        if ((out.authorities ?? 0n) !== 0n) continue;
+        const token = 'token' in out ? out.token : implicitTokenKey;
+        bumpDelta(token, out.value);
+      }
+      for (const so of txData.shieldedOutputs ?? []) {
+        if (so.value <= 0n) continue;
+        bumpDelta(so.token, so.value);
+      }
+      for (const inp of txData.inputs) {
+        const auth = inp.authorities ?? 0n;
+        if (auth !== 0n) {
+          if ((auth & TOKEN_MINT_MASK) !== 0n) mintAuthorityTokens.add(inp.token);
+          if ((auth & TOKEN_MELT_MASK) !== 0n) meltAuthorityTokens.add(inp.token);
+          continue;
+        }
+        if (inp.value > 0n) bumpDelta(inp.token, -inp.value);
+      }
+
+      const mintEntries: Array<{ tokenIndex: number; amount: bigint }> = [];
+      const meltEntries: Array<{ tokenIndex: number; amount: bigint }> = [];
+      for (const token of tokensArray) {
+        const delta = tokenDelta.get(token) ?? 0n;
+        // For createToken the new token has no authority input (it's
+        // the genesis): the tx version itself authorizes mint, so we
+        // declare unconditionally on positive delta.
+        const canMint = isCreateToken || mintAuthorityTokens.has(token);
+        const canMelt = meltAuthorityTokens.has(token);
+        if (delta > 0n && canMint) {
+          mintEntries.push({
+            tokenIndex: tokensArray.indexOf(token) + 1,
+            amount: delta,
+          });
+        } else if (delta < 0n && canMelt) {
+          meltEntries.push({
+            tokenIndex: tokensArray.indexOf(token) + 1,
+            amount: -delta,
+          });
+        }
+      }
+      if (mintEntries.length > 0) {
+        tx.headers.push(new MintHeader(mintEntries));
+      }
+      if (meltEntries.length > 0) {
+        tx.headers.push(new MeltHeader(meltEntries));
+      }
+    }
   },
 
   /**
@@ -667,7 +1234,13 @@ const transaction = {
                   return reject(new Error(response.message ?? ''));
                 }
 
-                if (input.index >= response.tx.outputs.length) {
+                // SEPARATED model: the on-chain index space spans transparent
+                // outputs followed by shielded outputs, so the bound is the
+                // sum of both arrays. Using outputs.length alone rejects every
+                // shielded spend whose parent isn't in storage.
+                const shieldedCount =
+                  (response.tx as { shielded_outputs?: unknown[] }).shielded_outputs?.length ?? 0;
+                if (input.index >= response.tx.outputs.length + shieldedCount) {
                   return reject(new Error('Index outside of tx output array bounds'));
                 }
                 return resolve(this.convertFullNodeTxToHistoryTx(response));
@@ -685,13 +1258,56 @@ const transaction = {
         }
       }
 
-      if (input.index >= spentTx.outputs.length) {
+      // Resolve the parent's spent output by its absolute on-chain index via
+      // the SEPARATED-model resolver. A `kind === 'shielded'` result means the
+      // input spends a shielded slot (on-chain index ≥ outputs.length); we
+      // stamp `type: 'shielded'` so the rest of wallet-lib (e.g.
+      // `getShieldedUnblindingForTx`, the WS-driven tx-history view, the
+      // signing key chain selection) routes this input through the shielded
+      // code paths.
+      const resolvedSpent = this.resolveSpentOutput(spentTx, input.index);
+
+      if (resolvedSpent?.kind === 'shielded' && resolvedSpent.output.value !== undefined) {
+        // The wallet's stored parent tx carries a decoded shielded entry for
+        // this slot. Read value/token/decoded/script straight off that entry
+        // instead of touching the UTXO record — the entry survives the
+        // WebSocket-driven `processNewTx` UTXO deletion that races with this
+        // fire-and-forget local-insert call. Headless wallets pointed at a
+        // local fullnode hit that race almost every time (WS re-delivery wins,
+        // UTXO is gone before this function reaches its lookup).
+        const shieldedEntry = resolvedSpent.output;
+        inputs.push({
+          type: 'shielded',
+          tx_id: input.hash,
+          index: input.index,
+          script: shieldedEntry.script ?? '',
+          decoded: shieldedEntry.decoded ?? {},
+          token_data: shieldedEntry.token_data ?? 0,
+          token: shieldedEntry.token!,
+          value: shieldedEntry.value,
+        });
+        continue;
+      }
+
+      if (resolvedSpent === undefined || resolvedSpent.kind === 'shielded') {
+        // Reachable only if we're "spending" a shielded slot the wallet never
+        // decoded (value === undefined) or whose stored shielded list is too
+        // short to resolve. That is impossible for a real spend: a shielded
+        // input requires the spend key and unblinding factors the wallet only
+        // holds for outputs it OWNS, and an owned output is decoded + persisted
+        // on the parent at receive time — so reaching here means corrupted or
+        // incomplete storage. Don't paper over it with the racy UTXO record;
+        // surface it (the broadcast already happened — only the local insert
+        // fails, and the WS re-delivery still processes the tx correctly).
         throw new Error(
-          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+          `Input ${input.hash}:${input.index} spends a shielded slot with no decoded ` +
+            `entry on the spent tx (shielded_outputs length ` +
+            `${spentTx.shielded_outputs?.length ?? 0}) — cannot reconstruct the local insert.`
         );
       }
 
-      const spentOut = spentTx.outputs[input.index];
+      // Transparent slot: resolvedSpent is the transparent output.
+      const spentOut = resolvedSpent!.output as ITransparentOutput;
       inputs.push({
         tx_id: input.hash,
         index: input.index,
@@ -719,6 +1335,31 @@ const transaction = {
       outputs.push(this.hydrateIOWithToken(out, tokensArray));
     }
 
+    // Emit shielded_outputs so the locally-pushed tx carries the same shape
+    // a websocket-delivered tx would. Without this, a shielded self-send
+    // writes a bare history entry (no shielded_outputs), and processNewTx's
+    // decryption gate is skipped entirely (shieldedCount=0) — the wallet
+    // debits the input but never credits back the self-sent shielded outputs,
+    // leaving the per-tx balance stuck at -input_value until a full
+    // processHistory reload.
+    const shieldedOutputs: IHistoryShieldedOutput[] | undefined =
+      tx.shieldedOutputs && tx.shieldedOutputs.length > 0
+        ? tx.shieldedOutputs.map(so => {
+            const parsed = parseScript(so.script, storage.config.getNetwork());
+            return {
+              mode: so.mode,
+              commitment: so.commitment.toString('hex'),
+              range_proof: so.rangeProof.toString('hex'),
+              script: so.script.toString('hex'),
+              token_data: so.tokenData,
+              ephemeral_pubkey: so.ephemeralPubkey.toString('hex'),
+              asset_commitment: so.assetCommitment?.toString('hex'),
+              surjection_proof: so.surjectionProof?.toString('hex'),
+              decoded: (parsed?.toData() ?? {}) as IHistoryShieldedOutput['decoded'],
+            };
+          })
+        : undefined;
+
     const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signalBits,
@@ -731,6 +1372,7 @@ const transaction = {
       outputs,
       parents: tx.parents,
       tokens: tx.tokens,
+      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
       // The missing fields below are metadata that cannot be inferred from the
       // Transaction instance.
       // height, first_block
@@ -780,6 +1422,107 @@ const transaction = {
       signTx: true,
       ...options,
     };
+
+    // Attach an UnshieldBalanceHeader for a "full unshield" — a tx that spends
+    // shielded inputs but produces NO shielded outputs — on paths that bypass
+    // SendTransaction.prepareTxData (notably `createNewToken` /
+    // `prepareCreateNewToken`, which build txData directly via tokens.ts). The
+    // header carries the excess blinding factor so the fullnode's Pedersen
+    // balance check holds (same logic SendTransaction runs for the send path).
+    //
+    // The condition AND's two separate things: `!excessBlindingFactor` is a
+    // skip-guard for paths that already computed it upstream, and "no shielded
+    // outputs" is the actual full-unshield signal (mutually exclusive with the
+    // header). The third requirement — that the tx really spends shielded inputs
+    // — is verified below: the header is only attached when shieldedInputs > 0.
+    if (
+      !txData.excessBlindingFactor &&
+      (!txData.shieldedOutputs || txData.shieldedOutputs.length === 0)
+    ) {
+      const shieldedInputs: Array<{
+        value: bigint;
+        valueBlindingFactor: Buffer;
+        generatorBlindingFactor: Buffer;
+      }> = [];
+      const transparentInputs: Array<{
+        value: bigint;
+        valueBlindingFactor: Buffer;
+        generatorBlindingFactor: Buffer;
+      }> = [];
+      // The excess scalar in UnshieldBalanceHeader represents
+      // sum(r_in) - sum(r_out), independent of token (it lives on G).
+      // Include shielded inputs of every token so the G-term sum is
+      // correct; transparent inputs (valueBlindingFactor=0) contribute
+      // nothing to the sum but their value matters for the per-token
+      // balance the verifier checks separately.
+      for (const inp of txData.inputs) {
+        const utxo = await storage.getUtxo({ txId: inp.txId, index: inp.index });
+        if (!utxo) continue;
+        if (utxo.shielded) {
+          if (!utxo.blindingFactor) continue;
+          shieldedInputs.push({
+            value: utxo.value,
+            valueBlindingFactor: Buffer.from(utxo.blindingFactor, 'hex'),
+            generatorBlindingFactor: utxo.assetBlindingFactor
+              ? Buffer.from(utxo.assetBlindingFactor, 'hex')
+              : ZERO_TWEAK,
+          });
+        } else if ((utxo.authorities ?? 0n) === 0n && utxo.value > 0n) {
+          transparentInputs.push({
+            value: utxo.value,
+            valueBlindingFactor: ZERO_TWEAK,
+            generatorBlindingFactor: ZERO_TWEAK,
+          });
+        }
+      }
+
+      if (shieldedInputs.length > 0) {
+        // Spending shielded UTXOs without shielded outputs needs the provider to
+        // compute the excess blinding factor; fail loudly if it is missing.
+        const cryptoProvider = storage.getShieldedCryptoProvider();
+        const transparentOutputEntries: Array<{
+          value: bigint;
+          valueBlindingFactor: Buffer;
+          generatorBlindingFactor: Buffer;
+        }> = [];
+        // All outputs contribute (value, valueBlindingFactor=0,
+        // generatorBlindingFactor=0). Authority outputs are skipped because
+        // their `value` field is the authority mask, not a token amount the
+        // verifier sums.
+        for (const out of txData.outputs) {
+          if (out.value > 0n && (out.authorities ?? 0n) === 0n) {
+            transparentOutputEntries.push({
+              value: out.value,
+              valueBlindingFactor: ZERO_TWEAK,
+              generatorBlindingFactor: ZERO_TWEAK,
+            });
+          }
+        }
+        // Fees (HTR + per-token) are value leaving the tx, so for the Pedersen
+        // value-conservation check (inputs = outputs + fees) they count on the
+        // OUTPUT side. Zero-blinded because fee amounts are public/explicit.
+        for (const header of txData.headers ?? []) {
+          if (header instanceof FeeHeader) {
+            for (const fee of header.entries) {
+              transparentOutputEntries.push({
+                value: fee.amount,
+                valueBlindingFactor: ZERO_TWEAK,
+                generatorBlindingFactor: ZERO_TWEAK,
+              });
+            }
+          }
+        }
+        const excess = await cryptoProvider.computeBalancingBlindingFactor(
+          0n,
+          ZERO_TWEAK,
+          [...shieldedInputs, ...transparentInputs],
+          transparentOutputEntries
+        );
+        // eslint-disable-next-line no-param-reassign
+        txData.excessBlindingFactor = excess;
+      }
+    }
+
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
@@ -849,12 +1592,19 @@ const transaction = {
     const rewardLock = storage.version?.reward_spend_min_blocks || 0;
     const nowTs = Math.floor(Date.now() / 1000);
     const tx = await storage.getTx(utxo.txId);
-    if (tx === null || (tx.outputs && tx.outputs.length <= utxo.index)) {
+    if (tx === null) {
       // This is not our utxo, so we cannot spend it.
       return false;
     }
-    const output = tx.outputs[utxo.index];
-    const isTimelocked = this.isOutputLocked(output, { refTs: nowTs });
+    // SEPARATED-model lookup. A shielded UTXO has on-chain index
+    // outputs.length + s, so a positional `tx.outputs[utxo.index]` would read
+    // the wrong (or no) entry; resolve arithmetically and read the timelock
+    // off the resolved output (transparent or shielded — both carry decoded).
+    const resolved = this.resolveSpentOutput(tx, utxo.index);
+    if (!resolved) {
+      return false;
+    }
+    const isTimelocked = this.isOutputLocked(resolved.output, { refTs: nowTs });
     const isHeightLocked = this.isHeightLocked(tx.height, currentHeight, rewardLock);
     const isSelectedAsInput = await storage.isUtxoSelectedAsInput(utxo);
 
@@ -934,14 +1684,34 @@ const transaction = {
       throw new Error(`trying to convert a tx from a failed api request: ${txResponse.message}`);
     }
     const { tx, meta } = txResponse;
-    const inputs: IHistoryInput[] = tx.inputs.map(i => {
-      const hydratedInput = this.hydrateIOWithToken(i, tx.tokens);
-      return hydratedInput as IHistoryInput;
-    });
-    const outputs: IHistoryOutput[] = tx.outputs.map(o => {
-      const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
-      return hydratedoutput as IHistoryOutput;
-    });
+    // Shielded inputs (type: 'shielded') carry no remappable token_data — a
+    // FullShielded entry omits it and an AmountShielded entry echoes the PARENT
+    // tx's raw token_data — so hydrateIOWithToken would throw
+    // ("token not found in tokens list"). Pass them through untouched; the
+    // wallet re-derives their value/token/decoded from its own storage
+    // (clearUntrustedShieldedData + processNewTx), never from this wire copy.
+    const inputs: IHistoryInput[] = tx.inputs.map(i =>
+      this.isShieldedInputEntry(i as { type?: string })
+        ? (i as unknown as IHistoryInput)
+        : (this.hydrateIOWithToken(i as { token_data: number }, tx.tokens) as IHistoryInput)
+    );
+
+    // SEPARATED model: `outputs[]` is transparent-only — hydrate each with its
+    // token. Shielded outputs arrive in a dedicated `shielded_outputs[]` field
+    // (passthrough — not in the zod schema); they are shallow-copied here and
+    // hex-normalized in one pass via normalizeShieldedOutputs(histTx) below.
+    const outputs: IHistoryOutput[] = tx.outputs.map(
+      o => this.hydrateIOWithToken(o, tx.tokens) as IHistoryOutput
+    );
+
+    const separateShielded = (tx as { shielded_outputs?: IHistoryShieldedOutput[] })
+      .shielded_outputs;
+    // Shallow-copy each slot so the hex normalization below mutates our copies,
+    // not the caller's txResponse objects.
+    const shieldedOutputs: IHistoryShieldedOutput[] = (separateShielded ?? []).map(so => ({
+      ...so,
+    }));
+
     const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signal_bits,
@@ -958,6 +1728,7 @@ const transaction = {
       tokens: tx.tokens.map(token => token.uid),
       height: meta.height,
       first_block: meta.first_block,
+      ...(shieldedOutputs.length > 0 ? { shielded_outputs: shieldedOutputs } : {}),
     };
 
     if (tx.nc_id) histTx.nc_id = tx.nc_id;
@@ -967,6 +1738,10 @@ const transaction = {
     if (tx.nc_address) histTx.nc_address = tx.nc_address;
     if (tx.nc_context) histTx.nc_context = tx.nc_context;
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
+
+    // Hex-encode the confidential wire fields (commitment/range_proof/script/…)
+    // in one pass — the same normalization used by the realtime/ws path.
+    this.normalizeShieldedOutputs(histTx);
 
     return histTx;
   },

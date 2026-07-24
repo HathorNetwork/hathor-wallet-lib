@@ -60,6 +60,7 @@ import {
 import { stopGLLBackgroundTask } from './sync/gll';
 import * as enums from './models/enum';
 import { Fee } from './utils/fee';
+import * as shielded from './shielded';
 
 export {
   PartialTx,
@@ -124,6 +125,7 @@ export {
   WalletTxTemplateInterpreter,
   stopGLLBackgroundTask,
   enums,
+  shielded,
 };
 
 // Re-export all types from every module.

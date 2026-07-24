@@ -14,13 +14,14 @@ import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import {
   DEFAULT_TX_VERSION,
+  NATIVE_TOKEN_UID,
   P2PKH_ACCT_PATH,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
-import { IHistoryTx, WalletType } from '../../src/types';
+import { EcdsaTxSign, IHistoryTx, WalletType } from '../../src/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
@@ -29,6 +30,7 @@ import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
+import { ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
@@ -240,6 +242,72 @@ test('Protected xpub wallet methods', async () => {
   await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
 });
 
+test('sendManyOutputsSendTransaction maps shielded and transparent outputs', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendManyOutputsSendTransaction([
+    // Shielded, timelock 0 → shieldedMode carried, timelock preserved.
+    {
+      address: 'shielded-addr',
+      value: 10n,
+      token: NATIVE_TOKEN_UID,
+      shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      timelock: 0,
+    },
+    // Transparent, timelock 0 → preserved via the unified `!= null` guard
+    // (the old `o.timelock ?` guard would have dropped it).
+    {
+      address: 'transparent-timelock0-addr',
+      value: 20n,
+      token: NATIVE_TOKEN_UID,
+      timelock: 0,
+    },
+    // Transparent, no timelock → no timelock key, no shieldedMode.
+    {
+      address: 'transparent-addr',
+      value: 30n,
+      token: '01',
+    },
+    // Shielded, no timelock → shieldedMode carried, no timelock key.
+    {
+      address: 'shielded-no-timelock-addr',
+      value: 40n,
+      token: '01',
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    },
+  ]);
+
+  expect(sendTx.outputs).toHaveLength(4);
+  expect(sendTx.outputs[0]).toEqual({
+    address: 'shielded-addr',
+    value: 10n,
+    token: NATIVE_TOKEN_UID,
+    timelock: 0,
+    shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+  });
+  expect(sendTx.outputs[1]).toEqual({
+    address: 'transparent-timelock0-addr',
+    value: 20n,
+    token: NATIVE_TOKEN_UID,
+    timelock: 0,
+  });
+  expect(sendTx.outputs[2]).toEqual({
+    address: 'transparent-addr',
+    value: 30n,
+    token: '01',
+  });
+  expect(sendTx.outputs[3]).toEqual({
+    address: 'shielded-no-timelock-addr',
+    value: 40n,
+    token: '01',
+    shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+  });
+});
+
 test('getSignatures', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -350,6 +418,45 @@ test('signTx throws when pinCode is not provided', async () => {
   await expect(hWallet.signTx(tx, { pinCode: null })).rejects.toThrow(
     'Pin code is required to sign a transaction'
   );
+});
+
+test('signTx does not require a pinCode when an external signing method is registered', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  // No pin available anywhere: the external signer must cover for it.
+  hWallet.pinCode = null;
+
+  const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
+  const tx = new Transaction([new Input(txId, 0)], [], {
+    version: DEFAULT_TX_VERSION,
+    tokens: [],
+  });
+
+  // An external signer produces signatures without using the pin.
+  const externalSigner = jest.fn(async () => ({
+    ncCallerSignature: null,
+    inputSignatures: [
+      {
+        signature: Buffer.from('ca', 'hex'),
+        pubkey: Buffer.from('fe', 'hex'),
+        inputIndex: 0,
+        addressIndex: 0,
+      },
+    ],
+  }));
+  storage.setTxSignatureMethod(externalSigner as unknown as EcdsaTxSign);
+
+  // Must NOT throw the pin-required error, and must sign through the external method.
+  const returnedTx = await hWallet.signTx(tx);
+  expect(returnedTx).toBe(tx);
+  expect(externalSigner).toHaveBeenCalledTimes(1);
+  // The pin is unused by the external signer; the lib forwards an empty string.
+  expect(externalSigner).toHaveBeenCalledWith(tx, storage, '');
+  expect(tx.inputs[0].data.toString('hex')).toEqual('01ca01fe');
 });
 
 test('getWalletInputInfo', async () => {
@@ -932,6 +1039,331 @@ test('getTxHistory', async () => {
   ]);
 });
 
+describe('getShieldedUnblindingForTx', () => {
+  // SEPARATED model: build a tx with transparent outputs in `outputs[]` and the
+  // full on-chain-ordered shielded list in `shielded_outputs[]`. Owned slots
+  // carry the owned-marker fields (value/token/blindingFactor[/assetBlindingFactor])
+  // written IN PLACE; non-owned slots have `value === undefined`. The on-chain
+  // absolute index of `shielded_outputs[s]` is `outputs.length + s`.
+  const makeTx = (
+    txId: string,
+    transparent: Array<{ value: bigint; token: string }>,
+    shielded: Array<{
+      commitment: string;
+      value?: bigint;
+      token?: string;
+      blindingFactor?: string;
+      assetBlindingFactor?: string;
+    }>
+  ): IHistoryTx =>
+    ({
+      tx_id: txId,
+      timestamp: 1,
+      version: 1,
+      weight: 1,
+      nonce: 0,
+      height: 0,
+      parents: [],
+      inputs: [],
+      outputs: transparent.map(t => ({
+        value: t.value,
+        token_data: 0,
+        token: t.token,
+        spent_by: null,
+        script: '',
+        decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
+      })),
+      // The FULL on-chain-ordered shielded list. Owned slots carry the
+      // owned-marker fields; non-owned slots leave value/token/blinding
+      // undefined.
+      shielded_outputs: shielded.map(s => ({
+        mode: s.assetBlindingFactor ? 2 : 1,
+        commitment: s.commitment,
+        range_proof: '',
+        script: '',
+        token_data: 0,
+        ephemeral_pubkey: '',
+        decoded: { type: 'P2PKH', address: 'addrShielded', timelock: null },
+        spent_by: null,
+        // owned-marker fields (undefined when not owned)
+        value: s.value,
+        token: s.token,
+        blindingFactor: s.blindingFactor,
+        assetBlindingFactor: s.assetBlindingFactor,
+      })),
+    }) as unknown as IHistoryTx;
+
+  test('returns one entry per wallet-owned shielded output (index = T + s)', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    // 1 transparent output (T=1) → shielded slots map to on-chain indices 1,2,3.
+    const tx = makeTx(
+      'tx1',
+      [{ value: 100n, token: '00' }],
+      [
+        // owned (decoded) AmountShielded — on-chain index = T(1) + 0 = 1
+        { commitment: 'aa', value: 250n, token: '00', blindingFactor: 'cafe' },
+        // not decoded — wallet doesn't own. value === undefined → skipped.
+        { commitment: 'bb' },
+        // owned FullShielded — on-chain index = T(1) + 2 = 3
+        {
+          commitment: 'cc',
+          value: 999n,
+          token: '0102',
+          blindingFactor: 'beef',
+          assetBlindingFactor: 'dead',
+        },
+      ]
+    );
+    jest.spyOn(storage, 'getTx').mockResolvedValue(tx);
+
+    const result = await hWallet.getShieldedUnblindingForTx('tx1');
+
+    expect(result.outputs).toEqual([
+      { index: 1, value: 250n, token: '00', vbf: 'cafe' },
+      { index: 3, value: 999n, token: '0102', vbf: 'beef', abf: 'dead' },
+    ]);
+    expect(result.inputs).toEqual([]);
+  });
+
+  test('returns empty when tx not found or has no decoded shielded outputs', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    jest.spyOn(storage, 'getTx').mockResolvedValueOnce(null);
+    await expect(hWallet.getShieldedUnblindingForTx('missing')).resolves.toEqual({
+      outputs: [],
+      inputs: [],
+    });
+
+    const transparentOnly = makeTx('tx2', [{ value: 5n, token: '00' }], []);
+    jest.spyOn(storage, 'getTx').mockResolvedValueOnce(transparentOnly);
+    await expect(hWallet.getShieldedUnblindingForTx('tx2')).resolves.toEqual({
+      outputs: [],
+      inputs: [],
+    });
+  });
+
+  test('owned slot at a non-prefix shielded position resolves to index T + s', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    // Two transparent outputs (T=2), then two shielded slots — the wallet owns
+    // only the SECOND shielded slot (s=1). Its on-chain index must be the
+    // arithmetic T(2) + s(1) = 3, with NO reliance on a stored onChainIndex.
+    const tx = makeTx(
+      'tx3',
+      [
+        { value: 1n, token: '00' },
+        { value: 2n, token: '00' },
+      ],
+      [
+        { commitment: 'foreign' }, // not owned (value undefined)
+        { commitment: 'mine', value: 50n, token: '00', blindingFactor: 'fade' },
+      ]
+    );
+    jest.spyOn(storage, 'getTx').mockResolvedValue(tx);
+
+    const result = await hWallet.getShieldedUnblindingForTx('tx3');
+    expect(result.outputs).toEqual([{ index: 3, value: 50n, token: '00', vbf: 'fade' }]);
+    expect(result.inputs).toEqual([]);
+  });
+
+  test('returns inputs the wallet owned the parent output for', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    // Parent tx has 1 transparent output (T=1) + 1 shielded the wallet owns;
+    // that shielded slot's on-chain index is T(1) + 0 = 1.
+    const parent = makeTx(
+      'parentA',
+      [{ value: 10n, token: '00' }],
+      [
+        {
+          commitment: 'parent-shielded-cm',
+          value: 777n,
+          token: '00',
+          blindingFactor: 'parentVbf',
+          assetBlindingFactor: 'parentAbf',
+        },
+      ]
+    );
+
+    // Spending tx: input #0 is a shielded reference to parentA[1] (the
+    // wallet-owned output), input #1 is a shielded reference to a tx the wallet
+    // doesn't have (no parent → skipped silently).
+    const spending = {
+      ...makeTx('spendA', [], [{ commitment: 'self-cm' }]),
+      inputs: [
+        { type: 'shielded', tx_id: 'parentA', index: 1, commitment: 'parent-shielded-cm' },
+        { type: 'shielded', tx_id: 'foreign', index: 2, commitment: 'foreign-cm' },
+        // Transparent input — ignored, doesn't need unblinding.
+        {
+          type: 'transparent',
+          tx_id: 'parentA',
+          index: 0,
+          value: 10n,
+          token: '00',
+          token_data: 0,
+          script: '',
+          decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
+        },
+      ],
+    };
+
+    jest.spyOn(storage, 'getTx').mockImplementation(async (id: string) => {
+      if (id === 'spendA') return spending as unknown as IHistoryTx;
+      if (id === 'parentA') return parent;
+      return null;
+    });
+
+    const result = await hWallet.getShieldedUnblindingForTx('spendA');
+    // Owned-parent input is included with the input position in the current tx
+    // (`index: 0`). The foreign-parent input is silently skipped — the wallet
+    // has no opening for it.
+    expect(result.inputs).toEqual([
+      { index: 0, value: 777n, token: '00', vbf: 'parentVbf', abf: 'parentAbf' },
+    ]);
+  });
+});
+
+describe('onNewTx shielded handling (SEPARATED model)', () => {
+  const TX_ID = 'ab'.repeat(32); // 64-char hex tx_id
+
+  // A bare wire shielded output (commitment-only, value-less) as the fullnode
+  // re-delivers it after the wallet already decoded the slot once.
+  const bareWireShielded = () => ({
+    mode: 1,
+    commitment: 'aa',
+    range_proof: 'bb',
+    script: 'cc',
+    token_data: 0,
+    ephemeral_pubkey: 'dd',
+    decoded: { type: 'P2PKH', address: 'addrShielded', timelock: null },
+    spent_by: null,
+  });
+
+  // The wire form of a re-delivered tx: transparent output(s) in outputs[],
+  // bare value-less shielded entries in shielded_outputs[].
+  const reDeliveredWire = () => ({
+    tx_id: TX_ID,
+    version: 1,
+    weight: 1,
+    timestamp: 1,
+    is_voided: false,
+    nonce: 0,
+    inputs: [],
+    outputs: [
+      {
+        value: 100n,
+        token_data: 0,
+        token: '00',
+        script: '',
+        spent_by: null,
+        decoded: { type: 'P2PKH', address: 'addr1', timelock: null },
+      },
+    ],
+    shielded_outputs: [bareWireShielded()],
+    parents: [],
+  });
+
+  test('per-slot merge preserves decoded shielded data across a bare re-delivery', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.state = HathorWallet.READY;
+    hWallet.pinCode = null;
+    hWallet.emit = () => {};
+    hWallet.scanAddressesToLoad = jest.fn().mockResolvedValue(undefined);
+
+    // The processing branches must not clobber our merged data; stub them.
+    jest.spyOn(storage, 'processNewTx').mockResolvedValue(undefined);
+    jest.spyOn(storage, 'processHistory').mockResolvedValue(undefined);
+    jest.spyOn(storageUtils, 'processMetadataChanged').mockResolvedValue(undefined);
+
+    // Storage already holds the DECODED tx — owned-marker fields are written in
+    // place on shielded_outputs[0] (value/token/blinding present).
+    const decodedStored = reDeliveredWire();
+    decodedStored.shielded_outputs[0] = {
+      ...bareWireShielded(),
+      value: 250n,
+      token: '00',
+      blindingFactor: 'cafe',
+      decoded: { type: 'P2PKH', address: 'addrShielded', timelock: null },
+    };
+    await storage.addTx(decodedStored as unknown as IHistoryTx);
+
+    // A bare WS re-delivery arrives: shielded_outputs[] present but value-less.
+    await hWallet.onNewTx({ type: 'wallet:address_history', history: reDeliveredWire() });
+
+    const persisted = await storage.getTx(TX_ID);
+    // The decoded owned-marker fields survived the re-delivery (per-slot merge).
+    expect(persisted.shielded_outputs[0].value).toBe(250n);
+    expect(persisted.shielded_outputs[0].token).toBe('00');
+    expect(persisted.shielded_outputs[0].blindingFactor).toBe('cafe');
+    // Transparent balance is untouched.
+    expect(persisted.outputs[0].value).toBe(100n);
+  });
+
+  test('strips forged value/token/decoded off an incoming shielded input', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.state = HathorWallet.READY;
+    hWallet.pinCode = null;
+    hWallet.emit = () => {};
+    hWallet.scanAddressesToLoad = jest.fn().mockResolvedValue(undefined);
+    jest.spyOn(storage, 'processNewTx').mockResolvedValue(undefined);
+
+    // A hostile payload: a NEW tx whose shielded input pre-fills the spent
+    // output's value/token/decoded — fields the fullnode can never legitimately
+    // know for a shielded output. The schema accepts them (all optional), so
+    // onNewTx must strip them before the debit path can trust them.
+    const forged = {
+      tx_id: 'ba'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      inputs: [
+        {
+          type: 'shielded',
+          tx_id: 'cc'.repeat(32),
+          index: 0,
+          value: 5000000n,
+          token: '00',
+          token_data: 0,
+          decoded: { type: 'P2PKH', address: 'addrOwned', timelock: null },
+        },
+      ],
+      outputs: [],
+      parents: [],
+    };
+    await hWallet.onNewTx({ type: 'wallet:address_history', history: forged });
+
+    const persisted = await storage.getTx('ba'.repeat(32));
+    const input = persisted.inputs[0];
+    expect(input.type).toBe('shielded');
+    // The forged confidential fields are gone; the outpoint is kept.
+    expect(input.value).toBeUndefined();
+    expect(input.token).toBeUndefined();
+    expect(input.decoded).toBeUndefined();
+    expect(input.tx_id).toBe('cc'.repeat(32));
+  });
+});
+
 test('isHardwareWallet', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -1004,6 +1436,98 @@ describe('prepare transactions without signature', () => {
         }),
       ])
     );
+  });
+
+  test('prepareCreateNewToken does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    // Register an external signer (mirrors a passkey wallet), which makes the pin optional.
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // No pinCode passed: without the external signer this throws 'Pin is required.'; with it,
+    // the build proceeds (signing is delegated to the external method).
+    const txData = await hWallet.prepareCreateNewToken('01', 'my01', 100n, {
+      address: fakeAddress.base58,
+      signTx: false,
+    });
+
+    expect(txData.inputs).toHaveLength(1);
+  });
+
+  test('prepareCreateNewToken still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(
+      hWallet.prepareCreateNewToken('01', 'my01', 100n, {
+        address: fakeAddress.base58,
+        signTx: false,
+      })
+    ).rejects.toThrow('Pin is required.');
+  });
+
+  test('createNanoContractCreateTokenTransaction does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    // Real passkey scenario: xpub-only (readOnly) storage — no private key to decrypt.
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    // Register an external signer (mirrors a passkey wallet): this flips isSignedExternally, so the
+    // wallet-level isReadonly() returns false and the pin becomes optional.
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    // The method must get PAST both guards: the xpub guard (honored by the external signer) AND the
+    // "Pin is required." guard. It fails later resolving the non-existent nano contract, but with
+    // neither guard error. This pins both fixes: using storage.isReadonly() here would reject with
+    // WalletFromXPubGuard, and reverting the condition to `if (!pin)` would reject with
+    // 'Pin is required.'.
+    const err = await hWallet
+      .createNanoContractCreateTokenTransaction(
+        'noop',
+        fakeAddress.base58,
+        { ncId: 'a'.repeat(64), args: [], actions: [] },
+        { name: '01', symbol: 'my01', amount: 100n, mintAddress: fakeAddress.base58 },
+        { signTx: false }
+      )
+      .catch(e => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
+    expect(err.message).not.toContain('Pin is required');
+  });
+
+  test('createNanoContractCreateTokenTransaction still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(
+      hWallet.createNanoContractCreateTokenTransaction(
+        'noop',
+        fakeAddress.base58,
+        { ncId: 'a'.repeat(64), args: [], actions: [] },
+        { name: '01', symbol: 'my01', amount: 100n, mintAddress: fakeAddress.base58 },
+        { signTx: false }
+      )
+    ).rejects.toThrow('Pin is required.');
   });
 
   test('prepareMintTokensData', async () => {
@@ -1604,5 +2128,160 @@ describe('hasTxOutsideFirstAddress', () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe('deposit/withdraw facade methods', () => {
+  const buildWallet = (state: number) => {
+    const storage = new Storage(new MemoryStore());
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.state = state;
+    return hWallet;
+  };
+
+  test('delegate to the util with the fraction from storage', () => {
+    const hWallet = buildWallet(HathorWallet.READY);
+    // 3% deposit percentage; deposit rounds up and withdraw rounds down for 1010.
+    jest
+      .spyOn(hWallet.storage, 'getTokenDepositPercentageFraction')
+      .mockReturnValue({ numerator: 3n, denominator: 100n });
+
+    expect(hWallet.getDepositAmount(1010n)).toBe(31n); // ceil(30.3)
+    expect(hWallet.getWithdrawAmount(1010n)).toBe(30n); // floor(30.3)
+  });
+
+  test('throw when the wallet is not ready', () => {
+    const hWallet = buildWallet(HathorWallet.CLOSED);
+    expect(() => hWallet.getDepositAmount(1010n)).toThrow('Wallet not ready');
+    expect(() => hWallet.getWithdrawAmount(1010n)).toThrow('Wallet not ready');
+  });
+});
+
+describe('getAddressInfo shielded accounting (SEPARATED model)', () => {
+  // SEPARATED model: owned shielded outputs are decoded in place onto
+  // tx.shielded_outputs[] (value/token written after decryption) with
+  // decoded.address = the shielded-spend P2PKH. getAddressInfo mirrors the
+  // transparent accounting over shielded_outputs so a shielded receive/spend on
+  // the queried address is reflected in the per-address totals.
+  //
+  // A shielded slot is wallet-OWNED only when so.value !== undefined; a slot is
+  // spent when so.spent_by is non-null; a slot is locked when its decoded
+  // timelock is in the future (height/reward lock stays off here since the
+  // store's bestBlockHeight is 0 and storage.version is undefined).
+  test('sums received/sent/locked/available over owned shielded outputs only', async () => {
+    const ownedAddress = 'addrOwned';
+    const token = '00';
+    const futureTimelock = Math.floor(Date.now() / 1000) + 3600;
+
+    // A history tx whose shielded_outputs[] cover every accounting branch for
+    // the queried (ownedAddress, token):
+    //   A: owned, unspent, unlocked  -> received + available
+    //   B: owned, spent              -> received + sent (and nothing else)
+    //   C: owned, locked (timelock)  -> received + locked (not available)
+    //   D: non-owned (value=undef)   -> excluded from every total
+    //   E: owned but wrong token     -> excluded (token filter)
+    //   F: owned but wrong address   -> excluded (address filter)
+    const tx = {
+      tx_id: 'shieldedTx',
+      timestamp: 1,
+      version: 1,
+      weight: 1,
+      nonce: 0,
+      height: 0,
+      is_voided: false,
+      parents: [],
+      inputs: [],
+      outputs: [],
+      shielded_outputs: [
+        // A: owned, unspent, unlocked
+        {
+          mode: 1,
+          commitment: 'aa',
+          spent_by: null,
+          token,
+          value: 250n,
+          blindingFactor: 'cafe',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // B: owned, spent
+        {
+          mode: 1,
+          commitment: 'bb',
+          spent_by: 'spendTx',
+          token,
+          value: 100n,
+          blindingFactor: 'beef',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // C: owned, time-locked
+        {
+          mode: 1,
+          commitment: 'cc',
+          spent_by: null,
+          token,
+          value: 70n,
+          blindingFactor: 'face',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: futureTimelock },
+        },
+        // D: non-owned (value undefined) -> skipped before any total
+        {
+          mode: 1,
+          commitment: 'dd',
+          spent_by: null,
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // E: owned but a different token -> token filter excludes it
+        {
+          mode: 1,
+          commitment: 'ee',
+          spent_by: null,
+          token: '0102',
+          value: 500n,
+          blindingFactor: 'dead',
+          decoded: { type: 'P2PKH', address: ownedAddress, timelock: null },
+        },
+        // F: owned but a different address -> address filter excludes it
+        {
+          mode: 1,
+          commitment: 'ff',
+          spent_by: null,
+          token,
+          value: 999n,
+          blindingFactor: 'feed',
+          decoded: { type: 'P2PKH', address: 'addrOther', timelock: null },
+        },
+      ],
+    } as unknown as IHistoryTx;
+
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    async function* txHistoryMock() {
+      yield tx;
+    }
+    jest.spyOn(storage, 'txHistory').mockImplementation(txHistoryMock);
+    jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+    jest
+      .spyOn(storage, 'getAddressInfo')
+      .mockResolvedValue({ bip32AddressIndex: 7 } as unknown as ReturnType<
+        typeof storage.getAddressInfo
+      >);
+
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+
+    const info = await hWallet.getAddressInfo(ownedAddress, { token });
+
+    // Hand-computed expectations over the owned, matching-token slots A/B/C:
+    //   received  = 250 + 100 + 70 = 420
+    //   sent      = 100             (only the spent slot B)
+    //   locked    = 70              (only the time-locked slot C)
+    //   available = 250             (only the unspent, unlocked slot A)
+    expect(info.total_amount_received).toBe(420n);
+    expect(info.total_amount_sent).toBe(100n);
+    expect(info.total_amount_locked).toBe(70n);
+    expect(info.total_amount_available).toBe(250n);
+    expect(info.token).toBe(token);
+    expect(info.index).toBe(7);
   });
 });

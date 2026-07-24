@@ -63,7 +63,22 @@ export function encodeShieldedAddress(
 ): string {
   assertValidCompressedPubkey(scanPubkey, 'scan pubkey');
   assertValidCompressedPubkey(spendPubkey, 'spend pubkey');
+  return encodeShieldedAddressTrusted(scanPubkey, spendPubkey, network);
+}
 
+/**
+ * Byte assembly of encodeShieldedAddress WITHOUT the on-curve validation.
+ * Only for pubkeys we derived ourselves in this module (bitcore's deriveChild
+ * can only produce valid curve points) — external/user-supplied pubkeys must
+ * go through encodeShieldedAddress, whose curve check catches malformed input
+ * early. The validation is expensive (a bitcore point decompression per key),
+ * which matters on the address-loading hot path.
+ */
+function encodeShieldedAddressTrusted(
+  scanPubkey: Buffer,
+  spendPubkey: Buffer,
+  network: Network
+): string {
   const versionByte = Buffer.from([network.versionBytes.shielded]);
   const payload = Buffer.concat([versionByte, scanPubkey, spendPubkey]);
   const checksum = helpers.getChecksum(payload);
@@ -74,15 +89,20 @@ export function encodeShieldedAddress(
 /**
  * Derive a shielded address at a given BIP32 index from xpub keys.
  *
- * @param scanXpubkey xpub at the scan chain (m/44'/280'/1'/0)
- * @param spendXpubkey xpub at the spend chain (m/44'/280'/2'/0)
+ * The parent keys may be passed either as xpub strings or as already-parsed
+ * HDPublicKey instances. Callers deriving MANY indexes (address loading) should
+ * parse once and pass the instances — bitcore's xpub parsing (base58check decode
+ * + point decompression) is expensive and identical for every index.
+ *
+ * @param scanXpubkey xpub (or parsed HDPublicKey) at the scan chain (m/44'/280'/1'/0)
+ * @param spendXpubkey xpub (or parsed HDPublicKey) at the spend chain (m/44'/280'/2'/0)
  * @param index BIP32 address index
  * @param networkName Network name (mainnet, testnet, privatenet)
  * @returns Shielded address info
  */
 export function deriveShieldedAddress(
-  scanXpubkey: string,
-  spendXpubkey: string,
+  scanXpubkey: string | HDPublicKey,
+  spendXpubkey: string | HDPublicKey,
   index: number,
   networkName: string
 ): IShieldedAddressInfo {
@@ -96,19 +116,22 @@ export function deriveShieldedAddress(
   }
   const network = new Network(networkName);
 
-  const scanHdPub = new HDPublicKey(scanXpubkey);
-  const spendHdPub = new HDPublicKey(spendXpubkey);
+  const scanHdPub = typeof scanXpubkey === 'string' ? new HDPublicKey(scanXpubkey) : scanXpubkey;
+  const spendHdPub =
+    typeof spendXpubkey === 'string' ? new HDPublicKey(spendXpubkey) : spendXpubkey;
 
-  // Standard BIP32 derivation for public keys.
-  // Note: private key derivation (in processing.ts) uses deriveNonCompliantChild
-  // due to a historical bitcore-lib bug. Do not align these — the asymmetry is intentional.
+  // Compliant BIP32 derivation. The matching private keys (processing.ts scan,
+  // transaction.ts spend) use the same deriveChild, so the ECDH scan keypair and
+  // the spend signing key line up with the address.
   const scanKey = scanHdPub.deriveChild(index);
   const spendKey = spendHdPub.deriveChild(index);
 
   const scanPubkeyBuf: Buffer = scanKey.publicKey.toBuffer();
   const spendPubkeyBuf: Buffer = spendKey.publicKey.toBuffer();
 
-  const base58 = encodeShieldedAddress(scanPubkeyBuf, spendPubkeyBuf, network);
+  // Trusted path: these pubkeys came straight out of bitcore's own derivation,
+  // so the on-curve re-validation of encodeShieldedAddress is redundant here.
+  const base58 = encodeShieldedAddressTrusted(scanPubkeyBuf, spendPubkeyBuf, network);
 
   // Derive on-chain P2PKH from spend_pubkey
   const spendAddress = publicKeyToP2PKH(spendKey.publicKey, network);

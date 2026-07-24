@@ -16,6 +16,7 @@
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import HathorWallet from '../../../src/new/wallet';
+import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
@@ -31,12 +32,14 @@ import {
   DEFAULT_PIN_CODE,
   generateConnection,
   generateWalletHelper,
+  waitForTxReceived,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import {
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
+import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
@@ -65,8 +68,8 @@ describe('[Fullnode-specific] start', () => {
     await adapter.stopAllWallets();
   });
 
-  it('should reject with invalid constructor parameters', () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+  it('should reject with invalid constructor parameters', async () => {
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const connection = generateConnection();
 
     // No arguments at all
@@ -160,7 +163,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should resolve precalculated addresses via getAddressAtIndex', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     const hWallet = new HathorWallet({
       seed: walletData.words,
@@ -168,6 +171,7 @@ describe('[Fullnode-specific] start', () => {
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
+      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -181,7 +185,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it("should calculate the wallet's addresses on start (no precalculated)", async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     const walletConfig = {
       seed: walletData.words,
@@ -209,6 +213,7 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
+      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
@@ -230,7 +235,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start a wallet to manage a specific token', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
 
     // Create a wallet and mint a custom token
     let hWallet = await generateWalletHelper({
@@ -279,13 +284,11 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should generate correct addresses from xpub (readonly)', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Fullnode derives addresses locally from xpub — verify all 20 match precalculated.
@@ -295,13 +298,11 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should reject write operations on a readonly (xpub) wallet', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const xpub = deriveXpubFromSeed(walletData.words);
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
 
     // Methods requiring private key should throw WalletFromXPubGuard.
@@ -328,7 +329,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start an externally signed wallet', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -336,8 +337,6 @@ describe('[Fullnode-specific] start', () => {
 
     const hWallet = await generateWalletHelper({
       xpub,
-      password: null,
-      pinCode: null,
     });
     // @ts-expect-error -- Simplified mock: real EcdsaTxSign has a different signature
     hWallet.setExternalTxSigningMethod(async () => {});
@@ -348,7 +347,7 @@ describe('[Fullnode-specific] start', () => {
   });
 
   it('should start an externally signed wallet from storage', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
     const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
@@ -362,8 +361,6 @@ describe('[Fullnode-specific] start', () => {
     const hWallet = await generateWalletHelper({
       xpub,
       storage,
-      password: null,
-      pinCode: null,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
     await expect(hWallet.isReadonly()).resolves.toBe(false);
@@ -371,8 +368,50 @@ describe('[Fullnode-specific] start', () => {
     await expect(hWallet.isReadonly()).resolves.toBe(true);
   });
 
+  it('should create a token with an external signer and no pin (signTx: true)', async () => {
+    // Reproduces the passkey-wallet flow end to end: an xpub-only wallet with an external
+    // tx-signing method registered builds AND signs a create-token transaction (signTx defaults
+    // to true) with NO pin. The signer derives keys the way a passkey ceremony would and reuses
+    // transactionUtils.signTxInputs — the same primitive getSignatureForTx wraps — so it must
+    // NOT hit the "Pin is required." guard, and the produced signatures must be valid on-chain.
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+    const rootXpriv = new Mnemonic(walletData.words).toHDPrivateKey('', new Network('testnet'));
+    const acctXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    // signTxInputs asks for the change-path xpriv (m/44'/280'/0'/0) and derives per-input keys.
+    const changeXpriv = acctXpriv.deriveNonCompliantChild(0);
+
+    const hWallet = await generateWalletHelper({ xpub: acctXpriv.xpubkey });
+    hWallet.setExternalTxSigningMethod((tx, storage) =>
+      transactionUtils.signTxInputs(tx, storage, async () => changeXpriv)
+    );
+    // The external signer, not a stored key, makes the wallet spendable.
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
+
+    // No pinCode passed: createNewToken -> prepareCreateNewToken({ signTx: true }) -> signed by
+    // the external method -> mined and pushed. Must not throw "Pin is required.".
+    const tokenTx = await hWallet.createNewToken('External Signer Token', 'EST', 100n);
+    expect(tokenTx).not.toBeNull();
+    const tokenUid = tokenTx!.hash!;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    // Every input carries real signature data — the fullnode accepted the tx, so the external
+    // signer produced valid signatures without a pin.
+    expect(tokenTx!.inputs.length).toBeGreaterThan(0);
+    for (const input of tokenTx!.inputs) {
+      expect(input.data).not.toBeNull();
+      expect(input.data!.length).toBeGreaterThan(0);
+    }
+
+    const balance = await hWallet.getBalance(tokenUid);
+    expect(balance[0].balance).toStrictEqual({ unlocked: 100n, locked: 0n });
+
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
   it('should start a wallet without pin (hack test)', async () => {
-    const walletData = precalculationHelpers.test!.getPrecalculatedWallet();
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
     const hWallet = await generateWalletHelper({
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,

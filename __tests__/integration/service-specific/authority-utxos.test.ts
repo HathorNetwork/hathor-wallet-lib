@@ -38,7 +38,7 @@ describe('[Service] getAuthorityUtxo', () => {
   let createdTokenUid: string;
 
   beforeAll(async () => {
-    const { wallet, addresses } = buildWalletInstance();
+    const { wallet, addresses } = await buildWalletInstance();
     utxosTestWallet = wallet;
     await utxosTestWallet.start({ pinCode, password });
 
@@ -63,7 +63,7 @@ describe('[Service] getAuthorityUtxo', () => {
   });
 
   it('should return mint authority at the configured address with default options', async () => {
-    const { wallet, addresses } = buildWalletInstance();
+    const { wallet, addresses } = await buildWalletInstance();
     await wallet.start({ pinCode, password });
 
     await GenesisWalletServiceHelper.injectFunds(addresses[0], 100n, wallet);

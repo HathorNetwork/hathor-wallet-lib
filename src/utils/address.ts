@@ -52,6 +52,31 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 }
 
 /**
+ * Resolve an address to the form usable as a transparent output script.
+ *
+ * A 71-byte address in the wallet's universal format has no single transparent
+ * output script (on-chain a transparent output at it uses the spend-derived
+ * P2PKH), so this returns the spend address base58 for such an address and the
+ * address unchanged otherwise. Use it before `getAddressType` / output building
+ * wherever a caller-supplied address may be in the 71-byte format — e.g. a
+ * change address in token creation (otherwise getAddressType throws). This is
+ * the uniform address->script resolution the transaction layer
+ * (createOutputScript) applies to every output address; it produces a plain
+ * TRANSPARENT output, not a shielded one.
+ *
+ * @param {string} address base58 address (may be shielded)
+ * @param {Network} network
+ * @returns {string} spend-derived P2PKH base58 if shielded, else `address`
+ */
+export function resolveOutputScriptAddress(address: string, network: Network): string {
+  const addressObj = new Address(address, { network });
+  if (addressObj.getType() === 'shielded') {
+    return addressObj.getSpendAddress().base58;
+  }
+  return address;
+}
+
+/**
  * Convert a bitcore PublicKey to a base58 P2PKH address string.
  */
 export function publicKeyToP2PKH(
@@ -188,25 +213,23 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
 }
 
 /**
- * Derive shielded address and its on-chain spend address from storage at a given index.
+ * Derive the shielded address pair (user-facing shielded + on-chain spend P2PKH)
+ * at a given index from the scan/spend parent keys.
+ *
+ * The parents may be xpub strings or already-parsed HDPublicKey instances —
+ * callers deriving many indexes (address loading) should parse once and pass
+ * the instances (see deriveShieldedAddress).
  *
  * Returns two IAddressInfo entries:
  * 1. The shielded address (user-facing, 71-byte format)
  * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
- *
- * Returns null if the wallet doesn't have shielded key material.
  */
-export async function deriveShieldedAddressFromStorage(
+export function deriveShieldedAddressPair(
+  scanXpub: string | HDPublicKey,
+  spendXpub: string | HDPublicKey,
   index: number,
-  storage: IStorage
-): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
-  const scanXpub = await storage.getScanXPubKey();
-  const spendXpub = await storage.getSpendXPubKey();
-  if (!scanXpub || !spendXpub) {
-    return null;
-  }
-
-  const networkName = storage.config.getNetwork().name;
+  networkName: string
+): { shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } {
   const info = deriveShieldedAddress(scanXpub, spendXpub, index, networkName);
 
   // The user-facing shielded address encodes both scan and spend pubkeys.
@@ -233,4 +256,27 @@ export async function deriveShieldedAddressFromStorage(
   };
 
   return { shieldedAddress, spendAddress };
+}
+
+/**
+ * Derive shielded address and its on-chain spend address from storage at a given index.
+ *
+ * Returns two IAddressInfo entries:
+ * 1. The shielded address (user-facing, 71-byte format)
+ * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
+ *
+ * Returns null if the wallet doesn't have shielded key material.
+ */
+export async function deriveShieldedAddressFromStorage(
+  index: number,
+  storage: IStorage
+): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
+  const scanXpub = await storage.getScanXPubKey();
+  const spendXpub = await storage.getSpendXPubKey();
+  if (!scanXpub || !spendXpub) {
+    return null;
+  }
+
+  const networkName = storage.config.getNetwork().name;
+  return deriveShieldedAddressPair(scanXpub, spendXpub, index, networkName);
 }

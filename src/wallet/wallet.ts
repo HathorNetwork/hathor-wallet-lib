@@ -71,6 +71,7 @@ import {
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
 } from './types';
+import type { IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
   UtxoError,
@@ -557,6 +558,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         min_tx_weight_coefficient: v.minTxWeightCoefficient,
         min_tx_weight_k: v.minTxWeightK,
         token_deposit_percentage: v.tokenDepositPercentage,
+        token_deposit_percentage_numerator: v.tokenDepositPercentageNumerator,
+        token_deposit_percentage_denominator: v.tokenDepositPercentageDenominator,
         reward_spend_min_blocks: v.rewardSpendMinBlocks,
         max_number_inputs: v.maxNumberInputs,
         max_number_outputs: v.maxNumberOutputs,
@@ -1821,6 +1824,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     throw new WalletError('Not implemented.');
   }
 
+  /* eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars */
+  setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
+    // Shielded outputs are not supported on the wallet-service backend.
+    throw new WalletError('Not implemented.');
+  }
+
   /**
    * Checks if the given array of addresses belongs to the caller wallet
    *
@@ -1914,8 +1923,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR deposit needed
     let deposit = 0n;
     if (tokenVersion === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      deposit += tokens.getDepositAmount(amount, depositPercent);
+      deposit += this.getDepositAmount(amount);
     }
 
     if (newOptions.data && newOptions.data.length > 0) {
@@ -2252,8 +2260,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR deposit needed
     let deposit = 0n;
     if (tokenInfo?.version === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      deposit = tokens.getDepositAmount(amount, depositPercent);
+      deposit = this.getDepositAmount(amount);
     }
 
     // 2. Get mint authority
@@ -2424,8 +2431,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR withdraw
     let withdraw = 0n;
     if (tokenInfo?.version === TokenVersion.DEPOSIT) {
-      const depositPercent = this.storage.getTokenDepositPercentage();
-      withdraw = tokens.getWithdrawAmount(amount, depositPercent);
+      withdraw = this.getWithdrawAmount(amount);
     }
 
     // 2. Get utxos for custom token to melt
@@ -2618,6 +2624,36 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     const tx = await this.prepareMeltTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * HTR deposit required to mint the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getDepositAmount(mintAmount: OutputValueType): OutputValueType {
+    this.failIfWalletNotReady();
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokens.getDepositAmount(mintAmount, numerator, denominator);
+  }
+
+  /**
+   * HTR withdrawal returned when melting the given amount of a deposit-based token.
+   *
+   * The deposit percentage is read from the connected fullnode's `/version` data,
+   * so callers pass only the amount. Requires the wallet to be READY.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getWithdrawAmount(meltAmount: OutputValueType): OutputValueType {
+    this.failIfWalletNotReady();
+    const { numerator, denominator } = this.storage.getTokenDepositPercentageFraction();
+    return tokens.getWithdrawAmount(meltAmount, numerator, denominator);
   }
 
   /**

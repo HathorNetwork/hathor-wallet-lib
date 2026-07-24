@@ -48,12 +48,16 @@ describe('[Service] getUtxos', () => {
       pinCode: adapter.defaultPinCode,
       changeAddress: addr0,
     });
-    await adapter.waitForTx(wallet, tx2.hash!);
+    // The wallet-service's UTXO index lags its tx index, so waiting for the tx
+    // alone lets the next send select an already-spent (or not-yet-available)
+    // UTXO — surfaced as `Error sending tx proposal` or `No UTXOs available`.
+    // Wait until the index fully reflects each send before issuing the next.
+    await adapter.waitForUtxoConsistency(wallet, tx2);
     const tx3 = await wallet.sendTransaction(addr2, 30n, {
       pinCode: adapter.defaultPinCode,
       changeAddress: addr0,
     });
-    await adapter.waitForTx(wallet, tx3.hash!);
+    await adapter.waitForUtxoConsistency(wallet, tx3);
 
     // Creating a 200n custom token on addr1 burns 2n HTR (1% deposit) from the
     // 20n input, leaving 18n change at addr1 — the small UTXO the range filter

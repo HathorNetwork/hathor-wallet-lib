@@ -10,7 +10,11 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 import Header from './headers/base';
-import type { IShieldedCryptoProvider, IShieldedOutput } from './shielded/types';
+import type {
+  IShieldedCryptoProvider,
+  IShieldedOutput,
+  IDataShieldedOutput,
+} from './shielded/types';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -52,6 +56,10 @@ export interface IInputSignature {
   addressIndex: number;
   signature: Buffer;
   pubkey: Buffer;
+  // Address type of the signed input, so consumers can render the matching
+  // derivation path. 'shielded-spend' inputs are signed with the spend chain
+  // (m/44'/280'/2'); undefined/legacy use the P2PKH/P2SH chain.
+  addressType?: AddressType | 'shielded-spend';
 }
 
 export enum HistorySyncMode {
@@ -94,7 +102,10 @@ export type HistorySyncFunction = (
   count: number,
   storage: IStorage,
   connection: FullNodeConnection,
-  shouldProcessHistory?: boolean
+  shouldProcessHistory?: boolean,
+  // PIN code threaded so processHistory can derive the per-address scan key
+  // and decrypt wallet-owned shielded outputs after the history loads.
+  pinCode?: string
 ) => Promise<void>;
 
 /**
@@ -132,6 +143,26 @@ export interface IAddressInfo {
  */
 export interface IAddressChainOptions {
   legacy?: boolean; // default: true
+}
+
+/**
+ * A pre-calculated shielded address pair for one BIP32 index (test tooling).
+ *
+ * Mirrors the pre-calculated legacy addresses passed at wallet construction:
+ * carries exactly the fields needed to reconstruct the two storage records
+ * that live derivation (deriveShieldedAddressPair) would produce, so injected
+ * indexes skip the expensive EC derivation in loadAddresses.
+ */
+export interface IPrecalculatedShieldedAddress {
+  bip32AddressIndex: number;
+  /** The user-facing 71-byte shielded address (scan + spend pubkeys) */
+  shieldedBase58: string;
+  /** The paired on-chain P2PKH derived from HASH160(spend_pubkey) */
+  spendBase58: string;
+  /** Compressed scan child pubkey, hex */
+  scanPubkey: string;
+  /** Compressed spend child pubkey, hex */
+  spendPubkey: string;
 }
 
 export interface IAddressMetadata {
@@ -285,6 +316,18 @@ export interface IHistoryShieldedOutput extends Omit<IShieldedOutput, 'decoded'>
   // the processNewTx decryption append so the wallet treats shielded
   // and transparent outputs identically when checking spend status.
   spent_by?: string | null;
+  // ─── owned-marker fields (SEPARATED model) ───────────────────────────────
+  // Populated IN PLACE on this entry when the wallet decrypts a shielded
+  // output it owns (received or change). The single ownership gate is
+  // `value !== undefined`: a slot with `value === undefined` is non-owned (or
+  // not yet decrypted) and is excluded from balance/credit/sign. `decoded`
+  // (address) is NOT an ownership signal — the fullnode emits a decoded
+  // address for non-owned outputs too, so keying ownership off `decoded`
+  // would let the wallet sign foreign inputs. `decoded` stays REQUIRED.
+  value?: OutputValueType;
+  token?: string;
+  blindingFactor?: string; // hex, 32 bytes — value blinding factor (after decryption)
+  assetBlindingFactor?: string; // hex, 32 bytes — asset blinding factor (FullShielded only)
 }
 
 export enum TxHistoryProcessingStatus {
@@ -293,13 +336,29 @@ export enum TxHistoryProcessingStatus {
 }
 
 export interface IHistoryInput {
-  value: OutputValueType;
-  token_data: number;
-  script: string;
-  decoded: IHistoryOutputDecoded;
-  token: string;
+  // These fields are resolved from the spent output.
+  // For shielded inputs (spending shielded outputs), they may be absent
+  // because the spent output's value/token are hidden in commitments.
+  value?: OutputValueType;
+  token_data?: number;
+  script?: string;
+  decoded?: IHistoryOutputDecoded;
+  token?: string;
+  // Always present:
   tx_id: string;
   index: number;
+  // Set to 'shielded' when this input spends a shielded output. The
+  // fullnode emits this on the wire for inputs in `address_history` /
+  // `/transaction?id=…` responses; the wallet's sender-local insert
+  // (`txUtils.convertTransactionToHistoryTx`) also stamps it so
+  // self-sent shielded spends carry the discriminator before any
+  // WebSocket re-delivery. The alpha fullnode stamps 'transparent' on
+  // ordinary inputs; older nodes omit the field entirely.
+  type?: 'shielded' | 'transparent';
+  // Shielded inputs carry their own commitment on the wire; surfaced
+  // here so the explorer's unblinding verifier (and any future
+  // re-derive flows) can read it without round-tripping the full tx.
+  commitment?: string;
 }
 
 // Obs: this will change with nano contracts
@@ -310,7 +369,7 @@ export interface IHistoryOutputDecoded {
   data?: string;
 }
 
-export interface IHistoryOutput {
+export interface ITransparentOutput {
   value: OutputValueType;
   token_data: number;
   script: string;
@@ -319,6 +378,14 @@ export interface IHistoryOutput {
   spent_by: string | null;
   selected_as_input?: boolean;
 }
+
+// SEPARATED model: `outputs[]` is transparent-only as a POST-NORMALIZE
+// internal invariant. Shielded outputs live in their own on-chain-ordered
+// `shielded_outputs[]` list (see `IHistoryShieldedOutput`); the on-chain
+// absolute index of `shielded_outputs[s]` is `outputs.length + s`. Resolve
+// "what does an input spend" via `resolveSpentOutput` (utils/transaction.ts),
+// never positional `outputs[idx]` for an idx that may be ≥ outputs.length.
+export type IHistoryOutput = ITransparentOutput;
 
 export interface IDataOutputData {
   type: 'data';
@@ -391,6 +458,20 @@ export interface IDataTx extends Partial<IDataTokenCreationTx> {
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
+  shieldedOutputs?: IDataShieldedOutput[];
+  /**
+   * 32-byte excess blinding factor for a full-unshield transaction
+   * (shielded inputs → transparent outputs only, no shielded outputs).
+   *
+   * When present, `prepareTransaction` attaches an `UnshieldBalanceHeader`
+   * (id 0x13) to the built Transaction. Mutually exclusive with
+   * `shieldedOutputs`; the fullnode rejects a tx that carries both, and
+   * rejects a tx with shielded inputs but no shielded outputs and no
+   * excess. See hathor-core
+   * `hathor/transaction/headers/unshield_balance_header.py` and
+   * Section 2.4 of the shielded outputs client guide.
+   */
+  excessBlindingFactor?: Buffer;
   weight?: number;
   nonce?: number;
   timestamp?: number;
@@ -585,7 +666,12 @@ export interface ApiVersion {
   min_tx_weight: number;
   min_tx_weight_coefficient: number;
   min_tx_weight_k: number;
-  token_deposit_percentage: number;
+  /** @deprecated Prefer the numerator/denominator fraction below (integer precision). Optional: fullnodes will stop sending it. */
+  token_deposit_percentage?: number;
+  /** Token deposit percentage numerator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_numerator?: number;
+  /** Token deposit percentage denominator (parts per billion). Absent on older fullnodes. */
+  token_deposit_percentage_denominator?: number;
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
@@ -692,7 +778,17 @@ export interface IStorage {
 
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
+  // Non-null after a processHistory reload that could not decode one or more
+  // owned shielded txs (systemic: wrong PIN / missing scan key): the list of
+  // skipped tx ids. A "partial history" flag the wallet can surface — reported
+  // balances are understated (and gap-limit discovery may be short) until a
+  // reload with a valid PIN. Reset to null when a reload completes with no skips.
+  shieldedDecodeSkippedTxIds?: string[] | null;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  // Get the provider, or throw if it has not been configured. Confidential
+  // code paths require it; a missing provider is a setup error, not a
+  // condition to silently default around.
+  getShieldedCryptoProvider(): IShieldedCryptoProvider;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
@@ -720,8 +816,10 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  processHistory(): Promise<void>;
-  processNewTx(tx: IHistoryTx): Promise<void>;
+  // pinCode is threaded so the scan-key derivation can decrypt wallet-owned
+  // shielded outputs while (re)processing the history.
+  processHistory(pinCode?: string): Promise<void>;
+  processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
   getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
 
   // Tokens
@@ -781,6 +879,7 @@ export interface IStorage {
     cleanTokens?: boolean;
   }): Promise<void>;
   getTokenDepositPercentage(): number;
+  getTokenDepositPercentageFraction(): { numerator: bigint; denominator: bigint };
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;

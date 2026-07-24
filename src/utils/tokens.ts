@@ -11,7 +11,8 @@ import Header from '../headers/base';
 import {
   CREATE_TOKEN_TX_VERSION,
   NATIVE_TOKEN_UID,
-  TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+  TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
   TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -29,7 +30,8 @@ import {
   TokenVersion,
   UtxoSelectionAlgorithm,
 } from '../types';
-import { getAddressType } from './address';
+import { getAddressType, resolveOutputScriptAddress } from './address';
+import { ceilDiv } from './bigint';
 import {
   InsufficientFundsError,
   SendTxError,
@@ -299,25 +301,28 @@ const tokens = {
   },
 
   /**
-   * Calculate deposit value for the given token mint amount
+   * Calculate deposit value for the given token mint amount.
    *
    * @param {OutputValueType} mintAmount Amount of tokens being minted
-   * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
+   * @param {bigint} [depositNumerator=TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR] deposit percentage numerator.
+   * @param {bigint} [depositDenominator=TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR] deposit percentage denominator.
    *
-   * @return {number}
+   * @return {OutputValueType}
    * @memberof Tokens
    * @inner
    *
    */
   getDepositAmount(
     mintAmount: OutputValueType,
-    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+    depositNumerator: bigint = TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+    depositDenominator: bigint = TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
   ): OutputValueType {
-    // This conversion from mintAmount to Number may cause loss of precision for large amounts,
-    // but this is fully equivalent to the reference Python implementation, which does the same.
-    // It'll never be a problem for mainnet as no values can reach the precision boundary, but
-    // it may happen in custom networks.
-    return BigInt(Math.ceil(depositPercent * Number(mintAmount)));
+    // Coerce to bigint so callers passing a number keep working (the API previously used Number()).
+    const amount = BigInt(mintAmount);
+    if (mintAmount < 0) {
+      throw new Error('mint amount should not be negative');
+    }
+    return ceilDiv(depositNumerator * amount, depositDenominator);
   },
 
   /**
@@ -329,21 +334,25 @@ const tokens = {
   },
 
   /**
-   * Calculate withdraw value for the given token melt amount
+   * Calculate withdraw value for the given token melt amount.
    *
    * @param {OutputValueType} meltAmount Amount of tokens being melted
-   * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
+   * @param {bigint} [depositNumerator=TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR] deposit percentage numerator.
+   * @param {bigint} [depositDenominator=TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR] deposit percentage denominator.
    *
-   * @return {number}
+   * @return {OutputValueType}
    * @memberof Tokens
    * @inner
    *
    */
   getWithdrawAmount(
     meltAmount: OutputValueType,
-    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+    depositNumerator: bigint = TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+    depositDenominator: bigint = TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR
   ): OutputValueType {
-    return BigInt(Math.floor(depositPercent * Number(meltAmount)));
+    // Coerce to bigint so callers passing a number keep working (the API previously used Number()).
+    const amount = BigInt(meltAmount);
+    return (depositNumerator * amount) / depositDenominator;
   },
 
   /**
@@ -492,7 +501,17 @@ const tokens = {
 
       // get output change
       if (foundAmount > requiredAmount) {
-        const cAddress = await storage.getChangeAddress({ changeAddress });
+        // The change address may be in the wallet's 71-byte universal format,
+        // which has no single transparent output script. This deposit change is
+        // a plain TRANSPARENT output (shielded token-creation change is out of
+        // scope), so resolve the address to its spend-derived P2PKH — the same
+        // uniform address->script resolution the transaction layer applies to
+        // every output address. Without this, getAddressType throws for a
+        // 71-byte changeAddress.
+        const cAddress = resolveOutputScriptAddress(
+          await storage.getChangeAddress({ changeAddress }),
+          storage.config.getNetwork()
+        );
 
         // place at the beginning of the array to keep the order of the outputs
         outputs.unshift({
@@ -606,8 +625,8 @@ const tokens = {
     let depositAmount = data !== null ? this.getDataScriptOutputFee() * BigInt(data.length) : 0n;
 
     if (tokenData.version === TokenVersion.DEPOSIT) {
-      const depositPercent = storage.getTokenDepositPercentage();
-      withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
+      const { numerator, denominator } = storage.getTokenDepositPercentageFraction();
+      withdrawAmount = this.getWithdrawAmount(amount, numerator, denominator);
 
       // We only make these calculations if we are creating data outputs because the transaction needs to deposit the fee
       if (depositAmount > 0) {
@@ -928,8 +947,8 @@ const tokens = {
    * Get the deposit amount for a mint
    */
   getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
-    const depositPercent = storage.getTokenDepositPercentage();
-    return this.getDepositAmount(mintAmount, depositPercent);
+    const { numerator, denominator } = storage.getTokenDepositPercentageFraction();
+    return this.getDepositAmount(mintAmount, numerator, denominator);
   },
 
   /**

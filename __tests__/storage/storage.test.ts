@@ -9,12 +9,15 @@ import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
+import { getDefaultAddressMeta } from '../../src/storage/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
 import {
   P2PKH_ACCT_PATH,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
@@ -34,6 +37,7 @@ import {
   WALLET_FLAGS,
   TokenVersion,
   ApiVersion,
+  IBalance,
 } from '../../src/types';
 
 describe('handleStop', () => {
@@ -214,6 +218,65 @@ describe('config version', () => {
     expect(storage.getTokenDepositPercentage()).toEqual(0.5);
     storage.setApiVersion(null);
     expect(storage.getTokenDepositPercentage()).toEqual(TOKEN_DEPOSIT_PERCENTAGE);
+  });
+
+  describe('getTokenDepositPercentageFraction', () => {
+    it('should prefer the numerator/denominator fields from the version', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({
+        token_deposit_percentage: 0.02,
+        token_deposit_percentage_numerator: 3,
+        token_deposit_percentage_denominator: 100,
+      } as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: 3n,
+        denominator: 100n,
+      });
+    });
+
+    it('should derive the fraction from the float percentage when the fields are absent', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({ token_deposit_percentage: 0.5 } as ApiVersion); // 50%
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / 2n,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should derive the fraction from the float percentage when only one field is present', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      // Only the numerator is provided, so the field-based branch must not be taken.
+      storage.setApiVersion({
+        token_deposit_percentage: 0.5,
+        token_deposit_percentage_numerator: 3,
+      } as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR / 2n,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should fall back to the default fraction when no version is set', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
+
+    it('should fall back to the default fraction when the version has no deposit data', async () => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      storage.setApiVersion({ foo: 'bar' } as unknown as ApiVersion);
+      expect(storage.getTokenDepositPercentageFraction()).toEqual({
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      });
+    });
   });
 
   it('should get native token from version', async () => {
@@ -1245,5 +1308,55 @@ describe('shielded key access (smoke)', () => {
     expect(storage.shieldedCryptoProvider).toBe(provider);
     storage.setShieldedCryptoProvider(undefined);
     expect(storage.shieldedCryptoProvider).toBeUndefined();
+  });
+
+  it('getShieldedCryptoProvider returns the provider when one is set', () => {
+    const storage = new Storage(new MemoryStore());
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    expect(storage.getShieldedCryptoProvider()).toBe(provider);
+  });
+
+  it('getShieldedCryptoProvider throws (never silently defaults) when none is set', () => {
+    const storage = new Storage(new MemoryStore());
+    // Unset on a fresh storage.
+    expect(() => storage.getShieldedCryptoProvider()).toThrow(
+      'Shielded crypto provider is not set'
+    );
+    // And still throws after an explicit clear — a missing provider is a setup
+    // error that must fail loudly, not be defaulted around.
+    const provider = {
+      id: 'mock',
+    } as unknown as import('../../src/shielded/types').IShieldedCryptoProvider;
+    storage.setShieldedCryptoProvider(provider);
+    storage.setShieldedCryptoProvider(undefined);
+    expect(() => storage.getShieldedCryptoProvider()).toThrow(
+      'Shielded crypto provider is not set'
+    );
+  });
+});
+
+describe('getDefaultAddressMeta — per-call balance Map (no shared aliasing)', () => {
+  const someBalance: IBalance = {
+    tokens: { locked: 0n, unlocked: 5n },
+    authorities: {
+      mint: { locked: 0n, unlocked: 0n },
+      melt: { locked: 0n, unlocked: 0n },
+    },
+  };
+
+  it('returns a fresh, non-aliased balance Map on every call', () => {
+    const a = getDefaultAddressMeta();
+    const b = getDefaultAddressMeta();
+    // Two calls must not share the same Map instance — a shared module-level Map
+    // (the pre-fix behaviour) would fail this and re-leak balances across addresses.
+    expect(a.balance).not.toBe(b.balance);
+    expect(a.numTransactions).toBe(0);
+
+    // A credit written to one address's metadata must not appear in another's.
+    a.balance.set(NATIVE_TOKEN_UID, someBalance);
+    expect(b.balance.has(NATIVE_TOKEN_UID)).toBe(false);
   });
 });

@@ -16,6 +16,7 @@ import {
   initializeServiceGlobalConfigs,
   pollForTx,
   pollForTokenDetails,
+  pollForUtxoConsistency,
   pollUntilCondition,
   retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
@@ -36,9 +37,13 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  MintTokensAdapterOptions,
+  MeltTokensAdapterOptions,
+  MintMeltResult,
   TokenDetailsResult,
   GetUtxosAdapterOptions,
   GetUtxosResult,
+  GetUtxosForAmountResult,
   AdapterUtxo,
   AdapterOutput,
   SendManyOutputsAdapterOptions,
@@ -46,6 +51,8 @@ import type {
   GetAuthorityUtxosOptions,
   DelegateAuthorityAdapterOptions,
   DelegateAuthorityResult,
+  DestroyAuthorityResult,
+  AdapterAddress,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -74,6 +81,10 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   name = 'Wallet Service';
 
   networkName = NETWORK_NAME;
+
+  // The HTR deposit/fee shortfall surfaces from selectUtxos while gathering the
+  // funding UTXOs: "Don't have enough utxos to fill total amount."
+  insufficientHtrError = /^Don't have enough utxos to fill total amount\.$/;
 
   defaultPinCode = SERVICE_PIN;
 
@@ -136,7 +147,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // attach to it. When both seed and xpub are provided, pre-register the wallet by
     // starting it with the seed, then stop and restart as a readonly xpub client.
     if (options?.xpub && options?.seed) {
-      const seedWallet = this.buildWalletInstance({ seed: options.seed });
+      const seedWallet = await this.buildWalletInstance({ seed: options.seed });
       await this.startWallet(seedWallet.wallet, {
         pinCode: options.pinCode ?? SERVICE_PIN,
         password: options.password ?? SERVICE_PASSWORD,
@@ -144,7 +155,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
       await this.stopWallet(seedWallet.wallet);
     }
 
-    const built = this.buildWalletInstance(options);
+    const built = await this.buildWalletInstance(options);
 
     await this.startWallet(built.wallet, {
       pinCode: options?.pinCode ?? SERVICE_PIN,
@@ -154,9 +165,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     return built;
   }
 
-  buildWalletInstance(options?: CreateWalletOptions): ServiceCreateWalletResult {
+  async buildWalletInstance(options?: CreateWalletOptions): Promise<ServiceCreateWalletResult> {
     // xpub and seed are mutually exclusive in the constructor — prefer xpub when present.
-    const result = buildWalletInstance({
+    const result = await buildWalletInstance({
       words: options?.xpub ? '' : options?.seed || '',
       xpub: options?.xpub || '',
       enableWs: false,
@@ -180,11 +191,11 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     wallet: FuzzyWalletType,
     options?: { pinCode?: string; password?: string }
   ): Promise<void> {
-    const sw = this.concrete(wallet);
+    const serviceWallet = this.concrete(wallet);
 
-    if (this.xpubWallets.has(sw)) {
+    if (this.xpubWallets.has(serviceWallet)) {
       // Readonly wallets use a dedicated start method that requires no credentials.
-      await sw.startReadOnly();
+      await serviceWallet.startReadOnly();
       return;
     }
 
@@ -194,7 +205,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     // backend rejecting `POST wallet/init` doesn't fail the suite's beforeAll
     // (Jest's retryTimes only re-runs it() bodies, not setup hooks).
     await retryOnTransientWalletInit(
-      () => sw.start({ pinCode: options?.pinCode, password: options?.password }),
+      () => serviceWallet.start({ pinCode: options?.pinCode, password: options?.password }),
       'ServiceWalletTestAdapter.startWallet'
     );
   }
@@ -205,9 +216,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   }
 
   async stopWallet(wallet: FuzzyWalletType): Promise<void> {
-    const sw = this.concrete(wallet);
-    await sw.stop(STOP_OPTIONS);
-    this.tracker.untrack(sw);
+    const serviceWallet = this.concrete(wallet);
+    await serviceWallet.stop(STOP_OPTIONS);
+    this.tracker.untrack(serviceWallet);
   }
 
   async stopAllWallets(): Promise<void> {
@@ -249,7 +260,18 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     }
   }
 
-  getPrecalculatedWallet(): PrecalculatedWalletData {
+  /**
+   * Waits until the wallet-service's UTXO index fully reflects `tx` (spent inputs
+   * gone, own output available). Use between consecutive sends whose input
+   * selection depends on the previous send's outputs — the service's UTXO index
+   * lags its tx index, so `waitForTx` alone is not enough. See
+   * {@link pollForUtxoConsistency}.
+   */
+  async waitForUtxoConsistency(wallet: FuzzyWalletType, tx: Transaction): Promise<void> {
+    await pollForUtxoConsistency(this.concrete(wallet), tx);
+  }
+
+  getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
     return precalculationHelpers.test!.getPrecalculatedWallet();
   }
 
@@ -259,9 +281,9 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     amount: bigint,
     options?: SendTransactionOptions
   ): Promise<SendTransactionResult> {
-    const sw = this.concrete(wallet);
+    const serviceWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
-    const result = await sw.sendTransaction(address, amount, {
+    const result = await serviceWallet.sendTransaction(address, amount, {
       pinCode: SERVICE_PIN,
       ...txOptions,
     });
@@ -304,16 +326,16 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     amount: bigint,
     options?: CreateTokenOptions
   ): Promise<CreateTokenResult> {
-    const sw = this.concrete(wallet);
-    const result = await sw.createNewToken(name, symbol, amount, {
+    const serviceWallet = this.concrete(wallet);
+    const result = await serviceWallet.createNewToken(name, symbol, amount, {
       ...options,
       pinCode: SERVICE_PIN,
     });
     if (!result?.hash) {
       throw new Error('createToken: transaction had no hash');
     }
-    await pollForTx(sw, result.hash);
-    await pollForTokenDetails(sw, result.hash);
+    await pollForTx(serviceWallet, result.hash);
+    await pollForTokenDetails(serviceWallet, result.hash);
     return { hash: result.hash, transaction: result };
   }
 
@@ -347,14 +369,37 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     };
   }
 
+  async getUtxosForAmount(
+    wallet: FuzzyWalletType,
+    amount: bigint,
+    options?: GetUtxosAdapterOptions
+  ): Promise<GetUtxosForAmountResult> {
+    const tokenId = options?.token ?? NATIVE_TOKEN_UID;
+    const result = await this.concrete(wallet).getUtxosForAmount(amount, {
+      token: tokenId,
+      filter_address: options?.address,
+    });
+    return {
+      changeAmount: result.changeAmount,
+      utxos: result.utxos.map(utxo => ({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        tokenId,
+        locked: utxo.locked,
+      })),
+    };
+  }
+
   async sendManyOutputsTransaction(
     wallet: FuzzyWalletType,
     outputs: AdapterOutput[],
     options?: SendManyOutputsAdapterOptions
   ): Promise<SendTransactionResult> {
-    const sw = this.concrete(wallet);
+    const serviceWallet = this.concrete(wallet);
     const { recvWallet, ...txOptions } = options ?? {};
-    const result = await sw.sendManyOutputsTransaction(outputs, {
+    const result = await serviceWallet.sendManyOutputsTransaction(outputs, {
       pinCode: SERVICE_PIN,
       ...txOptions,
     });
@@ -371,8 +416,8 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     type: AuthorityType,
     options?: GetAuthorityUtxosOptions
   ): Promise<AuthorityUtxoResult[]> {
-    const sw = this.concrete(wallet);
-    const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
+    const serviceWallet = this.concrete(wallet);
+    const utxos = await serviceWallet.getAuthorityUtxo(tokenUid, type, {
       many: options?.many ?? true,
       only_available_utxos: true,
       filter_address: options?.filter_address,
@@ -392,28 +437,225 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     destinationAddress: string,
     options?: DelegateAuthorityAdapterOptions
   ): Promise<DelegateAuthorityResult> {
-    const sw = this.concrete(wallet);
-    const result = await sw.delegateAuthority(tokenUid, type, destinationAddress, {
+    const serviceWallet = this.concrete(wallet);
+    const createAnother = options?.createAnother ?? false;
+
+    // Snapshot the available authority UTXOs before delegating. A delegation
+    // ALWAYS spends one of them as input, so once the index settles at least one
+    // of these keys is gone — a settle signal that holds regardless of
+    // createAnother or whether the destination is this wallet or another one.
+    // (A count- or txId-based check does not: a within-wallet delegation moves
+    // the authority to a new address without changing the count, and a
+    // cross-wallet createAnother=false delegation leaves no source UTXO carrying
+    // the delegation txId.)
+    const authorityKey = (u: { txId: string; index: number }) => `${u.txId}:${u.index}`;
+    const beforeKeys = new Set(
+      (
+        await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        })
+      ).map(authorityKey)
+    );
+
+    const result = await serviceWallet.delegateAuthority(tokenUid, type, destinationAddress, {
       pinCode: SERVICE_PIN,
       anotherAuthorityAddress: null,
-      createAnother: options?.createAnother ?? false,
+      createAnother,
     });
     if (!result?.hash) {
       throw new Error('delegateAuthority: transaction had no hash');
     }
-    await pollForTx(sw, result.hash);
+    await pollForTx(serviceWallet, result.hash);
 
-    // The wallet service UTXO index may lag behind tx visibility.
-    // Poll until the delegation tx appears in the authority UTXO list.
+    // The wallet service UTXO index may lag behind tx visibility. Wait until the
+    // spent authority input is no longer in the available set.
     const delegationTxId = result.hash;
     await pollUntilCondition(async () => {
-      const utxos = await sw.getAuthorityUtxo(tokenUid, type, {
-        many: true,
-        only_available_utxos: true,
-      });
-      return utxos.some(u => u.txId === delegationTxId);
+      const curKeys = new Set(
+        (
+          await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+            many: true,
+            only_available_utxos: true,
+          })
+        ).map(authorityKey)
+      );
+      return [...beforeKeys].some(k => !curKeys.has(k));
     }, `authority UTXO index reflects delegation ${delegationTxId}`);
 
+    // When a destination wallet is provided, also wait for ITS index to reflect
+    // the delegation so cross-wallet tests can read the recipient's authorities.
+    if (options?.recvWallet) {
+      const recv = this.concrete(options.recvWallet);
+      await pollForTx(recv, delegationTxId);
+      await pollUntilCondition(async () => {
+        const utxos = await recv.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === delegationTxId);
+      }, `recipient authority UTXO index reflects delegation ${delegationTxId}`);
+    }
+
     return { hash: result.hash };
+  }
+
+  async mintTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MintTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const serviceWallet = this.concrete(wallet);
+    const { recvWallet, ...mintOptions } = options ?? {};
+
+    // Capture the current token balance so we can wait for the UTXO/balance
+    // index to reflect the mint. Minting increases the token balance by `amount`
+    // on BOTH deposit- and fee-based tokens, regardless of where the new mint
+    // authority is routed — so this is a robust settle signal even when the
+    // authority is delegated to an external address.
+    const [balanceBefore] = await serviceWallet.getBalance(tokenUid);
+    const expectedUnlocked = balanceBefore.balance.unlocked + amount;
+
+    const result = await serviceWallet.mintTokens(tokenUid, amount, {
+      ...mintOptions,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('mintTokens: transaction had no hash');
+    }
+    await pollForTx(serviceWallet, result.hash);
+    await pollUntilCondition(async () => {
+      const [balance] = await serviceWallet.getBalance(tokenUid);
+      return balance.balance.unlocked >= expectedUnlocked;
+    }, `token balance index reflects mint ${result.hash}`);
+
+    // When a recipient wallet is provided (mint authority routed to one of its
+    // addresses), also wait for ITS index to surface the new authority UTXO.
+    if (recvWallet) {
+      const recv = this.concrete(recvWallet);
+      await pollForTx(recv, result.hash);
+      await pollUntilCondition(async () => {
+        const utxos = await recv.getAuthorityUtxo(tokenUid, AuthorityType.MINT, {
+          many: true,
+          only_available_utxos: true,
+        });
+        return utxos.some(u => u.txId === result.hash);
+      }, `recipient mint authority index reflects mint ${result.hash}`);
+    }
+
+    return { hash: result.hash, transaction: result };
+  }
+
+  async meltTokens(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    amount: bigint,
+    options?: MeltTokensAdapterOptions
+  ): Promise<MintMeltResult> {
+    const serviceWallet = this.concrete(wallet);
+
+    // Capture the current token balance so we can wait for the UTXO/balance
+    // index to reflect the melt. Melting decreases the token balance by `amount`
+    // on BOTH deposit- and fee-based tokens, so this is a robust settle signal.
+    const [balanceBefore] = await serviceWallet.getBalance(tokenUid);
+    const expectedUnlocked = balanceBefore.balance.unlocked - amount;
+
+    const result = await serviceWallet.meltTokens(tokenUid, amount, {
+      ...options,
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('meltTokens: transaction had no hash');
+    }
+    await pollForTx(serviceWallet, result.hash);
+    await pollUntilCondition(async () => {
+      const [balance] = await serviceWallet.getBalance(tokenUid);
+      return balance.balance.unlocked <= expectedUnlocked;
+    }, `token balance index reflects melt ${result.hash}`);
+
+    return { hash: result.hash, transaction: result };
+  }
+
+  async destroyAuthority(
+    wallet: FuzzyWalletType,
+    tokenUid: string,
+    type: AuthorityType,
+    count: number
+  ): Promise<DestroyAuthorityResult> {
+    const serviceWallet = this.concrete(wallet);
+
+    // Capture the current authority count so we can wait for the UTXO index to
+    // reflect the destruction. `getAuthorityUtxo` throwing (e.g. count too high)
+    // surfaces before any polling, preserving the rejection for the caller.
+    const countBefore = (
+      await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+        many: true,
+        only_available_utxos: true,
+      })
+    ).length;
+
+    const result = await serviceWallet.destroyAuthority(tokenUid, type, count, {
+      pinCode: SERVICE_PIN,
+    });
+    if (!result?.hash) {
+      throw new Error('destroyAuthority: transaction had no hash');
+    }
+    await pollForTx(serviceWallet, result.hash);
+    await pollUntilCondition(async () => {
+      const remaining = (
+        await serviceWallet.getAuthorityUtxo(tokenUid, type, {
+          many: true,
+          only_available_utxos: true,
+        })
+      ).length;
+      return remaining <= countBefore - count;
+    }, `authority UTXO index reflects destroy ${result.hash}`);
+
+    return { hash: result.hash };
+  }
+
+  async getAllAddresses(wallet: FuzzyWalletType): Promise<AdapterAddress[]> {
+    const sw = this.concrete(wallet);
+    const result: AdapterAddress[] = [];
+    for await (const entry of sw.getAllAddresses()) {
+      result.push({
+        address: entry.address,
+        index: entry.index,
+        addressPath: await sw.getAddressPathForIndex(entry.index),
+      });
+    }
+    return result;
+  }
+
+  async getCurrentAddress(
+    wallet: FuzzyWalletType,
+    options?: { markAsUsed?: boolean }
+  ): Promise<AdapterAddress> {
+    const sw = this.concrete(wallet);
+    const current = sw.getCurrentAddress({ markAsUsed: options?.markAsUsed ?? false });
+    return {
+      address: current.address,
+      index: current.index,
+      addressPath: current.addressPath,
+    };
+  }
+
+  async getNextAddress(wallet: FuzzyWalletType): Promise<AdapterAddress> {
+    const next = this.concrete(wallet).getNextAddress();
+    return {
+      address: next.address,
+      index: next.index,
+      addressPath: next.addressPath,
+    };
+  }
+
+  async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
+    const index = await this.concrete(wallet).getAddressIndex(address);
+    return index === null ? undefined : index;
+  }
+
+  async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
+    return this.concrete(wallet).getAddressAtIndex(index);
   }
 }

@@ -59,16 +59,30 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+  TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
   DECIMAL_PLACES,
   DEFAULT_NATIVE_TOKEN_CONFIG,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
 
-export const DEFAULT_ADDRESS_META: IAddressMetadata = {
-  numTransactions: 0,
-  balance: new Map<string, IBalance>(),
-};
+/**
+ * Build a fresh address-metadata object.
+ *
+ * The `balance` Map MUST be a new instance per call. The previous
+ * `export const DEFAULT_ADDRESS_META` created ONE Map at module load, and every
+ * `{ ...DEFAULT_ADDRESS_META }` shallow-spread copied that same Map REFERENCE
+ * into each address's metadata — so a `balance.set(...)` for one address mutated
+ * a Map shared by every address AND every wallet instance in the process,
+ * leaking balances across addresses and surviving wallet reloads.
+ */
+export function getDefaultAddressMeta(): IAddressMetadata {
+  return {
+    numTransactions: 0,
+    balance: new Map<string, IBalance>(),
+  };
+}
 
 export class Storage implements IStorage {
   store: IStore;
@@ -82,6 +96,10 @@ export class Storage implements IStorage {
   txSignFunc: EcdsaTxSign | null;
 
   shieldedCryptoProvider?: IShieldedCryptoProvider;
+
+  // See IStorage.shieldedDecodeSkippedTxIds — the "partial history" flag set by
+  // processHistory when some owned shielded txs could not be decoded.
+  shieldedDecodeSkippedTxIds?: string[] | null;
 
   /**
    * This promise is used to chain the calls to process unlocked utxos.
@@ -103,6 +121,7 @@ export class Storage implements IStorage {
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
     this.shieldedCryptoProvider = undefined;
+    this.shieldedDecodeSkippedTxIds = null;
     this.logger = getDefaultLogger();
   }
 
@@ -181,6 +200,21 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Get the shielded crypto provider, or throw if it has not been configured.
+   * Confidential-transaction code paths require the provider; a missing one is a
+   * setup error and must fail loudly rather than silently degrade.
+   */
+  getShieldedCryptoProvider(): IShieldedCryptoProvider {
+    if (!this.shieldedCryptoProvider) {
+      throw new Error(
+        'Shielded crypto provider is not set. It is required for confidential ' +
+          'transaction operations; configure it via setShieldedCryptoProvider().'
+      );
+    }
+    return this.shieldedCryptoProvider;
+  }
+
+  /**
    * Sign the transaction
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
@@ -194,7 +228,9 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Return the deposit percentage for creating tokens.
+   * Return the deposit percentage as a float, for display purposes (wallet UI).
+   * Deposit/withdraw amounts use {@link getTokenDepositPercentageFraction} for exact integer math.
+   *
    * @returns {number}
    */
   getTokenDepositPercentage(): number {
@@ -203,6 +239,37 @@ export class Storage implements IStorage {
      *  Since this data is important for the wallets UI we will return the default value here.
      */
     return this.version?.token_deposit_percentage ?? TOKEN_DEPOSIT_PERCENTAGE;
+  }
+
+  /**
+   * Return the deposit percentage as an integer fraction (numerator/denominator).
+   *
+   * Prefers the `token_deposit_percentage_numerator`/`token_deposit_percentage_denominator`
+   * fields returned by the fullnode `/version` endpoint. When they're absent (older fullnodes
+   * that predate these fields), it falls back to deriving the numerator from the deprecated
+   * float percentage, keeping the standard 1e9 denominator, and ultimately to the defaults.
+   *
+   * @returns {{ numerator: bigint; denominator: bigint }}
+   */
+  getTokenDepositPercentageFraction(): { numerator: bigint; denominator: bigint } {
+    const numerator = this.version?.token_deposit_percentage_numerator;
+    const denominator = this.version?.token_deposit_percentage_denominator;
+    if (numerator != null && denominator != null) {
+      return { numerator: BigInt(numerator), denominator: BigInt(denominator) };
+    }
+
+    // Older fullnodes: derive the numerator from the deprecated float percentage.
+    const percentage = this.version?.token_deposit_percentage;
+    if (percentage == null) {
+      return {
+        numerator: TOKEN_DEPOSIT_PERCENTAGE_NUMERATOR,
+        denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+      };
+    }
+    return {
+      numerator: BigInt(Math.round(percentage * Number(TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR))),
+      denominator: TOKEN_DEPOSIT_PERCENTAGE_DENOMINATOR,
+    };
   }
 
   /**
@@ -223,7 +290,7 @@ export class Storage implements IStorage {
   ): AsyncGenerator<IAddressInfo & IAddressMetadata> {
     for await (const address of this.store.addressIter(opts)) {
       const meta = await this.store.getAddressMeta(address.base58);
-      yield { ...address, ...DEFAULT_ADDRESS_META, ...meta };
+      yield { ...address, ...getDefaultAddressMeta(), ...meta };
     }
   }
 
@@ -243,7 +310,7 @@ export class Storage implements IStorage {
     }
     const meta = await this.store.getAddressMeta(base58);
     const seqnum = (await this.store.getSeqnumMeta(base58)) ?? -1;
-    return { ...address, ...DEFAULT_ADDRESS_META, ...meta, seqnum };
+    return { ...address, ...getDefaultAddressMeta(), ...meta, seqnum };
   }
 
   /**
@@ -391,6 +458,19 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async addTx(tx: IHistoryTx): Promise<void> {
+    // Normalize: convert base64-encoded confidential fields to hex in
+    // tx.shielded_outputs[] (the fullnode delivers the transparent/shielded
+    // split; this does not move or extract entries).
+    transactionUtils.normalizeShieldedOutputs(tx);
+    // Preserve the wallet's own decoded shielded data across a re-save. The
+    // fullnode never re-sends it, so a wire-sourced overwrite (WS re-delivery,
+    // gap-limit history reload, stream re-sync) would otherwise erase the
+    // decoded balance of an already-processed tx. This is the single choke
+    // point every save passes through.
+    const storedTx = await this.store.getTx(tx.tx_id);
+    if (storedTx) {
+      transactionUtils.restoreStoredShieldedData(tx, storedTx);
+    }
     await this.store.saveTx(tx);
   }
 
@@ -398,21 +478,25 @@ export class Storage implements IStorage {
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processHistory(): Promise<void> {
+  async processHistory(pinCode?: string): Promise<void> {
     await this.store.preProcessHistory();
-    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
+    await processHistoryUtil(this, {
+      rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
+    });
   }
 
   /**
    * Process the transaction history to calculate the metadata.
    * @returns {Promise<void>}
    */
-  async processNewTx(tx: IHistoryTx): Promise<void> {
+  async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
     // Keep tx-timestamp index sorted
     await this.store.preProcessHistory();
     // Process the single tx we received
     await processSingleTxUtil(this, tx, {
       rewardLock: this.version?.reward_spend_min_blocks,
+      pinCode,
     });
   }
 
@@ -760,12 +844,20 @@ export class Storage implements IStorage {
     if (!tx) {
       return;
     }
-    const output = tx.outputs[utxo.index];
-    if (!output) {
+    // Resolve the actual output the UTXO record refers to via the
+    // SEPARATED-model resolver. A shielded UTXO has on-chain index
+    // outputs.length + s, so a positional `tx.outputs[utxo.index]` would read
+    // the wrong (or no) entry — the `.spent_by` check below would then consult
+    // the wrong entry's flag.
+    const resolved = transactionUtils.resolveSpentOutput(tx, utxo.index);
+    if (!resolved) {
       return;
     }
 
-    if (markAs && output.spent_by !== null) {
+    // Both transparent (`string | null`) and shielded (`string | null |
+    // undefined`) outputs carry spent_by; treat undefined as unspent.
+    const spentBy = resolved.output.spent_by ?? null;
+    if (markAs && spentBy !== null) {
       // Already spent, no need to mark as selected_as_input
       return;
     }

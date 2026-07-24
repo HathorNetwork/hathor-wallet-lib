@@ -147,6 +147,9 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     addressIndex: 10,
     signature: expect.anything(),
     pubkey: xpriv.derive(10).publicKey.toDER(),
+    // Legacy (P2PKH) input → addressType undefined; shielded-spend inputs carry
+    // 'shielded-spend' so getSignatures can render the spend-chain path.
+    addressType: undefined,
   });
 
   const hashdata = tx.getDataToSignHash();
@@ -157,6 +160,138 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
       xpriv.deriveChild(10).publicKey
     )
   ).toBe(true);
+});
+
+test('getSignatureForTx uses the spend key chain for a shielded-spend input', async () => {
+  // A shielded UTXO is spent with the spend key chain (m/44'/280'/2'/0), not the
+  // legacy/main chain. The spent output is a shielded slot (on-chain index ≥ the
+  // parent's transparent outputs.length), resolved via the SEPARATED-model
+  // resolver, and its addressInfo is marked `addressType: 'shielded-spend'`.
+  const mainXpriv = new HDPrivateKey();
+  const spendXpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const shieldedSpendAddr = 'W-shielded-spend-p2pkh';
+  const idx = 7;
+
+  jest.spyOn(storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(mainXpriv.xprivkey));
+  const getSpendSpy = jest
+    .spyOn(storage, 'getSpendXPrivKey')
+    .mockReturnValue(Promise.resolve(spendXpriv.xprivkey));
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr =>
+    addr === shieldedSpendAddr
+      ? {
+          base58: addr,
+          bip32AddressIndex: idx,
+          addressType: 'shielded-spend',
+          numTransactions: 1,
+          balance: new Map(),
+        }
+      : null
+  );
+  // Parent tx: 0 transparent outputs + 1 shielded output at on-chain index 0,
+  // whose spend-derived P2PKH (decoded.address) is our shielded-spend address.
+  const spentTx = {
+    outputs: [],
+    shielded_outputs: [{ decoded: { address: shieldedSpendAddr } }],
+  };
+  async function* getSpentMock(inputs) {
+    yield { index: 0, input: inputs[0], tx: spentTx };
+  }
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
+  // Input spends parent on-chain index 0 → the shielded slot (parent has T=0).
+  const input = new Input('cafe', 0);
+  const tx = new Transaction([input], []);
+
+  const sigData = await transaction.getSignatureForTx(tx, storage, '123');
+
+  // The spend chain was lazily loaded and used for the signature.
+  expect(getSpendSpy).toHaveBeenCalledWith('123');
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0]).toMatchObject({
+    inputIndex: 0,
+    addressIndex: idx,
+    // The signature carries the input's address type so getSignatures can
+    // render the spend-chain derivation path (m/44'/280'/2').
+    addressType: 'shielded-spend',
+  });
+  // Shielded-spend inputs sign with the COMPLIANT deriveChild key (new key
+  // material, no deployed wallet to stay bug-compatible with)...
+  expect(sigData.inputSignatures[0].pubkey).toStrictEqual(
+    spendXpriv.deriveChild(idx).publicKey.toDER()
+  );
+  // ...and NOT the legacy/main-chain key, which stays on deriveNonCompliantChild.
+  expect(sigData.inputSignatures[0].pubkey).not.toStrictEqual(
+    mainXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
+  );
+  // The signature verifies against the spend pubkey.
+  const hashdata = tx.getDataToSignHash();
+  expect(
+    crypto.ECDSA.verify(
+      hashdata,
+      crypto.Signature.fromDER(sigData.inputSignatures[0].signature),
+      spendXpriv.deriveChild(idx).publicKey
+    )
+  ).toBe(true);
+});
+
+test('signTxInputs sources keys from the resolver, not from storage', async () => {
+  // Proves an external signer (e.g. a passkey signer) can supply the signing xprivs directly:
+  // signTxInputs uses the resolver's keys and never calls storage.getMainXPrivKey /
+  // getSpendXPrivKey. Reuses the shielded-spend setup so both chains are exercised.
+  const mainXpriv = new HDPrivateKey();
+  const spendXpriv = new HDPrivateKey();
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const shieldedSpendAddr = 'W-shielded-spend-p2pkh';
+  const idx = 7;
+
+  const getMainSpy = jest.spyOn(storage, 'getMainXPrivKey');
+  const getSpendSpy = jest.spyOn(storage, 'getSpendXPrivKey');
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr =>
+    addr === shieldedSpendAddr
+      ? {
+          base58: addr,
+          bip32AddressIndex: idx,
+          addressType: 'shielded-spend',
+          numTransactions: 1,
+          balance: new Map(),
+        }
+      : null
+  );
+  const spentTx = {
+    outputs: [],
+    shielded_outputs: [{ decoded: { address: shieldedSpendAddr } }],
+  };
+  async function* getSpentMock(inputs) {
+    yield { index: 0, input: inputs[0], tx: spentTx };
+  }
+  jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
+  const input = new Input('cafe', 0);
+  const tx = new Transaction([input], []);
+
+  const resolver = jest.fn(async chain => (chain === 'spend' ? spendXpriv : mainXpriv));
+  const sigData = await transaction.signTxInputs(tx, storage, resolver);
+
+  // Keys came from the resolver, never from storage.
+  expect(resolver).toHaveBeenCalledWith('spend');
+  // The only input is shielded-spend and there is no nano/OCB header, so the legacy chain is
+  // never needed — the resolver must not be asked for it (lazy fetch; matters for passkey signers
+  // where each resolver call is a biometric ceremony).
+  expect(resolver).not.toHaveBeenCalledWith('legacy');
+  expect(getMainSpy).not.toHaveBeenCalled();
+  expect(getSpendSpy).not.toHaveBeenCalled();
+
+  // The shielded input was signed with the resolver's spend key.
+  expect(sigData.inputSignatures).toHaveLength(1);
+  expect(sigData.inputSignatures[0]).toMatchObject({
+    inputIndex: 0,
+    addressIndex: idx,
+    addressType: 'shielded-spend',
+  });
+  expect(sigData.inputSignatures[0].pubkey).toStrictEqual(
+    spendXpriv.deriveNonCompliantChild(idx).publicKey.toDER()
+  );
 });
 
 test('signTransaction', async () => {

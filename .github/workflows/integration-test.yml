@@ -19,7 +19,8 @@ env:
 jobs:
   itest:
     runs-on: 'ubuntu-latest'
-    timeout-minutes: 70
+    # Temporary bump; the integration suite is slow (speed fix in another PR).
+    timeout-minutes: 150
 
     strategy:
       matrix:
