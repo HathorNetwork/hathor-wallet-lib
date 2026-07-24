@@ -12,7 +12,38 @@ import { NETWORK_NAME } from '../configuration/test-constants';
 import testConfig from '../configuration/test.config';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
-import { IPrecalculatedShieldedAddress } from '../../../src/types';
+import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../../src/types';
+
+/**
+ * Merge a legacy address list with its shielded pairs into the unified
+ * `IPrecalculatedAddress[]` shape accepted by `preCalculatedAddresses`.
+ * Legacy index = array position; a shielded entry attaches to the index it
+ * declares (`bip32AddressIndex`). Indexes without a shielded fixture are
+ * legacy-only and have their pair derived at wallet start.
+ */
+export function mergePrecalculatedAddresses(
+  legacyAddresses: string[] | undefined | null,
+  shieldedAddresses?: IPrecalculatedShieldedAddress[] | null
+): IPrecalculatedAddress[] {
+  const shieldedByIndex = new Map(
+    (shieldedAddresses ?? []).map(entry => [entry.bip32AddressIndex, entry])
+  );
+  return (legacyAddresses ?? []).map((base58, bip32AddressIndex) => {
+    const shielded = shieldedByIndex.get(bip32AddressIndex);
+    return {
+      bip32AddressIndex,
+      base58,
+      ...(shielded && {
+        shielded: {
+          shieldedBase58: shielded.shieldedBase58,
+          spendBase58: shielded.spendBase58,
+          scanPubkey: shielded.scanPubkey,
+          spendPubkey: shielded.spendPubkey,
+        },
+      }),
+    };
+  });
+}
 
 /**
  * Precalculated wallet data containing addresses and related information

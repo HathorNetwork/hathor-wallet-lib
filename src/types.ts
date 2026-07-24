@@ -165,6 +165,26 @@ export interface IPrecalculatedShieldedAddress {
   spendPubkey: string;
 }
 
+/**
+ * A pre-calculated address for a single BIP32 index, injected at wallet start
+ * to skip live EC derivation. Carries the legacy P2PKH address and, for
+ * shielded wallets, its shielded pair. An index whose `shielded` block is
+ * omitted persists its legacy address only — the injected list is persisted
+ * exactly as given, nothing extra is derived at start.
+ *
+ * This is the unified successor to passing a `string[]` of legacy addresses
+ * alongside a separate `IPrecalculatedShieldedAddress[]`: both chains for one
+ * index now travel together. A plain `string[]` is still accepted (legacy-only,
+ * back-compat).
+ */
+export interface IPrecalculatedAddress {
+  bip32AddressIndex: number;
+  /** The legacy P2PKH address (base58). */
+  base58: string;
+  /** The shielded pair for this index (present for shielded wallets). */
+  shielded?: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+}
+
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;

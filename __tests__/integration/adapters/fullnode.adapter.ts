@@ -26,7 +26,10 @@ import {
   DEFAULT_PIN_CODE,
 } from '../helpers/wallet.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import {
+  mergePrecalculatedAddresses,
+  precalculationHelpers,
+} from '../helpers/wallet-precalculation.helper';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import type { WalletStopOptions } from '../../../src/new/types';
 import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
@@ -571,8 +574,10 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
       // by calling buildWalletInstance + startWallet without defaults.
       ...(options?.password !== undefined && { password: options.password }),
       ...(options?.pinCode !== undefined && { pinCode: options.pinCode }),
-      preCalculatedAddresses: walletData.addresses,
-      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        walletData.addresses,
+        walletData.shieldedAddresses
+      ),
       ...(options?.xpub && { xpub: options.xpub }),
       ...(options?.xpriv && { xpriv: options.xpriv }),
       ...(options?.passphrase && { passphrase: options.passphrase }),

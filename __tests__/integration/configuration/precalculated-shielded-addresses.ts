@@ -15,9 +15,9 @@ import { IPrecalculatedShieldedAddress } from '../../../src/types';
  *
  * Purpose: shielded address derivation is pure-JS EC math that jest's vm
  * sandbox slows down ~40-58x, so deriving live at every wallet start dominates
- * integration runtime. Injecting these at wallet construction (via the
- * preCalculatedShieldedAddresses param) makes loadAddresses skip the
- * derivation, exactly like the legacy preCalculatedAddresses always did.
+ * integration runtime. Injecting these at wallet construction (as the
+ * `shielded` field on the unified preCalculatedAddresses entries) makes
+ * loadAddresses skip the derivation, exactly like the legacy address list did.
  *
  * DRIFT-PROOF: a test (precalculated-shielded-addresses.test.ts) re-derives these
  * live from the same seeds and asserts equality — if derivation logic or the
