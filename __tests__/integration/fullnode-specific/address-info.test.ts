@@ -139,12 +139,17 @@ describe('[Fullnode] getAddressInfo', () => {
   it('should return correct values for locked utxos', async () => {
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    const timelock1 = Date.now().valueOf() + 5000; // 5 seconds of locked resources
-    const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
 
     // injectFunds already waits past the funding tx's timestamp before
     // returning, so the spend below needs no extra wait.
     await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+
+    // Computed after funding, so the window covers only the locking tx and the
+    // assertion below. The margin is deliberately tight: if the two steps stop
+    // fitting in 5s, this test should fail loudly rather than hide a slowdown.
+    const timelock1 = Date.now().valueOf() + 5000; // 5 seconds of locked resources
+    const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
+
     const rawTimelockTx = await hWallet.sendManyOutputsTransaction([
       {
         address: addr0,
