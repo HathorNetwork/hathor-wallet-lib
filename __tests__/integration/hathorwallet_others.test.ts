@@ -2,6 +2,8 @@ import { generateWalletHelper } from './helpers/wallet.helper';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 
 // getAuthorityUtxos tests moved to shared/authority-utxos.test.ts and fullnode-specific/authority-utxos.test.ts
+// getAddressInfo and getTxAddresses tests moved to fullnode-specific/address-info.test.ts
+// checkAddressesMine tests moved to shared/addresses.test.ts and fullnode-specific/address-info.test.ts
 
 describe('index-limit address scanning policy', () => {
   /** @type HathorWallet */
