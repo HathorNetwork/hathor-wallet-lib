@@ -8,7 +8,11 @@
 import { z } from 'zod';
 import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
-import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import {
+  NanoContractTransactionError,
+  TxNotFoundError,
+  WalletFromXPubGuard,
+} from '../../src/errors';
 import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
@@ -1550,20 +1554,27 @@ describe('prepare transactions without signature', () => {
       currentAddress: fakeAddress.base58,
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
-    hWallet.setExternalTxSigningMethod(async () => ({
+    const externalSigner = jest.fn(async () => ({
       inputSignatures: [],
       ncCallerSignature: null,
     }));
+    hWallet.setExternalTxSigningMethod(externalSigner);
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
     jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
-    // No pinCode: the external signer makes the pin optional and isReadonly() honors it, so the
-    // build proceeds. Reverting the guard to `if (!pin)` would reject with 'Pin is required.'.
+    // No pinCode, and signTx left at its default of true: the external signer makes the pin
+    // optional and isReadonly() honors it, so the build proceeds AND signs. Reverting the guard
+    // to `if (!pin)` would reject with 'Pin is required.'.
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
       address: fakeAddress.base58,
-      signTx: false,
     });
     expect(txData.inputs.length).toBeGreaterThan(0);
+
+    // The relaxation is only worth anything if signing actually reaches the external method.
+    expect(externalSigner).toHaveBeenCalledTimes(1);
+    // ...and it must receive '' rather than the null pin: `prepareTransaction` is typed for a
+    // string, so a bare `pin` here would hand the signer a null.
+    expect(externalSigner.mock.calls[0][2]).toBe('');
   });
 
   test('prepareMintTokensData still requires a pin without an external signing method', async () => {
@@ -1605,9 +1616,13 @@ describe('prepare transactions without signature', () => {
       ncCallerSignature: null,
     }));
 
-    // Must clear BOTH the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the pin
-    // guard; it fails later on the non-existent nano contract, with neither guard error.
-    // Default signTx:true so the pin guard (which is conditional on signTx !== false) is exercised.
+    // Must clear BOTH the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the
+    // pin guard. Default signTx:true, so the pin guard — which is conditional on signTx !== false
+    // — is exercised. The build then gets as far as validating the caller address, which this
+    // minimal mock storage does not own; pinning that exact failure is what keeps the test
+    // honest, since asserting merely "some error that isn't the two guard errors" would pass on
+    // any unrelated breakage. End-to-end signing for the relaxed entry points is covered by the
+    // external-signer integration tests.
     const err = await hWallet
       .createNanoContractTransaction('noop', fakeAddress.base58, {
         ncId: 'a'.repeat(64),
@@ -1615,9 +1630,8 @@ describe('prepare transactions without signature', () => {
         actions: [],
       })
       .catch(e => e);
-    expect(err).toBeInstanceOf(Error);
-    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
-    expect(err.message).not.toContain('Pin is required');
+    expect(err).toBeInstanceOf(NanoContractTransactionError);
+    expect(err.message).toContain('does not belong to the wallet');
   });
 
   test('createNanoContractTransaction still requires a pin without an external signing method', async () => {
@@ -1650,14 +1664,15 @@ describe('prepare transactions without signature', () => {
       ncCallerSignature: null,
     }));
 
-    // Must clear the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the pin guard;
-    // it fails later building from the dummy code, with neither guard error.
+    // Must clear the xpub guard (was storage.isReadonly() → now this.isReadonly()) and the pin
+    // guard. As with the nano test above, the build then reaches caller-address validation, which
+    // this minimal mock storage fails; pin that exact failure rather than accepting any error, so
+    // an unrelated breakage cannot masquerade as the guards being cleared.
     const err = await hWallet
       .createOnChainBlueprintTransaction('0123abcd', fakeAddress.base58)
       .catch(e => e);
-    expect(err).toBeInstanceOf(Error);
-    expect(err).not.toBeInstanceOf(WalletFromXPubGuard);
-    expect(err.message).not.toContain('Pin is required');
+    expect(err).toBeInstanceOf(NanoContractTransactionError);
+    expect(err.message).toContain('does not belong to the wallet');
   });
 
   test('prepareMintTokensData', async () => {
