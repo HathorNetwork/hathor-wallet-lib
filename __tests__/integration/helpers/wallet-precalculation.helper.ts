@@ -18,31 +18,52 @@ import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../../s
  * Merge a legacy address list with its shielded pairs into the unified
  * `IPrecalculatedAddress[]` shape accepted by `preCalculatedAddresses`.
  * Legacy index = array position; a shielded entry attaches to the index it
- * declares (`bip32AddressIndex`). Indexes without a shielded fixture are
- * legacy-only and have their pair derived at wallet start.
+ * declares (`bip32AddressIndex`).
+ *
+ * Keyed on the UNION of both index sets, so an index present on only one chain
+ * still produces an entry: a wallet with committed shielded fixtures but no
+ * legacy list (WALLET_CONSTANTS.ocb) keeps all of its pairs, and so do shielded
+ * indexes past the end of a shorter legacy list. Whichever chain an index omits
+ * is derived live at wallet start; dropping the entry instead would silently
+ * put every one of its pairs back on the slow derivation path.
  */
 export function mergePrecalculatedAddresses(
-  legacyAddresses: string[] | undefined | null,
+  legacyAddresses?: string[] | null,
   shieldedAddresses?: IPrecalculatedShieldedAddress[] | null
 ): IPrecalculatedAddress[] {
+  const legacy = legacyAddresses ?? [];
   const shieldedByIndex = new Map(
     (shieldedAddresses ?? []).map(entry => [entry.bip32AddressIndex, entry])
   );
-  return (legacyAddresses ?? []).map((base58, bip32AddressIndex) => {
-    const shielded = shieldedByIndex.get(bip32AddressIndex);
-    return {
-      bip32AddressIndex,
-      base58,
-      ...(shielded && {
-        shielded: {
-          shieldedBase58: shielded.shieldedBase58,
-          spendBase58: shielded.spendBase58,
-          scanPubkey: shielded.scanPubkey,
-          spendPubkey: shielded.spendPubkey,
-        },
-      }),
-    };
-  });
+
+  const indexes = new Set<number>([...legacy.keys(), ...shieldedByIndex.keys()]);
+
+  return [...indexes]
+    .sort((a, b) => a - b)
+    .map(bip32AddressIndex => {
+      const shielded = shieldedByIndex.get(bip32AddressIndex);
+      // Copy the four payload fields explicitly: the fixtures are whole
+      // IPrecalculatedShieldedAddress values, so spreading would carry their own
+      // bip32AddressIndex into a block that must not have one.
+      const shieldedBlock = shielded && {
+        shieldedBase58: shielded.shieldedBase58,
+        spendBase58: shielded.spendBase58,
+        scanPubkey: shielded.scanPubkey,
+        spendPubkey: shielded.spendPubkey,
+      };
+      const base58 = legacy[bip32AddressIndex];
+
+      if (base58 === undefined) {
+        // Shielded-only index — `shieldedBlock` is defined here by construction,
+        // since the index came from one set or the other.
+        return { bip32AddressIndex, shielded: shieldedBlock! };
+      }
+      return {
+        bip32AddressIndex,
+        base58,
+        ...(shieldedBlock && { shielded: shieldedBlock }),
+      };
+    });
 }
 
 /**

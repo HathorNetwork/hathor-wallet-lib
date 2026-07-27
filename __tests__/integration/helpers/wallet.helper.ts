@@ -118,8 +118,10 @@ export async function generateWalletHelper(param) {
     scanPolicy: getGapLimitConfig(),
   };
   if (param) {
-    // param's precalc (already folded into the merged array above) is stripped
-    // so Object.assign doesn't clobber the unified preCalculatedAddresses.
+    // Both precalc params were folded into the merged array above, so they are
+    // stripped here: `preCalculatedAddresses` would otherwise clobber the
+    // unified array via Object.assign, and `preCalculatedShieldedAddresses` is
+    // no longer a wallet option at all (it would simply be ignored).
     const { preCalculatedAddresses: _pca, preCalculatedShieldedAddresses: _pcsa, ...rest } = param;
     Object.assign(walletConfig, rest);
   }

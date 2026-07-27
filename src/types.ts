@@ -167,23 +167,33 @@ export interface IPrecalculatedShieldedAddress {
 
 /**
  * A pre-calculated address for a single BIP32 index, injected at wallet start
- * to skip live EC derivation. Carries the legacy P2PKH address and, for
- * shielded wallets, its shielded pair. An index whose `shielded` block is
- * omitted persists its legacy address only — the injected list is persisted
- * exactly as given, nothing extra is derived at start.
+ * to skip live EC derivation for the chains actually supplied.
  *
- * This is the unified successor to passing a `string[]` of legacy addresses
- * alongside a separate `IPrecalculatedShieldedAddress[]`: both chains for one
- * index now travel together. A plain `string[]` is still accepted (legacy-only,
- * back-compat).
+ * An index may carry the legacy chain address, the shielded pair, or both —
+ * some fixed-seed wallets have committed shielded pairs but no legacy list, so
+ * a shielded-only entry has to be expressible. Whichever chain an entry omits
+ * is derived live for that index during address loading, as are indexes past
+ * the injected window.
+ *
+ * Both chains for one index travel together here; passing a plain `string[]` of
+ * legacy addresses is still accepted (legacy-only, back-compat).
  */
-export interface IPrecalculatedAddress {
-  bip32AddressIndex: number;
-  /** The legacy P2PKH address (base58). */
-  base58: string;
-  /** The shielded pair for this index (present for shielded wallets). */
-  shielded?: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
-}
+export type IPrecalculatedAddress = { bip32AddressIndex: number } & (
+  | {
+      /** The legacy chain address (P2PKH, or P2SH for multisig wallets). */
+      base58: string;
+      /** The shielded pair for this index (present for shielded wallets). */
+      shielded?: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+  | {
+      /**
+       * Shielded-only: this index has no pre-calculated legacy address, so the
+       * legacy chain is derived live for it while the shielded pair is reused.
+       */
+      base58?: undefined;
+      shielded: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+);
 
 export interface IAddressMetadata {
   numTransactions: number;

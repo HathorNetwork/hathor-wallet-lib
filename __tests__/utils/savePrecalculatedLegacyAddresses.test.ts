@@ -88,6 +88,32 @@ describe('savePrecalculatedLegacyAddresses', () => {
     ).rejects.toThrow(/index 0/);
   });
 
+  /**
+   * A shielded-only entry carries no legacy address for its index. It must be
+   * skipped rather than persisted, so the index stays empty and address loading
+   * derives the real legacy address for it — persisting a placeholder would
+   * make the junk value that index's address permanently.
+   */
+  it('skips an entry that carries no legacy address', async () => {
+    const storage = await makeStorage();
+    await savePrecalculatedLegacyAddresses(storage, [
+      { bip32AddressIndex: 0, base58: 'addrA' },
+      {
+        bip32AddressIndex: 1,
+        shielded: {
+          shieldedBase58: 'shielded-1',
+          spendBase58: 'spend-1',
+          scanPubkey: '02aa',
+          spendPubkey: '03bb',
+        },
+      },
+    ]);
+
+    expect((await storage.getAddressAtIndex(0))!.base58).toBe('addrA');
+    expect(await storage.getAddressAtIndex(1)).toBeNull();
+    expect(await storage.store.addressCount()).toBe(1);
+  });
+
   it('accepts an empty list', async () => {
     const storage = await makeStorage();
     await expect(savePrecalculatedLegacyAddresses(storage, [])).resolves.not.toThrow();

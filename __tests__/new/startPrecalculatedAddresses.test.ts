@@ -98,6 +98,32 @@ describe('start() with pre-calculated addresses', () => {
   });
 
   /**
+   * Some fixed-seed wallets have committed shielded pairs but no legacy list,
+   * so a shielded-only entry has to survive injection: its pair is reused while
+   * the legacy chain for that index is left to live derivation. Persisting a
+   * placeholder instead would make the junk value that index's address for good.
+   */
+  it('injects a shielded-only entry without poisoning its legacy index', async () => {
+    const { storage } = await startWith([
+      {
+        bip32AddressIndex: 0,
+        shielded: {
+          shieldedBase58: 'shielded-only-0',
+          spendBase58: 'spend-only-0',
+          scanPubkey: '02cc',
+          spendPubkey: '03dd',
+        },
+      },
+    ]);
+
+    const shielded0 = await storage.getAddressAtIndex(0, { legacy: false });
+    expect(shielded0!.base58).toBe('shielded-only-0');
+    expect(await storage.isAddressMine('spend-only-0')).toBe(true);
+    // Nothing was written to the legacy chain for that index.
+    expect(await storage.getAddressAtIndex(0)).toBeNull();
+  });
+
+  /**
    * Regression: the mapped object used to spread `entry.shielded` AFTER
    * `bip32AddressIndex`, so a `bip32AddressIndex` structurally present on the
    * shielded block won the assignment. `Omit<…, 'bip32AddressIndex'>` removes it

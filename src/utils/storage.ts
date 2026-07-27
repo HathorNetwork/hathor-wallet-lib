@@ -200,6 +200,11 @@ export async function savePrecalculatedLegacyAddresses(
   entries: IPrecalculatedAddress[]
 ): Promise<void> {
   for (const entry of entries) {
+    if (!entry.base58) {
+      // Shielded-only entry: nothing to persist on the legacy chain, so
+      // loadAddresses derives that index's legacy address live.
+      continue;
+    }
     const existing = await storage.getAddressAtIndex(entry.bip32AddressIndex);
     if (existing !== null) {
       if (existing.base58 !== entry.base58) {
