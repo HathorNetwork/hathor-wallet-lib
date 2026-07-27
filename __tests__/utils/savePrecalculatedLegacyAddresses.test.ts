@@ -9,6 +9,7 @@ import walletUtils from '../../src/utils/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
 import { savePrecalculatedLegacyAddresses } from '../../src/utils/storage';
 import { IPrecalculatedAddress } from '../../src/types';
+import { AddressError } from '../../src/errors';
 
 describe('savePrecalculatedLegacyAddresses', () => {
   const PIN = '0000';
@@ -83,6 +84,11 @@ describe('savePrecalculatedLegacyAddresses', () => {
     const storage = await makeStorage();
     await savePrecalculatedLegacyAddresses(storage, entries);
 
+    // A typed error, so a consumer can tell "your pre-calculated list disagrees
+    // with storage" apart from any other startup failure without string matching.
+    await expect(
+      savePrecalculatedLegacyAddresses(storage, [{ bip32AddressIndex: 0, base58: 'somethingElse' }])
+    ).rejects.toThrow(AddressError);
     await expect(
       savePrecalculatedLegacyAddresses(storage, [{ bip32AddressIndex: 0, base58: 'somethingElse' }])
     ).rejects.toThrow(/index 0/);
