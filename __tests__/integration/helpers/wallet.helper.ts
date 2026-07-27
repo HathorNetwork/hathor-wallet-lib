@@ -109,8 +109,7 @@ export async function generateWalletHelper(param) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    // Both chains for each index travel together in the unified array; the
-    // separate shielded param is gone.
+    // Both chains for each index travel together in the unified array.
     preCalculatedAddresses: mergePrecalculatedAddresses(
       walletData.addresses,
       walletData.shieldedAddresses

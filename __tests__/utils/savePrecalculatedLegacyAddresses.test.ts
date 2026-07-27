@@ -44,10 +44,9 @@ describe('savePrecalculatedLegacyAddresses', () => {
   });
 
   /**
-   * Regression: `saveAddress` throws on a duplicate base58, so re-injecting the
-   * same pre-calculated list over already-populated storage — a wallet
-   * `stop()` (which keeps addresses by default) followed by `start()` — used to
-   * throw 'Already have this address' before startup could complete.
+   * `saveAddress` throws on a duplicate base58, so without the index guard here
+   * a wallet `stop()` (which keeps addresses by default) followed by `start()`
+   * aborts with 'Already have this address' before startup can complete.
    */
   it('is idempotent: re-injecting the same list over populated storage is a no-op', async () => {
     const storage = await makeStorage();

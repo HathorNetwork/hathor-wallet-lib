@@ -2019,11 +2019,12 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    // Persist the injected pre-calculated addresses exactly as provided — the
-    // caller's list is authoritative. Back-compat: a string[] is legacy-only;
-    // the unified IPrecalculatedAddress[] carries each index's legacy address
-    // plus an optional shielded pair. An index with no shielded pair persists
-    // legacy-only; nothing is derived here.
+    // Persist the injected pre-calculated addresses. Each entry may carry the
+    // legacy address for its index, the shielded pair, or both; a bare string is
+    // legacy-only and takes the index of its array position. Nothing is derived
+    // HERE, but whatever an entry omits is derived during address loading, along
+    // with every index past the injected window. Injection never overwrites: an
+    // index storage already holds is skipped, and a disagreement throws.
     const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
     await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
     const injectedShieldedPairs = injectedAddresses

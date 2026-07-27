@@ -17,7 +17,7 @@ import { IPrecalculatedShieldedAddress } from '../../../src/types';
  * sandbox slows down ~40-58x, so deriving live at every wallet start dominates
  * integration runtime. Injecting these at wallet construction (as the
  * `shielded` field on the unified preCalculatedAddresses entries) makes
- * loadAddresses skip the derivation, exactly like the legacy address list did.
+ * loadAddresses skip the derivation, exactly like the legacy address list does.
  *
  * DRIFT-PROOF: a test (precalculated-shielded-addresses.test.ts) re-derives these
  * live from the same seeds and asserts equality — if derivation logic or the
