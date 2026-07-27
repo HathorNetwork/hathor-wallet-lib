@@ -2027,7 +2027,12 @@ class HathorWallet extends EventEmitter {
     await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
     const injectedShieldedPairs = injectedAddresses
       .filter(entry => entry.shielded)
-      .map(entry => ({ bip32AddressIndex: entry.bip32AddressIndex, ...entry.shielded! }));
+      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
+      // the type but not from the value, and excess-property checks only fire on
+      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
+      // (which the repo's own fixtures are) carries one, and spreading it last
+      // would file this entry's pair under the nested index instead.
+      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
     if (injectedShieldedPairs.length > 0) {
       await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
     }
