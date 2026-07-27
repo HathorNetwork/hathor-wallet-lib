@@ -125,4 +125,25 @@ describe('savePrecalculatedLegacyAddresses', () => {
     await expect(savePrecalculatedLegacyAddresses(storage, [])).resolves.not.toThrow();
     expect(await storage.store.addressCount()).toBe(0);
   });
+
+  /**
+   * `start()` injects the pre-calculated list BEFORE it reads access data and
+   * before access data is generated and persisted, so on a fresh wallet this
+   * helper runs against storage that has none — the inverse of what the fixture
+   * above sets up. It works only because `Storage.getAddressAtIndex` and
+   * `Storage.saveAddress` delegate straight to the store, unlike their sibling
+   * `getAddressPubkey`, which validates. Pin that asymmetry: if a guard is ever
+   * added for symmetry, fresh-wallet startup breaks and this is what says so.
+   */
+  it('works on storage with no access data, as at wallet start', async () => {
+    const storage = new Storage(new MemoryStore());
+    expect(await storage.getAccessData()).toBeNull();
+
+    await expect(savePrecalculatedLegacyAddresses(storage, entries)).resolves.not.toThrow();
+    expect(await storage.store.addressCount()).toBe(entries.length);
+    expect((await storage.getAddressAtIndex(0))!.base58).toBe('addrA');
+
+    // The contrast that makes this test fail loudly if validation is added.
+    await expect(storage.getAddressPubkey(5)).rejects.toThrow();
+  });
 });
