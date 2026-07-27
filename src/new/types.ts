@@ -73,15 +73,18 @@ export interface HathorWalletConstructorParams {
   multisig?: { pubkeys: string[]; numSignatures: number } | null;
   /**
    * Pre-calculated addresses to load into storage, skipping live EC derivation
-   * for the injected indexes. Two accepted shapes:
-   *   - `string[]` — legacy-only, index = array position (back-compat).
-   *   - `IPrecalculatedAddress[]` — unified: each index carries its legacy
-   *     address and, for shielded wallets, its shielded pair.
+   * for the chains actually supplied. Entries may be mixed, per element:
+   *   - a `string` — legacy-only, taking the index of its array position
+   *     (so a plain `string[]` keeps working, back-compat).
+   *   - an `IPrecalculatedAddress` — the legacy address for its index, the
+   *     shielded pair, or both.
    *
-   * The persisted set is exactly what is passed — the caller's list is
-   * authoritative and nothing extra is derived at start.
+   * Injection skips indexes storage already holds and fails loudly if the list
+   * disagrees with one, so it never overwrites. Whatever an entry omits — the
+   * other chain, or any index past the injected window — is derived live during
+   * address loading.
    */
-  preCalculatedAddresses?: string[] | IPrecalculatedAddress[] | null;
+  preCalculatedAddresses?: (string | IPrecalculatedAddress)[] | null;
   /** Address scanning policy configuration */
   scanPolicy?: AddressScanPolicyData | null;
   /** Logger instance for wallet operations */

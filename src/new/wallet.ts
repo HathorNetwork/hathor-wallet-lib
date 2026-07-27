@@ -166,20 +166,21 @@ const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
 /**
  * Normalize the `preCalculatedAddresses` option into per-index entries.
  *
- * Back-compat: a `string[]` is legacy-only, index = array position. The unified
- * `IPrecalculatedAddress[]` shape (each index's legacy address plus an optional
- * shielded pair) passes through unchanged.
+ * Per element, not by classifying the whole array from element 0: a caller that
+ * has a unified fixture for some indexes and only a legacy address for the rest
+ * can mix the two shapes in one list. A string entry is legacy-only and takes
+ * its BIP32 index from its array position (back-compat with a plain `string[]`);
+ * a unified entry passes through by reference, keeping the index it declares.
  */
 export function normalizePreCalculatedAddresses(
-  input: string[] | IPrecalculatedAddress[] | null
+  input?: (string | IPrecalculatedAddress)[] | null
 ): IPrecalculatedAddress[] {
-  if (!input || input.length === 0) {
+  if (!input) {
     return [];
   }
-  if (typeof input[0] === 'string') {
-    return (input as string[]).map((base58, index) => ({ bip32AddressIndex: index, base58 }));
-  }
-  return input as IPrecalculatedAddress[];
+  return input.map((entry, index) =>
+    typeof entry === 'string' ? { bip32AddressIndex: index, base58: entry } : entry
+  );
 }
 
 /**
@@ -232,7 +233,7 @@ class HathorWallet extends EventEmitter {
   password: string | null;
 
   // Address management
-  preCalculatedAddresses: string[] | IPrecalculatedAddress[] | null;
+  preCalculatedAddresses: (string | IPrecalculatedAddress)[] | null;
 
   // Connection state
   firstConnection: boolean;
