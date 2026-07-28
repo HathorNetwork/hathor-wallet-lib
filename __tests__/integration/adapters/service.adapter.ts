@@ -54,6 +54,7 @@ import type {
   DelegateAuthorityResult,
   DestroyAuthorityResult,
   AdapterAddress,
+  CheckAddressesMineResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 
@@ -739,6 +740,13 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
   async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
     const index = await this.concrete(wallet).getAddressIndex(address);
     return index === null ? undefined : index;
+  }
+
+  async checkAddressesMine(
+    wallet: FuzzyWalletType,
+    addresses: string[]
+  ): Promise<CheckAddressesMineResult> {
+    return this.concrete(wallet).checkAddressesMine(addresses);
   }
 
   async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {

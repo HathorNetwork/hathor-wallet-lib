@@ -6,7 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import type { IHathorWallet, FullNodeTxResponse } from '../../../src/wallet/types';
+import type {
+  IHathorWallet,
+  FullNodeTxResponse,
+  WalletAddressMap,
+} from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import type Transaction from '../../../src/models/transaction';
 import type { IHistoryTx, IStorage, TokenVersion, AuthorityType } from '../../../src/types';
@@ -401,6 +405,20 @@ export interface IWalletTestAdapter {
   getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined>;
 
   /**
+   * Maps each queried address to whether it belongs to the wallet.
+   * Both facades expose `checkAddressesMine()` with the same result shape —
+   * the fullnode resolves it locally from storage, the wallet-service via its
+   * REST API. Callers must pass well-formed base58 addresses: the
+   * wallet-service response schema only admits base58 keys, so malformed
+   * address strings are a fullnode-only scenario
+   * (see `fullnode-specific/address-info.test.ts`).
+   */
+  checkAddressesMine(
+    wallet: FuzzyWalletType,
+    addresses: string[]
+  ): Promise<CheckAddressesMineResult>;
+
+  /**
    * Returns the address at a specific derivation index.
    */
   getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string>;
@@ -686,3 +704,14 @@ export interface AdapterAddress {
   /** Derivation path (e.g. `m/44'/280'/0'/0/3`); both facades expose this. */
   addressPath: string;
 }
+
+/**
+ * Result of an adapter `checkAddressesMine` query: each queried address mapped
+ * to whether it belongs to the wallet.
+ *
+ * Aliases the library's own {@link WalletAddressMap} rather than restating its
+ * shape: `IHathorWallet.checkAddressesMine` already declares that type as the
+ * return value for both facades, and the fullnode's `Record<string, boolean>`
+ * is structurally identical to it.
+ */
+export type CheckAddressesMineResult = WalletAddressMap;
