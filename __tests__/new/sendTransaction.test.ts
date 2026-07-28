@@ -9,6 +9,7 @@ import { HDPrivateKey, PrivateKey } from 'bitcore-lib';
 import {
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
+  FEE_PER_OUTPUT,
   MAX_SHIELDED_OUTPUTS,
   NATIVE_TOKEN_UID,
   TOKEN_AUTHORITY_MASK,
@@ -33,6 +34,7 @@ import {
   WalletType,
 } from '../../src/types';
 import FeeHeader from '../../src/headers/fee';
+import { Fee } from '../../src/utils/fee';
 import walletHelpers from '../../src/utils/helpers';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import transaction from '../../src/utils/transaction';
@@ -183,6 +185,167 @@ test('prepareTxData resolves 71-byte shielded addresses internally', async () =>
   await expect(sendTransaction.prepareTxData()).rejects.toThrow(
     /Shielded crypto provider is not set/
   );
+});
+
+test('prepareTxData does not charge FEE_PER_OUTPUT for a shielded FEE-token output', async () => {
+  // Regression: the phantom pushed for UTXO selection must not reach
+  // Fee.calculate — the node charges a shielded output only the shielded fee.
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  // A genuine shielded address (on-curve scan/spend pubkeys).
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x0b), 'testnet');
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    root.deriveChild("m/1'/0").publicKey.toBuffer(),
+    new Network('testnet')
+  );
+
+  // Token '02' is a FEE-version token (mockGetToken). Fund the '02' outputs
+  // exactly (20n, so there is no '02' change) and HTR for the fee.
+  async function* selectUtxoMock(options) {
+    if (options.token === '02') {
+      yield {
+        txId: 'fbt-funding-tx',
+        index: 0,
+        value: 20n,
+        token: '02',
+        address: 'fbt-funding-address',
+        authorities: 0n,
+      };
+    } else if (options.token === NATIVE_TOKEN_UID) {
+      yield {
+        txId: 'htr-funding-tx',
+        index: 0,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        address: 'htr-funding-address',
+        authorities: 0n,
+      };
+    }
+  }
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
+  jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'));
+  jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      // A real TRANSPARENT FEE-token output → exactly one chargeable output.
+      {
+        type: OutputType.P2PKH,
+        address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+        value: 10n,
+        token: '02',
+      },
+      {
+        address: shieldedAddress,
+        value: 10n,
+        token: '02',
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ],
+  });
+
+  const calcSpy = jest.spyOn(Fee, 'calculate');
+
+  // prepareTxData reaches the fee calc, then rejects at the crypto boundary
+  // (no provider) — which is enough to inspect what Fee.calculate received.
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    /Shielded crypto provider is not set/
+  );
+
+  expect(calcSpy).toHaveBeenCalledTimes(1);
+  const feeOutputs = calcSpy.mock.calls[0][1] as { token: string; address: string }[];
+  // Assert WHICH output survived, not just the count: the phantom also carries
+  // token '02', so a count alone passes even with the filter inverted.
+  const fee02 = feeOutputs.filter(out => out.token === '02');
+  expect(fee02).toHaveLength(1);
+  expect(fee02[0].address).toBe('WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+
+  calcSpy.mockRestore();
+});
+
+test('prepareTxData charges the flat melt fee once when a FEE token goes entirely to shielded outputs', async () => {
+  // Exercises the branch the companion test can't reach: with no transparent
+  // '02' output, outputCount hits 0 and Fee.calculate falls through to the flat
+  // melt fee. TWO shielded outputs deliberately — with one, the melt fee equals
+  // the single FEE_PER_OUTPUT being removed, so the fee is 1n before and after.
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x0c), 'testnet');
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    root.deriveChild("m/1'/0").publicKey.toBuffer(),
+    new Network('testnet')
+  );
+
+  // Fund '02' exactly (20n for two 10n outputs, so there is no '02' change)
+  // and HTR for the fee.
+  async function* selectUtxoMock(options) {
+    if (options.token === '02') {
+      yield {
+        txId: 'fbt-funding-tx',
+        index: 0,
+        value: 20n,
+        token: '02',
+        address: 'fbt-funding-address',
+        authorities: 0n,
+      };
+    } else if (options.token === NATIVE_TOKEN_UID) {
+      yield {
+        txId: 'htr-funding-tx',
+        index: 0,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        address: 'htr-funding-address',
+        authorities: 0n,
+      };
+    }
+  }
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
+  jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'));
+  jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [
+      {
+        address: shieldedAddress,
+        value: 10n,
+        token: '02',
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: shieldedAddress,
+        value: 10n,
+        token: '02',
+        shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ],
+  });
+
+  const calcSpy = jest.spyOn(Fee, 'calculate');
+
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+    /Shielded crypto provider is not set/
+  );
+
+  expect(calcSpy).toHaveBeenCalledTimes(1);
+  const feeOutputs = calcSpy.mock.calls[0][1] as { token: string }[];
+  // No transparent '02' output survives: both phantoms are filtered out.
+  expect(feeOutputs.filter(out => out.token === '02')).toHaveLength(0);
+
+  // So '02' has inputs but zero outputs -> the flat melt fee, charged ONCE.
+  // Without the fix the two phantoms would be counted and this would be 2n.
+  await expect(calcSpy.mock.results[0].value).resolves.toBe(FEE_PER_OUTPUT);
+
+  calcSpy.mockRestore();
 });
 
 test('type methods', () => {
