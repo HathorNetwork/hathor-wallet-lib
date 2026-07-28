@@ -3048,6 +3048,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
+    // Set the transaction change address if declared
+    if (newOptions.changeAddress) {
+      builder.setChangeAddress(newOptions.changeAddress);
+    }
+
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin!, {

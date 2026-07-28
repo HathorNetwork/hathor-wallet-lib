@@ -233,6 +233,12 @@ export type CreateNanoTxOptions = {
   maxFee?: OutputValueType;
   /** If the contract will pay the transaction fees (for FEE tokens) */
   contractPaysFees?: boolean;
+  /**
+   * Address for the change outputs created for the transaction itself, notably
+   * the change of the HTR selected to pay the fee. A deposit action's own
+   * `changeAddress` takes precedence for that action's change output.
+   */
+  changeAddress?: string | null;
   /** If the transaction should be signed */
   signTx?: boolean;
 };

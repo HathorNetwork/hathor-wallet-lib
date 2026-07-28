@@ -3579,6 +3579,11 @@ class HathorWallet extends EventEmitter {
       builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
+    // Set the transaction change address if declared
+    if (newOptions.changeAddress) {
+      builder.setChangeAddress(newOptions.changeAddress);
+    }
+
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
       return prepareNanoSendTransaction(nc, pin!, this.storage);
