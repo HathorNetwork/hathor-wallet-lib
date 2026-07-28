@@ -188,12 +188,8 @@ test('prepareTxData resolves 71-byte shielded addresses internally', async () =>
 });
 
 test('prepareTxData does not charge FEE_PER_OUTPUT for a shielded FEE-token output', async () => {
-  // Regression: a shielded output pushes a transparent "phantom" into
-  // txData.outputs so UTXO selection accounts for its value. That phantom must
-  // NOT reach Fee.calculate — the fullnode charges a shielded output only the
-  // shielded fee, never FEE_PER_OUTPUT, and counts just the real transparent
-  // outputs. Leaving the phantom in over-declares FEE_PER_OUTPUT and the node's
-  // exact-match fee check rejects the tx.
+  // Regression: the phantom pushed for UTXO selection must not reach
+  // Fee.calculate — the node charges a shielded output only the shielded fee.
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork('testnet');
@@ -244,8 +240,6 @@ test('prepareTxData does not charge FEE_PER_OUTPUT for a shielded FEE-token outp
         value: 10n,
         token: '02',
       },
-      // A SHIELDED FEE-token output → charged the shielded fee, never
-      // FEE_PER_OUTPUT. Its phantom must be excluded from Fee.calculate.
       {
         address: shieldedAddress,
         value: 10n,
@@ -265,10 +259,8 @@ test('prepareTxData does not charge FEE_PER_OUTPUT for a shielded FEE-token outp
 
   expect(calcSpy).toHaveBeenCalledTimes(1);
   const feeOutputs = calcSpy.mock.calls[0][1] as { token: string; address: string }[];
-  // Only the real transparent '02' output is fee-charged; the shielded output's
-  // phantom is filtered out. Assert WHICH output survived, not just how many:
-  // the phantom carries token '02' too, so a count alone passes even if the
-  // filter is inverted and the phantom is the one that reaches Fee.calculate.
+  // Assert WHICH output survived, not just the count: the phantom also carries
+  // token '02', so a count alone passes even with the filter inverted.
   const fee02 = feeOutputs.filter(out => out.token === '02');
   expect(fee02).toHaveLength(1);
   expect(fee02[0].address).toBe('WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
@@ -277,16 +269,10 @@ test('prepareTxData does not charge FEE_PER_OUTPUT for a shielded FEE-token outp
 });
 
 test('prepareTxData charges the flat melt fee once when a FEE token goes entirely to shielded outputs', async () => {
-  // The companion test above keeps a real transparent '02' output, so removing
-  // the phantom only moves outputCount 2 -> 1 and stays inside Fee.calculate's
-  // per-output branch. This case exercises the branch the fix actually changes:
-  // with no transparent '02' output, dropping the phantoms takes outputCount to
-  // 0, so Fee.calculate falls through to the flat melt fee instead.
-  //
-  // TWO shielded outputs, deliberately: with one, the transparent fee is 1n
-  // before AND after the fix (the flat melt fee equals the single
-  // FEE_PER_OUTPUT being removed), so a single-output fixture cannot see this
-  // branch at all. With two it moves 2n -> 1n.
+  // Exercises the branch the companion test can't reach: with no transparent
+  // '02' output, outputCount hits 0 and Fee.calculate falls through to the flat
+  // melt fee. TWO shielded outputs deliberately — with one, the melt fee equals
+  // the single FEE_PER_OUTPUT being removed, so the fee is 1n before and after.
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork('testnet');

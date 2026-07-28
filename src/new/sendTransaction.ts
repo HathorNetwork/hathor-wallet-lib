@@ -485,16 +485,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const partialInputs = [...txData.inputs, ...partialTxData.inputs];
     const partialOutputs = [...txData.outputs, ...partialTxData.outputs] as IDataOutputWithToken[];
 
-    // Phantom outputs are transparent proxies for shielded outputs — they exist
-    // ONLY so UTXO selection accounts for the shielded value, and are stripped
-    // from the final tx (below). They must NOT reach Fee.calculate: the fullnode
-    // charges a shielded output only the shielded fee (added below), never
-    // FEE_PER_OUTPUT, and counts just the real transparent outputs. Leaving a
-    // phantom in would over-declare FEE_PER_OUTPUT for a FEE-token shielded
-    // output; since the node validates the declared fee for an exact match, the
-    // tx would be rejected. Excluding them keeps the wallet in lockstep with the
-    // node: transparent outputs → FEE_PER_OUTPUT (or the flat melt fee when a
-    // FEE token has inputs but no transparent output), shielded → shielded fee.
+    // Phantoms exist only so UTXO selection accounts for the shielded value.
+    // The fullnode counts just the real transparent outputs for FEE_PER_OUTPUT
+    // and rejects any fee that isn't an exact match, so a phantom here would
+    // over-declare. Shielded outputs are charged separately, in shieldedFee.
+    // (A FEE token with inputs but no transparent output pays the flat melt fee.)
     const feeOutputs =
       phantomOutputs.size > 0
         ? partialOutputs.filter(out => !phantomOutputs.has(out))
