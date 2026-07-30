@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 /* eslint max-classes-per-file: ["error", 2] */
-import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from '../configuration/test-constants';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { mergePrecalculatedAddresses } from './wallet-precalculation.helper';
 import Connection from '../../../src/new/connection';
@@ -42,7 +42,7 @@ export class GenesisWalletHelper {
     const { words } = WALLET_CONSTANTS.genesis;
     const pin = '123456';
     const connection = new Connection({
-      network: 'testnet',
+      network: NETWORK_NAME,
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
       logger: console, // Add required logger parameter
