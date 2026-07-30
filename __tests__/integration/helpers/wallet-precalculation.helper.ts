@@ -28,7 +28,7 @@ import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../../s
  * put every one of its pairs back on the slow derivation path.
  */
 export function mergePrecalculatedAddresses(
-  legacyAddresses: string[] | undefined,
+  legacyAddresses?: string[],
   shieldedAddresses?: IPrecalculatedShieldedAddress[]
 ): IPrecalculatedAddress[] {
   const legacy = legacyAddresses ?? [];

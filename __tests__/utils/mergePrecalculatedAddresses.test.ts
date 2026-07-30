@@ -81,6 +81,7 @@ describe('mergePrecalculatedAddresses', () => {
   });
 
   it('returns an empty list when neither chain is supplied', () => {
+    expect(mergePrecalculatedAddresses()).toEqual([]);
     expect(mergePrecalculatedAddresses(undefined, undefined)).toEqual([]);
     expect(mergePrecalculatedAddresses([], [])).toEqual([]);
   });
