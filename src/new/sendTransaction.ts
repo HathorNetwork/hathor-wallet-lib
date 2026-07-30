@@ -485,11 +485,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const partialInputs = [...txData.inputs, ...partialTxData.inputs];
     const partialOutputs = [...txData.outputs, ...partialTxData.outputs] as IDataOutputWithToken[];
 
+    // Phantoms exist only so UTXO selection accounts for the shielded value.
+    // The fullnode counts just the real transparent outputs for FEE_PER_OUTPUT
+    // and rejects any fee that isn't an exact match, so a phantom here would
+    // over-declare. Shielded outputs are charged separately, in shieldedFee.
+    // (A FEE token with inputs but no transparent output pays the flat melt fee.)
+    const feeOutputs =
+      phantomOutputs.size > 0
+        ? partialOutputs.filter(out => !phantomOutputs.has(out))
+        : partialOutputs;
+
     // calculate the fee based in the inputs and outputs, including the change output
     // fee is always in HTR
     const fee = await Fee.calculate(
       partialInputs,
-      partialOutputs,
+      feeOutputs,
       await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
     );
 
