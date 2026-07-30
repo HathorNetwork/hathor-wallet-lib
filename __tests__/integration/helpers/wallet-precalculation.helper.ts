@@ -28,8 +28,8 @@ import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../../s
  * put every one of its pairs back on the slow derivation path.
  */
 export function mergePrecalculatedAddresses(
-  legacyAddresses?: string[] | null,
-  shieldedAddresses?: IPrecalculatedShieldedAddress[] | null
+  legacyAddresses: string[] | undefined,
+  shieldedAddresses?: IPrecalculatedShieldedAddress[]
 ): IPrecalculatedAddress[] {
   const legacy = legacyAddresses ?? [];
   const shieldedByIndex = new Map(

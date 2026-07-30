@@ -53,7 +53,7 @@ describe('mergePrecalculatedAddresses', () => {
   it('keeps shielded pairs when there is no legacy list at all', () => {
     const shielded = [shieldedAt(0), shieldedAt(1), shieldedAt(2)];
 
-    for (const legacy of [undefined, null, []] as (string[] | undefined | null)[]) {
+    for (const legacy of [undefined, []] as (string[] | undefined)[]) {
       const merged = mergePrecalculatedAddresses(legacy, shielded);
       expect(merged).toHaveLength(3);
       expect(merged.map(e => e.bip32AddressIndex)).toEqual([0, 1, 2]);
@@ -82,7 +82,7 @@ describe('mergePrecalculatedAddresses', () => {
 
   it('returns an empty list when neither chain is supplied', () => {
     expect(mergePrecalculatedAddresses(undefined, undefined)).toEqual([]);
-    expect(mergePrecalculatedAddresses(null, null)).toEqual([]);
+    expect(mergePrecalculatedAddresses([], [])).toEqual([]);
   });
 
   it('copies only the four shielded fields, dropping the nested index', () => {
