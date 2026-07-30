@@ -41,6 +41,7 @@ import type {
   SendTransactionResult,
   CreateTokenOptions,
   CreateTokenResult,
+  CreateNftAdapterOptions,
   MintTokensAdapterOptions,
   MeltTokensAdapterOptions,
   MintMeltResult,
@@ -57,6 +58,7 @@ import type {
   DelegateAuthorityResult,
   DestroyAuthorityResult,
   AdapterAddress,
+  CheckAddressesMineResult,
 } from './types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
@@ -79,6 +81,9 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   // e.g. "Not enough HTR tokens for deposit or fee: 90 required, 9 available"
   insufficientHtrError = /^Not enough HTR tokens for deposit or fee: \d+ required, \d+ available$/;
+
+  // The fullnode facade re-throws the node's own message for an unknown token.
+  unknownTokenError = /Unknown token/;
 
   defaultPinCode = DEFAULT_PIN_CODE;
 
@@ -280,6 +285,37 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   async getTokenDetails(wallet: FuzzyWalletType, tokenUid: string): Promise<TokenDetailsResult> {
     return this.concrete(wallet).getTokenDetails(tokenUid);
+  }
+
+  async getTokens(wallet: FuzzyWalletType): Promise<string[]> {
+    return this.concrete(wallet).getTokens();
+  }
+
+  async createNFT(
+    wallet: FuzzyWalletType,
+    name: string,
+    symbol: string,
+    amount: bigint,
+    data: string,
+    options?: CreateNftAdapterOptions
+  ): Promise<CreateTokenResult> {
+    const hWallet = this.concrete(wallet);
+    const { recvWallet, ...nftOptions } = options ?? {};
+    const result = await hWallet.createNFT(name, symbol, amount, data, {
+      pinCode: DEFAULT_PIN_CODE,
+      ...nftOptions,
+      createMint: nftOptions.createMint ?? false,
+      createMelt: nftOptions.createMelt ?? false,
+    });
+    if (!result?.hash) {
+      throw new Error('createNFT: transaction had no hash');
+    }
+    await waitForTxReceived(hWallet, result.hash);
+    if (recvWallet) {
+      await waitForTxReceived(this.concrete(recvWallet), result.hash);
+    }
+    await waitUntilNextTimestamp(hWallet, result.hash);
+    return { hash: result.hash, transaction: result };
   }
 
   async getUtxos(
@@ -507,6 +543,13 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   async getAddressIndex(wallet: FuzzyWalletType, address: string): Promise<number | undefined> {
     const index = await this.concrete(wallet).getAddressIndex(address);
     return index === null ? undefined : index;
+  }
+
+  async checkAddressesMine(
+    wallet: FuzzyWalletType,
+    addresses: string[]
+  ): Promise<CheckAddressesMineResult> {
+    return this.concrete(wallet).checkAddressesMine(addresses);
   }
 
   async getAddressAtIndex(wallet: FuzzyWalletType, index: number): Promise<string> {
