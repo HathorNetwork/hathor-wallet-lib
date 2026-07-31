@@ -17,6 +17,7 @@ import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import { ithService } from './ith-service';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -84,6 +85,7 @@ export class GenesisWalletHelper {
    * @returns {Promise<Transaction>}
    * @private
    */
+  // eslint-disable-next-line class-methods-use-this -- funding is delegated to ithService; kept as an instance method to preserve call sites
   async _injectFunds(
     destinationWallet: HathorWallet,
     address: string,
@@ -91,21 +93,23 @@ export class GenesisWalletHelper {
     options: InjectFundsOptions = {}
   ): Promise<Transaction> {
     try {
-      const result = (await this.hWallet.sendTransaction(address, value, {
-        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
-      })) as SuccessfulInjectTransaction;
+      // Funding is delegated to the helper's race-free /fund endpoint rather
+      // than broadcast from a locally-synced genesis wallet. The helper returns
+      // once the tx is broadcast; we then wait until the destination wallet
+      // observes it, which is the guarantee callers actually rely on.
+      const { txId } = await ithService.fund(address, value);
+      const result = { hash: txId } as unknown as SuccessfulInjectTransaction;
 
       if (options.waitTimeout === 0) {
         return result;
       }
 
-      if (!result.hash) {
-        throw new Error('Transaction had no hash');
-      }
-
-      await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
-      await waitForTxReceived(destinationWallet, result.hash, options.waitTimeout);
-      await waitUntilNextTimestamp(this.hWallet, result.hash);
+      await waitForTxReceived(destinationWallet, txId, options.waitTimeout);
+      // Timestamps are per-second and a tx must be timestamped strictly after
+      // its parent. Without this wait, a test that spends the just-funded UTXO
+      // within the same second collides with the funding tx and flakes. Applied
+      // via the destination wallet, which is the one that now has the tx.
+      await waitUntilNextTimestamp(destinationWallet, txId);
       return result;
     } catch (e) {
       loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
@@ -227,17 +231,14 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    const gWallet = await GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(address, amount, {
-      pinCode: GenesisWalletServiceHelper.pinCode,
-    });
-
-    // Ensure the transaction was sent from the Genesis perspective
-    await pollForTx(gWallet, fundTx.hash!);
+    // Delegated to the helper's /fund, same as the fullnode path above. No
+    // timestamp wait here: the Wallet Service handles ordering itself.
+    const { txId } = await ithService.fund(address, amount);
+    const fundTx = { hash: txId } as unknown as Transaction;
 
     // Ensure the destination wallet is also aware of the transaction
     if (destinationWallet) {
-      await pollForTx(destinationWallet, fundTx.hash!);
+      await pollForTx(destinationWallet, txId);
     }
 
     return fundTx;
