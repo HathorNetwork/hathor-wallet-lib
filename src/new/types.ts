@@ -10,7 +10,7 @@ import {
   ILogger,
   AddressScanPolicyData,
   IHistoryTx,
-  IPrecalculatedShieldedAddress,
+  IPrecalculatedAddress,
   OutputValueType,
   TokenVersion,
 } from '../types';
@@ -71,14 +71,20 @@ export interface HathorWalletConstructorParams {
   beforeReloadCallback?: (() => void) | null;
   /** Multisig configuration for P2SH wallets */
   multisig?: { pubkeys: string[]; numSignatures: number } | null;
-  /** Pre-calculated addresses to load into storage */
-  preCalculatedAddresses?: string[] | null;
   /**
-   * Pre-calculated shielded address pairs to load into storage (test tooling,
-   * mirrors preCalculatedAddresses). Injected indexes skip live EC derivation
-   * in address loading; indexes past the injected window still derive live.
+   * Pre-calculated addresses to load into storage, skipping live EC derivation
+   * for the chains actually supplied. Entries may be mixed, per element:
+   *   - a `string` — legacy-only, taking the index of its array position
+   *     (so a plain `string[]` keeps working, back-compat).
+   *   - an `IPrecalculatedAddress` — the legacy address for its index, the
+   *     shielded pair, or both.
+   *
+   * Injection skips indexes storage already holds and fails loudly if the list
+   * disagrees with one, so it never overwrites. Whatever an entry omits — the
+   * other chain, or any index past the injected window — is derived live during
+   * address loading.
    */
-  preCalculatedShieldedAddresses?: IPrecalculatedShieldedAddress[] | null;
+  preCalculatedAddresses?: (string | IPrecalculatedAddress)[] | null;
   /** Address scanning policy configuration */
   scanPolicy?: AddressScanPolicyData | null;
   /** Logger instance for wallet operations */
