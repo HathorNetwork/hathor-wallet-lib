@@ -3609,7 +3609,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
@@ -3635,7 +3635,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<SendTransaction> {
     // Use the wallet-level isReadonly() (not storage.isReadonly()): it returns false when an
     // external tx-signing method is registered, so an xpub-only passkey wallet is allowed here and

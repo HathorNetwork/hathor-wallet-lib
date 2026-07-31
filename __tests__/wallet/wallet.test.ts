@@ -10,6 +10,7 @@ import Mnemonic from 'bitcore-mnemonic';
 import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
+import NanoContractTransactionBuilder from '../../src/nano_contracts/builder';
 import {
   GetAddressesObject,
   WsTransaction,
@@ -4873,6 +4874,45 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       await expect(
         wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
       ).rejects.toThrow('createNanoContractTransaction');
+    });
+
+    /**
+     * This facade carries the same change-address wiring as the fullnode one,
+     * but only the fullnode side is exercised by the integration suite, so a
+     * wrong field name or a misplaced call here would ship unnoticed. Capture
+     * what reaches the builder rather than that the setter was called: it is
+     * the value landing on the builder that build() will use which matters.
+     */
+    describe.each([
+      ['forwards the transaction change address', 'WSFK832SPd6WKzpKkymj5Ya4JLnkvW2Y5A'],
+      ['leaves it unset when the caller omits it', undefined],
+    ])('%s', (_name, changeAddress) => {
+      it('reaches the builder', async () => {
+        const caller = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+        jest.spyOn(wallet, 'isReady').mockReturnValue(true);
+        jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false);
+        jest.spyOn(wallet, 'getAddressIndexIfOwned').mockResolvedValue(0);
+
+        let seen: string | null | undefined;
+        const buildSpy = jest
+          .spyOn(NanoContractTransactionBuilder.prototype, 'build')
+          .mockImplementation(async function mockBuild(this: NanoContractTransactionBuilder) {
+            seen = this.changeAddress;
+            throw new Error('stop-after-build');
+          });
+
+        await expect(
+          wallet.createNanoContractTransaction(
+            'method',
+            caller,
+            { ncId: 'a'.repeat(64), args: [], actions: [] },
+            { pinCode: '123', ...(changeAddress ? { changeAddress } : {}) }
+          )
+        ).rejects.toThrow('stop-after-build');
+
+        expect(seen).toBe(changeAddress ?? null);
+        buildSpy.mockRestore();
+      });
     });
   });
 

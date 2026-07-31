@@ -666,7 +666,9 @@ class NanoContractTransactionBuilder {
     // Validated once here rather than at each use site, so a bad address fails
     // before any utxo is selected instead of from inside fee selection.
     if (this.changeAddress && !(await this.wallet.isAddressMine(this.changeAddress))) {
-      throw new NanoContractTransactionError('Change address must belong to the same wallet.');
+      throw new NanoContractTransactionError(
+        'Transaction change address must belong to the same wallet.'
+      );
     }
 
     // Validate if the arguments match the expected method arguments

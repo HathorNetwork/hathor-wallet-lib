@@ -459,14 +459,14 @@ export interface IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<Transaction>;
   getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;

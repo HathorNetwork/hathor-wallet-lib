@@ -237,6 +237,11 @@ export type CreateNanoTxOptions = {
    * Address for the change outputs created for the transaction itself, notably
    * the change of the HTR selected to pay the fee. A deposit action's own
    * `changeAddress` takes precedence for that action's change output.
+   *
+   * The nano create-token methods do not accept this option: they omit it from
+   * their signatures rather than take it and ignore it. Wiring the create-token
+   * path is a follow-up, which must also settle precedence against the change
+   * address those methods already accept in their create-token options.
    */
   changeAddress?: string | null;
   /** If the transaction should be signed */
