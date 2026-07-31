@@ -16,6 +16,7 @@ import {
   IHistoryTx,
   IBalance,
   ILockedUtxo,
+  IPrecalculatedAddress,
   IPrecalculatedShieldedAddress,
   isGapLimitScanPolicy,
   IScanPolicyLoadAddresses,
@@ -50,7 +51,7 @@ import {
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getDefaultAddressMeta } from '../storage/storage';
-import { ShieldedDecodeSystemicError } from '../errors';
+import { AddressError, ShieldedDecodeSystemicError } from '../errors';
 
 /**
  * Get history sync method for a given mode
@@ -177,6 +178,51 @@ export async function loadAddresses(
 }
 
 /**
+ * Persist pre-calculated legacy addresses into storage.
+ *
+ * Sibling of savePrecalculatedShieldedAddresses: the two together are what
+ * wallet start injects for the unified `preCalculatedAddresses` option.
+ *
+ * Skips indexes already present so re-injecting the same list over populated
+ * storage is a no-op — `saveAddress` throws on a duplicate base58, which would
+ * otherwise abort startup when a wallet is stopped (which keeps addresses by
+ * default) and started again. The skip is keyed on the BIP32 index rather than
+ * on the address, matching how loadAddresses guards the legacy chain
+ * (`getAddressAtIndex(i) !== null`); an index already holding a DIFFERENT
+ * address means the injected list disagrees with storage, which stays a loud
+ * error instead of being silently skipped.
+ *
+ * @param storage The wallet storage instance
+ * @param entries Pre-calculated addresses, one per BIP32 index
+ */
+export async function savePrecalculatedLegacyAddresses(
+  storage: IStorage,
+  entries: IPrecalculatedAddress[]
+): Promise<void> {
+  for (const entry of entries) {
+    if (!entry.base58) {
+      // Shielded-only entry: nothing to persist on the legacy chain, so
+      // loadAddresses derives that index's legacy address live.
+      continue;
+    }
+    const existing = await storage.getAddressAtIndex(entry.bip32AddressIndex);
+    if (existing !== null) {
+      if (existing.base58 !== entry.base58) {
+        throw new AddressError(
+          `Pre-calculated address mismatch at index ${entry.bip32AddressIndex}: ` +
+            `storage holds ${existing.base58}, injected list declares ${entry.base58}.`
+        );
+      }
+      continue;
+    }
+    await storage.saveAddress({
+      base58: entry.base58,
+      bip32AddressIndex: entry.bip32AddressIndex,
+    });
+  }
+}
+
+/**
  * Persist pre-calculated shielded address pairs into storage.
  *
  * Test tooling: mirrors the pre-calculated legacy address injection done at
@@ -206,8 +252,31 @@ export async function savePrecalculatedShieldedAddresses(
       addressType: 'shielded-spend',
       ctMappingAddress: entry.shieldedBase58,
     };
-    // saveAddress throws on duplicates — guard so re-injection on a wallet
-    // restart over existing storage is a no-op, like the loadAddresses guards.
+    // Keyed on the shielded chain index, mirroring the legacy sibling: an
+    // isAddressMine check alone cannot see a DISAGREEMENT, because a pair that
+    // contradicts what this index already holds is made of two brand-new
+    // addresses — both would save, and the index mapping would be overwritten
+    // while the previous record lingered unreachable. Compare the pair link too:
+    // 'shielded-spend' records are not index-addressable, so ctMappingAddress is
+    // the only way to catch a re-pointed spend address.
+    const existing = await storage.getAddressAtIndex(entry.bip32AddressIndex, { legacy: false });
+    if (existing !== null && existing.addressType === 'shielded') {
+      if (existing.base58 !== entry.shieldedBase58) {
+        throw new AddressError(
+          `Pre-calculated shielded address mismatch at index ${entry.bip32AddressIndex}: ` +
+            `storage holds ${existing.base58}, injected list declares ${entry.shieldedBase58}.`
+        );
+      }
+      if (existing.ctMappingAddress && existing.ctMappingAddress !== entry.spendBase58) {
+        throw new AddressError(
+          `Pre-calculated shielded pair mismatch at index ${entry.bip32AddressIndex}: ` +
+            `storage maps ${existing.base58} to ${existing.ctMappingAddress}, ` +
+            `injected list declares ${entry.spendBase58}.`
+        );
+      }
+    }
+    // saveAddress throws on duplicates — guard each half so re-injection on a
+    // wallet restart is a no-op, and so a partially stored pair still heals.
     if (!(await storage.isAddressMine(shieldedAddress.base58))) {
       await storage.saveAddress(shieldedAddress);
     }

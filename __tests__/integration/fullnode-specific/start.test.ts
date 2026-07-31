@@ -40,6 +40,7 @@ import {
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import {
+  mergePrecalculatedAddresses,
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
@@ -174,8 +175,10 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: walletData.addresses,
-      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        walletData.addresses,
+        walletData.shieldedAddresses
+      ),
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -217,7 +220,15 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
+      // Shielded pairs only, deliberately: injecting the legacy P2SH addresses
+      // too would make the assertion below read back what this config wrote,
+      // and a broken redeem script or P2SH derivation would still pass. The
+      // legacy chain is derived live from pubkeys/numSignatures; the shielded
+      // pairs are still injected, so the expensive half stays pre-calculated.
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        undefined,
+        getPrecalculatedShieldedForSeed(multisigWalletsData.words[0])
+      ),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
