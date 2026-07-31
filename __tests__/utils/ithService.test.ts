@@ -148,9 +148,16 @@ describe('ithService idempotency', () => {
     mockedAxios.request.mockRejectedValue(new Error('timeout of 45000ms exceeded'));
 
     await expect(ithService.fund('addr', 10n)).rejects.toThrow('timeout');
+
+    // Count only the funding calls: a failed fund also fires a best-effort
+    // GET /status diagnostic, which is a separate request and must not be
+    // mistaken for a retry.
+    const fundCalls = mockedAxios.request.mock.calls.filter(([cfg]) =>
+      String(cfg?.url).endsWith('/fund')
+    );
     // A timed-out fund may already have reserved a UTXO and broadcast; replaying
     // it would double-fund the address.
-    expect(mockedAxios.request).toHaveBeenCalledTimes(1);
+    expect(fundCalls).toHaveLength(1);
   });
 
   it('still honours a helper-declared retryable failure on POST /fund', async () => {
