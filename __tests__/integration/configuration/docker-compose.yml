@@ -240,7 +240,7 @@ services:
   # https://github.com/HathorNetwork/hathor-integration-test-helper
   wallet-provider:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_WALLET_PROVIDER_IMAGE:-hathornetwork/hathor-integration-test-helper:latest}
+      ${HATHOR_LIB_INTEGRATION_TESTS_WALLET_PROVIDER_IMAGE:-hathornetwork/hathor-integration-test-helper:0.0.2}
     ports:
       - "3020:3020"
     networks:
