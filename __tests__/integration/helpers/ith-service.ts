@@ -18,11 +18,9 @@
  */
 import axios, { type Method } from 'axios';
 import { loggers } from '../utils/logger.util';
+import { delay } from '../utils/time.util';
+import testConfig from '../configuration/test.config';
 import type { IPrecalculatedShieldedAddress, OutputValueType } from '../../../src/types';
-
-// test.config.ts is CommonJS.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const testConfig = require('../configuration/test.config');
 
 export interface SimpleWalletData {
   words: string;
@@ -34,9 +32,17 @@ export interface SimpleWalletData {
   shieldedAddresses?: IPrecalculatedShieldedAddress[];
 }
 
+/**
+ * Mirrors the helper's `POST /fund` response.
+ *
+ * `amount` is a `bigint` on the wire, serialised by the helper via
+ * `JSONBigInt.stringify`, so it is typed `string` here — `JSON.parse` would
+ * round it as a `number`. Nothing reads it today; the type exists so the first
+ * caller that does is not handed a silently-rounded value.
+ */
 export interface FundResult {
   txId: string;
-  amount: number;
+  amount: string;
   utxoSource: 'test' | 'leftover' | 'large';
 }
 
@@ -65,28 +71,59 @@ interface IthConfig {
 }
 
 function ithConfig(): IthConfig {
+  // No `??` fallbacks here: test.config validates and defaults every value, so a
+  // second layer would only hide a misconfiguration (and could not catch NaN
+  // anyway, since NaN is not nullish).
   return {
     baseUrl: testConfig.walletProviderUrl,
-    timeoutMs: testConfig.ithTimeoutMs ?? 15000,
-    maxRetries: testConfig.ithMaxRetries ?? 5,
-    retryBaseDelayMs: testConfig.ithRetryBaseDelayMs ?? 500,
+    timeoutMs: testConfig.ithTimeoutMs,
+    maxRetries: testConfig.ithMaxRetries,
+    retryBaseDelayMs: testConfig.ithRetryBaseDelayMs,
   };
 }
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => {
-    setTimeout(resolve, ms);
-  });
+/** Statuses worth retrying when the response carries no helper error contract. */
+const RETRYABLE_BARE_STATUSES = new Set([429, 502, 503, 504]);
+
+/** Keep a non-conforming body in the message — truncated, since it may be an HTML page. */
+function describeBody(data: unknown): string {
+  try {
+    const asText = typeof data === 'string' ? data : JSON.stringify(data);
+    if (!asText) {
+      return '';
+    }
+    return ` — body: ${asText.length > 300 ? `${asText.slice(0, 300)}…` : asText}`;
+  } catch {
+    return '';
+  }
+}
+
+interface RequestOptions {
+  /**
+   * Whether replaying this request is harmless. `false` confines retries to
+   * failures the helper *declared* retryable — every such code is raised before,
+   * or together with, a released reservation and no accepted broadcast. Blind
+   * transport retries (a timeout may mean the request succeeded and the response
+   * was lost) are allowed only for idempotent calls.
+   */
+  idempotent: boolean;
+}
 
 /**
  * Perform an HTTP request against the helper with timeout + retry.
- * Retries on transport errors and on the helper's `retryable:true` responses,
- * with exponential backoff; surfaces everything else as an {@link IthServiceError}.
+ *
+ * Retries on the helper's `retryable:true` responses always, and on transport
+ * errors only when the call is idempotent; backs off exponentially and surfaces
+ * everything else as an {@link IthServiceError}.
  */
-async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+async function request<T>(
+  method: Method,
+  path: string,
+  options: RequestOptions,
+  body?: unknown
+): Promise<T> {
   const { baseUrl, timeoutMs, maxRetries, retryBaseDelayMs } = ithConfig();
   const url = `${baseUrl}${path}`;
-  let lastError: IthServiceError | undefined;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let err: IthServiceError;
@@ -105,15 +142,27 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
 
       // Helper error body: { error, message, retryable }
       const errorBody = res.data as { error?: string; message?: string; retryable?: boolean };
+      const conforms = typeof errorBody?.error === 'string' && 'retryable' in (errorBody ?? {});
       err = new IthServiceError(
-        errorBody?.message ?? `Request to ${path} failed with HTTP ${res.status}`,
-        errorBody?.error ?? 'UNKNOWN',
-        Boolean(errorBody?.retryable),
+        conforms
+          ? errorBody.message ?? `Request to ${path} failed with HTTP ${res.status}`
+          : `Request to ${path} failed with HTTP ${res.status}${describeBody(res.data)}`,
+        conforms ? errorBody.error! : 'UNKNOWN',
+        // A body that doesn't match the contract carries no verdict, so fall back
+        // to the status. This is where an operator most needs the raw body, hence
+        // describeBody above.
+        conforms ? Boolean(errorBody.retryable) : RETRYABLE_BARE_STATUSES.has(res.status),
         res.status
       );
     } catch (transportError) {
-      // Timeout / connection refused / DNS — treat as retryable transport failure.
-      err = new IthServiceError((transportError as Error).message, 'TRANSPORT', true, 0);
+      // Timeout / connection refused / DNS. Retryable only for idempotent calls:
+      // a timed-out POST /fund may already have reserved a UTXO and broadcast.
+      err = new IthServiceError(
+        (transportError as Error).message,
+        'TRANSPORT',
+        options.idempotent,
+        0
+      );
     }
 
     if (!err.retryable || attempt === maxRetries) {
@@ -124,37 +173,64 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
     }
 
     const backoff = retryBaseDelayMs * 2 ** attempt;
-    loggers.test?.info(
+    loggers.test?.warn(
       `ithService ${method} ${path} retryable ${err.code}; retry ${attempt + 1}/${maxRetries} in ${backoff}ms`
     );
-    lastError = err;
-    await sleep(backoff);
+    await delay(backoff);
   }
 
-  // Unreachable (loop either returns or throws), but satisfies the type checker.
-  throw lastError;
+  // Unreachable: the loop returns, or throws on its final attempt.
+  throw new Error(`ithService ${method} ${path}: retry loop exited without a result`);
 }
 
 export const ithService = {
-  /** GET /simpleWallet — a fresh precalculated wallet. */
+  /**
+   * GET /simpleWallet — a fresh precalculated wallet.
+   *
+   * Idempotent: repeating it only costs the helper one wallet from its supply.
+   */
   async getSimpleWallet(): Promise<SimpleWalletData> {
-    const data = await request<SimpleWalletData>('get', '/simpleWallet');
+    const data = await request<SimpleWalletData>('get', '/simpleWallet', { idempotent: true });
     if (!data?.words || !Array.isArray(data?.addresses)) {
-      throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
+      throw new IthServiceError(
+        `GET /simpleWallet returned an unexpected shape${describeBody(data)}`,
+        'MALFORMED_RESPONSE',
+        false,
+        200
+      );
     }
     return data;
   },
 
   /**
    * POST /fund — reserve a pool UTXO and send `amount` to `address`.
+   *
    * bigint amounts are sent as digit-strings (the helper parses them beyond the
    * JS safe-integer range).
+   *
+   * NOT idempotent, and there is no idempotency key in the wire contract: each
+   * accepted call reserves a UTXO and broadcasts. A blindly retried timeout
+   * would double-fund the address and make every downstream balance assertion
+   * nondeterministic, so transport failures are not replayed here — only
+   * failures the helper itself declared retryable.
    */
   async fund(address: string, amount?: OutputValueType): Promise<FundResult> {
-    const payload: { address: string; amount?: number | string } = { address };
-    if (amount !== undefined && amount !== null) {
-      payload.amount = typeof amount === 'bigint' ? amount.toString() : Number(amount);
+    const payload: { address: string; amount?: string } = { address };
+    if (amount !== undefined) {
+      payload.amount = amount.toString();
     }
-    return request<FundResult>('post', '/fund', payload);
+    const result = await request<FundResult>('post', '/fund', { idempotent: false }, payload);
+    // A 2xx is not proof of a usable body: a proxy error page or a renamed field
+    // would otherwise reach waitForTxReceived as `undefined` and hang for the
+    // full timeout with nothing pointing back at funding.
+    if (!result?.txId) {
+      throw new IthServiceError(
+        `POST /fund returned no txId${describeBody(result)}`,
+        'MALFORMED_RESPONSE',
+        false,
+        200
+      );
+    }
+    return result;
   },
 };
