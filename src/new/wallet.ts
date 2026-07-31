@@ -628,6 +628,17 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Whether a pin still has to be supplied in order to sign.
+   *
+   * The pin is only used to decrypt the local private key. When an external
+   * tx-signing method is registered (e.g. a hardware or passkey signer),
+   * signatures are produced without it, so the pin is optional in that case.
+   */
+  pinIsRequired(pin: string | null | undefined): boolean {
+    return !pin && !this.storage.hasTxSignatureMethod();
+  }
+
+  /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
@@ -1929,7 +1940,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
@@ -2207,10 +2218,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    // The pin is only used to decrypt the local key for signing. When an external tx-signing
-    // method is registered (e.g. a passkey signer), signing does not use it, so it is optional
-    // — mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2411,7 +2419,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2527,7 +2535,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2631,7 +2639,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { createAnother: true, pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { createAnother } = newOptions;
@@ -2747,7 +2755,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs: IUtxo[];
@@ -3174,7 +3182,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const signatures = await this.storage.getTxSignatures(tx, pin ?? '');
@@ -3208,10 +3216,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('signTx');
     }
     const pinCode = options.pinCode ?? this.pinCode;
-    // The pin is only used to decrypt the local private key. When an external tx-signing
-    // method is registered (e.g. a hardware or passkey signer), signatures are produced
-    // without it, so the pin is optional in that case.
-    if (!pinCode && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pinCode)) {
       throw new Error('Pin code is required to sign a transaction');
     }
 
@@ -3539,6 +3544,8 @@ class HathorWallet extends EventEmitter {
     data: FullnodeCreateNanoTxData,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
@@ -3546,7 +3553,7 @@ class HathorWallet extends EventEmitter {
     const pin = newOptions.pinCode || this.pinCode;
 
     // Only require PIN if we're actually signing
-    if (newOptions.signTx !== false && !pin && !this.storage.hasTxSignatureMethod()) {
+    if (newOptions.signTx !== false && this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3640,9 +3647,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    // Optional when an external tx-signing method is registered (e.g. a passkey signer) —
-    // mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3883,7 +3888,7 @@ class HathorWallet extends EventEmitter {
     const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
       const pin = newOptions.pinCode || this.pinCode;
-      if (!pin && !this.storage.hasTxSignatureMethod()) {
+      if (this.pinIsRequired(pin)) {
         throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
       }
       await transactionUtils.signTransaction(tx, this.storage, pin ?? '');
@@ -3937,12 +3942,14 @@ class HathorWallet extends EventEmitter {
     address: string,
     options: CreateOnChainBlueprintTxOptions = {}
   ): Promise<SendTransaction> {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 

@@ -17,7 +17,11 @@
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import HathorWallet from '../../../src/new/wallet';
 import transactionUtils from '../../../src/utils/transaction';
-import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
+import {
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+  NATIVE_TOKEN_UID,
+  P2PKH_ACCT_PATH,
+} from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
 import { AuthorityType, TokenVersion } from '../../../src/types';
@@ -410,7 +414,7 @@ describe('[Fullnode-specific] start', () => {
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
-  it('should send, mint, melt, delegate and destroy with an external signer and no pin', async () => {
+  it('should send, mint, melt, delegate, destroy and call a nano contract with an external signer and no pin', async () => {
     // The companion test above covers createNewToken. This walks the rest of the entry points
     // whose pin guard is relaxed for an external signer, on one xpub-only wallet with NO pin.
     // Each is asserted on-chain rather than on the absence of an error: a relaxed guard that
@@ -464,8 +468,24 @@ describe('[Fullnode-specific] start', () => {
     const destroyTx = await hWallet.destroyAuthority(tokenUid, AuthorityType.MINT, 1);
     await waitForTxReceived(hWallet, destroyTx!.hash!);
 
+    // A nano call too: it signs through prepareNanoSendTransaction rather than
+    // prepareTransaction, and produces a caller signature on the nano header —
+    // a path no other test here reaches, so a pin requirement reintroduced
+    // below the relaxed guards would otherwise go unnoticed.
+    const ncTx = await hWallet.createAndSendNanoContractTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      await hWallet.getAddressAtIndex(0),
+      {
+        blueprintId: global.FEE_BLUEPRINT_ID,
+        args: [],
+        actions: [{ type: 'deposit', token: NATIVE_TOKEN_UID, amount: 10n }],
+      }
+    );
+    await waitForTxReceived(hWallet, ncTx.hash!);
+    expect(ncTx.getNanoHeaders()[0].script.length).toBeGreaterThan(0);
+
     // Every signed tx carries real input data; the fullnode accepted all of them.
-    for (const tx of [sendTx, mintTx, meltTx, delegateTx, destroyTx]) {
+    for (const tx of [sendTx, mintTx, meltTx, delegateTx, destroyTx, ncTx]) {
       expect(tx!.inputs.length).toBeGreaterThan(0);
       for (const input of tx!.inputs) {
         expect(input.data).not.toBeNull();

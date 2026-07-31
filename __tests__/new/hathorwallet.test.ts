@@ -15,6 +15,7 @@ import {
 } from '../../src/errors';
 import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
+import transactionUtils from '../../src/utils/transaction';
 import Input from '../../src/models/input';
 import {
   DEFAULT_TX_VERSION,
@@ -1621,7 +1622,7 @@ describe('prepare transactions without signature', () => {
     // — is exercised. The build then gets as far as validating the caller address, which this
     // minimal mock storage does not own; pinning that exact failure is what keeps the test
     // honest, since asserting merely "some error that isn't the two guard errors" would pass on
-    // any unrelated breakage. End-to-end signing for the relaxed entry points is covered by the
+    // any unrelated breakage. Signing itself is exercised end to end by the nano case in the
     // external-signer integration tests.
     const err = await hWallet
       .createNanoContractTransaction('noop', fakeAddress.base58, {
@@ -1673,6 +1674,92 @@ describe('prepare transactions without signature', () => {
       .catch(e => e);
     expect(err).toBeInstanceOf(NanoContractTransactionError);
     expect(err.message).toContain('does not belong to the wallet');
+  });
+
+  test('createOnChainBlueprintTransaction still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    // Not readonly, so the xpub guard passes and the pin guard is what fires.
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(
+      hWallet.createOnChainBlueprintTransaction('0123abcd', fakeAddress.base58)
+    ).rejects.toThrow('Pin is required.');
+  });
+
+  test('getSignatures does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    const externalSigner = jest.fn(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+    hWallet.setExternalTxSigningMethod(externalSigner);
+
+    // Public API returning signature material, so the external-signer path is
+    // worth pinning: it must reach the signer, and hand it '' rather than a null.
+    const tx = new Transaction([], []);
+    await expect(hWallet.getSignatures(tx)).resolves.toEqual([]);
+    expect(externalSigner).toHaveBeenCalledTimes(1);
+    expect(externalSigner.mock.calls[0][2]).toBe('');
+  });
+
+  test('getSignatures still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+
+    await expect(hWallet.getSignatures(new Transaction([], []))).rejects.toThrow(
+      'Pin is required.'
+    );
+  });
+
+  test('buildTxTemplate does not require a pin with an external tx-signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: true,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    hWallet.setExternalTxSigningMethod(async () => ({
+      inputSignatures: [],
+      ncCallerSignature: null,
+    }));
+
+    const builtTx = new Transaction([], []);
+    hWallet.txTemplateInterpreter = { build: jest.fn().mockResolvedValue(builtTx) };
+    jest.spyOn(builtTx, 'prepareToSend').mockImplementation(() => {});
+    jest.spyOn(transactionUtils, 'getWeightConstantsFromStorage').mockReturnValue({});
+    const signSpy = jest.spyOn(transactionUtils, 'signTransaction').mockResolvedValue(builtTx);
+
+    // signTx must be requested for the guard to be reached at all.
+    await expect(hWallet.buildTxTemplate([], { signTx: true })).resolves.toBe(builtTx);
+    // Reaching the signer with '' is the whole point of the relaxation.
+    expect(signSpy).toHaveBeenCalledWith(builtTx, hWallet.storage, '');
+
+    signSpy.mockRestore();
+  });
+
+  test('buildTxTemplate still requires a pin without an external signing method', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    hWallet.txTemplateInterpreter = { build: jest.fn().mockResolvedValue(new Transaction([], [])) };
+
+    await expect(hWallet.buildTxTemplate([], { signTx: true })).rejects.toThrow('Pin is required.');
   });
 
   test('prepareMintTokensData', async () => {
