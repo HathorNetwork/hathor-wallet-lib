@@ -19,7 +19,7 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import { SendTxError, WalletError } from '../errors';
 import Address from '../models/address';
-import { getAddressType } from '../utils/address';
+import { getAddressType, resolveOutputScriptAddress } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { Fee } from '../utils/fee';
 import Transaction from '../models/transaction';
@@ -56,6 +56,7 @@ import {
   SplitFallback,
   buildTokenOutputProfiles,
   computeTokenPolicy,
+  decideChangeMode,
   hasShieldedUtxo,
   makeShieldedAwareSelection,
   needsAvailabilityProbe,
@@ -118,6 +119,8 @@ export interface ISendShieldedOutput {
  */
 export interface IResolvedShieldedOutputDef extends ShieldedOutputProposal {
   shieldedAddress?: string;
+  /** True for defs the wallet created as change (never for recipient outputs). */
+  isChange?: boolean;
 }
 
 export function isShieldedOutput(output: ISendOutput): output is ISendShieldedOutput {
@@ -333,18 +336,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // chooseInputs should be true if no inputs are given
         tokenMap.set(output.token, true);
 
-        // getAddressType throws for a 71-byte shielded address: it has no
-        // transparent output script form, so it must fail loudly here rather
-        // than be silently rewritten to its spend-derived P2PKH. To pay a
-        // shielded address, callers pass a shielded output definition
-        // (shieldedMode), which is handled by the isShieldedOutput branch above.
+        // The new address format serves both shielded and transparent
+        // outputs: a plain transparent output aimed at a 71-byte address is
+        // paid to its embedded spend-derived P2PKH. Legacy addresses pass
+        // through unchanged.
+        const transparentAddress = resolveOutputScriptAddress(output.address, network);
         txData.outputs.push({
-          address: output.address,
+          address: transparentAddress,
           value: output.value,
           timelock: output.timelock ? output.timelock : null,
           authorities: 0n,
           token: output.token,
-          type: getAddressType(output.address, network),
+          type: getAddressType(transparentAddress, network),
         });
       }
     }
@@ -453,14 +456,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // and we don't want to select inputs for HTR before that
     tokenMap.delete(HTR_UID);
 
-    // Whether the caller requested any shielded outputs of their own. Gates
-    // every change-shielding conversion below: `changeShieldedMode` only
-    // matters when the tx is already private — on a purely transparent send
-    // shielding the change adds no privacy and would risk a lone shielded
-    // output (violates the >= 2 rule). Captured before any conversion grows
-    // `shieldedOutputDefs`.
-    const hasExplicitShieldedOutputs = shieldedOutputDefs.length > 0;
-
     // ── Automatic selection rules ─────────────────────────────────────────
     // Analyze each token's outputs and decide its input-pool policy, whether a
     // shielded input must be forced, and whether a lone shielded output has to
@@ -501,6 +496,29 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
     }
 
+    // ── changeAddress under the address model ────────────────────────────
+    // Legacy addresses are transparent-only; the new 71-byte format serves
+    // both shielded and transparent outputs. A legacy changeAddress on a tx
+    // that carries shielded outputs (or an explicit shielded change mode) can
+    // never honor the change rules — fail rather than silently downgrade.
+    const changeAddressIsNewFormat = this.changeAddress
+      ? new Address(this.changeAddress, { network }).isShielded()
+      : false;
+    if (
+      this.changeAddress &&
+      !changeAddressIsNewFormat &&
+      (shieldedOutputDefs.length > 0 ||
+        changeModeOverride === ShieldedOutputMode.AMOUNT_SHIELDED ||
+        changeModeOverride === ShieldedOutputMode.FULLY_SHIELDED)
+    ) {
+      throw new SendTxError(
+        'A legacy change address cannot be used on a transaction with shielded outputs ' +
+          'or a shielded change mode — use a new-format (shielded-capable) address.'
+      );
+    }
+    // A new-format changeAddress hosts the shielded change itself.
+    const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
+
     const partialTxData = await prepareSendManyTokensData(
       this.storage,
       txData,
@@ -515,52 +533,75 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
     );
 
-    // Custom-token change: when the caller opted into shielded change and this
-    // tx already carries explicit shielded outputs, rewrite each custom-token
-    // change output as a shielded output. The fee is always HTR (a different
+    // Custom-token change: the rules decide, per token, whether the change is
+    // shielded — shielded when that token's inputs include a shielded one or
+    // all its outputs are shielded, transparent otherwise, with an explicit
+    // changeShieldedMode always winning. The fee is always HTR (a different
     // token), so the FULL change value carries over — nothing is subtracted
     // here. Done before Fee.calculate (so the converted output is charged the
     // per-output shielded fee, not the transparent per-output fee) and before
     // the HTR pass (so its selection funds the resulting larger total fee).
     // HTR change is handled separately, after selection, by
     // convertHtrChangeIfRequested.
-    // 'transparent' narrows to null here: both mean "no shielded conversion"
-    // until the automatic rules land (the explicit value exists so callers can
-    // pin today's behavior through that transition).
-    const changeMode = this.changeShieldedMode === 'transparent' ? null : this.changeShieldedMode;
     const changeWallet = this.wallet;
-    if (changeMode && changeWallet && hasExplicitShieldedOutputs) {
+    {
       const keptOutputs: IDataOutput[] = [];
       for (const out of partialTxData.outputs) {
         const withToken = out as IDataOutputWithToken;
-        if (withToken.token !== HTR_UID && out.isChange === true) {
-          if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
-            throw new SendTxError(
-              `Cannot shield custom-token change: the transaction already has the ` +
-                `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
-            );
-          }
-          const { address: shieldedAddress } = await changeWallet.getCurrentAddress(
+        if (withToken.token === HTR_UID || out.isChange !== true) {
+          keptOutputs.push(out);
+          continue;
+        }
+        const tokenChangeMode = decideChangeMode({
+          profile: outputProfiles.get(withToken.token),
+          report:
+            selectionReports.get(withToken.token) ??
+            userInputSummaries.get(withToken.token) ??
+            null,
+          override: changeModeOverride,
+        });
+        if (tokenChangeMode === 'transparent') {
+          keptOutputs.push(out);
+          continue;
+        }
+        if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+          throw new SendTxError(
+            `Cannot shield custom-token change: the transaction already has the ` +
+              `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
+          );
+        }
+        // The change destination: an explicit new-format changeAddress, else
+        // the wallet's own shielded address. A rules-shielded change with
+        // neither available is a hard error — never a silent transparent
+        // downgrade.
+        let shieldedAddress: string;
+        if (shieldedChangeAddress) {
+          shieldedAddress = shieldedChangeAddress;
+        } else if (changeWallet) {
+          ({ address: shieldedAddress } = await changeWallet.getCurrentAddress(
             {},
             { legacy: false }
-          );
-          const addressObj = new Address(shieldedAddress, { network });
-          if (!addressObj.isShielded()) {
-            throw new SendTxError(
-              'Wallet did not return a shielded address for custom-token change conversion.'
-            );
-          }
-          shieldedOutputDefs.push({
-            address: addressObj.getSpendAddress().base58,
-            value: withToken.value,
-            token: withToken.token,
-            scanPubkey: addressObj.getScanPubkey().toString('hex'),
-            shieldedMode: changeMode,
-            shieldedAddress,
-          });
+          ));
         } else {
-          keptOutputs.push(out);
+          throw new SendTxError(
+            'A shielded change is required but no wallet is available to derive its address.'
+          );
         }
+        const addressObj = new Address(shieldedAddress, { network });
+        if (!addressObj.isShielded()) {
+          throw new SendTxError(
+            'Wallet did not return a shielded address for custom-token change conversion.'
+          );
+        }
+        shieldedOutputDefs.push({
+          address: addressObj.getSpendAddress().base58,
+          value: withToken.value,
+          token: withToken.token,
+          scanPubkey: addressObj.getScanPubkey().toString('hex'),
+          shieldedMode: tokenChangeMode,
+          shieldedAddress,
+          isChange: true,
+        });
       }
       partialTxData.outputs = keptOutputs;
     }
@@ -649,17 +690,23 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       totalFee
     );
 
-    // If the caller opted in to shielded HTR change, rewrite the
-    // transparent change emitted above as a shielded HTR output. The
-    // helper mutates both `partialHtrTxData.outputs` (removing the
-    // transparent change) and `shieldedOutputDefs` (appending the
-    // shielded replacement), and returns the extra shielded-output
-    // fee we now owe — funded by reducing the change by the same
-    // amount, so inputs already picked are still sufficient.
+    // The HTR change mode follows the same rules: shielded when shielded HTR
+    // inputs were spent (mirroring them) or all HTR outputs are shielded,
+    // transparent otherwise, with the explicit override winning. The helper
+    // mutates both `partialHtrTxData.outputs` (removing the transparent
+    // change) and `shieldedOutputDefs` (appending the shielded replacement),
+    // and returns the extra shielded-output fee we now owe — funded by
+    // reducing the change by the same amount, so inputs already picked are
+    // still sufficient.
+    const htrChangeMode = decideChangeMode({
+      profile: outputProfiles.get(HTR_UID),
+      report: selectionReports.get(HTR_UID) ?? userInputSummaries.get(HTR_UID) ?? null,
+      override: changeModeOverride,
+    });
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,
-      changeMode,
+      htrChangeMode === 'transparent' ? null : htrChangeMode,
       this.wallet,
       network,
       this.storage,
@@ -667,14 +714,147 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // Only pull extra HTR to fund the shielded-change fee when the wallet is
       // already auto-selecting HTR; if the caller supplied the HTR inputs,
       // convertHtrChangeIfRequested throws rather than choosing more.
-      shouldChooseHTRInputs
+      shouldChooseHTRInputs,
+      htrPolicy.preference,
+      shieldedChangeAddress
     );
     totalFee += addedFee;
 
-    // FeeHeader is pushed AFTER the conversion so it carries the final
-    // total. The header gates on `totalFee > 0`; that's still
-    // monotonically increasing through the conversion (addedFee >= 0n)
-    // so the gate's outcome can't flip from true to false.
+    // ── Structural minimum: never emit a lone shielded output ─────────────
+    // A single shielded output carries a random blinding factor and can never
+    // satisfy the node's balance equation, so a tx ending with exactly one —
+    // whatever produced it — is resolved by splitting it into two halves. The
+    // second output's fee is funded without ever touching a recipient's value:
+    // shave the lone def when it is itself the HTR change, else shave the
+    // transparent HTR change, else pull extra HTR.
+    if (shieldedOutputDefs.length === 1) {
+      const lone = shieldedOutputDefs[0];
+      const extraFee =
+        lone.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED
+          ? FEE_PER_FULL_SHIELDED_OUTPUT
+          : FEE_PER_AMOUNT_SHIELDED_OUTPUT;
+      const usedUtxos = new Set<string>();
+      for (const inp of [...partialInputs, ...partialHtrTxData.inputs]) {
+        usedUtxos.add(`${inp.txId}:${inp.index}`);
+      }
+
+      if (lone.isChange && lone.token === HTR_UID) {
+        // The lone def is the shielded HTR change: fund the split's fee from
+        // itself, pulling extra HTR only if the shave would make a half
+        // impossible (each half must be at least 1n).
+        const deficit = extraFee + 2n - lone.value;
+        if (deficit > 0n) {
+          if (!shouldChooseHTRInputs) {
+            throw new SendTxError(
+              'The shielded HTR change is too small to split into the two shielded outputs ' +
+                'the protocol requires, and HTR inputs were user-supplied so no additional ' +
+                'HTR can be selected.'
+            );
+          }
+          const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
+            this.storage,
+            usedUtxos,
+            htrPolicy.preference,
+            sum => sum >= deficit
+          );
+          if (pulledSum < deficit) {
+            throw new SendTxError(
+              'The shielded HTR change is too small to split into the two shielded outputs ' +
+                'the protocol requires, and no additional HTR is available.'
+            );
+          }
+          partialHtrTxData.inputs.push(...pulledInputs);
+          lone.value += pulledSum;
+        }
+        lone.value -= extraFee;
+      } else {
+        const htrChangeIdx = partialHtrTxData.outputs.findIndex(o => {
+          const withToken = o as IDataOutputWithToken;
+          return withToken.token === HTR_UID && withToken.isChange === true;
+        });
+        if (htrChangeIdx !== -1) {
+          const htrChange = partialHtrTxData.outputs[htrChangeIdx];
+          if (htrChange.value > extraFee) {
+            htrChange.value -= extraFee;
+          } else if (htrChange.value === extraFee) {
+            partialHtrTxData.outputs.splice(htrChangeIdx, 1);
+          } else {
+            if (!shouldChooseHTRInputs) {
+              throw new SendTxError(
+                'The HTR change cannot fund the shielded-output split the protocol requires, ' +
+                  'and HTR inputs were user-supplied so no additional HTR can be selected.'
+              );
+            }
+            const deficit = extraFee - htrChange.value;
+            const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
+              this.storage,
+              usedUtxos,
+              htrPolicy.preference,
+              sum => sum >= deficit
+            );
+            if (pulledSum < deficit) {
+              throw new SendTxError(
+                'The HTR change cannot fund the shielded-output split the protocol requires, ' +
+                  'and no additional HTR is available.'
+              );
+            }
+            partialHtrTxData.inputs.push(...pulledInputs);
+            const surplus = pulledSum - deficit;
+            if (surplus > 0n) {
+              htrChange.value = surplus;
+            } else {
+              partialHtrTxData.outputs.splice(htrChangeIdx, 1);
+            }
+          }
+        } else {
+          if (!shouldChooseHTRInputs) {
+            throw new SendTxError(
+              'Splitting the lone shielded output requires extra HTR for its fee, and HTR ' +
+                'inputs were user-supplied so no additional HTR can be selected.'
+            );
+          }
+          const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
+            this.storage,
+            usedUtxos,
+            htrPolicy.preference,
+            sum => sum >= extraFee
+          );
+          if (pulledSum < extraFee) {
+            throw new SendTxError(
+              'Splitting the lone shielded output requires extra HTR for its fee, and no ' +
+                'additional HTR is available.'
+            );
+          }
+          partialHtrTxData.inputs.push(...pulledInputs);
+          const surplus = pulledSum - extraFee;
+          if (surplus > 0n) {
+            // The pull preference is public-first, so a transparent surplus
+            // change is the expected shape here; a shielded surplus would need
+            // the shielded pool to be the only HTR left, in which case the HTR
+            // selection above already produced a shielded change def and this
+            // branch (no HTR change anywhere) is not reachable.
+            partialHtrTxData.outputs.push({
+              type: await getOutputTypeFromWallet(this.storage),
+              token: HTR_UID,
+              value: surplus,
+              address: await this.storage.getChangeAddress({
+                changeAddress: this.changeAddress ?? undefined,
+              }),
+              authorities: 0n,
+              timelock: null,
+              isChange: true,
+            });
+          }
+        }
+      }
+      totalFee += extraFee;
+      splitShieldedDef(shieldedOutputDefs, 0);
+    }
+
+    // FeeHeader is pushed AFTER the conversion and the structural pass so it
+    // carries the final total. The header gates on `totalFee > 0`; that's
+    // still monotonically increasing through both (added fees >= 0n) so the
+    // gate's outcome can't flip from true to false.
     const headers: Header[] = [];
     if (totalFee > 0n) {
       headers.push(new FeeHeader([{ tokenIndex: 0, amount: totalFee }]));
@@ -1404,6 +1584,46 @@ export async function prepareSendTokensData(
 }
 
 /**
+ * Pull additional HTR UTXOs (excluding already-used ones) until the pulled sum
+ * satisfies `isEnough`. Pool-aware: the preferred pool first, the other as a
+ * fallback. Ascending value inside each pool — the pulled value flows into a
+ * change output, so pulling smallest-first moves the least extra HTR around.
+ */
+async function pullExtraHtrUtxos(
+  storage: IStorage,
+  usedUtxos: Set<string>,
+  preference: 'shielded' | 'public',
+  isEnough: (pulledSum: bigint) => boolean
+): Promise<{ pulledInputs: IDataInput[]; pulledSum: bigint }> {
+  const pulledInputs: IDataInput[] = [];
+  let pulledSum = 0n;
+  const passes: boolean[] = preference === 'shielded' ? [true, false] : [false, true];
+  for (const shieldedPass of passes) {
+    if (isEnough(pulledSum)) {
+      break;
+    }
+    const selectOptions: IUtxoFilterOptions = {
+      token: NATIVE_TOKEN_UID,
+      authorities: 0n,
+      only_available_utxos: true,
+      order_by_value: 'asc',
+      shielded: shieldedPass,
+      filter_method: (utxo: IUtxo) => !usedUtxos.has(`${utxo.txId}:${utxo.index}`),
+    };
+    // eslint-disable-next-line no-await-in-loop -- sequential pool passes
+    for await (const utxo of storage.selectUtxos(selectOptions)) {
+      pulledInputs.push(helpers.getDataInputFromUtxo(utxo));
+      usedUtxos.add(`${utxo.txId}:${utxo.index}`);
+      pulledSum += utxo.value;
+      if (isEnough(pulledSum)) {
+        break;
+      }
+    }
+  }
+  return { pulledInputs, pulledSum };
+}
+
+/**
  * If `mode` is set and `prepareSendTokensData` emitted a transparent
  * HTR change output, rewrite that change as a shielded HTR output in
  * `shieldedOutputDefs`. Mutates both `partialHtrTxData.outputs` (to
@@ -1422,16 +1642,17 @@ export async function prepareSendTokensData(
  * available to clear the threshold, we throw rather than downgrade.
  *
  * No-ops in any of these cases:
- *   - `mode` is null/undefined (caller did not opt in).
- *   - `wallet` is null (no shielded address derivation available).
- *   - `shieldedOutputDefs` is empty (a pure-transparent tx has no
- *     shielded fee context; converting the change here would silently
- *     break the `>= 2 shielded outputs` invariant downstream).
+ *   - `mode` is null/undefined (the rules decided on a transparent change).
  *   - No HTR change output exists in `partialHtrTxData.outputs` (the
  *     selected HTR UTXO covered the fee exactly).
  *
+ * A shielded change on a transaction with no other shielded output is legal
+ * here: the structural pass downstream splits a lone shielded output into two
+ * halves, restoring the protocol minimum.
+ *
  * @throws SendTxError when the change is too small to fund its shielded
- *   fee and no additional HTR UTXO is available to cover the difference.
+ *   fee and no additional HTR UTXO is available to cover the difference, or
+ *   when a shielded change is required with no address source for it.
  */
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
@@ -1441,11 +1662,11 @@ export async function convertHtrChangeIfRequested(
   network: ReturnType<IStorage['config']['getNetwork']>,
   storage: IStorage,
   existingInputs: IDataInput[] = [],
-  canSelectMoreHtr: boolean = true
+  canSelectMoreHtr: boolean = true,
+  pullPreference: 'shielded' | 'public' = 'public',
+  shieldedChangeAddress: string | null = null
 ): Promise<{ addedFee: bigint }> {
   if (!mode) return { addedFee: 0n };
-  if (!wallet) return { addedFee: 0n };
-  if (shieldedOutputDefs.length === 0) return { addedFee: 0n };
 
   const additionalFee =
     mode === ShieldedOutputMode.FULLY_SHIELDED
@@ -1499,29 +1720,16 @@ export async function convertHtrChangeIfRequested(
 
     // We need the pulled sum to strictly exceed the deficit so that
     // (changeValue + pulled) > additionalFee, leaving a positive shielded
-    // value after subtracting the fee.
+    // value after subtracting the fee. Smallest-first, honoring the HTR
+    // pool preference — 'desc' would sweep the largest UTXO into the shielded
+    // change, silently shielding most of the wallet's HTR balance.
     const deficit = additionalFee - changeValue;
-    const pulledInputs: IDataInput[] = [];
-    let pulledSum = 0n;
-    // Ascending value: the whole pulled sum flows into the shielded change
-    // (changeValue += pulledSum), so pulling smallest-first — and stopping as
-    // soon as pulledSum > deficit (a tiny value, <= FEE_PER_FULL_SHIELDED_OUTPUT)
-    // — shields the least extra HTR. 'desc' would sweep the largest UTXO into
-    // the shielded change, silently shielding most of the wallet's HTR balance.
-    const selectOptions: IUtxoFilterOptions = {
-      token: HTR_UID,
-      authorities: 0n,
-      only_available_utxos: true,
-      order_by_value: 'asc',
-      filter_method: (utxo: IUtxo) => !usedUtxos.has(`${utxo.txId}:${utxo.index}`),
-    };
-    for await (const utxo of storage.selectUtxos(selectOptions)) {
-      pulledInputs.push(helpers.getDataInputFromUtxo(utxo));
-      pulledSum += utxo.value;
-      if (pulledSum > deficit) {
-        break;
-      }
-    }
+    const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
+      storage,
+      usedUtxos,
+      pullPreference,
+      sum => sum > deficit
+    );
 
     if (pulledSum <= deficit) {
       // Deliberate hard failure, NOT a silent transparent downgrade: the caller
@@ -1540,7 +1748,16 @@ export async function convertHtrChangeIfRequested(
     changeValue += pulledSum;
   }
 
-  const { address: shieldedAddress } = await wallet.getCurrentAddress({}, { legacy: false });
+  let shieldedAddress: string;
+  if (shieldedChangeAddress) {
+    shieldedAddress = shieldedChangeAddress;
+  } else if (wallet) {
+    ({ address: shieldedAddress } = await wallet.getCurrentAddress({}, { legacy: false }));
+  } else {
+    throw new SendTxError(
+      'A shielded HTR change is required but no wallet is available to derive its address.'
+    );
+  }
   const addressObj = new Address(shieldedAddress, { network });
   if (!addressObj.isShielded()) {
     throw new SendTxError('Wallet did not return a shielded address for HTR change conversion.');
@@ -1559,6 +1776,7 @@ export async function convertHtrChangeIfRequested(
     scanPubkey: addressObj.getScanPubkey().toString('hex'),
     shieldedMode: mode,
     shieldedAddress,
+    isChange: true,
   });
 
   return { addedFee: additionalFee };

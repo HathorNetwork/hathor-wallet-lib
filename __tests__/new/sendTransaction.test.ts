@@ -41,18 +41,32 @@ import transaction from '../../src/utils/transaction';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
-test('prepareTxData rejects a shielded address in a transparent output', async () => {
+test('prepareTxData pays a transparent output at a new-format address via its spend P2PKH', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork('testnet');
 
   // Genuine curve points (encode/extract validate on-curve membership).
   const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x09), 'testnet');
+  const network = new Network('testnet');
   const shieldedAddress = encodeShieldedAddress(
     root.deriveChild("m/0'/0").publicKey.toBuffer(),
     root.deriveChild("m/1'/0").publicKey.toBuffer(),
-    new Network('testnet')
+    network
   );
+
+  async function* selectUtxoMock() {
+    yield {
+      txId: 'htr-tx',
+      index: 0,
+      value: 10n,
+      token: NATIVE_TOKEN_UID,
+      address: 'htr-addr',
+      authorities: 0n,
+    };
+  }
+  jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.P2PKH);
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock as never);
 
   const sendTransaction = new SendTransaction({
     storage,
@@ -66,12 +80,14 @@ test('prepareTxData rejects a shielded address in a transparent output', async (
     ],
   });
 
-  // The transparent pipeline must fail loudly BEFORE any utxo selection:
-  // shielded routing only lands in PR 6, and a 71-byte address has no
-  // transparent output script form.
-  await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-    /Shielded addresses cannot be used directly as output script type/
-  );
+  const result = await sendTransaction.prepareTxData();
+
+  // The new address format serves transparent outputs too: the output is paid
+  // to the address's embedded spend-derived P2PKH.
+  const expected = new Address(shieldedAddress, { network }).getSpendAddress().base58;
+  expect(result.outputs).toHaveLength(1);
+  expect(result.outputs[0].address).toBe(expected);
+  expect(result.shieldedOutputs).toBeUndefined();
 });
 
 test('prepareTxData rejects a shieldedMode output with a non-shielded address', async () => {
@@ -159,8 +175,16 @@ test('prepareTxData resolves 71-byte shielded addresses internally', async () =>
   jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'));
   jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
 
+  // All HTR outputs are shielded, so the rules shield the HTR change too —
+  // which needs a wallet to derive the change address from.
+  const wallet = {
+    storage,
+    getCurrentAddress: jest.fn().mockResolvedValue({ address: buildAddr(2) }),
+  } as unknown as import('../../src/new/wallet').default;
+
   const sendTransaction = new SendTransaction({
     storage,
+    wallet,
     outputs: [
       {
         address: buildAddr(0),
@@ -1271,11 +1295,10 @@ describe('convertHtrChangeIfRequested', () => {
     expect(defs).toHaveLength(2);
   });
 
-  test('H.6 — no-op when shieldedOutputDefs is empty (defensive)', async () => {
-    // A pure-transparent tx that somehow received `changeShieldedMode`
-    // should NOT have its HTR change converted — the resulting tx
-    // would have exactly one shielded output, violating the `>= 2`
-    // invariant enforced later in prepareTxData.
+  test('H.6 — converts even when no shielded defs exist yet', async () => {
+    // A forced mode on a pure-transparent tx converts the change; the lone
+    // shielded output this creates is resolved by prepareTxData's structural
+    // pass, which splits it into the two outputs the protocol requires.
     const partialHtrTxData = {
       inputs: [],
       outputs: [buildHtrChangeOutput(100n)],
@@ -1291,9 +1314,11 @@ describe('convertHtrChangeIfRequested', () => {
       mockStorage()
     );
 
-    expect(result.addedFee).toBe(0n);
-    expect(partialHtrTxData.outputs).toHaveLength(1);
-    expect(defs).toHaveLength(0);
+    expect(result.addedFee).toBe(FEE_PER_FULL_SHIELDED_OUTPUT);
+    expect(partialHtrTxData.outputs).toHaveLength(0);
+    expect(defs).toHaveLength(1);
+    expect(defs[0].value).toBe(100n - FEE_PER_FULL_SHIELDED_OUTPUT);
+    expect(defs[0].isChange).toBe(true);
   });
 
   test('H.7 — throws when the shielded-output cap is already reached', async () => {
@@ -1690,9 +1715,9 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     expect(2n + 5n).toBe(htrChange!.value + feeHeader.entries[0].amount);
   });
 
-  test('gating — changeShieldedMode on a transparent-only send keeps the change transparent', async () => {
+  test('an explicit shielded mode on a transparent-only send is honored via a split change', async () => {
     async function* selectUtxoMock(options: IUtxoFilterOptions) {
-      if (options.token === NATIVE_TOKEN_UID) {
+      if (options.token === NATIVE_TOKEN_UID && options.shielded !== true) {
         yield {
           txId: 'htr-tx',
           index: 0,
@@ -1703,8 +1728,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         };
       }
     }
-    // No shielded outputs at all → no crypto provider required.
-    const storage = buildStorage(selectUtxoMock, { withProvider: false });
+    const storage = buildStorage(selectUtxoMock);
     const wallet = buildWallet(storage, buildShieldedAddr(0));
     const sendTransaction = new SendTransaction({
       wallet,
@@ -1717,8 +1741,45 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
     const result = await sendTransaction.prepareTxData();
 
-    // Gate: no explicit shielded outputs → no conversion, no lone shielded
-    // output, transparent change preserved (100n - 10n = 90n).
+    // The user's mode is respected: the 90n change is converted (−2n fee) and
+    // then split in halves by the structural pass (−2n more), so the tx meets
+    // the two-shielded-outputs minimum. 100 = 10 + 43 + 43 + 4.
+    expect(result.shieldedOutputs).toHaveLength(2);
+    const values = result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b));
+    expect(values).toEqual([43n, 43n]);
+    const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+    expect(feeHeader.entries[0].amount).toBe(4n);
+    // No transparent change survives.
+    expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+  });
+
+  test('without a mode, a transparent-only send keeps its change transparent (auto rules)', async () => {
+    async function* selectUtxoMock(options: IUtxoFilterOptions) {
+      if (options.token === NATIVE_TOKEN_UID && options.shielded !== true) {
+        yield {
+          txId: 'htr-tx',
+          index: 0,
+          value: 100n,
+          token: NATIVE_TOKEN_UID,
+          address: 'htr-addr',
+          authorities: 0n,
+        };
+      }
+    }
+    // No shielded element anywhere → no crypto provider required.
+    const storage = buildStorage(selectUtxoMock, { withProvider: false });
+    const wallet = buildWallet(storage, buildShieldedAddr(0));
+    const sendTransaction = new SendTransaction({
+      wallet,
+      outputs: [
+        { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 10n, token: NATIVE_TOKEN_UID },
+      ],
+    });
+
+    const result = await sendTransaction.prepareTxData();
+
+    // All outputs public, no shielded inputs spent → the rules keep the
+    // change transparent (100n - 10n = 90n).
     expect(result.shieldedOutputs).toBeUndefined();
     const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
     expect(change).toBeDefined();
