@@ -18,6 +18,7 @@ import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
 import { ithService, IthServiceError } from './ith-service';
+import { waitPastTxTimestamp } from '../utils/fullnode.util';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -246,8 +247,7 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    // Delegated to the helper's /fund, same as the fullnode path above. No
-    // timestamp wait here: the Wallet Service handles ordering itself.
+    // Delegated to the helper's /fund, same as the fullnode path above.
     const { txId } = await ithService.fund(address, amount);
     const fundTx = { hash: txId } as unknown as Transaction;
 
@@ -265,6 +265,18 @@ export class GenesisWalletServiceHelper {
       const gWallet = await GenesisWalletServiceHelper.getSingleton();
       await pollForTx(gWallet, txId);
     }
+
+    // Timestamps are per-second and a transaction may not share its parent's.
+    // Callers routinely fund an address and immediately spend that UTXO, and the
+    // fullnode rejects the pair with "full validation failed: tx=… timestamp=N,
+    // spent_tx=… timestamp=N" when both land in the same second.
+    //
+    // The wallet service does NOT order this for us -- the fullnode enforces it.
+    //
+    // Read from the fullnode rather than the wallet: HathorWalletServiceWallet
+    // throws `Not implemented` for getTx, so waitUntilNextTimestamp cannot be
+    // used on this path.
+    await waitPastTxTimestamp(txId);
 
     return fundTx;
   }
