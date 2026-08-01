@@ -36,7 +36,7 @@ import { decryptData } from '../../../src/utils/crypto';
 import walletUtils from '../../../src/utils/wallet';
 import Network from '../../../src/models/network';
 import { NETWORK_NAME } from '../configuration/test-constants';
-import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
+import { buildWalletInstance, getEmptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { deriveXpubFromSeed } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
@@ -72,7 +72,7 @@ describe('[Service-specific] start', () => {
   });
 
   it('should have websocket disabled by default in tests', async () => {
-    ({ wallet } = await buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet } = await buildWalletInstance({ words: (await getEmptyWallet()).words }));
     await wallet.start({ pinCode, password });
     expect(wallet.isWsEnabled()).toBe(false);
   });
@@ -80,7 +80,7 @@ describe('[Service-specific] start', () => {
   // TODO: Move mock-based tests to unit tests
   it('should handle getAccessData unexpected errors', async () => {
     let storage: Storage;
-    ({ wallet, storage } = await buildWalletInstance({ words: emptyWallet.words }));
+    ({ wallet, storage } = await buildWalletInstance({ words: (await getEmptyWallet()).words }));
 
     // Exercise the event-emission path during a failed start
     const events: string[] = [];
@@ -97,10 +97,14 @@ describe('[Service-specific] start', () => {
 
   // TODO: Move mock-based tests to unit tests
   it('should create wallet with xpriv', async () => {
-    let storage: Storage;
-    ({ wallet, storage } = await buildWalletInstance({ words: emptyWallet.words }));
+    // One wallet for the whole test: the xpriv is derived from this seed and the
+    // final assertion compares against this address set, so they must match.
+    const emptyWalletData = await getEmptyWallet();
 
-    const seed = emptyWallet.words;
+    let storage: Storage;
+    ({ wallet, storage } = await buildWalletInstance({ words: emptyWalletData.words }));
+
+    const seed = emptyWalletData.words;
     const accessData = walletUtils.generateAccessDataFromSeed(seed, {
       networkName: 'testnet',
       password: '1234',
@@ -132,7 +136,7 @@ describe('[Service-specific] start', () => {
 
     const currentAddress = wallet.getCurrentAddress();
     expect(currentAddress.index).toBeDefined();
-    expect(currentAddress.address).toEqual(emptyWallet.addresses[currentAddress.index]);
+    expect(currentAddress.address).toEqual(emptyWalletData.addresses[currentAddress.index]);
   });
 
   it('should complete start() on a brand-new wallet that goes through creating→ready', async () => {
