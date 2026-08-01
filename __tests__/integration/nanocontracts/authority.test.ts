@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
 import {
   CREATE_TOKEN_TX_VERSION,
@@ -18,12 +18,11 @@ describe('Authority actions blueprint test', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000n);
   });
 
   afterAll(async () => {
     await hWallet.stop();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {
@@ -420,7 +419,7 @@ describe('Authority actions blueprint test', () => {
     // Create a new nano contract of this blueprint with token creation and deposit
     // using a single utxo for it
     const address2 = await hWallet.getAddressAtIndex(2);
-    await GenesisWalletHelper.injectFunds(hWallet, address2, 1000n);
+    await injectFunds(hWallet, address2, 1000n);
 
     // Create NC with deposit of HTR and token creation
     const newInitializeData = {
@@ -487,8 +486,8 @@ describe('Authority actions blueprint test', () => {
     // Use a new wallet so the utxos don't get mixed with previous change utxos
     const newWallet = await generateWalletHelper();
     const newAddress0 = await newWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
-    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
+    await injectFunds(newWallet, newAddress0, 100n);
+    await injectFunds(newWallet, newAddress0, 100n);
 
     // Create NC with deposit of HTR and token creation
     const twoUtxosInitializeData = {

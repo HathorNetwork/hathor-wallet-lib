@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
+import { injectFunds } from '../../helpers/funding.helper';
 import {
   DEFAULT_PIN_CODE,
   generateWalletHelper,
@@ -45,13 +45,12 @@ describe('Template execution', () => {
     hWallet = await generateWalletHelper(null);
     interpreter = new WalletTxTemplateInterpreter(hWallet);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 1000n, {});
+    await injectFunds(hWallet, address, 1000n, {});
   });
 
   afterAll(async () => {
     await hWallet.stop();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const waitExecution = async (wallet, tx) => {

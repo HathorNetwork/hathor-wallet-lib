@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   generateWalletHelper,
   stopAllWallets,
@@ -24,13 +24,12 @@ describe('FeeBlueprint nano contract operations', () => {
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10000n, {});
+    await injectFunds(hWallet, address, 10000n, {});
   });
 
   afterAll(async () => {
     await hWallet.stop();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {
@@ -608,7 +607,7 @@ describe('FeeBlueprint nano contract operations', () => {
     const recipient = await singleUtxoWallet.getAddressAtIndex(0);
 
     // Single HTR utxo sized to cover deposit (10n) + fee (1n) + small change (9n)
-    await GenesisWalletHelper.injectFunds(singleUtxoWallet, recipient, 20n, {});
+    await injectFunds(singleUtxoWallet, recipient, 20n, {});
 
     const fbtWithdrawalAmount = 50n;
     const htrDepositAmount = 10n;
@@ -1093,7 +1092,7 @@ describe('FeeBlueprint nano contract operations', () => {
 
     // Pull FBT out of the contract so the wallet owns a single 100n FBT utxo.
     // The 10n covers this withdrawal's own 1n fee.
-    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 10n, {});
+    await injectFunds(feeChangeWallet, callerAddress, 10n, {});
     const fundingTx = await feeChangeWallet.createAndSendNanoContractTransaction(
       'noop',
       callerAddress,
@@ -1107,8 +1106,8 @@ describe('FeeBlueprint nano contract operations', () => {
 
     // Utxo selection takes the smallest utxo that covers the requested amount,
     // so the 10n HTR deposit below takes the 11n utxo and leaves 1n of change.
-    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 11n, {});
-    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 20n, {});
+    await injectFunds(feeChangeWallet, callerAddress, 11n, {});
+    await injectFunds(feeChangeWallet, callerAddress, 20n, {});
 
     // The assertions only mean something while the change addresses differ from
     // the address the builder falls back to when none is given.

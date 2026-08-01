@@ -1,4 +1,4 @@
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
+import { injectFunds } from './helpers/funding.helper';
 import {
   createTokenHelper,
   DEFAULT_PIN_CODE,
@@ -14,7 +14,6 @@ import PartialTxProposal from '../../src/wallet/partialTxProposal';
 describe('partial tx proposal', () => {
   afterEach(async () => {
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   it('Should exchange tokens between wallets', async () => {
@@ -23,11 +22,11 @@ describe('partial tx proposal', () => {
     const hWallet2 = await generateWalletHelper();
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 103n);
+    await injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 103n);
     const { hash: token1Uid } = await createTokenHelper(hWallet1, 'Token1', 'TK1', 200n);
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10n);
     const { hash: token2Uid } = await createTokenHelper(hWallet2, 'Token2', 'TK2', 1000n);
 
     // Get the balance states before the exchange

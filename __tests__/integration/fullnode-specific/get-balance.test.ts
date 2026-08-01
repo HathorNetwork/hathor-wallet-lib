@@ -14,7 +14,7 @@
  * Shared getBalance() tests live in `shared/get-balance.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { getRandomInt } from '../utils/core.util';
 import { createTokenHelper, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 
@@ -45,7 +45,7 @@ describe('[Fullnode] getBalance', () => {
   it('should not show custom token balance on a different wallet', async () => {
     const hWallet = await generateWalletHelper();
 
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const newTokenAmount = BigInt(getRandomInt(1000, 10));
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
@@ -59,7 +59,7 @@ describe('[Fullnode] getBalance', () => {
     // assertion would hold trivially. With funds of its own, "zero for THIS
     // token" is a real claim about token scoping.
     const otherWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(otherWallet, await otherWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(otherWallet, await otherWallet.getAddressAtIndex(0), 10n);
 
     const otherTknBalance = await otherWallet.getBalance(tokenUid);
     expect(otherTknBalance).toHaveLength(1);

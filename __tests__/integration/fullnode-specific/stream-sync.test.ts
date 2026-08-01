@@ -18,7 +18,7 @@
  * prove it accepts client-derived P2SH addresses.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateMultisigWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { HistorySyncMode } from '../../../src/types';
@@ -27,7 +27,6 @@ import { WALLET_CONSTANTS } from '../configuration/test-constants';
 describe('[Fullnode] history-streaming sync', () => {
   afterEach(async () => {
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   it('should sync a multisig (P2SH) wallet history via manual websocket streaming', async () => {
@@ -44,7 +43,7 @@ describe('[Fullnode] history-streaming sync', () => {
 
     const [htrBefore] = await funder.getBalance(NATIVE_TOKEN_UID);
     // injectFunds waits for the funder wallet to receive and confirm the tx.
-    await GenesisWalletHelper.injectFunds(funder, fundedAddress, 10n);
+    await injectFunds(funder, fundedAddress, 10n);
     const [htrAfter] = await funder.getBalance(NATIVE_TOKEN_UID);
     // Sanity: the polling path saw exactly the +10n we just injected.
     expect(htrAfter.balance.unlocked - htrBefore.balance.unlocked).toEqual(10n);

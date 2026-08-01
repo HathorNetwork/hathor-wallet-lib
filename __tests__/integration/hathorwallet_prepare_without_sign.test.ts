@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
+import { injectFunds } from './helpers/funding.helper';
 import {
   DEFAULT_PIN_CODE,
   generateWalletHelper,
@@ -22,7 +22,7 @@ describe('HathorWallet prepare transaction without signing', () => {
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10000n, {});
+    await injectFunds(hWallet, address, 10000n, {});
 
     // Initialize a FeeBlueprint contract
     const initTx = await hWallet.createAndSendNanoContractTransaction(
@@ -75,7 +75,6 @@ describe('HathorWallet prepare transaction without signing', () => {
   afterAll(async () => {
     await hWallet.stop();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {
@@ -187,7 +186,7 @@ describe('HathorWallet prepare transaction without signing', () => {
     const address1 = await hWallet.getAddressAtIndex(1);
 
     // Inject more funds since previous test consumed some
-    await GenesisWalletHelper.injectFunds(hWallet, address0, 1000n, {});
+    await injectFunds(hWallet, address0, 1000n, {});
 
     // 1. Build unsigned token creation transaction with address0 as caller
     const sendTransaction: SendTransaction = await hWallet.createNanoContractCreateTokenTransaction(

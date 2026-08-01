@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
@@ -32,12 +32,11 @@ describe('Upgradable nano contract', () => {
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
     address0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address0, 1000n);
+    await injectFunds(hWallet, address0, 1000n);
   });
 
   afterAll(async () => {
     await hWallet.stop();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {

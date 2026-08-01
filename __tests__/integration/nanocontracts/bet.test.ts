@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import {
   generateMultisigWalletHelper,
@@ -44,20 +44,15 @@ describe('full cycle of bet nano contract', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
-    fundsTx = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      1000n
-    );
+    fundsTx = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000n);
 
     mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
-    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000n);
+    await injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000n);
   });
 
   afterAll(async () => {
     await hWallet.stop();
     await mhWallet.stop();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {

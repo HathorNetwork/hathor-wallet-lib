@@ -24,7 +24,8 @@ import {
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
 } from '../helpers/wallet.helper';
-import { GenesisWalletHelper, type InjectedFundsTx } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
+import { type InjectedFundsTx } from '../helpers/genesis-wallet.helper';
 import { ithService } from '../helpers/ith-service';
 import { waitForTxOnFullnode } from '../utils/fullnode.util';
 import {
@@ -76,7 +77,7 @@ const STOP_OPTIONS: WalletStopOptions = { cleanStorage: true, cleanAddresses: tr
  * Key behavioral differences from the service adapter:
  * - `start()` returns immediately; callers must explicitly `waitForReady()`.
  * - Supports multisig, xpub-readonly, token scoping, and external signing.
- * - Uses the fullnode P2P helpers ({@link GenesisWalletHelper}) for fund injection.
+ * - Funds wallets through the integration-test-helper ({@link injectFunds}).
  */
 export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   name = 'Fullnode';
@@ -131,7 +132,6 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
 
   async suiteTeardown(): Promise<void> {
     await this.stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   }
 
   /**
@@ -197,7 +197,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     address: string,
     amount: bigint
   ): Promise<InjectedFundsTx> {
-    return GenesisWalletHelper.injectFunds(this.concrete(destWallet), address, amount);
+    return injectFunds(this.concrete(destWallet), address, amount);
   }
 
   /**

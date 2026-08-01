@@ -39,7 +39,7 @@
  *   transaction diverges between the facades.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 import { TxNotFoundError } from '../../../src/errors';
 
@@ -67,11 +67,7 @@ describe('[Fullnode] fullnode API queries', () => {
     it('should download an existing transaction from the fullnode', async () => {
       const hWallet = await generateWalletHelper();
 
-      const tx1 = await GenesisWalletHelper.injectFunds(
-        hWallet,
-        await hWallet.getAddressAtIndex(0),
-        10n
-      );
+      const tx1 = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
       const fullTx = await hWallet.getFullTxById(tx1.hash);
       expect(fullTx.success).toStrictEqual(true);
@@ -104,11 +100,7 @@ describe('[Fullnode] fullnode API queries', () => {
     it('should download confirmation data for an existing transaction from the fullnode', async () => {
       const hWallet = await generateWalletHelper();
 
-      const tx1 = await GenesisWalletHelper.injectFunds(
-        hWallet,
-        await hWallet.getAddressAtIndex(0),
-        10n
-      );
+      const tx1 = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
       const confirmationData = await hWallet.getTxConfirmationData(tx1.hash);
 
@@ -146,11 +138,7 @@ describe('[Fullnode] fullnode API queries', () => {
   describe('graphvizNeighborsQuery', () => {
     it('should download graphviz neighbors data for an existing transaction from the fullnode', async () => {
       const hWallet = await generateWalletHelper();
-      const tx1 = await GenesisWalletHelper.injectFunds(
-        hWallet,
-        await hWallet.getAddressAtIndex(0),
-        10n
-      );
+      const tx1 = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
       const neighborsData = await hWallet.graphvizNeighborsQuery(tx1.hash, 'funds', 1);
 
       expect(neighborsData).toMatch(/digraph {/);
@@ -161,11 +149,7 @@ describe('[Fullnode] fullnode API queries', () => {
 
     it('should capture HTTP transport errors from the fullnode', async () => {
       const hWallet = await generateWalletHelper();
-      const tx1 = await GenesisWalletHelper.injectFunds(
-        hWallet,
-        await hWallet.getAddressAtIndex(0),
-        10n
-      );
+      const tx1 = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
       // Deliberately omitting the required graphType/maxLevel arguments: axios
       // drops the resulting undefined params, the fullnode receives `?tx=` only

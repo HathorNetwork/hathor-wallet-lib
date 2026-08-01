@@ -1,4 +1,4 @@
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   mergePrecalculatedAddresses,
   precalculationHelpers,
@@ -65,7 +65,6 @@ describe('locked utxos', () => {
   afterEach(async () => {
     await stopWallets();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   /**
@@ -77,7 +76,7 @@ describe('locked utxos', () => {
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 1n);
+    await injectFunds(hwallet, address, 1n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -122,7 +121,7 @@ describe('locked utxos', () => {
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 1n);
+    await injectFunds(hwallet, address, 1n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -145,7 +144,6 @@ describe('run(until) state machine', () => {
   afterEach(async () => {
     await stopWallets();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   it('should stop at prepare-tx and resume to completion', async () => {
@@ -154,7 +152,7 @@ describe('run(until) state machine', () => {
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+    await injectFunds(hwallet, address, 2n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -189,7 +187,7 @@ describe('run(until) state machine', () => {
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+    await injectFunds(hwallet, address, 2n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -223,7 +221,7 @@ describe('run(until) state machine', () => {
     const storage = new Storage(store);
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 2n);
+    await injectFunds(hwallet, address, 2n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -248,13 +246,12 @@ describe('run(until) state machine', () => {
 describe('custom signature method', () => {
   afterEach(async () => {
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   it('should check that we have an external signature method', async () => {
     const hwallet = await generateWalletHelper();
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 10n);
+    await injectFunds(hwallet, address, 10n);
 
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(false);
     const customSignFunc = jest
@@ -267,7 +264,7 @@ describe('custom signature method', () => {
   it('should sign transactions with custom signature method', async () => {
     const hwallet = await generateWalletHelper();
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 10n);
+    await injectFunds(hwallet, address, 10n);
 
     const customSignFunc = jest
       .fn()

@@ -25,7 +25,7 @@
  * and assert the same routing through `getUtxoFromId` directly.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import CreateTokenTransaction from '../../../src/models/create_token_transaction';
@@ -40,7 +40,7 @@ describe('[Fullnode] createNewToken', () => {
   it('should create a new token on the correct addresses', async () => {
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    await injectFunds(hWallet, addr0, 10n);
 
     const destinationAddress = await hWallet.getAddressAtIndex(4);
     const changeAddress = await hWallet.getAddressAtIndex(8);
@@ -71,7 +71,7 @@ describe('[Fullnode] createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const mintAuthorityAddress = await hWallet.getAddressAtIndex(10);
     const meltAuthorityAddress = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 2n);
+    await injectFunds(hWallet, addr0, 2n);
 
     const response = await hWallet.createNewToken('New Token', 'NTKN', 100n, {
       createMint: true,
@@ -101,7 +101,7 @@ describe('[Fullnode] createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const externalMintAddr = await externalWallet.getAddressAtIndex(0);
     const externalMeltAddr = await externalWallet.getAddressAtIndex(1);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
+    await injectFunds(hWallet, addr0, 1n);
 
     await expect(
       hWallet.createNewToken('New Token', 'NTKN', 100n, {
@@ -151,7 +151,7 @@ describe('[Fullnode] createNewToken', () => {
   it('should create a FEE token on the correct addresses', async () => {
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    await injectFunds(hWallet, addr0, 10n);
 
     const destinationAddress = await hWallet.getAddressAtIndex(4);
     const changeAddress = await hWallet.getAddressAtIndex(8);
@@ -183,7 +183,7 @@ describe('[Fullnode] createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const mintAuthorityAddress = await hWallet.getAddressAtIndex(10);
     const meltAuthorityAddress = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 2n);
+    await injectFunds(hWallet, addr0, 2n);
 
     const response = await hWallet.createNewToken('New Token', 'NTKN', 8582n, {
       createMint: true,

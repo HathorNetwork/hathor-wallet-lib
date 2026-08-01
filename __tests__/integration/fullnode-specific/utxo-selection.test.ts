@@ -19,7 +19,7 @@
  * Shared `getUtxosForAmount` selection tests live in `shared/utxo-selection.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -37,7 +37,7 @@ import type HathorWallet from '../../../src/new/wallet';
  */
 async function createFundedFunder(htrAmount: bigint): Promise<HathorWallet> {
   const funder = await generateWalletHelper();
-  await GenesisWalletHelper.injectFunds(funder, await funder.getAddressAtIndex(0), htrAmount);
+  await injectFunds(funder, await funder.getAddressAtIndex(0), htrAmount);
   return funder;
 }
 
@@ -411,7 +411,7 @@ describe('[Fullnode] getUtxosForAmount with selected utxos', () => {
   it('should not retrieve utxos marked as selected', async () => {
     const hWallet = await generateWalletHelper();
     const addr = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr, 100n);
+    await injectFunds(hWallet, addr, 100n);
 
     // Retrieving the utxo's data and marking it as selected
     const utxosAddr = await hWallet.getUtxos({ filter_address: addr });
