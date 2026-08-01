@@ -2006,5 +2006,283 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(inputIds).toContain('htr-pub-20');
       expect(inputIds).not.toContain('htr-sh-20');
     });
+
+    test('R2 — a shielded top-up shields the HTR change mirroring the FS input, split when lone', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-pub-8', 8n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-10', 10n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '66'.repeat(32),
+          assetBlindingFactor: '77'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          // All-public HTR send that public funds alone cannot cover.
+          { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 12n, token: NATIVE_TOKEN_UID },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // Public exhausted (8n) + shielded top-up (10n) = 18n. The 6n change is
+      // shielded, mirroring the fully-shielded input, and — being the tx's
+      // only shielded output — split: 6n − 2n (conversion fee) − 2n (split
+      // fee) = 2n → halves 1n/1n. 18 = 12 + 1 + 1 + 4.
+      const inputIds = result.inputs.map(i => i.txId).sort();
+      expect(inputIds).toEqual(['htr-pub-8', 'htr-sh-10']);
+      expect(result.shieldedOutputs).toHaveLength(2);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([1n, 1n]);
+      expect(
+        result.shieldedOutputs!.every(o => o.shieldedMode === ShieldedOutputMode.FULLY_SHIELDED)
+      ).toBe(true);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(4n);
+      // No transparent change, no unshield header (shielded outputs exist).
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.excessBlindingFactor).toBeUndefined();
+    });
+
+    test('R2 — an exact match from a single shielded input forces a change end to end', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-sh-10', 10n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '88'.repeat(32),
+        }),
+        poolUtxo('htr-sh-5', 5n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '99'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 10n, token: NATIVE_TOKEN_UID },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The 10n shielded UTXO matched the send exactly; spending it alone
+      // would reveal its value by subtraction, so the smallest extra UTXO is
+      // pulled in and the resulting change is shielded (AS — no FS input).
+      // 15 = 10 + 1 + 2 + 2(fees).
+      const inputIds = result.inputs.map(i => i.txId).sort();
+      expect(inputIds).toEqual(['htr-sh-10', 'htr-sh-5']);
+      expect(result.shieldedOutputs).toHaveLength(2);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        2n,
+      ]);
+      expect(
+        result.shieldedOutputs!.every(o => o.shieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED)
+      ).toBe(true);
+    });
+
+    test("the 'transparent' override keeps the change public and unshields", async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-sh-10', 10n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: 'aa'.repeat(32),
+        }),
+        poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 10n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+        changeShieldedMode: 'transparent',
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The whole shielded balance is spent into a public output with the
+      // change pinned transparent: a full unshield. No shielded outputs, the
+      // excess blinding factor is computed, and no fee is owed (deposit token,
+      // no shielded outputs) so no HTR is touched.
+      expect(result.inputs.map(i => i.txId)).toEqual(['custom-sh-10']);
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      expect(result.excessBlindingFactor).toBeDefined();
+      expect(result.headers ?? []).toHaveLength(0);
+    });
+
+    test('a legacy changeAddress on a shielded send fails loudly', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: 'bb'.repeat(32),
+        }),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        /legacy change address cannot be used/
+      );
+    });
+
+    test('a new-format changeAddress hosts the shielded change itself', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: 'cc'.repeat(32),
+        }),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const changeAddress = buildShieldedAddr(7);
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeAddress,
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The 20n custom change is shielded (all custom outputs are shielded)
+      // and goes to the caller's new-format changeAddress, not the wallet's
+      // own shielded address.
+      const expectedSpend = new Address(changeAddress, {
+        network: testnetNetwork,
+      }).getSpendAddress().base58;
+      const change = result.shieldedOutputs!.find(o => o.value === 20n)!;
+      expect(change.address).toBe(expectedSpend);
+      expect(wallet.getCurrentAddress).not.toHaveBeenCalled();
+    });
+
+    test('a new-format changeAddress that is not ours is rejected', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: 'ee'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeAddress: buildShieldedAddr(7),
+      });
+
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        'Change address is not from the wallet'
+      );
+    });
+
+    test('a user-supplied shielded input shields the change of its token', async () => {
+      const pool = [poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID)];
+      const storage = buildPoolStorage(pool);
+      // The user-supplied input spends an owned shielded slot of the custom
+      // token; the wallet must not select anything for that token, but the
+      // change rules still see the shielded spend.
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: [],
+        shielded_outputs: [
+          {
+            mode: 1,
+            commitment: '',
+            range_proof: '',
+            script: '',
+            ephemeral_pubkey: '',
+            decoded: { address: 'W-shielded-spend-addr' },
+            value: 30n,
+            token: CUSTOM_TOKEN,
+            blindingFactor: 'dd'.repeat(32),
+          },
+        ],
+        inputs: [],
+      } as never);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      jest.spyOn(storage, 'getUtxo').mockResolvedValue(
+        poolUtxo('parent', 30n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: 'dd'.repeat(32),
+        }) as never
+      );
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 10n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+        inputs: [{ txId: 'parent', index: 0 }],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The 20n custom change is shielded (AS — the spent input carried no
+      // asset blinding factor) and split by the structural pass, its split fee
+      // shaved from the transparent HTR change. Nothing extra was selected for
+      // the custom token.
+      expect(result.inputs.filter(i => i.token === CUSTOM_TOKEN)).toHaveLength(1);
+      expect(result.shieldedOutputs).toHaveLength(2);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([10n, 10n]);
+      expect(
+        result.shieldedOutputs!.every(
+          o => o.token === CUSTOM_TOKEN && o.shieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED
+        )
+      ).toBe(true);
+    });
   });
 });

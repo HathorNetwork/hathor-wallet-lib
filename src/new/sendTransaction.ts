@@ -516,7 +516,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           'or a shielded change mode — use a new-format (shielded-capable) address.'
       );
     }
-    // A new-format changeAddress hosts the shielded change itself.
+    // A new-format changeAddress hosts the shielded change itself. It must be
+    // ours — same contract the transparent path enforces via getChangeAddress.
+    if (changeAddressIsNewFormat && !(await this.storage.isAddressMine(this.changeAddress!))) {
+      throw new SendTxError('Change address is not from the wallet');
+    }
     const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
 
     const partialTxData = await prepareSendManyTokensData(
