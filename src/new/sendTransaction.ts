@@ -33,6 +33,7 @@ import {
   IUtxo,
   IUtxoFilterOptions,
   IUtxoSelectionOptions,
+  UtxoSelectionAlgorithm,
   OutputValueType,
   WalletType,
 } from '../types';
@@ -49,6 +50,16 @@ import { addCreatedTokenFromTx } from '../utils/storage';
 import tokens from '../utils/tokens';
 import transactionUtils from '../utils/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
+import {
+  ISelectionReport,
+  ITokenSelectionPolicy,
+  SplitFallback,
+  buildTokenOutputProfiles,
+  computeTokenPolicy,
+  hasShieldedUtxo,
+  makeShieldedAwareSelection,
+  needsAvailabilityProbe,
+} from '../utils/shieldedSelection';
 import MineTransaction from '../wallet/mineTransaction';
 import { ISendTransaction as ISendTransactionInterface, OutputType } from '../wallet/types';
 import HathorWallet from './wallet';
@@ -340,6 +351,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     const requiresFees: { txId: string; index: number }[] = [];
 
+    // Per-token digest of the user-supplied inputs, for the change-mode rules.
+
+    const userInputSummaries = new Map<string, ISelectionReport>();
+
     for (const input of this.inputs) {
       const inputTx = await this.storage.getTx(input.txId);
       // SEPARATED-model resolve. Positional inputTx.outputs[input.index] would
@@ -412,6 +427,20 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // cannot attribute a shielded input to a token.
         ...(resolved.kind === 'shielded' ? { shielded: true } : {}),
       });
+
+      // User-supplied inputs bypass selection, but the change-mode rules still
+      // read them: a shielded input makes that token's change shielded.
+      const summary = userInputSummaries.get(spentToken) ?? {
+        shieldedInputCount: 0,
+        anyFullyShieldedInput: false,
+        exactMatch: false,
+      };
+      if (resolved.kind === 'shielded') {
+        summary.shieldedInputCount += 1;
+        summary.anyFullyShieldedInput =
+          summary.anyFullyShieldedInput || resolved.output.assetBlindingFactor !== undefined;
+      }
+      userInputSummaries.set(spentToken, summary);
     }
 
     // If the user provided HTR inputs, tokenMap.get(HTR_UID) will be false
@@ -432,11 +461,58 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // `shieldedOutputDefs`.
     const hasExplicitShieldedOutputs = shieldedOutputDefs.length > 0;
 
+    // ── Automatic selection rules ─────────────────────────────────────────
+    // Analyze each token's outputs and decide its input-pool policy, whether a
+    // shielded input must be forced, and whether a lone shielded output has to
+    // be split because the wallet cannot supply the shielded input the rules
+    // require. Splits run HERE — before selection and before Fee.calculate —
+    // so the extra output's fee and funding flow through the normal machinery.
+    const changeModeOverride = this.changeShieldedMode ?? null;
+    const outputProfiles = await buildTokenOutputProfiles(
+      this.outputs.map(o => ({
+        token: 'token' in o ? o.token : undefined,
+        address: 'address' in o ? o.address : undefined,
+        shieldedMode: 'shieldedMode' in o ? o.shieldedMode : undefined,
+      })),
+      this.storage
+    );
+    const selectionPolicies = new Map<string, ITokenSelectionPolicy>();
+    const selectionReports = new Map<string, ISelectionReport>();
+    for (const [token, profile] of outputProfiles) {
+      const chooseInputs = token === HTR_UID ? shouldChooseHTRInputs : tokenMap.get(token) ?? false;
+      // The availability the rules test: the wallet's shielded pool for tokens
+      // it selects for, the user's own inputs for tokens they control.
+      let shieldedAvailable = true;
+      if (needsAvailabilityProbe(profile)) {
+        shieldedAvailable = chooseInputs
+          ? await hasShieldedUtxo(this.storage, token)
+          : (userInputSummaries.get(token)?.shieldedInputCount ?? 0) > 0;
+      }
+      const { policy, needsSplitFallback } = computeTokenPolicy(
+        profile,
+        shieldedAvailable,
+        changeModeOverride
+      );
+      if (chooseInputs) {
+        selectionPolicies.set(token, policy);
+      }
+      if (needsSplitFallback !== 'none') {
+        splitShieldedDefForToken(shieldedOutputDefs, token, needsSplitFallback);
+      }
+    }
+
     const partialTxData = await prepareSendManyTokensData(
       this.storage,
       txData,
       tokenMap,
-      this.changeAddress
+      this.changeAddress,
+      token => {
+        const policy = selectionPolicies.get(token);
+        if (!policy) {
+          return undefined;
+        }
+        return makeShieldedAwareSelection(policy, report => selectionReports.set(token, report));
+      }
     );
 
     // Custom-token change: when the caller opted into shielded change and this
@@ -545,6 +621,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       token: HTR_UID,
       chooseInputs: shouldChooseHTRInputs,
     };
+
+    // HTR follows the same rules. With HTR outputs its policy was computed in
+    // the analysis phase above; entering only to pay fees it follows the
+    // all-public rule: public inputs first, shielded only when public is
+    // insufficient, with the exact-single-shielded forcing.
+    const htrPolicy =
+      selectionPolicies.get(HTR_UID) ??
+      computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy;
+    if (shouldChooseHTRInputs) {
+      options.utxoSelectionMethod = makeShieldedAwareSelection(htrPolicy, report =>
+        selectionReports.set(HTR_UID, report)
+      );
+    }
 
     if (this.changeAddress) {
       options.changeAddress = this.changeAddress;
@@ -1243,6 +1332,61 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
  * @param {Pick<IDataTx, 'inputs' | 'outputs'>} dataTx inputs and outputs from dataTx
  * @param {IUtxoSelectionOptions} options
  */
+/**
+ * Replace one shielded output definition with two floor/ceil halves at the
+ * same destination, mode and token.
+ *
+ * This is how the rules satisfy the protocol's two-shielded-outputs minimum
+ * (a single shielded output carries a random blinding factor and can never
+ * balance) and how a lone shielded output is de-correlated from its inputs
+ * when no shielded input is available. The phantom output pushed for UTXO
+ * selection is untouched: the halves sum to the original value.
+ */
+export function splitShieldedDef(defs: IResolvedShieldedOutputDef[], index: number): void {
+  const target = defs[index];
+  if (target.value < 2n) {
+    throw new SendTxError(
+      'Cannot split a 1-unit shielded output to satisfy the minimum of 2 shielded outputs.'
+    );
+  }
+  if (defs.length + 1 > MAX_SHIELDED_OUTPUTS) {
+    throw new SendTxError(
+      `Cannot split a shielded output: the transaction already carries the ` +
+        `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
+    );
+  }
+  const half = target.value / 2n;
+  defs.splice(index, 1, { ...target, value: half }, { ...target, value: target.value - half });
+}
+
+/**
+ * Apply a rules-mandated split for a token: its only shielded output
+ * ('splitOne') or its largest one ('splitLargest').
+ */
+export function splitShieldedDefForToken(
+  defs: IResolvedShieldedOutputDef[],
+  token: string,
+  fallback: Exclude<SplitFallback, 'none'>
+): void {
+  let targetIndex = -1;
+  for (let i = 0; i < defs.length; i++) {
+    if (defs[i].token !== token) {
+      continue;
+    }
+    if (
+      targetIndex === -1 ||
+      (fallback === 'splitLargest' && defs[i].value > defs[targetIndex].value)
+    ) {
+      targetIndex = i;
+    }
+  }
+  if (targetIndex === -1) {
+    // Defensive: the profile said this token has shielded outputs.
+    throw new SendTxError(`No shielded output found to split for token ${token}.`);
+  }
+  splitShieldedDef(defs, targetIndex);
+}
+
 export async function prepareSendTokensData(
   storage: IStorage,
   dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
@@ -1543,7 +1687,8 @@ export async function prepareSendManyTokensData(
   storage: IStorage,
   txData: IDataTx,
   tokenMap: Map<string, boolean>,
-  changeAddress: string | null
+  changeAddress: string | null,
+  utxoSelectionForToken?: (token: string) => UtxoSelectionAlgorithm | undefined
 ): Promise<Pick<IDataTx, 'outputs' | 'inputs'>> {
   const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
   for (const [token, chooseInputs] of tokenMap) {
@@ -1551,6 +1696,10 @@ export async function prepareSendManyTokensData(
       token,
       chooseInputs,
     };
+    const utxoSelectionMethod = utxoSelectionForToken?.(token);
+    if (utxoSelectionMethod) {
+      options.utxoSelectionMethod = utxoSelectionMethod;
+    }
     if (changeAddress) {
       options.changeAddress = changeAddress;
     }
