@@ -39,6 +39,7 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
   createTokenHelper,
+  getExternalAddress,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { TokenVersion } from '../../../src/types';
@@ -86,13 +87,10 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
       0
     );
 
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      8n,
-      { changeAddress: await hWallet.getAddressAtIndex(5) }
-    );
+    const { hash: tx2Hash } = await hWallet.sendTransaction(await getExternalAddress(), 8n, {
+      changeAddress: await hWallet.getAddressAtIndex(5),
+    });
     await waitForTxReceived(hWallet, tx2Hash);
 
     const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
@@ -128,13 +126,11 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
       1
     );
 
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      80n,
-      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
-    );
+    const { hash: tx2Hash } = await hWallet.sendTransaction(await getExternalAddress(), 80n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(12),
+    });
     await waitForTxReceived(hWallet, tx2Hash);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
@@ -172,13 +168,11 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
       1
     );
 
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(
-      await gWallet.getAddressAtIndex(0),
-      82n,
-      { token: tokenUid, changeAddress: await hWallet.getAddressAtIndex(12) }
-    );
+    const { hash: tx2Hash } = await hWallet.sendTransaction(await getExternalAddress(), 82n, {
+      token: tokenUid,
+      changeAddress: await hWallet.getAddressAtIndex(12),
+    });
     await waitForTxReceived(hWallet, tx2Hash);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(

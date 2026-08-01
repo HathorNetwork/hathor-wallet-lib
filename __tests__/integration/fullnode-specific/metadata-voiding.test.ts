@@ -20,7 +20,11 @@
 
 import { cloneDeep, reverse } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitForTxReceived } from '../helpers/wallet.helper';
+import {
+  generateWalletHelper,
+  waitForTxReceived,
+  getExternalAddress,
+} from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import HathorWallet from '../../../src/new/wallet';
 import { MemoryStore } from '../../../src/storage';
@@ -240,8 +244,7 @@ describe('[Fullnode] processing transaction metadata changes', () => {
   it('should process history when a tx sent by the wallet to another wallet is voided', async () => {
     const store = hWallet.storage.store as MemoryStore;
     const addr0 = await hWallet.getAddressAtIndex(0);
-    const genesis = await GenesisWalletHelper.getSingleton();
-    const addrExt = await genesis.hWallet.getAddressAtIndex(1);
+    const addrExt = await getExternalAddress();
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
