@@ -14,7 +14,7 @@ import {
   OutputValueType,
   TokenVersion,
 } from '../types';
-import { ShieldedOutputMode } from '../shielded/types';
+import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
 import Address from '../models/address';
@@ -408,25 +408,25 @@ export interface SendTransactionFullnodeOptions {
  * @property changeAddress Address for change output
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
- * @property changeShieldedMode When set AND the transaction already carries
- *   explicit shielded outputs, change outputs are rewritten as shielded
- *   outputs in the given mode — mirroring the transaction's privacy mode so
- *   change doesn't leak the sender alongside an otherwise-private send. This
- *   covers both the HTR change (the surplus over any HTR being sent plus ALL
- *   fees — fees are always charged in HTR, including per-shielded-output fees)
- *   and custom-token change. On a pure-transparent send (no shielded outputs)
- *   it is a no-op: the change stays transparent. The send REJECTS (throws
- *   SendTxError) when the HTR change is too small to fund its own
- *   shielded-output fee and no additional HTR UTXO is available to cover the
- *   difference — it never silently downgrades the change to transparent.
- *   Undefined keeps the default transparent change.
+ * @property changeShieldedMode The change-output mode. Absent or null: the
+ *   wallet's automatic selection rules decide per token (change is shielded
+ *   when shielded inputs are spent or all of a token's outputs are shielded;
+ *   transparent otherwise). Explicit 'transparent': every change output stays
+ *   public, even when shielded inputs are spent. Explicit AMOUNT_SHIELDED or
+ *   FULLY_SHIELDED: every change output — the HTR fee-change and custom-token
+ *   change — is emitted shielded in that mode; on a transaction with no other
+ *   shielded element the change is split into two halves to satisfy the
+ *   protocol's two-shielded-outputs minimum. The send REJECTS (throws
+ *   SendTxError) when a shielded change cannot fund its own per-output fee and
+ *   no additional UTXO is available — it never silently downgrades to
+ *   transparent.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
   changeAddress?: string | null;
   startMiningTx?: boolean;
   pinCode?: string | null;
-  changeShieldedMode?: ShieldedOutputMode;
+  changeShieldedMode?: ChangeOutputMode | null;
 }
 
 /**

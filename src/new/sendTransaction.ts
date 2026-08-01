@@ -37,6 +37,7 @@ import {
   WalletType,
 } from '../types';
 import {
+  ChangeOutputMode,
   IDataShieldedOutput,
   InputGeneratorInfo,
   ShieldedOutputMode,
@@ -165,7 +166,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * rather than downgrade to transparent change (see
    * convertHtrChangeIfRequested).
    */
-  changeShieldedMode: ShieldedOutputMode | null;
+  changeShieldedMode: ChangeOutputMode | null;
 
   pin: string | null;
 
@@ -184,7 +185,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
-   * @param {ShieldedOutputMode|null} [options.changeShieldedMode=null] If set (and the tx has explicit shielded outputs), every change output — HTR fee-change and custom-token change — is emitted shielded in this mode
+   * @param {ChangeOutputMode|null} [options.changeShieldedMode=null] Change-output mode: null lets the automatic rules decide per token; 'transparent' keeps every change public; AMOUNT_SHIELDED/FULLY_SHIELDED emit every change output shielded in that mode
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -204,7 +205,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     inputs?: ISendInput[];
     outputs?: ISendOutput[];
     changeAddress?: string | null;
-    changeShieldedMode?: ShieldedOutputMode | null;
+    changeShieldedMode?: ChangeOutputMode | null;
     pin?: string | null;
   } = {}) {
     super();
@@ -447,7 +448,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // the HTR pass (so its selection funds the resulting larger total fee).
     // HTR change is handled separately, after selection, by
     // convertHtrChangeIfRequested.
-    const changeMode = this.changeShieldedMode;
+    // 'transparent' narrows to null here: both mean "no shielded conversion"
+    // until the automatic rules land (the explicit value exists so callers can
+    // pin today's behavior through that transition).
+    const changeMode = this.changeShieldedMode === 'transparent' ? null : this.changeShieldedMode;
     const changeWallet = this.wallet;
     if (changeMode && changeWallet && hasExplicitShieldedOutputs) {
       const keptOutputs: IDataOutput[] = [];
@@ -566,7 +570,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,
-      this.changeShieldedMode,
+      changeMode,
       this.wallet,
       network,
       this.storage,
