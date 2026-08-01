@@ -407,6 +407,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         token: spentToken,
         address: spentAddress,
         authorities: spentAuthorities,
+        // Mark shielded spends so fee accounting can skip them — the fullnode
+        // cannot attribute a shielded input to a token.
+        ...(resolved.kind === 'shielded' ? { shielded: true } : {}),
       });
     }
 

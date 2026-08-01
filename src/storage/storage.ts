@@ -682,6 +682,7 @@ export class Storage implements IStorage {
           address: utxo.address,
           value: utxo.value,
           authorities: utxo.authorities,
+          ...(utxo.shielded ? { shielded: true } : {}),
         });
       }
       if (foundAmount < singleBalance) {
