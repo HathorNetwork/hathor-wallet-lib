@@ -31,6 +31,7 @@ import {
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
+import { SEND_TX_TIMEOUT } from '../../constants';
 import { parseSchema } from '../../utils/bigint';
 import {
   addressesResponseSchema,
@@ -243,7 +244,7 @@ const walletApi = {
     txHex: string
   ): Promise<TxProposalCreateResponseData> {
     const data = { txHex };
-    const axios = await axiosInstance(wallet, true);
+    const axios = await axiosInstance(wallet, true, SEND_TX_TIMEOUT);
     const response = await axios.post('tx/proposal', data);
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
@@ -257,7 +258,7 @@ const walletApi = {
     txHex: string
   ): Promise<TxProposalUpdateResponseData> {
     const data = { txHex };
-    const axios = await axiosInstance(wallet, true);
+    const axios = await axiosInstance(wallet, true, SEND_TX_TIMEOUT);
     const response = await axios.put(`tx/proposal/${id}`, data);
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
