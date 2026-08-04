@@ -20,9 +20,9 @@ import {
   DEFAULT_PIN_CODE,
   generateMultisigWalletHelper,
   generateWalletHelper,
+  getMultisigAddresses,
   stopAllWallets,
 } from '../helpers/wallet.helper';
-import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import { verifyMessage } from '../../../src/utils/crypto';
 import { GAP_LIMIT } from '../../../src/constants';
 
@@ -75,7 +75,7 @@ describe('[Fullnode] addresses methods', () => {
     // The fullnode facade derives every index locally (no gap-limit window), so
     // we verify the whole precalculated multisig set. The bound is the length of
     // that precalculated list, not a magic number.
-    const expected = WALLET_CONSTANTS.multisig.addresses;
+    const expected = await getMultisigAddresses();
     for (let i = 0; i < expected.length; i++) {
       expect(await mshWallet.getAddressAtIndex(i)).toStrictEqual(expected[i]);
     }

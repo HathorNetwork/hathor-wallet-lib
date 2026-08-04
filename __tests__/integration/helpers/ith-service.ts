@@ -33,6 +33,36 @@ export interface SimpleWalletData {
 }
 
 /**
+ * One participant of a multisig group, from `GET /multisigWallet`.
+ *
+ * Every participant shares the same `addresses` and the same `pubkeys`: a P2SH
+ * multisig address derives from the pubkey set, not from any single seed. Only
+ * `words` differs, which is what lets each participant sign independently.
+ */
+export interface MultisigParticipantData {
+  words: string;
+  addresses: string[];
+  /**
+   * Precalculated shielded address pairs. Absent from every helper version
+   * released so far — `/multisigWallet` does not precalculate them yet
+   * (HathorNetwork/hathor-integration-test-helper#31), and the wallet derives
+   * each pair live meanwhile. Reading it optionally means the day the helper
+   * starts sending them, callers pick them up with no code change.
+   */
+  shieldedAddresses?: IPrecalculatedShieldedAddress[];
+  multisigDebugData: {
+    total: number;
+    minSignatures: number;
+    pubkeys: string[];
+  };
+}
+
+/** Mirrors the helper's `GET /multisigWallet` response. */
+export interface MultisigWalletSet {
+  wallets: MultisigParticipantData[];
+}
+
+/**
  * Mirrors the helper's `POST /fund` response.
  *
  * `amount` is a `bigint` on the wire, serialised by the helper via
@@ -242,6 +272,40 @@ export const ithService = {
     if (!data?.words || !Array.isArray(data?.addresses)) {
       throw new IthServiceError(
         `GET /simpleWallet returned an unexpected shape${describeBody(data)}`,
+        'MALFORMED_RESPONSE',
+        false,
+        200
+      );
+    }
+    return data;
+  },
+
+  /**
+   * GET /multisigWallet — a fresh multisig group: `participants` seeds sharing
+   * one pubkey set, `numSignatures` of which must sign to spend.
+   *
+   * Idempotent: the helper derives the group on demand and keeps no per-caller
+   * state, so a retry repeats the derivation and nothing else.
+   */
+  async getMultisigWallet({
+    participants,
+    numSignatures,
+  }: {
+    participants: number;
+    numSignatures: number;
+  }): Promise<MultisigWalletSet> {
+    const data = await request<MultisigWalletSet>(
+      'get',
+      `/multisigWallet?participants=${participants}&numSignatures=${numSignatures}`,
+      { idempotent: true }
+    );
+
+    // Check the arity too, not just the shape: asking for 5 participants and
+    // silently receiving 3 would surface much later as an out-of-range
+    // walletIndex reading `undefined.words`.
+    if (!Array.isArray(data?.wallets) || data.wallets.length !== participants) {
+      throw new IthServiceError(
+        `GET /multisigWallet returned an unexpected shape${describeBody(data)}`,
         'MALFORMED_RESPONSE',
         false,
         200

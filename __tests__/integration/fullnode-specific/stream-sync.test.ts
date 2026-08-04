@@ -19,10 +19,13 @@
  */
 
 import { injectFunds } from '../helpers/funding.helper';
-import { generateMultisigWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
+import {
+  generateMultisigWalletHelper,
+  getMultisigAddresses,
+  stopAllWallets,
+} from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { HistorySyncMode } from '../../../src/types';
-import { WALLET_CONSTANTS } from '../configuration/test-constants';
 
 describe('[Fullnode] history-streaming sync', () => {
   afterEach(async () => {
@@ -37,9 +40,10 @@ describe('[Fullnode] history-streaming sync', () => {
     // 1. Fund the first multisig address using a regular (polling) multisig wallet. Doing it
     //    BEFORE the streaming wallet starts guarantees the funds can only be discovered through
     //    the history-streaming sync, not through a live `new-tx` websocket event.
+    const multisigAddresses = await getMultisigAddresses();
     const funder = await generateMultisigWalletHelper({ walletIndex: 0 });
     const fundedAddress = await funder.getAddressAtIndex(0);
-    expect(fundedAddress).toEqual(WALLET_CONSTANTS.multisig.addresses[0]);
+    expect(fundedAddress).toEqual(multisigAddresses[0]);
 
     const [htrBefore] = await funder.getBalance(NATIVE_TOKEN_UID);
     // injectFunds waits for the funder wallet to receive and confirm the tx.
@@ -69,7 +73,7 @@ describe('[Fullnode] history-streaming sync', () => {
     for (let i = 0; i < 5; i++) {
       // eslint-disable-next-line no-await-in-loop -- sequential reads keep the assertion readable
       const address = await streamWallet.getAddressAtIndex(i);
-      expect(address).toEqual(WALLET_CONSTANTS.multisig.addresses[i]);
+      expect(address).toEqual(multisigAddresses[i]);
     }
   }, 60000);
 });
