@@ -391,7 +391,9 @@ export const fullNodeTxResponseSchema = baseResponseSchema.extend({
 export const fullNodeTxConfirmationDataResponseSchema = baseResponseSchema.extend({
   accumulated_weight: z.number(),
   accumulated_bigger: z.boolean(),
-  stop_value: z.number(),
+  // Optional to match the fullnode contract (TransactionAccWeightSuccess in
+  // src/api/schemas/txApi.ts): only present once the tx has a first_block.
+  stop_value: z.number().optional(),
   confirmation_level: z.number(),
 });
 
