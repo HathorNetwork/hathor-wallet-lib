@@ -34,6 +34,7 @@ import {
   SCANNING_POLICY,
   INcData,
   EcdsaTxSign,
+  PrivateKeyProvider,
   ITxSignatureData,
   OutputValueType,
   ILogger,
@@ -95,6 +96,8 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
+  getPrivKeyFunc: PrivateKeyProvider | null;
+
   shieldedCryptoProvider?: IShieldedCryptoProvider;
 
   // See IStorage.shieldedDecodeSkippedTxIds — the "partial history" flag set by
@@ -120,6 +123,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
     this.logger = getDefaultLogger();
@@ -189,6 +193,38 @@ export class Storage implements IStorage {
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+  }
+
+  /**
+   * Whether an external private-key provider is registered.
+   * @returns {boolean}
+   */
+  hasPrivateKeyMethod(): boolean {
+    return !!this.getPrivKeyFunc;
+  }
+
+  /**
+   * Set the external private-key provider, or a null value to clear it.
+   * @param getPrivKey The provider function, or null
+   */
+  setPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.getPrivKeyFunc = getPrivKey;
+  }
+
+  /**
+   * Get the private key for an address index from the registered external provider.
+   * @param addressIndex The address' derivation index
+   * @param options Options forwarded to the provider (e.g. pinCode, usually ignored)
+   * @returns {Promise<unknown>} A bitcore PrivateKey
+   */
+  async getExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string | null } = {}
+  ): Promise<unknown> {
+    if (!this.getPrivKeyFunc) {
+      throw new Error('No external private key method set.');
+    }
+    return this.getPrivKeyFunc(addressIndex, this, options);
   }
 
   /**

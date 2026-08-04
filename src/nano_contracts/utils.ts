@@ -189,7 +189,10 @@ export const unsafeGetOracleInputData = async (
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
   if (parsedOracleScript && !(parsedOracleScript instanceof ScriptData)) {
-    if (await wallet.storage.isReadonly()) {
+    // A readonly (xpub-only) wallet can still sign here when an external private-key provider
+    // is registered (e.g. a passkey signer); getPrivateKeyFromAddress will use it below.
+    const isReadonly = await wallet.storage.isReadonly();
+    if (isReadonly && !wallet.storage.hasPrivateKeyMethod()) {
       throw new WalletFromXPubGuard('getOracleInputData');
     }
 
