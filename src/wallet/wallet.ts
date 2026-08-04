@@ -3048,6 +3048,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
+    // Set the transaction change address if declared
+    if (newOptions.changeAddress) {
+      builder.setChangeAddress(newOptions.changeAddress);
+    }
+
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin!, {
@@ -3099,7 +3104,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
@@ -3167,7 +3172,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {

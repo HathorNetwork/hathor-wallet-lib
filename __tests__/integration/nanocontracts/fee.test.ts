@@ -1070,4 +1070,102 @@ describe('FeeBlueprint nano contract operations', () => {
     const tokenDetails = await hWallet.getTokenDetails(tx!.hash!);
     expect(tokenDetails.tokenInfo.version).toBe(TokenVersion.FEE);
   });
+
+  it('should send the fee change output to the transaction change address', async () => {
+    // The fee change output is the one created when HTR utxos are selected to
+    // pay the fee. It must honor the transaction-level change address, while
+    // each deposit's own change output keeps honoring its action-level one.
+    //
+    // The amounts below are chosen so the fee cannot be paid out of the HTR
+    // deposit change: build() first drains an existing HTR deposit change
+    // output to fund the fee and only selects new utxos for what is left. Here
+    // the deposit change (1n) is smaller than the fee (2n), so the drain
+    // removes it and the fee selection still runs. A deposit change larger than
+    // the fee would absorb it entirely and the fee change output would never be
+    // created, hiding a regression.
+    const feeChangeWallet = await generateWalletHelper(null);
+    const callerAddress = await feeChangeWallet.getAddressAtIndex(0);
+    // Far enough down the derivation path that the wallet will not hand these
+    // out as its current address, so the assertions below can only pass if the
+    // addresses were actually threaded through to the outputs.
+    const depositChangeAddress = await feeChangeWallet.getAddressAtIndex(10);
+    const txChangeAddress = await feeChangeWallet.getAddressAtIndex(11);
+
+    // Pull FBT out of the contract so the wallet owns a single 100n FBT utxo.
+    // The 10n covers this withdrawal's own 1n fee.
+    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 10n, {});
+    const fundingTx = await feeChangeWallet.createAndSendNanoContractTransaction(
+      'noop',
+      callerAddress,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [{ type: 'withdrawal', token: fbtUid, amount: 100n, address: callerAddress }],
+      }
+    );
+    await checkTxValid(feeChangeWallet, fundingTx);
+
+    // Utxo selection takes the smallest utxo that covers the requested amount,
+    // so the 10n HTR deposit below takes the 11n utxo and leaves 1n of change.
+    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 11n, {});
+    await GenesisWalletHelper.injectFunds(feeChangeWallet, callerAddress, 20n, {});
+
+    // The assertions only mean something while the change addresses differ from
+    // the address the builder falls back to when none is given.
+    const currentAddress = (await feeChangeWallet.getCurrentAddress()).address;
+    expect(currentAddress).not.toBe(depositChangeAddress);
+    expect(currentAddress).not.toBe(txChangeAddress);
+
+    const tx = await feeChangeWallet.createAndSendNanoContractTransaction(
+      'noop',
+      callerAddress,
+      {
+        ncId: contractId,
+        args: [],
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 10n,
+            changeAddress: depositChangeAddress,
+          },
+          {
+            type: 'deposit',
+            token: fbtUid,
+            amount: 50n,
+            changeAddress: depositChangeAddress,
+          },
+        ],
+      },
+      { changeAddress: txChangeAddress }
+    );
+    await checkTxValid(feeChangeWallet, tx);
+
+    // 1 FBT deposit action + 1 FBT change output = 2n
+    const feeHeader = tx.getFeeHeader();
+    expect(feeHeader).not.toBeNull();
+    expect(feeHeader!.entries[0].amount).toBe(2n);
+
+    // One input for the HTR deposit, one for the FBT deposit and one for the
+    // fee. Fewer would mean the deposit change covered the fee and the fee
+    // selection never ran, which is not the scenario under test.
+    expect(tx.inputs.length).toBe(3);
+
+    const fullTx = await feeChangeWallet.getFullTxById(tx.hash);
+    const htrOutputs = fullTx.tx.outputs.filter(output => output.token_data === 0);
+    const fbtOutputs = fullTx.tx.outputs.filter(output => output.token_data !== 0);
+
+    // The deposit's own change output still uses the action-level address.
+    expect(fbtOutputs).toHaveLength(1);
+    expect(fbtOutputs[0].value).toBe(50n);
+    expect(fbtOutputs[0].decoded.address).toBe(depositChangeAddress);
+
+    // The fee change output uses the transaction-level address. It deliberately
+    // does not fall back to a deposit action's change address: the fee belongs
+    // to the transaction and there may be any number of deposit actions.
+    expect(htrOutputs).toHaveLength(1);
+    expect(htrOutputs[0].decoded.address).toBe(txChangeAddress);
+
+    await feeChangeWallet.stop();
+  });
 });
