@@ -103,7 +103,7 @@ const txApi = {
           resolve(res.data);
         },
         res => {
-          Promise.reject(res);
+          return Promise.reject(res);
         }
       );
   },

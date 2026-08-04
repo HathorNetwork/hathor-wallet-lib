@@ -427,6 +427,8 @@ const walletApi = {
       return response.data;
     }
 
+    walletApi._txNotFoundGuard(response.data);
+
     throw new WalletRequestError(
       `Error getting neighbors data for ${txId} from the proxied fullnode.`,
       {
