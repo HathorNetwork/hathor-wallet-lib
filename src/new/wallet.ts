@@ -645,6 +645,17 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Whether a pin still has to be supplied in order to sign.
+   *
+   * The pin is only used to decrypt the local private key. When an external
+   * tx-signing method is registered (e.g. a hardware or passkey signer),
+   * signatures are produced without it, so the pin is optional in that case.
+   */
+  pinIsRequired(pin: string | null | undefined): boolean {
+    return !pin && !this.storage.hasTxSignatureMethod();
+  }
+
+  /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
@@ -1946,7 +1957,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
@@ -2229,10 +2240,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    // The pin is only used to decrypt the local key for signing. When an external tx-signing
-    // method is registered (e.g. a passkey signer), signing does not use it, so it is optional
-    // — mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2433,7 +2441,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2471,7 +2479,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       mintOptions
     );
-    return transactionUtils.prepareTransaction(txData, pin, this.storage, {
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage, {
       signTx: newOptions.signTx,
     });
   }
@@ -2549,7 +2557,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2585,7 +2593,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       meltOptions
     );
-    return transactionUtils.prepareTransaction(txData, pin, this.storage, {
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage, {
       signTx: newOptions.signTx,
     });
   }
@@ -2653,7 +2661,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { createAnother: true, pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { createAnother } = newOptions;
@@ -2689,7 +2697,7 @@ class HathorWallet extends EventEmitter {
       createAnother
     );
 
-    return transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage);
   }
 
   /**
@@ -2769,7 +2777,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs: IUtxo[];
@@ -2803,7 +2811,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
-    return transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage);
   }
 
   /**
@@ -3196,10 +3204,10 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const signatures = await this.storage.getTxSignatures(tx, pin);
+    const signatures = await this.storage.getTxSignatures(tx, pin ?? '');
     const sigInfoArray: ISignature[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
@@ -3230,10 +3238,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('signTx');
     }
     const pinCode = options.pinCode ?? this.pinCode;
-    // The pin is only used to decrypt the local private key. When an external tx-signing
-    // method is registered (e.g. a hardware or passkey signer), signatures are produced
-    // without it, so the pin is optional in that case.
-    if (!pinCode && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pinCode)) {
       throw new Error('Pin code is required to sign a transaction');
     }
 
@@ -3561,14 +3566,16 @@ class HathorWallet extends EventEmitter {
     data: FullnodeCreateNanoTxData,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
-    if (await this.storage.isReadonly()) {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
 
     // Only require PIN if we're actually signing
-    if (newOptions.signTx !== false && !pin) {
+    if (newOptions.signTx !== false && this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3608,7 +3615,7 @@ class HathorWallet extends EventEmitter {
 
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
-      return prepareNanoSendTransaction(nc, pin!, this.storage);
+      return prepareNanoSendTransaction(nc, pin ?? '', this.storage);
     }
 
     return new SendTransaction({
@@ -3667,9 +3674,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    // Optional when an external tx-signing method is registered (e.g. a passkey signer) —
-    // mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3910,10 +3915,10 @@ class HathorWallet extends EventEmitter {
     const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
       const pin = newOptions.pinCode || this.pinCode;
-      if (!pin) {
+      if (this.pinIsRequired(pin)) {
         throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
       }
-      await transactionUtils.signTransaction(tx, this.storage, pin);
+      await transactionUtils.signTransaction(tx, this.storage, pin ?? '');
       tx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     }
     return tx;
@@ -3964,12 +3969,14 @@ class HathorWallet extends EventEmitter {
     address: string,
     options: CreateOnChainBlueprintTxOptions = {}
   ): Promise<SendTransaction> {
-    if (await this.storage.isReadonly()) {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3989,7 +3996,7 @@ class HathorWallet extends EventEmitter {
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
 
-    return prepareNanoSendTransaction(tx, pin, this.storage);
+    return prepareNanoSendTransaction(tx, pin ?? '', this.storage);
   }
 
   /**
