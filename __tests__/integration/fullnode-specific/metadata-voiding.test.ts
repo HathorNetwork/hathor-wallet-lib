@@ -19,7 +19,7 @@
  */
 
 import { cloneDeep, reverse } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   generateWalletHelper,
   waitForTxReceived,
@@ -77,7 +77,7 @@ describe('[Fullnode] processing transaction metadata changes', () => {
     ]);
     expect(store.utxos.size).toStrictEqual(0);
 
-    const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    const injectedTx = await injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
       throw new Error('Could not inject funds into wallet');
     }
@@ -144,7 +144,7 @@ describe('[Fullnode] processing transaction metadata changes', () => {
     ]);
     expect(store.utxos.size).toStrictEqual(0);
 
-    const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    const injectedTx = await injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
       throw new Error('Could not inject funds into wallet');
     }
@@ -260,7 +260,7 @@ describe('[Fullnode] processing transaction metadata changes', () => {
     ]);
     expect(store.utxos.size).toStrictEqual(0);
 
-    const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    const injectedTx = await injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
       throw new Error('Could not inject funds into wallet');
     }
@@ -370,7 +370,7 @@ describe('[Fullnode] processing transaction metadata changes', () => {
     ]);
     expect(store.utxos.size).toStrictEqual(0);
 
-    const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    const injectedTx = await injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
       throw new Error('Could not inject funds into wallet');
     }

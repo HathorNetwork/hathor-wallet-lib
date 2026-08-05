@@ -15,7 +15,7 @@
  * Shared fee-token tests live in `shared/fee-tokens.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -41,7 +41,7 @@ describe('[Fullnode] fee tokens — createNewToken with data outputs', () => {
   it('should create a fee token with data outputs and discount data HTR correctly', async () => {
     const wallet = await generateWalletHelper();
     const addr0 = await wallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(wallet, addr0, 10n);
+    await injectFunds(wallet, addr0, 10n);
 
     const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
     const previousHtrBalance = htrBalance[0].balance.unlocked;
@@ -90,7 +90,7 @@ describe('[Fullnode] fee tokens — mintTokens detailed bookkeeping', () => {
     }
 
     const wallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(wallet, await wallet.getAddressAtIndex(0), 13n);
+    await injectFunds(wallet, await wallet.getAddressAtIndex(0), 13n);
     const { hash: fbtUid } = await createTokenHelper(wallet, 'FeeBasedToken', 'FBT', 8582n, {
       tokenVersion: TokenVersion.FEE,
     });
@@ -148,11 +148,7 @@ describe('[Fullnode] fee tokens — meltTokens with delegateAuthority and data o
   it('should melt fee based tokens', async () => {
     const wallet = await generateWalletHelper();
     let expectedHtrAmount = 15n;
-    await GenesisWalletHelper.injectFunds(
-      wallet,
-      await wallet.getAddressAtIndex(0),
-      expectedHtrAmount
-    );
+    await injectFunds(wallet, await wallet.getAddressAtIndex(0), expectedHtrAmount);
 
     const { hash: fbtUid } = await createTokenHelper(wallet, 'FeeBasedToken', 'FBT', 8582n, {
       tokenVersion: TokenVersion.FEE,

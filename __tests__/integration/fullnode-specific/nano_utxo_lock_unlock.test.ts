@@ -6,7 +6,7 @@
  */
 
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   generateWalletHelper,
   stopAllWallets,
@@ -36,7 +36,7 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
     hWallet = await generateWalletHelper();
     const address = await hWallet.getAddressAtIndex(0);
 
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10000n, {});
+    await injectFunds(hWallet, address, 10000n, {});
 
     const initTx = await hWallet.createAndSendNanoContractTransaction(
       NANO_CONTRACTS_INITIALIZE_METHOD,
@@ -61,7 +61,6 @@ describe('Nano contract UTXO lock/unlock lifecycle', () => {
   afterAll(async () => {
     await hWallet.stop();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   it('should lock UTXOs on prepare and unlock with releaseUtxos()', async () => {

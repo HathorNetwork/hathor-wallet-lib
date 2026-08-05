@@ -15,7 +15,7 @@
  * Shared authority UTXO tests live in `shared/authority-utxos.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -32,7 +32,7 @@ describe('[Fullnode] getAuthorityUtxos — fullnode-specific', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'getAuthorityUtxos Token',
@@ -138,7 +138,7 @@ describe('[Fullnode] authority utxo selection', () => {
 
   it('getMintAuthority', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100n);
 
     // Mark mint authority as selected_as_input
@@ -161,7 +161,7 @@ describe('[Fullnode] authority utxo selection', () => {
 
   it('getMeltAuthority', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100n);
 
     // Mark melt authority as selected_as_input

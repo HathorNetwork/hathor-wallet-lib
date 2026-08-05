@@ -45,7 +45,7 @@ import {
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 
@@ -257,7 +257,7 @@ describe('[Fullnode-specific] start', () => {
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
     });
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Dedicated Wallet Token',
@@ -402,7 +402,7 @@ describe('[Fullnode-specific] start', () => {
     // The external signer, not a stored key, makes the wallet spendable.
     await expect(hWallet.isReadonly()).resolves.toBe(false);
 
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
 
     // No pinCode passed: createNewToken -> prepareCreateNewToken({ signTx: true }) -> signed by
     // the external method -> mined and pushed. Must not throw "Pin is required.".
@@ -444,7 +444,7 @@ describe('[Fullnode-specific] start', () => {
     );
     await expect(hWallet.isReadonly()).resolves.toBe(false);
 
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 200n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 200n);
 
     // createNewToken keeps the mint and melt authorities on this wallet.
     const tokenTx = await hWallet.createNewToken('Relaxed Guards', 'RLX', 100n);
@@ -538,7 +538,7 @@ describe('[Fullnode-specific] start', () => {
       pinCode: DEFAULT_PIN_CODE,
     });
 
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Manually remove pin to test the no-pin code paths
     hWallet.pinCode = null;

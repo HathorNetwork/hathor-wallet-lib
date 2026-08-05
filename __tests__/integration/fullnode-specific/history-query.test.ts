@@ -22,7 +22,7 @@
  *   the wallet-service facade, and exercise `delegateAuthority` besides.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { delay, getRandomInt } from '../utils/core.util';
 import {
   createTokenHelper,
@@ -50,7 +50,7 @@ describe('[Fullnode] getTxById', () => {
 
     // Injecting some funds on this wallet
     const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
-    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, fundDestinationAddress, 10n);
+    const tx1 = await injectFunds(hWallet, fundDestinationAddress, 10n);
     // Validating the full history increased in one
     expect(Object.keys(await hWallet.getFullHistory())).toHaveLength(1);
 
@@ -146,7 +146,7 @@ describe('[Fullnode] getTxById', () => {
     // Test case: custom token with funds
     const address = await hWallet.getAddressAtIndex(0);
     // Inject 10 HTR into the wallet
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+    await injectFunds(hWallet, address, 10n);
     // Generate a random amount of new tokens
     const newTokenAmount = BigInt(getRandomInt(1000, 10));
     // Create a new custom token with the generated amount
@@ -195,7 +195,7 @@ describe('[Fullnode] getTxById', () => {
     // assertion would hold trivially. With funds of its own, "zero for THIS
     // token" is a real claim about token scoping.
     const otherWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(otherWallet, await otherWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(otherWallet, await otherWallet.getAddressAtIndex(0), 10n);
 
     const otherTknBalance = await otherWallet.getBalance(tokenUid);
     expect(otherTknBalance).toHaveLength(1);
@@ -220,11 +220,7 @@ describe('[Fullnode] getFullHistory', () => {
 
     // Injecting some funds on this wallet
     const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
-    const { hash: fundTxId } = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      fundDestinationAddress,
-      10n
-    );
+    const { hash: fundTxId } = await injectFunds(hWallet, fundDestinationAddress, 10n);
 
     // Validating the full history increased in one
     await expect(hWallet.storage.store.historyCount()).resolves.toEqual(1);
@@ -299,7 +295,7 @@ describe('[Fullnode] getFullHistory', () => {
 
   it('should return full history (custom token)', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const tokenName = 'Full History Token';
     const tokenSymbol = 'FHT';
     const { hash: tokenUid } = await createTokenHelper(hWallet, tokenName, tokenSymbol, 100n);
@@ -363,11 +359,7 @@ describe('[Fullnode] getTxBalance', () => {
 
   it('should get tx balance', async () => {
     const hWallet = await generateWalletHelper();
-    const { hash: tx1Hash } = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
+    const { hash: tx1Hash } = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Validating tx balance for a transaction with a single token (htr)
     const tx1 = await hWallet.getTx(tx1Hash);

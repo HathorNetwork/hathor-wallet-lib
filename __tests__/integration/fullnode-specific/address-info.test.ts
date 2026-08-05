@@ -22,7 +22,7 @@
  *   non-base58 string cannot round-trip through that facade.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -56,7 +56,7 @@ describe('[Fullnode] getAddressInfo', () => {
     });
 
     // Validating address after 1 transaction
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    await injectFunds(hWallet, addr0, 10n);
     await expect(hWallet.getAddressInfo(addr0)).resolves.toMatchObject({
       total_amount_received: 10n,
       total_amount_sent: 0n,
@@ -114,7 +114,7 @@ describe('[Fullnode] getAddressInfo', () => {
     // Fund addr2 with all the amounts the assertions below track. injectFunds
     // already waits past the funding tx's timestamp before returning, so the
     // spend below needs no extra wait.
-    await GenesisWalletHelper.injectFunds(hWallet, addr2, 10n);
+    await injectFunds(hWallet, addr2, 10n);
     await expect(hWallet.getAddressInfo(addr2)).resolves.toMatchObject({
       total_amount_received: 10n,
       total_amount_sent: 0n,
@@ -142,7 +142,7 @@ describe('[Fullnode] getAddressInfo', () => {
 
     // injectFunds already waits past the funding tx's timestamp before
     // returning, so the spend below needs no extra wait.
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    await injectFunds(hWallet, addr0, 10n);
 
     // Computed after funding, so the window covers only the locking tx and the
     // assertion below. The margin is deliberately tight: if the two steps stop
@@ -178,7 +178,7 @@ describe('[Fullnode] getAddressInfo', () => {
     const addr1 = await hWallet.getAddressAtIndex(1);
 
     // Creating custom token
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
+    await injectFunds(hWallet, addr0, 1n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'getAddressInfo Token',
@@ -240,7 +240,7 @@ describe('[Fullnode] getTxAddresses', () => {
     // is what the final assertion pins down.
     const senderWallet = await generateWalletHelper();
     const senderAddress = await senderWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(senderWallet, senderAddress, 20n);
+    await injectFunds(senderWallet, senderAddress, 20n);
 
     // Generating a transaction with outputs to multiple addresses
     const tx = await senderWallet.sendManyOutputsTransaction(

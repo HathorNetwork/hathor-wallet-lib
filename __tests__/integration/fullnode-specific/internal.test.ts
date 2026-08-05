@@ -18,7 +18,7 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import { ConnectionState } from '../../../src/wallet/types';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { generateWalletHelper } from '../helpers/wallet.helper';
 
 describe('[Fullnode] internal methods', () => {
@@ -48,7 +48,7 @@ describe('[Fullnode] internal methods', () => {
   });
 
   it('should call processHistory when connection state changes to CONNECTED', async () => {
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const spy = jest.spyOn(hWallet.storage, 'processHistory');
     // Simulate that we received an event of the connection becoming active
     await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);

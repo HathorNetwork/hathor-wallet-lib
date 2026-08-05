@@ -16,7 +16,7 @@ import { TX_MINING_URL, WALLET_CONSTANTS } from './__tests__/integration/configu
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
-import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
+import { injectFunds } from './__tests__/integration/helpers/funding.helper';
 import { generateWalletHelper, waitTxConfirmed, waitUntilNextTimestamp } from './__tests__/integration/helpers/wallet.helper';
 import { waitForNextBlock } from './__tests__/integration/utils/fullnode.util';
 import { stopGLLBackgroundTask } from './src/sync/gll';
@@ -31,7 +31,6 @@ jest.retryTimes(2, { logErrorsBeforeRetry: true });
 Transaction.prototype.calculateWeight = function () {
   return 1;
 };
-
 
 /**
  * Disable HTTP keep-alive for axios to prevent "socket hang up" errors in Jest.
@@ -53,7 +52,7 @@ async function createOCBs(sharedState) {
   const { seed } = WALLET_CONSTANTS.ocb;
   const ocbWallet = await generateWalletHelper({ seed });
   const address0 = await ocbWallet.getAddressAtIndex(0);
-  await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
+  await injectFunds(ocbWallet, address0, 1000n);
 
   const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
   const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);

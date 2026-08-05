@@ -1,5 +1,5 @@
 import { isEmpty } from 'lodash';
-import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
+import { injectFunds } from '../../helpers/funding.helper';
 import {
   DEFAULT_PIN_CODE,
   generateWalletHelper,
@@ -23,7 +23,7 @@ describe('FeeBlueprint Template execution', () => {
   beforeAll(async () => {
     hWallet = await generateWalletHelper(null);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10000n, {});
+    await injectFunds(hWallet, address, 10000n, {});
 
     // Setup: initialize contract and create tokens using wallet methods
     // (setup is not the focus of these tests, the template operations are)
@@ -126,7 +126,6 @@ describe('FeeBlueprint Template execution', () => {
   afterAll(async () => {
     await hWallet.stop();
     await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
   });
 
   const checkTxValid = async (wallet, tx) => {

@@ -30,7 +30,7 @@
  *      that paper over a real protocol asymmetry for very few tests.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   DEFAULT_PIN_CODE,
   generateMultisigWalletHelper,
@@ -53,7 +53,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
   it('should track address usage for HTR transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6n);
     await waitForTxReceived(hWallet, tx1.hash);
@@ -108,7 +108,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
   it('should track address usage for custom token transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'DepositBasedToken', 'DBT', 100n);
 
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30n, {
@@ -148,7 +148,7 @@ describe('[Fullnode] sendTransaction — address tracking', () => {
 
   it('should track address usage for fee token transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {
       tokenVersion: TokenVersion.FEE,
     });
@@ -198,7 +198,7 @@ describe('[Fullnode] sendTransaction — multisig', () => {
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
-    await GenesisWalletHelper.injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
+    await injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
 
     const { tx_id: inputTxId, index: inputIndex } = (await mhWallet1.getUtxos()).utxos[0];
     const network = mhWallet1.getNetworkObject();

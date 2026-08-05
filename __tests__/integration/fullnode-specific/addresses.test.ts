@@ -15,7 +15,7 @@
  * Shared address tests live in `shared/addresses.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   DEFAULT_PIN_CODE,
   generateMultisigWalletHelper,
@@ -35,7 +35,7 @@ describe('[Fullnode] addresses methods', () => {
     const hWallet = await generateWalletHelper();
 
     const currentAddress = await hWallet.getCurrentAddress();
-    await GenesisWalletHelper.injectFunds(hWallet, currentAddress.address, 1n);
+    await injectFunds(hWallet, currentAddress.address, 1n);
 
     const currentAfterTx = await hWallet.getCurrentAddress();
     expect(currentAfterTx).toMatchObject({

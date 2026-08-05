@@ -21,7 +21,7 @@
  * Shared mintTokens tests live in `shared/token-authority.test.ts`.
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import {
   createTokenHelper,
   generateWalletHelper,
@@ -54,7 +54,7 @@ describe('[Fullnode] mintTokens data outputs', () => {
 
   it('should append a data-script output when minting with data', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Data Mint Token', 'DMTK', 100n);
 
     // By default the data output is appended at the end of the output list.
@@ -88,7 +88,7 @@ describe('[Fullnode] mintTokens FEE-token tx shape', () => {
 
   it('should build the mint tx outputs and charge a flat fee header', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // FEE-token creation charges a flat 1 HTR: 10 − 1 = 9 HTR available.
     const { hash: fbtUid } = await createTokenHelper(hWallet, 'FeeBasedToken', 'FBT', 8582n, {

@@ -19,7 +19,7 @@
  * wallet-service facade does not implement).
  */
 
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { injectFunds } from '../helpers/funding.helper';
 import { createTokenHelper, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../src/constants';
 
@@ -35,11 +35,7 @@ describe('[Fullnode] getAvailableUtxos', () => {
     let generator = hWallet.getAvailableUtxos();
     expect(await generator.next()).toStrictEqual({ done: true, value: undefined });
 
-    const tx = await GenesisWalletHelper.injectFunds(
-      hWallet,
-      await hWallet.getAddressAtIndex(0),
-      10n
-    );
+    const tx = await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // After funding, the generator yields the funding UTXO
     generator = hWallet.getAvailableUtxos();
@@ -64,7 +60,7 @@ describe('[Fullnode] getAvailableUtxos', () => {
 
   it('should list authority UTXOs when filtering by authorities mask', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    await injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'AuthoritiesUtxosToken',
