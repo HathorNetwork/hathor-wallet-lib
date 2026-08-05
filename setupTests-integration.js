@@ -170,7 +170,17 @@ beforeAll(async () => {
       process.exit(1);
     }
 
-    await createOCBs(sharedState);
+    try {
+      await createOCBs(sharedState);
+    } catch (error) {
+      // A raw failure here may carry axios internals (functions) or BigInts
+      // that crash jest's worker IPC while *reporting* it — surfacing as
+      // DataCloneError / "Do not know how to serialize a BigInt" with the
+      // whole suite down and the true cause hidden. Log the truth to the
+      // per-file transaction log and rethrow a clonable copy.
+      loggers.test?.error(`createOCBs failed: ${error?.stack ?? error}`);
+      throw new Error(`createOCBs failed: ${error?.message ?? error}`);
+    }
 
     sharedState.setupDone = true;
   }
@@ -210,3 +220,13 @@ expect.extend({
 
 // Stop gll interval to avoid background tasks during tests
 stopGLLBackgroundTask();
+
+// Record suite-level unhandled rejections in the per-file transaction log.
+// jest reports them by shipping the raw error object to the main process,
+// and payloads carrying axios internals crash that IPC (DataCloneError under
+// workerThreads, BigInt errors under JSON IPC), masking the original error.
+// This listener does not swallow anything — jest's own handler still runs —
+// it just guarantees the true failure is readable somewhere.
+process.on('unhandledRejection', reason => {
+  loggers.test?.error(`Unhandled rejection: ${reason?.stack ?? reason}`);
+});
