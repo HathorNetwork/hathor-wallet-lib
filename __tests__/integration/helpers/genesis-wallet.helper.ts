@@ -24,7 +24,16 @@ interface InjectFundsOptions {
   waitTimeout?: number;
 }
 
-type SuccessfulInjectTransaction = Transaction;
+/**
+ * What funding actually returns now that the broadcast is delegated.
+ *
+ * The helper's /fund answers with a txId and nothing else, so this is narrowed
+ * to exactly that rather than claiming to be a full `Transaction`. A wider type
+ * here would compile at every call site while returning `undefined` for
+ * `.outputs`, `.inputs` or `.timestamp` — a whole class of silent failures the
+ * checker can prevent for free.
+ */
+export type InjectedFundsTx = Pick<Transaction, 'hash'>;
 
 let singleton: GenesisWalletHelper | null = null;
 let singletonService: HathorWalletServiceWallet | null = null;
@@ -83,7 +92,7 @@ export class GenesisWalletHelper {
    * @param [options]
    * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
    *                                       Passing 0 here skips this waiting.
-   * @returns {Promise<Transaction>}
+   * @returns {Promise<InjectedFundsTx>}
    * @private
    */
   // eslint-disable-next-line class-methods-use-this -- funding is delegated to ithService; kept as an instance method to preserve call sites
@@ -92,7 +101,7 @@ export class GenesisWalletHelper {
     address: string,
     value: OutputValueType,
     options: InjectFundsOptions = {}
-  ): Promise<Transaction> {
+  ): Promise<InjectedFundsTx> {
     // Captured outside the try so the catch can tell "the helper never funded"
     // apart from "it funded and our wallet never saw the tx".
     let fundedTxId: string | undefined;
@@ -102,7 +111,7 @@ export class GenesisWalletHelper {
       // once the tx is broadcast; we then wait until the destination wallet
       // observes it, which is the guarantee callers actually rely on.
       fundedTxId = (await ithService.fund(address, value)).txId;
-      const result = { hash: fundedTxId } as unknown as SuccessfulInjectTransaction;
+      const result: InjectedFundsTx = { hash: fundedTxId };
 
       if (options.waitTimeout === 0) {
         return result;
@@ -157,7 +166,7 @@ export class GenesisWalletHelper {
    * @param [options]
    * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
    *                                       Passing 0 here skips this waiting.
-   * @returns {Promise<Transaction>}
+   * @returns {Promise<InjectedFundsTx>}
    */
   static async injectFunds(
     destinationWallet: HathorWallet,
@@ -246,10 +255,10 @@ export class GenesisWalletServiceHelper {
     address: string,
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
-  ): Promise<Transaction> {
+  ): Promise<InjectedFundsTx> {
     // Delegated to the helper's /fund, same as the fullnode path above.
     const { txId } = await ithService.fund(address, amount);
-    const fundTx = { hash: txId } as unknown as Transaction;
+    const fundTx: InjectedFundsTx = { hash: txId };
 
     if (destinationWallet) {
       // Ensure the destination wallet is also aware of the transaction.

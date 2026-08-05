@@ -87,6 +87,26 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
+/**
+ * An address belonging to nobody the caller is testing with — for assertions
+ * about sending funds "somewhere external".
+ *
+ * Comes from a fresh pre-calculated wallet, so no wallet is started at all: no
+ * sync, no listeners, no shared state — just a valid address that belongs to
+ * nothing else in the run.
+ *
+ * Only use this where the receiving side is never inspected. If a test needs to
+ * wait for the recipient to observe the transaction, it needs a started wallet
+ * from {@link generateWalletHelper} instead.
+ *
+ * @param {number} [index=0] Which address of the fresh wallet to return
+ * @returns {Promise<string>}
+ */
+export async function getExternalAddress(index = 0) {
+  const { addresses } = await precalculationHelpers.test.getPrecalculatedWallet();
+  return addresses[index];
+}
+
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
   let walletData = {};

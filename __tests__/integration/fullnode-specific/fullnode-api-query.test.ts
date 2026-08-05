@@ -42,7 +42,6 @@
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 import { TxNotFoundError } from '../../../src/errors';
-import HathorWallet from '../../../src/new/wallet';
 
 /**
  * A well-formed transaction hash that is absent from the private test network.
@@ -55,13 +54,11 @@ const NOT_FOUND_TX_HASH = '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab
 const INVALID_TX_HASH = 'invalid-tx-hash';
 
 describe('[Fullnode] fullnode API queries', () => {
-  let gWallet: HathorWallet;
-
-  beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
-  });
-
+  // The error-path tests below build their own wallet per test rather than
+  // sharing one across the describe. They need a started wallet only as a
+  // vehicle to reach the fullnode -- the transaction they query is never
+  // theirs -- and the afterEach below stops every tracked wallet, so a shared
+  // instance would be dead by the second test.
   afterEach(async () => {
     await stopAllWallets();
   });
@@ -91,13 +88,15 @@ describe('[Fullnode] fullnode API queries', () => {
     });
 
     it('should throw an error if success is false on response', async () => {
-      await expect(gWallet.getFullTxById(INVALID_TX_HASH)).rejects.toThrow(
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.getFullTxById(INVALID_TX_HASH)).rejects.toThrow(
         `Invalid transaction ${INVALID_TX_HASH}`
       );
     });
 
     it('should throw an error on valid but not found transaction', async () => {
-      await expect(gWallet.getFullTxById(NOT_FOUND_TX_HASH)).rejects.toThrow(TxNotFoundError);
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.getFullTxById(NOT_FOUND_TX_HASH)).rejects.toThrow(TxNotFoundError);
     });
   });
 
@@ -130,13 +129,15 @@ describe('[Fullnode] fullnode API queries', () => {
     });
 
     it('should throw an error if success is false on response', async () => {
-      await expect(gWallet.getTxConfirmationData(INVALID_TX_HASH)).rejects.toThrow(
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.getTxConfirmationData(INVALID_TX_HASH)).rejects.toThrow(
         `Invalid transaction ${INVALID_TX_HASH}`
       );
     });
 
     it('should throw TxNotFoundError on valid hash but not found transaction', async () => {
-      await expect(gWallet.getTxConfirmationData(NOT_FOUND_TX_HASH)).rejects.toThrow(
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.getTxConfirmationData(NOT_FOUND_TX_HASH)).rejects.toThrow(
         TxNotFoundError
       );
     });
@@ -179,13 +180,15 @@ describe('[Fullnode] fullnode API queries', () => {
     });
 
     it('should throw an error if success is false on response', async () => {
-      await expect(gWallet.graphvizNeighborsQuery(INVALID_TX_HASH, 'funds', 1)).rejects.toThrow(
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.graphvizNeighborsQuery(INVALID_TX_HASH, 'funds', 1)).rejects.toThrow(
         `Invalid transaction ${INVALID_TX_HASH}`
       );
     });
 
     it('should throw TxNotFoundError on valid but not found transaction', async () => {
-      await expect(gWallet.graphvizNeighborsQuery(NOT_FOUND_TX_HASH, 'funds', 1)).rejects.toThrow(
+      const hWallet = await generateWalletHelper();
+      await expect(hWallet.graphvizNeighborsQuery(NOT_FOUND_TX_HASH, 'funds', 1)).rejects.toThrow(
         TxNotFoundError
       );
     });
