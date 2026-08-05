@@ -198,9 +198,20 @@ describe('[Fullnode] sendTransaction — multisig', () => {
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
-    await injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
+    const fundTx = await injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
 
-    const { tx_id: inputTxId, index: inputIndex } = (await mhWallet1.getUtxos()).utxos[0];
+    // Pick the UTXO this test just created, not whichever happens to sit at
+    // position 0. Position 0 is only the right input on a wallet holding
+    // nothing else; if the address carries any smaller output, spending 10n
+    // from it fails with "Sum of outputs is greater than sum of inputs", which
+    // reads like a wallet bug rather than a selection mistake. Selecting by
+    // funding tx is correct whatever else the address holds.
+    const { utxos } = await mhWallet1.getUtxos();
+    const fundedUtxo = utxos.find(utxo => utxo.tx_id === fundTx.hash);
+    if (!fundedUtxo) {
+      throw new Error(`Funding tx ${fundTx.hash} produced no utxo on the multisig wallet`);
+    }
+    const { tx_id: inputTxId, index: inputIndex } = fundedUtxo;
     const network = mhWallet1.getNetworkObject();
     const sendTransaction = new SendTransaction({
       storage: mhWallet1.storage,

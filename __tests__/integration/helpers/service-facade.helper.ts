@@ -14,22 +14,18 @@ const pinCode = '123456';
 /** Default password to simplify the tests */
 const password = 'testpass';
 
-export const emptyWallet = {
-  words:
-    'buddy kingdom scorpion device uncover donate sense false few leaf oval illegal assume talent express glide above brain end believe abstract will marine crunch',
-  addresses: [
-    'WkHNZyrKNusTtu3EHfvozEqcBdK7RoEMR7',
-    'WivGyxDjWxijcns3hpGvEJKhjR9HMgFzZ5',
-    'WXQSeMcNt67hVpmgwYqmYLsddgXeGYP4mq',
-    'WTMH3NQs8YXyNguqwLyqoTKDFTfkJLxMzX',
-    'WTUiHeiajtt1MXd1Jb3TEeWUysfNJfig35',
-    'WgzZ4MNcuX3sBgLC5Fa6dTTQaoy4ccLdv5',
-    'WU6UQCnknGLh1WP392Gq6S69JmheS5kzZ2',
-    'WX7cKt38FfgKFWFxSa2YzCWeCPgMbRR98h',
-    'WZ1ABXsuwHHfLzeAWMX7RYs5919LPBaYpp',
-    'WUJjQGb4SGSLh44m2JdgAR4kui8mTPb8bK',
-  ],
-};
+/**
+ * A wallet guaranteed to have no transactions.
+ *
+ * The guarantee comes from how the wallet is obtained: a freshly generated one
+ * is empty by construction. Do not swap this for a fixed seed — on a network
+ * that lives across runs, "nobody ever funds this address" is a promise the
+ * test suite cannot keep.
+ */
+export async function getEmptyWallet(): Promise<{ words: string; addresses: string[] }> {
+  const { words, addresses } = await precalculationHelpers.test.getPrecalculatedWallet();
+  return { words, addresses };
+}
 
 export function initializeServiceGlobalConfigs() {
   // Set base URL for the wallet service API inside the privatenet test container
