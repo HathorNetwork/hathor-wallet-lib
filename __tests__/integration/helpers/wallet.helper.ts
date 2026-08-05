@@ -12,15 +12,11 @@ import {
   FULLNODE_URL,
   NETWORK_NAME,
   TX_TIMEOUT_DEFAULT,
-  WALLET_CONSTANTS,
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
-import {
-  mergePrecalculatedAddresses,
-  multisigWalletsData,
-  precalculationHelpers,
-} from './wallet-precalculation.helper';
+import { mergePrecalculatedAddresses, precalculationHelpers } from './wallet-precalculation.helper';
+import { ithService, type MultisigWalletSet } from './ith-service';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
@@ -207,25 +203,113 @@ export async function generateWalletHelperRO(options) {
   return hWallet;
 }
 
+/** Group shape used when a caller does not ask for a specific one. */
+export const DEFAULT_MULTISIG_PARTICIPANTS = 5;
+export const DEFAULT_MULTISIG_NUM_SIGNATURES = 3;
+
+/**
+ * @typedef {Object} MultisigGroupShape
+ * @property {number} [participants=5] How many seeds share the pubkey set
+ * @property {number} [numSignatures=3] How many of them must sign to spend
+ */
+
+/** One memoised group per requested shape, keyed `<numSignatures>-of-<participants>`. */
+const multisigWalletSets = new Map<string, Promise<MultisigWalletSet>>();
+
+/**
+ * A multisig group provisioned by the helper.
+ *
+ * Fetched once per shape and shared by every participant of it, because they
+ * must genuinely be one group: a P2SH address derives from the pubkey set, so
+ * participants that did not come from the same `/multisigWallet` call would
+ * compute different addresses and could not co-sign.
+ *
+ * The memo is per test file — jest gives each file a fresh module registry —
+ * which is the useful scope: every file gets a group nobody has spent from, so
+ * no test inherits another file's on-chain history. Distinct shapes are cached
+ * separately, so asking for 2-of-3 does not disturb the file's 3-of-5 group.
+ *
+ * The promise, rather than the resolved value, is what gets cached, so two
+ * participants awaiting concurrently share one request instead of racing to
+ * provision two different groups.
+ *
+ * @param {MultisigGroupShape} [shape]
+ */
+export async function getMultisigWalletSet({
+  participants = DEFAULT_MULTISIG_PARTICIPANTS,
+  numSignatures = DEFAULT_MULTISIG_NUM_SIGNATURES,
+} = {}): Promise<MultisigWalletSet> {
+  const key = `${numSignatures}-of-${participants}`;
+  let pending = multisigWalletSets.get(key);
+  if (!pending) {
+    pending = ithService.getMultisigWallet({ participants, numSignatures });
+    multisigWalletSets.set(key, pending);
+  }
+  return pending;
+}
+
+/**
+ * The P2SH addresses of a multisig group.
+ *
+ * Shared by every participant, so which one they are read from is arbitrary.
+ * Tests asserting on multisig addresses take them from here rather than from a
+ * committed constant, so the expectation follows whatever group the helper
+ * provisioned for this run. Pass the same shape the wallets were built with.
+ *
+ * @param {MultisigGroupShape} [shape]
+ */
+export async function getMultisigAddresses(shape = {}): Promise<string[]> {
+  const { wallets } = await getMultisigWalletSet(shape);
+  return wallets[0].addresses;
+}
+
 /**
  *
+ * Called with no arguments, builds participant 0 of the default
+ * {@link DEFAULT_MULTISIG_NUM_SIGNATURES}-of-{@link DEFAULT_MULTISIG_PARTICIPANTS}
+ * group. `participants`/`numSignatures` request a different shape; every
+ * participant of one group must be built with the same pair, or they will not
+ * share a pubkey set and cannot co-sign.
+ *
  * @param [parameters]
- * @param {number} [parameters.walletIndex] Index of the harcoded wallet that will be used
+ * @param {number} [parameters.walletIndex=0] Index of the participant to build, within the
+ *                                            helper-provisioned group
+ * @param {number} [parameters.participants=5] Size of the group to request
+ * @param {number} [parameters.numSignatures=3] Signatures required to spend
  * @param {string} [parameters.walletWords] Custom wallet words to be used. If informed, all the
  *                                          other parameters (except walletIndex) become mandatory
  * @param {string[]} [parameters.preCalculatedAddresses] Custom pre-calculated addresses, if
  *                                                       walletWords is used
  * @param {string[]} [parameters.pubkeys] Custom pubkeys if walletWords is used
- * @param {number} [parameters.numSignatures] Custom numSignatures if walletWords is used
  * @param {HistorySyncMode} [parameters.historySyncMode] History sync mode to set before start
  *
  * @example
- * const multisigWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+ * const multisigWallet = await generateMultisigWalletHelper();
+ * @example
+ * const twoOfThree = await generateMultisigWalletHelper({
+ *   walletIndex: 1,
+ *   participants: 3,
+ *   numSignatures: 2,
+ * });
  *
  * @return {Promise<HathorWallet>}
  */
-export async function generateMultisigWalletHelper(parameters) {
-  const seed = parameters.walletWords || multisigWalletsData.words[parameters.walletIndex];
+export async function generateMultisigWalletHelper(parameters = {}) {
+  // Passing the pair through explicitly keeps `undefined` meaning "default":
+  // destructuring in getMultisigWalletSet applies them, so an absent shape and
+  // an explicit default resolve to the same memoised group.
+  const { wallets } = await getMultisigWalletSet({
+    participants: parameters.participants,
+    numSignatures: parameters.numSignatures,
+  });
+  const participant = wallets[parameters.walletIndex ?? 0];
+  if (!participant) {
+    throw new Error(
+      `No multisig participant at index ${parameters.walletIndex}: the helper provisioned a group of ${wallets.length}`
+    );
+  }
+
+  const seed = parameters.walletWords || participant.words;
   // Start the wallet
   const walletConfig = {
     seed,
@@ -233,15 +317,22 @@ export async function generateMultisigWalletHelper(parameters) {
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
     // Both chains for each index travel together in the unified array. The
-    // multisig seeds are fixed in-repo, so their shielded pairs are committed
-    // fixtures.
+    // helper does not precalculate shielded pairs for multisig groups yet
+    // (HathorNetwork/hathor-integration-test-helper#31), so `shieldedAddresses`
+    // is absent today and the wallet derives each pair live -- the cost of
+    // provisioning these fresh. Reading it from the participant regardless
+    // means the day the helper starts sending them, this speeds up on its own.
     preCalculatedAddresses: mergePrecalculatedAddresses(
-      parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
-      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed)
+      parameters.preCalculatedAddresses || participant.addresses,
+      parameters.preCalculatedShieldedAddresses ||
+        participant.shieldedAddresses ||
+        getPrecalculatedShieldedForSeed(seed)
     ),
+    // Read back from the group the helper actually built rather than from the
+    // request, so these stay the single source of truth for the pubkey set.
     multisig: {
-      pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
-      numSignatures: parameters.numSignatures || 3,
+      pubkeys: parameters.pubkeys || participant.multisigDebugData.pubkeys,
+      numSignatures: participant.multisigDebugData.minSignatures,
     },
     scanPolicy: getGapLimitConfig(),
   };
