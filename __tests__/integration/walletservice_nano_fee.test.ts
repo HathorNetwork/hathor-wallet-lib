@@ -25,7 +25,6 @@ describe('WalletService Nano Contract Fee Tests', () => {
   beforeAll(async () => {
     // 1. Start genesis wallet helper
     await GenesisWalletServiceHelper.start();
-    const gWallet = await GenesisWalletServiceHelper.getSingleton();
 
     // 2. Build and start wsWallet (uses precalculated wallet)
     const buildResult = await buildWalletInstance({});
@@ -33,10 +32,11 @@ describe('WalletService Nano Contract Fee Tests', () => {
     walletAddresses = buildResult.addresses;
     await wsWallet.start({ pinCode, password });
 
-    // 3. Fund wallet with HTR
+    // 3. Fund wallet with HTR through the helper's race-free pool — spending
+    // genesis UTXOs directly would compete with the integration-test-helper,
+    // which owns the genesis wallet.
     const address0 = walletAddresses[0];
-    const fundTx = await gWallet.sendTransaction(address0, 1000n, { pinCode });
-    await pollForTx(wsWallet, fundTx.hash!);
+    await GenesisWalletServiceHelper.injectFunds(address0, 1000n, wsWallet);
 
     // 4. Initialize FeeBlueprint contract
     const initTx = await wsWallet.createAndSendNanoContractTransaction(
