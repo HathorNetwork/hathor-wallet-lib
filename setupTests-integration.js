@@ -12,7 +12,7 @@ import axios from 'axios';
 import fs from 'fs';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from './src/config';
-import { TX_MINING_URL, WALLET_CONSTANTS } from './__tests__/integration/configuration/test-constants';
+import { TX_MINING_URL } from './__tests__/integration/configuration/test-constants';
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
@@ -49,8 +49,11 @@ axios.defaults.httpAgent = new http.Agent({ keepAlive: false });
 axios.defaults.httpsAgent = new https.Agent({ keepAlive: false });
 
 async function createOCBs(sharedState) {
-  const { seed } = WALLET_CONSTANTS.ocb;
-  const ocbWallet = await generateWalletHelper({ seed });
+  // The privnet does not restrict blueprint publishers
+  // (NC_ON_CHAIN_BLUEPRINT_RESTRICTED: false), so each jest worker publishes
+  // its own blueprint set from a fresh helper wallet. A shared fixed seed here
+  // would make concurrent workers race on the same UTXOs during this setup.
+  const ocbWallet = await generateWalletHelper();
   const address0 = await ocbWallet.getAddressAtIndex(0);
   await injectFunds(ocbWallet, address0, 1000n);
 

@@ -607,12 +607,14 @@ describe('Full blueprint basic tests', () => {
     expect(builtInBlueprintList.has_more).toBe(false);
     expect(builtInBlueprintList.blueprints.length).toBe(0);
 
-    const onChainBlueprintList = await ncApi.getOnChainBlueprintList();
+    // Identity check rather than a count: the on-chain list is node-global and
+    // grows with every jest worker (each publishes its own blueprint set in
+    // setupTests-integration.js), so any count-based assertion couples this
+    // test to worker count and to the API's default page size. Searching for
+    // our own blueprint exercises the same endpoint without that coupling.
+    const onChainBlueprintList = await ncApi.getOnChainBlueprintList(null, null, null, blueprintId);
     expect(onChainBlueprintList.success).toBe(true);
-    // Lower-bound check rather than exact count: the global on-chain blueprint
-    // list grows whenever a new fixture is registered in setupTests-integration.js,
-    // so an exact assertion couples this test to unrelated additions.
-    expect(onChainBlueprintList.blueprints.length).toBeGreaterThanOrEqual(8);
+    expect(onChainBlueprintList.blueprints).toEqual([expect.objectContaining({ id: blueprintId })]);
 
     const nanoList = await ncApi.getNanoContractCreationList();
     // The correct length depends on the execution order, so I
