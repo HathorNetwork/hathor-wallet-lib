@@ -11,6 +11,12 @@ module.exports = {
   collectCoverage: true,
   collectCoverageFrom: ['<rootDir>/src/**/*.js', '<rootDir>/src/**/*.ts'],
   testMatch: [mainTestMatch],
+  // Worker-to-parent IPC uses the structured-clone algorithm instead of
+  // JSON.stringify, which cannot serialize the BigInts our amounts carry: a
+  // failing test whose error payload includes a tx object would otherwise
+  // crash its whole suite with "Do not know how to serialize a BigInt",
+  // masking the real failure. Only exercised when running with workers.
+  workerThreads: true,
   // Blocks the whole suite until the integration-test-helper reports ready.
   globalSetup: '<rootDir>/__tests__/integration/configuration/global-setup.ts',
   coverageReporters: ['text-summary', 'lcov', 'clover'],
