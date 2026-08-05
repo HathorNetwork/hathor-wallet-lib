@@ -10,15 +10,9 @@ import { P2PKH_ACCT_PATH } from '../../../src/constants';
 import Network from '../../../src/models/network';
 import { AddressScanPolicyData, SCANNING_POLICY } from '../../../src/types';
 
-/**
- * Simple way to wait asynchronously before continuing the funcion. Does not block the JS thread.
- * @param ms Amount of milliseconds to delay
- */
-export async function delay(ms: number): Promise<unknown> {
-  return new Promise(resolve => {
-    setTimeout(resolve, ms);
-  });
-}
+// Re-exported so existing call sites keep working. Its home is time.util, which
+// has no dependencies — see the note there on why that matters for setup code.
+export { delay } from './time.util';
 
 /**
  * Generates a random positive integer between the maximum and minimum values,
