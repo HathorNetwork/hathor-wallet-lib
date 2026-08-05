@@ -145,6 +145,24 @@ function ithConfig(): IthConfig {
 /** Statuses worth retrying when the response carries no helper error contract. */
 const RETRYABLE_BARE_STATUSES = new Set([429, 502, 503, 504]);
 
+/**
+ * A fullnode rejection for a tx whose DAG parent shares its timestamp.
+ *
+ * With parallel jest workers, the helper's funding tx can be mined in the same
+ * second as another process's tx that the mining service picks as its parent —
+ * rejected because timestamps have 1-second granularity and must be strictly
+ * greater than each parent's (HathorNetwork/tx-mining-service#172).
+ *
+ * Retrying is safe even on the non-idempotent POST /fund, overriding the
+ * helper's own verdict: the broadcast was *rejected*, so no transaction exists
+ * on-chain and the helper has already released its reservation — a replay
+ * cannot double-fund. The retry re-mines with fresh parents and timestamp,
+ * which lands in a later second essentially always.
+ */
+function isParentTimestampCollision(message: string): boolean {
+  return /timestamp=(\d+), parent=[0-9a-f]+ timestamp=\1\b/.test(message);
+}
+
 /** Keep a non-conforming body in the message — truncated, since it may be an HTML page. */
 function describeBody(data: unknown): string {
   try {
@@ -203,15 +221,18 @@ async function request<T>(
       // Helper error body: { error, message, retryable }
       const errorBody = res.data as { error?: string; message?: string; retryable?: boolean };
       const conforms = typeof errorBody?.error === 'string' && 'retryable' in (errorBody ?? {});
+      const message = conforms
+        ? errorBody.message ?? `Request to ${path} failed with HTTP ${res.status}`
+        : `Request to ${path} failed with HTTP ${res.status}${describeBody(res.data)}`;
       err = new IthServiceError(
-        conforms
-          ? errorBody.message ?? `Request to ${path} failed with HTTP ${res.status}`
-          : `Request to ${path} failed with HTTP ${res.status}${describeBody(res.data)}`,
+        message,
         conforms ? errorBody.error! : 'UNKNOWN',
         // A body that doesn't match the contract carries no verdict, so fall back
         // to the status. This is where an operator most needs the raw body, hence
-        // describeBody above.
-        conforms ? Boolean(errorBody.retryable) : RETRYABLE_BARE_STATUSES.has(res.status),
+        // describeBody above. Parent-timestamp collisions are retryable no
+        // matter what the helper says — see isParentTimestampCollision.
+        (conforms ? Boolean(errorBody.retryable) : RETRYABLE_BARE_STATUSES.has(res.status)) ||
+          isParentTimestampCollision(message),
         res.status
       );
     } catch (transportError) {
