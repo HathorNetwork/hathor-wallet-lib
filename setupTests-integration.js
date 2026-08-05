@@ -21,6 +21,8 @@ import { generateWalletHelper, waitTxConfirmed, waitUntilNextTimestamp } from '.
 import { waitForNextBlock } from './__tests__/integration/utils/fullnode.util';
 import { stopGLLBackgroundTask } from './src/sync/gll';
 import Transaction from './src/models/transaction';
+import SendTransaction from './src/new/sendTransaction';
+import SendTransactionWalletService from './src/wallet/sendTransactionWalletService';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
@@ -31,6 +33,61 @@ jest.retryTimes(2, { logErrorsBeforeRetry: true });
 Transaction.prototype.calculateWeight = function () {
   return 1;
 };
+
+/**
+ * Re-mine and resubmit a broadcast rejected for sharing its DAG parent's
+ * timestamp.
+ *
+ * Parents and timestamp are assigned by the tx-mining-service at mining time,
+ * from the node's current tips. With parallel jest workers (or the
+ * integration-test-helper funding concurrently), a tx can be handed another
+ * process's same-second tx as parent, which the fullnode rejects — timestamps
+ * have 1-second granularity and must be strictly greater than each parent's.
+ * No worker-local wait can prevent this, so on that specific rejection the
+ * send is re-mined (fresh parents and timestamp over the same signed funds —
+ * signatures only cover the funds part) and resubmitted.
+ *
+ * Both facades funnel every send through `runFromMining`, so wrapping it
+ * covers all paths. The wallet-service facade hides the fullnode's reason
+ * behind a fixed proposal-error message, so that message is the best
+ * available signal on its path.
+ */
+const RE_MINE_ATTEMPTS = 3;
+
+function isParentTimestampCollision(error) {
+  return /timestamp=(\d+), parent=[0-9a-f]+ timestamp=\1\b/.test(error?.message ?? '');
+}
+
+function isTxProposalError(error) {
+  return (error?.message ?? '') === 'Error sending tx proposal.';
+}
+
+function retryParentTimestampCollisions(SendClass, shouldRetry) {
+  const originalRunFromMining = SendClass.prototype.runFromMining;
+  SendClass.prototype.runFromMining = async function runFromMiningWithRetry(...args) {
+    let lastError;
+    for (let attempt = 1; attempt <= RE_MINE_ATTEMPTS; attempt++) {
+      try {
+        return await originalRunFromMining.apply(this, args);
+      } catch (error) {
+        if (!shouldRetry(error) || attempt === RE_MINE_ATTEMPTS) {
+          throw error;
+        }
+        lastError = error;
+        loggers.test?.log(
+          `Re-mining after a rejected broadcast (attempt ${attempt}): ${error.message}`
+        );
+      }
+    }
+    throw lastError;
+  };
+}
+
+retryParentTimestampCollisions(SendTransaction, isParentTimestampCollision);
+retryParentTimestampCollisions(
+  SendTransactionWalletService,
+  error => isParentTimestampCollision(error) || isTxProposalError(error)
+);
 
 /**
  * Disable HTTP keep-alive for axios to prevent "socket hang up" errors in Jest.
