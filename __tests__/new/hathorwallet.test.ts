@@ -27,6 +27,7 @@ import {
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
 import { EcdsaTxSign, IHistoryTx, WalletType } from '../../src/types';
+import { OutputType } from '../../src/wallet/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
@@ -310,6 +311,30 @@ test('sendManyOutputsSendTransaction maps shielded and transparent outputs', asy
     value: 40n,
     token: '01',
     shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+  });
+});
+
+test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const dataOutput = { type: OutputType.DATA, data: Buffer.from('test'), token: NATIVE_TOKEN_UID };
+  const sendTx = await hWallet.sendManyOutputsSendTransaction([
+    dataOutput,
+    { address: 'transparent-addr', value: 30n, token: NATIVE_TOKEN_UID },
+  ]);
+
+  // A data output has no address, so rebuilding it as a token output would drop its
+  // `type` and `data` and make SendTransaction fail with an undefined address.
+  expect(sendTx.outputs).toHaveLength(2);
+  expect(sendTx.outputs[0]).toBe(dataOutput);
+  expect(sendTx.outputs[1]).toEqual({
+    address: 'transparent-addr',
+    value: 30n,
+    token: NATIVE_TOKEN_UID,
   });
 });
 
