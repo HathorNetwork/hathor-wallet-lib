@@ -15,6 +15,7 @@
  */
 
 import HathorWallet from '../../../src/new/wallet';
+import { MemoryStore, Storage } from '../../../src/storage';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateConnection,
@@ -30,6 +31,7 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { ShieldedOutputMode } from '../../../src/shielded/types';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
+import { getGapLimitConfig } from '../utils/core.util';
 
 bumpShieldedTestTimeout();
 
@@ -110,26 +112,38 @@ describe('shielded outputs — Group D: Address derivation', () => {
 
   it('D.22 — Wallet reload preserves previously derived shielded addresses', async () => {
     const precalculated = await precalculationHelpers.test!.getPrecalculatedWallet();
+    // One Storage shared across both wallet instances: the reload must read the
+    // PERSISTED addresses, not merely re-derive the same ones from the seed.
+    const store = new MemoryStore();
+    const storage = new Storage(store);
     const wallet = new HathorWallet({
       seed: precalculated.words,
+      storage,
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: precalculated.addresses,
+      // Direct construction defaults to the single-address policy, which only
+      // ever loads index 0 — the gap-limit window is what persists the shielded
+      // chain this test reloads.
+      scanPolicy: getGapLimitConfig(),
     });
     registerShieldedProvider(wallet);
     await wallet.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });
     await waitForWalletReady(wallet);
     const shielded3 = await wallet.getAddressAtIndex(3, { legacy: false });
-    await wallet.stop();
+    // Keep the stored addresses — the whole point is reloading over them.
+    await wallet.stop({ cleanStorage: false });
 
-    // Reload the same wallet from the same seed.
+    // Reload the same wallet over the SAME storage.
     const wallet2 = new HathorWallet({
       seed: precalculated.words,
+      storage,
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: precalculated.addresses,
+      scanPolicy: getGapLimitConfig(),
     });
     registerShieldedProvider(wallet2);
     await wallet2.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });

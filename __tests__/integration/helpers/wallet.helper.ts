@@ -200,6 +200,9 @@ export async function generateWalletHelperRO(options) {
     scanPolicy: getGapLimitConfig(),
   };
   const hWallet = new HathorWallet(walletConfig);
+  // Direct construction bypasses generateWalletHelper, so the shielded crypto
+  // provider must be wired in explicitly (see registerShieldedProvider above).
+  registerShieldedProvider(hWallet);
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -246,6 +249,7 @@ export async function generateMultisigWalletHelper(parameters) {
     scanPolicy: getGapLimitConfig(),
   };
   const mhWallet = new HathorWallet(walletConfig);
+  registerShieldedProvider(mhWallet);
   if (parameters.historySyncMode) {
     mhWallet.setHistorySyncMode(parameters.historySyncMode);
   }

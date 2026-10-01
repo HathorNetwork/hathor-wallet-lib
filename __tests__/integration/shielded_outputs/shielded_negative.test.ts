@@ -97,11 +97,12 @@ describe('shielded outputs — Group V: protocol-level rejections', () => {
   });
 
   /**
-   * V.4 — Repeatedly spending the same shielded UTXO double-spends. The
-   * fullnode (or the wallet, depending on which side detects first)
-   * rejects the second tx as conflicting.
+   * V.4 — A chained second send must auto-select a fresh UTXO (the change
+   * of the first send) rather than re-spending the already-spent shielded
+   * UTXO. The positive assertions are the point: if the wallet re-used the
+   * spent UTXO, the fullnode would reject tx2 and the test would fail.
    */
-  it('V.4 — second send of an already-spent shielded UTXO is rejected', async () => {
+  it('V.4 — chained send auto-selects a fresh UTXO instead of re-spending a spent shielded UTXO', async () => {
     const walletA = await generateWalletHelper();
     const walletB = await generateWalletHelper();
     const walletC = await generateWalletHelper();

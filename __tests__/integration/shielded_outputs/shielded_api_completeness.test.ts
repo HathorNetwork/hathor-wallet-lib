@@ -14,6 +14,7 @@
  * those, and would have caught the corresponding code gaps.
  */
 
+import HathorWallet from '../../../src/new/wallet';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
@@ -34,7 +35,7 @@ describe('shielded outputs — Group C: API completeness for shielded receives',
   });
 
   // Spend-derived P2PKH (on-chain form) for a user-facing 71-byte shielded addr.
-  const spendOf = (wallet, shieldedAddr) =>
+  const spendOf = (wallet: HathorWallet, shieldedAddr: string): string =>
     new Address(shieldedAddr, { network: wallet.getNetworkObject() }).getSpendAddress().base58;
 
   it('C.1 — getTxAddresses returns the shielded-spend P2PKHs of a shielded-only receive', async () => {

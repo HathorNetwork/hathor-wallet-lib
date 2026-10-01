@@ -62,7 +62,7 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
   });
 
   it('K.2 — Create token with a shielded change address: HTR change is credited back', async () => {
-    // 10 HTR funded, 10n/100 minted ⇒ deposit 0.1 HTR (=1 centi-HTR per 100),
+    // 100 HTR funded, 100 tokens minted ⇒ deposit 1 HTR (1% of mint amount),
     // so there will be HTR change. Route that change through a shielded
     // address and verify the wallet still sees it.
     const wallet = await generateWalletHelper();

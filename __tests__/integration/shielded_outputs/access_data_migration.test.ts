@@ -91,28 +91,36 @@ describe('shielded outputs — Group M: access-data migration', () => {
     });
     registerShieldedProvider(hWallet);
     await hWallet.start();
-    await waitForWalletReady(hWallet);
+    // This wallet is not registered with generateWalletHelper, so
+    // stopAllWallets() never sees it — stop it here whatever happens.
+    try {
+      await waitForWalletReady(hWallet);
 
-    // Migration must have written all four fields back to persistent storage.
-    const after = await storage.getAccessData();
-    expect(after).not.toBeNull();
-    expect(after!.scanXpubkey).toBeDefined();
-    expect(after!.scanMainKey).toBeDefined();
-    expect(after!.spendXpubkey).toBeDefined();
-    expect(after!.spendMainKey).toBeDefined();
+      // Migration must have written all four fields back to persistent storage.
+      const after = await storage.getAccessData();
+      expect(after).not.toBeNull();
+      expect(after!.scanXpubkey).toBeDefined();
+      expect(after!.scanMainKey).toBeDefined();
+      expect(after!.spendXpubkey).toBeDefined();
+      expect(after!.spendMainKey).toBeDefined();
 
-    // The xpubs must match what fresh-create would have produced for the
-    // same seed — so a migrated wallet's shielded addresses are identical
-    // to a freshly-created one (no address drift).
-    expect(after!.scanXpubkey).toBe(fullAccessData.scanXpubkey);
-    expect(after!.spendXpubkey).toBe(fullAccessData.spendXpubkey);
+      // The xpubs must match what fresh-create would have produced for the
+      // same seed — so a migrated wallet's shielded addresses are identical
+      // to a freshly-created one (no address drift).
+      expect(after!.scanXpubkey).toBe(fullAccessData.scanXpubkey);
+      expect(after!.spendXpubkey).toBe(fullAccessData.spendXpubkey);
 
-    // The original failure mode — the thing Sentry was catching — must
-    // now be gone: `getCurrentAddress({legacy: false})` returns an address
-    // instead of throwing "Current shielded address is not loaded".
-    const shieldedAddr = await hWallet.getAddressAtIndex(0, { legacy: false });
-    expect(typeof shieldedAddr).toBe('string');
-    expect(shieldedAddr.length).toBeGreaterThan(0);
+      // The original failure mode — the thing Sentry was catching — must
+      // now be gone: `getCurrentAddress({legacy: false})` returns an address
+      // instead of throwing "Current shielded address is not loaded". The
+      // current-address pointer is the persisted state under test, so the
+      // non-persisting getAddressAtIndex fallback would not catch it.
+      const { address: shieldedAddr } = await hWallet.getCurrentAddress({}, { legacy: false });
+      expect(typeof shieldedAddr).toBe('string');
+      expect(shieldedAddr.length).toBeGreaterThan(0);
+    } finally {
+      await hWallet.stop();
+    }
   });
 
   /**
@@ -150,13 +158,18 @@ describe('shielded outputs — Group M: access-data migration', () => {
     });
     registerShieldedProvider(hWallet);
     await hWallet.start();
-    await waitForWalletReady(hWallet);
+    // Same manual lifecycle as M.int.1 — not covered by stopAllWallets().
+    try {
+      await waitForWalletReady(hWallet);
 
-    const after = await storage.getAccessData();
-    // Byte-identical — migration did NOT run.
-    expect(after!.scanXpubkey).toBe(snapshot.scanXpubkey);
-    expect(JSON.stringify(after!.scanMainKey)).toBe(snapshot.scanMainKey);
-    expect(after!.spendXpubkey).toBe(snapshot.spendXpubkey);
-    expect(JSON.stringify(after!.spendMainKey)).toBe(snapshot.spendMainKey);
+      const after = await storage.getAccessData();
+      // Byte-identical — migration did NOT run.
+      expect(after!.scanXpubkey).toBe(snapshot.scanXpubkey);
+      expect(JSON.stringify(after!.scanMainKey)).toBe(snapshot.scanMainKey);
+      expect(after!.spendXpubkey).toBe(snapshot.spendXpubkey);
+      expect(JSON.stringify(after!.spendMainKey)).toBe(snapshot.spendMainKey);
+    } finally {
+      await hWallet.stop();
+    }
   });
 });

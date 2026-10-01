@@ -10,7 +10,12 @@ import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-
 import { mergePrecalculatedAddresses } from './wallet-precalculation.helper';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import {
+  registerShieldedProvider,
+  waitForTxReceived,
+  waitForWalletReady,
+  waitUntilNextTimestamp,
+} from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
@@ -63,6 +68,9 @@ export class GenesisWalletHelper {
         ),
         scanPolicy: getGapLimitConfig(),
       });
+      // Direct construction bypasses generateWalletHelper, so the shielded
+      // crypto provider must be wired in explicitly.
+      registerShieldedProvider(this.hWallet);
       await this.hWallet.start();
 
       // Only return the positive response after the wallet is ready

@@ -319,7 +319,6 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     // to the same wallet. Real-time getTxBalance was returning
     // -input_value (no credit for the decoded shielded outputs), while
     // reload returned the correct near-zero self-send delta.
-    const walletA = await generateWalletHelper();
     const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
@@ -432,7 +431,6 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
   });
 
   it('R.9 — FS → FS: FullShielded input and outputs (custom-token self-send)', async () => {
-    const walletA = await generateWalletHelper();
     const walletDataB = await precalculationHelpers.test!.getPrecalculatedWallet();
     const walletB = await generateWalletHelper({
       seed: walletDataB.words,
