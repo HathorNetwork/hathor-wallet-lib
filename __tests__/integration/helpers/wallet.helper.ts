@@ -414,10 +414,20 @@ async function updateInputsSpentBy(hWallet, tx) {
       continue;
     }
 
-    // Shielded inputs (type === 'shielded') reference a shielded output whose
-    // spent_by marking is handled by the wallet's own processing once the
-    // metadata update arrives; we don't force-mark it here.
+    // Shielded inputs reference the parent's shielded slot by ABSOLUTE
+    // on-chain index (after the transparent outputs). The same stale-spent_by
+    // race this helper closes for transparent outputs applies here:
+    // processHistory rebuilds the UTXO set from the stored txs and re-saves a
+    // shielded UTXO whose stored spent_by is still null, resurrecting a spent
+    // UTXO until the parent's update-tx event lands. Force-mark it too.
     if (input.type === 'shielded') {
+      const shieldedIndex = input.index - inputTx.outputs.length;
+      const shieldedOutput = (inputTx.shielded_outputs ?? [])[shieldedIndex];
+      if (!shieldedOutput) {
+        throw new Error("Try to get shielded output in an index that doesn't exist.");
+      }
+      shieldedOutput.spent_by = tx.tx_id;
+      await hWallet.storage.addTx(inputTx);
       continue;
     }
 

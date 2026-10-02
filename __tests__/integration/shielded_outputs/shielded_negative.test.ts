@@ -110,39 +110,55 @@ describe('shielded outputs — Group V: protocol-level rejections', () => {
     const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
 
+    // Shield the ENTIRE spendable balance: 60n + 36n outputs + 4n fee
+    // (2 x FEE_PER_FULL_SHIELDED_OUTPUT) consume the 100n funding exactly,
+    // leaving no transparent change — so the sends below cannot be satisfied
+    // by anything but shielded UTXOs.
     const sbA0 = await walletA.getAddressAtIndex(2, { legacy: false });
     const sbA1 = await walletA.getAddressAtIndex(3, { legacy: false });
     const seedTx = await walletA.sendManyOutputsTransaction([
       {
         address: sbA0,
-        value: 30n,
+        value: 60n,
         token: NATIVE_TOKEN_UID,
         shielded: ShieldedOutputMode.FULLY_SHIELDED,
       },
       {
         address: sbA1,
-        value: 20n,
+        value: 36n,
         token: NATIVE_TOKEN_UID,
         shielded: ShieldedOutputMode.FULLY_SHIELDED,
       },
     ]);
     await waitForTxReceived(walletA, seedTx!.hash!);
     await waitUntilNextTimestamp(walletA, seedTx!.hash!);
+    // Fixture precondition: no transparent outputs on the seed tx, so every
+    // input referencing it below is necessarily a shielded slot.
+    const seedStored = await walletA.getTx(seedTx!.hash!);
+    expect(seedStored!.outputs).toHaveLength(0);
 
-    // First send — succeeds.
+    // First send — must be funded by a shielded UTXO from the seed tx.
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
     const tx1 = await walletA.sendTransaction(addrB, 25n);
     expect(tx1).not.toBeNull();
     await waitForTxReceived(walletA, tx1!.hash!);
+    const tx1Stored = await walletA.getTx(tx1!.hash!);
+    const tx1SeedInputs = tx1Stored!.inputs.filter(i => i.tx_id === seedTx!.hash!);
+    expect(tx1SeedInputs.length).toBeGreaterThan(0);
+    const tx1SpentKeys = new Set(tx1Stored!.inputs.map(i => `${i.tx_id}:${i.index}`));
 
-    // Second send chained — wallet should pick a NEW UTXO (the change
-    // from tx1) automatically. If for some reason it tried to re-use
-    // the spent UTXO from seedTx, the fullnode would reject. We mainly
-    // assert no error is thrown — and the recipient's balance reflects
-    // both sends.
+    // Second send chained — the wallet must select a FRESH UTXO (tx1's
+    // change, or the untouched seed output), never re-offer what tx1
+    // already consumed. A re-spend would be rejected by the fullnode, and
+    // the explicit input check below fails even if a regression produced a
+    // locally-accepted duplicate selection.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
     const tx2 = await walletA.sendTransaction(addrC, 5n);
     expect(tx2).not.toBeNull();
     await waitForTxReceived(walletC, tx2!.hash!);
+    const tx2Stored = await walletA.getTx(tx2!.hash!);
+    for (const input of tx2Stored!.inputs) {
+      expect(tx1SpentKeys.has(`${input.tx_id}:${input.index}`)).toBe(false);
+    }
   });
 });

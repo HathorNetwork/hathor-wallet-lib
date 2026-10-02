@@ -93,28 +93,31 @@ async function assertRealtimeMatchesReload(
   // Reload. cleanStorage forces the full sync+decrypt cycle.
   await walletB.stop({ cleanStorage: true, cleanAddresses: true });
   const walletB2 = await reloadFromSeed(walletBSeed);
+  // reloadFromSeed constructs the wallet directly, so stopAllWallets never
+  // sees it — stop it whatever the assertions below do.
+  try {
+    // Post-reload snapshots.
+    const storedReload = await walletB2.getTx(txHash);
+    expect(storedReload).not.toBeNull();
+    const deltaReload = await walletB2.getTxBalance(storedReload!);
+    const balanceReload: Record<string, bigint> = {};
+    for (const uid of tokensToCheck) {
+      balanceReload[uid] = (await walletB2.getBalance(uid))[0].balance.unlocked;
+    }
 
-  // Post-reload snapshots.
-  const storedReload = await walletB2.getTx(txHash);
-  expect(storedReload).not.toBeNull();
-  const deltaReload = await walletB2.getTxBalance(storedReload!);
-  const balanceReload: Record<string, bigint> = {};
-  for (const uid of tokensToCheck) {
-    balanceReload[uid] = (await walletB2.getBalance(uid))[0].balance.unlocked;
+    // Every token the delta mentions must appear in both snapshots with the
+    // same value. Missing keys are treated as 0n so that either snapshot
+    // omitting a token is equivalent to showing 0.
+    const tokenKeys = new Set([...Object.keys(deltaRealtime), ...Object.keys(deltaReload)]);
+    for (const token of tokenKeys) {
+      expect(deltaReload[token] ?? 0n).toBe(deltaRealtime[token] ?? 0n);
+    }
+    for (const uid of tokensToCheck) {
+      expect(balanceReload[uid]).toBe(balanceRealtime[uid]);
+    }
+  } finally {
+    await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
   }
-
-  // Every token the delta mentions must appear in both snapshots with the
-  // same value. Missing keys are treated as 0n so that either snapshot
-  // omitting a token is equivalent to showing 0.
-  const tokenKeys = new Set([...Object.keys(deltaRealtime), ...Object.keys(deltaReload)]);
-  for (const token of tokenKeys) {
-    expect(deltaReload[token] ?? 0n).toBe(deltaRealtime[token] ?? 0n);
-  }
-  for (const uid of tokensToCheck) {
-    expect(balanceReload[uid]).toBe(balanceRealtime[uid]);
-  }
-
-  await walletB2.stop({ cleanStorage: true, cleanAddresses: true });
 }
 
 describe('shielded outputs — Group R: Real-time vs reload invariant', () => {

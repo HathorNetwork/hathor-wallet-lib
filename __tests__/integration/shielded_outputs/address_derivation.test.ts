@@ -130,10 +130,15 @@ describe('shielded outputs — Group D: Address derivation', () => {
     });
     registerShieldedProvider(wallet);
     await wallet.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });
-    await waitForWalletReady(wallet);
-    const shielded3 = await wallet.getAddressAtIndex(3, { legacy: false });
-    // Keep the stored addresses — the whole point is reloading over them.
-    await wallet.stop({ cleanStorage: false });
+    // Directly constructed: stopAllWallets never sees it — always stop.
+    let shielded3: string;
+    try {
+      await waitForWalletReady(wallet);
+      shielded3 = await wallet.getAddressAtIndex(3, { legacy: false });
+    } finally {
+      // Keep the stored addresses — the whole point is reloading over them.
+      await wallet.stop({ cleanStorage: false });
+    }
 
     // Reload the same wallet over the SAME storage.
     const wallet2 = new HathorWallet({
@@ -147,10 +152,13 @@ describe('shielded outputs — Group D: Address derivation', () => {
     });
     registerShieldedProvider(wallet2);
     await wallet2.start({ pinCode: DEFAULT_PIN_CODE, password: DEFAULT_PASSWORD });
-    await waitForWalletReady(wallet2);
-    const shielded3Again = await wallet2.getAddressAtIndex(3, { legacy: false });
-    expect(shielded3Again).toBe(shielded3);
-    expect(await wallet2.storage.isAddressMine(shielded3Again)).toBe(true);
-    await wallet2.stop();
+    try {
+      await waitForWalletReady(wallet2);
+      const shielded3Again = await wallet2.getAddressAtIndex(3, { legacy: false });
+      expect(shielded3Again).toBe(shielded3);
+      expect(await wallet2.storage.isAddressMine(shielded3Again)).toBe(true);
+    } finally {
+      await wallet2.stop();
+    }
   });
 });
