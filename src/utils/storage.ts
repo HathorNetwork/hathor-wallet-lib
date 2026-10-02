@@ -308,6 +308,17 @@ export async function apiSyncHistory(
   let itCount = count;
   let foundAnyTx = false;
 
+  // Track the last-emitted (addressesFound, historyLength) tuple to suppress
+  // duplicate `wallet-load-partial-update` events. The for-await loop below
+  // yields once per HTTP chunk; with shielded support enabled a single window
+  // spans two chunks (each index contributes the legacy P2PKH and the shielded
+  // spend P2PKH), so an empty-wallet startup emitted two identical updates —
+  // consumers treated the duplicate as a second state change. Deduping keeps
+  // the live-progress semantics for wallets that actually grow during sync
+  // while collapsing the no-change-between-chunks case to a single emit.
+  let lastEmittedAddresses = -1;
+  let lastEmittedHistory = -1;
+
   while (true) {
     const addresses = await loadAddresses(itStartIndex, itCount, storage);
     // subscribe to addresses
@@ -317,11 +328,15 @@ export async function apiSyncHistory(
         // This will signal we have found a transaction when syncing the history
         foundAnyTx = true;
       }
+      const addressesFound = await storage.store.addressCount();
+      const historyLength = await storage.store.historyCount();
+      if (addressesFound === lastEmittedAddresses && historyLength === lastEmittedHistory) {
+        continue;
+      }
+      lastEmittedAddresses = addressesFound;
+      lastEmittedHistory = historyLength;
       // update UI
-      connection.emit('wallet-load-partial-update', {
-        addressesFound: await storage.store.addressCount(),
-        historyLength: await storage.store.historyCount(),
-      });
+      connection.emit('wallet-load-partial-update', { addressesFound, historyLength });
     }
 
     // Check if we need to load more addresses from the address scanning policy

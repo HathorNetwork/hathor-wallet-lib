@@ -1380,6 +1380,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Highest value first by default, so max_utxos keeps the top-N by value
+      // instead of storage insertion order (which consolidation callers were
+      // observing as seemingly random picks).
+      order_by_value: options.order_by_value ?? 'desc',
       // Transparent-only by default: getUtxos feeds consolidateUtxos, which
       // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
       // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.

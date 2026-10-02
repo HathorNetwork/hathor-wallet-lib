@@ -112,6 +112,12 @@ export interface UtxoOptions {
   max_amount?: bigint;
   only_available_utxos?: boolean;
   /**
+   * Value ordering of the returned UTXOs. Defaults to 'desc' (highest value
+   * first), so `max_utxos` keeps the top-N by value rather than whatever the
+   * storage insertion order happens to be — matching getUtxosForAmount.
+   */
+  order_by_value?: 'asc' | 'desc';
+  /**
    * Whether to include shielded UTXOs. Defaults to `false` (transparent-only):
    * `getUtxos` feeds consolidation, which spends its results as TRANSPARENT
    * inputs, so a shielded UTXO must never leak into that listing. Pass `true`
