@@ -6,6 +6,13 @@
  */
 
 import { get, includes } from 'lodash';
+// `@hathor/ct-crypto-node` is intentionally NOT declared as a dependency of
+// wallet-lib (neither dependencies nor devDependencies). The integration suite
+// installs it on demand via the `pretest_network_integration` hook
+// (scripts/ensure-ct-crypto.js; see __tests__/integration/README.md), and
+// .eslintrc whitelists it under import/core-modules. Production wallets
+// register their own provider per the post-migration contract.
+import { createDefaultShieldedCryptoProvider } from '@hathor/ct-crypto-node/provider';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -87,6 +94,16 @@ const startedWallets = [];
  *   addresses: ['addr0','addr1'],
  * })
  */
+/**
+ * Register the shielded crypto provider on a wallet. Tests that build a
+ * HathorWallet directly (rather than via generateWalletHelper) must call this
+ * before `wallet.start()` — wallet-lib does not auto-register the provider
+ * post-migration, the client is required to wire it in.
+ */
+export function registerShieldedProvider(hWallet) {
+  hWallet.setShieldedCryptoProvider(createDefaultShieldedCryptoProvider());
+}
+
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
   let walletData = {};
@@ -125,6 +142,9 @@ export async function generateWalletHelper(param) {
     Object.assign(walletConfig, rest);
   }
   const hWallet = new HathorWallet(walletConfig);
+  // wallet-lib no longer auto-registers the provider post-migration; wire it in
+  // explicitly before start (see registerShieldedProvider above).
+  registerShieldedProvider(hWallet);
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -155,7 +175,7 @@ export async function generateWalletHelperRO(options) {
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
     walletData = await precalculationHelpers.test.getPrecalculatedWallet();
-    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
+    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: NETWORK_NAME });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
     xpub = options.xpub;
@@ -180,6 +200,9 @@ export async function generateWalletHelperRO(options) {
     scanPolicy: getGapLimitConfig(),
   };
   const hWallet = new HathorWallet(walletConfig);
+  // Direct construction bypasses generateWalletHelper, so the shielded crypto
+  // provider must be wired in explicitly (see registerShieldedProvider above).
+  registerShieldedProvider(hWallet);
   await hWallet.start();
   await waitForWalletReady(hWallet);
   startedWallets.push(hWallet);
@@ -226,6 +249,7 @@ export async function generateMultisigWalletHelper(parameters) {
     scanPolicy: getGapLimitConfig(),
   };
   const mhWallet = new HathorWallet(walletConfig);
+  registerShieldedProvider(mhWallet);
   if (parameters.historySyncMode) {
     mhWallet.setHistorySyncMode(parameters.historySyncMode);
   }
@@ -368,7 +392,7 @@ export async function waitForTxReceived(
     // so after the transaction arrives, all the metadata involved on it is updated and we can
     // continue running the tests to correctly check balances, addresses, and everyting else
     await updateInputsSpentBy(hWallet, storageTx);
-    await hWallet.storage.processHistory();
+    await hWallet.storage.processHistory(hWallet.pinCode ?? undefined);
   }
 
   return storageTx;
@@ -387,6 +411,23 @@ async function updateInputsSpentBy(hWallet, tx) {
     const inputTx = await hWallet.getTx(input.tx_id);
     if (!inputTx) {
       // This input is not spending an output from this wallet
+      continue;
+    }
+
+    // Shielded inputs reference the parent's shielded slot by ABSOLUTE
+    // on-chain index (after the transparent outputs). The same stale-spent_by
+    // race this helper closes for transparent outputs applies here:
+    // processHistory rebuilds the UTXO set from the stored txs and re-saves a
+    // shielded UTXO whose stored spent_by is still null, resurrecting a spent
+    // UTXO until the parent's update-tx event lands. Force-mark it too.
+    if (input.type === 'shielded') {
+      const shieldedIndex = input.index - inputTx.outputs.length;
+      const shieldedOutput = (inputTx.shielded_outputs ?? [])[shieldedIndex];
+      if (!shieldedOutput) {
+        throw new Error("Try to get shielded output in an index that doesn't exist.");
+      }
+      shieldedOutput.spent_by = tx.tx_id;
+      await hWallet.storage.addTx(inputTx);
       continue;
     }
 

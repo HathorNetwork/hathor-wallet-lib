@@ -5,12 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 /* eslint max-classes-per-file: ["error", 2] */
-import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from '../configuration/test-constants';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { mergePrecalculatedAddresses } from './wallet-precalculation.helper';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import {
+  registerShieldedProvider,
+  waitForTxReceived,
+  waitForWalletReady,
+  waitUntilNextTimestamp,
+} from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
@@ -42,7 +47,7 @@ export class GenesisWalletHelper {
     const { words } = WALLET_CONSTANTS.genesis;
     const pin = '123456';
     const connection = new Connection({
-      network: 'testnet',
+      network: NETWORK_NAME,
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
       logger: console, // Add required logger parameter
@@ -63,6 +68,9 @@ export class GenesisWalletHelper {
         ),
         scanPolicy: getGapLimitConfig(),
       });
+      // Direct construction bypasses generateWalletHelper, so the shielded
+      // crypto provider must be wired in explicitly.
+      registerShieldedProvider(this.hWallet);
       await this.hWallet.start();
 
       // Only return the positive response after the wallet is ready
