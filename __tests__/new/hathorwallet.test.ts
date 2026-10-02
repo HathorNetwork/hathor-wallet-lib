@@ -321,20 +321,34 @@ test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => 
   };
   hWallet.pinCode = '123';
 
-  const dataOutput = { type: OutputType.DATA, data: Buffer.from('test'), token: NATIVE_TOKEN_UID };
+  const dataOutput = { type: OutputType.DATA, data: 'test' } as const;
   const sendTx = await hWallet.sendManyOutputsSendTransaction([
     dataOutput,
     { address: 'transparent-addr', value: 30n, token: NATIVE_TOKEN_UID },
+    {
+      address: 'shielded-addr',
+      value: 10n,
+      token: NATIVE_TOKEN_UID,
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    },
   ]);
 
   // A data output has no address, so rebuilding it as a token output would drop its
   // `type` and `data` and make SendTransaction fail with an undefined address.
-  expect(sendTx.outputs).toHaveLength(2);
-  expect(sendTx.outputs[0]).toBe(dataOutput);
+  expect(sendTx.outputs).toHaveLength(3);
+  expect(sendTx.outputs[0]).toEqual({ type: OutputType.DATA, data: 'test' });
+  // SendTransaction sets `token` on its outputs, so it must get a copy, not the caller's object.
+  expect(sendTx.outputs[0]).not.toBe(dataOutput);
   expect(sendTx.outputs[1]).toEqual({
     address: 'transparent-addr',
     value: 30n,
     token: NATIVE_TOKEN_UID,
+  });
+  expect(sendTx.outputs[2]).toEqual({
+    address: 'shielded-addr',
+    value: 10n,
+    token: NATIVE_TOKEN_UID,
+    shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
   });
 });
 
