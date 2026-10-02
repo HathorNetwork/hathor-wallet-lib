@@ -522,6 +522,19 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       throw new SendTxError('Change address is not from the wallet');
     }
     const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
+    // The static guard above only sees explicit shielded outputs or an
+    // explicit AS/FS override. The automatic rules can ALSO decide on a
+    // shielded change after selection (e.g. a shielded top-up under R2, or a
+    // user-supplied shielded input) — a legacy changeAddress must fail there
+    // too, never be silently replaced by a wallet-derived address.
+    const assertChangeAddressSupportsShieldedChange = () => {
+      if (this.changeAddress && !changeAddressIsNewFormat) {
+        throw new SendTxError(
+          'A legacy change address cannot be used on a transaction with shielded outputs ' +
+            'or a shielded change mode — use a new-format (shielded-capable) address.'
+        );
+      }
+    };
 
     const partialTxData = await prepareSendManyTokensData(
       this.storage,
@@ -568,6 +581,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           keptOutputs.push(out);
           continue;
         }
+        assertChangeAddressSupportsShieldedChange();
         if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
           throw new SendTxError(
             `Cannot shield custom-token change: the transaction already has the ` +
@@ -707,6 +721,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       report: selectionReports.get(HTR_UID) ?? userInputSummaries.get(HTR_UID) ?? null,
       override: changeModeOverride,
     });
+    if (htrChangeMode !== 'transparent') {
+      assertChangeAddressSupportsShieldedChange();
+    }
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,

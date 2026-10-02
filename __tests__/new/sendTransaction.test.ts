@@ -2224,6 +2224,99 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
+    test('a legacy changeAddress fails when the RULES shield the change (R2 top-up)', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-pub-8', 8n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-10', 10n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '12'.repeat(32),
+        }),
+      ]);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          // All-public send that public funds cannot cover: the shielded
+          // top-up makes the rules decide on a shielded change AFTER the
+          // static pre-selection guard has already passed.
+          { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 12n, token: NATIVE_TOKEN_UID },
+        ],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        /legacy change address cannot be used/
+      );
+    });
+
+    test('a legacy changeAddress fails when a user-supplied shielded input shields the change', async () => {
+      const storage = buildPoolStorage([poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID)]);
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: [],
+        shielded_outputs: [
+          {
+            mode: 1,
+            commitment: '',
+            range_proof: '',
+            script: '',
+            ephemeral_pubkey: '',
+            decoded: { address: 'W-shielded-spend-addr' },
+            value: 30n,
+            token: CUSTOM_TOKEN,
+            blindingFactor: '34'.repeat(32),
+          },
+        ],
+        inputs: [],
+      } as never);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      jest.spyOn(storage, 'getUtxo').mockResolvedValue(
+        poolUtxo('parent', 30n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '34'.repeat(32),
+        }) as never
+      );
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 10n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+        inputs: [{ txId: 'parent', index: 0 }],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        /legacy change address cannot be used/
+      );
+    });
+
+    test('a legacy changeAddress still works when the change stays transparent', async () => {
+      const storage = buildPoolStorage([poolUtxo('htr-pub-100', 100n, NATIVE_TOKEN_UID)]);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 10n, token: NATIVE_TOKEN_UID },
+        ],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
+      expect(change).toBeDefined();
+      expect((change as { address?: string }).address).toBe('WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+    });
+
     test('a user-supplied shielded input shields the change of its token', async () => {
       const pool = [poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID)];
       const storage = buildPoolStorage(pool);
