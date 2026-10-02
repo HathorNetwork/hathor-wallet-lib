@@ -16,11 +16,12 @@
  * charged FEE_PER_OUTPUT on top of its shielded fee. The fullnode validates the
  * declared fee for an EXACT match, so the over-declared tx is rejected outright.
  *
- * This test sends a FEE-token to a shielded address, leaving a transparent
- * change. The correct fee is FEE_PER_OUTPUT (for the one transparent change) +
- * the shielded fee. On a build that leaks the phantom the wallet declares
- * 2 * FEE_PER_OUTPUT + shielded fee and the send is rejected — so this test
- * fails until the phantom-exclusion fix lands.
+ * This test sends a FEE-token to two shielded addresses (the protocol requires
+ * at least two shielded outputs per tx), leaving a transparent change. The
+ * correct fee is FEE_PER_OUTPUT (for the one transparent change) + the two
+ * shielded fees. On a build that leaks the phantoms the wallet declares
+ * 3 * FEE_PER_OUTPUT + shielded fees and the fullnode rejects the exact-match
+ * fee — so this test fails on any phantom-leaking build.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
@@ -69,17 +70,26 @@ describe('shielded outputs — fee-token shielded fee', () => {
 
     const htrBefore = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
 
-    // Send part of the FEE token to a shielded address; the remainder returns
-    // as a single TRANSPARENT change output. Correct fee =
+    // Send part of the FEE token to two shielded addresses (the protocol
+    // minimum per tx); the remainder returns as a single TRANSPARENT change
+    // output. Correct fee =
     //   FEE_PER_OUTPUT (the one transparent change output)
-    //   + FEE_PER_FULL_SHIELDED_OUTPUT (the shielded output).
-    // A phantom-leaking build instead declares 2 * FEE_PER_OUTPUT + shielded
-    // fee (phantom + change) and the fullnode rejects the exact-match fee.
+    //   + 2 * FEE_PER_FULL_SHIELDED_OUTPUT (the two shielded outputs).
+    // A phantom-leaking build instead declares 3 * FEE_PER_OUTPUT + shielded
+    // fees (two phantoms + change) and the fullnode rejects the exact-match
+    // fee.
     const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
+    const sbB1 = await walletB.getAddressAtIndex(1, { legacy: false });
     const tx = await walletA.sendManyOutputsTransaction([
       {
         address: sbB0,
-        value: 400n,
+        value: 250n,
+        token: tokenResp.hash,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: sbB1,
+        value: 150n,
         token: tokenResp.hash,
         shielded: ShieldedOutputMode.FULLY_SHIELDED,
       },
@@ -88,7 +98,11 @@ describe('shielded outputs — fee-token shielded fee', () => {
     await waitForTxReceived(walletA, tx!.hash!);
 
     const htrAfter = (await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
-    const expectedFee = FEE_PER_OUTPUT + FEE_PER_FULL_SHIELDED_OUTPUT;
+    const expectedFee = FEE_PER_OUTPUT + 2n * FEE_PER_FULL_SHIELDED_OUTPUT;
     expect(htrBefore - htrAfter).toBe(expectedFee);
+
+    // The receiver decodes both shielded outputs.
+    const balB = await walletB.getBalance(tokenResp.hash);
+    expect(balB[0].balance.unlocked).toBe(400n);
   });
 });
