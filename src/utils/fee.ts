@@ -40,7 +40,15 @@ export class Fee {
     tokens: Map<string, ITokenData | TokenInfo>,
     actions?: NanoContractAction[]
   ): Promise<bigint> {
-    const nonAuthorityInputs = Fee.groupTokenElementsByTokenUid(inputs);
+    // Shielded inputs are invisible to the fullnode's token accounting — their
+    // value (and for fully-shielded, their token) is hidden in commitments, so
+    // the node never counts them as chargeable inputs. Skip them here too, or
+    // an all-shielded spend of a FEE token would over-declare the flat melt fee
+    // and fail the node's exact-match fee check. Transparent inputs (including
+    // ones without the flag, e.g. the wallet-service facade shape) stay
+    // chargeable.
+    const transparentInputs = inputs.filter(el => !('shielded' in el && el.shielded === true));
+    const nonAuthorityInputs = Fee.groupTokenElementsByTokenUid(transparentInputs);
     const nonAuthorityOutputs = Fee.groupTokenElementsByTokenUid(outputs);
 
     const tokensSet = new Set([...nonAuthorityInputs.keys(), ...nonAuthorityOutputs.keys()]);

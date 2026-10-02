@@ -93,23 +93,27 @@ export async function fastUtxoSelection(
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: OutputValueType
+  amount: OutputValueType,
+  extraFilter?: Pick<IUtxoFilterOptions, 'shielded' | 'filter_method'>
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0n;
   let selectedUtxo: IUtxo | null = null;
 
-  // Select any UTXO (transparent or shielded) up to the requested amount.
-  // hathor-core accepts shielded inputs in transparent-output-only txs
-  // (see `is_shielded()` gating in verification_service.py); ownership is
+  // By default select any UTXO (transparent or shielded) up to the requested
+  // amount — hathor-core accepts shielded inputs in transparent-output-only
+  // txs (see `is_shielded()` gating in verification_service.py); ownership is
   // enforced via the P2PKH signature on the spend-derived key for shielded
   // outputs, and the fullnode skips the HTR surplus/deficit check for
-  // shielded txs.
+  // shielded txs. Callers implementing pool-aware policies narrow the pool
+  // with `extraFilter.shielded` and exclude already-picked UTXOs with
+  // `extraFilter.filter_method`.
   const options: IUtxoFilterOptions = {
     token,
     authorities: 0n,
     only_available_utxos: true,
     order_by_value: 'desc',
+    ...extraFilter,
   };
   for await (const utxo of storage.selectUtxos(options)) {
     // storage ensures the utxo can be used

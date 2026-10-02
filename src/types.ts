@@ -472,6 +472,13 @@ export interface IDataInput {
   token: string;
   address: string;
   data?: string;
+  /**
+   * True when this input spends a shielded UTXO. The fullnode cannot attribute
+   * a shielded input to a token (its value — and for fully-shielded, its token
+   * — is hidden in commitments), so fee accounting must skip it; see
+   * Fee.calculate.
+   */
+  shielded?: boolean;
 }
 
 interface IDataTokenCreationTx {

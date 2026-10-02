@@ -29,6 +29,18 @@ export type {
 // ─── wallet-lib-domain shielded types ──────────────────────────────────────
 
 /**
+ * The mode of a change output. Extends the crypto-provider's shielded modes
+ * with an explicit `'transparent'` value — the provider enum cannot grow a
+ * member, and "transparent" is a wallet-level concept, not a crypto one.
+ *
+ * As the `changeShieldedMode` send option: absent or `null` means the wallet's
+ * automatic selection rules decide the change mode per token; any explicit
+ * value — `'transparent'`, AMOUNT_SHIELDED or FULLY_SHIELDED — is respected
+ * for every change output.
+ */
+export type ChangeOutputMode = ShieldedOutputMode | 'transparent';
+
+/**
  * A shielded output as received from the full node API.
  * This is the on-chain data before decryption.
  */
