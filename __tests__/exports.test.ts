@@ -226,6 +226,11 @@ import {
   type ITxTemplateInterpreter,
 
   // ============================================================
+  // Send types from src/new/sendTransaction.ts
+  // ============================================================
+  type ISendDataOutput,
+
+  // ============================================================
   // Header types from src/headers/types.ts
   // ============================================================
   VertexHeaderId,
