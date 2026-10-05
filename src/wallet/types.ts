@@ -459,14 +459,14 @@ export interface IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<Transaction>;
   getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;
@@ -821,7 +821,9 @@ export interface FullNodeTxConfirmationDataResponse {
   success: boolean;
   accumulated_weight: number;
   accumulated_bigger: boolean;
-  stop_value: number;
+  // Optional on the fullnode contract too (TransactionAccWeightSuccess in
+  // src/api/schemas/txApi.ts): only present once the tx has a first_block.
+  stop_value?: number;
   confirmation_level: number;
 }
 
