@@ -140,3 +140,5 @@ export * from './models/enum';
 export * from './wallet/types';
 export * from './new/types';
 export * from './shielded/types';
+// Data output accepted by HathorWallet.sendManyOutputsSendTransaction.
+export type { ISendDataOutput } from './new/sendTransaction';
