@@ -3789,16 +3789,19 @@ class HathorWallet extends EventEmitter {
    *                          Optional but required if not set in instance
    */
   async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
-    // External provider path (e.g. passkey signer): no stored key and no pin are needed.
-    // This is what lets an xpub-only wallet sign messages and oracle data.
-    if (this.storage.hasPrivateKeyMethod()) {
-      const externalIndex = await this.getAddressIndex(address);
-      if (externalIndex === null) {
-        throw new AddressError('Address does not belong to the wallet.');
-      }
-      return this.storage.getExternalPrivateKey(externalIndex, options);
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new AddressError('Address does not belong to the wallet.');
     }
 
+    // External provider path (e.g. passkey signer): no stored key and no pin are needed.
+    // This is what lets an xpub-only (readonly) wallet sign messages and oracle data, so it
+    // must run before the readonly guard below.
+    if (this.storage.hasPrivateKeyMethod()) {
+      return this.storage.getExternalPrivateKey(addressIndex, options);
+    }
+
+    // Internal path: derive from the stored key - requires a non-readonly wallet and a pin.
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
@@ -3806,11 +3809,6 @@ class HathorWallet extends EventEmitter {
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    const addressIndex = await this.getAddressIndex(address);
-    if (addressIndex === null) {
-      throw new AddressError('Address does not belong to the wallet.');
     }
 
     const xprivkey = await this.storage.getMainXPrivKey(pin);
