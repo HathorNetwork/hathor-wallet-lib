@@ -2188,13 +2188,15 @@ class HathorWallet extends EventEmitter {
       // needed, and no storage address lookup required.
       privateKey = await this.storage.getExternalPrivateKey(index, { pinCode });
     } else {
-      // No external provider: this falls back to the stored key, which requires a pin. pinCode is
-      // optional on the signature, so guard explicitly here rather than letting `undefined` flow into
-      // getMainXPrivKey/decryptData and surface as an opaque low-level error (matches signTx etc.).
-      if (!pinCode) {
-        throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+      // No external provider: fall back to the stored key, which requires a pin. Mirror
+      // getPrivateKeyFromAddress — use the instance pin when the caller didn't pass one, and throw a
+      // typed PinRequiredError instead of letting `undefined` flow into getMainXPrivKey/decryptData
+      // and surface as an opaque low-level error.
+      const pin = pinCode || this.pinCode;
+      if (!pin) {
+        throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
       }
-      const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
+      const addressHDPrivKey = (await this.getAddressPrivKey(pin, index)) as {
         privateKey: unknown;
       };
       privateKey = addressHDPrivKey.privateKey;
