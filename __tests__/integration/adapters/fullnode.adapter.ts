@@ -202,9 +202,14 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   /**
    * Sends funds to an address whose wallet has not started yet.
    *
-   * Cannot delegate to {@link injectFunds} because that method polls both the
-   * genesis and the destination wallet for tx confirmation — but the destination
-   * wallet isn't running yet, so polling it would hang or fail.
+   * Cannot delegate to {@link injectFunds} because that method waits for the
+   * destination wallet to observe the tx — but that wallet isn't running yet,
+   * so the wait would hang or fail.
+   *
+   * Note this path still broadcasts from the locally-synced genesis wallet
+   * rather than the helper's /fund. The helper runs the same genesis seed and
+   * reserves from the same UTXO set on background timers, so the two are
+   * concurrent spenders; migrating this is tracked separately.
    */
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();

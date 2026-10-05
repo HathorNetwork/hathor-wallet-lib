@@ -233,19 +233,35 @@ services:
     networks:
       - hathor-privnet
 
-  # Wallet Provider section
-  # Serves precalculated wallets on demand (GET /simpleWallet), replacing the
-  # former static precalculated-wallets.json. ADDRESS_COUNT defaults to 22 in
-  # the image, matching the old static set.
+  # ITH section
+  # Serves the helper endpoints the suite depends on: pre-calculated wallets and
+  # race-free genesis funding.
   # https://github.com/HathorNetwork/hathor-integration-test-helper
-  wallet-provider:
+  integration-test-helper:
     image:
       ${HATHOR_LIB_INTEGRATION_TESTS_WALLET_PROVIDER_IMAGE:-hathornetwork/hathor-integration-test-helper:0.0.2}
     ports:
       - "3020:3020"
+    environment:
+      FUNDING_ENABLED: "true"
+      HATHOR_NODE_URL: http://fullnode:8080/v1a/
+      TX_MINING_URL: http://tx-mining-service:8035/
+      TX_MIN_WEIGHT: "1"
+    depends_on:
+      fullnode:
+        condition: service_healthy
+      tx-mining-service:
+        condition: service_started
     networks:
       - hathor-privnet
-    # TODO: add a healthcheck once the ITH exposes a readiness endpoint.
+    healthcheck:
+      # /ready gates the suite: 503 until genesis syncs + pool splits, then 200.
+      # Wide retries window covers genesis reward-lock maturity on a fresh net.
+      # Uses `bun`, not `curl` — the helper image is a Bun runtime with no curl.
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3020/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
 
 networks:
   hathor-privnet:

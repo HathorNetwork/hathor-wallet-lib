@@ -17,6 +17,8 @@ import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
 import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import { ithService, IthServiceError } from './ith-service';
+import { waitPastTxTimestamp } from '../utils/fullnode.util';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -84,31 +86,49 @@ export class GenesisWalletHelper {
    * @returns {Promise<Transaction>}
    * @private
    */
+  // eslint-disable-next-line class-methods-use-this -- funding is delegated to ithService; kept as an instance method to preserve call sites
   async _injectFunds(
     destinationWallet: HathorWallet,
     address: string,
     value: OutputValueType,
     options: InjectFundsOptions = {}
   ): Promise<Transaction> {
+    // Captured outside the try so the catch can tell "the helper never funded"
+    // apart from "it funded and our wallet never saw the tx".
+    let fundedTxId: string | undefined;
     try {
-      const result = (await this.hWallet.sendTransaction(address, value, {
-        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
-      })) as SuccessfulInjectTransaction;
+      // Funding is delegated to the helper's race-free /fund endpoint rather
+      // than broadcast from a locally-synced genesis wallet. The helper returns
+      // once the tx is broadcast; we then wait until the destination wallet
+      // observes it, which is the guarantee callers actually rely on.
+      fundedTxId = (await ithService.fund(address, value)).txId;
+      const result = { hash: fundedTxId } as unknown as SuccessfulInjectTransaction;
 
       if (options.waitTimeout === 0) {
         return result;
       }
 
-      if (!result.hash) {
-        throw new Error('Transaction had no hash');
-      }
-
-      await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
-      await waitForTxReceived(destinationWallet, result.hash, options.waitTimeout);
-      await waitUntilNextTimestamp(this.hWallet, result.hash);
+      await waitForTxReceived(destinationWallet, fundedTxId, options.waitTimeout);
+      // Timestamps are per-second and a tx must be timestamped strictly after
+      // its parent. Without this wait, a test that spends the just-funded UTXO
+      // within the same second collides with the funding tx and flakes. Applied
+      // via the destination wallet, which is the one that now has the tx.
+      await waitUntilNextTimestamp(destinationWallet, fundedTxId);
       return result;
     } catch (e) {
-      loggers.test!.error(`Failed to inject funds: ${(e as Error).message}`);
+      // Delegating the broadcast created a failure mode that did not exist
+      // before: the helper funded successfully and our wallet never observed
+      // the tx. Without txId that is indistinguishable in the log from "the
+      // helper refused to fund", and there is nothing to cross-reference
+      // against the helper's own logs or the fullnode.
+      const cause =
+        e instanceof IthServiceError
+          ? `${e.code} (HTTP ${e.status}, retryable=${e.retryable}): ${e.message}`
+          : (e as Error).message;
+      loggers.test!.error(
+        `Failed to inject funds: address=${address} value=${value} ` +
+          `txId=${fundedTxId ?? 'not-broadcast'} — ${cause}`
+      );
       throw e;
     }
   }
@@ -227,18 +247,36 @@ export class GenesisWalletServiceHelper {
     amount: bigint,
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
-    const gWallet = await GenesisWalletServiceHelper.getSingleton();
-    const fundTx = await gWallet.sendTransaction(address, amount, {
-      pinCode: GenesisWalletServiceHelper.pinCode,
-    });
+    // Delegated to the helper's /fund, same as the fullnode path above.
+    const { txId } = await ithService.fund(address, amount);
+    const fundTx = { hash: txId } as unknown as Transaction;
 
-    // Ensure the transaction was sent from the Genesis perspective
-    await pollForTx(gWallet, fundTx.hash!);
-
-    // Ensure the destination wallet is also aware of the transaction
     if (destinationWallet) {
-      await pollForTx(destinationWallet, fundTx.hash!);
+      // Ensure the destination wallet is also aware of the transaction.
+      await pollForTx(destinationWallet, txId);
+    } else {
+      // No destination wallet to observe with — but returning on the helper's
+      // HTTP 200 alone would only mean "broadcast to the fullnode", with
+      // wallet-service ingestion still pending. Callers like
+      // injectFundsBeforeStart then start a wallet and assert on its history,
+      // which becomes a race against the indexer. Poll the genesis wallet
+      // instead: it spends the pool UTXO, so it sees the same tx, and this is
+      // the guarantee the pre-delegation code provided.
+      const gWallet = await GenesisWalletServiceHelper.getSingleton();
+      await pollForTx(gWallet, txId);
     }
+
+    // Timestamps are per-second and a transaction may not share its parent's.
+    // Callers routinely fund an address and immediately spend that UTXO, and the
+    // fullnode rejects the pair with "full validation failed: tx=… timestamp=N,
+    // spent_tx=… timestamp=N" when both land in the same second.
+    //
+    // The wallet service does NOT order this for us -- the fullnode enforces it.
+    //
+    // Read from the fullnode rather than the wallet: HathorWalletServiceWallet
+    // throws `Not implemented` for getTx, so waitUntilNextTimestamp cannot be
+    // used on this path.
+    await waitPastTxTimestamp(txId);
 
     return fundTx;
   }
