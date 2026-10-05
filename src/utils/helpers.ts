@@ -12,12 +12,12 @@ import { clone } from 'lodash';
 import { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { OP_PUSHDATA1 } from '../opcodes';
 import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
-import Transaction from '../models/transaction';
+import type Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
-import CreateTokenTransaction from '../models/create_token_transaction';
+import type CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
@@ -37,6 +37,30 @@ import { ErrorMessages } from '../errorMessages';
 import config from '../config';
 import { IDataInput, IUtxo } from '../types';
 import { Utxo } from '../wallet/types';
+
+/**
+ * Lazily resolve the concrete Transaction / CreateTokenTransaction classes.
+ *
+ * They are `require`d on demand rather than imported at module load to break a
+ * load-time circular dependency:
+ *   transaction -> output -> scripts -> p2pkh -> helpers -> create_token_transaction
+ * `create_token_transaction`'s `class extends Transaction` would otherwise
+ * evaluate while `transaction` was still mid-load, which some runtimes (notably
+ * Bun, depending on module load order) surface as
+ * "The superclass is not a constructor". Deferring the require keeps this module
+ * out of the models' load-time graph while preserving its runtime behaviour.
+ */
+function txClasses(): {
+  Transaction: typeof import('../models/transaction').default;
+  CreateTokenTransaction: typeof import('../models/create_token_transaction').default;
+} {
+  /* eslint-disable global-require, @typescript-eslint/no-var-requires */
+  return {
+    Transaction: require('../models/transaction').default,
+    CreateTokenTransaction: require('../models/create_token_transaction').default,
+  };
+  /* eslint-enable global-require, @typescript-eslint/no-var-requires */
+}
 
 /**
  * Helper methods
@@ -283,6 +307,7 @@ const helpers = {
     const [_signalBits, buf] = unpackToInt(1, false, cloneBuffer);
     const [version] = unpackToInt(1, false, buf);
 
+    const { Transaction, CreateTokenTransaction } = txClasses();
     if (version === DEFAULT_TX_VERSION) {
       return Transaction.createFromBytes(cloneBuffer, network);
     }
@@ -390,6 +415,7 @@ const helpers = {
       tokens: data.tokens,
     };
 
+    const { Transaction, CreateTokenTransaction } = txClasses();
     if (data.version === CREATE_TOKEN_TX_VERSION) {
       const createTokenOptions = {
         ...options,
@@ -433,6 +459,7 @@ const helpers = {
     const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
     const outputs = historyTx.outputs.map(this.createOutputFromHistoryObject);
 
+    const { Transaction, CreateTokenTransaction } = txClasses();
     if (isCreateTokenTx) {
       return new CreateTokenTransaction(
         historyTx.token_name!,

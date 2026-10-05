@@ -216,6 +216,175 @@ describe('processHistory — orchestration', () => {
     await processHistory(storage);
     expect(cleanSpy).toHaveBeenCalled();
   });
+
+  const buildOwnedShieldedTx = (
+    txId: string,
+    timestamp: number,
+    shieldedAddr: string
+  ): IHistoryTx =>
+    ({
+      tx_id: txId,
+      version: 1,
+      timestamp,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.FULLY_SHIELDED,
+          commitment: 'aa'.repeat(33),
+          range_proof: 'bb'.repeat(10),
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: 'cc'.repeat(33),
+          asset_commitment: 'dd'.repeat(33),
+          decoded: { address: shieldedAddr, timelock: null },
+          spent_by: null,
+        },
+      ],
+    }) as unknown as IHistoryTx;
+
+  const buildTransparentTx = (txId: string, timestamp: number, legacyAddr: string): IHistoryTx =>
+    ({
+      tx_id: txId,
+      version: 1,
+      timestamp,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [
+        {
+          value: 50n,
+          token_data: 0,
+          token: NATIVE_TOKEN_UID,
+          decoded: { address: legacyAddr, timelock: null },
+          script: '',
+          spent_by: null,
+        },
+      ],
+      shielded_outputs: [],
+    }) as unknown as IHistoryTx;
+
+  it('skips ONLY a systemic shielded-decode failure and keeps walking (partial-history flag set)', async () => {
+    // A systemic shielded-decode failure — here getScanXPrivKey rejecting, as a
+    // wrong-PIN / corrupt-scan-key would — makes processNewTx throw a typed
+    // ShieldedDecodeSystemicError. During a full reload that must NOT abort the
+    // whole walk: cleanMetadata() has already wiped balances, so aborting would
+    // strand the wallet empty. processHistory skips this tx, records it, continues.
+    const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+    const TX_A = 'aa'.repeat(32);
+    const TX_B = 'bb'.repeat(32);
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: SHIELDED_ADDR,
+      bip32AddressIndex: 3,
+      publicKey: '02'.repeat(33),
+      addressType: 'shielded-spend',
+    });
+
+    await store.saveTx(buildOwnedShieldedTx(TX_A, 1, SHIELDED_ADDR));
+    await store.saveTx(buildOwnedShieldedTx(TX_B, 2, SHIELDED_ADDR));
+
+    // Minimal provider only to pass processNewTx's decode gate; the throw comes
+    // from getScanXPrivKey, unlocked once per tx before any provider rewind runs.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    storage.shieldedCryptoProvider = {} as any;
+    jest.spyOn(storage, 'getScanXPrivKey').mockRejectedValue(new Error('wrong pin'));
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+
+    // Must resolve, not reject: the systemic failure does not abort the reload.
+    await expect(processHistory(storage, { pinCode: 'pin' })).resolves.toBeUndefined();
+
+    // Both txs were walked and skipped — proves the loop continued past the first
+    // failure (chronological asc order) rather than aborting on it.
+    const skipCalls = (storage.logger.error as jest.Mock).mock.calls.filter(
+      c => c[0] === 'Shielded decode failed during history reload, skipping tx'
+    );
+    expect(skipCalls.map(c => c[1])).toEqual([TX_A, TX_B]);
+    // The partial-history flag surfaces the skip (not just a per-tx log line).
+    expect(storage.shieldedDecodeSkippedTxIds).toEqual([TX_A, TX_B]);
+  });
+
+  it('processes a healthy tx that follows a skipped one — the rest of the history still rebuilds', async () => {
+    // Oldest tx fails its shielded decode; the newer transparent tx must still be
+    // credited (the skip must not drop later txs' metadata).
+    const SHIELDED_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+    const LEGACY_ADDR = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+    const BAD_TX = 'aa'.repeat(32);
+    const GOOD_TX = 'bb'.repeat(32);
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: SHIELDED_ADDR,
+      bip32AddressIndex: 3,
+      publicKey: '02'.repeat(33),
+      addressType: 'shielded-spend',
+    });
+    await store.saveAddress({
+      base58: LEGACY_ADDR,
+      bip32AddressIndex: 0,
+      publicKey: '03'.repeat(33),
+    });
+
+    await store.saveTx(buildOwnedShieldedTx(BAD_TX, 1, SHIELDED_ADDR));
+    await store.saveTx(buildTransparentTx(GOOD_TX, 2, LEGACY_ADDR));
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    storage.shieldedCryptoProvider = {} as any;
+    jest.spyOn(storage, 'getScanXPrivKey').mockRejectedValue(new Error('wrong pin'));
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+
+    await expect(processHistory(storage, { pinCode: 'pin' })).resolves.toBeUndefined();
+    // The reload rebuilt LEGACY_ADDR's metadata from the default-metadata template,
+    // whose balance Map is a module-level singleton shared across stores. Clear this
+    // store's copy of it so the NATIVE_TOKEN credit above cannot bleed into suites
+    // that assert absolute NATIVE_TOKEN balances.
+    (await store.getAddressMeta(LEGACY_ADDR))?.balance.clear();
+
+    // The healthy tx's transparent UTXO survived — its metadata was rebuilt even
+    // though the older shielded tx was skipped.
+    expect(await store.getUtxo({ txId: GOOD_TX, index: 0 })).not.toBeNull();
+    // Only the shielded tx was skipped.
+    expect(storage.shieldedDecodeSkippedTxIds).toEqual([BAD_TX]);
+  });
+
+  it('rethrows (aborts) a NON-decode error during reload — store failures are not swallowed', async () => {
+    // A generic store failure (here a read error, not a shielded decode) must fail
+    // LOUD, not be silently skipped: only ShieldedDecodeSystemicError is skippable,
+    // and swallowing anything else is the exact stranded-empty-wallet outcome this
+    // walk must avoid. The read throws inside processNewTx's credit path, before any
+    // balance is written, so the abort leaves no partial state behind.
+    const LEGACY_ADDR = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+    const TX = 'cc'.repeat(32);
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: LEGACY_ADDR,
+      bip32AddressIndex: 0,
+      publicKey: '03'.repeat(33),
+    });
+    await store.saveTx(buildTransparentTx(TX, 1, LEGACY_ADDR));
+
+    // A store read throws a generic (non-typed) error while rebuilding the address
+    // metadata. cleanMetadata() does not read per-address metadata, so this only
+    // fires inside processNewTx — exactly where the skip-or-rethrow decision lives.
+    jest.spyOn(store, 'getAddressMeta').mockRejectedValue(new Error('IndexedDB read failed'));
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+
+    await expect(processHistory(storage)).rejects.toThrow(/IndexedDB read failed/);
+    // It aborted — NOT surfaced as a partial-history skip.
+    expect(storage.shieldedDecodeSkippedTxIds ?? null).toBeNull();
+  });
 });
 
 describe('scanning policy methods', () => {

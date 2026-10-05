@@ -10,10 +10,11 @@ import {
   ILogger,
   AddressScanPolicyData,
   IHistoryTx,
-  IPrecalculatedShieldedAddress,
+  IPrecalculatedAddress,
   OutputValueType,
   TokenVersion,
 } from '../types';
+import { ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
 import Address from '../models/address';
@@ -70,14 +71,20 @@ export interface HathorWalletConstructorParams {
   beforeReloadCallback?: (() => void) | null;
   /** Multisig configuration for P2SH wallets */
   multisig?: { pubkeys: string[]; numSignatures: number } | null;
-  /** Pre-calculated addresses to load into storage */
-  preCalculatedAddresses?: string[] | null;
   /**
-   * Pre-calculated shielded address pairs to load into storage (test tooling,
-   * mirrors preCalculatedAddresses). Injected indexes skip live EC derivation
-   * in address loading; indexes past the injected window still derive live.
+   * Pre-calculated addresses to load into storage, skipping live EC derivation
+   * for the chains actually supplied. Entries may be mixed, per element:
+   *   - a `string` — legacy-only, taking the index of its array position
+   *     (so a plain `string[]` keeps working, back-compat).
+   *   - an `IPrecalculatedAddress` — the legacy address for its index, the
+   *     shielded pair, or both.
+   *
+   * Injection skips indexes storage already holds and fails loudly if the list
+   * disagrees with one, so it never overwrites. Whatever an entry omits — the
+   * other chain, or any index past the injected window — is derived live during
+   * address loading.
    */
-  preCalculatedShieldedAddresses?: IPrecalculatedShieldedAddress[] | null;
+  preCalculatedAddresses?: (string | IPrecalculatedAddress)[] | null;
   /** Address scanning policy configuration */
   scanPolicy?: AddressScanPolicyData | null;
   /** Logger instance for wallet operations */
@@ -346,16 +353,18 @@ export interface UtxoDetails {
 
 /**
  * Proposed output for a transaction
- * @property address Destination address for the output
+ * @property address Destination address for the output. Must be a shielded address when shielded mode is set.
  * @property value Value of the output
  * @property timelock Optional timelock for the output
  * @property token Token UID for the output
+ * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or FULLY_SHIELDED)
  */
 export interface ProposedOutput {
   address: string;
   value: OutputValueType;
   timelock?: number;
   token: string;
+  shielded?: ShieldedOutputMode;
 }
 
 /**
@@ -399,12 +408,25 @@ export interface SendTransactionFullnodeOptions {
  * @property changeAddress Address for change output
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
+ * @property changeShieldedMode When set AND the transaction already carries
+ *   explicit shielded outputs, change outputs are rewritten as shielded
+ *   outputs in the given mode — mirroring the transaction's privacy mode so
+ *   change doesn't leak the sender alongside an otherwise-private send. This
+ *   covers both the HTR change (the surplus over any HTR being sent plus ALL
+ *   fees — fees are always charged in HTR, including per-shielded-output fees)
+ *   and custom-token change. On a pure-transparent send (no shielded outputs)
+ *   it is a no-op: the change stays transparent. The send REJECTS (throws
+ *   SendTxError) when the HTR change is too small to fund its own
+ *   shielded-output fee and no additional HTR UTXO is available to cover the
+ *   difference — it never silently downgrades the change to transparent.
+ *   Undefined keeps the default transparent change.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
   changeAddress?: string | null;
   startMiningTx?: boolean;
   pinCode?: string | null;
+  changeShieldedMode?: ShieldedOutputMode;
 }
 
 /**

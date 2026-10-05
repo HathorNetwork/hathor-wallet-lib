@@ -54,12 +54,15 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
 /**
  * Resolve an address to the form usable as a transparent output script.
  *
- * Shielded addresses have no direct output script (on-chain they use the
- * spend-derived P2PKH), so this returns the spend address base58 for a shielded
- * input and the address unchanged otherwise. Use it before `getAddressType` /
- * output building wherever a caller-supplied address may be shielded — e.g. a
- * shielded change address in token creation (otherwise getAddressType throws).
- * Mirrors the conversion the send pipeline applies to explicit shielded outputs.
+ * A 71-byte address in the wallet's universal format has no single transparent
+ * output script (on-chain a transparent output at it uses the spend-derived
+ * P2PKH), so this returns the spend address base58 for such an address and the
+ * address unchanged otherwise. Use it before `getAddressType` / output building
+ * wherever a caller-supplied address may be in the 71-byte format — e.g. a
+ * change address in token creation (otherwise getAddressType throws). This is
+ * the uniform address->script resolution the transaction layer
+ * (createOutputScript) applies to every output address; it produces a plain
+ * TRANSPARENT output, not a shielded one.
  *
  * @param {string} address base58 address (may be shielded)
  * @param {Network} network

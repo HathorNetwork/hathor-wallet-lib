@@ -16,7 +16,12 @@
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import HathorWallet from '../../../src/new/wallet';
-import { NATIVE_TOKEN_UID, P2PKH_ACCT_PATH } from '../../../src/constants';
+import transactionUtils from '../../../src/utils/transaction';
+import {
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+  NATIVE_TOKEN_UID,
+  P2PKH_ACCT_PATH,
+} from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
 import { WalletFromXPubGuard } from '../../../src/errors';
 import { AuthorityType, TokenVersion } from '../../../src/types';
@@ -31,9 +36,11 @@ import {
   DEFAULT_PIN_CODE,
   generateConnection,
   generateWalletHelper,
+  waitForTxReceived,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
 import {
+  mergePrecalculatedAddresses,
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
@@ -168,8 +175,10 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: walletData.addresses,
-      preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        walletData.addresses,
+        walletData.shieldedAddresses
+      ),
       scanPolicy: getGapLimitConfig(),
     });
     tracker.track(hWallet);
@@ -211,7 +220,15 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedShieldedAddresses: getPrecalculatedShieldedForSeed(multisigWalletsData.words[0]),
+      // Shielded pairs only, deliberately: injecting the legacy P2SH addresses
+      // too would make the assertion below read back what this config wrote,
+      // and a broken redeem script or P2SH derivation would still pass. The
+      // legacy chain is derived live from pubkeys/numSignatures; the shielded
+      // pairs are still injected, so the expensive half stays pre-calculated.
+      preCalculatedAddresses: mergePrecalculatedAddresses(
+        undefined,
+        getPrecalculatedShieldedForSeed(multisigWalletsData.words[0])
+      ),
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
@@ -364,6 +381,153 @@ describe('[Fullnode-specific] start', () => {
     await expect(hWallet.isReadonly()).resolves.toBe(false);
     hWallet.setExternalTxSigningMethod(null);
     await expect(hWallet.isReadonly()).resolves.toBe(true);
+  });
+
+  it('should create a token with an external signer and no pin (signTx: true)', async () => {
+    // Reproduces the passkey-wallet flow end to end: an xpub-only wallet with an external
+    // tx-signing method registered builds AND signs a create-token transaction (signTx defaults
+    // to true) with NO pin. The signer derives keys the way a passkey ceremony would and reuses
+    // transactionUtils.signTxInputs — the same primitive getSignatureForTx wraps — so it must
+    // NOT hit the "Pin is required." guard, and the produced signatures must be valid on-chain.
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+    const rootXpriv = new Mnemonic(walletData.words).toHDPrivateKey('', new Network('testnet'));
+    const acctXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    // signTxInputs asks for the change-path xpriv (m/44'/280'/0'/0) and derives per-input keys.
+    const changeXpriv = acctXpriv.deriveNonCompliantChild(0);
+
+    const hWallet = await generateWalletHelper({ xpub: acctXpriv.xpubkey });
+    hWallet.setExternalTxSigningMethod((tx, storage) =>
+      transactionUtils.signTxInputs(tx, storage, async () => changeXpriv)
+    );
+    // The external signer, not a stored key, makes the wallet spendable.
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
+
+    // No pinCode passed: createNewToken -> prepareCreateNewToken({ signTx: true }) -> signed by
+    // the external method -> mined and pushed. Must not throw "Pin is required.".
+    const tokenTx = await hWallet.createNewToken('External Signer Token', 'EST', 100n);
+    expect(tokenTx).not.toBeNull();
+    const tokenUid = tokenTx!.hash!;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    // Every input carries real signature data — the fullnode accepted the tx, so the external
+    // signer produced valid signatures without a pin.
+    expect(tokenTx!.inputs.length).toBeGreaterThan(0);
+    for (const input of tokenTx!.inputs) {
+      expect(input.data).not.toBeNull();
+      expect(input.data!.length).toBeGreaterThan(0);
+    }
+
+    const balance = await hWallet.getBalance(tokenUid);
+    expect(balance[0].balance).toStrictEqual({ unlocked: 100n, locked: 0n });
+
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
+  it('should send, mint, melt, delegate, destroy and call a nano contract with an external signer and no pin', async () => {
+    // The companion test above covers createNewToken. This walks the rest of the entry points
+    // whose pin guard is relaxed for an external signer, on one xpub-only wallet with NO pin.
+    // Each is asserted on-chain rather than on the absence of an error: a relaxed guard that
+    // let a build through while producing invalid signatures would be rejected by the fullnode,
+    // so waiting for the tx to be received is what proves the signer actually signed.
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+    const rootXpriv = new Mnemonic(walletData.words).toHDPrivateKey('', new Network('testnet'));
+    const acctXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    const changeXpriv = acctXpriv.deriveNonCompliantChild(0);
+
+    const hWallet = await generateWalletHelper({ xpub: acctXpriv.xpubkey });
+    // The "device" side of a passkey wallet: keys live outside the wallet, and the signer
+    // reuses the same primitive getSignatureForTx wraps.
+    hWallet.setExternalTxSigningMethod((tx, storage) =>
+      transactionUtils.signTxInputs(tx, storage, async () => changeXpriv)
+    );
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 200n);
+
+    // createNewToken keeps the mint and melt authorities on this wallet.
+    const tokenTx = await hWallet.createNewToken('Relaxed Guards', 'RLX', 100n);
+    const tokenUid = tokenTx!.hash!;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    // sendManyOutputsSendTransaction
+    const sendTx = await hWallet.sendManyOutputsTransaction([
+      { address: await hWallet.getAddressAtIndex(1), value: 10n, token: NATIVE_TOKEN_UID },
+    ]);
+    await waitForTxReceived(hWallet, sendTx!.hash!);
+
+    // prepareMintTokensData
+    const mintTx = await hWallet.mintTokens(tokenUid, 50n);
+    await waitForTxReceived(hWallet, mintTx!.hash!);
+    expect((await hWallet.getBalance(tokenUid))[0].balance.unlocked).toStrictEqual(150n);
+
+    // prepareMeltTokensData
+    const meltTx = await hWallet.meltTokens(tokenUid, 30n);
+    await waitForTxReceived(hWallet, meltTx!.hash!);
+    expect((await hWallet.getBalance(tokenUid))[0].balance.unlocked).toStrictEqual(120n);
+
+    // prepareDelegateAuthorityData
+    const delegateTx = await hWallet.delegateAuthority(
+      tokenUid,
+      AuthorityType.MINT,
+      await hWallet.getAddressAtIndex(2)
+    );
+    await waitForTxReceived(hWallet, delegateTx!.hash!);
+
+    // prepareDestroyAuthorityData — the delegation above left two mint authorities.
+    const destroyTx = await hWallet.destroyAuthority(tokenUid, AuthorityType.MINT, 1);
+    await waitForTxReceived(hWallet, destroyTx!.hash!);
+
+    // A nano call too: it signs through prepareNanoSendTransaction rather than
+    // prepareTransaction, and produces a caller signature on the nano header —
+    // a path no other test here reaches, so a pin requirement reintroduced
+    // below the relaxed guards would otherwise go unnoticed.
+    const ncTx = await hWallet.createAndSendNanoContractTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      await hWallet.getAddressAtIndex(0),
+      {
+        blueprintId: global.FEE_BLUEPRINT_ID,
+        args: [],
+        actions: [{ type: 'deposit', token: NATIVE_TOKEN_UID, amount: 10n }],
+      }
+    );
+    await waitForTxReceived(hWallet, ncTx.hash!);
+    expect(ncTx.getNanoHeaders()[0].script.length).toBeGreaterThan(0);
+
+    // Every signed tx carries real input data; the fullnode accepted all of them.
+    for (const tx of [sendTx, mintTx, meltTx, delegateTx, destroyTx, ncTx]) {
+      expect(tx!.inputs.length).toBeGreaterThan(0);
+      for (const input of tx!.inputs) {
+        expect(input.data).not.toBeNull();
+        expect(input.data!.length).toBeGreaterThan(0);
+      }
+    }
+
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  });
+
+  it('should still require a pin on the relaxed entry points without an external signer', async () => {
+    // The other half of the relaxation: with no external signer registered, an xpub-only wallet
+    // is readonly and every one of these entry points must still refuse to sign.
+    const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+    const rootXpriv = new Mnemonic(walletData.words).toHDPrivateKey('', new Network('testnet'));
+    const acctXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+
+    const hWallet = await generateWalletHelper({ xpub: acctXpriv.xpubkey });
+    await expect(hWallet.isReadonly()).resolves.toBe(true);
+
+    const address0 = await hWallet.getAddressAtIndex(0);
+    await expect(hWallet.mintTokens('0'.repeat(64), 1n)).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.meltTokens('0'.repeat(64), 1n)).rejects.toThrow(WalletFromXPubGuard);
+    await expect(
+      hWallet.delegateAuthority('0'.repeat(64), AuthorityType.MINT, address0)
+    ).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.destroyAuthority('0'.repeat(64), AuthorityType.MINT, 1)).rejects.toThrow(
+      WalletFromXPubGuard
+    );
+
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
   });
 
   it('should start a wallet without pin (hack test)', async () => {

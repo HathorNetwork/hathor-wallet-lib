@@ -30,7 +30,7 @@ import {
   TokenVersion,
   UtxoSelectionAlgorithm,
 } from '../types';
-import { getAddressType } from './address';
+import { getAddressType, resolveOutputScriptAddress } from './address';
 import { ceilDiv } from './bigint';
 import {
   InsufficientFundsError,
@@ -501,7 +501,17 @@ const tokens = {
 
       // get output change
       if (foundAmount > requiredAmount) {
-        const cAddress = await storage.getChangeAddress({ changeAddress });
+        // The change address may be in the wallet's 71-byte universal format,
+        // which has no single transparent output script. This deposit change is
+        // a plain TRANSPARENT output (shielded token-creation change is out of
+        // scope), so resolve the address to its spend-derived P2PKH — the same
+        // uniform address->script resolution the transaction layer applies to
+        // every output address. Without this, getAddressType throws for a
+        // 71-byte changeAddress.
+        const cAddress = resolveOutputScriptAddress(
+          await storage.getChangeAddress({ changeAddress }),
+          storage.config.getNetwork()
+        );
 
         // place at the beginning of the array to keep the order of the outputs
         outputs.unshift({

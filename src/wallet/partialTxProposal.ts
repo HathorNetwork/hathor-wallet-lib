@@ -86,7 +86,14 @@ class PartialTxProposal {
       allUtxos = utxos;
     } else {
       allUtxos = [];
-      for await (const utxo of this.storage.selectUtxos({ token, authorities: 0n })) {
+      // Shielded UTXOs cannot be spent in a transparent partial transaction
+      // (they need confidential-spend machinery + single-sig P2PKH signing, not
+      // the P2SH assembly this flow uses), so never select them here.
+      for await (const utxo of this.storage.selectUtxos({
+        token,
+        authorities: 0n,
+        shielded: false,
+      })) {
         allUtxos.push({
           txId: utxo.txId,
           index: utxo.index,

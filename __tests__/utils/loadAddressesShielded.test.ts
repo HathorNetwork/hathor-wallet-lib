@@ -97,7 +97,7 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
       const liveList = await loadAddresses(0, 4, liveStorage);
 
       // Same wallet, but with the pairs injected up front (what the wallet start
-      // does with preCalculatedShieldedAddresses).
+      // does with the shielded pairs on the unified preCalculatedAddresses).
       const injectedStorage = await makeStorage();
       await savePrecalculatedShieldedAddresses(injectedStorage, deriveEntries(4, injectedStorage));
 

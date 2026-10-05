@@ -583,11 +583,14 @@ test('access data from xpriv — shielded key chains', () => {
   // Root import: the depth-0 arm of the guard — shielded keys MUST be
   // derived, at exactly the documented paths.
   const fromRoot = wallet.generateAccessDataFromXpriv(xprivkeyRoot, { pin: '123' });
+  // Shielded chains use the COMPLIANT deriveChild (bitcore's correct method):
+  // this key material is new, with no deployed wallet to stay bug-compatible
+  // with, unlike the legacy chains above which stay on deriveNonCompliantChild.
   expect(fromRoot.scanXpubkey).toBe(
-    xprivRoot.deriveNonCompliantChild(SHIELDED_SCAN_ACCT_PATH).deriveNonCompliantChild(0).xpubkey
+    xprivRoot.deriveChild(SHIELDED_SCAN_ACCT_PATH).deriveChild(0).xpubkey
   );
   expect(fromRoot.spendXpubkey).toBe(
-    xprivRoot.deriveNonCompliantChild(SHIELDED_SPEND_ACCT_PATH).deriveNonCompliantChild(0).xpubkey
+    xprivRoot.deriveChild(SHIELDED_SPEND_ACCT_PATH).deriveChild(0).xpubkey
   );
   expect(checkPassword(fromRoot.scanMainKey!, '123')).toBe(true);
   expect(checkPassword(fromRoot.spendMainKey!, '123')).toBe(true);

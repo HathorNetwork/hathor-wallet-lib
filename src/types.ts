@@ -177,6 +177,36 @@ export interface IPrecalculatedShieldedAddress {
   spendPubkey: string;
 }
 
+/**
+ * A pre-calculated address for a single BIP32 index, injected at wallet start
+ * to skip live EC derivation for the chains actually supplied.
+ *
+ * An index may carry the legacy chain address, the shielded pair, or both —
+ * some fixed-seed wallets have committed shielded pairs but no legacy list, so
+ * a shielded-only entry has to be expressible. Whichever chain an entry omits
+ * is derived live for that index during address loading, as are indexes past
+ * the injected window.
+ *
+ * Both chains for one index travel together here; passing a plain `string[]` of
+ * legacy addresses is still accepted (legacy-only, back-compat).
+ */
+export type IPrecalculatedAddress = { bip32AddressIndex: number } & (
+  | {
+      /** The legacy chain address (P2PKH, or P2SH for multisig wallets). */
+      base58: string;
+      /** The shielded pair for this index (present for shielded wallets). */
+      shielded?: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+  | {
+      /**
+       * Shielded-only: this index has no pre-calculated legacy address, so the
+       * legacy chain is derived live for it while the shielded pair is reused.
+       */
+      base58?: undefined;
+      shielded: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+);
+
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
@@ -790,6 +820,12 @@ export interface IStorage {
 
   // Shielded (confidential transaction) crypto provider
   shieldedCryptoProvider?: IShieldedCryptoProvider;
+  // Non-null after a processHistory reload that could not decode one or more
+  // owned shielded txs (systemic: wrong PIN / missing scan key): the list of
+  // skipped tx ids. A "partial history" flag the wallet can surface — reported
+  // balances are understated (and gap-limit discovery may be short) until a
+  // reload with a valid PIN. Reset to null when a reload completes with no skips.
+  shieldedDecodeSkippedTxIds?: string[] | null;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
   // Get the provider, or throw if it has not been configured. Confidential
   // code paths require it; a missing provider is a setup error, not a

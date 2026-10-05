@@ -16,7 +16,11 @@ import {
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
-import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
+import {
+  mergePrecalculatedAddresses,
+  multisigWalletsData,
+  precalculationHelpers,
+} from './wallet-precalculation.helper';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
@@ -105,12 +109,20 @@ export async function generateWalletHelper(param) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    preCalculatedAddresses: walletData.addresses,
-    preCalculatedShieldedAddresses: walletData.shieldedAddresses,
+    // Both chains for each index travel together in the unified array.
+    preCalculatedAddresses: mergePrecalculatedAddresses(
+      walletData.addresses,
+      walletData.shieldedAddresses
+    ),
     scanPolicy: getGapLimitConfig(),
   };
   if (param) {
-    Object.assign(walletConfig, param);
+    // Both precalc params were folded into the merged array above, so they are
+    // stripped here: `preCalculatedAddresses` would otherwise clobber the
+    // unified array via Object.assign, and `preCalculatedShieldedAddresses` is
+    // no longer a wallet option at all (it would simply be ignored).
+    const { preCalculatedAddresses: _pca, preCalculatedShieldedAddresses: _pcsa, ...rest } = param;
+    Object.assign(walletConfig, rest);
   }
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
@@ -200,12 +212,13 @@ export async function generateMultisigWalletHelper(parameters) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    preCalculatedAddresses:
+    // Both chains for each index travel together in the unified array. The
+    // multisig seeds are fixed in-repo, so their shielded pairs are committed
+    // fixtures.
+    preCalculatedAddresses: mergePrecalculatedAddresses(
       parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
-    // The multisig seeds are fixed in-repo, so their shielded pairs are
-    // committed fixtures (the shielded chain derives from the seed alone).
-    preCalculatedShieldedAddresses:
-      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed),
+      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed)
+    ),
     multisig: {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,

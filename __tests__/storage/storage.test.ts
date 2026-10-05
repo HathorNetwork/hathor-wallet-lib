@@ -9,6 +9,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
+import { getDefaultAddressMeta } from '../../src/storage/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
@@ -36,6 +37,7 @@ import {
   WALLET_FLAGS,
   TokenVersion,
   ApiVersion,
+  IBalance,
 } from '../../src/types';
 
 describe('handleStop', () => {
@@ -1333,5 +1335,28 @@ describe('shielded key access (smoke)', () => {
     expect(() => storage.getShieldedCryptoProvider()).toThrow(
       'Shielded crypto provider is not set'
     );
+  });
+});
+
+describe('getDefaultAddressMeta — per-call balance Map (no shared aliasing)', () => {
+  const someBalance: IBalance = {
+    tokens: { locked: 0n, unlocked: 5n },
+    authorities: {
+      mint: { locked: 0n, unlocked: 0n },
+      melt: { locked: 0n, unlocked: 0n },
+    },
+  };
+
+  it('returns a fresh, non-aliased balance Map on every call', () => {
+    const a = getDefaultAddressMeta();
+    const b = getDefaultAddressMeta();
+    // Two calls must not share the same Map instance — a shared module-level Map
+    // (the pre-fix behaviour) would fail this and re-leak balances across addresses.
+    expect(a.balance).not.toBe(b.balance);
+    expect(a.numTransactions).toBe(0);
+
+    // A credit written to one address's metadata must not appear in another's.
+    a.balance.set(NATIVE_TOKEN_UID, someBalance);
+    expect(b.balance.has(NATIVE_TOKEN_UID)).toBe(false);
   });
 });

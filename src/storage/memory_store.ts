@@ -329,7 +329,10 @@ export class MemoryStore implements IStore {
    * @returns {Promise<void>}
    */
   async saveAddress(info: IAddressInfo): Promise<void> {
-    if (!info.base58) {
+    // Reject a non-string base58 as well as a falsy one: an object here would be
+    // truthy, get keyed into the address map, and make every later ownership
+    // check on that index miss. Untyped JS callers can reach this.
+    if (!info.base58 || typeof info.base58 !== 'string') {
       throw new Error('Invalid address');
     }
     if (this.addresses.has(info.base58)) {
