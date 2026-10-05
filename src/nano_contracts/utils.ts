@@ -195,7 +195,9 @@ export const unsafeGetOracleInputData = async (
 
     // This is only when the oracle is an address, otherwise we will have the signed input data
     const address = parsedOracleScript.address.base58;
-    if (!wallet.isAddressMine(address)) {
+    // isAddressMine is async: without the await, `!promise` is always false and this guard
+    // never fires.
+    if (!(await wallet.isAddressMine(address))) {
       throw new OracleParseError('Oracle address is not from the loaded wallet.');
     }
     const oracleKey = await wallet.getPrivateKeyFromAddress(address, options);
