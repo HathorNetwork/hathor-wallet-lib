@@ -1380,6 +1380,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Highest value first by default, so max_utxos keeps the top-N by value
+      // instead of whatever the storage insertion order happens to be.
+      // Consolidation overrides this to smallest-first.
+      order_by_value: options.order_by_value ?? 'desc',
       // Transparent-only by default: getUtxos feeds consolidateUtxos, which
       // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
       // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.
@@ -1545,6 +1549,11 @@ class HathorWallet extends EventEmitter {
     // a caller passes shielded:true — the literal after the spread wins.
     const utxoDetails = await this.getUtxos({
       ...options,
+      // Smallest first: consolidation is the only path that clears dust, since
+      // regular sends spend the largest UTXOs first. This decides which UTXOs
+      // survive every limit — max_utxos, max_amount and the max_number_inputs
+      // cap in the loop below. Callers can still override it.
+      order_by_value: options.order_by_value ?? 'asc',
       only_available_utxos: true,
       shielded: false,
     });
