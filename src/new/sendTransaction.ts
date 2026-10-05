@@ -721,7 +721,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       report: selectionReports.get(HTR_UID) ?? userInputSummaries.get(HTR_UID) ?? null,
       override: changeModeOverride,
     });
-    if (htrChangeMode !== 'transparent') {
+    // Only a change that will actually be shielded needs a shielded-capable
+    // destination; with no HTR change (an exact match) the address is unused.
+    if (htrChangeMode !== 'transparent' && findHtrChangeIndex(partialHtrTxData.outputs) !== -1) {
       assertChangeAddressSupportsShieldedChange();
     }
     const { addedFee } = await convertHtrChangeIfRequested(
@@ -1675,6 +1677,14 @@ async function pullExtraHtrUtxos(
  *   fee and no additional HTR UTXO is available to cover the difference, or
  *   when a shielded change is required with no address source for it.
  */
+/** Index of the transparent HTR change output, or -1 when the tx has none. */
+function findHtrChangeIndex(outputs: IDataOutput[]): number {
+  return outputs.findIndex(o => {
+    const withToken = o as IDataOutputWithToken;
+    return withToken.token === NATIVE_TOKEN_UID && withToken.isChange === true;
+  });
+}
+
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
   shieldedOutputDefs: IResolvedShieldedOutputDef[],
@@ -1694,11 +1704,7 @@ export async function convertHtrChangeIfRequested(
       ? FEE_PER_FULL_SHIELDED_OUTPUT
       : FEE_PER_AMOUNT_SHIELDED_OUTPUT;
 
-  const HTR_UID = NATIVE_TOKEN_UID;
-  const changeIdx = partialHtrTxData.outputs.findIndex(o => {
-    const withToken = o as IDataOutputWithToken;
-    return withToken.token === HTR_UID && withToken.isChange === true;
-  });
+  const changeIdx = findHtrChangeIndex(partialHtrTxData.outputs);
   if (changeIdx === -1) return { addedFee: 0n };
 
   // There is an HTR change to shield, but the tx already carries the maximum
@@ -1793,7 +1799,7 @@ export async function convertHtrChangeIfRequested(
   shieldedOutputDefs.push({
     address: spendAddress.base58,
     value: changeValue - additionalFee,
-    token: HTR_UID,
+    token: NATIVE_TOKEN_UID,
     scanPubkey: addressObj.getScanPubkey().toString('hex'),
     shieldedMode: mode,
     shieldedAddress,

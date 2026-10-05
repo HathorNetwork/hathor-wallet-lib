@@ -2297,6 +2297,56 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
+    test('a legacy changeAddress is accepted when a shielded HTR input leaves no change', async () => {
+      const storage = buildPoolStorage([]);
+      // The caller spends an owned shielded HTR slot that exactly funds the
+      // payment: the rules decide on a shielded mode (a shielded input was
+      // spent), but no change output exists, so the change address is never
+      // used and must not cause a rejection.
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: [],
+        shielded_outputs: [
+          {
+            mode: 1,
+            commitment: '',
+            range_proof: '',
+            script: '',
+            ephemeral_pubkey: '',
+            decoded: { address: 'W-shielded-spend-addr' },
+            value: 10n,
+            token: NATIVE_TOKEN_UID,
+            blindingFactor: '56'.repeat(32),
+          },
+        ],
+        inputs: [],
+      } as never);
+      jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+      jest.spyOn(storage, 'getUtxo').mockResolvedValue(
+        poolUtxo('parent', 10n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '56'.repeat(32),
+        }) as never
+      );
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 10n, token: NATIVE_TOKEN_UID },
+        ],
+        inputs: [{ txId: 'parent', index: 0 }],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // Exact match: no change of any kind, no shielded outputs, and the
+      // shielded input is fully unshielded into the public payment.
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      expect(result.excessBlindingFactor).toBeDefined();
+    });
+
     test('a legacy changeAddress still works when the change stays transparent', async () => {
       const storage = buildPoolStorage([poolUtxo('htr-pub-100', 100n, NATIVE_TOKEN_UID)]);
       jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
