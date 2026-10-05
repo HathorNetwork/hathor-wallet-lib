@@ -219,7 +219,7 @@ export class Storage implements IStorage {
    */
   async getExternalPrivateKey(
     addressIndex: number,
-    options: { pinCode?: string | null } = {}
+    options: { pinCode?: string } = {}
   ): Promise<unknown> {
     if (!this.getPrivKeyFunc) {
       throw new Error('No external private key method set.');

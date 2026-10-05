@@ -106,7 +106,7 @@ export type EcdsaTxSign = (
 export type PrivateKeyProvider = (
   addressIndex: number,
   storage: IStorage,
-  options?: { pinCode?: string | null }
+  options?: { pinCode?: string }
 ) => Promise<unknown>;
 
 export type HistorySyncFunction = (
@@ -844,10 +844,7 @@ export interface IStorage {
 
   hasPrivateKeyMethod(): boolean;
   setPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
-  getExternalPrivateKey(
-    addressIndex: number,
-    options?: { pinCode?: string | null }
-  ): Promise<unknown>;
+  getExternalPrivateKey(addressIndex: number, options?: { pinCode?: string }): Promise<unknown>;
 
   // Address methods
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo & IAddressMetadata>;
