@@ -125,8 +125,8 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
   }
 
   async suiteSetup(): Promise<void> {
-    // GenesisWalletHelper lazily initializes via getSingleton(), no explicit setup needed.
-    await GenesisWalletHelper.getSingleton();
+    // Nothing to warm up: funding goes through the integration-test-helper, and
+    // the suite gates on its readiness in globalSetup.
   }
 
   async suiteTeardown(): Promise<void> {

@@ -232,21 +232,29 @@ describe('[Fullnode] getTxAddresses', () => {
 
   it('should identify transaction addresses correctly', async () => {
     const hWallet = await generateWalletHelper();
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+
+    // The sender is an ordinary funded wallet rather than the genesis one. All
+    // this test needs is a wallet that built the transaction, so it can assert
+    // what the *sending* side sees in it. Funding index 0 and sending change
+    // back to index 0 keeps the sender's footprint to a single address, which
+    // is what the final assertion pins down.
+    const senderWallet = await generateWalletHelper();
+    const senderAddress = await senderWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(senderWallet, senderAddress, 20n);
 
     // Generating a transaction with outputs to multiple addresses
-    const tx = await gWallet.sendManyOutputsTransaction(
+    const tx = await senderWallet.sendManyOutputsTransaction(
       [
         { address: await hWallet.getAddressAtIndex(1), value: 1n, token: NATIVE_TOKEN_UID },
         { address: await hWallet.getAddressAtIndex(3), value: 3n, token: NATIVE_TOKEN_UID },
         { address: await hWallet.getAddressAtIndex(5), value: 5n, token: NATIVE_TOKEN_UID },
       ],
       {
-        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
+        changeAddress: senderAddress,
       }
     );
     await waitForTxReceived(hWallet, tx.hash);
-    await waitForTxReceived(gWallet, tx.hash);
+    await waitForTxReceived(senderWallet, tx.hash);
 
     // Validating the method results
     const decodedTx = await hWallet.getTx(tx.hash);
@@ -258,9 +266,10 @@ describe('[Fullnode] getTxAddresses', () => {
       ])
     );
 
-    // By convention, only the address 0 of the genesis wallet is used on the integration tests
-    await expect(gWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(
-      new Set([WALLET_CONSTANTS.genesis.addresses[0]])
+    // The sender funded and took change on a single address, so that is the
+    // whole of its footprint in this transaction.
+    await expect(senderWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(
+      new Set([senderAddress])
     );
   });
 });

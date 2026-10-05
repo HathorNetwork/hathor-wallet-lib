@@ -17,7 +17,8 @@ import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
-import { generateWalletHelper, waitNextBlock, waitTxConfirmed, waitUntilNextTimestamp } from './__tests__/integration/helpers/wallet.helper';
+import { generateWalletHelper, waitTxConfirmed, waitUntilNextTimestamp } from './__tests__/integration/helpers/wallet.helper';
+import { waitForNextBlock } from './__tests__/integration/utils/fullnode.util';
 import { stopGLLBackgroundTask } from './src/sync/gll';
 import Transaction from './src/models/transaction';
 
@@ -149,10 +150,12 @@ beforeAll(async () => {
   // One-time setup: Run only once across all test files (using shared state from CustomEnvironment)
   const sharedState = global.__SHARED_STATE__;
   if (!sharedState.setupDone) {
-    // Await first block to be mined to release genesis reward lock
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    // Await first block to be mined to release genesis reward lock.
+    // Asked of the fullnode rather than a wallet's storage: block height is a
+    // property of the chain, and the old form only used the genesis wallet
+    // because it happened to be running.
     try {
-      await waitNextBlock(gWallet.storage);
+      await waitForNextBlock();
     } catch (err) {
       // When running jest with jasmine there's a bug (or behavior)
       // that any error thrown inside beforeAll methods don't stop the tests

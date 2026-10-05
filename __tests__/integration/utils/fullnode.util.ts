@@ -5,8 +5,42 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import axios from 'axios';
 import txApi from '../../../src/api/txApi';
 import { delay } from './time.util';
+import { FULLNODE_URL } from '../configuration/test-constants';
+
+/** Current best-block height, read straight from the fullnode. */
+async function getBestBlockHeight(): Promise<number> {
+  const { data } = await axios.get(`${FULLNODE_URL}status`, { timeout: 10000 });
+  return data?.dag?.best_block?.height ?? 0;
+}
+
+/**
+ * Wait until the fullnode's best block advances past the height at call time.
+ *
+ * The wallet-free counterpart of `waitNextBlock`, which reads
+ * `storage.getCurrentHeight()` and therefore needs a started, connected wallet.
+ * Height is a property of the chain rather than of any wallet, so asking the
+ * fullnode directly avoids that dependency. Prefer this one unless a caller
+ * already has a started wallet on hand.
+ */
+export async function waitForNextBlock({
+  timeoutMs = 600000,
+  pollIntervalMs = 1000,
+}: { timeoutMs?: number; pollIntervalMs?: number } = {}): Promise<void> {
+  const startingHeight = await getBestBlockHeight();
+  const deadline = Date.now() + timeoutMs;
+
+  while ((await getBestBlockHeight()) === startingHeight) {
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out after ${timeoutMs}ms waiting for a block past height ${startingHeight}`
+      );
+    }
+    await delay(pollIntervalMs);
+  }
+}
 
 /**
  * Wait until the wall clock is strictly past `txId`'s timestamp second.
