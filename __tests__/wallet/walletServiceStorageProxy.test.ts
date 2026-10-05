@@ -37,6 +37,7 @@ describe('WalletServiceStorageProxy', () => {
 
     // Mock the storage methods we need
     mockStorage = {
+      getTxSignatureMethod: jest.fn().mockReturnValue(null),
       getItem: jest.fn(),
       setItem: jest.fn(),
       removeItem: jest.fn(),
@@ -563,6 +564,22 @@ describe('WalletServiceStorageProxy', () => {
         proxiedStorage,
         'pin123'
       );
+    });
+
+    it('should hand the proxy itself to a registered external signer', async () => {
+      const mockTransaction = new Transaction([], []);
+      const signatures = { inputSignatures: [], ncCallerSignature: null };
+      const externalSigner = jest.fn().mockResolvedValue(signatures);
+      (mockStorage.getTxSignatureMethod as jest.Mock).mockReturnValue(externalSigner);
+      (transactionUtils.getSignatureForTx as jest.Mock).mockClear();
+
+      const result = await proxiedStorage.getTxSignatures(mockTransaction, '');
+
+      expect(result).toBe(signatures);
+      // The signer must get the PROXY (with the wallet-service getSpentTxs/getAddressInfo), not the
+      // raw storage that Storage.getTxSignatures would pass.
+      expect(externalSigner).toHaveBeenCalledWith(mockTransaction, proxiedStorage, '');
+      expect(transactionUtils.getSignatureForTx).not.toHaveBeenCalled();
     });
   });
 });
