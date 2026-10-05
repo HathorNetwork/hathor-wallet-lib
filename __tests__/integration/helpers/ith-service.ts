@@ -46,6 +46,18 @@ export interface FundResult {
   utxoSource: 'test' | 'leftover' | 'large';
 }
 
+/**
+ * The helper's readiness report. `ready` is false until it has synced the
+ * genesis wallet and split the funding pool; the remaining fields are pool
+ * statistics whose exact set varies by helper version.
+ */
+export interface ReadyStatus {
+  ready: boolean;
+  readyReason?: string;
+  testUtxos?: number;
+  [stat: string]: unknown;
+}
+
 /** A typed failure from the helper (or the transport), carrying the RFC error contract. */
 export class IthServiceError extends Error {
   readonly code: string;
@@ -68,6 +80,8 @@ interface IthConfig {
   timeoutMs: number;
   maxRetries: number;
   retryBaseDelayMs: number;
+  readyTimeoutMs: number;
+  readyPollIntervalMs: number;
 }
 
 function ithConfig(): IthConfig {
@@ -79,6 +93,8 @@ function ithConfig(): IthConfig {
     timeoutMs: testConfig.ithTimeoutMs,
     maxRetries: testConfig.ithMaxRetries,
     retryBaseDelayMs: testConfig.ithRetryBaseDelayMs,
+    readyTimeoutMs: testConfig.ithReadyTimeoutMs,
+    readyPollIntervalMs: testConfig.ithReadyPollIntervalMs,
   };
 }
 
@@ -232,5 +248,55 @@ export const ithService = {
       );
     }
     return result;
+  },
+
+  /**
+   * GET /ready — readiness probe.
+   *
+   * Deliberately does NOT go through {@link request}: a 503 here is the
+   * helper's documented "not ready yet" answer, not a failure, and it carries
+   * no `retryable` field — so the generic path would fail fast on the one
+   * response a caller most expects to see. Reports the state instead of
+   * throwing, and folds a transport error into the same "not ready" shape,
+   * since a helper that is not listening yet is indistinguishable from one
+   * that is still warming up to anybody who is polling.
+   */
+  async ready(): Promise<ReadyStatus> {
+    const { baseUrl, timeoutMs } = ithConfig();
+    try {
+      const res = await axios.get<ReadyStatus>(`${baseUrl}/ready`, {
+        timeout: timeoutMs,
+        validateStatus: () => true,
+      });
+      return { ...res.data, ready: res.status === 200 && res.data?.ready === true };
+    } catch (transportError) {
+      return { ready: false, readyReason: (transportError as Error).message };
+    }
+  },
+
+  /** Poll {@link ready} until the helper reports ready, or throw at the deadline. */
+  async waitUntilReady(
+    options: { timeoutMs?: number; pollIntervalMs?: number } = {}
+  ): Promise<ReadyStatus> {
+    const { readyTimeoutMs, readyPollIntervalMs } = ithConfig();
+    const timeoutMs = options.timeoutMs ?? readyTimeoutMs;
+    const pollIntervalMs = options.pollIntervalMs ?? readyPollIntervalMs;
+    const deadline = Date.now() + timeoutMs;
+
+    let status: ReadyStatus = { ready: false, readyReason: 'not yet polled' };
+    for (;;) {
+      status = await this.ready();
+      if (status.ready) {
+        return status;
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(
+          `The integration-test-helper did not become ready within ${timeoutMs}ms ` +
+            `(last reported: ${status.readyReason ?? 'no reason given'}). ` +
+            `Check that the wallet-provider container is running and healthy.`
+        );
+      }
+      await delay(pollIntervalMs);
+    }
   },
 };

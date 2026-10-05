@@ -11,6 +11,8 @@ module.exports = {
   collectCoverage: true,
   collectCoverageFrom: ['<rootDir>/src/**/*.js', '<rootDir>/src/**/*.ts'],
   testMatch: [mainTestMatch],
+  // Blocks the whole suite until the integration-test-helper reports ready.
+  globalSetup: '<rootDir>/__tests__/integration/configuration/global-setup.ts',
   coverageReporters: ['text-summary', 'lcov', 'clover'],
   testTimeout: 20 * 60 * 1000, // May be adjusted with optimizations
   setupFilesAfterEnv: ['<rootDir>/setupTests-integration.js'],

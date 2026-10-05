@@ -47,4 +47,11 @@ module.exports = {
   ithTimeoutMs: positiveIntEnv('ITH_TIMEOUT_MS', 45000),
   ithMaxRetries: positiveIntEnv('ITH_MAX_RETRIES', 5, { min: 0 }),
   ithRetryBaseDelayMs: positiveIntEnv('ITH_RETRY_BASE_DELAY_MS', 500),
+
+  // Readiness gate (see configuration/global-setup.ts). The helper reports 503
+  // until it has synced the genesis wallet and split the funding pool, which on
+  // a cold private network waits out genesis reward-lock maturity — hence the
+  // generous default ceiling.
+  ithReadyTimeoutMs: positiveIntEnv('ITH_READY_TIMEOUT_MS', 300000),
+  ithReadyPollIntervalMs: positiveIntEnv('ITH_READY_POLL_INTERVAL_MS', 2000),
 };
