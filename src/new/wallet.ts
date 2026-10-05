@@ -2172,6 +2172,31 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Fetch an address private key from the external provider and verify it corresponds to the
+   * wallet's address at that index. A buggy or mismatched provider could otherwise return the
+   * wrong key, which would sign with the wrong key and could create an unspendable utxo.
+   *
+   * @param addressIndex - Index whose private key to fetch
+   * @param options - Options forwarded to the provider (e.g. pinCode)
+   * @returns Promise that resolves with the verified private key (a bitcore PrivateKey)
+   */
+  async getVerifiedExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string } = {}
+  ): Promise<unknown> {
+    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, options);
+    const derivedAddress = getAddressFromPubkey(
+      (privateKey as bitcore.PrivateKey).publicKey.toString(),
+      this.getNetworkObject()
+    ).toString();
+    const expectedAddress = await this.getAddressAtIndex(addressIndex);
+    if (derivedAddress !== expectedAddress) {
+      throw new WalletError('External private key provider returned a key for the wrong address.');
+    }
+    return privateKey;
+  }
+
+  /**
    * Returns a base64 encoded signed message with an address' private key given an
    * address index
    *
@@ -2184,9 +2209,9 @@ class HathorWallet extends EventEmitter {
   async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
     let privateKey: unknown;
     if (this.storage.hasPrivateKeyMethod()) {
-      // External provider (e.g. passkey signer): derive the key on demand by index; no pin
-      // needed, and no storage address lookup required.
-      privateKey = await this.storage.getExternalPrivateKey(index, { pinCode });
+      // External provider (e.g. passkey signer): derive the key on demand by index; no pin needed.
+      // Verified against the wallet's address at this index (see getVerifiedExternalPrivateKey).
+      privateKey = await this.getVerifiedExternalPrivateKey(index, { pinCode });
     } else {
       // No external provider: fall back to the stored key, which requires a pin. Mirror
       // getPrivateKeyFromAddress — use the instance pin when the caller didn't pass one, and throw a
@@ -3789,22 +3814,25 @@ class HathorWallet extends EventEmitter {
    *                          Optional but required if not set in instance
    */
   async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
+    // A readonly wallet with no external provider cannot produce a private key for any address.
+    // Keep this first so an xpub-only wallet hits WalletFromXPubGuard (not AddressError) even for an
+    // unknown address, while a passkey wallet (readonly + external provider) still passes through.
+    if ((await this.storage.isReadonly()) && !this.storage.hasPrivateKeyMethod()) {
+      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
+    }
+
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
     }
 
     // External provider path (e.g. passkey signer): no stored key and no pin are needed.
-    // This is what lets an xpub-only (readonly) wallet sign messages and oracle data, so it
-    // must run before the readonly guard below.
     if (this.storage.hasPrivateKeyMethod()) {
-      return this.storage.getExternalPrivateKey(addressIndex, options);
+      return this.getVerifiedExternalPrivateKey(addressIndex, options);
     }
 
-    // Internal path: derive from the stored key - requires a non-readonly wallet and a pin.
-    if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
-    }
+    // Internal path: derive from the stored key. The wallet is guaranteed non-readonly here (the
+    // guard above only lets a non-readonly wallet reach this point without an external provider).
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
