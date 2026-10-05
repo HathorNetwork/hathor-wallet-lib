@@ -2185,10 +2185,13 @@ class HathorWallet extends EventEmitter {
     options: { pinCode?: string } = {}
   ): Promise<unknown> {
     const privateKey = await this.storage.getExternalPrivateKey(addressIndex, options);
+    if (!(privateKey instanceof bitcore.PrivateKey)) {
+      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
+    }
     const derivedAddress = getAddressFromPubkey(
       (privateKey as bitcore.PrivateKey).publicKey.toString(),
       this.getNetworkObject()
-    ).toString();
+    ).base58;
     const expectedAddress = await this.getAddressAtIndex(addressIndex);
     if (derivedAddress !== expectedAddress) {
       throw new WalletError('External private key provider returned a key for the wrong address.');

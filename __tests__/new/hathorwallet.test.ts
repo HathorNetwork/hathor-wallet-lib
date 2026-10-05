@@ -841,15 +841,34 @@ test('signMessageWithAddress uses an external private-key provider (no pin requi
 
 test('getPrivateKeyFromAddress uses the provider and bypasses the readonly guard', async () => {
   const { hWallet, storage } = await makeStartedWallet();
-  const sentinel = { marker: 'external-key' };
-  const provider = jest.fn(async () => sentinel);
+  const addressIndex = 0;
+  // Return the real key for this index so it passes getVerifiedExternalPrivateKey's address check.
+  const expectedKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(addressIndex).privateKey;
+  const provider = jest.fn(async () => expectedKey);
   hWallet.setExternalPrivateKeyMethod(provider);
   // Even a readonly wallet must reach the provider (no WalletFromXPubGuard, no pin).
   jest.spyOn(storage, 'isReadonly').mockResolvedValue(true);
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(addressIndex);
+
+  await expect(hWallet.getPrivateKeyFromAddress('some-owned-address')).resolves.toBe(expectedKey);
+  expect(provider).toHaveBeenCalledWith(addressIndex, storage, {});
+});
+
+test('getPrivateKeyFromAddress rejects a provider key for the wrong address', async () => {
+  const { hWallet, storage } = await makeStartedWallet();
+  // Provider returns the key for index 5 regardless of the requested index.
+  const wrongKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(5).privateKey;
+  const provider = jest.fn(async () => wrongKey);
+  hWallet.setExternalPrivateKeyMethod(provider);
   hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
 
-  await expect(hWallet.getPrivateKeyFromAddress('some-owned-address')).resolves.toBe(sentinel);
-  expect(provider).toHaveBeenCalledWith(0, storage, {});
+  await expect(hWallet.getPrivateKeyFromAddress('some-owned-address')).rejects.toThrow(
+    'External private key provider returned a key for the wrong address.'
+  );
 });
 
 test('setExternalPrivateKeyMethod toggles hasPrivateKeyMethod', () => {
