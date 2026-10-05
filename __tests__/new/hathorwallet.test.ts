@@ -850,9 +850,11 @@ test('getPrivateKeyFromAddress uses the provider and bypasses the readonly guard
   hWallet.setExternalPrivateKeyMethod(provider);
   // Even a readonly wallet must reach the provider (no WalletFromXPubGuard, no pin).
   jest.spyOn(storage, 'isReadonly').mockResolvedValue(true);
+  // This harness doesn't persist address records, so map the real address to its index.
+  const address = await hWallet.getAddressAtIndex(addressIndex);
   hWallet.getAddressIndex = jest.fn().mockResolvedValue(addressIndex);
 
-  await expect(hWallet.getPrivateKeyFromAddress('some-owned-address')).resolves.toBe(expectedKey);
+  await expect(hWallet.getPrivateKeyFromAddress(address)).resolves.toBe(expectedKey);
   expect(provider).toHaveBeenCalledWith(addressIndex, storage, {});
 });
 
@@ -866,9 +868,30 @@ test('getPrivateKeyFromAddress rejects a provider key for the wrong address', as
   hWallet.setExternalPrivateKeyMethod(provider);
   hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
 
-  await expect(hWallet.getPrivateKeyFromAddress('some-owned-address')).rejects.toThrow(
+  await expect(
+    hWallet.getPrivateKeyFromAddress(await hWallet.getAddressAtIndex(0))
+  ).rejects.toThrow('External private key provider returned a key for the wrong address.');
+});
+
+test('getPrivateKeyFromAddress verifies against the requested address, not just its index', async () => {
+  // A BIP32 index can carry a legacy, a shielded and a shielded-spend address. Simulate a request
+  // for a non-legacy sibling of index 0: a different address that resolves to the same index.
+  const { hWallet, storage } = await makeStartedWallet();
+  const siblingAddress = await hWallet.getAddressAtIndex(3); // stand-in for the spend address
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
+  // An index-only provider returns the LEGACY key of index 0 — the wrong key for this address.
+  const legacyKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(0).privateKey;
+  const provider = jest.fn(async () => legacyKey);
+  hWallet.setExternalPrivateKeyMethod(provider);
+
+  // Comparing against the legacy address at index 0 would accept it and silently hand back the
+  // wrong key; comparing against the requested address rejects it (fails closed).
+  await expect(hWallet.getPrivateKeyFromAddress(siblingAddress)).rejects.toThrow(
     'External private key provider returned a key for the wrong address.'
   );
+  expect(provider).toHaveBeenCalledWith(0, storage, {});
 });
 
 test('setExternalPrivateKeyMethod toggles hasPrivateKeyMethod', () => {

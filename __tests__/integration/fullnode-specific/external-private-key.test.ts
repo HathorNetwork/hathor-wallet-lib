@@ -23,6 +23,7 @@ import { verifyMessage } from '../../../src/utils/crypto';
 import { getOracleBuffer, unsafeGetOracleInputData } from '../../../src/nano_contracts/utils';
 import { DEFAULT_PIN_CODE, generateWalletHelper, stopAllWallets } from '../helpers/wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
+import { deriveXpubFromSeed } from '../utils/core.util';
 import { WalletError } from '../../../src/errors';
 
 /**
@@ -37,16 +38,10 @@ function makeProvider(words: string, indexOffset = 0) {
     changeXpriv.deriveNonCompliantChild(addressIndex + indexOffset).privateKey;
 }
 
-/** Account xpub (m/44'/280'/0') for an xpub-only wallet built from `words`. */
-function accountXpub(words: string): string {
-  const rootXpriv = new Mnemonic(words).toHDPrivateKey('', new Network('testnet'));
-  return rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey;
-}
-
 async function startExternalKeyWallet(indexOffset = 0) {
   const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
   const hWallet: HathorWallet = await generateWalletHelper({
-    xpub: accountXpub(walletData.words),
+    xpub: deriveXpubFromSeed(walletData.words),
     preCalculatedAddresses: walletData.addresses,
   });
   hWallet.setExternalPrivateKeyMethod(makeProvider(walletData.words, indexOffset));
