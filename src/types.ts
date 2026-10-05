@@ -828,6 +828,7 @@ export interface IStorage {
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void;
+  getTxSignatureMethod(): EcdsaTxSign | null;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   // Address methods

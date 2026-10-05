@@ -192,6 +192,16 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Get the registered tx signing function, if any.
+   * Lets wrappers (e.g. the wallet-service storage proxy) call the external signer with
+   * themselves as the storage argument, which `getTxSignatures` can't do (it passes `this`).
+   * @returns {EcdsaTxSign | null}
+   */
+  getTxSignatureMethod(): EcdsaTxSign | null {
+    return this.txSignFunc;
+  }
+
+  /**
    * Set the shielded crypto provider for confidential transaction support.
    * @param provider The crypto provider, or undefined to clear it
    */

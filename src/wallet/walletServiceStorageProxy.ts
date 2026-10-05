@@ -106,10 +106,18 @@ export class WalletServiceStorageProxy {
   }
 
   /**
-   * Get transaction signatures using the transaction utility
+   * Get transaction signatures.
+   *
+   * When an external tx-signing method is registered (e.g. a passkey signer), it is called with
+   * the PROXY as its storage, so it can resolve spent outputs and address indexes through the
+   * wallet-service methods above. Delegating to the target's own `getTxSignatures` would pass the
+   * raw storage instead. Otherwise the transaction utility signs with the stored key.
    */
-  // eslint-disable-next-line class-methods-use-this
   private async getTxSignatures(receiver: IStorage, tx: Transaction, pinCode: string) {
+    const externalSigner = this.originalStorage.getTxSignatureMethod();
+    if (externalSigner) {
+      return externalSigner(tx, receiver, pinCode);
+    }
     const result = await transactionUtils.getSignatureForTx(tx, receiver, pinCode);
     return result;
   }

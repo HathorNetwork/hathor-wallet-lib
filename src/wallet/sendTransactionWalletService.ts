@@ -839,6 +839,16 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
     }
+    if (this.wallet.storage.hasTxSignatureMethod()) {
+      // External tx-signing method (e.g. a passkey signer): no pin and no stored key. The wallet
+      // signs through its storage proxy, which hands the proxy to the signer and resolves each
+      // input's address from the spent output, then prepares the tx to be sent.
+      this.emit('sign-tx-start');
+      await this.wallet.signTx(this.transaction, { pinCode: pin ?? this.pin });
+      this._currentStep = 'signed';
+      this.emit('sign-tx-end', this.transaction);
+      return this.transaction;
+    }
     const pinToUse = pin ?? this.pin ?? '';
     if (!pinToUse) {
       throw new SendTxError('Pin is not set.');

@@ -97,6 +97,7 @@ import HathorWallet from '../new/wallet';
 import { ErrorMessages } from '../errorMessages';
 import {
   ApiVersion,
+  EcdsaTxSign,
   IStorage,
   IWalletAccessData,
   OutputValueType,
@@ -191,6 +192,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   public storage: IStorage;
 
+  // Whether an external tx-signing method is registered (e.g. a passkey or hardware signer).
+  // Mirrors HathorWallet: such a wallet can sign even when its storage holds only the xpub.
+  isSignedExternally: boolean;
+
   constructor({
     requestPassword,
     seed = null,
@@ -243,6 +248,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } else {
       this.storage = storage;
     }
+    this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -1257,6 +1263,79 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Mint a full (read-write) auth token with an auth private key the caller holds only
+   * transiently, WITHOUT keeping the key on this instance.
+   *
+   * Meant for externally-signed, xpub-only wallets (e.g. a passkey signer): they browse with
+   * read-only tokens and, during the same ceremony that signs a transaction, derive the auth key
+   * (`HathorWalletServiceWallet.deriveAuthPrivateKey(rootXpriv)`) and call this before the
+   * transaction is sent, since sending needs a full token. Later renewals fall back to read-only
+   * tokens, exactly as for a wallet whose auth key isn't in memory.
+   *
+   * @param authPrivKey The wallet's auth private key (m/280'/280')
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async refreshFullAuthToken(authPrivKey: bitcore.HDPrivateKey): Promise<void> {
+    if (!this.walletId) {
+      throw new Error('Wallet not ready yet.');
+    }
+    const timestampNow = Math.floor(Date.now() / 1000);
+    await retryOnTransientWalletError(() => this.renewAuthToken(authPrivKey, timestampNow), {
+      maxAttempts: MAX_AUTH_TOKEN_RENEW_ATTEMPTS,
+      intervalMs: WALLET_STATUS_POLLING_INTERVAL,
+    });
+  }
+
+  /**
+   * Set an external tx-signing method (e.g. a passkey or hardware signer), or null to clear it.
+   * With a signer set, transactions are signed through it — via the wallet-service storage proxy —
+   * and no pin is needed, even when the storage holds only the xpub. Mirrors HathorWallet.
+   *
+   * @param method The external tx-signing method, or null to clear it
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
+    this.isSignedExternally = !!method;
+    this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Whether this wallet can't sign transactions: its storage holds only the xpub and no external
+   * tx-signing method is registered.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async isReadonly(): Promise<boolean> {
+    return (await this.storage.isReadonly()) && !this.storage.hasTxSignatureMethod();
+  }
+
+  /**
+   * Whether a pin still has to be supplied in order to sign. The pin only decrypts the local
+   * private key; with an external tx-signing method it is not needed.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  pinIsRequired(pin: string | null | undefined): boolean {
+    return !pin && !this.storage.hasTxSignatureMethod();
+  }
+
+  /**
+   * Sign every input of `tx` through the registered external tx-signing method. The signer gets
+   * the wallet-service storage proxy, which resolves spent outputs and address indexes via the
+   * API. Callers are responsible for `prepareToSend`.
+   */
+  private async signInputsExternally(tx: Transaction, pinCode?: string | null): Promise<void> {
+    const storageProxy = new WalletServiceStorageProxy(this, this.storage).createProxy();
+    await transaction.signTransaction(tx, storageProxy, pinCode ?? '');
+  }
+
+  /**
    * Get read-only auth token using only the xpubkey (no signature required)
    * This allows read-only access to wallet data without needing private keys
    *
@@ -1356,7 +1435,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
     }
     const newOptions = {
@@ -1368,9 +1447,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const { inputs, changeAddress, pinCode } = newOptions;
 
-    // PIN validation - request from client if not provided
-    const pin = pinCode || (await this.requestPassword());
-    if (!pin) {
+    // PIN validation - request from client if not provided. With an external tx-signing method
+    // the pin is unused, so never prompt for it.
+    const pin =
+      pinCode || (this.storage.hasTxSignatureMethod() ? null : await this.requestPassword());
+    if (this.pinIsRequired(pin)) {
       throw new Error('Pin is required.');
     }
 
@@ -1720,6 +1801,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     options: { pinCode?: string } = {}
   ): Promise<bitcore.PrivateKey> {
+    // Deliberately the raw storage check, not this.isReadonly(): this needs the stored private
+    // key, which an external tx-signing method doesn't provide.
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
@@ -2018,21 +2101,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Sign transaction
     if (newOptions.signTx) {
-      const dataToSignHash = tx.getDataToSignHash();
+      if (this.storage.hasTxSignatureMethod()) {
+        await this.signInputsExternally(tx, newOptions.pinCode);
+      } else {
+        const dataToSignHash = tx.getDataToSignHash();
 
-      if (!newOptions.pinCode) {
-        throw new Error('PIN not specified in prepareCreateNewToken options');
-      }
+        if (!newOptions.pinCode) {
+          throw new Error('PIN not specified in prepareCreateNewToken options');
+        }
 
-      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
-      for (const [idx, inputObj] of tx.inputs.entries()) {
-        const inputData = this.getInputData(
-          xprivkey,
-          dataToSignHash,
-          HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
-        );
-        inputObj.setData(inputData);
+        for (const [idx, inputObj] of tx.inputs.entries()) {
+          const inputData = this.getInputData(
+            xprivkey,
+            dataToSignHash,
+            HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
+          );
+          inputObj.setData(inputData);
+        }
       }
     }
 
@@ -2337,17 +2424,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Sign transaction
     if (newOptions.signTx) {
-      const dataToSignHash = tx.getDataToSignHash();
+      if (this.storage.hasTxSignatureMethod()) {
+        await this.signInputsExternally(tx, newOptions.pinCode);
+      } else {
+        const dataToSignHash = tx.getDataToSignHash();
 
-      if (!newOptions.pinCode) {
-        throw new Error('PIN not specified in prepareMintTokensData options');
-      }
+        if (!newOptions.pinCode) {
+          throw new Error('PIN not specified in prepareMintTokensData options');
+        }
 
-      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
-      for (const [idx, inputObj] of tx.inputs.entries()) {
-        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
-        inputObj.setData(inputData);
+        for (const [idx, inputObj] of tx.inputs.entries()) {
+          const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
+          inputObj.setData(inputData);
+        }
       }
     }
 
@@ -2540,17 +2631,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Sign transaction
     if (newOptions.signTx) {
-      const dataToSignHash = tx.getDataToSignHash();
+      if (this.storage.hasTxSignatureMethod()) {
+        await this.signInputsExternally(tx, newOptions.pinCode);
+      } else {
+        const dataToSignHash = tx.getDataToSignHash();
 
-      if (!newOptions.pinCode) {
-        throw new Error('PIN not specified in prepareMeltTokensData options');
-      }
+        if (!newOptions.pinCode) {
+          throw new Error('PIN not specified in prepareMeltTokensData options');
+        }
 
-      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
-      for (const [idx, inputObj] of tx.inputs.entries()) {
-        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
-        inputObj.setData(inputData);
+        for (const [idx, inputObj] of tx.inputs.entries()) {
+          const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
+          inputObj.setData(inputData);
+        }
       }
     }
 
@@ -2730,20 +2825,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
 
-    if (!pinCode) {
-      throw new Error('PIN not specified in prepareDelegateAuthorityData options');
-    }
+    if (this.storage.hasTxSignatureMethod()) {
+      await this.signInputsExternally(tx, pinCode);
+    } else {
+      if (!pinCode) {
+        throw new Error('PIN not specified in prepareDelegateAuthorityData options');
+      }
 
-    const xprivkey = await this.storage.getMainXPrivKey(pinCode);
+      const xprivkey = await this.storage.getMainXPrivKey(pinCode);
 
-    // Set input data
-    const dataToSignHash = tx.getDataToSignHash();
-    const addressIndex = await this.getAddressIndex(utxo.address);
-    if (addressIndex === null) {
-      throw new Error(`Authority address ${utxo.address} not found in wallet`);
+      // Set input data
+      const dataToSignHash = tx.getDataToSignHash();
+      const addressIndex = await this.getAddressIndex(utxo.address);
+      if (addressIndex === null) {
+        throw new Error(`Authority address ${utxo.address} not found in wallet`);
+      }
+      const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
+      inputsObj[0].setData(inputData);
     }
-    const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
-    inputsObj[0].setData(inputData);
 
     tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
 
@@ -2808,22 +2907,26 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const tx = new Transaction(inputsObj, []);
     tx.tokens = [token];
 
-    // Set input data
-    const dataToSignHash = tx.getDataToSignHash();
+    if (this.storage.hasTxSignatureMethod()) {
+      await this.signInputsExternally(tx, pinCode);
+    } else {
+      // Set input data
+      const dataToSignHash = tx.getDataToSignHash();
 
-    if (!pinCode) {
-      throw new Error('PIN not specified in prepareDestroyAuthorityData options');
-    }
-
-    const xprivkey = await this.storage.getMainXPrivKey(pinCode);
-
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      const addressIndex = await this.getAddressIndex(ret.utxos[idx].address);
-      if (addressIndex === null) {
-        throw new Error(`Authority address ${ret.utxos[idx].address} not found in wallet`);
+      if (!pinCode) {
+        throw new Error('PIN not specified in prepareDestroyAuthorityData options');
       }
-      const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
-      inputObj.setData(inputData);
+
+      const xprivkey = await this.storage.getMainXPrivKey(pinCode);
+
+      for (const [idx, inputObj] of tx.inputs.entries()) {
+        const addressIndex = await this.getAddressIndex(ret.utxos[idx].address);
+        if (addressIndex === null) {
+          throw new Error(`Authority address ${ret.utxos[idx].address} not found in wallet`);
+        }
+        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
+        inputObj.setData(inputData);
+      }
     }
 
     tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
@@ -3006,15 +3109,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
 
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
 
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode;
 
-    // Only require PIN if we're actually signing
-    if (newOptions.signTx !== false && !pin) {
+    // Only require PIN if we're actually signing (an external signer doesn't need one)
+    if (newOptions.signTx !== false && this.pinIsRequired(pin)) {
       throw new PinRequiredError('Pin is required.');
     }
 
@@ -3145,7 +3248,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (options.signTx !== false && pinCode) {
+    if (options.signTx !== false && (pinCode || this.storage.hasTxSignatureMethod())) {
       await this.signTx(tx, { pinCode });
     }
 
@@ -3175,14 +3278,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode;
 
-    // Only require PIN if we're actually signing
-    if (newOptions.signTx !== false && !pin) {
+    // Only require PIN if we're actually signing (an external signer doesn't need one)
+    if (newOptions.signTx !== false && this.pinIsRequired(pin)) {
       throw new PinRequiredError('Pin is required.');
     }
 
@@ -3267,18 +3370,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns The signed transaction
    */
   async signTx(tx: Transaction, options: { pinCode?: string | null } = {}): Promise<Transaction> {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('signTx');
     }
-    if (!options.pinCode) {
+    if (this.pinIsRequired(options.pinCode)) {
       throw new Error('Pin code is required to sign a transaction');
     }
 
+    // The proxy signs with the registered external tx-signing method when there is one (passing
+    // itself as the signer's storage), otherwise with the stored key decrypted by the pin.
     const storageProxy = new WalletServiceStorageProxy(this, this.storage);
     const signedTx = await transaction.signTransaction(
       tx,
       storageProxy.createProxy(),
-      options.pinCode
+      options.pinCode ?? ''
     );
     signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
