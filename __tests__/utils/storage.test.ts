@@ -7,6 +7,7 @@
 
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
+import { HDPrivateKey } from 'bitcore-lib';
 import {
   HistorySyncMode,
   WalletType,
@@ -31,6 +32,9 @@ import {
   processHistory,
 } from '../../src/utils/storage';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { encryptData } from '../../src/utils/crypto';
+import walletApi from '../../src/api/wallet';
+import FullnodeConnection from '../../src/new/connection';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
@@ -973,8 +977,6 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
     });
 
     // A real chain-level xpriv so scan-key derivation succeeds and rewind runs.
-    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
-    const { HDPrivateKey } = require('bitcore-lib');
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
     jest.spyOn(storage, 'getScanXPrivKey').mockResolvedValue(mockXpriv);
 
@@ -1270,5 +1272,49 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       spendXpubkey: undefined,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+});
+
+describe('apiSyncHistory partial-update emission', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  /**
+   * loadAddresses(0, 40) spans two MAX_ADDRESSES_GET chunks, so the history
+   * loop yields twice per window. On an empty wallet both yields see the same
+   * (addressesFound, historyLength) tuple — the event must fire once, not
+   * once per chunk (consumers treat a duplicate as a second state change).
+   */
+  it('suppresses duplicate wallet-load-partial-update emits within a window', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const xpriv = new HDPrivateKey();
+    await store.saveAccessData({
+      xpubkey: xpriv.xpubkey,
+      mainKey: encryptData(xpriv.xprivkey, '123'),
+      walletType: WalletType.P2PKH,
+      walletFlags: 0,
+    } as never);
+    // Pre-save all 40 addresses so loadAddresses skips per-index derivation
+    // and produces exactly two 20-address chunks.
+    for (let i = 0; i < 40; i++) {
+      await store.saveAddress({ base58: `W-partial-update-${i}`, bip32AddressIndex: i });
+    }
+    jest.spyOn(walletApi, 'getAddressHistoryForAwait').mockResolvedValue({
+      data: { success: true, history: [], has_more: false },
+    } as never);
+    const connection = {
+      subscribeAddresses: jest.fn(),
+      emit: jest.fn(),
+    } as unknown as FullnodeConnection;
+
+    await apiSyncHistory(0, 40, storage, connection);
+
+    const partialUpdates = (connection.emit as jest.Mock).mock.calls.filter(
+      c => c[0] === 'wallet-load-partial-update'
+    );
+    expect(partialUpdates).toHaveLength(1);
+    expect(partialUpdates[0][1]).toEqual({ addressesFound: 40, historyLength: 0 });
   });
 });
