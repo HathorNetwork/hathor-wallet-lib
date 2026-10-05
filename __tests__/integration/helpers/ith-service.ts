@@ -58,6 +58,20 @@ export interface ReadyStatus {
   [stat: string]: unknown;
 }
 
+/**
+ * The helper's operator diagnostic: readiness plus pool counts, the genesis
+ * address, and the bootstrap/funding lifecycle state. Field set varies by
+ * helper version, so everything past `ready` is optional.
+ */
+export interface HelperStatus {
+  ready: boolean;
+  readyReason?: string;
+  genesisAddress?: string | null;
+  startup?: unknown;
+  funding?: unknown;
+  [stat: string]: unknown;
+}
+
 /** A typed failure from the helper (or the transport), carrying the RFC error contract. */
 export class IthServiceError extends Error {
   readonly code: string;
@@ -199,6 +213,24 @@ async function request<T>(
   throw new Error(`ithService ${method} ${path}: retry loop exited without a result`);
 }
 
+/**
+ * Best-effort diagnostic dump of the helper's own view of itself, for when a
+ * funding call has already failed.
+ *
+ * Swallows its own errors on purpose: this runs on a path where an exception is
+ * already in flight, and a failure to *describe* that problem must never
+ * replace the problem itself. The worst case is one extra log line saying the
+ * diagnostic was unavailable.
+ */
+async function logHelperStatus(): Promise<void> {
+  try {
+    const status = await ithService.status();
+    loggers.test?.error(`ithService /status at failure: ${JSON.stringify(status)}`);
+  } catch (statusError) {
+    loggers.test?.error(`ithService could not read /status: ${(statusError as Error).message}`);
+  }
+}
+
 export const ithService = {
   /**
    * GET /simpleWallet — a fresh precalculated wallet.
@@ -235,19 +267,37 @@ export const ithService = {
     if (amount !== undefined) {
       payload.amount = amount.toString();
     }
-    const result = await request<FundResult>('post', '/fund', { idempotent: false }, payload);
-    // A 2xx is not proof of a usable body: a proxy error page or a renamed field
-    // would otherwise reach waitForTxReceived as `undefined` and hang for the
-    // full timeout with nothing pointing back at funding.
-    if (!result?.txId) {
-      throw new IthServiceError(
-        `POST /fund returned no txId${describeBody(result)}`,
-        'MALFORMED_RESPONSE',
-        false,
-        200
-      );
+    try {
+      const result = await request<FundResult>('post', '/fund', { idempotent: false }, payload);
+      // A 2xx is not proof of a usable body: a proxy error page or a renamed
+      // field would otherwise reach waitForTxReceived as `undefined` and hang
+      // for the full timeout with nothing pointing back at funding.
+      if (!result?.txId) {
+        throw new IthServiceError(
+          `POST /fund returned no txId${describeBody(result)}`,
+          'MALFORMED_RESPONSE',
+          false,
+          200
+        );
+      }
+      return result;
+    } catch (fundError) {
+      // Every throw reaching here is terminal — retries exhausted, a fail-fast
+      // non-retryable code, or a malformed body — so this is the right moment
+      // to capture the helper's state. Doing it here rather than at each call
+      // site means every funding path gets the diagnostic for free.
+      await logHelperStatus();
+      throw fundError;
     }
-    return result;
+  },
+
+  /**
+   * GET /status — operator diagnostic: readiness, pool counts, genesis address,
+   * bootstrap phase and funding lifecycle. Always 200, so the shared retry path
+   * applies normally. Idempotent: it is a pure read.
+   */
+  async status(): Promise<HelperStatus> {
+    return request<HelperStatus>('get', '/status', { idempotent: true });
   },
 
   /**
