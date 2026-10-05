@@ -204,9 +204,17 @@ describe('[Fullnode] sendTransaction — multisig', () => {
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
-    await GenesisWalletHelper.injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
+    const fundTx = await GenesisWalletHelper.injectFunds(
+      mhWallet1,
+      await mhWallet1.getAddressAtIndex(0),
+      10n
+    );
 
-    const { tx_id: inputTxId, index: inputIndex } = (await mhWallet1.getUtxos()).utxos[0];
+    // The multisig seeds are shared across suites, so the wallet may already
+    // hold other UTXOs: pick the one this test just funded, not the first listed.
+    const fundUtxo = (await mhWallet1.getUtxos()).utxos.find(u => u.tx_id === fundTx!.hash);
+    expect(fundUtxo).toBeDefined();
+    const { tx_id: inputTxId, index: inputIndex } = fundUtxo!;
     const network = mhWallet1.getNetworkObject();
     const sendTransaction = new SendTransaction({
       storage: mhWallet1.storage,
