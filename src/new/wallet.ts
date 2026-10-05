@@ -2185,22 +2185,24 @@ class HathorWallet extends EventEmitter {
    * requested address. A buggy or mismatched provider could otherwise return the wrong key, which
    * would sign with the wrong key and could create an unspendable utxo.
    *
-   * Callers that know the requested address must pass it as `expectedAddress`. An index alone is
-   * ambiguous — the legacy, shielded and shielded-spend addresses of one BIP32 index share it — so
-   * checking only against the address at the index could accept the legacy key for a
+   * Callers that know the requested address must pass it as `options.expectedAddress`. An index
+   * alone is ambiguous — the legacy, shielded and shielded-spend addresses of one BIP32 index share
+   * it — so checking only against the address at the index could accept the legacy key for a
    * shielded-spend request. Index-based callers fall back to the legacy address at that index.
    *
    * @param addressIndex - Index whose private key to fetch
-   * @param options - Options forwarded to the provider (e.g. pinCode)
-   * @param expectedAddress - The address the key must own, when the caller knows it
+   * @param [options.pinCode] - Forwarded to the provider
+   * @param [options.expectedAddress] - The address the key must own, when the caller knows it.
+   *   Used only for verification; it is not forwarded to the provider.
    * @returns Promise that resolves with the verified private key (a bitcore PrivateKey)
    */
   async getVerifiedExternalPrivateKey(
     addressIndex: number,
-    options: { pinCode?: string },
-    expectedAddress?: string
+    options: { pinCode?: string; expectedAddress?: string } = {}
   ): Promise<unknown> {
-    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, options);
+    // expectedAddress is verification-only: keep it out of the PrivateKeyProvider contract.
+    const { expectedAddress, ...providerOptions } = options;
+    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
     if (!(privateKey instanceof bitcore.PrivateKey)) {
       throw new WalletError('External private key provider must return a bitcore PrivateKey.');
     }
@@ -3849,7 +3851,10 @@ class HathorWallet extends EventEmitter {
     if (this.storage.hasPrivateKeyMethod()) {
       // Verify the key against the requested address, not just the legacy address at its index
       // (a shielded-spend address shares its index with a legacy one).
-      return this.getVerifiedExternalPrivateKey(addressIndex, options, address);
+      return this.getVerifiedExternalPrivateKey(addressIndex, {
+        ...options,
+        expectedAddress: address,
+      });
     }
 
     // Internal path: derive from the stored key. The wallet is guaranteed non-readonly here (the

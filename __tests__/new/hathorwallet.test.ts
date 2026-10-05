@@ -856,6 +856,8 @@ test('getPrivateKeyFromAddress uses the provider and bypasses the readonly guard
 
   await expect(hWallet.getPrivateKeyFromAddress(address)).resolves.toBe(expectedKey);
   expect(provider).toHaveBeenCalledWith(addressIndex, storage, {});
+  // expectedAddress is verification-only; it must not leak into the provider contract.
+  expect(provider.mock.calls[0][2]).not.toHaveProperty('expectedAddress');
 });
 
 test('getPrivateKeyFromAddress rejects a provider key for the wrong address', async () => {
@@ -892,6 +894,8 @@ test('getPrivateKeyFromAddress verifies against the requested address, not just 
     'External private key provider returned a key for the wrong address.'
   );
   expect(provider).toHaveBeenCalledWith(0, storage, {});
+  // expectedAddress is verification-only; it must not leak into the provider contract.
+  expect(provider.mock.calls[0][2]).not.toHaveProperty('expectedAddress');
 });
 
 test('setExternalPrivateKeyMethod toggles hasPrivateKeyMethod', () => {
