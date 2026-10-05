@@ -115,6 +115,8 @@ export interface UtxoOptions {
    * Value ordering of the returned UTXOs. Defaults to 'desc' (highest value
    * first), so `max_utxos` keeps the top-N by value rather than whatever the
    * storage insertion order happens to be — matching getUtxosForAmount.
+   * Fullnode facade only: the wallet-service facade and `IHathorWallet` don't
+   * accept it, and the wallet-service API always returns highest value first.
    */
   order_by_value?: 'asc' | 'desc';
   /**

@@ -977,7 +977,6 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
     });
 
     // A real chain-level xpriv so scan-key derivation succeeds and rewind runs.
-    // eslint-disable-next-line global-require, @typescript-eslint/no-var-requires
     const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
     jest.spyOn(storage, 'getScanXPrivKey').mockResolvedValue(mockXpriv);
 
