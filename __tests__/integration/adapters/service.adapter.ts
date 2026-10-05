@@ -20,7 +20,7 @@ import {
   pollUntilCondition,
   retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
-import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
+import { GenesisWalletServiceHelper, type InjectedFundsTx } from '../helpers/genesis-wallet.helper';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import type { WalletStopOptions } from '../../../src/new/types';
 import type { IHistoryTx } from '../../../src/types';
@@ -234,7 +234,7 @@ export class ServiceWalletTestAdapter implements IWalletTestAdapter {
     destWallet: FuzzyWalletType,
     address: string,
     amount: bigint
-  ): Promise<Transaction> {
+  ): Promise<InjectedFundsTx> {
     return GenesisWalletServiceHelper.injectFunds(address, amount, this.concrete(destWallet));
   }
 

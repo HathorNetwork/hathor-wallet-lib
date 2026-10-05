@@ -40,3 +40,47 @@ export async function waitPastTxTimestamp(txId: string): Promise<void> {
     await delay(remaining + 10);
   }
 }
+
+/**
+ * Wait until the fullnode knows about `txId`.
+ *
+ * Needed where no wallet is available to observe with — chiefly funding an
+ * address *before* its wallet starts. The helper's `POST /fund` returns as soon
+ * as the transaction is broadcast (its own tx observation only defers releasing
+ * the UTXO reservation, it does not gate the response), so a caller that starts
+ * a wallet immediately afterwards would otherwise race the fullnode's indexing
+ * and see an empty history.
+ *
+ * @param txId Transaction to wait for
+ * @param options.timeoutMs Total time to wait before throwing
+ * @param options.pollIntervalMs Gap between attempts
+ */
+export async function waitForTxOnFullnode(
+  txId: string,
+  { timeoutMs = 30000, pollIntervalMs = 500 }: { timeoutMs?: number; pollIntervalMs?: number } = {}
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    // txApi is callback-style, and `success: false` is its normal "not indexed
+    // yet" answer. A rejection is treated the same way rather than rethrown, so
+    // a momentary blip while the fullnode is busy does not fail the wait — the
+    // deadline below still bounds it, and a persistent failure surfaces as the
+    // timeout rather than hanging.
+    const found = await new Promise<boolean>(resolve => {
+      txApi
+        .getTransaction(txId, response => resolve(Boolean(response?.success)))
+        .catch(() => {
+          resolve(false);
+        });
+    });
+
+    if (found) {
+      return;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for tx ${txId} on the fullnode`);
+    }
+    await delay(pollIntervalMs);
+  }
+}

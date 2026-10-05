@@ -373,14 +373,13 @@ describe('getTxHistory', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
+  // A second wallet to receive the "external transfer" in each test. Built per
+  // test rather than once for the describe: the afterEach above calls
+  // stopAllWallets(), which stops every tracked wallet, so a shared instance
+  // would be dead by the second test.
   let gWallet;
-  beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
-  });
-
-  afterAll(async () => {
-    await gWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  beforeEach(async () => {
+    gWallet = await generateWalletHelper();
   });
 
   it('should show htr transactions in correct order', async () => {

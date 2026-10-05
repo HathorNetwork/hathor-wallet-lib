@@ -26,13 +26,15 @@ describe('[Fullnode] internal methods', () => {
   let hWallet: HathorWallet;
 
   beforeAll(async () => {
-    const { hWallet: ghWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = ghWallet;
+    // Any started wallet exercises the debug-mode toggles; nothing here is
+    // genesis-specific.
+    gWallet = await generateWalletHelper();
     hWallet = await generateWalletHelper();
   });
 
   afterAll(async () => {
     await hWallet.stop();
+    await gWallet.stop();
   });
 
   it('should test the debug methods', async () => {

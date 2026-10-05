@@ -54,10 +54,16 @@ describe('[Fullnode] getBalance', () => {
       newTokenAmount
     );
 
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    const genesisTknBalance = await gWallet.getBalance(tokenUid);
-    expect(genesisTknBalance).toHaveLength(1);
-    expect(genesisTknBalance[0]).toMatchObject({
+    // A second wallet that has its own history but never received this token.
+    // Funding it matters: a pristine wallet reports zero for everything, so the
+    // assertion would hold trivially. With funds of its own, "zero for THIS
+    // token" is a real claim about token scoping.
+    const otherWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(otherWallet, await otherWallet.getAddressAtIndex(0), 10n);
+
+    const otherTknBalance = await otherWallet.getBalance(tokenUid);
+    expect(otherTknBalance).toHaveLength(1);
+    expect(otherTknBalance[0]).toMatchObject({
       token: { id: tokenUid },
       balance: { unlocked: 0n, locked: 0n },
       transactions: 0,

@@ -12,6 +12,7 @@ import type {
   WalletAddressMap,
 } from '../../../src/wallet/types';
 import type { PrecalculatedWalletData } from '../helpers/wallet-precalculation.helper';
+import type { InjectedFundsTx } from '../helpers/genesis-wallet.helper';
 import type Transaction from '../../../src/models/transaction';
 import type { IHistoryTx, IStorage, TokenVersion, AuthorityType } from '../../../src/types';
 import { HathorWallet, HathorWalletServiceWallet } from '../../../src';
@@ -179,10 +180,18 @@ export interface IWalletTestAdapter {
   // --- Fund injection ---
 
   /**
-   * Sends funds from the genesis wallet to a destination wallet's address.
-   * Waits for both genesis and destination wallets to see the tx.
+   * Sends funds to a destination wallet's address, waiting until that wallet
+   * observes the tx.
+   *
+   * Returns only the hash: funding is delegated to the integration-test-helper,
+   * whose response carries a txId and nothing else. Callers needing the full
+   * transaction should fetch it.
    */
-  injectFunds(destWallet: FuzzyWalletType, address: string, amount: bigint): Promise<Transaction>;
+  injectFunds(
+    destWallet: FuzzyWalletType,
+    address: string,
+    amount: bigint
+  ): Promise<InjectedFundsTx>;
 
   /**
    * Injects funds to an address BEFORE the wallet is started.

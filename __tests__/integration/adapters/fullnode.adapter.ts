@@ -16,7 +16,6 @@ import {
   SCANNING_POLICY,
   WalletState,
 } from '../../../src/types';
-import type Transaction from '../../../src/models/transaction';
 import {
   generateConnection,
   waitForWalletReady,
@@ -25,7 +24,9 @@ import {
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
 } from '../helpers/wallet.helper';
-import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { GenesisWalletHelper, type InjectedFundsTx } from '../helpers/genesis-wallet.helper';
+import { ithService } from '../helpers/ith-service';
+import { waitForTxOnFullnode } from '../utils/fullnode.util';
 import {
   mergePrecalculatedAddresses,
   precalculationHelpers,
@@ -195,7 +196,7 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
     destWallet: FuzzyWalletType,
     address: string,
     amount: bigint
-  ): Promise<Transaction> {
+  ): Promise<InjectedFundsTx> {
     return GenesisWalletHelper.injectFunds(this.concrete(destWallet), address, amount);
   }
 
@@ -204,20 +205,14 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    *
    * Cannot delegate to {@link injectFunds} because that method waits for the
    * destination wallet to observe the tx — but that wallet isn't running yet,
-   * so the wait would hang or fail.
-   *
-   * Note this path still broadcasts from the locally-synced genesis wallet
-   * rather than the helper's /fund. The helper runs the same genesis seed and
-   * reserves from the same UTXO set on background timers, so the two are
-   * concurrent spenders; migrating this is tracked separately.
+   * so the wait would hang or fail. Waits on the fullnode instead: /fund returns
+   * on broadcast, and the caller starts a wallet immediately afterwards, which
+   * would otherwise race the fullnode's indexing and read an empty history.
    */
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    const result = await gWallet.sendTransaction(address, amount);
-    if (!result || !result.hash) {
-      throw new Error('injectFundsBeforeStart: transaction had no hash');
-    }
-    return result.hash;
+    const { txId } = await ithService.fund(address, amount);
+    await waitForTxOnFullnode(txId);
+    return txId;
   }
 
   async waitForTx(
