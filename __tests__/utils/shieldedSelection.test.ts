@@ -114,14 +114,13 @@ describe('shieldedAwareSelection', () => {
     expect(result.amount).toBeGreaterThanOrEqual(60n);
   });
 
-  it('exact match from a single shielded input forces the smallest extra UTXO', async () => {
-    // Only one 40n shielded UTXO and the target matches it exactly.
+  it('exact match from a single shielded input forces the smallest other shielded UTXO', async () => {
+    // Public funds (3n) cannot pay 40n, and the shielded top-up matches the
+    // remaining 37n exactly with a single shielded input.
     const store = new MemoryStore();
-    await store.saveUtxo(
-      utxo({ txId: 'only-sh', value: 40n, shielded: true, blindingFactor: 'bf' })
-    );
     await store.saveUtxo(utxo({ txId: 'tiny-pub', value: 3n }));
-    await store.saveUtxo(utxo({ txId: 'big-pub', value: 90n }));
+    await store.saveUtxo(utxo({ txId: 'sh-37', value: 37n, shielded: true, blindingFactor: 'bf' }));
+    await store.saveUtxo(utxo({ txId: 'sh-5', value: 5n, shielded: true, blindingFactor: 'bf' }));
     const storage = new Storage(store);
 
     let report: ISelectionReport | undefined;
@@ -129,19 +128,46 @@ describe('shieldedAwareSelection', () => {
       storage,
       '00',
       40n,
-      // public-preferred but only the shielded UTXO reaches 40n... force the
-      // policy shape R2 produces.
-      { preference: 'shielded', forceShieldedInput: false, forceChangeOnExactSingleShielded: true },
+      // The policy shape R2 produces.
+      { ...publicPolicy, forceChangeOnExactSingleShielded: true },
       r => {
         report = r;
       }
     );
 
-    // The smallest extra (3n public) is added, so a change output will exist.
-    expect(ids(result)).toEqual(['only-sh', 'tiny-pub']);
-    expect(result.amount).toBe(43n);
+    // The smallest other shielded UTXO (5n) is added, so a change output will
+    // exist.
+    expect(ids(result)).toEqual(['sh-37', 'sh-5', 'tiny-pub']);
+    expect(result.amount).toBe(45n);
     expect(report!.exactMatch).toBe(false);
-    expect(report!.shieldedInputCount).toBe(1);
+    expect(report!.shieldedInputCount).toBe(2);
+  });
+
+  it('the change-forcing UTXO is shielded even when public UTXOs are left', async () => {
+    // 260 public 1n UTXOs: the sweep stops at the input limit and leaves some.
+    const store = new MemoryStore();
+    for (let i = 0; i < 260; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(
+      utxo({ txId: 'sh-100', value: 100n, shielded: true, blindingFactor: 'bf' })
+    );
+    await store.saveUtxo(utxo({ txId: 'sh-7', value: 7n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', 353n, {
+      ...publicPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+
+    // 253 public UTXOs and the shielded 100n match 353n exactly with a single
+    // shielded input. The change will equal the extra UTXO's value, so the
+    // extra is the shielded 7n, not one of the public 1n left over.
+    const picked = result.utxos.map(u => u.txId);
+    expect(picked).toContain('sh-100');
+    expect(picked).toContain('sh-7');
+    expect(result.utxos).toHaveLength(MAX_INPUTS);
+    expect(result.amount).toBe(360n);
   });
 
   it('exact match with two shielded inputs is returned unchanged', async () => {

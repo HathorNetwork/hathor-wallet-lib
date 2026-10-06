@@ -60,7 +60,7 @@ export interface ITokenSelectionPolicy {
   forceShieldedInput: boolean;
   /**
    * On an exact match spent from exactly one shielded input, add the smallest
-   * extra UTXO (either pool) to force a change output.
+   * other shielded UTXO to force a change output.
    */
   forceChangeOnExactSingleShielded: boolean;
 }
@@ -287,9 +287,9 @@ export function decideChangeMode(args: {
  *      (sweeping the preferred pool first, largest-first, as far as the
  *      input limit allows);
  *   4. on an exact match spent from exactly one shielded input, add the
- *      smallest extra UTXO from either pool so a change output exists — when
- *      the wallet holds nothing else, proceed unforced (spending the whole
- *      balance would otherwise be impossible).
+ *      smallest other shielded UTXO so a change output exists — when there is
+ *      none, proceed unforced (spending the last shielded UTXO would otherwise
+ *      be impossible).
  *
  * The result either covers `amount` or, when even the top-up falls short, is
  * empty, which the caller reports as insufficient funds (the same contract as
@@ -374,22 +374,26 @@ export async function shieldedAwareSelection(
   }
 
   // An exact match spent from a single shielded input would reveal its value
-  // by subtraction, so one more UTXO is added for a change output to hide it.
+  // by subtraction, so one more shielded UTXO is added for a change output to
+  // hide it.
   if (policy.forceChangeOnExactSingleShielded && sum === amount) {
     const shieldedCount = picked.filter(utxo => utxo.shielded).length;
     if (shieldedCount === 1) {
+      // The change will equal the extra UTXO's value, so only a shielded one
+      // keeps it hidden.
       for await (const utxo of storage.selectUtxos({
         token,
         authorities: 0n,
         only_available_utxos: true,
         order_by_value: 'asc',
+        shielded: true,
         filter_method: notPicked,
         max_utxos: 1,
       })) {
         add(utxo);
       }
-      // No extra UTXO anywhere: proceed unforced — the whole balance is being
-      // spent and there is nothing to hide it behind.
+      // No other shielded UTXO: proceed unforced — there is nothing left to
+      // hide the value behind.
     }
   }
 
