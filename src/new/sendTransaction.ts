@@ -723,7 +723,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,
-      htrChangeMode === OutputKind.TRANSPARENT ? null : htrChangeMode,
+      htrChangeMode,
       this.wallet,
       network,
       this.storage,
@@ -1789,8 +1789,8 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
 }
 
 /**
- * If `mode` is set and `prepareSendTokensData` emitted a transparent
- * HTR change output, rewrite that change as a shielded HTR output in
+ * If `mode` is a shielded mode and `prepareSendTokensData` emitted a
+ * transparent HTR change output, rewrite that change as a shielded HTR output in
  * `shieldedOutputDefs`. Mutates both `partialHtrTxData.outputs` (to
  * remove the transparent change) and `shieldedOutputDefs` (to append
  * the shielded one). Returns the additional shielded-output fee that
@@ -1807,7 +1807,8 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
  * available to clear the threshold, we throw rather than downgrade.
  *
  * No-ops in any of these cases:
- *   - `mode` is null/undefined (the rules decided on a transparent change).
+ *   - `mode` is null/undefined or `OutputKind.TRANSPARENT` (the change stays
+ *     transparent).
  *   - No HTR change output exists in `partialHtrTxData.outputs` (the
  *     selected HTR UTXO covered the fee exactly).
  *
@@ -1822,7 +1823,7 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
   shieldedOutputDefs: IResolvedShieldedOutputDef[],
-  mode: ShieldedOutputMode | null,
+  mode: ChangeOutputMode | null,
   wallet: HathorWallet | null,
   network: ReturnType<IStorage['config']['getNetwork']>,
   storage: IStorage,
@@ -1831,7 +1832,7 @@ export async function convertHtrChangeIfRequested(
   pullPreference: InputPreference = OutputKind.TRANSPARENT,
   shieldedChangeAddress: string | null = null
 ): Promise<{ addedFee: bigint }> {
-  if (!mode) return { addedFee: 0n };
+  if (!mode || mode === OutputKind.TRANSPARENT) return { addedFee: 0n };
 
   const additionalFee = shieldedOutputFee(mode);
 

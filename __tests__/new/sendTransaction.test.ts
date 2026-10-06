@@ -1373,6 +1373,32 @@ describe('convertHtrChangeIfRequested', () => {
     expect(defs).toHaveLength(2);
   });
 
+  test('H.5b — no-op when the change mode is transparent', async () => {
+    const partialHtrTxData = {
+      inputs: [] as IDataInput[],
+      outputs: [buildHtrChangeOutput(5n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+    ];
+
+    const result = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      defs,
+      OutputKind.TRANSPARENT,
+      mockWallet(buildShieldedAddress()),
+      testnetNetwork,
+      mockStorage()
+    );
+
+    // The transparent change stays as it is: nothing converted, no fee added.
+    expect(result.addedFee).toBe(0n);
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(partialHtrTxData.outputs[0].value).toBe(5n);
+    expect(defs).toHaveLength(2);
+  });
+
   test('H.6 — converts even when no shielded defs exist yet', async () => {
     // A forced mode on a pure-transparent tx converts the change; the lone
     // shielded output this creates is resolved by prepareTxData's structural
