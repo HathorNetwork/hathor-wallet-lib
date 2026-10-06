@@ -294,7 +294,8 @@ export function decideChangeMode(args: {
  *   2. select from the preferred pool;
  *   3. top up from the other pool when the preferred one is insufficient
  *      (sweeping the preferred pool first, largest-first, as far as the
- *      input limit allows);
+ *      input limit allows, and dropping its smallest UTXOs again when the
+ *      top-up needs the room);
  *   4. on an exact match spent from exactly one shielded input, add the
  *      smallest other shielded UTXO so a change output exists — when there is
  *      none, proceed unforced (spending the last shielded UTXO would otherwise
@@ -350,6 +351,7 @@ export async function shieldedAwareSelection(
       // top up from the other pool, leaving room within the input limit for
       // the top-up and, when the policy may force one, a change-forcing UTXO.
       const sweepLimit = MAX_INPUTS - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
+      const sweepStart = picked.length;
       for await (const utxo of storage.selectUtxos({
         token,
         authorities: 0n,
@@ -363,6 +365,7 @@ export async function shieldedAwareSelection(
         }
         add(utxo);
       }
+      const sweepEnd = picked.length;
       if (sum < amount) {
         const secondary = await bestUtxoSelection(storage, token, amount - sum, {
           shielded: !preferShielded,
@@ -378,6 +381,18 @@ export async function shieldedAwareSelection(
           };
         }
         secondary.utxos.forEach(add);
+        // A top-up of several UTXOs can still exceed the input limit: drop the
+        // smallest swept UTXOs while the rest still covers the amount.
+        const inputLimit = MAX_INPUTS - (policy.forceChangeOnExactSingleShielded ? 1 : 0);
+        for (let cut = sweepEnd; picked.length > inputLimit && cut > sweepStart; cut -= 1) {
+          const dropped = picked[cut - 1];
+          if (sum - dropped.value < amount) {
+            break;
+          }
+          picked.splice(cut - 1, 1);
+          pickedIds.delete(`${dropped.txId}:${dropped.index}`);
+          sum -= dropped.value;
+        }
       }
     }
   }

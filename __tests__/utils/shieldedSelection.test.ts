@@ -202,6 +202,31 @@ describe('shieldedAwareSelection', () => {
     expect(result.amount).toBe(40n);
   });
 
+  it('a top-up of several UTXOs still stays within the input limit', async () => {
+    // 253 transparent 1n UTXOs cannot pay 500n, and no single shielded UTXO
+    // covers the other 247n: the top-up takes all three 100n.
+    const store = new MemoryStore();
+    for (let i = 0; i < 253; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    for (const id of ['sh-a', 'sh-b', 'sh-c']) {
+      await store.saveUtxo(utxo({ txId: id, value: 100n, shielded: true, blindingFactor: 'bf' }));
+    }
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', 500n, {
+      ...transparentPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+
+    // The two smallest swept UTXOs are dropped again, leaving room for a
+    // change-forcing UTXO: 251 transparent + 3 shielded = 551n.
+    const picked = result.utxos.map(u => u.txId);
+    expect(picked).toEqual(expect.arrayContaining(['sh-a', 'sh-b', 'sh-c']));
+    expect(result.utxos).toHaveLength(MAX_INPUTS - 1);
+    expect(result.amount).toBe(551n);
+  });
+
   it('sweeping an insufficient preferred pool stays within the input limit', async () => {
     // 300 transparent 1n UTXOs cannot pay 500n; sweeping all of them before the
     // shielded top-up would build a tx with more inputs than a tx can hold.
