@@ -97,6 +97,18 @@ export type EcdsaTxSign = (
   pinCode: string
 ) => Promise<ITxSignatureData>;
 
+/**
+ * Method signature for an external provider that returns the private key for one of the
+ * wallet's addresses (by derivation index). Registered by clients that hold no local key
+ * (e.g. a passkey signer) so message and oracle-data signing can obtain a key on demand.
+ * Returns a bitcore PrivateKey (typed as unknown here, matching the rest of the lib).
+ */
+export type PrivateKeyProvider = (
+  addressIndex: number,
+  storage: IStorage,
+  options?: { pinCode?: string }
+) => Promise<unknown>;
+
 export type HistorySyncFunction = (
   startIndex: number,
   count: number,
@@ -830,6 +842,10 @@ export interface IStorage {
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void;
   getTxSignatureMethod(): EcdsaTxSign | null;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
+
+  hasPrivateKeyMethod(): boolean;
+  setPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
+  getExternalPrivateKey(addressIndex: number, options?: { pinCode?: string }): Promise<unknown>;
 
   // Address methods
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo & IAddressMetadata>;

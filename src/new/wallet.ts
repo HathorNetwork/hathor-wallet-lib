@@ -41,7 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction from './sendTransaction';
+import SendTransaction, { ISendDataOutput, ISendOutput, isDataOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -59,6 +59,7 @@ import {
   AddressScanPolicyData,
   AuthorityType,
   EcdsaTxSign,
+  PrivateKeyProvider,
   getDefaultLogger,
   HistorySyncMode,
   IHistoryTx,
@@ -1944,13 +1945,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves with SendTransaction instance
    */
   async sendManyOutputsSendTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
@@ -1971,21 +1973,28 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
 
-    // Map ProposedOutput[] to ISendOutput[]. Shielded outputs pass the
+    // Map the proposed outputs to ISendOutput[]. Shielded outputs pass the
     // 71-byte shielded address through as-is — SendTransaction resolves the
     // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
     // non-shielded address with a SendTxError at prepare time).
-    const sendOutputs = outputs.map(o => ({
-      address: o.address,
-      value: o.value,
-      token: o.token,
-      // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
-      // for both branches.
-      ...(o.timelock != null ? { timelock: o.timelock } : {}),
-      // Shielded-only field: carry the mode through so SendTransaction resolves
-      // the 71-byte address; absent for transparent outputs.
-      ...(o.shielded ? { shieldedMode: o.shielded } : {}),
-    }));
+    const sendOutputs: ISendOutput[] = outputs.map(o => {
+      // Data outputs have no address: keep their `type` and `data`. Copy them,
+      // as SendTransaction sets `token` on the object it receives.
+      if (isDataOutput(o)) {
+        return { ...o };
+      }
+      return {
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
+        // for shielded and transparent outputs.
+        ...(o.timelock != null ? { timelock: o.timelock } : {}),
+        // Shielded-only field: carry the mode through so SendTransaction resolves
+        // the 71-byte address; absent for transparent outputs.
+        ...(o.shielded ? { shieldedMode: o.shielded } : {}),
+      };
+    });
 
     return new SendTransaction({
       wallet: this,
@@ -2000,13 +2009,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
@@ -2180,6 +2190,43 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Fetch an address private key from the external provider and verify it corresponds to the
+   * requested address. A buggy or mismatched provider could otherwise return the wrong key, which
+   * would sign with the wrong key and could create an unspendable utxo.
+   *
+   * Callers that know the requested address must pass it as `options.expectedAddress`. An index
+   * alone is ambiguous — the legacy, shielded and shielded-spend addresses of one BIP32 index share
+   * it — so checking only against the address at the index could accept the legacy key for a
+   * shielded-spend request. Index-based callers fall back to the legacy address at that index.
+   *
+   * @param addressIndex - Index whose private key to fetch
+   * @param [options.pinCode] - Forwarded to the provider
+   * @param [options.expectedAddress] - The address the key must own, when the caller knows it.
+   *   Used only for verification; it is not forwarded to the provider.
+   * @returns Promise that resolves with the verified private key (a bitcore PrivateKey)
+   */
+  async getVerifiedExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string; expectedAddress?: string } = {}
+  ): Promise<unknown> {
+    // expectedAddress is verification-only: keep it out of the PrivateKeyProvider contract.
+    const { expectedAddress, ...providerOptions } = options;
+    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
+    if (!(privateKey instanceof bitcore.PrivateKey)) {
+      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
+    }
+    const derivedAddress = getAddressFromPubkey(
+      (privateKey as bitcore.PrivateKey).publicKey.toString(),
+      this.getNetworkObject()
+    ).base58;
+    const ownerAddress = expectedAddress ?? (await this.getAddressAtIndex(addressIndex));
+    if (derivedAddress !== ownerAddress) {
+      throw new WalletError('External private key provider returned a key for the wrong address.');
+    }
+    return privateKey;
+  }
+
+  /**
    * Returns a base64 encoded signed message with an address' private key given an
    * address index
    *
@@ -2189,11 +2236,27 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
-      privateKey: unknown;
-    };
-    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
+    let privateKey: unknown;
+    if (this.storage.hasPrivateKeyMethod()) {
+      // External provider (e.g. passkey signer): derive the key on demand by index; no pin needed.
+      // Verified against the wallet's address at this index (see getVerifiedExternalPrivateKey).
+      privateKey = await this.getVerifiedExternalPrivateKey(index, { pinCode });
+    } else {
+      // No external provider: fall back to the stored key, which requires a pin. Mirror
+      // getPrivateKeyFromAddress — use the instance pin when the caller didn't pass one, and throw a
+      // typed PinRequiredError instead of letting `undefined` flow into getMainXPrivKey/decryptData
+      // and surface as an opaque low-level error.
+      const pin = pinCode || this.pinCode;
+      if (!pin) {
+        throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+      }
+      const addressHDPrivKey = (await this.getAddressPrivKey(pin, index)) as {
+        privateKey: unknown;
+      };
+      privateKey = addressHDPrivKey.privateKey;
+    }
+    const signedMessage = signMessage(message, privateKey as bitcore.PrivateKey);
 
     return signedMessage;
   }
@@ -3781,18 +3844,34 @@ class HathorWallet extends EventEmitter {
    *                          Optional but required if not set in instance
    */
   async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
-    if (await this.storage.isReadonly()) {
+    // A readonly wallet with no external provider cannot produce a private key for any address.
+    // Keep this first so an xpub-only wallet hits WalletFromXPubGuard (not AddressError) even for an
+    // unknown address, while a passkey wallet (readonly + external provider) still passes through.
+    if ((await this.storage.isReadonly()) && !this.storage.hasPrivateKeyMethod()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
-    }
-    const newOptions = { pinCode: null, ...options };
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
+    }
+
+    // External provider path (e.g. passkey signer): no stored key and no pin are needed.
+    if (this.storage.hasPrivateKeyMethod()) {
+      // Verify the key against the requested address, not just the legacy address at its index
+      // (a shielded-spend address shares its index with a legacy one).
+      return this.getVerifiedExternalPrivateKey(addressIndex, {
+        ...options,
+        expectedAddress: address,
+      });
+    }
+
+    // Internal path: derive from the stored key. The wallet is guaranteed non-readonly here (the
+    // guard above only lets a non-readonly wallet reach this point without an external provider).
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     const xprivkey = await this.storage.getMainXPrivKey(pin);
@@ -3810,6 +3889,18 @@ class HathorWallet extends EventEmitter {
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set an external private-key provider used by getPrivateKeyFromAddress (and therefore by
+   * message and oracle-data signing). Lets a keyless wallet (e.g. a passkey signer) supply the
+   * address private key on demand. NOTE: this intentionally does NOT flip isSignedExternally /
+   * isReadonly — it does not enable transaction sending, which uses the tx-signing method.
+   *
+   * @param getPrivKey The external provider, or null to clear
+   */
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.storage.setPrivateKeyMethod(getPrivKey);
   }
 
   /**

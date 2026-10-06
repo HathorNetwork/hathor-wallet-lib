@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import bitcore from 'bitcore-lib';
 import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import {
@@ -27,6 +28,7 @@ import {
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
 import { EcdsaTxSign, IHistoryTx, WalletType } from '../../src/types';
+import { OutputType } from '../../src/wallet/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
@@ -34,6 +36,7 @@ import * as storageUtils from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
+import { getOracleBuffer, unsafeGetOracleInputData } from '../../src/nano_contracts/utils';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
 import { ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
@@ -309,6 +312,44 @@ test('sendManyOutputsSendTransaction maps shielded and transparent outputs', asy
     address: 'shielded-no-timelock-addr',
     value: 40n,
     token: '01',
+    shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+  });
+});
+
+test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const dataOutput = { type: OutputType.DATA, data: 'test' } as const;
+  const sendTx = await hWallet.sendManyOutputsSendTransaction([
+    dataOutput,
+    { address: 'transparent-addr', value: 30n, token: NATIVE_TOKEN_UID },
+    {
+      address: 'shielded-addr',
+      value: 10n,
+      token: NATIVE_TOKEN_UID,
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    },
+  ]);
+
+  // A data output has no address, so rebuilding it as a token output would drop its
+  // `type` and `data` and make SendTransaction fail with an undefined address.
+  expect(sendTx.outputs).toHaveLength(3);
+  expect(sendTx.outputs[0]).toEqual({ type: OutputType.DATA, data: 'test' });
+  // SendTransaction sets `token` on its outputs, so it must get a copy, not the caller's object.
+  expect(sendTx.outputs[0]).not.toBe(dataOutput);
+  expect(sendTx.outputs[1]).toEqual({
+    address: 'transparent-addr',
+    value: 30n,
+    token: NATIVE_TOKEN_UID,
+  });
+  expect(sendTx.outputs[2]).toEqual({
+    address: 'shielded-addr',
+    value: 10n,
+    token: NATIVE_TOKEN_UID,
     shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
   });
 });
@@ -783,6 +824,150 @@ test('signMessageWithAddress', async () => {
   expect(
     verifyMessage(message, signedMessage, await hWallet.getAddressAtIndex(addressIndex))
   ).toBeTruthy();
+});
+
+// Helper for the external-private-key-provider tests: a started seed wallet (so addresses and
+// getMainXPrivKey work), which the tests then overlay with an external provider.
+async function makeStartedWallet() {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+    getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
+  };
+  jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+    resolve({ network: 'testnet' });
+  });
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+  await hWallet.start({ pinCode: '1234', password: '1234' });
+  return { hWallet, storage };
+}
+
+// A provider that mimics a passkey signer: derives the address key from the change-path xpriv.
+function makeProvider(storage) {
+  return jest.fn(async addressIndex => {
+    const xprivkey = await storage.getMainXPrivKey('1234');
+    return new bitcore.HDPrivateKey(xprivkey).deriveNonCompliantChild(addressIndex).privateKey;
+  });
+}
+
+test('signMessageWithAddress uses an external private-key provider (no pin required)', async () => {
+  const { hWallet, storage } = await makeStartedWallet();
+  const provider = makeProvider(storage);
+  hWallet.setExternalPrivateKeyMethod(provider);
+
+  const message = 'sign-me-please';
+  const addressIndex = 2;
+  // No pin passed — the provider covers for it.
+  const signedMessage = await hWallet.signMessageWithAddress(message, addressIndex);
+
+  expect(provider).toHaveBeenCalledTimes(1);
+  expect(provider).toHaveBeenCalledWith(addressIndex, storage, { pinCode: undefined });
+  expect(
+    verifyMessage(message, signedMessage, await hWallet.getAddressAtIndex(addressIndex))
+  ).toBeTruthy();
+});
+
+test('getPrivateKeyFromAddress uses the provider and bypasses the readonly guard', async () => {
+  const { hWallet, storage } = await makeStartedWallet();
+  const addressIndex = 0;
+  // Return the real key for this index so it passes getVerifiedExternalPrivateKey's address check.
+  const expectedKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(addressIndex).privateKey;
+  const provider = jest.fn(async () => expectedKey);
+  hWallet.setExternalPrivateKeyMethod(provider);
+  // Even a readonly wallet must reach the provider (no WalletFromXPubGuard, no pin).
+  jest.spyOn(storage, 'isReadonly').mockResolvedValue(true);
+  // This harness doesn't persist address records, so map the real address to its index.
+  const address = await hWallet.getAddressAtIndex(addressIndex);
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(addressIndex);
+
+  await expect(hWallet.getPrivateKeyFromAddress(address)).resolves.toBe(expectedKey);
+  expect(provider).toHaveBeenCalledWith(addressIndex, storage, {});
+  // expectedAddress is verification-only; it must not leak into the provider contract.
+  expect(provider.mock.calls[0][2]).not.toHaveProperty('expectedAddress');
+});
+
+test('getPrivateKeyFromAddress rejects a provider key for the wrong address', async () => {
+  const { hWallet, storage } = await makeStartedWallet();
+  // Provider returns the key for index 5 regardless of the requested index.
+  const wrongKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(5).privateKey;
+  const provider = jest.fn(async () => wrongKey);
+  hWallet.setExternalPrivateKeyMethod(provider);
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
+
+  await expect(
+    hWallet.getPrivateKeyFromAddress(await hWallet.getAddressAtIndex(0))
+  ).rejects.toThrow('External private key provider returned a key for the wrong address.');
+});
+
+test('getPrivateKeyFromAddress verifies against the requested address, not just its index', async () => {
+  // A BIP32 index can carry a legacy, a shielded and a shielded-spend address. Simulate a request
+  // for a non-legacy sibling of index 0: a different address that resolves to the same index.
+  const { hWallet, storage } = await makeStartedWallet();
+  const siblingAddress = await hWallet.getAddressAtIndex(3); // stand-in for the spend address
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
+  // An index-only provider returns the LEGACY key of index 0 — the wrong key for this address.
+  const legacyKey = new bitcore.HDPrivateKey(
+    await storage.getMainXPrivKey('1234')
+  ).deriveNonCompliantChild(0).privateKey;
+  const provider = jest.fn(async () => legacyKey);
+  hWallet.setExternalPrivateKeyMethod(provider);
+
+  // Comparing against the legacy address at index 0 would accept it and silently hand back the
+  // wrong key; comparing against the requested address rejects it (fails closed).
+  await expect(hWallet.getPrivateKeyFromAddress(siblingAddress)).rejects.toThrow(
+    'External private key provider returned a key for the wrong address.'
+  );
+  expect(provider).toHaveBeenCalledWith(0, storage, {});
+  // expectedAddress is verification-only; it must not leak into the provider contract.
+  expect(provider.mock.calls[0][2]).not.toHaveProperty('expectedAddress');
+});
+
+test('setExternalPrivateKeyMethod toggles hasPrivateKeyMethod', () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  expect(storage.hasPrivateKeyMethod()).toBe(false);
+  hWallet.setExternalPrivateKeyMethod(async () => undefined);
+  expect(storage.hasPrivateKeyMethod()).toBe(true);
+  hWallet.setExternalPrivateKeyMethod(null);
+  expect(storage.hasPrivateKeyMethod()).toBe(false);
+});
+
+test('oracle signing uses the external provider on a readonly wallet', async () => {
+  const { hWallet, storage } = await makeStartedWallet();
+  const provider = makeProvider(storage);
+  hWallet.setExternalPrivateKeyMethod(provider);
+  jest.spyOn(storage, 'isReadonly').mockResolvedValue(true);
+
+  const network = new Network('testnet');
+  const oracleAddress = await hWallet.getAddressAtIndex(0);
+  const oracleData = getOracleBuffer(oracleAddress, network);
+  hWallet.isAddressMine = jest.fn().mockReturnValue(true);
+  hWallet.getAddressIndex = jest.fn().mockResolvedValue(0);
+
+  // Must NOT throw WalletFromXPubGuard, and must produce oracle input data via the provider.
+  const inputData = await unsafeGetOracleInputData(oracleData, Buffer.from('result-data'), hWallet);
+
+  expect(provider).toHaveBeenCalled();
+  expect(Buffer.isBuffer(inputData)).toBe(true);
+  expect(inputData.length).toBeGreaterThan(0);
 });
 
 test('GapLimit', async () => {
