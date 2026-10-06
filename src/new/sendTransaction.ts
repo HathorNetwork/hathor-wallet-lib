@@ -1714,6 +1714,8 @@ async function pullExtraHtrUtxos(
       token: NATIVE_TOKEN_UID,
       authorities: 0n,
       only_available_utxos: true,
+      // Smallest first: these pulls cover a fee or a small shortfall, so a
+      // larger UTXO would only move extra HTR into a change.
       order_by_value: 'asc',
       shielded: pass.shielded,
       filter_method: (utxo: IUtxo) =>
