@@ -27,11 +27,13 @@ import { bestUtxoSelection } from './utxo';
  *     mirroring the inputs. An exact match spent from exactly ONE shielded
  *     input forces a change (an extra input is added) so the input's value is
  *     not revealed by subtraction.
- *   - Mixed: one shielded output forces at least one shielded input (splitting
- *     the output in two when the wallet has none); two or more shielded
- *     outputs force one only when some of them leave the wallet, and stay as
- *     they are when the wallet has none. Change is shielded iff a shielded
- *     input was used or all T outputs are shielded.
+ *   - Mixed: one shielded output forces at least one shielded input; when the
+ *     wallet has none, the change is shielded instead so the output's amount
+ *     cannot be computed by subtraction (with no change, the structural pass
+ *     splits the output). Two or more shielded outputs force one only when
+ *     some of them leave the wallet, and stay as they are when the wallet has
+ *     none. Change is shielded iff a shielded input was used, all T outputs
+ *     are shielded, or it stands in for the missing shielded input.
  *   - HTR entering only to pay fees behaves like the all-transparent case.
  *
  * An explicit `changeShieldedMode` always wins over the change-mode rules:
@@ -66,12 +68,6 @@ export interface ITokenSelectionPolicy {
    */
   forceChangeOnExactSingleShielded: boolean;
 }
-
-/**
- * Whether a token's only shielded output must be split because the wallet has
- * no shielded input for it.
- */
-export type SplitFallback = 'none' | 'splitOne';
 
 /** What the selection actually did — feeds the change-mode decision. */
 export interface ISelectionReport {
@@ -170,9 +166,9 @@ export async function hasShieldedUtxo(
 }
 
 /**
- * Compute the selection policy for one token, and whether a lone shielded
- * output must be resolved by splitting because the wallet cannot supply the
- * shielded input the rules require.
+ * Compute the selection policy for one token, and whether its change must be
+ * shielded because the wallet cannot supply the shielded input the rules want
+ * for its lone shielded output.
  *
  * `profile === undefined` means the token appears in no output — HTR entering
  * only to pay fees — which follows the all-transparent-outputs rule.
@@ -181,7 +177,7 @@ export function computeTokenPolicy(
   profile: ITokenOutputProfile | undefined,
   hasShieldedUtxoForToken: boolean,
   override: ChangeOutputMode | null
-): { policy: ITokenSelectionPolicy; needsSplitFallback: SplitFallback } {
+): { policy: ITokenSelectionPolicy; shieldChange: boolean } {
   // The exact-match forcing exists solely to create a change output for the
   // shielded value to hide in; when the caller pinned the change transparent
   // the forced input would buy nothing.
@@ -195,7 +191,7 @@ export function computeTokenPolicy(
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: allowExactForcing,
       },
-      needsSplitFallback: 'none',
+      shieldChange: false,
     };
   }
 
@@ -208,7 +204,7 @@ export function computeTokenPolicy(
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: false,
       },
-      needsSplitFallback: 'none',
+      shieldChange: false,
     };
   }
 
@@ -221,7 +217,7 @@ export function computeTokenPolicy(
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: false,
       },
-      needsSplitFallback: 'none',
+      shieldChange: false,
     };
   }
   if (hasShieldedUtxoForToken) {
@@ -231,20 +227,21 @@ export function computeTokenPolicy(
         forceShieldedInput: true,
         forceChangeOnExactSingleShielded: false,
       },
-      needsSplitFallback: 'none',
+      shieldChange: false,
     };
   }
-  // The rules want a shielded input the wallet does not have. A lone shielded
-  // output is split in two, since it could never balance alone. Two or more
-  // already meet the minimum, and with only transparent inputs their total is
-  // public either way, so splitting one would only add a fee.
+  // The rules want a shielded input the wallet does not have. For a lone
+  // shielded output the change is shielded instead: with only transparent
+  // inputs, a transparent change would publish the output's amount by
+  // subtraction. Two or more shielded outputs are left as they are; their
+  // total is public either way.
   return {
     policy: {
       preference: OutputKind.TRANSPARENT,
       forceShieldedInput: false,
       forceChangeOnExactSingleShielded: false,
     },
-    needsSplitFallback: profile.shieldedOutputCount === 1 ? 'splitOne' : 'none',
+    shieldChange: profile.shieldedOutputCount === 1,
   };
 }
 
@@ -252,14 +249,17 @@ export function computeTokenPolicy(
  * Decide the change-output mode for one token.
  *
  * `report` is what selection did (or, for user-supplied inputs, a summary of
- * them); `null` means no inputs of the token were spent at all.
+ * them); `null` means no inputs of the token were spent at all. `shieldChange`
+ * is the policy's request to shield the change in place of a shielded input
+ * the wallet does not have.
  */
 export function decideChangeMode(args: {
   profile: ITokenOutputProfile | undefined;
   report: ISelectionReport | null;
   override: ChangeOutputMode | null;
+  shieldChange?: boolean;
 }): ChangeOutputMode {
-  const { profile, report, override } = args;
+  const { profile, report, override, shieldChange = false } = args;
   if (override !== null && override !== undefined) {
     return override;
   }
@@ -270,7 +270,7 @@ export function decideChangeMode(args: {
     profile.shieldedOutputCount > 0;
   const shieldedInputUsed = (report?.shieldedInputCount ?? 0) > 0;
 
-  if (!allOutputsShielded && !shieldedInputUsed) {
+  if (!allOutputsShielded && !shieldedInputUsed && !shieldChange) {
     return OutputKind.TRANSPARENT;
   }
 

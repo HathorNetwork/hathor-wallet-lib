@@ -301,10 +301,10 @@ describe('computeTokenPolicy', () => {
   });
 
   it('R1: all shielded prefers the shielded pool', () => {
-    const { policy, needsSplitFallback } = computeTokenPolicy(profile(2, 0), true, null);
+    const { policy, shieldChange } = computeTokenPolicy(profile(2, 0), true, null);
     expect(policy.preference).toBe(OutputKind.SHIELDED);
     expect(policy.forceShieldedInput).toBe(false);
-    expect(needsSplitFallback).toBe('none');
+    expect(shieldChange).toBe(false);
   });
 
   it('R2: all transparent prefers the transparent pool with exact-match forcing', () => {
@@ -325,21 +325,21 @@ describe('computeTokenPolicy', () => {
   });
 
   it('R3a: one shielded output forces a shielded input when available', () => {
-    const { policy, needsSplitFallback } = computeTokenPolicy(profile(1, 1), true, null);
+    const { policy, shieldChange } = computeTokenPolicy(profile(1, 1), true, null);
     expect(policy.forceShieldedInput).toBe(true);
-    expect(needsSplitFallback).toBe('none');
+    expect(shieldChange).toBe(false);
   });
 
-  it('R3a: without a shielded UTXO the output is split', () => {
-    const { policy, needsSplitFallback } = computeTokenPolicy(profile(1, 1), false, null);
+  it('R3a: without a shielded UTXO the change is shielded instead', () => {
+    const { policy, shieldChange } = computeTokenPolicy(profile(1, 1), false, null);
     expect(policy.forceShieldedInput).toBe(false);
-    expect(needsSplitFallback).toBe('splitOne');
+    expect(shieldChange).toBe(true);
   });
 
   it('R3b: all-mine forces nothing', () => {
-    const { policy, needsSplitFallback } = computeTokenPolicy(profile(2, 1, true), false, null);
+    const { policy, shieldChange } = computeTokenPolicy(profile(2, 1, true), false, null);
     expect(policy.forceShieldedInput).toBe(false);
-    expect(needsSplitFallback).toBe('none');
+    expect(shieldChange).toBe(false);
   });
 
   it('R3b: an external shielded output forces a shielded input', () => {
@@ -348,9 +348,9 @@ describe('computeTokenPolicy', () => {
   });
 
   it('R3b: external with no shielded UTXO splits nothing', () => {
-    const { policy, needsSplitFallback } = computeTokenPolicy(profile(2, 1, false), false, null);
+    const { policy, shieldChange } = computeTokenPolicy(profile(2, 1, false), false, null);
     expect(policy.forceShieldedInput).toBe(false);
-    expect(needsSplitFallback).toBe('none');
+    expect(shieldChange).toBe(false);
   });
 });
 
@@ -409,6 +409,36 @@ describe('decideChangeMode', () => {
     expect(
       decideChangeMode({ profile: profile(1, 1, true), report: report(1, false), override: null })
     ).toBe(FULLY_SHIELDED);
+  });
+
+  it('R3a: the shielded-change hint shields the change mirroring the outputs', () => {
+    expect(
+      decideChangeMode({
+        profile: profile(1, 1),
+        report: report(0),
+        override: null,
+        shieldChange: true,
+      })
+    ).toBe(AMOUNT_SHIELDED);
+    expect(
+      decideChangeMode({
+        profile: profile(1, 1, true),
+        report: report(0),
+        override: null,
+        shieldChange: true,
+      })
+    ).toBe(FULLY_SHIELDED);
+  });
+
+  it('R3a: an explicit transparent override wins over the shielded-change hint', () => {
+    expect(
+      decideChangeMode({
+        profile: profile(1, 1),
+        report: report(0),
+        override: OutputKind.TRANSPARENT,
+        shieldChange: true,
+      })
+    ).toBe(OutputKind.TRANSPARENT);
   });
 
   it('R3: mixed without a shielded input keeps the change transparent', () => {
