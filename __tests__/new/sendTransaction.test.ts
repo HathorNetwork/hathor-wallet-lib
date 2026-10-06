@@ -2321,6 +2321,291 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
+    test('when no pull can fund a shielded change, the split fee is paid exactly', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-1', 1n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-1', 1n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '1d'.repeat(32),
+        }),
+        poolUtxo('htr-fs-1', 1n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '1e'.repeat(32),
+          assetBlindingFactor: '1f'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // Both shielded 1n together make a 2n change, but the fully shielded one
+      // makes it fully shielded, and its 2n fee would leave nothing. No pull
+      // funds a shielded change, so the 1n split fee is paid exactly, as when
+      // nothing more can be pulled. HTR: 1 + 1 = 2 (fees).
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-pub-10',
+        'htr-pub-1',
+        'htr-sh-1',
+      ]);
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('a fully shielded split-fee pull too small for its own change throws', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-1', 1n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-fs-2', 2n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '20'.repeat(32),
+          assetBlindingFactor: '21'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      });
+
+      // The 2n covers the 1n split fee with 1n over, which must not become a
+      // transparent change (it is shielded value). As a fully shielded change,
+      // mirroring the input, the 2n would pay a 2n fee and keep nothing, and
+      // the change is not downgraded to amount-shielded.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        /HTR change is too small to fund its shielded-output fee and no additional HTR is available/
+      );
+    });
+
+    test('an exact split-fee pull becomes a shielded change when that costs less', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-2', 2n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '22'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The shielded 2n would pay the 2n split fee exactly and be revealed by
+      // subtraction. As an amount-shielded change it pays a 1n fee and keeps
+      // 1n, so it is the second shielded output and the recipient's output is
+      // not split. HTR: 2 + 2 = 3 (fees) + 1.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-pub-10',
+        'htr-pub-2',
+        'htr-sh-2',
+      ]);
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        10n,
+      ]);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect(byValue.get(10n)!.token).toBe(CUSTOM_TOKEN);
+      expect(byValue.get(10n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(byValue.get(1n)!.token).toBe(NATIVE_TOKEN_UID);
+      expect(byValue.get(1n)!.shieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(3n);
+    });
+
+    test('a small public HTR change with an exact top-up becomes a cheaper shielded change', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-1', 1n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '23'.repeat(32),
+        }),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The public 3n pays the 2n FS fee and leaves a 1n change; the shielded
+      // 1n would top it up to the 2n split fee exactly and be revealed by
+      // subtraction. Together they make a 2n amount-shielded change that pays
+      // a 1n fee and keeps 1n. HTR: 3 + 1 = 3 (fees) + 1.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-pub-10',
+        'htr-pub-3',
+        'htr-sh-1',
+      ]);
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        10n,
+      ]);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect(byValue.get(10n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(byValue.get(1n)!.token).toBe(NATIVE_TOKEN_UID);
+      expect(byValue.get(1n)!.shieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(3n);
+    });
+
+    test('a pinned amount-shielded change replaces an exact split when it costs less', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-pub-12', 12n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: NATIVE_TOKEN_UID,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+        changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The 12n pays 10n and the 2n FS fee exactly; the pulled 2n would pay
+      // the 2n split fee exactly. As the pinned amount-shielded change it pays
+      // a 1n fee and keeps 1n, and the recipient's output is not split.
+      // HTR: 12 + 2 = 10 + 3 (fees) + 1.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['htr-pub-12', 'htr-pub-2']);
+      expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        10n,
+      ]);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect(byValue.get(10n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(byValue.get(1n)!.shieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(3n);
+    });
+
+    test('with no address for a shielded change, an exact split-fee pull splits', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-2', 2n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '24'.repeat(32),
+        }),
+      ]);
+      // Built from storage alone: no wallet to derive a change address from.
+      const sendTransaction = new SendTransaction({
+        storage,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // A cheaper shielded change would need an address, so the shielded 2n
+      // pays the 2n split fee and the recipient's output is split.
+      // HTR: 2 + 2 = 4 (fees).
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-pub-10',
+        'htr-pub-2',
+        'htr-sh-2',
+      ]);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(4n);
+    });
+
+    test('with no address for a shielded change, a shielded split-fee pull stops at the fee', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-1', 1n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-1', 1n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '25'.repeat(32),
+        }),
+        poolUtxo('htr-sh-7', 7n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '26'.repeat(32),
+        }),
+      ]);
+      // Built from storage alone: no wallet to derive a change address from.
+      const sendTransaction = new SendTransaction({
+        storage,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // Pulling on past the shielded 1n would only make a change that must be
+      // shielded and cannot be, so the 1n split fee is paid exactly.
+      // HTR: 1 + 1 = 2 (fees).
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-pub-10',
+        'htr-pub-1',
+        'htr-sh-1',
+      ]);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
     test("the 'transparent' override pulls public HTR first for the split fee", async () => {
       const storage = buildPoolStorage([
         poolUtxo('htr-sh-11', 11n, NATIVE_TOKEN_UID, {
