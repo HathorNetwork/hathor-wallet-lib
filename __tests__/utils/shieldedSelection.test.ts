@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { MAX_INPUTS } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import { IUtxo } from '../../src/types';
 import { ShieldedOutputMode } from '../../src/shielded/types';
@@ -173,6 +174,30 @@ describe('shieldedAwareSelection', () => {
     });
     expect(ids(result)).toEqual(['only-sh']);
     expect(result.amount).toBe(40n);
+  });
+
+  it('sweeping an insufficient preferred pool stays within the input limit', async () => {
+    // 300 public 1n UTXOs cannot pay 500n; sweeping all of them before the
+    // shielded top-up would build a tx with more inputs than a tx can hold.
+    const store = new MemoryStore();
+    for (let i = 0; i < 300; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(
+      utxo({ txId: 'sh-1000', value: 1000n, shielded: true, blindingFactor: 'bf' })
+    );
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', 500n, {
+      ...publicPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+
+    // The sweep leaves room for the top-up and for a change-forcing UTXO:
+    // 253 public UTXOs, then the shielded 1000n.
+    expect(result.utxos.map(u => u.txId)).toContain('sh-1000');
+    expect(result.utxos).toHaveLength(MAX_INPUTS - 1);
+    expect(result.amount).toBe(1253n);
   });
 
   it('insufficient across both pools reports the combined available sum', async () => {

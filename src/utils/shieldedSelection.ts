@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NATIVE_TOKEN_UID } from '../constants';
+import { MAX_INPUTS, NATIVE_TOKEN_UID } from '../constants';
 import { IStorage, IUtxo, OutputValueType, UtxoSelectionAlgorithm } from '../types';
 import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { bestUtxoSelection } from './utxo';
@@ -284,7 +284,8 @@ export function decideChangeMode(args: {
  *   1. force-include the smallest shielded UTXO when the policy demands one;
  *   2. select from the preferred pool;
  *   3. top up from the other pool when the preferred one is insufficient
- *      (taking the whole preferred pool first, largest-first);
+ *      (sweeping the preferred pool first, largest-first, as far as the
+ *      input limit allows);
  *   4. on an exact match spent from exactly one shielded input, add the
  *      smallest extra UTXO from either pool so a change output exists — when
  *      the wallet holds nothing else, proceed unforced (spending the whole
@@ -336,8 +337,10 @@ export async function shieldedAwareSelection(
     if (primary.utxos.length > 0) {
       primary.utxos.forEach(add);
     } else {
-      // Preferred pool is insufficient on its own: consume it entirely
-      // (largest-first) and top up from the other pool.
+      // Preferred pool is insufficient on its own: sweep it (largest-first) and
+      // top up from the other pool, leaving room within the input limit for
+      // the top-up and, when the policy may force one, a change-forcing UTXO.
+      const sweepLimit = MAX_INPUTS - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
       for await (const utxo of storage.selectUtxos({
         token,
         authorities: 0n,
@@ -346,6 +349,9 @@ export async function shieldedAwareSelection(
         shielded: preferShielded,
         filter_method: notPicked,
       })) {
+        if (picked.length >= sweepLimit) {
+          break;
+        }
         add(utxo);
       }
       if (sum < amount) {
