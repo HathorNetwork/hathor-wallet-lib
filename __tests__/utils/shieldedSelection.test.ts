@@ -347,9 +347,10 @@ describe('computeTokenPolicy', () => {
     expect(policy.forceShieldedInput).toBe(true);
   });
 
-  it('R3b: external with no shielded UTXO splits the largest output', () => {
-    const { needsSplitFallback } = computeTokenPolicy(profile(2, 1, false), false, null);
-    expect(needsSplitFallback).toBe('splitLargest');
+  it('R3b: external with no shielded UTXO splits nothing', () => {
+    const { policy, needsSplitFallback } = computeTokenPolicy(profile(2, 1, false), false, null);
+    expect(policy.forceShieldedInput).toBe(false);
+    expect(needsSplitFallback).toBe('none');
   });
 });
 

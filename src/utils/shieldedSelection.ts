@@ -29,8 +29,9 @@ import { bestUtxoSelection } from './utxo';
  *     not revealed by subtraction.
  *   - Mixed: one shielded output forces at least one shielded input (splitting
  *     the output in two when the wallet has none); two or more shielded
- *     outputs force one only when some of them leave the wallet. Change is
- *     shielded iff a shielded input was used or all T outputs are shielded.
+ *     outputs force one only when some of them leave the wallet, and stay as
+ *     they are when the wallet has none. Change is shielded iff a shielded
+ *     input was used or all T outputs are shielded.
  *   - HTR entering only to pay fees behaves like the all-transparent case.
  *
  * An explicit `changeShieldedMode` always wins over the change-mode rules:
@@ -66,8 +67,11 @@ export interface ITokenSelectionPolicy {
   forceChangeOnExactSingleShielded: boolean;
 }
 
-/** How a lone-shielded-output situation is resolved when no shielded input exists. */
-export type SplitFallback = 'none' | 'splitOne' | 'splitLargest';
+/**
+ * Whether a token's only shielded output must be split because the wallet has
+ * no shielded input for it.
+ */
+export type SplitFallback = 'none' | 'splitOne';
 
 /** What the selection actually did — feeds the change-mode decision. */
 export interface ISelectionReport {
@@ -230,15 +234,17 @@ export function computeTokenPolicy(
       needsSplitFallback: 'none',
     };
   }
-  // The rules require a shielded input the wallet does not have: fall back to
-  // splitting a shielded output so no single input↔output mapping is revealed.
+  // The rules want a shielded input the wallet does not have. A lone shielded
+  // output is split in two, since it could never balance alone. Two or more
+  // already meet the minimum, and with only transparent inputs their total is
+  // public either way, so splitting one would only add a fee.
   return {
     policy: {
       preference: OutputKind.TRANSPARENT,
       forceShieldedInput: false,
       forceChangeOnExactSingleShielded: false,
     },
-    needsSplitFallback: profile.shieldedOutputCount === 1 ? 'splitOne' : 'splitLargest',
+    needsSplitFallback: profile.shieldedOutputCount === 1 ? 'splitOne' : 'none',
   };
 }
 

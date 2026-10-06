@@ -55,7 +55,6 @@ import {
   ISelectionReport,
   ITokenSelectionPolicy,
   InputPreference,
-  SplitFallback,
   buildTokenOutputProfiles,
   computeTokenPolicy,
   decideChangeMode,
@@ -494,7 +493,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         selectionPolicies.set(token, policy);
       }
       if (needsSplitFallback !== 'none') {
-        splitShieldedDefForToken(shieldedOutputDefs, token, needsSplitFallback);
+        splitShieldedDefForToken(shieldedOutputDefs, token);
       }
     }
 
@@ -1632,28 +1631,13 @@ export function splitShieldedDef(defs: IResolvedShieldedOutputDef[], index: numb
 }
 
 /**
- * Apply a rules-mandated split for a token: its only shielded output
- * ('splitOne') or its largest one ('splitLargest').
+ * Apply the rules-mandated split for a token: its only shielded output becomes
+ * two halves at the same destination.
  */
-export function splitShieldedDefForToken(
-  defs: IResolvedShieldedOutputDef[],
-  token: string,
-  fallback: Exclude<SplitFallback, 'none'>
-): void {
-  let targetIndex = -1;
-  for (let i = 0; i < defs.length; i++) {
-    if (defs[i].token !== token) {
-      continue;
-    }
-    if (
-      targetIndex === -1 ||
-      (fallback === 'splitLargest' && defs[i].value > defs[targetIndex].value)
-    ) {
-      targetIndex = i;
-    }
-  }
+export function splitShieldedDefForToken(defs: IResolvedShieldedOutputDef[], token: string): void {
+  const targetIndex = defs.findIndex(def => def.token === token);
   if (targetIndex === -1) {
-    // Defensive: the profile said this token has shielded outputs.
+    // Defensive: the profile said this token has a shielded output.
     throw new SendTxError(`No shielded output found to split for token ${token}.`);
   }
   splitShieldedDef(defs, targetIndex);

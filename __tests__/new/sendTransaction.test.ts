@@ -2035,6 +2035,50 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(new Set(inputIds).size).toBe(inputIds.length);
     });
 
+    test('R3b — with no shielded UTXO, two shielded outputs are left whole', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-100', 100n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 20n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 5n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // Two shielded outputs already meet the protocol minimum, and with only
+      // transparent inputs the shielded total is public either way, so
+      // splitting one would only add a fee. HTR: 9 = 2 (fees) + 7.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-pub-100', 'htr-pub-9']);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        10n,
+        20n,
+      ]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
     test('R3a fallback — no shielded UTXO splits the lone shielded output in halves', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
