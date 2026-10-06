@@ -1708,10 +1708,12 @@ interface PulledHtrKinds {
 /**
  * Pull additional HTR UTXOs (excluding already-used ones) until the pulled sum
  * satisfies `isEnough`. Pool-aware: the preferred pool first, the other as a
- * fallback. Ascending value inside each pool — the pulled value flows into a
- * change output, so pulling smallest-first moves the least extra HTR around.
- * Also reports which kinds of UTXO were pulled; `isEnough` sees them as they
- * accumulate.
+ * fallback, and fully shielded UTXOs last of all — one spent into anything but
+ * a fully shielded output reveals its token, and a change it funds pays the
+ * fully shielded fee. Ascending value inside each pass — the pulled value flows
+ * into a change output, so pulling smallest-first moves the least extra HTR
+ * around. Also reports which kinds of UTXO were pulled; `isEnough` sees them as
+ * they accumulate.
  */
 async function pullExtraHtrUtxos(
   storage: IStorage,
@@ -1723,8 +1725,12 @@ async function pullExtraHtrUtxos(
   let pulledSum = 0n;
   let anyShielded = false;
   let anyFullyShielded = false;
-  const passes: boolean[] = preference === OutputKind.SHIELDED ? [true, false] : [false, true];
-  for (const shieldedPass of passes) {
+  const pools = preference === OutputKind.SHIELDED ? [true, false] : [false, true];
+  const passes = [
+    ...pools.map(shielded => ({ shielded, fullyShielded: false })),
+    { shielded: true, fullyShielded: true },
+  ];
+  for (const pass of passes) {
     if (isEnough(pulledSum, { anyShielded, anyFullyShielded })) {
       break;
     }
@@ -1733,8 +1739,10 @@ async function pullExtraHtrUtxos(
       authorities: 0n,
       only_available_utxos: true,
       order_by_value: 'asc',
-      shielded: shieldedPass,
-      filter_method: (utxo: IUtxo) => !usedUtxos.has(`${utxo.txId}:${utxo.index}`),
+      shielded: pass.shielded,
+      filter_method: (utxo: IUtxo) =>
+        !usedUtxos.has(`${utxo.txId}:${utxo.index}`) &&
+        (utxo.assetBlindingFactor !== undefined) === pass.fullyShielded,
     };
     // eslint-disable-next-line no-await-in-loop -- sequential pool passes
     for await (const utxo of storage.selectUtxos(selectOptions)) {
