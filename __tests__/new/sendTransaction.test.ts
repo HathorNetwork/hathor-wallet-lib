@@ -10,6 +10,7 @@ import {
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
   FEE_PER_OUTPUT,
+  MAX_INPUTS,
   MAX_SHIELDED_OUTPUTS,
   NATIVE_TOKEN_UID,
   TOKEN_AUTHORITY_MASK,
@@ -33,6 +34,7 @@ import {
   TokenVersion,
   WalletType,
 } from '../../src/types';
+import { SendTxError } from '../../src/errors';
 import FeeHeader from '../../src/headers/fee';
 import { Fee } from '../../src/utils/fee';
 import walletHelpers from '../../src/utils/helpers';
@@ -2280,6 +2282,84 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
       expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([11n, 34n]);
       expect(byValue.get(34n)!.address).toBe(walletSpend());
+    });
+
+    test('the token selection leaves room for the HTR fee within the input limit', async () => {
+      const pool = [
+        ...Array.from({ length: 253 }, (_, i) =>
+          poolUtxo(`custom-sh-1-${i}`, 1n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+        poolUtxo('custom-pub-100a', 100n, CUSTOM_TOKEN),
+        poolUtxo('custom-pub-100b', 100n, CUSTOM_TOKEN),
+        poolUtxo('custom-pub-100c', 100n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 250n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 250n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+      // The shielded 1n UTXOs are swept first and the three 100n top them up;
+      // the sweep stops short so the HTR fee input still fits: 254 inputs.
+      expect(result.inputs.length).toBeLessThanOrEqual(MAX_INPUTS);
+      expect(result.inputs.map(i => i.txId)).toContain('htr-pub-10');
+    });
+
+    test('a send that needs more inputs than a transaction holds fails before building outputs', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) =>
+          poolUtxo(`custom-sh-1-${i}`, 1n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(4, '0').repeat(16),
+          })
+        ),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 140n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 140n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      });
+
+      // 280n of 1n UTXOs cannot fit in a transaction.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs 281 inputs, more than the ${MAX_INPUTS} a transaction can ` +
+            "hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
     });
 
     test('R3a fallback — with no change, the lone shielded output is split', async () => {

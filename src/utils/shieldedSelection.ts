@@ -303,14 +303,16 @@ export function decideChangeMode(args: {
  *
  * The result either covers `amount` or, when even the top-up falls short, is
  * empty, which the caller reports as insufficient funds (the same contract as
- * `bestUtxoSelection`).
+ * `bestUtxoSelection`). `maxInputs` is the room this selection has in the
+ * transaction's input limit; the sweep and the top-up stay within it.
  */
 export async function shieldedAwareSelection(
   storage: IStorage,
   token: string,
   amount: OutputValueType,
   policy: ITokenSelectionPolicy,
-  onReport?: (report: ISelectionReport) => void
+  onReport?: (report: ISelectionReport) => void,
+  maxInputs: number = MAX_INPUTS
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const picked: IUtxo[] = [];
   const pickedIds = new Set<string>();
@@ -350,7 +352,7 @@ export async function shieldedAwareSelection(
       // Preferred pool is insufficient on its own: sweep it (largest-first) and
       // top up from the other pool, leaving room within the input limit for
       // the top-up and, when the policy may force one, a change-forcing UTXO.
-      const sweepLimit = MAX_INPUTS - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
+      const sweepLimit = maxInputs - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
       const sweepStart = picked.length;
       for await (const utxo of storage.selectUtxos({
         token,
@@ -383,7 +385,7 @@ export async function shieldedAwareSelection(
         secondary.utxos.forEach(add);
         // A top-up of several UTXOs can still exceed the input limit: drop the
         // smallest swept UTXOs while the rest still covers the amount.
-        const inputLimit = MAX_INPUTS - (policy.forceChangeOnExactSingleShielded ? 1 : 0);
+        const inputLimit = maxInputs - (policy.forceChangeOnExactSingleShielded ? 1 : 0);
         for (let cut = sweepEnd; picked.length > inputLimit && cut > sweepStart; cut -= 1) {
           const dropped = picked[cut - 1];
           if (sum - dropped.value < amount) {
@@ -440,8 +442,9 @@ export async function shieldedAwareSelection(
  */
 export function makeShieldedAwareSelection(
   policy: ITokenSelectionPolicy,
-  onReport?: (report: ISelectionReport) => void
+  onReport?: (report: ISelectionReport) => void,
+  maxInputs: number = MAX_INPUTS
 ): UtxoSelectionAlgorithm {
   return (storage, token, amount) =>
-    shieldedAwareSelection(storage, token, amount, policy, onReport);
+    shieldedAwareSelection(storage, token, amount, policy, onReport, maxInputs);
 }

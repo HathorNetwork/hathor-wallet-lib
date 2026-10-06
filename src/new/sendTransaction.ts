@@ -10,6 +10,7 @@ import { shuffle } from 'lodash';
 import txApi from '../api/txApi';
 import {
   NATIVE_TOKEN_UID,
+  MAX_INPUTS,
   MAX_SHIELDED_OUTPUTS,
   SELECT_OUTPUTS_TIMEOUT,
   ZERO_TWEAK,
@@ -558,12 +559,18 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       txData,
       tokenMap,
       this.changeAddress,
-      token => {
+      (token, inputsSoFar) => {
         const policy = selectionPolicies.get(token);
         if (!policy) {
           return undefined;
         }
-        return makeShieldedAwareSelection(policy, report => selectionReports.set(token, report));
+        // The input limit is the whole transaction's: leave room for the inputs
+        // already in it, and for the HTR fee input and a structural pull.
+        return makeShieldedAwareSelection(
+          policy,
+          report => selectionReports.set(token, report),
+          MAX_INPUTS - inputsSoFar - 2
+        );
       }
     );
 
@@ -690,8 +697,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       selectionPolicies.get(HTR_UID) ??
       computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy;
     if (shouldChooseHTRInputs) {
-      options.utxoSelectionMethod = makeShieldedAwareSelection(htrPolicy, report =>
-        selectionReports.set(HTR_UID, report)
+      // Room left in the input limit, keeping one input for a structural pull.
+      options.utxoSelectionMethod = makeShieldedAwareSelection(
+        htrPolicy,
+        report => selectionReports.set(HTR_UID, report),
+        MAX_INPUTS - partialInputs.length - 1
       );
     }
 
@@ -1092,6 +1102,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         throw new SendTxError(
           `Cannot create more than ${MAX_SHIELDED_OUTPUTS} shielded outputs per transaction ` +
             `(requested ${shieldedOutputDefs.length}).`
+        );
+      }
+      const inputCount = partialInputs.length + partialHtrTxData.inputs.length;
+      if (inputCount > MAX_INPUTS) {
+        throw new SendTxError(
+          `The transaction needs ${inputCount} inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
         );
       }
 
@@ -2071,7 +2088,7 @@ export async function prepareSendManyTokensData(
   txData: IDataTx,
   tokenMap: Map<string, boolean>,
   changeAddress: string | null,
-  utxoSelectionForToken?: (token: string) => UtxoSelectionAlgorithm | undefined
+  utxoSelectionForToken?: (token: string, inputsSoFar: number) => UtxoSelectionAlgorithm | undefined
 ): Promise<Pick<IDataTx, 'outputs' | 'inputs'>> {
   const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
   for (const [token, chooseInputs] of tokenMap) {
@@ -2079,7 +2096,10 @@ export async function prepareSendManyTokensData(
       token,
       chooseInputs,
     };
-    const utxoSelectionMethod = utxoSelectionForToken?.(token);
+    const utxoSelectionMethod = utxoSelectionForToken?.(
+      token,
+      txData.inputs.length + partialTxData.inputs.length
+    );
     if (utxoSelectionMethod) {
       options.utxoSelectionMethod = utxoSelectionMethod;
     }
