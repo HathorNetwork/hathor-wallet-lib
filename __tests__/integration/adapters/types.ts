@@ -612,14 +612,28 @@ export interface GetUtxosForAmountResult {
 }
 
 /**
- * An output for sendManyOutputsTransaction.
+ * A regular address output for sendManyOutputsTransaction.
  */
-export interface AdapterOutput {
+export interface AdapterAddressOutput {
   address: string;
   value: bigint;
   token: string;
   timelock?: number;
 }
+
+/**
+ * A data output for sendManyOutputsTransaction: burns 0.01 HTR and stores the
+ * utf8 `data` payload in its script. Both facades accept this shape.
+ */
+export interface AdapterDataOutput {
+  type: 'data';
+  data: string;
+}
+
+/**
+ * An output for sendManyOutputsTransaction.
+ */
+export type AdapterOutput = AdapterAddressOutput | AdapterDataOutput;
 
 /**
  * An explicit input for sendManyOutputsTransaction.

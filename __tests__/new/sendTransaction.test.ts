@@ -390,7 +390,7 @@ test('type methods', () => {
    */
   const dataOutput = {
     type: OutputType.DATA,
-    data: Buffer.alloc(0),
+    data: '',
   };
 
   expect(isDataOutput(dataOutput)).toBeTruthy();
@@ -456,7 +456,7 @@ test('prepareTxData', async () => {
    */
   const dataOutput = {
     type: OutputType.DATA,
-    data: Buffer.from('abcd', 'hex'),
+    data: 'abcd',
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];
@@ -533,6 +533,37 @@ test('prepareTxData', async () => {
 
   prepareSpy.mockRestore();
   spyGetToken.mockRestore();
+});
+
+test('prepareTxData keeps the data output payload bytes in the output script', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+
+  async function* selectUtxoMock() {
+    yield {
+      txId: 'spent-tx-id',
+      index: 0,
+      value: 1n,
+      token: NATIVE_TOKEN_UID,
+      address: 'spent-utxo-address',
+      authorities: 0n,
+    };
+  }
+
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
+
+  const sendTransaction = new SendTransaction({
+    storage,
+    outputs: [{ type: OutputType.DATA, data: 'my message' }],
+  });
+  const txData = await sendTransaction.prepareTxData();
+
+  expect(txData.outputs).toHaveLength(1);
+  const script = transaction.createOutputScript(txData.outputs[0], new Network('testnet'));
+  // Push of the 10 utf8 bytes of the payload, then OP_CHECKSIG.
+  expect(script.toString('hex')).toEqual(`0a${Buffer.from('my message').toString('hex')}ac`);
 });
 
 test('invalid method calls', async () => {

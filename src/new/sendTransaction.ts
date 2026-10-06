@@ -73,8 +73,11 @@ export interface ISendInput {
 }
 
 export interface ISendDataOutput {
-  type: OutputType.DATA;
-  data: Buffer;
+  // The literal also accepts the wallet-service facade's DataScriptOutputRequestObj.
+  type: OutputType.DATA | 'data';
+  // utf8 payload for the data script. ScriptData encodes it via
+  // Buffer.from(data, 'utf8'), matching IDataOutputData.data (a string).
+  data: string;
   value?: number;
   token?: string;
 }
@@ -278,7 +281,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // Data output will always have value 1 (0.01) HTR
         txData.outputs.push({
           type: OutputType.DATA,
-          data: output.data.toString('hex'),
+          data: output.data,
           value: 1n,
           authorities: 0n,
           token: output.token,
