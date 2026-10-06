@@ -18,6 +18,9 @@ import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import dateFormatter from '../../../src/utils/date';
+import Network from '../../../src/models/network';
+import ScriptData from '../../../src/models/script_data';
+import { parseScript, parseScriptData } from '../../../src/utils/scripts';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 
@@ -147,6 +150,54 @@ describe.each(adapters)('[Shared] sendManyOutputsTransaction — $name', adapter
       expect.objectContaining({ value: 8n, token: NATIVE_TOKEN_UID })
     );
     expect(sendTx.inputs).toContainEqual(expect.objectContaining({ value: 200n, token: tokenUid }));
+  });
+
+  it('should send a data output alongside a regular output', async () => {
+    const { wallet } = await adapter.createWallet();
+    await adapter.injectFunds(wallet, (await wallet.getAddressAtIndex(0))!, 10n);
+
+    const payload = 'shared send-many-outputs data payload';
+    const recvAddress = (await wallet.getAddressAtIndex(1))!;
+    const { hash, transaction: tx } = await adapter.sendManyOutputsTransaction(wallet, [
+      { type: 'data', data: payload },
+      { address: recvAddress, value: 2n, token: NATIVE_TOKEN_UID },
+    ]);
+
+    // Data output, the 2 HTR output and the change: a facade that drops either
+    // requested output can't produce three.
+    expect(tx.outputs).toHaveLength(3);
+
+    // The transaction the facade built: exactly one data output, burning
+    // 0.01 HTR, whose script decodes back to the utf8 payload.
+    const network = new Network(adapter.networkName);
+    const builtDataOutputs = tx.outputs.filter(
+      o => parseScript(o.script, network) instanceof ScriptData
+    );
+    expect(builtDataOutputs).toHaveLength(1);
+    expect(builtDataOutputs[0].value).toBe(1n);
+    expect(builtDataOutputs[0].tokenData).toBe(0);
+    expect(parseScriptData(builtDataOutputs[0].script).data).toBe(payload);
+
+    // The fullnode's stored copy holds the same payload bytes on-chain.
+    const { tx: onChain } = await adapter.getFullTxById(wallet, hash);
+    const onChainDataOutputs = onChain.outputs.filter(
+      o => parseScript(Buffer.from(o.script, 'base64'), network) instanceof ScriptData
+    );
+    expect(onChainDataOutputs).toHaveLength(1);
+    expect(onChainDataOutputs[0].value).toBe(1n);
+    expect(parseScriptData(Buffer.from(onChainDataOutputs[0].script, 'base64')).data).toBe(payload);
+    // ...and the regular output landed next to it.
+    expect(onChain.outputs).toContainEqual(
+      expect.objectContaining({
+        value: 2n,
+        decoded: expect.objectContaining({ address: recvAddress }),
+      })
+    );
+
+    // The 2 HTR and the change come back to this wallet; only the data
+    // output's 0.01 HTR burn leaves it.
+    const htrBalance = await wallet.getBalance(NATIVE_TOKEN_UID);
+    expect(htrBalance[0].balance.unlocked).toBe(9n);
   });
 
   it('should respect timelocks', async () => {

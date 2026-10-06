@@ -41,7 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction from './sendTransaction';
+import SendTransaction, { ISendDataOutput, ISendOutput, isDataOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -1380,6 +1380,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Highest value first by default, so max_utxos keeps the top-N by value
+      // instead of whatever the storage insertion order happens to be.
+      // Consolidation overrides this to smallest-first.
+      order_by_value: options.order_by_value ?? 'desc',
       // Transparent-only by default: getUtxos feeds consolidateUtxos, which
       // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
       // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.
@@ -1545,6 +1549,11 @@ class HathorWallet extends EventEmitter {
     // a caller passes shielded:true — the literal after the spread wins.
     const utxoDetails = await this.getUtxos({
       ...options,
+      // Smallest first: consolidation is the only path that clears dust, since
+      // regular sends spend the largest UTXOs first. This decides which UTXOs
+      // survive every limit — max_utxos, max_amount and the max_number_inputs
+      // cap in the loop below. Callers can still override it.
+      order_by_value: options.order_by_value ?? 'asc',
       only_available_utxos: true,
       shielded: false,
     });
@@ -1935,13 +1944,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves with SendTransaction instance
    */
   async sendManyOutputsSendTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
@@ -1962,21 +1972,28 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
 
-    // Map ProposedOutput[] to ISendOutput[]. Shielded outputs pass the
+    // Map the proposed outputs to ISendOutput[]. Shielded outputs pass the
     // 71-byte shielded address through as-is — SendTransaction resolves the
     // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
     // non-shielded address with a SendTxError at prepare time).
-    const sendOutputs = outputs.map(o => ({
-      address: o.address,
-      value: o.value,
-      token: o.token,
-      // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
-      // for both branches.
-      ...(o.timelock != null ? { timelock: o.timelock } : {}),
-      // Shielded-only field: carry the mode through so SendTransaction resolves
-      // the 71-byte address; absent for transparent outputs.
-      ...(o.shielded ? { shieldedMode: o.shielded } : {}),
-    }));
+    const sendOutputs: ISendOutput[] = outputs.map(o => {
+      // Data outputs have no address: keep their `type` and `data`. Copy them,
+      // as SendTransaction sets `token` on the object it receives.
+      if (isDataOutput(o)) {
+        return { ...o };
+      }
+      return {
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
+        // for shielded and transparent outputs.
+        ...(o.timelock != null ? { timelock: o.timelock } : {}),
+        // Shielded-only field: carry the mode through so SendTransaction resolves
+        // the 71-byte address; absent for transparent outputs.
+        ...(o.shielded ? { shieldedMode: o.shielded } : {}),
+      };
+    });
 
     return new SendTransaction({
       wallet: this,
@@ -1991,13 +2008,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
