@@ -997,13 +997,24 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.emit('job-done', data);
     });
 
-    this.mineTransaction.on('error', message => {
-      this.updateOutputSelected(false);
+    // On a mining failure the inputs are released before anyone is told: the error events
+    // and the rejection of the returned promise all wait for the same release, so a caller
+    // that retries right away doesn't find its UTXOs still selected.
+    let releasing: Promise<void> | null = null;
+    const releaseInputs = () => {
+      if (!releasing) {
+        releasing = this.releaseUtxos();
+      }
+      return releasing;
+    };
+
+    this.mineTransaction.on('error', async message => {
+      await releaseInputs();
       this.emit('send-error', message);
     });
 
-    this.mineTransaction.on('unexpected-error', message => {
-      this.updateOutputSelected(false);
+    this.mineTransaction.on('unexpected-error', async message => {
+      await releaseInputs();
       this.emit('unexpected-error', message);
     });
 
@@ -1015,7 +1026,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.mineTransaction.start();
     }
 
-    return this.mineTransaction.promise;
+    try {
+      return await this.mineTransaction.promise;
+    } catch (err) {
+      await releaseInputs();
+      throw err;
+    }
   }
 
   /**
@@ -1071,13 +1087,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             this.emit('send-tx-success', this.transaction);
             resolve(this.transaction);
           } else {
-            this.updateOutputSelected(false);
+            // Release the inputs before rejecting, so a retry can select them again.
             const err = new SendTxError(response.message);
-            reject(err);
+            this.releaseUtxos().then(() => reject(err));
           }
         })
-        .catch(e => {
-          this.updateOutputSelected(false);
+        .catch(async e => {
+          await this.releaseUtxos();
           this.emit('send-error', e.message);
           reject(e);
         });
