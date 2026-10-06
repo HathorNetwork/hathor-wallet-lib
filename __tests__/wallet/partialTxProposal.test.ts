@@ -123,7 +123,9 @@ test('addSend', async () => {
   testStorage.config.setNetwork('testnet');
 
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyInput = jest.spyOn(PartialTxProposal.prototype, 'addInput').mockImplementation(() => {});
+  const spyInput = jest
+    .spyOn(PartialTxProposal.prototype, 'addInput')
+    .mockImplementation(async () => {});
   const spyOutput = jest
     .spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
@@ -269,7 +271,7 @@ test('addInput', async () => {
   /**
    * Add 1 HTR input
    */
-  proposal.addInput(FAKE_TXID, 5, 999n, ADDR1);
+  await proposal.addInput(FAKE_TXID, 5, 999n, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).toHaveBeenCalledWith({ txId: FAKE_TXID, index: 5 }, true);
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 5, 999n, ADDR1, {
@@ -285,7 +287,7 @@ test('addInput', async () => {
   /**
    * Add 1 custom token authority input
    */
-  proposal.addInput(FAKE_TXID, 20, 70n, ADDR2, {
+  await proposal.addInput(FAKE_TXID, 20, 70n, ADDR2, {
     token: FAKE_UID,
     authorities: TOKEN_MINT_MASK,
     markAsSelected: false,

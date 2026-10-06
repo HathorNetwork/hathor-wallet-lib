@@ -118,7 +118,7 @@ class PartialTxProposal {
     const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
 
     for (const utxo of utxosDetails.utxos) {
-      this.addInput(utxo.txId, utxo.index, utxo.value, utxo.address, {
+      await this.addInput(utxo.txId, utxo.index, utxo.value, utxo.address, {
         token: utxo.tokenId,
         authorities: utxo.authorities,
         markAsSelected,
@@ -165,8 +165,10 @@ class PartialTxProposal {
    * @param {OutputValueType} [options.authorities=0] Authority information of the UTXO.
    * @param {string|null} [options.address=null] Address that owns the UTXO.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
+   *
+   * @returns {Promise<void>} Resolves once the utxo is marked, so it can't be selected again.
    */
-  addInput(
+  async addInput(
     hash: string,
     index: number,
     value: OutputValueType,
@@ -183,11 +185,11 @@ class PartialTxProposal {
   ) {
     this.resetSignatures();
 
-    if (markAsSelected) {
-      this.storage.utxoSelectAsInput({ txId: hash, index }, true);
-    }
-
     this.partialTx.addInput(hash, index, value, address, { token, authorities });
+
+    if (markAsSelected) {
+      await this.storage.utxoSelectAsInput({ txId: hash, index }, true);
+    }
   }
 
   /**
@@ -321,11 +323,11 @@ class PartialTxProposal {
   /**
    * Unmark all inputs currently on the partial tx as not `selected_as_input`.
    *
-   * @param {HathorWallet} wallet Wallet of the UTXOs.
+   * @returns {Promise<void>} Resolves once all inputs are unmarked.
    */
-  unmarkAsSelected() {
+  async unmarkAsSelected() {
     for (const input of this.partialTx.inputs) {
-      this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
     }
   }
 
