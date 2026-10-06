@@ -103,8 +103,8 @@ const tokens = {
       message: string;
       name: string;
       symbol: string;
-    }>(resolve => {
-      walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
+    }>((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenData.uid, resolve).catch(reject);
     });
 
     if (!response.success) {
