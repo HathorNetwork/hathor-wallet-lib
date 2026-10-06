@@ -41,6 +41,7 @@ import {
   ChangeOutputMode,
   IDataShieldedOutput,
   InputGeneratorInfo,
+  OutputKind,
   ShieldedOutputMode,
   ShieldedOutputProposal,
 } from '../shielded/types';
@@ -53,6 +54,7 @@ import { bestUtxoSelection } from '../utils/utxo';
 import {
   ISelectionReport,
   ITokenSelectionPolicy,
+  InputPreference,
   SplitFallback,
   buildTokenOutputProfiles,
   computeTokenPolicy,
@@ -165,8 +167,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * The change-output mode. `null` (the default) lets the automatic selection
    * rules decide per token: the change is shielded when shielded inputs are
    * spent or all of the token's outputs are shielded, transparent otherwise.
-   * `'transparent'` keeps every change output public, even when shielded
-   * inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
+   * `OutputKind.TRANSPARENT` keeps every change output transparent, even when
+   * shielded inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
    * output — the HTR fee-change and any custom-token change — shielded in
    * that mode; on a transaction with no other shielded element the change is
    * split into two halves to satisfy the two-shielded-outputs minimum.
@@ -199,7 +201,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
-   * @param {ChangeOutputMode|null} [options.changeShieldedMode=null] Change-output mode: null lets the automatic rules decide per token; 'transparent' keeps every change public; AMOUNT_SHIELDED/FULLY_SHIELDED emit every change output shielded in that mode
+   * @param {ChangeOutputMode|null} [options.changeShieldedMode=null] Change-output mode: null lets the automatic rules decide per token; OutputKind.TRANSPARENT keeps every change transparent; AMOUNT_SHIELDED/FULLY_SHIELDED emit every change output shielded in that mode
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
@@ -577,7 +579,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             null,
           override: changeModeOverride,
         });
-        if (tokenChangeMode === 'transparent') {
+        if (tokenChangeMode === OutputKind.TRANSPARENT) {
           keptOutputs.push(out);
           continue;
         }
@@ -679,8 +681,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     // HTR follows the same rules. With HTR outputs its policy was computed in
     // the analysis phase above; entering only to pay fees it follows the
-    // all-public rule: public inputs first, shielded only when public is
-    // insufficient, with the exact-single-shielded forcing.
+    // all-transparent rule: transparent inputs first, shielded only when
+    // transparent funds are insufficient, with the exact-single-shielded
+    // forcing.
     const htrPolicy =
       selectionPolicies.get(HTR_UID) ??
       computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy;
@@ -719,13 +722,16 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     });
     // Only a change that will actually be shielded needs a shielded-capable
     // destination; with no HTR change (an exact match) the address is unused.
-    if (htrChangeMode !== 'transparent' && findHtrChangeIndex(partialHtrTxData.outputs) !== -1) {
+    if (
+      htrChangeMode !== OutputKind.TRANSPARENT &&
+      findHtrChangeIndex(partialHtrTxData.outputs) !== -1
+    ) {
       assertChangeAddressSupportsShieldedChange();
     }
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,
-      htrChangeMode === 'transparent' ? null : htrChangeMode,
+      htrChangeMode === OutputKind.TRANSPARENT ? null : htrChangeMode,
       this.wallet,
       network,
       this.storage,
@@ -764,9 +770,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // address, or one derived from the wallet.
       const canHostShieldedChange = shieldedChangeAddress !== null || this.wallet !== null;
       // A change the caller pinned transparent should unshield no more than it
-      // must, so its extra HTR comes from the public pool first.
+      // must, so its extra HTR comes from the transparent pool first.
       const extraHtrPreference =
-        changeModeOverride === 'transparent' ? 'public' : htrPolicy.preference;
+        changeModeOverride === OutputKind.TRANSPARENT
+          ? OutputKind.TRANSPARENT
+          : htrPolicy.preference;
       // Shielded HTR spent entirely on the public fee is revealed by
       // subtraction unless shielded HTR outputs absorb it (the lone def is
       // HTR). Such a pull goes on until it can fund a shielded change of its
@@ -775,7 +783,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       const needsRemainder = (anyShielded: boolean): boolean =>
         anyShielded &&
         lone.token !== HTR_UID &&
-        changeModeOverride !== 'transparent' &&
+        changeModeOverride !== OutputKind.TRANSPARENT &&
         canHostShieldedChange;
       // Pulls the `owed` HTR the split still needs, on top of the `held`
       // transparent HTR change (0n when there is none).
@@ -1708,14 +1716,14 @@ interface PulledHtrKinds {
 async function pullExtraHtrUtxos(
   storage: IStorage,
   usedUtxos: Set<string>,
-  preference: 'shielded' | 'public',
+  preference: InputPreference,
   isEnough: (pulledSum: bigint, pulled: PulledHtrKinds) => boolean
 ): Promise<{ pulledInputs: IDataInput[]; pulledSum: bigint } & PulledHtrKinds> {
   const pulledInputs: IDataInput[] = [];
   let pulledSum = 0n;
   let anyShielded = false;
   let anyFullyShielded = false;
-  const passes: boolean[] = preference === 'shielded' ? [true, false] : [false, true];
+  const passes: boolean[] = preference === OutputKind.SHIELDED ? [true, false] : [false, true];
   for (const shieldedPass of passes) {
     if (isEnough(pulledSum, { anyShielded, anyFullyShielded })) {
       break;
@@ -1758,10 +1766,10 @@ function pulledHtrChangeMode(
   override: ChangeOutputMode | null,
   pulled: PulledHtrKinds
 ): ShieldedOutputMode | null {
-  if (override === 'transparent') {
+  if (override === OutputKind.TRANSPARENT) {
     return null;
   }
-  if (htrChangeMode !== 'transparent') {
+  if (htrChangeMode !== OutputKind.TRANSPARENT) {
     return htrChangeMode;
   }
   if (!pulled.anyShielded) {
@@ -1820,7 +1828,7 @@ export async function convertHtrChangeIfRequested(
   storage: IStorage,
   existingInputs: IDataInput[] = [],
   canSelectMoreHtr: boolean = true,
-  pullPreference: 'shielded' | 'public' = 'public',
+  pullPreference: InputPreference = OutputKind.TRANSPARENT,
   shieldedChangeAddress: string | null = null
 ): Promise<{ addedFee: bigint }> {
   if (!mode) return { addedFee: 0n };

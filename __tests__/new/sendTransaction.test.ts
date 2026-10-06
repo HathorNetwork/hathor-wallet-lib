@@ -22,7 +22,7 @@ import SendTransaction, {
   convertHtrChangeIfRequested,
   prepareSendTokensData,
 } from '../../src/new/sendTransaction';
-import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
+import { IShieldedCryptoProvider, OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   IDataInput,
@@ -1904,7 +1904,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
       const result = await sendTransaction.prepareTxData();
 
-      // The shielded 40n covers the 20n send; the public 100n must be untouched.
+      // The shielded 40n covers the 20n send; the transparent 100n must be untouched.
       const inputIds = result.inputs.map(i => i.txId);
       expect(inputIds).toContain('custom-sh-40');
       expect(inputIds).not.toContain('custom-pub-100');
@@ -1928,7 +1928,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         wallet,
         outputs: [
           // Two shielded outputs to addresses the wallet does not own + one
-          // public output: rule 3b with an external recipient.
+          // transparent output: rule 3b with an external recipient.
           {
             address: buildShieldedAddr(1),
             value: 10n,
@@ -1953,7 +1953,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const result = await sendTransaction.prepareTxData();
 
       // The smallest shielded UTXO (3n) is force-included even though the
-      // public 50n covers the 25n total on its own; the remainder is public.
+      // transparent 50n covers the 25n total on its own; the remainder is transparent.
       const inputIds = result.inputs.map(i => i.txId);
       expect(inputIds).toContain('custom-sh-3');
       expect(inputIds).toContain('custom-pub-50');
@@ -1996,11 +1996,11 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const dest = new Address(buildShieldedAddr(1), { network: testnetNetwork }).getSpendAddress()
         .base58;
       expect(result.shieldedOutputs!.every(o => o.address === dest)).toBe(true);
-      // Public inputs only — there was no shielded UTXO to force.
+      // Transparent inputs only — there was no shielded UTXO to force.
       expect(result.inputs.map(i => i.txId)).toContain('custom-pub-50');
     });
 
-    test('HTR entering only to pay fees stays in the public pool', async () => {
+    test('HTR entering only to pay fees stays in the transparent pool', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
           shielded: true,
@@ -2051,14 +2051,14 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const sendTransaction = new SendTransaction({
         wallet,
         outputs: [
-          // All-public HTR send that public funds alone cannot cover.
+          // All-transparent HTR send that transparent funds alone cannot cover.
           { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 12n, token: NATIVE_TOKEN_UID },
         ],
       });
 
       const result = await sendTransaction.prepareTxData();
 
-      // Public exhausted (8n) + shielded top-up (10n) = 18n. The 6n change is
+      // Transparent exhausted (8n) + shielded top-up (10n) = 18n. The 6n change is
       // shielded, mirroring the fully-shielded input, and — being the tx's
       // only shielded output — split: 6n − 2n (conversion fee) − 2n (split
       // fee) = 2n → halves 1n/1n. 18 = 12 + 1 + 1 + 4.
@@ -2184,7 +2184,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
       const result = await sendTransaction.prepareTxData();
 
-      // Both tokens match exactly, so the split fee is pulled. No public HTR is
+      // Both tokens match exactly, so the split fee is pulled. No transparent HTR is
       // left, so the pull falls back to the shielded 7n; its 6n remainder is an
       // HTR change (not the custom token), shielded and mirroring the AS input,
       // and it is the second shielded output. HTR: 1 + 7 = 2 (fees) + 6.
@@ -2203,7 +2203,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
-    test('a small public HTR change topped up from the shielded pool becomes shielded change', async () => {
+    test('a small transparent HTR change topped up from the shielded pool becomes shielded change', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
         poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
@@ -2227,7 +2227,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
       const result = await sendTransaction.prepareTxData();
 
-      // The public 3n pays the 2n FS fee, leaving a public 1n change that
+      // The transparent 3n pays the 2n FS fee, leaving a transparent 1n change that
       // cannot fund the 2n split fee. The top-up comes from the shielded 5n, so
       // the change (1n + 5n) is shielded (AS, mirroring the input) and becomes
       // the second shielded output: 6n − 1n = 5n. HTR: 3 + 5 = 3 (fees) + 5.
@@ -2271,7 +2271,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const result = await sendTransaction.prepareTxData();
 
       // Spending only the shielded 1n on the 1n split fee would reveal it by
-      // subtraction (every other HTR amount here is public), so the pull goes
+      // subtraction (every other HTR amount here is transparent), so the pull goes
       // on to the 7n and the remainder becomes the shielded HTR change.
       // HTR: 1 + 1 + 7 = 2 (fees) + 7.
       expect(result.inputs.map(i => i.txId).sort()).toEqual([
@@ -2444,7 +2444,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(3n);
     });
 
-    test('a small public HTR change with an exact top-up becomes a cheaper shielded change', async () => {
+    test('a small transparent HTR change with an exact top-up becomes a cheaper shielded change', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
         poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
@@ -2468,7 +2468,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
       const result = await sendTransaction.prepareTxData();
 
-      // The public 3n pays the 2n FS fee and leaves a 1n change; the shielded
+      // The transparent 3n pays the 2n FS fee and leaves a 1n change; the shielded
       // 1n would top it up to the 2n split fee exactly and be revealed by
       // subtraction. Together they make a 2n amount-shielded change that pays
       // a 1n fee and keeps 1n. HTR: 3 + 1 = 3 (fees) + 1.
@@ -2606,7 +2606,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
-    test("the 'transparent' override pulls public HTR first for the split fee", async () => {
+    test('the transparent override pulls transparent HTR first for the split fee', async () => {
       const storage = buildPoolStorage([
         poolUtxo('htr-sh-11', 11n, NATIVE_TOKEN_UID, {
           shielded: true,
@@ -2629,13 +2629,13 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
             shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
           },
         ],
-        changeShieldedMode: 'transparent',
+        changeShieldedMode: OutputKind.TRANSPARENT,
       });
 
       const result = await sendTransaction.prepareTxData();
 
       // The caller pinned the change transparent, so the split fee's surplus
-      // stays public, but it comes from the public 4n rather than unshielding
+      // stays transparent, but it comes from the transparent 4n rather than unshielding
       // the 5n. 15 = 10 + 3 + 2 (fees).
       const inputIds = result.inputs.map(i => i.txId);
       expect(inputIds).toContain('htr-pub-4');
@@ -2683,7 +2683,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
-    test("the 'transparent' override keeps the change public and unshields", async () => {
+    test('the transparent override keeps the change transparent and unshields', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-sh-10', 10n, CUSTOM_TOKEN, {
           shielded: true,
@@ -2702,12 +2702,12 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
             token: CUSTOM_TOKEN,
           },
         ],
-        changeShieldedMode: 'transparent',
+        changeShieldedMode: OutputKind.TRANSPARENT,
       });
 
       const result = await sendTransaction.prepareTxData();
 
-      // The whole shielded balance is spent into a public output with the
+      // The whole shielded balance is spent into a transparent output with the
       // change pinned transparent: a full unshield. No shielded outputs, the
       // excess blinding factor is computed, and no fee is owed (deposit token,
       // no shielded outputs) so no HTR is touched.
@@ -2838,7 +2838,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const sendTransaction = new SendTransaction({
         wallet,
         outputs: [
-          // All-public send that public funds cannot cover: the shielded
+          // All-transparent send that transparent funds cannot cover: the shielded
           // top-up makes the rules decide on a shielded change AFTER the
           // static pre-selection guard has already passed.
           { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 12n, token: NATIVE_TOKEN_UID },
@@ -2942,7 +2942,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const result = await sendTransaction.prepareTxData();
 
       // Exact match: no change of any kind, no shielded outputs, and the
-      // shielded input is fully unshielded into the public payment.
+      // shielded input is fully unshielded into the transparent payment.
       expect(result.outputs.find(o => (o as { isChange?: boolean }).isChange)).toBeUndefined();
       expect(result.shieldedOutputs ?? []).toHaveLength(0);
       expect(result.excessBlindingFactor).toBeDefined();

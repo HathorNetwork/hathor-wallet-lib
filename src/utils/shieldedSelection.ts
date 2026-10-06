@@ -7,7 +7,7 @@
 
 import { MAX_INPUTS, NATIVE_TOKEN_UID } from '../constants';
 import { IStorage, IUtxo, OutputValueType, UtxoSelectionAlgorithm } from '../types';
-import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
+import { ChangeOutputMode, OutputKind, ShieldedOutputMode } from '../shielded/types';
 import { bestUtxoSelection } from './utxo';
 
 /**
@@ -15,15 +15,15 @@ import { bestUtxoSelection } from './utxo';
  *
  * The wallet analyzes each token's outputs and decides, per token:
  *   - which UTXO pool the inputs come from (shielded-preferred vs
- *     public-preferred, with the other pool as a fallback);
+ *     transparent-preferred, with the other pool as a fallback);
  *   - whether a shielded input must be force-included;
  *   - whether the change output is shielded, and in which mode.
  *
  * The rules, per token T:
  *   - All T outputs shielded: prefer shielded inputs; change shielded, mode =
  *     most private among T's shielded outputs.
- *   - All T outputs public: prefer public inputs; shielded only when public is
- *     insufficient. Any shielded input used makes the change shielded, mode
+ *   - All T outputs transparent: prefer transparent inputs; shielded only when
+ *     transparent funds are insufficient. Any shielded input used makes the change shielded, mode
  *     mirroring the inputs. An exact match spent from exactly ONE shielded
  *     input forces a change (an extra input is added) so the input's value is
  *     not revealed by subtraction.
@@ -31,22 +31,23 @@ import { bestUtxoSelection } from './utxo';
  *     the output in two when the wallet has none); two or more shielded
  *     outputs force one only when some of them leave the wallet. Change is
  *     shielded iff a shielded input was used or all T outputs are shielded.
- *   - HTR entering only to pay fees behaves like the all-public case.
+ *   - HTR entering only to pay fees behaves like the all-transparent case.
  *
  * An explicit `changeShieldedMode` always wins over the change-mode rules:
- * 'transparent' keeps every change public, AS/FS forces that mode.
+ * `OutputKind.TRANSPARENT` keeps every change transparent, AS/FS forces that
+ * mode.
  */
 
 /** Which UTXO pool a token's selection draws from first. */
-export type InputPreference = 'shielded' | 'public';
+export type InputPreference = OutputKind;
 
 /** Per-token digest of the caller's outputs. */
 export interface ITokenOutputProfile {
   token: string;
   /** Outputs carrying a shielded mode. */
   shieldedOutputCount: number;
-  /** Transparent outputs, including data outputs (public HTR). */
-  publicOutputCount: number;
+  /** Transparent outputs, including data outputs (transparent HTR). */
+  transparentOutputCount: number;
   /** Any FULLY_SHIELDED among the token's shielded outputs. */
   hasFullyShieldedOutput: boolean;
   /** All of the token's shielded outputs pay addresses this wallet owns. */
@@ -56,7 +57,7 @@ export interface ITokenOutputProfile {
 /** What the selection must do for one token. */
 export interface ITokenSelectionPolicy {
   preference: InputPreference;
-  /** Pre-include the smallest shielded UTXO even when public funds suffice. */
+  /** Pre-include the smallest shielded UTXO even when transparent funds suffice. */
   forceShieldedInput: boolean;
   /**
    * On an exact match spent from exactly one shielded input, add the smallest
@@ -106,7 +107,7 @@ export async function buildTokenOutputProfiles(
       profile = {
         token,
         shieldedOutputCount: 0,
-        publicOutputCount: 0,
+        transparentOutputCount: 0,
         hasFullyShieldedOutput: false,
         allShieldedOutputsMine: true,
       };
@@ -125,7 +126,7 @@ export async function buildTokenOutputProfiles(
         profile.allShieldedOutputsMine = false;
       }
     } else {
-      profile.publicOutputCount += 1;
+      profile.transparentOutputCount += 1;
     }
   }
   return profiles;
@@ -133,7 +134,7 @@ export async function buildTokenOutputProfiles(
 
 /** Whether a token's policy needs the shielded-pool availability probe. */
 export function needsAvailabilityProbe(profile: ITokenOutputProfile | undefined): boolean {
-  if (!profile || profile.shieldedOutputCount === 0 || profile.publicOutputCount === 0) {
+  if (!profile || profile.shieldedOutputCount === 0 || profile.transparentOutputCount === 0) {
     // Not the mixed case: no forcing, so availability is irrelevant.
     return false;
   }
@@ -170,7 +171,7 @@ export async function hasShieldedUtxo(
  * shielded input the rules require.
  *
  * `profile === undefined` means the token appears in no output — HTR entering
- * only to pay fees — which follows the all-public-outputs rule.
+ * only to pay fees — which follows the all-transparent-outputs rule.
  */
 export function computeTokenPolicy(
   profile: ITokenOutputProfile | undefined,
@@ -180,13 +181,13 @@ export function computeTokenPolicy(
   // The exact-match forcing exists solely to create a change output for the
   // shielded value to hide in; when the caller pinned the change transparent
   // the forced input would buy nothing.
-  const allowExactForcing = override !== 'transparent';
+  const allowExactForcing = override !== OutputKind.TRANSPARENT;
 
   if (!profile || profile.shieldedOutputCount === 0) {
-    // Fee-only HTR, or all outputs public.
+    // Fee-only HTR, or all outputs transparent.
     return {
       policy: {
-        preference: 'public',
+        preference: OutputKind.TRANSPARENT,
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: allowExactForcing,
       },
@@ -194,12 +195,12 @@ export function computeTokenPolicy(
     };
   }
 
-  if (profile.publicOutputCount === 0) {
+  if (profile.transparentOutputCount === 0) {
     // All outputs shielded: draw from the shielded pool first. A lone output
     // with an exact match is resolved by the structural split, not by forcing.
     return {
       policy: {
-        preference: 'shielded',
+        preference: OutputKind.SHIELDED,
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: false,
       },
@@ -212,7 +213,7 @@ export function computeTokenPolicy(
   if (!wantsShieldedInput) {
     return {
       policy: {
-        preference: 'public',
+        preference: OutputKind.TRANSPARENT,
         forceShieldedInput: false,
         forceChangeOnExactSingleShielded: false,
       },
@@ -222,7 +223,7 @@ export function computeTokenPolicy(
   if (hasShieldedUtxoForToken) {
     return {
       policy: {
-        preference: 'public',
+        preference: OutputKind.TRANSPARENT,
         forceShieldedInput: true,
         forceChangeOnExactSingleShielded: false,
       },
@@ -233,7 +234,7 @@ export function computeTokenPolicy(
   // splitting a shielded output so no single input↔output mapping is revealed.
   return {
     policy: {
-      preference: 'public',
+      preference: OutputKind.TRANSPARENT,
       forceShieldedInput: false,
       forceChangeOnExactSingleShielded: false,
     },
@@ -258,11 +259,13 @@ export function decideChangeMode(args: {
   }
 
   const allOutputsShielded =
-    profile !== undefined && profile.publicOutputCount === 0 && profile.shieldedOutputCount > 0;
+    profile !== undefined &&
+    profile.transparentOutputCount === 0 &&
+    profile.shieldedOutputCount > 0;
   const shieldedInputUsed = (report?.shieldedInputCount ?? 0) > 0;
 
   if (!allOutputsShielded && !shieldedInputUsed) {
-    return 'transparent';
+    return OutputKind.TRANSPARENT;
   }
 
   // Mode mirrors the outputs first, then the inputs: the most private mode
@@ -329,7 +332,7 @@ export async function shieldedAwareSelection(
   // Unless the forced input already covers it, take the rest from the preferred
   // pool alone when it can.
   if (sum < amount) {
-    const preferShielded = policy.preference === 'shielded';
+    const preferShielded = policy.preference === OutputKind.SHIELDED;
     const primary = await bestUtxoSelection(storage, token, amount - sum, {
       shielded: preferShielded,
       filter_method: notPicked,

@@ -423,8 +423,8 @@ export interface SendTransactionFullnodeOptions {
  * @property changeShieldedMode The change-output mode. Absent or null: the
  *   wallet's automatic selection rules decide per token (change is shielded
  *   when shielded inputs are spent or all of a token's outputs are shielded;
- *   transparent otherwise). Explicit 'transparent': every change output stays
- *   public, even when shielded inputs are spent. Explicit AMOUNT_SHIELDED or
+ *   transparent otherwise). Explicit OutputKind.TRANSPARENT: every change
+ *   output stays transparent, even when shielded inputs are spent. Explicit AMOUNT_SHIELDED or
  *   FULLY_SHIELDED: every change output — the HTR fee-change and custom-token
  *   change — is emitted shielded in that mode; on a transaction with no other
  *   shielded element the change is split into two halves to satisfy the

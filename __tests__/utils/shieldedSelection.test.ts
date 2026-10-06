@@ -8,7 +8,7 @@
 import { MAX_INPUTS } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import { IUtxo } from '../../src/types';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import {
   ISelectionReport,
   buildTokenOutputProfiles,
@@ -36,7 +36,7 @@ function utxo(partial: Partial<IUtxo> & { txId: string; value: bigint }): IUtxo 
 
 /**
  * Pools for token '00':
- *   public   [ 10n, 50n, 100n ]
+ *   transparent   [ 10n, 50n, 100n ]
  *   shielded [ 5n (AS), 40n (FS), 80n (AS) ]
  */
 async function makeStorage(extra: IUtxo[] = []): Promise<Storage> {
@@ -65,29 +65,29 @@ async function makeStorage(extra: IUtxo[] = []): Promise<Storage> {
 const ids = (result: { utxos: IUtxo[] }) => result.utxos.map(u => u.txId).sort();
 
 describe('shieldedAwareSelection', () => {
-  const publicPolicy = {
-    preference: 'public' as const,
+  const transparentPolicy = {
+    preference: OutputKind.TRANSPARENT,
     forceShieldedInput: false,
     forceChangeOnExactSingleShielded: false,
   };
-  const shieldedPolicy = { ...publicPolicy, preference: 'shielded' as const };
+  const shieldedPolicy = { ...transparentPolicy, preference: OutputKind.SHIELDED };
 
-  it('prefer-public leaves the shielded pool untouched when public covers', async () => {
+  it('prefer-transparent leaves the shielded pool untouched when transparent covers', async () => {
     const storage = await makeStorage();
-    const result = await shieldedAwareSelection(storage, '00', 60n, publicPolicy);
+    const result = await shieldedAwareSelection(storage, '00', 60n, transparentPolicy);
     expect(result.utxos.every(u => !u.shielded)).toBe(true);
     expect(result.amount).toBeGreaterThanOrEqual(60n);
   });
 
-  it('prefer-public exact match inside the pool short-circuits to that UTXO', async () => {
+  it('prefer-transparent exact match inside the pool short-circuits to that UTXO', async () => {
     const storage = await makeStorage();
-    const result = await shieldedAwareSelection(storage, '00', 50n, publicPolicy);
+    const result = await shieldedAwareSelection(storage, '00', 50n, transparentPolicy);
     expect(ids(result)).toEqual(['pub-50']);
   });
 
-  it('prefer-shielded exhausts the shielded pool before public', async () => {
+  it('prefer-shielded exhausts the shielded pool before transparent', async () => {
     const storage = await makeStorage();
-    // 5+40+80 = 125 shielded; ask more so public must top up.
+    // 5+40+80 = 125 shielded; ask more so transparent must top up.
     const result = await shieldedAwareSelection(storage, '00', 130n, shieldedPolicy);
     const shieldedPicked = result.utxos
       .filter(u => u.shielded)
@@ -104,10 +104,10 @@ describe('shieldedAwareSelection', () => {
     expect(result.utxos.every(u => u.shielded)).toBe(true);
   });
 
-  it('forced inclusion picks the smallest shielded UTXO even when public covers', async () => {
+  it('forced inclusion picks the smallest shielded UTXO even when transparent covers', async () => {
     const storage = await makeStorage();
     const result = await shieldedAwareSelection(storage, '00', 60n, {
-      ...publicPolicy,
+      ...transparentPolicy,
       forceShieldedInput: true,
     });
     expect(result.utxos.map(u => u.txId)).toContain('sh-5');
@@ -115,7 +115,7 @@ describe('shieldedAwareSelection', () => {
   });
 
   it('exact match from a single shielded input forces the smallest other shielded UTXO', async () => {
-    // Public funds (3n) cannot pay 40n, and the shielded top-up matches the
+    // Transparent funds (3n) cannot pay 40n, and the shielded top-up matches the
     // remaining 37n exactly with a single shielded input.
     const store = new MemoryStore();
     await store.saveUtxo(utxo({ txId: 'tiny-pub', value: 3n }));
@@ -129,7 +129,7 @@ describe('shieldedAwareSelection', () => {
       '00',
       40n,
       // The policy shape R2 produces.
-      { ...publicPolicy, forceChangeOnExactSingleShielded: true },
+      { ...transparentPolicy, forceChangeOnExactSingleShielded: true },
       r => {
         report = r;
       }
@@ -143,8 +143,8 @@ describe('shieldedAwareSelection', () => {
     expect(report!.shieldedInputCount).toBe(2);
   });
 
-  it('the change-forcing UTXO is shielded even when public UTXOs are left', async () => {
-    // 260 public 1n UTXOs: the sweep stops at the input limit and leaves some.
+  it('the change-forcing UTXO is shielded even when transparent UTXOs are left', async () => {
+    // 260 transparent 1n UTXOs: the sweep stops at the input limit and leaves some.
     const store = new MemoryStore();
     for (let i = 0; i < 260; i += 1) {
       await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
@@ -156,13 +156,13 @@ describe('shieldedAwareSelection', () => {
     const storage = new Storage(store);
 
     const result = await shieldedAwareSelection(storage, '00', 353n, {
-      ...publicPolicy,
+      ...transparentPolicy,
       forceChangeOnExactSingleShielded: true,
     });
 
-    // 253 public UTXOs and the shielded 100n match 353n exactly with a single
+    // 253 transparent UTXOs and the shielded 100n match 353n exactly with a single
     // shielded input. The change will equal the extra UTXO's value, so the
-    // extra is the shielded 7n, not one of the public 1n left over.
+    // extra is the shielded 7n, not one of the transparent 1n left over.
     const picked = result.utxos.map(u => u.txId);
     expect(picked).toContain('sh-100');
     expect(picked).toContain('sh-7');
@@ -178,7 +178,7 @@ describe('shieldedAwareSelection', () => {
     const storage = new Storage(store);
 
     const result = await shieldedAwareSelection(storage, '00', 40n, {
-      preference: 'shielded',
+      preference: OutputKind.SHIELDED,
       forceShieldedInput: false,
       forceChangeOnExactSingleShielded: true,
     });
@@ -194,7 +194,7 @@ describe('shieldedAwareSelection', () => {
     const storage = new Storage(store);
 
     const result = await shieldedAwareSelection(storage, '00', 40n, {
-      preference: 'shielded',
+      preference: OutputKind.SHIELDED,
       forceShieldedInput: false,
       forceChangeOnExactSingleShielded: true,
     });
@@ -203,7 +203,7 @@ describe('shieldedAwareSelection', () => {
   });
 
   it('sweeping an insufficient preferred pool stays within the input limit', async () => {
-    // 300 public 1n UTXOs cannot pay 500n; sweeping all of them before the
+    // 300 transparent 1n UTXOs cannot pay 500n; sweeping all of them before the
     // shielded top-up would build a tx with more inputs than a tx can hold.
     const store = new MemoryStore();
     for (let i = 0; i < 300; i += 1) {
@@ -215,12 +215,12 @@ describe('shieldedAwareSelection', () => {
     const storage = new Storage(store);
 
     const result = await shieldedAwareSelection(storage, '00', 500n, {
-      ...publicPolicy,
+      ...transparentPolicy,
       forceChangeOnExactSingleShielded: true,
     });
 
     // The sweep leaves room for the top-up and for a change-forcing UTXO:
-    // 253 public UTXOs, then the shielded 1000n.
+    // 253 transparent UTXOs, then the shielded 1000n.
     expect(result.utxos.map(u => u.txId)).toContain('sh-1000');
     expect(result.utxos).toHaveLength(MAX_INPUTS - 1);
     expect(result.amount).toBe(1253n);
@@ -228,8 +228,8 @@ describe('shieldedAwareSelection', () => {
 
   it('insufficient across both pools reports the combined available sum', async () => {
     const storage = await makeStorage();
-    // public 160 + shielded 125 = 285 total.
-    const result = await shieldedAwareSelection(storage, '00', 300n, publicPolicy);
+    // transparent 160 + shielded 125 = 285 total.
+    const result = await shieldedAwareSelection(storage, '00', 300n, transparentPolicy);
     expect(result.utxos).toEqual([]);
     expect(result.amount).toBe(0n);
     expect(result.available).toBe(285n);
@@ -260,26 +260,26 @@ describe('hasShieldedUtxo / needsAvailabilityProbe', () => {
       hasFullyShieldedOutput: false,
       allShieldedOutputsMine: true,
     };
-    // fee-only / all-public / all-shielded: no probe
+    // fee-only / all-transparent / all-shielded: no probe
     expect(needsAvailabilityProbe(undefined)).toBe(false);
-    expect(needsAvailabilityProbe({ ...base, shieldedOutputCount: 0, publicOutputCount: 2 })).toBe(
-      false
-    );
-    expect(needsAvailabilityProbe({ ...base, shieldedOutputCount: 2, publicOutputCount: 0 })).toBe(
-      false
-    );
+    expect(
+      needsAvailabilityProbe({ ...base, shieldedOutputCount: 0, transparentOutputCount: 2 })
+    ).toBe(false);
+    expect(
+      needsAvailabilityProbe({ ...base, shieldedOutputCount: 2, transparentOutputCount: 0 })
+    ).toBe(false);
     // 3a always probes; 3b only when an output leaves the wallet
-    expect(needsAvailabilityProbe({ ...base, shieldedOutputCount: 1, publicOutputCount: 1 })).toBe(
-      true
-    );
-    expect(needsAvailabilityProbe({ ...base, shieldedOutputCount: 2, publicOutputCount: 1 })).toBe(
-      false
-    );
+    expect(
+      needsAvailabilityProbe({ ...base, shieldedOutputCount: 1, transparentOutputCount: 1 })
+    ).toBe(true);
+    expect(
+      needsAvailabilityProbe({ ...base, shieldedOutputCount: 2, transparentOutputCount: 1 })
+    ).toBe(false);
     expect(
       needsAvailabilityProbe({
         ...base,
         shieldedOutputCount: 2,
-        publicOutputCount: 1,
+        transparentOutputCount: 1,
         allShieldedOutputsMine: false,
       })
     ).toBe(true);
@@ -289,38 +289,38 @@ describe('hasShieldedUtxo / needsAvailabilityProbe', () => {
 describe('computeTokenPolicy', () => {
   const profile = (
     shieldedOutputCount: number,
-    publicOutputCount: number,
+    transparentOutputCount: number,
     allMine = true,
     hasFS = false
   ) => ({
     token: '00',
     shieldedOutputCount,
-    publicOutputCount,
+    transparentOutputCount,
     hasFullyShieldedOutput: hasFS,
     allShieldedOutputsMine: allMine,
   });
 
   it('R1: all shielded prefers the shielded pool', () => {
     const { policy, needsSplitFallback } = computeTokenPolicy(profile(2, 0), true, null);
-    expect(policy.preference).toBe('shielded');
+    expect(policy.preference).toBe(OutputKind.SHIELDED);
     expect(policy.forceShieldedInput).toBe(false);
     expect(needsSplitFallback).toBe('none');
   });
 
-  it('R2: all public prefers the public pool with exact-match forcing', () => {
+  it('R2: all transparent prefers the transparent pool with exact-match forcing', () => {
     const { policy } = computeTokenPolicy(profile(0, 2), true, null);
-    expect(policy.preference).toBe('public');
+    expect(policy.preference).toBe(OutputKind.TRANSPARENT);
     expect(policy.forceChangeOnExactSingleShielded).toBe(true);
   });
 
   it('fee-only HTR follows R2', () => {
     const { policy } = computeTokenPolicy(undefined, true, null);
-    expect(policy.preference).toBe('public');
+    expect(policy.preference).toBe(OutputKind.TRANSPARENT);
     expect(policy.forceChangeOnExactSingleShielded).toBe(true);
   });
 
-  it("the 'transparent' override disables exact-match forcing", () => {
-    const { policy } = computeTokenPolicy(profile(0, 2), true, 'transparent');
+  it('the transparent override disables exact-match forcing', () => {
+    const { policy } = computeTokenPolicy(profile(0, 2), true, OutputKind.TRANSPARENT);
     expect(policy.forceChangeOnExactSingleShielded).toBe(false);
   });
 
@@ -354,10 +354,10 @@ describe('computeTokenPolicy', () => {
 });
 
 describe('decideChangeMode', () => {
-  const profile = (shieldedOutputCount: number, publicOutputCount: number, hasFS = false) => ({
+  const profile = (shieldedOutputCount: number, transparentOutputCount: number, hasFS = false) => ({
     token: '00',
     shieldedOutputCount,
-    publicOutputCount,
+    transparentOutputCount,
     hasFullyShieldedOutput: hasFS,
     allShieldedOutputsMine: true,
   });
@@ -372,9 +372,9 @@ describe('decideChangeMode', () => {
       decideChangeMode({
         profile: profile(2, 0, true),
         report: report(3, true),
-        override: 'transparent',
+        override: OutputKind.TRANSPARENT,
       })
-    ).toBe('transparent');
+    ).toBe(OutputKind.TRANSPARENT);
     expect(
       decideChangeMode({ profile: profile(0, 2), report: report(0), override: AMOUNT_SHIELDED })
     ).toBe(AMOUNT_SHIELDED);
@@ -389,9 +389,9 @@ describe('decideChangeMode', () => {
     ).toBe(AMOUNT_SHIELDED);
   });
 
-  it('R2: no shielded input, public outputs → transparent change', () => {
+  it('R2: no shielded input, transparent outputs → transparent change', () => {
     expect(decideChangeMode({ profile: profile(0, 2), report: report(0), override: null })).toBe(
-      'transparent'
+      OutputKind.TRANSPARENT
     );
   });
 
@@ -412,13 +412,13 @@ describe('decideChangeMode', () => {
 
   it('R3: mixed without a shielded input keeps the change transparent', () => {
     expect(decideChangeMode({ profile: profile(2, 1), report: report(0), override: null })).toBe(
-      'transparent'
+      OutputKind.TRANSPARENT
     );
   });
 
   it('fee-only HTR: shielded input shields the change mirroring inputs', () => {
     expect(decideChangeMode({ profile: undefined, report: report(0), override: null })).toBe(
-      'transparent'
+      OutputKind.TRANSPARENT
     );
     expect(decideChangeMode({ profile: undefined, report: report(2, true), override: null })).toBe(
       FULLY_SHIELDED
@@ -437,19 +437,19 @@ describe('buildTokenOutputProfiles', () => {
         { token: '01', address: 'theirs', shieldedMode: FULLY_SHIELDED },
         { token: '01', address: 'pub-dest' },
         { address: 'pub-htr' }, // token absent → HTR
-        {}, // data output → public HTR
+        {}, // data output → transparent HTR
       ],
       storage
     );
 
     const p01 = profiles.get('01')!;
     expect(p01.shieldedOutputCount).toBe(2);
-    expect(p01.publicOutputCount).toBe(1);
+    expect(p01.transparentOutputCount).toBe(1);
     expect(p01.hasFullyShieldedOutput).toBe(true);
     expect(p01.allShieldedOutputsMine).toBe(false);
 
     const htr = profiles.get('00')!;
     expect(htr.shieldedOutputCount).toBe(0);
-    expect(htr.publicOutputCount).toBe(2);
+    expect(htr.transparentOutputCount).toBe(2);
   });
 });
