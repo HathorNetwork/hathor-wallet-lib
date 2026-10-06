@@ -562,69 +562,61 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // the HTR pass (so its selection funds the resulting larger total fee).
     // HTR change is handled separately, after selection, by
     // convertHtrChangeIfRequested.
-    const changeWallet = this.wallet;
-    {
-      const keptOutputs: IDataOutput[] = [];
-      for (const out of partialTxData.outputs) {
-        const withToken = out as IDataOutputWithToken;
-        if (withToken.token === HTR_UID || out.isChange !== true) {
-          keptOutputs.push(out);
-          continue;
-        }
-        const tokenChangeMode = decideChangeMode({
-          profile: outputProfiles.get(withToken.token),
-          report:
-            selectionReports.get(withToken.token) ??
-            userInputSummaries.get(withToken.token) ??
-            null,
-          override: changeModeOverride,
-        });
-        if (tokenChangeMode === OutputKind.TRANSPARENT) {
-          keptOutputs.push(out);
-          continue;
-        }
-        assertChangeAddressSupportsShieldedChange();
-        if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
-          throw new SendTxError(
-            `Cannot shield custom-token change: the transaction already has the ` +
-              `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
-          );
-        }
-        // The change destination: an explicit new-format changeAddress, else
-        // the wallet's own shielded address. A rules-shielded change with
-        // neither available is a hard error — never a silent transparent
-        // downgrade.
-        let shieldedAddress: string;
-        if (shieldedChangeAddress) {
-          shieldedAddress = shieldedChangeAddress;
-        } else if (changeWallet) {
-          ({ address: shieldedAddress } = await changeWallet.getCurrentAddress(
-            {},
-            { legacy: false }
-          ));
-        } else {
-          throw new SendTxError(
-            'A shielded change is required but no wallet is available to derive its address.'
-          );
-        }
-        const addressObj = new Address(shieldedAddress, { network });
-        if (!addressObj.isShielded()) {
-          throw new SendTxError(
-            'Wallet did not return a shielded address for custom-token change conversion.'
-          );
-        }
-        shieldedOutputDefs.push({
-          address: addressObj.getSpendAddress().base58,
-          value: withToken.value,
-          token: withToken.token,
-          scanPubkey: addressObj.getScanPubkey().toString('hex'),
-          shieldedMode: tokenChangeMode,
-          shieldedAddress,
-          isChange: true,
-        });
+    const keptOutputs: IDataOutput[] = [];
+    for (const out of partialTxData.outputs) {
+      const withToken = out as IDataOutputWithToken;
+      if (withToken.token === HTR_UID || out.isChange !== true) {
+        keptOutputs.push(out);
+        continue;
       }
-      partialTxData.outputs = keptOutputs;
+      const tokenChangeMode = decideChangeMode({
+        profile: outputProfiles.get(withToken.token),
+        report:
+          selectionReports.get(withToken.token) ?? userInputSummaries.get(withToken.token) ?? null,
+        override: changeModeOverride,
+      });
+      if (tokenChangeMode === OutputKind.TRANSPARENT) {
+        keptOutputs.push(out);
+        continue;
+      }
+      assertChangeAddressSupportsShieldedChange();
+      if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+        throw new SendTxError(
+          `Cannot shield custom-token change: the transaction already has the ` +
+            `maximum ${MAX_SHIELDED_OUTPUTS} shielded outputs.`
+        );
+      }
+      // The change destination: an explicit new-format changeAddress, else
+      // the wallet's own shielded address. A rules-shielded change with
+      // neither available is a hard error — never a silent transparent
+      // downgrade.
+      let shieldedAddress: string;
+      if (shieldedChangeAddress) {
+        shieldedAddress = shieldedChangeAddress;
+      } else if (this.wallet) {
+        ({ address: shieldedAddress } = await this.wallet.getCurrentAddress({}, { legacy: false }));
+      } else {
+        throw new SendTxError(
+          'A shielded change is required but no wallet is available to derive its address.'
+        );
+      }
+      const addressObj = new Address(shieldedAddress, { network });
+      if (!addressObj.isShielded()) {
+        throw new SendTxError(
+          'Wallet did not return a shielded address for custom-token change conversion.'
+        );
+      }
+      shieldedOutputDefs.push({
+        address: addressObj.getSpendAddress().base58,
+        value: withToken.value,
+        token: withToken.token,
+        scanPubkey: addressObj.getScanPubkey().toString('hex'),
+        shieldedMode: tokenChangeMode,
+        shieldedAddress,
+        isChange: true,
+      });
     }
+    partialTxData.outputs = keptOutputs;
 
     const partialInputs = [...txData.inputs, ...partialTxData.inputs];
     const partialOutputs = [...txData.outputs, ...partialTxData.outputs] as IDataOutputWithToken[];
