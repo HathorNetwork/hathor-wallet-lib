@@ -162,26 +162,23 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   changeAddress: string | null;
 
   /**
-   * If set, EVERY change output the tx would otherwise emit transparently is
-   * rewritten as a shielded output in the given mode (FullShielded or
-   * AmountShielded) — both the HTR fee-change and any custom-token change.
+   * The change-output mode. `null` (the default) lets the automatic selection
+   * rules decide per token: the change is shielded when shielded inputs are
+   * spent or all of the token's outputs are shielded, transparent otherwise.
+   * `'transparent'` keeps every change output public, even when shielded
+   * inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
+   * output — the HTR fee-change and any custom-token change — shielded in
+   * that mode; on a transaction with no other shielded element the change is
+   * split into two halves to satisfy the two-shielded-outputs minimum.
+   *
    * The HTR change covers the surplus over everything HTR-denominated in the
    * tx: any HTR being sent plus ALL fees (fees are always charged in HTR,
    * including the per-shielded-output fees), so its shielded value is the
    * change minus its own shielded-output fee. Custom-token change carries its
-   * FULL value — the fee is HTR, a different token. Defaults to `null`, which
-   * preserves the long-standing transparent-change behavior.
-   *
-   * Only takes effect when the tx already carries caller-requested shielded
-   * outputs: on a purely transparent send, shielding the change adds no
-   * privacy and would risk a lone shielded output (violates the >= 2 rule).
-   * Used by callers that also pass shielded recipient outputs and want the
-   * change to match the same privacy mode — otherwise the transparent change
-   * would correlate the sender with an otherwise-private send. When the HTR
-   * change alone is too small to fund its own shielded-output fee, additional
-   * HTR UTXOs are pulled to cover it; if none are available the send throws
-   * rather than downgrade to transparent change (see
-   * convertHtrChangeIfRequested).
+   * FULL value — the fee is HTR, a different token. When the HTR change alone
+   * is too small to fund its own shielded-output fee, additional HTR UTXOs are
+   * pulled to cover it; if none are available the send throws rather than
+   * downgrade to transparent change (see convertHtrChangeIfRequested).
    */
   changeShieldedMode: ChangeOutputMode | null;
 
@@ -1608,14 +1605,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 }
 
 /**
- * Check the tx data and propose inputs and outputs to complete the transaction.
- * We will only check a single token
- *
- * @param {IStorage} storage
- * @param {Pick<IDataTx, 'inputs' | 'outputs'>} dataTx inputs and outputs from dataTx
- * @param {IUtxoSelectionOptions} options
- */
-/**
  * Replace one shielded output definition with two floor/ceil halves at the
  * same destination, mode and token.
  *
@@ -1670,6 +1659,14 @@ export function splitShieldedDefForToken(
   splitShieldedDef(defs, targetIndex);
 }
 
+/**
+ * Check the tx data and propose inputs and outputs to complete the transaction.
+ * We will only check a single token
+ *
+ * @param {IStorage} storage
+ * @param {Pick<IDataTx, 'inputs' | 'outputs'>} dataTx inputs and outputs from dataTx
+ * @param {IUtxoSelectionOptions} options
+ */
 export async function prepareSendTokensData(
   storage: IStorage,
   dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,

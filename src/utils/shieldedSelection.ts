@@ -289,6 +289,10 @@ export function decideChangeMode(args: {
  *      smallest extra UTXO from either pool so a change output exists — when
  *      the wallet holds nothing else, proceed unforced (spending the whole
  *      balance would otherwise be impossible).
+ *
+ * The result either covers `amount` or, when even the top-up falls short, is
+ * empty, which the caller reports as insufficient funds (the same contract as
+ * `bestUtxoSelection`).
  */
 export async function shieldedAwareSelection(
   storage: IStorage,
@@ -307,6 +311,7 @@ export async function shieldedAwareSelection(
   };
   const notPicked = (utxo: IUtxo): boolean => !pickedIds.has(`${utxo.txId}:${utxo.index}`);
 
+  // The policy requires a shielded input: take the smallest one first.
   if (policy.forceShieldedInput) {
     for await (const utxo of storage.selectUtxos({
       token,
@@ -320,6 +325,8 @@ export async function shieldedAwareSelection(
     }
   }
 
+  // Unless the forced input already covers it, take the rest from the preferred
+  // pool alone when it can.
   if (sum < amount) {
     const preferShielded = policy.preference === 'shielded';
     const primary = await bestUtxoSelection(storage, token, amount - sum, {
@@ -346,6 +353,8 @@ export async function shieldedAwareSelection(
           shielded: !preferShielded,
           filter_method: notPicked,
         });
+        // Both pools together fall short: return an empty selection, as
+        // bestUtxoSelection does, with the total that was available.
         if (secondary.utxos.length === 0) {
           return {
             utxos: [],
@@ -358,6 +367,8 @@ export async function shieldedAwareSelection(
     }
   }
 
+  // An exact match spent from a single shielded input would reveal its value
+  // by subtraction, so one more UTXO is added for a change output to hide it.
   if (policy.forceChangeOnExactSingleShielded && sum === amount) {
     const shieldedCount = picked.filter(utxo => utxo.shielded).length;
     if (shieldedCount === 1) {
