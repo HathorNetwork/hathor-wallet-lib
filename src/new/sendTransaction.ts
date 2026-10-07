@@ -540,6 +540,15 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
       return shieldedChangeHostable;
     };
+    // Shielding a token's change in place of a shielded input the wallet lacks
+    // is optional: it is skipped when the tx has no room for another shielded
+    // output or the wallet has no shielded address to receive it.
+    const shieldsChangeInstead = async (token: string): Promise<boolean> => {
+      if (!shieldedChangeTokens.has(token) || shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+        return false;
+      }
+      return canHostShieldedChange();
+    };
     // The static guard above only sees explicit shielded outputs or an
     // explicit AS/FS override. The automatic rules can ALSO decide on a
     // shielded change after selection (e.g. a shielded top-up under R2, or a
@@ -596,7 +605,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         report:
           selectionReports.get(withToken.token) ?? userInputSummaries.get(withToken.token) ?? null,
         override: changeModeOverride,
-        shieldChange: shieldedChangeTokens.has(withToken.token) && (await canHostShieldedChange()),
+        shieldChange: await shieldsChangeInstead(withToken.token),
       });
       if (tokenChangeMode === OutputKind.TRANSPARENT) {
         keptOutputs.push(out);
@@ -733,26 +742,25 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       report: selectionReports.get(HTR_UID) ?? userInputSummaries.get(HTR_UID) ?? null,
       override: changeModeOverride,
     };
-    const htrShieldChange = shieldedChangeTokens.has(HTR_UID) && (await canHostShieldedChange());
-    let htrChangeMode = decideChangeMode({ ...htrChangeArgs, shieldChange: htrShieldChange });
-    // A change shielded only in place of a missing shielded input stays
-    // transparent when it cannot pay its own fee; the structural pass then
-    // splits the lone shielded output, as it does when there is no change.
+    const htrShieldChange = await shieldsChangeInstead(HTR_UID);
+    const htrChangeMode = decideChangeMode({ ...htrChangeArgs, shieldChange: htrShieldChange });
     const htrChangeIndex = findHtrChangeIndex(partialHtrTxData.outputs);
-    if (
-      htrShieldChange &&
-      htrChangeMode !== OutputKind.TRANSPARENT &&
-      htrChangeIndex !== -1 &&
-      partialHtrTxData.outputs[htrChangeIndex].value <= shieldedOutputFee(htrChangeMode) &&
-      decideChangeMode(htrChangeArgs) === OutputKind.TRANSPARENT
-    ) {
-      htrChangeMode = OutputKind.TRANSPARENT;
-    }
     // Only a change that will actually be shielded needs a shielded-capable
     // destination; with no HTR change (an exact match) the address is unused.
     if (htrChangeMode !== OutputKind.TRANSPARENT && htrChangeIndex !== -1) {
       assertChangeAddressSupportsShieldedChange();
     }
+    // A change too small for its own fee, with no HTR to add to it, may stay as
+    // it is in two cases. It is shielded only in place of a missing shielded
+    // input, so it carries no shielded value. Or the tx's only shielded output
+    // is split next, and that split's fee takes the whole change, so no
+    // transparent change is left.
+    const htrChangeMayStay =
+      (htrShieldChange && decideChangeMode(htrChangeArgs) === OutputKind.TRANSPARENT) ||
+      (htrChangeIndex !== -1 &&
+        shieldedOutputDefs.length === 1 &&
+        partialHtrTxData.outputs[htrChangeIndex].value <=
+          shieldedOutputFee(shieldedOutputDefs[0].shieldedMode));
     const { addedFee } = await convertHtrChangeIfRequested(
       partialHtrTxData,
       shieldedOutputDefs,
@@ -762,10 +770,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       partialInputs,
       // Only pull extra HTR to fund the shielded-change fee when the wallet is
       // already auto-selecting HTR; if the caller supplied the HTR inputs,
-      // convertHtrChangeIfRequested throws rather than choosing more.
+      // convertHtrChangeIfRequested never chooses more.
       shouldChooseHTRInputs,
       htrPolicy.preference,
-      shieldedChangeAddress
+      shieldedChangeAddress,
+      !htrChangeMayStay
     );
     totalFee += addedFee;
 
@@ -1837,7 +1846,10 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
  * fold their value into the change until it clears the fee. The pulled
  * value flows entirely into the change output — it adds no new shielded
  * output, so `additionalFee` does not grow again. If no additional HTR is
- * available to clear the threshold, we throw rather than downgrade.
+ * available to clear the threshold, we throw rather than downgrade — unless
+ * `shieldingRequired` is false, in which case the change is left as it is.
+ * The caller passes false only for a change that carries no shielded value,
+ * or one the structural pass spends whole on the split's fee.
  *
  * No-ops in any of these cases:
  *   - `mode` is null/undefined or `OutputKind.TRANSPARENT` (the change stays
@@ -1850,8 +1862,9 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
  * halves, restoring the protocol minimum.
  *
  * @throws SendTxError when the change is too small to fund its shielded
- *   fee and no additional HTR UTXO is available to cover the difference, or
- *   when the wallet has no shielded address to receive the change.
+ *   fee, no additional HTR UTXO is available to cover the difference and
+ *   `shieldingRequired` is true, or when the wallet has no shielded address to
+ *   receive the change.
  */
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
@@ -1862,7 +1875,8 @@ export async function convertHtrChangeIfRequested(
   existingInputs: IDataInput[] = [],
   canSelectMoreHtr: boolean = true,
   pullPreference: InputPreference = OutputKind.TRANSPARENT,
-  shieldedChangeAddress: string | null = null
+  shieldedChangeAddress: string | null = null,
+  shieldingRequired: boolean = true
 ): Promise<{ addedFee: bigint }> {
   if (!mode || mode === OutputKind.TRANSPARENT) return { addedFee: 0n };
 
@@ -1892,6 +1906,9 @@ export async function convertHtrChangeIfRequested(
     // more" contract — fail instead so the caller keeps control of the input
     // set (they can add HTR, send less, or drop changeShieldedMode).
     if (!canSelectMoreHtr) {
+      if (!shieldingRequired) {
+        return { addedFee: 0n };
+      }
       throw new SendTxError(
         'HTR change is too small to fund its shielded-output fee, and HTR inputs were ' +
           'user-supplied so no additional HTR can be selected to cover the difference.'
@@ -1923,6 +1940,9 @@ export async function convertHtrChangeIfRequested(
     );
 
     if (pulledSum <= deficit) {
+      if (!shieldingRequired) {
+        return { addedFee: 0n };
+      }
       // Deliberate hard failure, NOT a silent transparent downgrade: the caller
       // asked to shield this change, so quietly leaving it transparent to
       // "rescue" the send would publish the change (and link the sender)
