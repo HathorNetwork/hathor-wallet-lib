@@ -4951,6 +4951,134 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
+    const fsHtr = (txId: string, value: bigint) =>
+      poolUtxo(txId, value, NATIVE_TOKEN_UID, {
+        shielded: true,
+        blindingFactor: '7a'.repeat(32),
+        assetBlindingFactor: '7b'.repeat(32),
+      });
+
+    test('a too-small HTR change topped up from a fully shielded UTXO becomes fully shielded', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
+          fsHtr('htr-fs-5', 5n),
+        ]),
+        ShieldedOutputMode.FULLY_SHIELDED
+      );
+
+      // The 3n pays the NFT's 2n fee, leaving 1n. Only the fully shielded 5n is
+      // left to pull, so the change mirrors it: 1 + 5 − 2 = 4n. Fee 4n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['htr-fs-5', 'htr-pub-3', 'nft-1']);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([1n, 4n]);
+      expect(byValue.get(4n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(4n);
+    });
+
+    test('a too-small HTR change pulls until it can pay the fully shielded fee', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
+          fsHtr('htr-fs-1a', 1n),
+          fsHtr('htr-fs-1b', 1n),
+        ]),
+        ShieldedOutputMode.FULLY_SHIELDED
+      );
+
+      // After the first fully shielded 1n the change is fully shielded and
+      // needs more than 2n, so the second is pulled too: 1 + 1 + 1 − 2 = 1n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'htr-fs-1a',
+        'htr-fs-1b',
+        'htr-pub-3',
+        'nft-1',
+      ]);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect(byValue.get(1n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(result.shieldedOutputs).toHaveLength(2);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(4n);
+    });
+
+    test('with no HTR change, HTR pulled from a fully shielded UTXO makes a fully shielded change', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-1', 1n, NATIVE_TOKEN_UID),
+          fsHtr('htr-fs-5', 5n),
+        ])
+      );
+
+      // The 1n pays the NFT's fee exactly; the change comes from the fully
+      // shielded 5n and mirrors it: 5 − 2 = 3n. Fee 1 + 2 = 3n.
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([1n, 3n]);
+      expect(byValue.get(3n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(3n);
+    });
+
+    test('a 1-unit output takes the change of caller-supplied HTR as the second output', async () => {
+      const callerHtr = poolUtxo('caller-pub-10', 10n, NATIVE_TOKEN_UID);
+      const storage = buildPoolStorage([
+        callerHtr,
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerHtr]);
+
+      const result = await sendOneNft(storage, ShieldedOutputMode.AMOUNT_SHIELDED, {
+        inputs: [{ txId: 'caller-pub-10', index: 0 }],
+      });
+
+      // The caller's 10n leaves 9n of change, shielded at its 1n fee: 8n.
+      // Nothing is added to the caller's input.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['caller-pub-10', 'nft-1']);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        8n,
+      ]);
+    });
+
+    test('a 1-unit output fails when caller-supplied HTR leaves a change too small for its fee', async () => {
+      const callerHtr = poolUtxo('caller-pub-2', 2n, NATIVE_TOKEN_UID);
+      const storage = buildPoolStorage([
+        callerHtr,
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerHtr]);
+
+      await expect(
+        sendOneNft(storage, ShieldedOutputMode.AMOUNT_SHIELDED, {
+          inputs: [{ txId: 'caller-pub-2', index: 0 }],
+        })
+      ).rejects.toThrow(
+        new SendTxError(
+          unsplittableOutput(
+            'the HTR inputs were user-supplied, so no HTR can be selected for a shielded change'
+          )
+        )
+      );
+    });
+
+    test('a 1-unit output fails when no HTR can be added to a change too small for its fee', async () => {
+      await expect(
+        sendOneNft(
+          buildPoolStorage([
+            poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+            poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+          ])
+        )
+      ).rejects.toThrow(
+        new SendTxError(unsplittableOutput('no HTR is available for a shielded change'))
+      );
+    });
+
     test('a 1-unit output with caller-supplied HTR and no HTR change fails', async () => {
       const callerHtr = poolUtxo('caller-pub-1', 1n, NATIVE_TOKEN_UID);
       const storage = buildPoolStorage([
