@@ -1226,10 +1226,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   }
 
   /**
-   * Release all UTXOs that were marked as selected for this transaction.
-   * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
-   */
-  /**
    * Emit an event once the inputs were released. The callers run where nothing awaits them (an
    * async event listener, a promise callback), so a listener that throws must not escape: it
    * would become an unhandled rejection (fatal on Node 15+) and could keep the send's promise
@@ -1243,6 +1239,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     }
   }
 
+  /**
+   * Release all UTXOs that were marked as selected for this transaction.
+   * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
+   */
   async releaseUtxos(): Promise<void> {
     if (this.transaction === null) {
       return;

@@ -1853,6 +1853,24 @@ describe('failed sends release their inputs before reporting', () => {
     expect(mining.state.error).toBeDefined();
   });
 
+  it('unexpected mining error: unexpected-error and the mineTx rejection wait for the release', async () => {
+    const { release, sendTx } = setup();
+    const unexpectedError = jest.fn();
+    sendTx.on('unexpected-error', unexpectedError);
+    const mining = track(sendTx.mineTx({ startMiningTx: false }));
+    await flush(); // the inputs are marked and the MineTransaction exists
+
+    sendTx.mineTransaction!.emit('unexpected-error', 'mining service down');
+    await flush();
+    expect(unexpectedError).not.toHaveBeenCalled();
+    expect(mining.state.settled).toBe(false);
+
+    release.resolve();
+    await mining.done;
+    expect(unexpectedError).toHaveBeenCalledWith('mining service down');
+    expect(mining.state.error).toBeDefined();
+  });
+
   it('push request failure: send-error and the rejection wait for the release', async () => {
     const { release, sendTx, sendError } = setup();
     const failure = new Error('network down');
