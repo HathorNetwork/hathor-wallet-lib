@@ -168,7 +168,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * rules decide per token: the change is shielded when shielded inputs are
    * spent, all of the token's outputs are shielded, or, where it can be, it
    * stands in for the shielded input a lone shielded output needs and the
-   * wallet lacks; transparent otherwise (see shieldedSelection).
+   * wallet lacks; transparent otherwise (see shieldedSelection). The HTR change
+   * is also shielded when the tx's only shielded output holds 1 unit, which
+   * cannot be split, so the change is its second shielded output.
    * `OutputKind.TRANSPARENT` keeps every change output transparent, even when
    * shielded inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
    * output — the HTR fee-change and any custom-token change — shielded in
@@ -555,9 +557,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     }
     const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
     // Whether a shielded change can be hosted at all: not at a legacy change
-    // address, nor by a wallet with no shielded address. Asked only where
-    // shielding the change is optional; where it is required, the legacy
-    // address check or resolving the address throws instead.
+    // address, nor by a wallet with no shielded address. Where shielding the
+    // change is optional, a false answer skips it; the 1-unit case of the
+    // structural pass throws with that reason; elsewhere a required shielding
+    // fails at the legacy address check or when resolving the address.
     const changeStorage = this.storage;
     let shieldedChangeHostable: Promise<boolean> | null = null;
     const canHostShieldedChange = (): Promise<boolean> => {
@@ -846,8 +849,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // output and the lone def stays whole: a transparent change must never
     // carry the value of a shielded input. A pull that lands exactly on the
     // split's fee also ends in that shielded change when the change's own fee
-    // is the smaller one. A 1-unit def cannot be split at all, so the HTR
-    // change is always the second output then.
+    // is the smaller one. A 1-unit def cannot be split, so the HTR change
+    // becomes the second output instead, unless the def is that change itself,
+    // which is topped up with more HTR and then split.
     if (shieldedOutputDefs.length === 1) {
       const lone = shieldedOutputDefs[0];
       const extraFee = shieldedOutputFee(lone.shieldedMode);
@@ -1778,9 +1782,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
  * Replace one shielded output definition with two floor/ceil halves at the
  * same destination, mode and token.
  *
- * This is how the structural pass satisfies the protocol's two-shielded-outputs
- * minimum (a single shielded output carries a random blinding factor and can
- * never balance). It adds no privacy: the halves' sum reveals whatever the
+ * This is one of the two ways the structural pass meets the protocol's
+ * two-shielded-outputs minimum (a single shielded output carries a random
+ * blinding factor and can never balance); the other shields an HTR change as
+ * the second output. It adds no privacy: the halves' sum reveals whatever the
  * original value did. The phantom output pushed for UTXO selection is
  * untouched: the halves sum to the original value.
  */
@@ -1843,8 +1848,8 @@ interface PulledHtrKinds {
  * Pull additional HTR UTXOs (excluding already-used ones) until the pulled sum
  * satisfies `isEnough`. Pool-aware: the preferred pool first, the other as a
  * fallback, and fully shielded UTXOs last of all — one spent into anything but
- * a fully shielded output reveals its token, and a change it funds pays the
- * fully shielded fee. Ascending value inside each pass — the pulled value flows
+ * a fully shielded output reveals its token, and a change that mirrors it pays
+ * the fully shielded fee. Ascending value inside each pass — the pulled value flows
  * into a change output, so pulling smallest-first moves the least extra HTR
  * around. Also reports which kinds of UTXO were pulled; `isEnough` sees them as
  * they accumulate.
@@ -1898,12 +1903,15 @@ async function pullExtraHtrUtxos(
 }
 
 /**
- * Mode for an HTR change that absorbs HTR pulled to fund the structural split,
- * or `null` when it may stay transparent. A transparent change must never carry
+ * Mode for an HTR change that absorbs HTR pulled in the structural pass, or
+ * `null` when it may stay transparent. A transparent change must never carry
  * the value of a shielded input, so the change is shielded when the rules
  * already shield the HTR change, or when the pull spent shielded HTR (mirroring
  * it, as the change rules do for a shielded input), unless the caller pinned
- * the change transparent.
+ * the change transparent. The rules' mode comes first: a fully shielded UTXO
+ * pulled into a change the rules made amount-shielded is spent at that mode,
+ * revealing its token, which the fully-shielded-last pull order keeps a last
+ * resort.
  */
 function pulledHtrChangeMode(
   htrChangeMode: ChangeOutputMode,

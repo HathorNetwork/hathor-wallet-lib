@@ -429,7 +429,9 @@ export interface SendTransactionFullnodeOptions {
  *   wallet's automatic selection rules decide per token (change is shielded
  *   when shielded inputs are spent, all of a token's outputs are shielded, or,
  *   where it can be, it stands in for the shielded input a lone shielded
- *   output needs and the wallet lacks; transparent otherwise). Explicit
+ *   output needs and the wallet lacks; transparent otherwise; the HTR change
+ *   is also shielded when the only shielded output holds 1 unit, which cannot
+ *   be split, so the change is its second shielded output). Explicit
  *   OutputKind.TRANSPARENT: every change output stays transparent, even when
  *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
  *   every change output — the HTR fee-change and custom-token change — is

@@ -174,9 +174,9 @@ export async function hasShieldedUtxo(
 }
 
 /**
- * Compute the selection policy for one token, and whether its change must be
- * shielded because the wallet cannot supply the shielded input the rules want
- * for its lone shielded output.
+ * Compute the selection policy for one token, and whether its change should be
+ * shielded, where it can be (see the header), because the wallet cannot supply
+ * the shielded input the rules want for its lone shielded output.
  *
  * `profile === undefined` means the token appears in no output — HTR entering
  * only to pay fees — which follows the all-transparent-outputs rule.
