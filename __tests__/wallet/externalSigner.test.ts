@@ -157,13 +157,16 @@ describe('signTx with an external signer', () => {
     await expect(wallet.signTx(makeTx())).rejects.toThrow(WalletFromXPubGuard);
   });
 
-  it('rejects a tx with an input the signer left unsigned', async () => {
+  // The public signTx signs only the wallet's own inputs; a counterparty's input (e.g. in a swap)
+  // is legitimately left for the other party to sign.
+  it('leaves an input it cannot sign for the caller, without throwing', async () => {
     const { wallet } = await makeXpubWallet();
     wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    const tx = makeTx();
 
-    await expect(wallet.signTx(makeTx())).rejects.toThrow(
-      `Could not sign input 1 (${'0'.repeat(62)}bb:1). Please try again.`
-    );
+    await expect(wallet.signTx(tx)).resolves.toBe(tx);
+    expect(tx.inputs[0].data!.length).toBeGreaterThan(0);
+    expect(tx.inputs[1].data).toBeNull();
   });
 });
 
@@ -179,6 +182,22 @@ describe('SendTransactionWalletService.signTx with an external signer', () => {
 
     expectSignedThroughProxy(signer, wallet, tx);
     expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  // Every input of a send is the wallet's own, so an unsigned one means signing failed (e.g. the
+  // proxy couldn't fetch its spent tx).
+  it('rejects a send with an input the signer left unsigned', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    const tx = new Transaction(
+      [new Input(`${'0'.repeat(62)}cc`, 0), new Input(`${'0'.repeat(62)}dd`, 2)],
+      []
+    );
+    const sendTx = new SendTransactionWalletService(wallet, { transaction: tx });
+
+    await expect(sendTx.signTx()).rejects.toThrow(
+      `Could not sign input 1 (${'0'.repeat(62)}dd:2). Please try again.`
+    );
   });
 });
 
@@ -328,6 +347,20 @@ describe('nano with an external signer', () => {
     await expect(
       wallet.createNanoContractTransaction('initialize', addresses[0], {})
     ).rejects.toThrow(PinRequiredError);
+  });
+
+  it('prepareNanoSendTransactionWalletService rejects an input the signer left unsigned', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({ index: 0 } as never);
+    const tx = new Transaction(
+      [new Input(`${'0'.repeat(62)}ee`, 0), new Input(`${'0'.repeat(62)}ff`, 1)],
+      []
+    );
+
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).rejects.toThrow(/Could not sign input 1 \(/);
   });
 
   it('prepareNanoSendTransactionWalletService signs with a signer and no pin', async () => {
