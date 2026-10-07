@@ -2242,7 +2242,8 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
 
     // A mixed send with one shielded output from a wallet with no shielded UTXO
     // of the token: the token's change is shielded so the shielded amount cannot
-    // be computed by subtraction; with no change, the lone output is split.
+    // be computed by subtraction; with no change, the structural pass adds the
+    // second shielded output.
     const r3aSendFrom = (
       storage: Storage,
       token: string = CUSTOM_TOKEN,

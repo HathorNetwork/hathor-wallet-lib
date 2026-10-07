@@ -422,16 +422,18 @@ export interface SendTransactionFullnodeOptions {
  * @property pinCode Pin to decrypt xpriv information
  * @property changeShieldedMode The change-output mode. Absent or null: the
  *   wallet's automatic selection rules decide per token (change is shielded
- *   when shielded inputs are spent or all of a token's outputs are shielded;
- *   transparent otherwise). Explicit OutputKind.TRANSPARENT: every change
- *   output stays transparent, even when shielded inputs are spent. Explicit AMOUNT_SHIELDED or
- *   FULLY_SHIELDED: every change output — the HTR fee-change and custom-token
- *   change — is emitted shielded in that mode; on a transaction with no other
- *   shielded element the change is split into two halves to satisfy the
- *   protocol's two-shielded-outputs minimum. The send REJECTS (throws
- *   SendTxError) when a shielded change cannot fund its own per-output fee and
- *   no additional UTXO is available — it never silently downgrades to
- *   transparent.
+ *   when shielded inputs are spent, all of a token's outputs are shielded, or,
+ *   where it can be, it stands in for the shielded input a lone shielded
+ *   output needs and the wallet lacks; transparent otherwise). Explicit
+ *   OutputKind.TRANSPARENT: every change output stays transparent, even when
+ *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
+ *   every change output — the HTR fee-change and custom-token change — is
+ *   emitted shielded in that mode; on a transaction with no other shielded
+ *   element the change is split into two halves to satisfy the protocol's
+ *   two-shielded-outputs minimum. The send REJECTS (throws SendTxError) when a
+ *   shielded change cannot fund its own per-output fee and no additional UTXO
+ *   is available, unless the split of the tx's only shielded output takes the
+ *   whole change as its fee — it never silently downgrades to transparent.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];

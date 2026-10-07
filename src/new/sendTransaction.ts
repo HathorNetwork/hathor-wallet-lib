@@ -166,7 +166,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   /**
    * The change-output mode. `null` (the default) lets the automatic selection
    * rules decide per token: the change is shielded when shielded inputs are
-   * spent or all of the token's outputs are shielded, transparent otherwise.
+   * spent, all of the token's outputs are shielded, or, where it can be, it
+   * stands in for the shielded input a lone shielded output needs and the
+   * wallet lacks; transparent otherwise (see shieldedSelection).
    * `OutputKind.TRANSPARENT` keeps every change output transparent, even when
    * shielded inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
    * output — the HTR fee-change and any custom-token change — shielded in
@@ -180,7 +182,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * FULL value — the fee is HTR, a different token. When the HTR change alone
    * is too small to fund its own shielded-output fee, additional HTR UTXOs are
    * pulled to cover it; if none are available the send throws rather than
-   * downgrade to transparent change (see convertHtrChangeIfRequested).
+   * downgrade to transparent change (see convertHtrChangeIfRequested), unless
+   * the split of the tx's only shielded output takes the whole change as its
+   * fee.
    */
   changeShieldedMode: ChangeOutputMode | null;
 
@@ -460,7 +464,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     // ── Automatic selection rules ─────────────────────────────────────────
     // Analyze each token's outputs and decide its input-pool policy, whether a
-    // shielded input must be forced, and whether its change must be shielded
+    // shielded input must be forced, and whether its change should be shielded
     // in place of a shielded input the wallet cannot supply.
     const changeModeOverride = this.changeShieldedMode ?? null;
     const outputProfiles = await buildTokenOutputProfiles(
@@ -584,15 +588,15 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     );
 
     // Custom-token change: the rules decide, per token, whether the change is
-    // shielded — shielded when that token's inputs include a shielded one or
-    // all its outputs are shielded, transparent otherwise, with an explicit
-    // changeShieldedMode always winning. The fee is always HTR (a different
-    // token), so the FULL change value carries over — nothing is subtracted
-    // here. Done before Fee.calculate (so the converted output is charged the
-    // per-output shielded fee, not the transparent per-output fee) and before
-    // the HTR pass (so its selection funds the resulting larger total fee).
-    // HTR change is handled separately, after selection, by
-    // convertHtrChangeIfRequested.
+    // shielded — shielded when that token's inputs include a shielded one, all
+    // its outputs are shielded, or it stands in for a missing shielded input;
+    // transparent otherwise, with an explicit changeShieldedMode always
+    // winning. The fee is always HTR (a different token), so the FULL change
+    // value carries over — nothing is subtracted here. Done before
+    // Fee.calculate (so the converted output is charged the per-output
+    // shielded fee, not the transparent per-output fee) and before the HTR
+    // pass (so its selection funds the resulting larger total fee). HTR change
+    // is handled separately, after selection, by convertHtrChangeIfRequested.
     const keptOutputs: IDataOutput[] = [];
     for (const out of partialTxData.outputs) {
       const withToken = out as IDataOutputWithToken;
@@ -1652,11 +1656,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
  * Replace one shielded output definition with two floor/ceil halves at the
  * same destination, mode and token.
  *
- * This is how the rules satisfy the protocol's two-shielded-outputs minimum
- * (a single shielded output carries a random blinding factor and can never
- * balance) and how a lone shielded output is de-correlated from its inputs
- * when no shielded input is available. The phantom output pushed for UTXO
- * selection is untouched: the halves sum to the original value.
+ * This is how the structural pass satisfies the protocol's two-shielded-outputs
+ * minimum (a single shielded output carries a random blinding factor and can
+ * never balance). It adds no privacy: the halves' sum reveals whatever the
+ * original value did. The phantom output pushed for UTXO selection is
+ * untouched: the halves sum to the original value.
  */
 export function splitShieldedDef(defs: IResolvedShieldedOutputDef[], index: number): void {
   const target = defs[index];

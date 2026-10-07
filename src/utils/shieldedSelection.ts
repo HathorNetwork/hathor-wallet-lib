@@ -23,18 +23,27 @@ import { bestUtxoSelection } from './utxo';
  *   - All T outputs shielded: prefer shielded inputs; change shielded, mode =
  *     most private among T's shielded outputs.
  *   - All T outputs transparent: prefer transparent inputs; shielded only when
- *     transparent funds are insufficient. Any shielded input used makes the change shielded, mode
- *     mirroring the inputs. An exact match spent from exactly ONE shielded
- *     input forces a change (an extra input is added) so the input's value is
- *     not revealed by subtraction.
+ *     transparent funds are insufficient. Any shielded input used makes the
+ *     change shielded, mode mirroring the inputs. An exact match spent from
+ *     exactly ONE shielded input forces a change (an extra input is added) so
+ *     the input's value is not revealed by subtraction.
  *   - Mixed: one shielded output forces at least one shielded input; when the
  *     wallet has none, the change is shielded instead so the output's amount
- *     cannot be computed by subtraction (with no change, the structural pass
- *     splits the output). Two or more shielded outputs force one only when
- *     some of them leave the wallet, and stay as they are when the wallet has
- *     none. Change is shielded iff a shielded input was used, all T outputs
- *     are shielded, or it stands in for the missing shielded input.
+ *     cannot be computed by subtraction. Two or more shielded outputs force
+ *     one only when some of them leave the wallet, and stay as they are when
+ *     the wallet has none. Change is shielded iff a shielded input was used,
+ *     all T outputs are shielded, or it stands in for the missing shielded
+ *     input.
  *   - HTR entering only to pay fees behaves like the all-transparent case.
+ *
+ * A change standing in for a missing shielded input is shielded only where it
+ * can be: it stays transparent when the tx has no room for another shielded
+ * output, the wallet has no shielded address to receive it, or (HTR) it cannot
+ * pay its own fee and no more HTR can be added to it.
+ *
+ * Whatever the rules decide, a transaction never ends with exactly one shielded
+ * output: the structural pass in SendTransaction adds a second one, splitting
+ * the output in two or shielding an HTR change as the second one.
  *
  * An explicit `changeShieldedMode` always wins over the change-mode rules:
  * `OutputKind.TRANSPARENT` keeps every change transparent, AS/FS forces that
