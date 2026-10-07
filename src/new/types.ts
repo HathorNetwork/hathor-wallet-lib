@@ -429,11 +429,13 @@ export interface SendTransactionFullnodeOptions {
  *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
  *   every change output — the HTR fee-change and custom-token change — is
  *   emitted shielded in that mode; on a transaction with no other shielded
- *   element the change is split into two halves to satisfy the protocol's
- *   two-shielded-outputs minimum. The send REJECTS (throws SendTxError) when a
+ *   element a second shielded output is added for the protocol's
+ *   two-shielded-outputs minimum: the change is split into two halves, or an
+ *   HTR change is shielded beside it. The send REJECTS (throws SendTxError) when a
  *   shielded change cannot fund its own per-output fee and no additional UTXO
  *   is available, unless the split of the tx's only shielded output takes the
- *   whole change as its fee — it never silently downgrades to transparent.
+ *   whole change as its fee — it never silently downgrades to transparent. A
+ *   multisig wallet never gets a shielded change: a send that needs one throws.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];

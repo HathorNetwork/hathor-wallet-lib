@@ -172,8 +172,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * `OutputKind.TRANSPARENT` keeps every change output transparent, even when
    * shielded inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
    * output — the HTR fee-change and any custom-token change — shielded in
-   * that mode; on a transaction with no other shielded element the change is
-   * split into two halves to satisfy the two-shielded-outputs minimum.
+   * that mode; on a transaction with no other shielded element a second
+   * shielded output is added for the two-shielded-outputs minimum: the change
+   * is split into two halves, or an HTR change is shielded beside it. A
+   * multisig wallet never gets a shielded change: a send that needs one throws.
    *
    * The HTR change covers the surplus over everything HTR-denominated in the
    * tx: any HTR being sent plus ALL fees (fees are always charged in HTR,
