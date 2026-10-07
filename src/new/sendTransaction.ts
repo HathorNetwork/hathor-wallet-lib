@@ -262,6 +262,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
+    // Every change output follows an explicit change mode, so an unknown value
+    // must fail here rather than act as one of the shielded modes.
+    const requestedChangeMode: unknown = this.changeShieldedMode;
+    if (
+      requestedChangeMode !== null &&
+      requestedChangeMode !== undefined &&
+      requestedChangeMode !== OutputKind.TRANSPARENT &&
+      requestedChangeMode !== ShieldedOutputMode.AMOUNT_SHIELDED &&
+      requestedChangeMode !== ShieldedOutputMode.FULLY_SHIELDED
+    ) {
+      throw new SendTxError(
+        `Invalid changeShieldedMode '${String(requestedChangeMode)}': expected ` +
+          'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
+      );
+    }
     const HTR_UID = NATIVE_TOKEN_UID;
     const network = this.storage.config.getNetwork();
     const txData: IDataTx = {

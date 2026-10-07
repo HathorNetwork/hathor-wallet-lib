@@ -4292,6 +4292,30 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       ).toBe(true);
     });
 
+    // A JS or HTTP caller can pass anything; none of these may pass for a mode.
+    test.each([['TRANSPARENT'], [OutputKind.SHIELDED], [3], [true], [0], [false], ['']])(
+      'an unknown changeShieldedMode %p is rejected',
+      async changeShieldedMode => {
+        const storage = buildPoolStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+        const wallet = buildWallet(storage, buildShieldedAddr(0));
+
+        await expect(
+          new SendTransaction({
+            wallet,
+            outputs: [
+              { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 8n, token: NATIVE_TOKEN_UID },
+            ],
+            changeShieldedMode: changeShieldedMode as unknown as ShieldedOutputMode,
+          }).prepareTxData()
+        ).rejects.toThrow(
+          new SendTxError(
+            `Invalid changeShieldedMode '${String(changeShieldedMode)}': expected ` +
+              'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
+          )
+        );
+      }
+    );
+
     describe('multisig wallets', () => {
       // A multisig wallet built from a seed also derives a shielded chain, but
       // its spend key belongs to this participant alone. Built from storage
