@@ -192,9 +192,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   public storage: IStorage;
 
-  // Whether an external tx-signing method is registered (e.g. a passkey or hardware signer).
-  // Mirrors HathorWallet: such a wallet can sign even when its storage holds only the xpub.
-  isSignedExternally: boolean;
+  /**
+   * Whether an external tx-signing method is registered (e.g. a passkey or hardware signer). Such a
+   * wallet can sign even when its storage holds only the xpub. Read from the storage, so it can't
+   * go stale if the storage's signing method is changed directly.
+   */
+  get isSignedExternally(): boolean {
+    return this.storage.hasTxSignatureMethod();
+  }
 
   constructor({
     requestPassword,
@@ -248,7 +253,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     } else {
       this.storage = storage;
     }
-    this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -1299,7 +1303,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
-    this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
   }
 
@@ -1333,6 +1336,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private async signInputsExternally(tx: Transaction, pinCode?: string | null): Promise<void> {
     const storageProxy = new WalletServiceStorageProxy(this, this.storage).createProxy();
     await transaction.signTransaction(tx, storageProxy, pinCode ?? '');
+    HathorWalletServiceWallet.assertAllInputsSigned(tx);
+  }
+
+  /**
+   * Check that external signing signed every input. The storage proxy skips an input whose spent
+   * transaction it couldn't fetch, so without this check a transient fullnode failure would
+   * produce a tx that only fails at push, with an unclear script error.
+   *
+   * @throws {SendTxError} naming the first unsigned input
+   */
+  private static assertAllInputsSigned(tx: Transaction): void {
+    const unsigned = tx.inputs.findIndex(input => !input.data || input.data.length === 0);
+    if (unsigned !== -1) {
+      const { hash, index } = tx.inputs[unsigned];
+      throw new SendTxError(
+        `Could not sign input ${unsigned} (${hash}:${index}). Please try again.`
+      );
+    }
   }
 
   /**
@@ -3385,6 +3406,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       storageProxy.createProxy(),
       options.pinCode ?? ''
     );
+    if (this.storage.hasTxSignatureMethod()) {
+      HathorWalletServiceWallet.assertAllInputsSigned(signedTx);
+    }
     signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }

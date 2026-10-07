@@ -16,10 +16,13 @@ import transactionUtils from '../utils/transaction';
  * Storage proxy that implements missing storage methods for wallet service
  * by delegating to wallet service API calls.
  *
- * This proxy enables nano contract transaction signing by providing:
+ * The wallet-service facade signs through this proxy whenever it signs with a resolver instead of
+ * its inline stored-key path: nano contract transactions, and every send, token and authority
+ * operation when an external tx-signing method is registered. It provides:
  * - getAddressInfo: Maps addresses to BIP32 indices
- * - getTx: Fetches transaction data from full node API
- * - getTxSignatures: Delegates to transaction signing utilities
+ * - getTx / getSpentTxs: Fetch the spent transactions from the full node API
+ * - getTxSignatures: Calls the external tx-signing method (with this proxy as its storage) when
+ *   one is registered, otherwise the transaction signing utilities with the stored key
  */
 export class WalletServiceStorageProxy {
   private wallet: HathorWalletServiceWallet;
