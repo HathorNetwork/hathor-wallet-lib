@@ -942,12 +942,14 @@ describe('convertHtrChangeIfRequested', () => {
     token: string;
     address: string;
     authorities: bigint;
+    shielded?: boolean;
+    assetBlindingFactor?: string;
   };
 
   // Storage stub whose `selectUtxos` yields the given HTR UTXOs, honoring the
-  // caller's `filter_method` (exclusion of already-used UTXOs) AND
-  // `order_by_value` (value sort) the same way the real storage does — so a
-  // regression in the pull-loop's ordering is observable.
+  // caller's `filter_method` (exclusion of already-used UTXOs), `shielded`
+  // (the pool) AND `order_by_value` (value sort) the same way the real storage
+  // does — so a regression in the pull-loop's pools or ordering is observable.
   const mockStorage = (
     utxos: FakeUtxo[] = [],
     shieldedAddress = buildShieldedAddress(),
@@ -974,6 +976,8 @@ describe('convertHtrChangeIfRequested', () => {
           });
         }
         for (const utxo of ordered) {
+          if (options.shielded === true && !utxo.shielded) continue;
+          if (options.shielded === false && utxo.shielded) continue;
           if (options.filter_method && !options.filter_method(utxo as unknown as IUtxo)) continue;
           yield utxo;
         }
@@ -1426,6 +1430,51 @@ describe('convertHtrChangeIfRequested', () => {
     expect(defs).toHaveLength(2);
   });
 
+  test('H.4j — pulls from the preferred pool first, past a smaller UTXO in the other', async () => {
+    const shielded: FakeUtxo = {
+      txId: 'sh-htr-tx',
+      index: 0,
+      value: 2n,
+      token: NATIVE_TOKEN_UID,
+      address: 'sh-addr',
+      authorities: 0n,
+      shielded: true,
+    };
+    const transparent: FakeUtxo = {
+      txId: 'pub-htr-tx',
+      index: 0,
+      value: 5n,
+      token: NATIVE_TOKEN_UID,
+      address: 'pub-addr',
+      authorities: 0n,
+    };
+    const pulledWith = async (preference: OutputKind) => {
+      const partialHtrTxData = {
+        inputs: [] as IDataInput[],
+        outputs: [buildHtrChangeOutput(1n)],
+      };
+      await convertHtrChangeIfRequested(
+        partialHtrTxData,
+        [
+          buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+          buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+        ],
+        ShieldedOutputMode.AMOUNT_SHIELDED,
+        testnetNetwork,
+        mockStorage([shielded, transparent]),
+        [],
+        true,
+        preference
+      );
+      return partialHtrTxData.inputs.map(i => i.txId);
+    };
+
+    // The 1n change cannot pay its 1n fee, so one UTXO is pulled: from the
+    // preferred pool, even though the other pool holds a smaller one.
+    expect(await pulledWith(OutputKind.TRANSPARENT)).toEqual(['pub-htr-tx']);
+    expect(await pulledWith(OutputKind.SHIELDED)).toEqual(['sh-htr-tx']);
+  });
+
   test('H.5 — no-op when no HTR change output present', async () => {
     // All HTR was consumed exactly by the fee — `prepareSendTokensData`
     // would have emitted no `isChange: true` HTR entry, so there's
@@ -1589,6 +1638,9 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
   // A genuine 32-byte custom token UID — createShieldedOutputs requires the
   // token UID to be exactly 32 bytes (a real on-chain token hash).
   const CUSTOM_TOKEN = 'ab'.repeat(32);
+  // A FEE-version token: each transparent output of it costs FEE_PER_OUTPUT,
+  // and spending it with no transparent output costs that once (the melt fee).
+  const FEE_TOKEN = 'cd'.repeat(32);
 
   const buildShieldedAddr = (i: number): string =>
     encodeShieldedAddress(
@@ -1634,6 +1686,9 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       // DEPOSIT (not FEE) → no transparent per-output fee, isolating the
       // shielded fee arithmetic.
       return { version: TokenVersion.DEPOSIT, uid, symbol: 'CTK', name: 'Custom' };
+    }
+    if (uid === FEE_TOKEN) {
+      return { version: TokenVersion.FEE, uid, symbol: 'FTK', name: 'Fee token' };
     }
     return undefined;
   };
@@ -2018,6 +2073,8 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     interface PoolUtxo {
       txId: string;
       index: number;
+      /** Not available to spend (locked, or held by another send). */
+      locked?: boolean;
       value: bigint;
       token: string;
       address: string;
@@ -2045,12 +2102,13 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     /**
      * A selectUtxos mock faithful to the store's filter semantics — the rules
      * engine issues pool-filtered (`shielded`), excluded (`filter_method`),
-     * ordered and capped queries, so an oblivious mock would hand the same
-     * UTXO to both passes.
+     * available-only, ordered and capped queries, so an oblivious mock would
+     * hand the same UTXO to both passes.
      */
     const buildPoolStorage = (pool: PoolUtxo[]): Storage => {
       async function* selectUtxoMock(options: IUtxoFilterOptions) {
         let list = pool.filter(u => u.token === (options.token ?? NATIVE_TOKEN_UID));
+        if (options.only_available_utxos) list = list.filter(u => !u.locked);
         if (options.shielded === true) list = list.filter(u => u.shielded);
         if (options.shielded === false) list = list.filter(u => !u.shielded);
         if (options.filter_method) list = list.filter(u => options.filter_method!(u as never));
@@ -4384,6 +4442,215 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const result = await send(OutputKind.TRANSPARENT);
       expect(result.inputs.map(i => i.txId)).toEqual(['custom-sh-10']);
       expect(result.shieldedOutputs ?? []).toHaveLength(0);
+    });
+
+    // Make caller-supplied inputs resolvable: each UTXO is output 0 of its own
+    // tx, at an address the wallet owns.
+    const supplyCallerInputs = (storage: Storage, utxos: PoolUtxo[]) => {
+      jest.spyOn(storage, 'getTx').mockImplementation((async (txId: string) => {
+        const utxo = utxos.find(u => u.txId === txId);
+        if (!utxo) {
+          return null;
+        }
+        const decoded = { address: utxo.address };
+        if (utxo.shielded) {
+          return {
+            tx_id: txId,
+            outputs: [],
+            shielded_outputs: [
+              {
+                mode: 1,
+                commitment: '',
+                range_proof: '',
+                script: '',
+                ephemeral_pubkey: '',
+                decoded,
+                value: utxo.value,
+                token: utxo.token,
+                blindingFactor: utxo.blindingFactor,
+              },
+            ],
+            inputs: [],
+          };
+        }
+        return {
+          tx_id: txId,
+          outputs: [
+            {
+              value: utxo.value,
+              token: utxo.token,
+              token_data: 0,
+              script: '',
+              decoded,
+              spent_by: null,
+            },
+          ],
+          shielded_outputs: [],
+          inputs: [],
+        };
+      }) as never);
+      const own = new Set(utxos.map(u => u.address));
+      jest.spyOn(storage, 'isAddressMine').mockImplementation(async address => own.has(address));
+    };
+
+    // The wallet holds a spare 50n HTR in each of these: adding it would build
+    // the tx, but caller-supplied HTR inputs are never added to.
+    test('a shielded HTR change of caller inputs too small to split is not topped up', async () => {
+      const callerInput = poolUtxo('caller-sh-11', 11n, NATIVE_TOKEN_UID, {
+        shielded: true,
+        blindingFactor: '6a'.repeat(32),
+      });
+      const storage = buildPoolStorage([
+        callerInput,
+        poolUtxo('htr-pub-50', 50n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerInput]);
+
+      // 11 − 8 = 3n of change mirrors the shielded input: 3 − 1 (its fee) = 2n,
+      // which cannot pay the split's 1n fee and leave two halves of 1n.
+      await expect(
+        new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [
+            { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 8n, token: NATIVE_TOKEN_UID },
+          ],
+          inputs: [{ txId: 'caller-sh-11', index: 0 }],
+        }).prepareTxData()
+      ).rejects.toThrow(
+        'The shielded HTR change is too small to split into the two shielded outputs the ' +
+          'protocol requires, and HTR inputs were user-supplied so no additional HTR can be selected.'
+      );
+    });
+
+    const fullyShieldedTokenSend = (callerHtr: bigint) => {
+      const callerInput = poolUtxo(`caller-pub-${callerHtr}`, callerHtr, NATIVE_TOKEN_UID);
+      const storage = buildPoolStorage([
+        callerInput,
+        poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-50', 50n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerInput]);
+      return new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+        inputs: [{ txId: callerInput.txId, index: 0 }],
+      }).prepareTxData();
+    };
+
+    test('the split fee is not drawn beyond a caller-supplied HTR change', async () => {
+      // The caller's 3n pays the output's 2n fee, leaving 1n of change for a
+      // 2n split fee.
+      await expect(fullyShieldedTokenSend(3n)).rejects.toThrow(
+        'The HTR change cannot fund the shielded-output split the protocol requires, and HTR ' +
+          'inputs were user-supplied so no additional HTR can be selected.'
+      );
+    });
+
+    test('the split fee is not drawn from the wallet when caller HTR leaves no change', async () => {
+      // The caller's 2n pays the output's 2n fee exactly; the split needs 2n more.
+      await expect(fullyShieldedTokenSend(2n)).rejects.toThrow(
+        'Splitting the lone shielded output requires extra HTR for its fee, and HTR inputs were ' +
+          'user-supplied so no additional HTR can be selected.'
+      );
+    });
+
+    test('HTR pulled for the second shielded output is never a UTXO that is not available', async () => {
+      const result = await r3aSend(
+        [
+          poolUtxo('htr-pub-17', 17n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-1-locked', 1n, NATIVE_TOKEN_UID, { locked: true }),
+          poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
+        ],
+        NATIVE_TOKEN_UID,
+        11n,
+        5n
+      );
+
+      // 17 pays 11 + 5 + 1 exactly. The pull for the second output skips the
+      // locked 1n, the smallest, and takes the 3n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['htr-pub-17', 'htr-pub-3']);
+    });
+
+    test('a FEE token spent only from shielded UTXOs pays no melt fee', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('fee-sh-20', 20n, FEE_TOKEN, { shielded: true, blindingFactor: '6b'.repeat(32) }),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: FEE_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: FEE_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+      // The node cannot see a shielded input's token, so it charges no melt fee
+      // for it, and the token has no transparent output: the fee is just the
+      // two shielded outputs'. HTR: 10 = 2 + 8.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['fee-sh-20', 'htr-pub-10']);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('R3b — shielded outputs that all pay the wallet force no shielded input', async () => {
+      const own = [buildShieldedAddr(0), buildShieldedAddr(2)];
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-100', 100n, CUSTOM_TOKEN),
+        poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '6c'.repeat(32),
+        }),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => own.includes(address));
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: own[0],
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: own[1],
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 5n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      }).prepareTxData();
+
+      // Moving the wallet's own funds into its own shielded outputs hides nothing
+      // more with a shielded input: the transparent 100n pays, the 40n stays.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds).toContain('custom-pub-100');
+      expect(inputIds).not.toContain('custom-sh-40');
     });
 
     // A JS or HTTP caller can pass anything; none of these may pass for a mode.

@@ -65,6 +65,9 @@ async function makeStorage(extra: IUtxo[] = []): Promise<Storage> {
 
 const ids = (result: { utxos: IUtxo[] }) => result.utxos.map(u => u.txId).sort();
 
+// A timelock this far ahead keeps a UTXO unavailable to every selection pass.
+const LOCKED_UNTIL = 4102444800; // 2100-01-01
+
 describe('shieldedAwareSelection', () => {
   const transparentPolicy = {
     preference: OutputKind.TRANSPARENT,
@@ -275,6 +278,62 @@ describe('shieldedAwareSelection', () => {
     expect(usingAll.amount).toBe(12n);
   });
 
+  it('the forced shielded input is never a UTXO that is not available', async () => {
+    const storage = await makeStorage([
+      utxo({
+        txId: 'sh-1-locked',
+        value: 1n,
+        shielded: true,
+        blindingFactor: 'bf',
+        timelock: LOCKED_UNTIL,
+      }),
+    ]);
+
+    // The smallest available shielded UTXO is sh-5; transparent pays the rest.
+    const result = await shieldedAwareSelection(storage, '00', 50n, {
+      ...transparentPolicy,
+      forceShieldedInput: true,
+    });
+    expect(ids(result)).toEqual(['pub-50', 'sh-5']);
+  });
+
+  it('the sweep never takes a UTXO that is not available', async () => {
+    const store = new MemoryStore();
+    await store.saveUtxo(utxo({ txId: 'dust-a', value: 1n }));
+    await store.saveUtxo(utxo({ txId: 'dust-b', value: 1n }));
+    await store.saveUtxo(utxo({ txId: 'dust-locked', value: 1n, timelock: LOCKED_UNTIL }));
+    await store.saveUtxo(utxo({ txId: 'sh-20', value: 20n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+
+    // The available 1n cannot pay 10n: they are swept, the shielded 20n tops up.
+    const result = await shieldedAwareSelection(storage, '00', 10n, transparentPolicy);
+    expect(ids(result)).toEqual(['dust-a', 'dust-b', 'sh-20']);
+  });
+
+  it('the change-forcing UTXO is never one that is not available', async () => {
+    const store = new MemoryStore();
+    await store.saveUtxo(utxo({ txId: 'sh-10', value: 10n, shielded: true, blindingFactor: 'bf' }));
+    await store.saveUtxo(
+      utxo({
+        txId: 'sh-1-locked',
+        value: 1n,
+        shielded: true,
+        blindingFactor: 'bf',
+        timelock: LOCKED_UNTIL,
+      })
+    );
+    await store.saveUtxo(utxo({ txId: 'sh-3', value: 3n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+
+    // The 10n matches exactly, so the smallest available other shielded UTXO
+    // is added for a change: sh-3, not the locked sh-1.
+    const result = await shieldedAwareSelection(storage, '00', 10n, {
+      ...shieldedPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+    expect(ids(result)).toEqual(['sh-10', 'sh-3']);
+  });
+
   it('insufficient across both pools reports the combined available sum', async () => {
     const storage = await makeStorage();
     // transparent 160 + shielded 125 = 285 total.
@@ -301,6 +360,21 @@ describe('hasShieldedUtxo / needsAvailabilityProbe', () => {
     const storage = await makeStorage();
     expect(await hasShieldedUtxo(storage, '00')).toBe(true);
     expect(await hasShieldedUtxo(storage, '01')).toBe(false);
+  });
+
+  it('does not count a shielded UTXO that is not available', async () => {
+    const store = new MemoryStore();
+    await store.saveUtxo(
+      utxo({
+        txId: 'sh-locked',
+        value: 5n,
+        shielded: true,
+        blindingFactor: 'bf',
+        timelock: LOCKED_UNTIL,
+      })
+    );
+
+    expect(await hasShieldedUtxo(new Storage(store), '00')).toBe(false);
   });
 
   it('requires the probe only for the mixed cases that may force', () => {
