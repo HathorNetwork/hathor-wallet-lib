@@ -509,6 +509,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const changeAddressIsNewFormat = this.changeAddress
       ? new Address(this.changeAddress, { network }).isShielded()
       : false;
+    // A multisig wallet's new-format addresses are single-signature: change
+    // sent there, shielded or not, would leave the multisig's control.
+    if (changeAddressIsNewFormat && (await this.storage.getWalletType()) !== WalletType.P2PKH) {
+      throw new SendTxError('A multisig wallet cannot use a new-format change address.');
+    }
     if (
       this.changeAddress &&
       !changeAddressIsNewFormat &&
@@ -1807,12 +1812,19 @@ function pulledHtrChangeMode(
  * address, else the wallet's current shielded address, read from storage so a
  * send built without a HathorWallet resolves it the same way.
  *
- * @throws SendTxError when the wallet has no shielded address to receive it.
+ * A multisig wallet has none: the shielded addresses it derives are
+ * single-signature, so change sent there would leave the multisig's control.
+ *
+ * @throws SendTxError for a multisig wallet, or when the wallet's shielded
+ *   address cannot be resolved.
  */
 async function resolveShieldedChangeAddress(
   storage: IStorage,
   shieldedChangeAddress: string | null
 ): Promise<string> {
+  if ((await storage.getWalletType()) !== WalletType.P2PKH) {
+    throw new SendTxError('A shielded change is not supported for multisig wallets.');
+  }
   if (shieldedChangeAddress) {
     return shieldedChangeAddress;
   }
@@ -1821,7 +1833,7 @@ async function resolveShieldedChangeAddress(
   } catch (e) {
     const reason = e instanceof Error ? e.message : String(e);
     throw new SendTxError(
-      `A shielded change is required, but the wallet has no shielded address to receive it: ${reason}`
+      `A shielded change is required, but the wallet's shielded address could not be resolved: ${reason}`
     );
   }
 }

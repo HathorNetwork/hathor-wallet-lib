@@ -943,8 +943,16 @@ describe('convertHtrChangeIfRequested', () => {
   // caller's `filter_method` (exclusion of already-used UTXOs) AND
   // `order_by_value` (value sort) the same way the real storage does — so a
   // regression in the pull-loop's ordering is observable.
-  const mockStorage = (utxos: FakeUtxo[] = [], shieldedAddress = buildShieldedAddress()) =>
+  const mockStorage = (
+    utxos: FakeUtxo[] = [],
+    shieldedAddress = buildShieldedAddress(),
+    walletType = WalletType.P2PKH
+  ) =>
     ({
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async getWalletType() {
+        return walletType;
+      },
       // The wallet's current shielded address, where a shielded change goes.
       // eslint-disable-next-line @typescript-eslint/require-await
       async getCurrentAddress() {
@@ -1512,6 +1520,35 @@ describe('convertHtrChangeIfRequested', () => {
     // Untouched: transparent change kept, no def appended.
     expect(partialHtrTxData.outputs).toHaveLength(1);
     expect(defs).toHaveLength(MAX_SHIELDED_OUTPUTS);
+  });
+
+  test('H.8 — refuses a shielded change for a multisig wallet, even to an explicit address', async () => {
+    const partialHtrTxData = {
+      inputs: [],
+      outputs: [buildHtrChangeOutput(100n)],
+    };
+    const defs = [
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+      buildShieldedDef(ShieldedOutputMode.AMOUNT_SHIELDED),
+    ];
+    // The multisig wallet's shielded address is single-signature.
+    const shieldedAddress = buildShieldedAddress();
+
+    await expect(
+      convertHtrChangeIfRequested(
+        partialHtrTxData,
+        defs,
+        ShieldedOutputMode.AMOUNT_SHIELDED,
+        testnetNetwork,
+        mockStorage([], shieldedAddress, WalletType.MULTISIG),
+        [],
+        true,
+        OutputKind.TRANSPARENT,
+        shieldedAddress
+      )
+    ).rejects.toThrow('A shielded change is not supported for multisig wallets.');
+    expect(partialHtrTxData.outputs).toHaveLength(1);
+    expect(defs).toHaveLength(2);
   });
 });
 
@@ -4063,6 +4100,136 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
           o => o.token === CUSTOM_TOKEN && o.shieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED
         )
       ).toBe(true);
+    });
+
+    describe('multisig wallets', () => {
+      // A multisig wallet built from a seed also derives a shielded chain, but
+      // its spend key belongs to this participant alone. Built from storage
+      // alone, as multisig tx proposals are.
+      const multisigStorage = (pool: ReturnType<typeof poolUtxo>[]) => {
+        const storage = withShieldedAddress(buildPoolStorage(pool), buildShieldedAddr(0));
+        jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.MULTISIG);
+        return storage;
+      };
+      const htrPayment = {
+        address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+        value: 8n,
+        token: NATIVE_TOKEN_UID,
+      };
+
+      test('a plain transparent send keeps its transparent change', async () => {
+        const storage = multisigStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+
+        const result = await new SendTransaction({
+          storage,
+          outputs: [htrPayment],
+        }).prepareTxData();
+
+        const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
+        expect(change!.value).toBe(12n);
+        expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      });
+
+      test('the change is not shielded in place of a missing shielded input', async () => {
+        const storage = multisigStorage([
+          poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          storage,
+          outputs: [
+            {
+              address: buildShieldedAddr(1),
+              value: 11n,
+              token: CUSTOM_TOKEN,
+              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+            },
+            {
+              type: OutputType.P2PKH,
+              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              value: 5n,
+              token: CUSTOM_TOKEN,
+            },
+          ],
+        }).prepareTxData();
+
+        // The 34n change stays transparent and the 11n is split at the recipient.
+        expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+          5n,
+          6n,
+        ]);
+        expect(result.shieldedOutputs!.every(o => o.address === recipientSpend())).toBe(true);
+        const transparentCustom = result.outputs
+          .filter(o => (o as { token?: string }).token === CUSTOM_TOKEN)
+          .map(o => o.value)
+          .sort((a, b) => Number(a - b));
+        expect(transparentCustom).toEqual([5n, 34n]);
+      });
+
+      test('a shielded change mode is rejected', async () => {
+        const storage = multisigStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+
+        await expect(
+          new SendTransaction({
+            storage,
+            outputs: [htrPayment],
+            changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          }).prepareTxData()
+        ).rejects.toThrow('A shielded change is not supported for multisig wallets.');
+      });
+
+      test('a change the rules must shield is rejected: all outputs shielded', async () => {
+        const storage = multisigStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+
+        await expect(
+          new SendTransaction({
+            storage,
+            outputs: [
+              {
+                address: buildShieldedAddr(1),
+                value: 5n,
+                token: NATIVE_TOKEN_UID,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+              {
+                address: buildShieldedAddr(2),
+                value: 5n,
+                token: NATIVE_TOKEN_UID,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+            ],
+          }).prepareTxData()
+        ).rejects.toThrow('A shielded change is not supported for multisig wallets.');
+      });
+
+      test('a change the rules must shield is rejected: a shielded UTXO was spent', async () => {
+        const storage = multisigStorage([
+          poolUtxo('htr-pub-3', 3n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-sh-10', 10n, NATIVE_TOKEN_UID, {
+            shielded: true,
+            blindingFactor: '4c'.repeat(32),
+          }),
+        ]);
+
+        await expect(
+          new SendTransaction({ storage, outputs: [htrPayment] }).prepareTxData()
+        ).rejects.toThrow('A shielded change is not supported for multisig wallets.');
+      });
+
+      test('a new-format change address is rejected', async () => {
+        const storage = multisigStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+        jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
+
+        // Even a transparent change there would pay the single-signature spend key.
+        await expect(
+          new SendTransaction({
+            storage,
+            outputs: [htrPayment],
+            changeAddress: buildShieldedAddr(0),
+          }).prepareTxData()
+        ).rejects.toThrow('A multisig wallet cannot use a new-format change address.');
+      });
     });
   });
 });
