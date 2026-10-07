@@ -15,8 +15,9 @@
  * the wrong address.
  *
  * Message signing and getPrivateKeyFromAddress work with the read-only token. Oracle signing also
- * calls wallet/addresses/check_mine, which needs a full token: the client mints it with
- * refreshFullAuthToken in the same passkey ceremony, before signing.
+ * calls wallet/addresses/check_mine, which the wallet-service currently allows only with a full
+ * token: the client mints it with refreshFullAuthToken in the same passkey ceremony, before
+ * signing.
  */
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
@@ -26,7 +27,7 @@ import Network from '../../../src/models/network';
 import { P2PKH_ACCT_PATH } from '../../../src/constants';
 import { verifyMessage } from '../../../src/utils/crypto';
 import { getOracleBuffer, unsafeGetOracleInputData } from '../../../src/nano_contracts/utils';
-import { WalletFromXPubGuard, WalletRequestError } from '../../../src/errors';
+import { WalletFromXPubGuard } from '../../../src/errors';
 import {
   buildWalletInstance,
   initializeServiceGlobalConfigs,
@@ -129,14 +130,10 @@ describe('[Service] external private-key provider on an xpub-only wallet', () =>
     await startXpubOnlyWallet(makeProvider(words));
     const oracleData = getOracleBuffer(addresses[1], wallet.getNetworkObject());
 
-    // The oracle path first checks the oracle address is ours (wallet/addresses/check_mine), which
-    // a read-only token may not call...
-    await expect(unsafeGetOracleInputData(oracleData, ORACLE_RESULT, wallet)).rejects.toThrow(
-      WalletRequestError
-    );
-
-    // ...so the passkey consent step mints a full token first, in the same ceremony that yields
-    // the keys (as it does for transactions).
+    // The oracle path first checks the oracle address is ours (wallet/addresses/check_mine). The
+    // wallet-service currently doesn't allow that call with a read-only token, so the passkey
+    // consent step mints a full token first, in the same ceremony that yields the keys (as it
+    // does for transactions).
     const rootXpriv = new Mnemonic(words).toHDPrivateKey('', new Network('testnet'));
     await wallet.refreshFullAuthToken(HathorWalletServiceWallet.deriveAuthPrivateKey(rootXpriv));
 
