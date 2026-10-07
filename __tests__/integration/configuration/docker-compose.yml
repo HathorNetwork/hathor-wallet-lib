@@ -136,7 +136,7 @@ services:
 
       # Connection to other services in this private network
       FULLNODE_HOST: "fullnode:8080"
-      FULLNODE_NETWORK: "nano-testnet-bravo"
+      FULLNODE_NETWORK: "privatenet"
       REDIS_URL: redis://redis:6379
       DB_ENDPOINT: "mysql"
       DB_NAME: "wallet_service"
@@ -240,8 +240,8 @@ services:
       AWS_SHARED_CREDENTIALS_FILE: ".aws/credentials" # Credentials for mocked AWS
       AWS_CONFIG_FILE: ".aws/config" # Config for mocked AWS
     ports:
-      - "3100:3000"
-      - "3101:3001"
+      - "3000:3000"
+      - "3001:3001"
     networks:
       - hathor-privnet
 
