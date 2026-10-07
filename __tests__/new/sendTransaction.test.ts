@@ -38,6 +38,7 @@ import { Fee } from '../../src/utils/fee';
 import walletHelpers from '../../src/utils/helpers';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import transaction from '../../src/utils/transaction';
+import txApi from '../../src/api/txApi';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
@@ -1779,5 +1780,140 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
     expect(change).toBeDefined();
     expect(change!.value).toBe(90n);
+  });
+});
+
+// A failed send must release its inputs BEFORE it reports the failure (error event, rejected
+// promise), so a caller that retries right away finds its UTXOs free. The release is held open
+// here to check that nothing is reported while it's pending.
+describe('failed sends release their inputs before reporting', () => {
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>(res => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  };
+  const flush = () =>
+    new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+
+  const setup = () => {
+    const storage = new Storage(new MemoryStore());
+    const release = deferred();
+    jest.spyOn(storage, 'utxoSelectAsInput').mockImplementation(async (_utxo, markAs) => {
+      if (!markAs) {
+        await release.promise;
+      }
+    });
+    const sendTx = new SendTransaction({ storage, outputs: [], inputs: [] });
+    sendTx.transaction = {
+      inputs: [{ hash: 'tx1', index: 0 }],
+      toHex: () => 'aa',
+      updateHash: () => {},
+    } as unknown as import('../../src/models/transaction').default;
+    const sendError = jest.fn();
+    sendTx.on('send-error', sendError);
+    return { storage, release, sendTx, sendError };
+  };
+
+  /** Track a promise without letting its rejection go unhandled. */
+  const track = (promise: Promise<unknown>) => {
+    const state = { settled: false, error: undefined as unknown };
+    const done = promise.then(
+      () => {
+        state.settled = true;
+      },
+      err => {
+        state.settled = true;
+        state.error = err;
+      }
+    );
+    return { state, done };
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('mining failure: send-error and the mineTx rejection wait for the release', async () => {
+    const { release, sendTx, sendError } = setup();
+    const mining = track(sendTx.mineTx({ startMiningTx: false }));
+    await flush(); // the inputs are marked and the MineTransaction exists
+
+    sendTx.mineTransaction!.emit('error', 'mining failed');
+    await flush();
+    expect(sendError).not.toHaveBeenCalled();
+    expect(mining.state.settled).toBe(false);
+
+    release.resolve();
+    await mining.done;
+    expect(sendError).toHaveBeenCalledWith('mining failed');
+    expect(mining.state.error).toBeDefined();
+  });
+
+  it('push request failure: send-error and the rejection wait for the release', async () => {
+    const { release, sendTx, sendError } = setup();
+    const failure = new Error('network down');
+    jest.spyOn(txApi, 'pushTx').mockRejectedValue(failure);
+    const push = track(sendTx.handlePushTx());
+    await flush();
+    expect(sendError).not.toHaveBeenCalled();
+    expect(push.state.settled).toBe(false);
+
+    release.resolve();
+    await push.done;
+    expect(sendError).toHaveBeenCalledWith('network down');
+    expect(push.state.error).toBe(failure);
+  });
+
+  it('tx rejected by the fullnode: the rejection waits for the release', async () => {
+    const { release, sendTx } = setup();
+    jest.spyOn(txApi, 'pushTx').mockImplementation(async (_hex, _force, callback) => {
+      callback({ success: false, message: 'invalid tx' });
+    });
+    const push = track(sendTx.handlePushTx());
+    await flush();
+    expect(push.state.settled).toBe(false);
+
+    release.resolve();
+    await push.done;
+    expect((push.state.error as Error).message).toBe('invalid tx');
+  });
+
+  // The listeners above run where nothing awaits them, so a consumer's throwing handler must be
+  // logged, not become an unhandled rejection, and must not keep the send from settling.
+  it("a throwing send-error handler is logged and doesn't keep the push from settling", async () => {
+    const { storage, release, sendTx } = setup();
+    const logError = jest.spyOn(storage.logger, 'error').mockImplementation(() => {});
+    const handlerBug = new Error('handler bug');
+    sendTx.on('send-error', () => {
+      throw handlerBug;
+    });
+    const failure = new Error('network down');
+    jest.spyOn(txApi, 'pushTx').mockRejectedValue(failure);
+
+    release.resolve();
+    await expect(sendTx.handlePushTx()).rejects.toBe(failure);
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('send-error'), handlerBug);
+  });
+
+  it('a throwing mining error handler is logged, and mineTx still rejects', async () => {
+    const { storage, release, sendTx } = setup();
+    const logError = jest.spyOn(storage.logger, 'error').mockImplementation(() => {});
+    const handlerBug = new Error('handler bug');
+    sendTx.on('send-error', () => {
+      throw handlerBug;
+    });
+    release.resolve();
+    const mining = track(sendTx.mineTx({ startMiningTx: false }));
+    await flush();
+
+    sendTx.mineTransaction!.emit('error', 'mining failed');
+    await mining.done;
+    await flush();
+    expect(mining.state.error).toBeDefined();
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('send-error'), handlerBug);
   });
 });

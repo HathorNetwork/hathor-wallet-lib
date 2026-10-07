@@ -579,3 +579,83 @@ test('unmarkAsSelected attempts every input, then rethrows the first failure', a
   expect(spyMark).toHaveBeenLastCalledWith({ txId: FAKE_TXID, index: 2 }, false);
   spyMark.mockRestore();
 });
+
+describe('PartialTxProposal waits for the UTXO marking', () => {
+  const deferred = () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>(res => {
+      resolve = res;
+    });
+    return { promise, resolve };
+  };
+  const flush = () =>
+    new Promise<void>(resolve => {
+      setImmediate(resolve);
+    });
+  const utxo: Utxo = {
+    txId: FAKE_TXID,
+    index: 1,
+    addressPath: '',
+    address: ADDR1,
+    timelock: null,
+    tokenId: FAKE_UID,
+    value: 10n,
+    authorities: 0n,
+    heightlock: null,
+    locked: false,
+  };
+
+  const setup = () => {
+    const storage = new Storage(new MemoryStore());
+    storage.config.setNetwork('testnet');
+    const marking = deferred();
+    const spyMark = jest
+      .spyOn(storage, 'utxoSelectAsInput')
+      .mockImplementation(() => marking.promise);
+    return { storage, marking, spyMark, proposal: new PartialTxProposal(storage) };
+  };
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('addSend resolves only once its inputs are marked', async () => {
+    const { marking, proposal } = setup();
+    let done = false;
+    // Exact amount: no change output, so nothing else is awaited.
+    const sending = proposal.addSend(FAKE_UID, 10n, { utxos: [utxo] }).then(() => {
+      done = true;
+    });
+    await flush();
+    expect(done).toBe(false);
+
+    marking.resolve();
+    await sending;
+    expect(done).toBe(true);
+  });
+
+  it('a non-awaited addInput already has the input in the partial tx', async () => {
+    const { marking, proposal } = setup();
+
+    const adding = proposal.addInput(FAKE_TXID, 5, 999n, ADDR1);
+
+    // Synchronously, before the marking resolves.
+    expect(proposal.partialTx.inputs).toHaveLength(1);
+    expect(proposal.partialTx.inputs[0].index).toBe(5);
+    marking.resolve();
+    await adding;
+  });
+
+  it('unmarkAsSelected logs every failed release', async () => {
+    const { storage, spyMark, proposal } = setup();
+    await proposal.addInput(FAKE_TXID, 0, 1n, ADDR1, { markAsSelected: false });
+    await proposal.addInput(FAKE_TXID, 1, 1n, ADDR1, { markAsSelected: false });
+    spyMark.mockReset();
+    spyMark.mockRejectedValue(new Error('storage unavailable'));
+    const debug = jest.spyOn(storage.logger, 'debug').mockImplementation(() => {});
+
+    await expect(proposal.unmarkAsSelected()).rejects.toThrow('storage unavailable');
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining(`${FAKE_TXID}:0`));
+    expect(debug).toHaveBeenCalledWith(expect.stringContaining(`${FAKE_TXID}:1`));
+  });
+});
