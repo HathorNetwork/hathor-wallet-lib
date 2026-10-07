@@ -585,8 +585,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // change is a rule that requires it (all of the token's outputs are
     // shielded, or a shielded UTXO was spent): a legacy changeAddress must
     // fail there, never be silently replaced by a wallet-derived address.
-    const assertChangeAddressSupportsShieldedChange = () => {
+    const assertChangeAddressSupportsShieldedChange = async (): Promise<void> => {
       if (legacyChangeAddress) {
+        // No address can take a multisig wallet's shielded change.
+        if ((await changeStorage.getWalletType()) !== WalletType.P2PKH) {
+          throw new SendTxError(MULTISIG_SHIELDED_CHANGE_ERROR);
+        }
         throw new SendTxError(
           "The change must be shielded (all of its token's outputs are shielded, or the " +
             'transaction spends a shielded UTXO), and a legacy change address cannot receive ' +
@@ -646,7 +650,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         keptOutputs.push(out);
         continue;
       }
-      assertChangeAddressSupportsShieldedChange();
+      await assertChangeAddressSupportsShieldedChange();
       if (shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
         throw new SendTxError(
           `Cannot shield custom-token change: the transaction already has the ` +
@@ -799,7 +803,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // Only a change that will actually be shielded needs a shielded-capable
     // destination; with no HTR change (an exact match) the address is unused.
     if (htrChangeMode !== OutputKind.TRANSPARENT && htrChangeIndex !== -1) {
-      assertChangeAddressSupportsShieldedChange();
+      await assertChangeAddressSupportsShieldedChange();
     }
     // A change too small for its own fee, with no HTR to add to it, may stay as
     // it is in two cases. It is shielded only in place of a missing shielded
@@ -903,7 +907,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       };
       // Shields the transparent HTR change as the tx's second shielded output.
       const shieldHtrChange = async (mode: ShieldedOutputMode): Promise<void> => {
-        assertChangeAddressSupportsShieldedChange();
+        await assertChangeAddressSupportsShieldedChange();
         const { addedFee: changeFee } = await convertHtrChangeIfRequested(
           partialHtrTxData,
           shieldedOutputDefs,
@@ -1920,6 +1924,10 @@ function pulledHtrChangeMode(
     : ShieldedOutputMode.AMOUNT_SHIELDED;
 }
 
+const MULTISIG_SHIELDED_CHANGE_ERROR =
+  'A shielded change is not supported for multisig wallets. Pass changeShieldedMode: ' +
+  'OutputKind.TRANSPARENT to keep the change transparent.';
+
 /**
  * The destination of a shielded change: the caller's new-format change
  * address, else the wallet's current shielded address, read from storage so a
@@ -1936,7 +1944,7 @@ async function resolveShieldedChangeAddress(
   shieldedChangeAddress: string | null
 ): Promise<string> {
   if ((await storage.getWalletType()) !== WalletType.P2PKH) {
-    throw new SendTxError('A shielded change is not supported for multisig wallets.');
+    throw new SendTxError(MULTISIG_SHIELDED_CHANGE_ERROR);
   }
   if (shieldedChangeAddress) {
     return shieldedChangeAddress;

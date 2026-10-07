@@ -5306,6 +5306,53 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         ).rejects.toThrow('A shielded change is not supported for multisig wallets.');
       });
 
+      test('with its legacy change address, a change that must be shielded is refused for multisig', async () => {
+        const send = (changeShieldedMode: ChangeOutputMode | null) => {
+          const storage = multisigStorage([
+            poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
+            poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+          ]);
+          ownLegacyChangeAddress(storage);
+          return new SendTransaction({
+            storage,
+            outputs: [
+              {
+                address: buildShieldedAddr(1),
+                value: 10n,
+                token: CUSTOM_TOKEN,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+              {
+                address: buildShieldedAddr(2),
+                value: 10n,
+                token: CUSTOM_TOKEN,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+            ],
+            changeAddress: LEGACY_CHANGE_ADDRESS,
+            changeShieldedMode,
+          }).prepareTxData();
+        };
+
+        // All custom outputs are shielded, so its change must be; a new-format
+        // address is no way out for a multisig wallet.
+        await expect(send(null)).rejects.toThrow(
+          new SendTxError(
+            'A shielded change is not supported for multisig wallets. Pass changeShieldedMode: ' +
+              'OutputKind.TRANSPARENT to keep the change transparent.'
+          )
+        );
+        // As suggested: the 30n change stays at the multisig change address.
+        const result = await send(OutputKind.TRANSPARENT);
+        const customChange = result.outputs.find(
+          o =>
+            (o as { isChange?: boolean }).isChange &&
+            (o as { token?: string }).token === CUSTOM_TOKEN
+        );
+        expect(customChange!.value).toBe(30n);
+        expect((customChange as { address?: string }).address).toBe(LEGACY_CHANGE_ADDRESS);
+      });
+
       test('a new-format change address is rejected', async () => {
         const storage = multisigStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
         jest.spyOn(storage, 'isAddressMine').mockResolvedValue(true);
