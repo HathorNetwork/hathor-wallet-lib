@@ -2026,7 +2026,8 @@ export async function convertHtrChangeIfRequested(
     // auto-selecting HTR (the caller supplied the HTR inputs), pulling extra
     // UTXOs would break the "user-supplied inputs -> wallet selects nothing
     // more" contract — fail instead so the caller keeps control of the input
-    // set (they can add HTR, send less, or drop changeShieldedMode).
+    // set (they can add HTR, send less, or pass changeShieldedMode:
+    // OutputKind.TRANSPARENT to keep the change transparent).
     if (!canSelectMoreHtr) {
       if (!shieldingRequired) {
         return { addedFee: 0n };
@@ -2065,12 +2066,12 @@ export async function convertHtrChangeIfRequested(
       if (!shieldingRequired) {
         return { addedFee: 0n };
       }
-      // Deliberate hard failure, NOT a silent transparent downgrade: the caller
-      // asked to shield this change, so quietly leaving it transparent to
+      // Deliberate hard failure, NOT a silent transparent downgrade: the rules
+      // or the caller shield this change, so quietly leaving it transparent to
       // "rescue" the send would publish the change (and link the sender)
-      // against their stated privacy intent. Fail loudly so the caller can
-      // decide (send less, consolidate HTR, or drop changeShieldedMode) rather
-      // than have privacy silently downgraded.
+      // against that intent. Fail loudly so the caller can decide (send less,
+      // consolidate HTR, or pass changeShieldedMode: OutputKind.TRANSPARENT)
+      // rather than have privacy silently downgraded.
       throw new SendTxError(
         'HTR change is too small to fund its shielded-output fee and no additional ' +
           'HTR is available to cover the difference.'
