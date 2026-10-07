@@ -840,7 +840,8 @@ export interface IStorage {
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void;
-  getTxSignatureMethod(): EcdsaTxSign | null;
+  // Optional so custom IStorage implementations keep type-checking.
+  getTxSignatureMethod?(): EcdsaTxSign | null;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   hasPrivateKeyMethod(): boolean;
