@@ -8,6 +8,7 @@
 export { OutputKind, ShieldedOutputMode } from './types';
 
 export type {
+  ChangeOutputMode,
   IShieldedOutput,
   IShieldedOutputDecoded,
   IDecryptedShieldedOutput,
