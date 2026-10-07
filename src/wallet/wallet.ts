@@ -1314,6 +1314,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * messages and oracle data. It does NOT enable sending transactions, which uses the tx-signing
    * method. Mirrors HathorWallet.
    *
+   * Oracle-data signing also checks the oracle address with isAddressMine, which needs a full auth
+   * token: a wallet browsing with a read-only token (startReadOnly) must mint one first, e.g. with
+   * refreshFullAuthToken in the same ceremony that provides the keys. Message signing works with
+   * a read-only token.
+   *
    * @param getPrivKey The external provider, or null to clear it
    *
    * @memberof HathorWalletServiceWallet
@@ -1364,19 +1369,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * The wallet's own address at an index. Derived locally from the xpub when the wallet has it, so
-   * checking a provider's key needs no wallet-service request and doesn't depend on its answer;
-   * otherwise asks the wallet-service.
+   * The wallet's own address at an index. Derived locally from the stored access data's xpub when
+   * the wallet has it, so checking a provider's key needs no wallet-service request and doesn't
+   * depend on its answer; otherwise asks the wallet-service. The stored xpub is always the
+   * change-level one (generateAccessDataFromXpub normalizes an account- or change-level xpub).
    *
    * @param index Address index
    * @returns {Promise<string>} The address in base58
    */
   private async getOwnAddressAtIndex(index: number): Promise<string> {
-    if (!this.xpub) {
+    const accessData = await this.storage.getAccessData();
+    if (!accessData?.xpubkey) {
       return this.getAddressAtIndex(index);
     }
-    const changeXpub = walletUtils.xpubDeriveChild(this.xpub, 0);
-    return deriveAddressFromXPubP2PKH(changeXpub, index, this.getNetworkObject().name).base58;
+    return deriveAddressFromXPubP2PKH(accessData.xpubkey, index, this.getNetworkObject().name)
+      .base58;
   }
 
   /**
@@ -1759,10 +1766,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // checked against the wallet's address at this index.
       privateKey = await this.getVerifiedExternalPrivateKey(index, { pinCode });
     } else {
-      if (!pinCode) {
-        throw new PinRequiredError('Pin is required.');
-      }
-      const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
+      // Ask for the pin when it wasn't given, like getPrivateKeyFromAddress and sendTransaction on
+      // this facade (HathorWallet falls back to its stored pin instead).
+      const pin = pinCode || (await this.requestPassword());
+      const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pin, index);
       privateKey = addressHDPrivKey.privateKey;
     }
     const signedMessage: string = signMessage(message, privateKey);

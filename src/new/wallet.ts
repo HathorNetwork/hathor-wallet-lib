@@ -2207,7 +2207,7 @@ class HathorWallet extends EventEmitter {
   async getVerifiedExternalPrivateKey(
     addressIndex: number,
     options: { pinCode?: string; expectedAddress?: string } = {}
-  ): Promise<unknown> {
+  ): Promise<bitcore.PrivateKey> {
     return fetchVerifiedExternalPrivateKey(
       this.storage,
       this.getNetworkObject(),
@@ -2228,7 +2228,7 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
-    let privateKey: unknown;
+    let privateKey: bitcore.PrivateKey;
     if (this.storage.hasPrivateKeyMethod()) {
       // External provider (e.g. passkey signer): derive the key on demand by index; no pin needed.
       // Verified against the wallet's address at this index (see getVerifiedExternalPrivateKey).
@@ -2243,11 +2243,11 @@ class HathorWallet extends EventEmitter {
         throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
       }
       const addressHDPrivKey = (await this.getAddressPrivKey(pin, index)) as {
-        privateKey: unknown;
+        privateKey: bitcore.PrivateKey;
       };
       privateKey = addressHDPrivKey.privateKey;
     }
-    const signedMessage = signMessage(message, privateKey as bitcore.PrivateKey);
+    const signedMessage = signMessage(message, privateKey);
 
     return signedMessage;
   }

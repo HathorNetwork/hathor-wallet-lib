@@ -7,6 +7,8 @@
 
 import bitcore from 'bitcore-lib';
 import {
+  EcdsaTxSign,
+  PrivateKeyProvider,
   TokenVersion,
   IStorage,
   OutputValueType,
@@ -344,6 +346,9 @@ export interface IHathorWallet {
   startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void>;
   getReadOnlyAuthToken(): Promise<string>;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  setExternalTxSigningMethod(method: EcdsaTxSign | null): void;
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
+  hasExternalPrivateKeyMethod(): boolean;
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
