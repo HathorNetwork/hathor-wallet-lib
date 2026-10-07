@@ -526,27 +526,27 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     // ── changeAddress under the address model ────────────────────────────
     // Legacy addresses are transparent-only; the new 71-byte format serves
-    // both shielded and transparent outputs. A legacy changeAddress on a tx
-    // that carries shielded outputs (or an explicit shielded change mode) can
-    // never honor the change rules — fail rather than silently downgrade.
+    // both shielded and transparent outputs. A legacy changeAddress can never
+    // receive a shielded change — fail rather than silently downgrade it.
     const changeAddressIsNewFormat = this.changeAddress
       ? new Address(this.changeAddress, { network }).isShielded()
       : false;
+    const legacyChangeAddress = !!this.changeAddress && !changeAddressIsNewFormat;
     // A multisig wallet's new-format addresses are single-signature: change
     // sent there, shielded or not, would leave the multisig's control.
     if (changeAddressIsNewFormat && (await this.storage.getWalletType()) !== WalletType.P2PKH) {
       throw new SendTxError('A multisig wallet cannot use a new-format change address.');
     }
+    // An explicit shielded change mode and a legacy change address contradict
+    // each other.
     if (
-      this.changeAddress &&
-      !changeAddressIsNewFormat &&
-      (shieldedOutputDefs.length > 0 ||
-        changeModeOverride === ShieldedOutputMode.AMOUNT_SHIELDED ||
+      legacyChangeAddress &&
+      (changeModeOverride === ShieldedOutputMode.AMOUNT_SHIELDED ||
         changeModeOverride === ShieldedOutputMode.FULLY_SHIELDED)
     ) {
       throw new SendTxError(
-        'A legacy change address cannot be used on a transaction with shielded outputs ' +
-          'or a shielded change mode — use a new-format (shielded-capable) address.'
+        'A legacy change address cannot receive the shielded change that changeShieldedMode ' +
+          'requests — use a new-format change address.'
       );
     }
     // A new-format changeAddress hosts the shielded change itself. It must be
@@ -555,45 +555,44 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       throw new SendTxError('Change address is not from the wallet');
     }
     const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
-    // Whether a shielded change can be hosted at all: a wallet with no shielded
-    // address cannot receive one. Asked only where shielding the change is
-    // optional; where it is required, resolving the address throws instead.
+    // Whether a shielded change can be hosted at all: not at a legacy change
+    // address, nor by a wallet with no shielded address. Asked only where
+    // shielding the change is optional; where it is required, the legacy
+    // address check or resolving the address throws instead.
     const changeStorage = this.storage;
     let shieldedChangeHostable: Promise<boolean> | null = null;
     const canHostShieldedChange = (): Promise<boolean> => {
       if (shieldedChangeHostable === null) {
-        shieldedChangeHostable = resolveShieldedChangeAddress(
-          changeStorage,
-          shieldedChangeAddress
-        ).then(
-          () => true,
-          () => false
-        );
+        shieldedChangeHostable = legacyChangeAddress
+          ? Promise.resolve(false)
+          : resolveShieldedChangeAddress(changeStorage, shieldedChangeAddress).then(
+              () => true,
+              () => false
+            );
       }
       return shieldedChangeHostable;
     };
     // Shielding a token's change in place of a shielded input the wallet lacks
     // is optional: it is skipped when the tx has no room for another shielded
-    // output or the wallet has no shielded address to receive it.
+    // output or the change cannot be hosted shielded.
     const shieldsChangeInstead = async (token: string): Promise<boolean> => {
       if (!shieldedChangeTokens.has(token) || shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
         return false;
       }
       return canHostShieldedChange();
     };
-    // The static guard above only sees explicit shielded outputs or an
-    // explicit AS/FS override. The automatic rules can ALSO decide on a
-    // shielded change after selection (e.g. a shielded top-up under R2, or a
-    // user-supplied shielded input) — a legacy changeAddress must fail there
-    // too, never be silently replaced by a wallet-derived address.
-    // Shielded outputs and an explicit AS/FS mode already failed the static
-    // guard, so what shields the change here is a spent shielded UTXO.
+    // Called wherever a change is about to be shielded. With an explicit AS/FS
+    // mode or the optional shielding ruled out above, what still shields the
+    // change is a rule that requires it (all of the token's outputs are
+    // shielded, or a shielded UTXO was spent): a legacy changeAddress must
+    // fail there, never be silently replaced by a wallet-derived address.
     const assertChangeAddressSupportsShieldedChange = () => {
-      if (this.changeAddress && !changeAddressIsNewFormat) {
+      if (legacyChangeAddress) {
         throw new SendTxError(
-          'The change must be shielded because the transaction spends a shielded UTXO, and a ' +
-            'legacy change address cannot receive it. Use a new-format change address, or ' +
-            'changeShieldedMode: OutputKind.TRANSPARENT to keep the change transparent.'
+          "The change must be shielded (all of its token's outputs are shielded, or the " +
+            'transaction spends a shielded UTXO), and a legacy change address cannot receive ' +
+            'it. Use a new-format change address, or changeShieldedMode: ' +
+            'OutputKind.TRANSPARENT to keep the change transparent.'
         );
       }
     };

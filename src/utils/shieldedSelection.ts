@@ -38,9 +38,9 @@ import { bestUtxoSelection } from './utxo';
  *
  * A change standing in for a missing shielded input is shielded only where it
  * can be: it stays transparent when the tx has no room for another shielded
- * output, the wallet has no shielded address to receive it (a multisig wallet
- * never does), or (HTR) it cannot pay its own fee and no more HTR can be added
- * to it.
+ * output, the caller gave a legacy change address, the wallet has no shielded
+ * address to receive it (a multisig wallet never does), or (HTR) it cannot pay
+ * its own fee and no more HTR can be added to it.
  *
  * Whatever the rules decide, a transaction never ends with exactly one shielded
  * output: the structural pass in SendTransaction adds a second one, splitting

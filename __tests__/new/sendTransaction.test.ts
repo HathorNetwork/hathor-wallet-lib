@@ -4004,7 +4004,18 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(result.headers ?? []).toHaveLength(0);
     });
 
-    test('a legacy changeAddress on a shielded send fails loudly', async () => {
+    const LEGACY_CHANGE_ADDRESS = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+    const LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_CHANGE =
+      "The change must be shielded (all of its token's outputs are shielded, or the transaction " +
+      'spends a shielded UTXO), and a legacy change address cannot receive it. Use a new-format ' +
+      'change address, or changeShieldedMode: OutputKind.TRANSPARENT to keep the change transparent.';
+    // The caller's own legacy address, the only address these tests treat as the wallet's.
+    const ownLegacyChangeAddress = (storage: Storage) =>
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === LEGACY_CHANGE_ADDRESS);
+
+    test('a legacy changeAddress fails when the rules must shield the change', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-sh-40', 40n, CUSTOM_TOKEN, {
           shielded: true,
@@ -4012,6 +4023,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         }),
         poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
       ]);
+      ownLegacyChangeAddress(storage);
       const wallet = buildWallet(storage, buildShieldedAddr(0));
       const sendTransaction = new SendTransaction({
         wallet,
@@ -4033,7 +4045,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       });
 
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-        /legacy change address cannot be used/
+        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_CHANGE)
       );
     });
 
@@ -4151,11 +4163,6 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
-    const LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND =
-      'The change must be shielded because the transaction spends a shielded UTXO, and a legacy ' +
-      'change address cannot receive it. Use a new-format change address, or changeShieldedMode: ' +
-      'OutputKind.TRANSPARENT to keep the change transparent.';
-
     test('a legacy changeAddress fails when the RULES shield the change (R2 top-up)', async () => {
       const storage = buildPoolStorage([
         poolUtxo('htr-pub-8', 8n, NATIVE_TOKEN_UID),
@@ -4178,7 +4185,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       });
 
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND)
+        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_CHANGE)
       );
     });
 
@@ -4225,7 +4232,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       });
 
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND)
+        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_CHANGE)
       );
     });
 
@@ -4297,6 +4304,160 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(change).toBeDefined();
       expect((change as { address?: string }).address).toBe('WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
       expect(result.shieldedOutputs ?? []).toHaveLength(0);
+    });
+
+    test('a legacy changeAddress takes the change of a shielded send whose change mode is transparent', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      ownLegacyChangeAddress(storage);
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeAddress: LEGACY_CHANGE_ADDRESS,
+        changeShieldedMode: OutputKind.TRANSPARENT,
+      }).prepareTxData();
+
+      // Both changes stay transparent at the caller's address: custom 50 − 20 = 30,
+      // HTR 9 − 2 (fees) = 7.
+      const changes = result.outputs.filter(o => (o as { isChange?: boolean }).isChange);
+      expect(changes.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([7n, 30n]);
+      expect(
+        changes.every(o => (o as { address?: string }).address === LEGACY_CHANGE_ADDRESS)
+      ).toBe(true);
+      expect(result.shieldedOutputs).toHaveLength(2);
+    });
+
+    test('a legacy changeAddress takes the HTR change of a shielded send with no token change', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      ownLegacyChangeAddress(storage);
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeAddress: LEGACY_CHANGE_ADDRESS,
+      }).prepareTxData();
+
+      // The custom token is spent exactly, so there is no change to shield; the
+      // HTR change stays transparent at the caller's address: 9 − 2 (fees) = 7.
+      const changes = result.outputs.filter(o => (o as { isChange?: boolean }).isChange);
+      expect(changes.map(o => o.value)).toEqual([7n]);
+      expect((changes[0] as { address?: string }).address).toBe(LEGACY_CHANGE_ADDRESS);
+    });
+
+    test('with a legacy changeAddress, the change is not shielded in place of a missing shielded input', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+      ]);
+      ownLegacyChangeAddress(storage);
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 11n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 5n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+        changeAddress: LEGACY_CHANGE_ADDRESS,
+      }).prepareTxData();
+
+      // The caller asked for the change at a transparent address, so the 34n
+      // stays there and the 11n is split at the recipient.
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        5n,
+        6n,
+      ]);
+      const customChange = result.outputs.find(
+        o =>
+          (o as { isChange?: boolean }).isChange && (o as { token?: string }).token === CUSTOM_TOKEN
+      );
+      expect(customChange!.value).toBe(34n);
+      expect((customChange as { address?: string }).address).toBe(LEGACY_CHANGE_ADDRESS);
+    });
+
+    test('a legacy changeAddress fails with a shielded change mode', async () => {
+      const storage = buildPoolStorage([poolUtxo('htr-pub-20', 20n, NATIVE_TOKEN_UID)]);
+      ownLegacyChangeAddress(storage);
+
+      await expect(
+        new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [
+            { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 8n, token: NATIVE_TOKEN_UID },
+          ],
+          changeAddress: LEGACY_CHANGE_ADDRESS,
+          changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        }).prepareTxData()
+      ).rejects.toThrow(
+        new SendTxError(
+          'A legacy change address cannot receive the shielded change that changeShieldedMode ' +
+            'requests — use a new-format change address.'
+        )
+      );
+    });
+
+    test('a legacy changeAddress fails when HTR pulled for the second shielded output must be shielded', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-pub-12', 12n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+      ]);
+      ownLegacyChangeAddress(storage);
+
+      // 12 pays 11 + 1 (fee) exactly. The second shielded output's fee comes from
+      // the 5n, whose surplus must be a shielded change because all HTR outputs
+      // are shielded; a legacy change address cannot receive it.
+      await expect(
+        new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [
+            {
+              address: buildShieldedAddr(1),
+              value: 11n,
+              token: NATIVE_TOKEN_UID,
+              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+            },
+          ],
+          changeAddress: LEGACY_CHANGE_ADDRESS,
+        }).prepareTxData()
+      ).rejects.toThrow(new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_CHANGE));
     });
 
     test('a user-supplied shielded input shields the change of its token', async () => {
