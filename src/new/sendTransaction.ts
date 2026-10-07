@@ -584,12 +584,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         if (!policy) {
           return undefined;
         }
-        // The input limit is the whole transaction's: leave room for the inputs
-        // already in it, and for the HTR fee input and a structural pull.
+        // The input limit is the whole transaction's: count the inputs already
+        // in it, and leave room for the HTR fee input and a structural pull
+        // when the amount allows.
         return makeShieldedAwareSelection(
           policy,
           report => selectionReports.set(token, report),
-          MAX_INPUTS - inputsSoFar - 2
+          MAX_INPUTS - inputsSoFar,
+          2
         );
       }
     );
@@ -717,11 +719,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       selectionPolicies.get(HTR_UID) ??
       computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy;
     if (shouldChooseHTRInputs) {
-      // Room left in the input limit, keeping one input for a structural pull.
+      // Room left in the input limit, keeping one input for a structural pull
+      // when the amount allows.
       options.utxoSelectionMethod = makeShieldedAwareSelection(
         htrPolicy,
         report => selectionReports.set(HTR_UID, report),
-        MAX_INPUTS - partialInputs.length - 1
+        MAX_INPUTS - partialInputs.length,
+        1
       );
     }
 

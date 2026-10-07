@@ -2937,6 +2937,76 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
+    test('a send that needs 254 inputs and pays no fee builds', async () => {
+      const pool = [
+        ...Array.from({ length: 253 }, (_, i) => poolUtxo(`custom-pub-1-${i}`, 1n, CUSTOM_TOKEN)),
+        poolUtxo('custom-sh-47', 47n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '4e'.repeat(32),
+        }),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 300n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      }).prepareTxData();
+
+      // The 253 transparent 1n cannot pay 300n, so they are swept and the
+      // shielded 47n tops them up exactly. With no fee and no shielded output,
+      // nothing follows to need the inputs the selection first leaves free.
+      expect(result.inputs).toHaveLength(254);
+      expect(result.inputs.map(i => i.txId)).toContain('custom-sh-47');
+      expect(result.inputs.map(i => i.txId)).not.toContain('htr-pub-10');
+    });
+
+    test('a send that needs every input a transaction holds builds', async () => {
+      const pool = [
+        ...Array.from({ length: 253 }, (_, i) =>
+          poolUtxo(`custom-sh-1-${i}`, 1n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+        poolUtxo('custom-pub-47', 47n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 150n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 150n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+      // The 253 shielded 1n are swept and the transparent 47n tops them up
+      // exactly; the HTR fee takes the last input: 253 + 1 + 1.
+      expect(result.inputs).toHaveLength(MAX_INPUTS);
+      expect(result.inputs.map(i => i.txId)).toContain('htr-pub-10');
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
     test('R3a fallback — with no change, the lone shielded output is split', async () => {
       const result = await r3aSend(
         [poolUtxo('custom-pub-16', 16n, CUSTOM_TOKEN), poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID)],

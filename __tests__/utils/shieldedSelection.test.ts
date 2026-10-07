@@ -15,6 +15,7 @@ import {
   computeTokenPolicy,
   decideChangeMode,
   hasShieldedUtxo,
+  makeShieldedAwareSelection,
   needsAvailabilityProbe,
   shieldedAwareSelection,
 } from '../../src/utils/shieldedSelection';
@@ -249,6 +250,29 @@ describe('shieldedAwareSelection', () => {
     expect(result.utxos.map(u => u.txId)).toContain('sh-1000');
     expect(result.utxos).toHaveLength(MAX_INPUTS - 1);
     expect(result.amount).toBe(1253n);
+  });
+
+  it('leaves room for inputs that may follow, unless covering the amount needs it', async () => {
+    // Eight transparent 1n UTXOs cannot pay on their own, so the selection
+    // sweeps them and tops up with the shielded 5n, within 8 inputs of which
+    // it tries to leave 2 free.
+    const store = new MemoryStore();
+    for (let i = 0; i < 8; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(utxo({ txId: 'sh-5', value: 5n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+    const select = makeShieldedAwareSelection(transparentPolicy, undefined, 8, 2);
+
+    // 10n fits in 6 inputs: 5 swept + the shielded 5n, leaving 2 free.
+    const leavingRoom = await select(storage, '00', 10n);
+    expect(leavingRoom.utxos).toHaveLength(6);
+    expect(leavingRoom.amount).toBe(10n);
+
+    // 12n does not fit in 6 (at most 5 + 5n), so all 8 are used: 7 + 5n.
+    const usingAll = await select(storage, '00', 12n);
+    expect(usingAll.utxos).toHaveLength(8);
+    expect(usingAll.amount).toBe(12n);
   });
 
   it('insufficient across both pools reports the combined available sum', async () => {

@@ -449,12 +449,32 @@ export async function shieldedAwareSelection(
 /**
  * Close a policy over the standard `UtxoSelectionAlgorithm` signature so the
  * existing selection plumbing can run it unchanged.
+ *
+ * The selection first leaves `room` of its `maxInputs` free for inputs that
+ * may follow it; when the amount cannot be covered that way, it uses all of
+ * them, and the transaction's own input check decides whether what follows
+ * still fits.
  */
 export function makeShieldedAwareSelection(
   policy: ITokenSelectionPolicy,
   onReport?: (report: ISelectionReport) => void,
-  maxInputs: number = MAX_INPUTS
+  maxInputs: number = MAX_INPUTS,
+  room: number = 0
 ): UtxoSelectionAlgorithm {
-  return (storage, token, amount) =>
-    shieldedAwareSelection(storage, token, amount, policy, onReport, maxInputs);
+  return async (storage, token, amount) => {
+    if (room > 0) {
+      const leavingRoom = await shieldedAwareSelection(
+        storage,
+        token,
+        amount,
+        policy,
+        onReport,
+        maxInputs - room
+      );
+      if (leavingRoom.amount >= amount) {
+        return leavingRoom;
+      }
+    }
+    return shieldedAwareSelection(storage, token, amount, policy, onReport, maxInputs);
+  };
 }
