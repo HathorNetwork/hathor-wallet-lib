@@ -24,7 +24,7 @@ import {
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
-import { deriveAddressFromXPubP2PKH } from '../utils/address';
+import { deriveAddressFromXPubP2PKH, getAddressFromPubkey } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -99,6 +99,7 @@ import {
   ApiVersion,
   EcdsaTxSign,
   IStorage,
+  PrivateKeyProvider,
   IWalletAccessData,
   OutputValueType,
   IHistoryTx,
@@ -1304,6 +1305,74 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Set an external private-key provider, or null to clear it. getPrivateKeyFromAddress (and so
+   * oracle-data signing) and signMessageWithAddress then get address private keys from it instead
+   * of a stored, PIN-encrypted key, which lets an xpub-only wallet (e.g. a passkey signer) sign
+   * messages and oracle data. It does NOT enable sending transactions, which uses the tx-signing
+   * method. Mirrors HathorWallet.
+   *
+   * @param getPrivKey The external provider, or null to clear it
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.storage.setPrivateKeyMethod(getPrivKey);
+  }
+
+  /**
+   * Fetch an address private key from the external provider and check it belongs to the requested
+   * address, so a buggy or mismatched provider can never sign with the wrong key.
+   *
+   * @param addressIndex Index whose private key to fetch
+   * @param [options.pinCode] Forwarded to the provider
+   * @param [options.expectedAddress] The address the key must own, when the caller knows it. Used
+   *   only for the check; it is not forwarded to the provider. Defaults to the address at the index.
+   * @returns {Promise<bitcore.PrivateKey>} The verified private key
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getVerifiedExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string; expectedAddress?: string } = {}
+  ): Promise<bitcore.PrivateKey> {
+    // expectedAddress is check-only: keep it out of the PrivateKeyProvider contract.
+    const { expectedAddress, ...providerOptions } = options;
+    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
+    if (!(privateKey instanceof bitcore.PrivateKey)) {
+      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
+    }
+    // bitcore's typings don't narrow `unknown` through instanceof, hence the cast.
+    const key = privateKey as bitcore.PrivateKey;
+    const derivedAddress = getAddressFromPubkey(
+      key.publicKey.toString(),
+      this.getNetworkObject()
+    ).base58;
+    const ownerAddress = expectedAddress ?? (await this.getOwnAddressAtIndex(addressIndex));
+    if (derivedAddress !== ownerAddress) {
+      throw new WalletError('External private key provider returned a key for the wrong address.');
+    }
+    return key;
+  }
+
+  /**
+   * The wallet's own address at an index. Derived locally from the xpub when the wallet has it, so
+   * checking a provider's key needs no wallet-service request and doesn't depend on its answer;
+   * otherwise asks the wallet-service.
+   *
+   * @param index Address index
+   * @returns {Promise<string>} The address in base58
+   */
+  private async getOwnAddressAtIndex(index: number): Promise<string> {
+    if (!this.xpub) {
+      return this.getAddressAtIndex(index);
+    }
+    const changeXpub = walletUtils.xpubDeriveChild(this.xpub, 0);
+    return deriveAddressFromXPubP2PKH(changeXpub, index, this.getNetworkObject().name).base58;
+  }
+
+  /**
    * Whether this wallet can't sign transactions: its storage holds only the xpub and no external
    * tx-signing method is registered.
    *
@@ -1650,12 +1719,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Returns a base64 encoded signed message with an address' private key given an
    * address index
    *
+   * @param message The message to sign
+   * @param index The address index to sign with
+   * @param [pinCode] The PIN that decrypts the stored key; not needed with an external
+   *   private-key provider
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage: string = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
+    let privateKey: bitcore.PrivateKey;
+    if (this.storage.hasPrivateKeyMethod()) {
+      // External provider (e.g. a passkey signer): no stored key and no pin needed. The key is
+      // checked against the wallet's address at this index.
+      privateKey = await this.getVerifiedExternalPrivateKey(index, { pinCode });
+    } else {
+      if (!pinCode) {
+        throw new PinRequiredError('Pin is required.');
+      }
+      const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
+      privateKey = addressHDPrivKey.privateKey;
+    }
+    const signedMessage: string = signMessage(message, privateKey);
 
     return signedMessage;
   }
@@ -1801,9 +1886,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     address: string,
     options: { pinCode?: string } = {}
   ): Promise<bitcore.PrivateKey> {
-    // Deliberately the raw storage check, not this.isReadonly(): this needs the stored private
-    // key, which an external tx-signing method doesn't provide.
-    if (await this.storage.isReadonly()) {
+    // Deliberately the raw storage check, not this.isReadonly(): this needs a private key, which
+    // an external tx-signing method doesn't provide; only a stored key or an external private-key
+    // provider can. Kept first so an xpub-only wallet without a provider gets WalletFromXPubGuard
+    // even for an address that isn't its own.
+    if ((await this.storage.isReadonly()) && !this.storage.hasPrivateKeyMethod()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
 
@@ -1811,6 +1898,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new WalletError(`Address ${address} does not belong to this wallet`);
+    }
+
+    // External provider (e.g. a passkey signer): no stored key and no pin needed. The key is
+    // checked against the requested address.
+    if (this.storage.hasPrivateKeyMethod()) {
+      return this.getVerifiedExternalPrivateKey(addressIndex, {
+        ...options,
+        expectedAddress: address,
+      });
     }
 
     // Request PIN if not provided

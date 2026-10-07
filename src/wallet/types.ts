@@ -372,7 +372,7 @@ export interface IHathorWallet {
   ): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
   getNextAddress(opts?: IAddressChainOptions): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
-  signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
+  signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string>;
   prepareCreateNewToken(
     name: string,
     symbol: string,
