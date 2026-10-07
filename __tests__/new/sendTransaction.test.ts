@@ -4564,45 +4564,47 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(change!.value).toBe(10n);
     });
 
-    test('a 1-unit change that is the only shielded output says how to keep it transparent', async () => {
+    test('a 1-unit change that is the only shielded output takes the HTR change as the second one', async () => {
       // An exact match from the shielded 10n forces the 1n in for a change to
       // hide behind; that 1n change cannot be split into two outputs.
-      const pool = [
-        poolUtxo('custom-sh-10', 10n, CUSTOM_TOKEN, {
-          shielded: true,
-          blindingFactor: '5b'.repeat(32),
-        }),
-        poolUtxo('custom-sh-1', 1n, CUSTOM_TOKEN, {
-          shielded: true,
-          blindingFactor: '5c'.repeat(32),
-        }),
-        poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
-      ];
-      const send = (changeShieldedMode: ChangeOutputMode | null) =>
-        new SendTransaction({
-          wallet: buildWallet(buildPoolStorage(pool), buildShieldedAddr(0)),
-          outputs: [
-            {
-              type: OutputType.P2PKH,
-              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-              value: 10n,
-              token: CUSTOM_TOKEN,
-            },
-          ],
-          changeShieldedMode,
-        }).prepareTxData();
+      const result = await new SendTransaction({
+        wallet: buildWallet(
+          buildPoolStorage([
+            poolUtxo('custom-sh-10', 10n, CUSTOM_TOKEN, {
+              shielded: true,
+              blindingFactor: '5b'.repeat(32),
+            }),
+            poolUtxo('custom-sh-1', 1n, CUSTOM_TOKEN, {
+              shielded: true,
+              blindingFactor: '5c'.repeat(32),
+            }),
+            poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+          ]),
+          buildShieldedAddr(0)
+        ),
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 10n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      }).prepareTxData();
 
-      await expect(send(null)).rejects.toThrow(
-        new SendTxError(
-          "The transaction's only shielded output is a 1-unit change, too small to split into " +
-            'the two shielded outputs the protocol requires; pass changeShieldedMode: ' +
-            'OutputKind.TRANSPARENT to keep the change transparent.'
-        )
-      );
-      // As suggested: nothing is forced in, and the 10n is spent exactly.
-      const result = await send(OutputKind.TRANSPARENT);
-      expect(result.inputs.map(i => i.txId)).toEqual(['custom-sh-10']);
-      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      // The HTR change, 5 − 1 (the custom change's fee) = 4n, is shielded as the
+      // second output instead: 4 − 1 = 3n. Fee 2n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual([
+        'custom-sh-1',
+        'custom-sh-10',
+        'htr-pub-5',
+      ]);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([1n, 3n]);
+      expect(byValue.get(1n)!.token).toBe(CUSTOM_TOKEN);
+      expect(byValue.get(3n)!.token).toBe(NATIVE_TOKEN_UID);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
     // Make caller-supplied inputs resolvable: each UTXO is output 0 of its own
@@ -4812,6 +4814,193 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       const inputIds = result.inputs.map(i => i.txId);
       expect(inputIds).toContain('custom-pub-100');
       expect(inputIds).not.toContain('custom-sh-40');
+    });
+
+    // One unit of a token (an NFT) sent shielded to one recipient: the output
+    // cannot be split, so the HTR change becomes the second shielded output.
+    const sendOneNft = (
+      storage: Storage,
+      shieldedMode: ShieldedOutputMode = ShieldedOutputMode.AMOUNT_SHIELDED,
+      options: {
+        changeShieldedMode?: ChangeOutputMode | null;
+        changeAddress?: string;
+        inputs?: { txId: string; index: number }[];
+      } = {}
+    ) =>
+      new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [{ address: buildShieldedAddr(1), value: 1n, token: CUSTOM_TOKEN, shieldedMode }],
+        ...options,
+      }).prepareTxData();
+    const unsplittableOutput = (reason: string) =>
+      "The transaction's only shielded output holds 1 unit, too little to split into the two " +
+      `shielded outputs the protocol requires, and ${reason}.`;
+
+    test('one NFT sent shielded to one recipient takes the HTR change as the second output', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+        ])
+      );
+
+      // The HTR change, 10 − 1 (the NFT's fee) = 9n, is shielded as the second
+      // output: 9 − 1 (its fee) = 8n. Fee 2n, nothing transparent.
+      expect(result.outputs).toHaveLength(0);
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([1n, 8n]);
+      expect(byValue.get(1n)!.address).toBe(recipientSpend());
+      expect(byValue.get(8n)!.token).toBe(NATIVE_TOKEN_UID);
+      expect(byValue.get(8n)!.address).toBe(walletSpend());
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('a fully shielded NFT takes an amount-shielded HTR change as the second output', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+        ]),
+        ShieldedOutputMode.FULLY_SHIELDED
+      );
+
+      // 10 − 2 (the NFT's fee) = 8n of HTR change, shielded at the amount-shielded
+      // fee: 8 − 1 = 7n. Fee 3n.
+      const byValue = new Map(result.shieldedOutputs!.map(o => [o.value, o]));
+      expect([...byValue.keys()].sort((a, b) => Number(a - b))).toEqual([1n, 7n]);
+      expect(byValue.get(1n)!.shieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+      expect(byValue.get(7n)!.shieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(3n);
+    });
+
+    test('an HTR change too small for its own fee takes more HTR to be the second output', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+        ])
+      );
+
+      // The 2n pays the NFT's 1n fee, leaving a 1n change that cannot pay its own
+      // 1n fee, so the 5n is pulled into it: 1 + 5 − 1 = 5n. Fee 2n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['htr-pub-2', 'htr-pub-5', 'nft-1']);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        5n,
+      ]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('with no HTR change, HTR is pulled for one to be the second output', async () => {
+      const result = await sendOneNft(
+        buildPoolStorage([
+          poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-1', 1n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-4', 4n, NATIVE_TOKEN_UID),
+        ])
+      );
+
+      // The 1n pays the NFT's fee exactly; the 4n is pulled for a change:
+      // 4 − 1 = 3n. Fee 2n.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['htr-pub-1', 'htr-pub-4', 'nft-1']);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        1n,
+        3n,
+      ]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('a 1-unit output with caller-supplied HTR and no HTR change fails', async () => {
+      const callerHtr = poolUtxo('caller-pub-1', 1n, NATIVE_TOKEN_UID);
+      const storage = buildPoolStorage([
+        callerHtr,
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerHtr]);
+
+      await expect(
+        sendOneNft(storage, ShieldedOutputMode.AMOUNT_SHIELDED, {
+          inputs: [{ txId: 'caller-pub-1', index: 0 }],
+        })
+      ).rejects.toThrow(
+        new SendTxError(
+          unsplittableOutput(
+            'the HTR inputs were user-supplied, so no HTR can be selected for a shielded change'
+          )
+        )
+      );
+    });
+
+    test('a 1-unit output fails when the change is pinned transparent', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+
+      await expect(
+        sendOneNft(storage, ShieldedOutputMode.AMOUNT_SHIELDED, {
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        })
+      ).rejects.toThrow(
+        new SendTxError(
+          unsplittableOutput(
+            'changeShieldedMode: OutputKind.TRANSPARENT keeps the change from being shielded as ' +
+              'the second one'
+          )
+        )
+      );
+    });
+
+    test('a 1-unit output fails when the wallet has no shielded address', async () => {
+      // Built from storage alone, with no shielded chain loaded.
+      const storage = buildPoolStorage([
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+
+      await expect(
+        new SendTransaction({
+          storage,
+          outputs: [
+            {
+              address: buildShieldedAddr(1),
+              value: 1n,
+              token: CUSTOM_TOKEN,
+              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+            },
+          ],
+        }).prepareTxData()
+      ).rejects.toThrow(
+        new SendTxError(
+          unsplittableOutput('the wallet cannot receive a shielded change as the second one')
+        )
+      );
+    });
+
+    test('a 1-unit output fails with a legacy changeAddress', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('nft-1', 1n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+      ownLegacyChangeAddress(storage);
+
+      await expect(
+        sendOneNft(storage, ShieldedOutputMode.AMOUNT_SHIELDED, {
+          changeAddress: LEGACY_CHANGE_ADDRESS,
+        })
+      ).rejects.toThrow(
+        new SendTxError(
+          unsplittableOutput(
+            'a legacy change address cannot receive a shielded change as the second one'
+          )
+        )
+      );
     });
 
     // A JS or HTTP caller can pass anything; none of these may pass for a mode.

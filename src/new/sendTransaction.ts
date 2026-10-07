@@ -843,7 +843,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // output and the lone def stays whole: a transparent change must never
     // carry the value of a shielded input. A pull that lands exactly on the
     // split's fee also ends in that shielded change when the change's own fee
-    // is the smaller one.
+    // is the smaller one. A 1-unit def cannot be split at all, so the HTR
+    // change is always the second output then.
     if (shieldedOutputDefs.length === 1) {
       const lone = shieldedOutputDefs[0];
       const extraFee = shieldedOutputFee(lone.shieldedMode);
@@ -917,9 +918,71 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
         totalFee += changeFee;
       };
+      // A 1-unit def cannot be split, so the HTR change becomes the second
+      // output: in the mode the rules give it, else amount-shielded, taking
+      // more HTR when it cannot pay its own fee.
+      const shieldHtrChangeAsSecondOutput = async (): Promise<void> => {
+        const unsplittable = (reason: string) =>
+          new SendTxError(
+            `The transaction's only shielded output holds ${lone.value} unit, too little to ` +
+              `split into the two shielded outputs the protocol requires, and ${reason}.`
+          );
+        if (changeModeOverride === OutputKind.TRANSPARENT) {
+          throw unsplittable(
+            'changeShieldedMode: OutputKind.TRANSPARENT keeps the change from being shielded ' +
+              'as the second one'
+          );
+        }
+        if (legacyChangeAddress) {
+          throw unsplittable(
+            'a legacy change address cannot receive a shielded change as the second one'
+          );
+        }
+        if (!changeHostable) {
+          throw unsplittable('the wallet cannot receive a shielded change as the second one');
+        }
+        const modeFor = (pulled: PulledHtrKinds): ShieldedOutputMode =>
+          pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled) ??
+          ShieldedOutputMode.AMOUNT_SHIELDED;
+        if (findHtrChangeIndex(partialHtrTxData.outputs) !== -1) {
+          // Shielding the change pulls more HTR when it cannot pay its own fee.
+          await shieldHtrChange(modeFor({ anyShielded: false, anyFullyShielded: false }));
+          return;
+        }
+        if (!shouldChooseHTRInputs) {
+          throw unsplittable(
+            'the HTR inputs were user-supplied, so no HTR can be selected for a shielded change'
+          );
+        }
+        const pulled = await pullExtraHtrUtxos(
+          walletStorage,
+          new Set(usedUtxos),
+          extraHtrPreference,
+          (sum, kinds) => sum > shieldedOutputFee(modeFor(kinds))
+        );
+        if (pulled.pulledSum <= shieldedOutputFee(modeFor(pulled))) {
+          throw unsplittable('no HTR is available for a shielded change');
+        }
+        partialHtrTxData.inputs.push(...pulled.pulledInputs);
+        partialHtrTxData.outputs.push({
+          type: await getOutputTypeFromWallet(walletStorage),
+          token: HTR_UID,
+          value: pulled.pulledSum,
+          address: await walletStorage.getChangeAddress({
+            changeAddress: this.changeAddress ?? undefined,
+          }),
+          authorities: 0n,
+          timelock: null,
+          isChange: true,
+        });
+        await shieldHtrChange(modeFor(pulled));
+      };
       let needsSplit = true;
 
-      if (lone.isChange && lone.token === HTR_UID) {
+      if (lone.value < 2n && !(lone.isChange && lone.token === HTR_UID)) {
+        await shieldHtrChangeAsSecondOutput();
+        needsSplit = false;
+      } else if (lone.isChange && lone.token === HTR_UID) {
         // The lone def is the shielded HTR change: fund the split's fee from
         // itself, pulling extra HTR only if the shave would make a half
         // impossible (each half must be at least 1n).
@@ -1036,14 +1099,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         }
       }
       if (needsSplit) {
-        // A 1-unit change cannot be split; say it is the change, and how to
-        // keep it transparent when the rules shielded it.
-        if (lone.isChange && lone.value < 2n) {
-          throw new SendTxError(
-            `The transaction's only shielded output is a ${lone.value}-unit change, too small ` +
-              `to split into the two shielded outputs the protocol requires${keepTransparentHint}`
-          );
-        }
         totalFee += extraFee;
         splitShieldedDef(shieldedOutputDefs, 0);
       }
