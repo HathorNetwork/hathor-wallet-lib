@@ -4724,6 +4724,66 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
+    // The same three sends with the wallet choosing the HTR, when it holds no
+    // more HTR than it spends: each fails, saying no more HTR is available.
+    test('a shielded HTR change too small to split fails when the wallet has no more HTR', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('htr-sh-11', 11n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '6b'.repeat(32),
+        }),
+      ]);
+
+      // 11 − 8 = 3n of change mirrors the shielded input: 3 − 1 (its fee) = 2n,
+      // which cannot pay the split's 1n fee and leave two halves of 1n.
+      await expect(
+        new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [
+            { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', value: 8n, token: NATIVE_TOKEN_UID },
+          ],
+        }).prepareTxData()
+      ).rejects.toThrow(
+        'The shielded HTR change is too small to split into the two shielded outputs the ' +
+          'protocol requires, and no additional HTR is available.'
+      );
+    });
+
+    const fullyShieldedTokenSendFromWallet = (htr: bigint) =>
+      new SendTransaction({
+        wallet: buildWallet(
+          buildPoolStorage([
+            poolUtxo('custom-pub-10', 10n, CUSTOM_TOKEN),
+            poolUtxo(`htr-pub-${htr}`, htr, NATIVE_TOKEN_UID),
+          ]),
+          buildShieldedAddr(0)
+        ),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+    test('the split fee fails when the HTR change cannot pay it and the wallet has no more HTR', async () => {
+      // The 3n pays the output's 2n fee, leaving 1n of change for a 2n split fee.
+      await expect(fullyShieldedTokenSendFromWallet(3n)).rejects.toThrow(
+        'The HTR change cannot fund the shielded-output split the protocol requires, and no ' +
+          'additional HTR is available.'
+      );
+    });
+
+    test('splitting the lone output fails when no HTR change is left and the wallet has no more HTR', async () => {
+      // The 2n pays the output's 2n fee exactly; the split needs 2n more.
+      await expect(fullyShieldedTokenSendFromWallet(2n)).rejects.toThrow(
+        'Splitting the lone shielded output requires extra HTR for its fee, and no additional ' +
+          'HTR is available.'
+      );
+    });
+
     test('HTR pulled for the second shielded output is never a UTXO that is not available', async () => {
       const result = await r3aSend(
         [
