@@ -49,6 +49,19 @@ const makeSigner = () =>
     ncCallerSignature: null,
   }));
 
+// A signer that leaves the last input unsigned, as when the storage proxy couldn't fetch its spent
+// transaction (a transient fullnode failure) and skipped it.
+const makeSkippingSigner = () =>
+  jest.fn(async (tx: Transaction) => ({
+    inputSignatures: tx.inputs.slice(0, -1).map((_input, inputIndex) => ({
+      inputIndex,
+      addressIndex: 0,
+      signature: Buffer.from(`sig-${inputIndex}`),
+      pubkey: PUBKEY,
+    })),
+    ncCallerSignature: null,
+  }));
+
 const htrUtxo = (txIdSuffix: string, address: string) => ({
   txId: `${'0'.repeat(60)}${txIdSuffix}`,
   index: 0,
@@ -111,6 +124,14 @@ describe('setExternalTxSigningMethod / isReadonly', () => {
     expect(wallet.isSignedExternally).toBe(false);
     await expect(wallet.isReadonly()).resolves.toBe(true);
   });
+
+  it('isSignedExternally follows the storage, even when it is changed directly', async () => {
+    const { wallet } = await makeXpubWallet();
+
+    wallet.storage.setTxSignatureMethod(makeSigner() as unknown as EcdsaTxSign);
+
+    expect(wallet.isSignedExternally).toBe(true);
+  });
 });
 
 describe('signTx with an external signer', () => {
@@ -134,6 +155,15 @@ describe('signTx with an external signer', () => {
   it('still rejects an xpub-only wallet without a signer', async () => {
     const { wallet } = await makeXpubWallet();
     await expect(wallet.signTx(makeTx())).rejects.toThrow(WalletFromXPubGuard);
+  });
+
+  it('rejects a tx with an input the signer left unsigned', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+
+    await expect(wallet.signTx(makeTx())).rejects.toThrow(
+      `Could not sign input 1 (${'0'.repeat(62)}bb:1). Please try again.`
+    );
   });
 });
 
@@ -231,6 +261,15 @@ describe('prepare* token/authority methods with an external signer', () => {
     expect(getMainXPrivKey).not.toHaveBeenCalled();
   });
 
+  it('rejects a token tx with an input the signer left unsigned', async () => {
+    const { wallet } = await setup();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+
+    await expect(
+      wallet.prepareCreateNewToken('Token', 'TKN', 100n, { signTx: true })
+    ).rejects.toThrow(/Could not sign input 0 \(/);
+  });
+
   it('prepareDestroyAuthorityData', async () => {
     const { wallet, signer, getMainXPrivKey } = await setup();
     jest.spyOn(wallet, 'getMeltAuthority').mockResolvedValue(authority(TOKEN_MELT_MASK) as never);
@@ -252,6 +291,35 @@ describe('nano with an external signer', () => {
     await expect(
       wallet.createNanoContractTransaction('initialize', addresses[0], {})
     ).rejects.toThrow('past the pin check');
+  });
+
+  it('createNanoContractCreateTokenTransaction does not require a pin when a signer is set', async () => {
+    const { wallet } = await makeXpubWallet();
+    // Stop right after the pin check: reaching this stub means the pin guard let it through.
+    jest
+      .spyOn(wallet as never, 'getAddressIndexIfOwned')
+      .mockRejectedValue(new Error('past the pin check') as never);
+
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    await expect(
+      wallet.createNanoContractCreateTokenTransaction('initialize', addresses[0], {}, {
+        name: 'Token',
+        symbol: 'TKN',
+        amount: 100n,
+      } as never)
+    ).rejects.toThrow('past the pin check');
+  });
+
+  it('createNanoContractCreateTokenTransaction still requires a pin without a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false); // seed-like wallet
+    await expect(
+      wallet.createNanoContractCreateTokenTransaction('initialize', addresses[0], {}, {
+        name: 'Token',
+        symbol: 'TKN',
+        amount: 100n,
+      } as never)
+    ).rejects.toThrow(PinRequiredError);
   });
 
   it('createNanoContractTransaction still requires a pin without a signer', async () => {
