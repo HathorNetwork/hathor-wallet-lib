@@ -15,6 +15,7 @@
 
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import NanoContractTransactionBuilder from '../../src/nano_contracts/builder';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import walletApi from '../../src/wallet/api/walletApi';
 import Network from '../../src/models/network';
@@ -361,6 +362,51 @@ describe('nano with an external signer', () => {
     await expect(
       wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
     ).rejects.toThrow(/Could not sign input 1 \(/);
+  });
+
+  // signTransaction copies the signer's ncCallerSignature into every nano header as-is; a nano call
+  // can have no inputs, so the input check alone would miss a missing caller signature.
+  it('prepareNanoSendTransactionWalletService rejects a nano tx without a caller signature', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({ index: 0 } as never);
+    jest.spyOn(wallet, 'signTx').mockImplementation(async tx => tx);
+    const header = { script: null as Buffer | null };
+    const tx = {
+      inputs: [],
+      isNanoContract: () => true,
+      getNanoHeaders: () => [header],
+    } as unknown as Transaction;
+
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).rejects.toThrow('Could not sign the nano contract caller. Please try again.');
+
+    header.script = Buffer.from('caller-signature');
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).resolves.toBeDefined();
+  });
+
+  it('createNanoContractCreateTokenTransaction keeps signTx: false with a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet as never, 'getAddressIndexIfOwned').mockResolvedValue(0 as never);
+    const builtTx = new Transaction([], []);
+    jest.spyOn(NanoContractTransactionBuilder.prototype, 'build').mockResolvedValue(builtTx);
+    const prepare = jest
+      .spyOn(wallet, 'prepareNanoSendTransactionWalletService')
+      .mockResolvedValue({} as never);
+
+    await wallet.createNanoContractCreateTokenTransaction(
+      'initialize',
+      addresses[0],
+      { blueprintId: 'blueprint', ncId: null },
+      { name: 'Token', symbol: 'TKN', amount: 100n } as never,
+      { signTx: false }
+    );
+
+    expect(prepare).toHaveBeenCalledWith(builtTx, addresses[0], null, { signTx: false });
   });
 
   it('prepareNanoSendTransactionWalletService signs with a signer and no pin', async () => {
