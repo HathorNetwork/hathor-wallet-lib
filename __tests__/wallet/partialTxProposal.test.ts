@@ -555,3 +555,27 @@ test('calculateBalance', async () => {
   proposal.partialTx = partialTx;
   expect(await proposal.calculateBalance()).toEqual(expected);
 });
+
+test('unmarkAsSelected attempts every input, then rethrows the first failure', async () => {
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  const proposal = new PartialTxProposal(testStorage);
+  await proposal.addInput(FAKE_TXID, 0, 1n, ADDR1, { markAsSelected: false });
+  await proposal.addInput(FAKE_TXID, 1, 1n, ADDR1, { markAsSelected: false });
+  await proposal.addInput(FAKE_TXID, 2, 1n, ADDR1, { markAsSelected: false });
+
+  const first = new Error('first release failed');
+  const spyMark = jest
+    .spyOn(testStorage, 'utxoSelectAsInput')
+    .mockRejectedValueOnce(first)
+    .mockRejectedValueOnce(new Error('second release failed'))
+    .mockResolvedValueOnce(undefined);
+
+  await expect(proposal.unmarkAsSelected()).rejects.toBe(first);
+
+  // A failed release doesn't leave the later inputs reserved.
+  expect(spyMark).toHaveBeenCalledTimes(3);
+  expect(spyMark).toHaveBeenLastCalledWith({ txId: FAKE_TXID, index: 2 }, false);
+  spyMark.mockRestore();
+});

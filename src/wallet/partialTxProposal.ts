@@ -323,11 +323,26 @@ class PartialTxProposal {
   /**
    * Unmark all inputs currently on the partial tx as not `selected_as_input`.
    *
+   * Every input is attempted even if one fails, so a single failure doesn't leave the others
+   * reserved; the first failure is then rethrown.
+   *
    * @returns {Promise<void>} Resolves once all inputs are unmarked.
    */
   async unmarkAsSelected() {
+    let failed = false;
+    let firstError: unknown;
     for (const input of this.partialTx.inputs) {
-      await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      try {
+        await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      } catch (err) {
+        if (!failed) {
+          failed = true;
+          firstError = err;
+        }
+      }
+    }
+    if (failed) {
+      throw firstError;
     }
   }
 
