@@ -43,19 +43,6 @@ type optionsType = {
 };
 
 /**
- * Maps a transaction input (identified by its txId + index) to its
- * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
- * the key format so the read and write sides cannot drift out of sync.
- *
- * Re-setting the same `{txId, index}` pair overwrites the previous path:
- * duplicate inputs collapse to a single entry. This is fine because
- * duplicate inputs would be rejected later as a double-spend; the map
- * deliberately does not try to detect or signal duplicates.
- *
- * @internal Exported only so unit tests can use the real class instead
- *   of a duck-typed stand-in. Not part of the public API of this module.
- */
-/**
  * Check that external signing signed every input of a transaction whose inputs are ALL the
  * wallet's own (the facade's send, token, authority and nano paths). The storage proxy skips an
  * input whose spent transaction it couldn't fetch, so without this check a transient fullnode
@@ -72,6 +59,37 @@ export function assertAllInputsSigned(tx: Transaction): void {
   }
 }
 
+/**
+ * Check that external signing produced the nano contract caller signature of a transaction whose
+ * caller is the wallet (the facade's nano paths). The signer returns it as `ncCallerSignature` and
+ * signTransaction copies it into every nano header's script as-is, so a signer that returns none
+ * yields a tx that only fails at push. Nano calls can have no inputs, where assertAllInputsSigned
+ * checks nothing.
+ *
+ * @throws {SendTxError} when a nano header has no caller signature
+ */
+export function assertNanoCallerSigned(tx: Transaction): void {
+  if (!tx.isNanoContract()) {
+    return;
+  }
+  if (tx.getNanoHeaders().some(header => !header.script || header.script.length === 0)) {
+    throw new SendTxError('Could not sign the nano contract caller. Please try again.');
+  }
+}
+
+/**
+ * Maps a transaction input (identified by its txId + index) to its
+ * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
+ * the key format so the read and write sides cannot drift out of sync.
+ *
+ * Re-setting the same `{txId, index}` pair overwrites the previous path:
+ * duplicate inputs collapse to a single entry. This is fine because
+ * duplicate inputs would be rejected later as a double-spend; the map
+ * deliberately does not try to detect or signal duplicates.
+ *
+ * @internal Exported only so unit tests can use the real class instead
+ *   of a duck-typed stand-in. Not part of the public API of this module.
+ */
 export class AddressPathMap {
   private readonly map = new Map<string, string>();
 

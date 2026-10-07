@@ -581,5 +581,17 @@ describe('WalletServiceStorageProxy', () => {
       expect(externalSigner).toHaveBeenCalledWith(mockTransaction, proxiedStorage, '');
       expect(transactionUtils.getSignatureForTx).not.toHaveBeenCalled();
     });
+
+    // getTxSignatureMethod is optional on IStorage, so a custom storage without it keeps working.
+    it('falls back to the stored key when the storage has no getTxSignatureMethod', async () => {
+      const mockTransaction = new Transaction([], []);
+      const mockSignatures = ['signature1'];
+      delete (mockStorage as { getTxSignatureMethod?: unknown }).getTxSignatureMethod;
+      (transactionUtils.getSignatureForTx as jest.Mock).mockResolvedValue(mockSignatures);
+
+      await expect(proxiedStorage.getTxSignatures(mockTransaction, 'pin123')).resolves.toBe(
+        mockSignatures
+      );
+    });
   });
 });

@@ -35,8 +35,9 @@ export class WalletServiceStorageProxy {
   }
 
   /**
-   * Creates a proxy that wraps the original storage with additional methods
-   * needed for nano contract transaction signing.
+   * Creates a proxy that wraps the original storage with the wallet-service methods the facade's
+   * signing needs: nano contract transactions, and every send, token and authority operation when
+   * an external tx-signing method is registered.
    */
   createProxy(): IStorage {
     return new Proxy(this.originalStorage, {
@@ -117,7 +118,7 @@ export class WalletServiceStorageProxy {
    * raw storage instead. Otherwise the transaction utility signs with the stored key.
    */
   private async getTxSignatures(receiver: IStorage, tx: Transaction, pinCode: string) {
-    const externalSigner = this.originalStorage.getTxSignatureMethod();
+    const externalSigner = this.originalStorage.getTxSignatureMethod?.() ?? null;
     if (externalSigner) {
       return externalSigner(tx, receiver, pinCode);
     }

@@ -42,6 +42,7 @@ import { MemoryStore, Storage } from '../storage';
 import WalletServiceConnection from './connection';
 import SendTransactionWalletService, {
   assertAllInputsSigned,
+  assertNanoCallerSigned,
 } from './sendTransactionWalletService';
 import {
   AddressInfoObject,
@@ -3365,8 +3366,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (options.signTx !== false && (pinCode || this.storage.hasTxSignatureMethod())) {
       await this.signTx(tx, { pinCode });
       if (this.storage.hasTxSignatureMethod()) {
-        // Every input of a nano tx built here is the wallet's own.
+        // Every input of a nano tx built here is the wallet's own, and so is its caller.
         assertAllInputsSigned(tx);
+        assertNanoCallerSigned(tx);
       }
     }
 
@@ -3453,7 +3455,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
 
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin, {
+      signTx: newOptions.signTx,
+    });
   }
 
   /**
