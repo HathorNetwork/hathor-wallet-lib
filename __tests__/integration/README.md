@@ -12,14 +12,18 @@ see below).
 prebuilds. You do **not** need to install it manually: the
 `pretest_network_integration` hook runs
 `__tests__/integration/scripts/ensure-ct-crypto.js` before the suite, which
-installs the pinned version (`--no-save`) if it isn't already present. The first
-integration run fetches it; later runs reuse the cached copy.
+installs the pinned version (`--no-save`) unless that exact version is already
+present, replacing any other version. The first integration run fetches it;
+later runs reuse the cached copy.
 
-To install it by hand (e.g. to pin a different prebuild):
+To install it by hand:
 
 ```bash
-npm install --no-save @hathor/ct-crypto-node@0.0.1-shielded
+npm install --no-save @hathor/ct-crypto-node@0.5.0
 ```
+
+To try a different prebuild, change `VERSION` in the script; the hook replaces
+any other version before every run.
 
 The package resolves under `node_modules/@hathor/ct-crypto-node/` and satisfies
 the import in `__tests__/integration/helpers/wallet.helper.ts`.
