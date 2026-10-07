@@ -22,6 +22,7 @@ import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import walletUtils from '../../src/utils/wallet';
+import { getAddressFromPubkey } from '../../src/utils/address';
 import {
   NATIVE_TOKEN_UID,
   P2PKH_ACCT_PATH,
@@ -173,6 +174,30 @@ describe('external private-key provider checks', () => {
       expect(getAddressAtIndex).not.toHaveBeenCalled();
     }
   );
+
+  // getPrivateKeyFromAddress checks the key against the REQUESTED address, not the own address at
+  // the index the wallet-service reported: a wrong index must lead to a rejection, never to
+  // signing with another of our keys.
+  it('rejects the key of another of our addresses when the service reports a wrong index', async () => {
+    const wallet = await walletFromXpub('account');
+    wallet.setExternalPrivateKeyMethod(async index => addressKey(index));
+    const requested = getAddressFromPubkey(addressKey(2).publicKey.toString(), network).base58;
+    jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(4); // wrong: the address is at 2
+
+    await expect(wallet.getPrivateKeyFromAddress(requested)).rejects.toThrow(
+      'External private key provider returned a key for the wrong address.'
+    );
+  });
+
+  it('passes the pin on to the provider', async () => {
+    const wallet = await walletFromXpub('account');
+    const provider = jest.fn(async (index: number) => addressKey(index));
+    wallet.setExternalPrivateKeyMethod(provider);
+
+    await wallet.signMessageWithAddress('a message', 0, '123');
+
+    expect(provider).toHaveBeenCalledWith(0, expect.anything(), { pinCode: '123' });
+  });
 
   it('signMessageWithAddress asks for the pin when neither a pin nor a provider is set', async () => {
     const { wallet, requestPassword } = await makeXpubWallet();

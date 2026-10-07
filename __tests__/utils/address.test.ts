@@ -314,12 +314,12 @@ describe('fetchVerifiedExternalPrivateKey', () => {
     storage.setPrivateKeyMethod(provider);
     const getOwnAddress = jest.fn(async () => 'never used');
 
-    await expect(
-      fetchVerifiedExternalPrivateKey(storage, network, 2, getOwnAddress, {
-        pinCode: '123',
-        expectedAddress: addressAt(2),
-      })
-    ).resolves.toBeDefined();
+    const key = await fetchVerifiedExternalPrivateKey(storage, network, 2, getOwnAddress, {
+      pinCode: '123',
+      expectedAddress: addressAt(2),
+    });
+
+    expect(key.toString()).toBe(keyAt(2).toString());
 
     expect(getOwnAddress).not.toHaveBeenCalled();
     // expectedAddress is verification-only and never reaches the provider.
