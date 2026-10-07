@@ -408,10 +408,15 @@ export interface ProposedInput {
   token: string;
 }
 
+/**
+ * Options for sending a transaction with a single output
+ * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions
+ */
 export interface SendTransactionFullnodeOptions {
   changeAddress?: string | null;
   token?: string;
   pinCode?: string | null;
+  changeShieldedMode?: ChangeOutputMode | null;
 }
 
 /**

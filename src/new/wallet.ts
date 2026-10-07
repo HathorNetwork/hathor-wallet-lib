@@ -1900,6 +1900,7 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
    *
    * @returns Promise that resolves when transaction is sent
    */
@@ -1916,9 +1917,14 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       ...options,
     };
-    const { token, changeAddress, pinCode } = newOptions;
+    const { token, changeAddress, pinCode, changeShieldedMode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsSendTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsSendTransaction(outputs, {
+      inputs: [],
+      changeAddress,
+      pinCode,
+      changeShieldedMode,
+    });
   }
 
   /**
@@ -1930,6 +1936,7 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
    *
    * @returns Promise that resolves when transaction is sent
    */

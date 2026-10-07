@@ -12,6 +12,7 @@ import { OutputType } from '../../src/wallet/types';
 import Network from '../../src/models/network';
 import { WalletFromXPubGuard } from '../../src/errors';
 import helpers from '../../src/utils/helpers';
+import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 
 // Mock the helpers module
 jest.mock('../../src/utils/helpers');
@@ -145,6 +146,50 @@ describe('sendManyOutputsSendTransaction', () => {
     });
 
     expect(sendTx).toBeInstanceOf(SendTransactionWalletService);
+  });
+
+  it('should refuse a shielded change mode, since it builds no shielded outputs', async () => {
+    const outputs = [
+      {
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    await expect(
+      wallet.sendManyOutputsSendTransaction(outputs, {
+        changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+      })
+    ).rejects.toThrow(
+      "Unsupported changeShieldedMode '1': the wallet service only supports OutputKind.TRANSPARENT."
+    );
+  });
+
+  it('should accept the transparent change mode', async () => {
+    const outputs = [
+      {
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+      },
+    ];
+
+    const sendTx = await wallet.sendManyOutputsSendTransaction(outputs, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
+
+    expect(sendTx).toBeInstanceOf(SendTransactionWalletService);
+  });
+
+  it('should pass the change mode on from sendTransaction', async () => {
+    await expect(
+      wallet.sendTransaction('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', 10n, {
+        changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      })
+    ).rejects.toThrow(
+      "Unsupported changeShieldedMode '2': the wallet service only supports OutputKind.TRANSPARENT."
+    );
   });
 
   it('should throw WalletFromXPubGuard when wallet is readonly', async () => {

@@ -71,7 +71,8 @@ import {
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
 } from './types';
-import type { IShieldedCryptoProvider } from '../shielded/types';
+import { OutputKind } from '../shielded/types';
+import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
   UtxoError,
@@ -1353,11 +1354,29 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async sendManyOutputsSendTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
-    options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
+    options: {
+      inputs?: InputRequestObj[];
+      changeAddress?: string;
+      pinCode?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    } = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
+    }
+    // This wallet builds no shielded outputs, so its change is always
+    // transparent: refuse any other change mode rather than ignore it.
+    const { changeShieldedMode } = options;
+    if (
+      changeShieldedMode !== undefined &&
+      changeShieldedMode !== null &&
+      changeShieldedMode !== OutputKind.TRANSPARENT
+    ) {
+      throw new SendTxError(
+        `Unsupported changeShieldedMode '${String(changeShieldedMode)}': the wallet service ` +
+          'only supports OutputKind.TRANSPARENT.'
+      );
     }
     const newOptions = {
       inputs: [],
@@ -1402,7 +1421,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async sendManyOutputsTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
-    options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
+    options: {
+      inputs?: InputRequestObj[];
+      changeAddress?: string;
+      pinCode?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    } = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
@@ -1417,7 +1441,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { token?: string; changeAddress?: string; pinCode?: string } = {}
+    options: {
+      token?: string;
+      changeAddress?: string;
+      pinCode?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = {
@@ -1425,9 +1454,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       changeAddress: undefined,
       ...options,
     };
-    const { token, changeAddress, pinCode } = newOptions;
+    const { token, changeAddress, pinCode, changeShieldedMode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsTransaction(outputs, {
+      inputs: [],
+      changeAddress,
+      pinCode,
+      changeShieldedMode,
+    });
   }
 
   /**
