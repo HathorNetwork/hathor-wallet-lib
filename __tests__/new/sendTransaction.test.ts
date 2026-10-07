@@ -23,7 +23,12 @@ import SendTransaction, {
   convertHtrChangeIfRequested,
   prepareSendTokensData,
 } from '../../src/new/sendTransaction';
-import { IShieldedCryptoProvider, OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
+import {
+  ChangeOutputMode,
+  IShieldedCryptoProvider,
+  OutputKind,
+  ShieldedOutputMode,
+} from '../../src/shielded/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   IDataInput,
@@ -4088,6 +4093,11 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       );
     });
 
+    const LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND =
+      'The change must be shielded because the transaction spends a shielded UTXO, and a legacy ' +
+      'change address cannot receive it. Use a new-format change address, or changeShieldedMode: ' +
+      'OutputKind.TRANSPARENT to keep the change transparent.';
+
     test('a legacy changeAddress fails when the RULES shield the change (R2 top-up)', async () => {
       const storage = buildPoolStorage([
         poolUtxo('htr-pub-8', 8n, NATIVE_TOKEN_UID),
@@ -4110,7 +4120,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       });
 
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-        /legacy change address cannot be used/
+        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND)
       );
     });
 
@@ -4157,7 +4167,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       });
 
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-        /legacy change address cannot be used/
+        new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_SHIELDED_SPEND)
       );
     });
 
@@ -4290,6 +4300,90 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
           o => o.token === CUSTOM_TOKEN && o.shieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED
         )
       ).toBe(true);
+    });
+
+    test('a wallet without HTR is told the shielded change needs its fee', async () => {
+      // Shielded custom-token funds only, no HTR: spending them shields the
+      // change, whose fee is paid in HTR.
+      const pool = [
+        poolUtxo('custom-sh-50', 50n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const send = (changeShieldedMode: ChangeOutputMode | null) =>
+        new SendTransaction({
+          wallet: buildWallet(buildPoolStorage(pool), buildShieldedAddr(0)),
+          outputs: [
+            {
+              type: OutputType.P2PKH,
+              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              value: 40n,
+              token: CUSTOM_TOKEN,
+            },
+          ],
+          changeShieldedMode,
+        }).prepareTxData();
+
+      await expect(send(null)).rejects.toThrow(
+        new SendTxError(
+          `Token: ${NATIVE_TOKEN_UID}. Insufficient amount of tokens to fill the amount. The ` +
+            'amount includes the fee to shield the change; pass changeShieldedMode: ' +
+            'OutputKind.TRANSPARENT to keep the change transparent.'
+        )
+      );
+      // A pinned shielded change gets no suggestion to drop it.
+      await expect(send(ShieldedOutputMode.AMOUNT_SHIELDED)).rejects.toThrow(
+        new SendTxError(
+          `Token: ${NATIVE_TOKEN_UID}. Insufficient amount of tokens to fill the amount. The ` +
+            'amount includes the fee to shield the change.'
+        )
+      );
+      // As suggested: the 10n change stays transparent and no HTR is needed.
+      const result = await send(OutputKind.TRANSPARENT);
+      const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
+      expect(change!.value).toBe(10n);
+    });
+
+    test('a 1-unit change that is the only shielded output says how to keep it transparent', async () => {
+      // An exact match from the shielded 10n forces the 1n in for a change to
+      // hide behind; that 1n change cannot be split into two outputs.
+      const pool = [
+        poolUtxo('custom-sh-10', 10n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '5b'.repeat(32),
+        }),
+        poolUtxo('custom-sh-1', 1n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '5c'.repeat(32),
+        }),
+        poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+      ];
+      const send = (changeShieldedMode: ChangeOutputMode | null) =>
+        new SendTransaction({
+          wallet: buildWallet(buildPoolStorage(pool), buildShieldedAddr(0)),
+          outputs: [
+            {
+              type: OutputType.P2PKH,
+              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              value: 10n,
+              token: CUSTOM_TOKEN,
+            },
+          ],
+          changeShieldedMode,
+        }).prepareTxData();
+
+      await expect(send(null)).rejects.toThrow(
+        new SendTxError(
+          "The transaction's only shielded output is a 1-unit change, too small to split into " +
+            'the two shielded outputs the protocol requires; pass changeShieldedMode: ' +
+            'OutputKind.TRANSPARENT to keep the change transparent.'
+        )
+      );
+      // As suggested: nothing is forced in, and the 10n is spent exactly.
+      const result = await send(OutputKind.TRANSPARENT);
+      expect(result.inputs.map(i => i.txId)).toEqual(['custom-sh-10']);
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
     });
 
     // A JS or HTTP caller can pass anything; none of these may pass for a mode.

@@ -484,6 +484,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // shielded input must be forced, and whether its change should be shielded
     // in place of a shielded input the wallet cannot supply.
     const changeModeOverride = this.changeShieldedMode ?? null;
+    // Ends an error about a shielded change: with the way to keep it transparent
+    // when the rules shielded it, plainly when the caller asked for it.
+    const keepTransparentHint =
+      changeModeOverride === null
+        ? '; pass changeShieldedMode: OutputKind.TRANSPARENT to keep the change transparent.'
+        : '.';
     const outputProfiles = await buildTokenOutputProfiles(
       this.outputs.map(o => ({
         token: 'token' in o ? o.token : undefined,
@@ -580,11 +586,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // shielded change after selection (e.g. a shielded top-up under R2, or a
     // user-supplied shielded input) — a legacy changeAddress must fail there
     // too, never be silently replaced by a wallet-derived address.
+    // Shielded outputs and an explicit AS/FS mode already failed the static
+    // guard, so what shields the change here is a spent shielded UTXO.
     const assertChangeAddressSupportsShieldedChange = () => {
       if (this.changeAddress && !changeAddressIsNewFormat) {
         throw new SendTxError(
-          'A legacy change address cannot be used on a transaction with shielded outputs ' +
-            'or a shielded change mode — use a new-format (shielded-capable) address.'
+          'The change must be shielded because the transaction spends a shielded UTXO, and a ' +
+            'legacy change address cannot receive it. Use a new-format change address, or ' +
+            'changeShieldedMode: OutputKind.TRANSPARENT to keep the change transparent.'
         );
       }
     };
@@ -756,7 +765,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       },
       options,
       totalFee
-    );
+    ).catch((e: unknown) => {
+      // A shielded change makes even a send of another token need HTR for its
+      // fee: when that HTR is missing, say so.
+      const changeShielded = shieldedOutputDefs.some(def => def.isChange);
+      if (
+        changeShielded &&
+        e instanceof SendTxError &&
+        e.message === insufficientTokensMessage(HTR_UID)
+      ) {
+        throw new SendTxError(
+          `${e.message} The amount includes the fee to shield the change${keepTransparentHint}`
+        );
+      }
+      throw e;
+    });
 
     // The HTR change mode follows the same rules: shielded when shielded HTR
     // inputs were spent (mirroring them), all HTR outputs are shielded, or it
@@ -1014,6 +1037,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         }
       }
       if (needsSplit) {
+        // A 1-unit change cannot be split; say it is the change, and how to
+        // keep it transparent when the rules shielded it.
+        if (lone.isChange && lone.value < 2n) {
+          throw new SendTxError(
+            `The transaction's only shielded output is a ${lone.value}-unit change, too small ` +
+              `to split into the two shielded outputs the protocol requires${keepTransparentHint}`
+          );
+        }
         totalFee += extraFee;
         splitShieldedDef(shieldedOutputDefs, 0);
       }
@@ -2033,6 +2064,11 @@ async function getOutputTypeFromWallet(storage: IStorage): Promise<'p2pkh' | 'p2
   throw new Error('Unsupported wallet type.');
 }
 
+/** The error a selection that cannot cover a token's amount reports. */
+function insufficientTokensMessage(token: string): string {
+  return `Token: ${token}. Insufficient amount of tokens to fill the amount.`;
+}
+
 async function _prepareSendTokensData(
   storage: IStorage,
   dataTx: Pick<IDataTx, 'inputs' | 'outputs'>,
@@ -2068,7 +2104,7 @@ async function _prepareSendTokensData(
     // We will choose the inputs to fill outputAmount.funds
     const newUtxos = await utxoSelection(storage, token, outputAmount);
     if (newUtxos.amount < outputAmount) {
-      throw new Error(`Token: ${token}. Insufficient amount of tokens to fill the amount.`);
+      throw new Error(insufficientTokensMessage(token));
     }
     newtxData.inputs = newUtxos.utxos.map(helpers.getDataInputFromUtxo);
 
