@@ -84,8 +84,6 @@ export interface ISelectionReport {
   shieldedInputCount: number;
   /** Any spent shielded UTXO was fully shielded (has an asset blinding factor). */
   anyFullyShieldedInput: boolean;
-  /** Selected sum equals the target exactly (no change). */
-  exactMatch: boolean;
 }
 
 /** The minimal output shape the profile builder needs. */
@@ -439,7 +437,6 @@ export async function shieldedAwareSelection(
       anyFullyShieldedInput: picked.some(
         utxo => utxo.shielded && utxo.assetBlindingFactor !== undefined
       ),
-      exactMatch: sum === amount,
     });
   }
 

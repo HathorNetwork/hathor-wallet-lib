@@ -143,7 +143,6 @@ describe('shieldedAwareSelection', () => {
     // exist.
     expect(ids(result)).toEqual(['sh-37', 'sh-5', 'tiny-pub']);
     expect(result.amount).toBe(45n);
-    expect(report!.exactMatch).toBe(false);
     expect(report!.shieldedInputCount).toBe(2);
   });
 
@@ -488,7 +487,6 @@ describe('decideChangeMode', () => {
   const report = (shieldedInputCount: number, anyFS = false): ISelectionReport => ({
     shieldedInputCount,
     anyFullyShieldedInput: anyFS,
-    exactMatch: false,
   });
 
   it('explicit override always wins', () => {

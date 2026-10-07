@@ -459,7 +459,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       const summary = userInputSummaries.get(spentToken) ?? {
         shieldedInputCount: 0,
         anyFullyShieldedInput: false,
-        exactMatch: false,
       };
       if (resolved.kind === 'shielded') {
         summary.shieldedInputCount += 1;
