@@ -2654,6 +2654,93 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
+    // A lone shielded HTR output: the change takes its mode (all HTR outputs are
+    // shielded), and when it equals that mode's fee, the split takes it whole.
+    const loneShieldedHtrSend = (
+      storage: Storage,
+      shieldedMode: ShieldedOutputMode,
+      inputs: { txId: string; index: number }[] = []
+    ) =>
+      new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          { address: buildShieldedAddr(1), value: 10n, token: NATIVE_TOKEN_UID, shieldedMode },
+        ],
+        inputs,
+      }).prepareTxData();
+
+    test('a lone shielded output whose change equals its fee is split, the change paying the split fee', async () => {
+      const amountShielded = await loneShieldedHtrSend(
+        buildPoolStorage([poolUtxo('htr-pub-12', 12n, NATIVE_TOKEN_UID)]),
+        ShieldedOutputMode.AMOUNT_SHIELDED
+      );
+      // 12 − 10 − 1 = 1n of change, exactly its own fee: 12 = 5 + 5 + 2 (fees).
+      expect(amountShielded.outputs).toHaveLength(0);
+      expect(amountShielded.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+      const asFee = amountShielded.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(asFee.entries[0].amount).toBe(2n);
+
+      const fullyShielded = await loneShieldedHtrSend(
+        buildPoolStorage([poolUtxo('htr-pub-14', 14n, NATIVE_TOKEN_UID)]),
+        ShieldedOutputMode.FULLY_SHIELDED
+      );
+      // 14 − 10 − 2 = 2n of change, exactly its own fee: 14 = 5 + 5 + 4 (fees).
+      expect(fullyShielded.outputs).toHaveLength(0);
+      expect(fullyShielded.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+      const fsFee = fullyShielded.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(fsFee.entries[0].amount).toBe(4n);
+    });
+
+    test('a lone shielded output spending a shielded UTXO whose change equals its fee is split', async () => {
+      const result = await loneShieldedHtrSend(
+        buildPoolStorage([
+          poolUtxo('htr-sh-12', 12n, NATIVE_TOKEN_UID, {
+            shielded: true,
+            blindingFactor: '4d'.repeat(32),
+          }),
+        ]),
+        ShieldedOutputMode.AMOUNT_SHIELDED
+      );
+
+      expect(result.inputs.map(i => i.txId)).toEqual(['htr-sh-12']);
+      expect(result.outputs).toHaveLength(0);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+    });
+
+    test('a lone shielded output from a caller-supplied input whose change equals its fee is split', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('parent', 12n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-pub-50', 50n, NATIVE_TOKEN_UID),
+      ]);
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: [
+          {
+            value: 12n,
+            token: NATIVE_TOKEN_UID,
+            token_data: 0,
+            script: '',
+            decoded: { address: 'addr-parent' },
+            spent_by: null,
+          },
+        ],
+        shielded_outputs: [],
+        inputs: [],
+      } as never);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === 'addr-parent');
+
+      const result = await loneShieldedHtrSend(storage, ShieldedOutputMode.AMOUNT_SHIELDED, [
+        { txId: 'parent', index: 0 },
+      ]);
+
+      // Nothing is added to the caller's input: 12 = 5 + 5 + 2 (fees).
+      expect(result.inputs.map(i => i.txId)).toEqual(['parent']);
+      expect(result.outputs).toHaveLength(0);
+      expect(result.shieldedOutputs!.map(o => o.value)).toEqual([5n, 5n]);
+    });
+
     test('a pinned shielded change too small for its fee fails when the only shielded output is 1n', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-pub-6', 6n, CUSTOM_TOKEN),
