@@ -98,6 +98,7 @@ import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
   deriveShieldedAddressFromStorage,
+  fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
@@ -2194,10 +2195,8 @@ class HathorWallet extends EventEmitter {
    * requested address. A buggy or mismatched provider could otherwise return the wrong key, which
    * would sign with the wrong key and could create an unspendable utxo.
    *
-   * Callers that know the requested address must pass it as `options.expectedAddress`. An index
-   * alone is ambiguous — the legacy, shielded and shielded-spend addresses of one BIP32 index share
-   * it — so checking only against the address at the index could accept the legacy key for a
-   * shielded-spend request. Index-based callers fall back to the legacy address at that index.
+   * See fetchVerifiedExternalPrivateKey (utils/address) for the checks and `expectedAddress`.
+   * Index-based callers are checked against the legacy address at that index.
    *
    * @param addressIndex - Index whose private key to fetch
    * @param [options.pinCode] - Forwarded to the provider
@@ -2209,21 +2208,13 @@ class HathorWallet extends EventEmitter {
     addressIndex: number,
     options: { pinCode?: string; expectedAddress?: string } = {}
   ): Promise<unknown> {
-    // expectedAddress is verification-only: keep it out of the PrivateKeyProvider contract.
-    const { expectedAddress, ...providerOptions } = options;
-    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
-    if (!(privateKey instanceof bitcore.PrivateKey)) {
-      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
-    }
-    const derivedAddress = getAddressFromPubkey(
-      (privateKey as bitcore.PrivateKey).publicKey.toString(),
-      this.getNetworkObject()
-    ).base58;
-    const ownerAddress = expectedAddress ?? (await this.getAddressAtIndex(addressIndex));
-    if (derivedAddress !== ownerAddress) {
-      throw new WalletError('External private key provider returned a key for the wrong address.');
-    }
-    return privateKey;
+    return fetchVerifiedExternalPrivateKey(
+      this.storage,
+      this.getNetworkObject(),
+      addressIndex,
+      index => this.getAddressAtIndex(index),
+      options
+    );
   }
 
   /**

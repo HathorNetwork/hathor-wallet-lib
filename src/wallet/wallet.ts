@@ -24,7 +24,7 @@ import {
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
-import { deriveAddressFromXPubP2PKH, getAddressFromPubkey } from '../utils/address';
+import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -1322,7 +1322,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   /**
    * Fetch an address private key from the external provider and check it belongs to the requested
-   * address, so a buggy or mismatched provider can never sign with the wrong key.
+   * address, so a buggy or mismatched provider can never sign with the wrong key. Same checks as
+   * HathorWallet (see fetchVerifiedExternalPrivateKey in utils/address); index-based callers are
+   * checked against the wallet's own address at the index (getOwnAddressAtIndex).
    *
    * @param addressIndex Index whose private key to fetch
    * @param [options.pinCode] Forwarded to the provider
@@ -1337,23 +1339,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     addressIndex: number,
     options: { pinCode?: string; expectedAddress?: string } = {}
   ): Promise<bitcore.PrivateKey> {
-    // expectedAddress is check-only: keep it out of the PrivateKeyProvider contract.
-    const { expectedAddress, ...providerOptions } = options;
-    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
-    if (!(privateKey instanceof bitcore.PrivateKey)) {
-      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
-    }
-    // bitcore's typings don't narrow `unknown` through instanceof, hence the cast.
-    const key = privateKey as bitcore.PrivateKey;
-    const derivedAddress = getAddressFromPubkey(
-      key.publicKey.toString(),
-      this.getNetworkObject()
-    ).base58;
-    const ownerAddress = expectedAddress ?? (await this.getOwnAddressAtIndex(addressIndex));
-    if (derivedAddress !== ownerAddress) {
-      throw new WalletError('External private key provider returned a key for the wrong address.');
-    }
-    return key;
+    return fetchVerifiedExternalPrivateKey(
+      this.storage,
+      this.getNetworkObject(),
+      addressIndex,
+      index => this.getOwnAddressAtIndex(index),
+      options
+    );
   }
 
   /**
