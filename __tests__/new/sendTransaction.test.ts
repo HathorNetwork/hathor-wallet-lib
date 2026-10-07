@@ -4772,6 +4772,42 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
+    test('a FEE token spent only from a caller-supplied shielded input pays no melt fee', async () => {
+      const callerInput = poolUtxo('caller-fee-sh-20', 20n, FEE_TOKEN, {
+        shielded: true,
+        blindingFactor: '6d'.repeat(32),
+      });
+      const storage = buildPoolStorage([
+        callerInput,
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ]);
+      supplyCallerInputs(storage, [callerInput]);
+      const result = await new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token: FEE_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 10n,
+            token: FEE_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        inputs: [{ txId: 'caller-fee-sh-20', index: 0 }],
+      }).prepareTxData();
+
+      // As with a selected one, the caller's shielded input pays no melt fee:
+      // the fee is just the two shielded outputs'. HTR: 10 = 2 + 8.
+      expect(result.inputs.map(i => i.txId).sort()).toEqual(['caller-fee-sh-20', 'htr-pub-10']);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
     test('R3b — shielded outputs that all pay the wallet force no shielded input', async () => {
       const own = [buildShieldedAddr(0), buildShieldedAddr(2)];
       const storage = buildPoolStorage([
