@@ -1240,8 +1240,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       try {
         await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
       } catch (err) {
-        // Best-effort: continue releasing remaining UTXOs
-        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+        // Best-effort: continue releasing remaining UTXOs. This method must never reject: the
+        // send's failure paths wait for it before reporting their own error, so even a failing
+        // logger must not escape here.
+        try {
+          this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+        } catch {
+          // Nothing else to do: logging was the last resort.
+        }
       }
     }
   }

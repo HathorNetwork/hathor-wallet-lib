@@ -868,6 +868,31 @@ describe('releaseUtxos', () => {
 
     expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
   });
+
+  // The send's failure paths wait for releaseUtxos before reporting their own error (e.g.
+  // handlePushTx rejects only after it), so it must never reject, even if logging fails.
+  it('should never reject, even when the logger throws, and still release the rest', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const utxoSelectSpy = jest
+      .spyOn(storage, 'utxoSelectAsInput')
+      .mockRejectedValueOnce(new Error('fail'))
+      .mockResolvedValueOnce(undefined);
+    jest.spyOn(storage.logger, 'debug').mockImplementation(() => {
+      throw new Error('logger down');
+    });
+
+    const sendTx = new SendTransaction({ storage, outputs: [], inputs: [] });
+    sendTx.transaction = {
+      inputs: [
+        { hash: 'tx1', index: 0 },
+        { hash: 'tx2', index: 1 },
+      ],
+    } as unknown as import('../../src/models/transaction').default;
+
+    await expect(sendTx.releaseUtxos()).resolves.toBeUndefined();
+    expect(utxoSelectSpy).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe('convertHtrChangeIfRequested', () => {
