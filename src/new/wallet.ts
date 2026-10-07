@@ -3895,6 +3895,14 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Whether an external private-key provider is registered (see setExternalPrivateKeyMethod),
+   * i.e. whether this wallet can sign messages and oracle data without a stored key.
+   */
+  hasExternalPrivateKeyMethod(): boolean {
+    return this.storage.hasPrivateKeyMethod();
+  }
+
+  /**
    * Set the shielded crypto provider for confidential transaction support.
    * Use this for explicit injection (e.g., mobile apps using UniFFI bindings).
    *

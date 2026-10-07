@@ -1321,6 +1321,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Whether an external private-key provider is registered (see setExternalPrivateKeyMethod),
+   * i.e. whether this wallet can sign messages and oracle data without a stored key. Mirrors
+   * HathorWallet.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  hasExternalPrivateKeyMethod(): boolean {
+    return this.storage.hasPrivateKeyMethod();
+  }
+
+  /**
    * Fetch an address private key from the external provider and check it belongs to the requested
    * address, so a buggy or mismatched provider can never sign with the wrong key. Same checks as
    * HathorWallet (see fetchVerifiedExternalPrivateKey in utils/address); index-based callers are

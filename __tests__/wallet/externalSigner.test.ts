@@ -113,6 +113,20 @@ describe('setExternalTxSigningMethod / isReadonly', () => {
   });
 });
 
+describe('setExternalPrivateKeyMethod / hasExternalPrivateKeyMethod', () => {
+  it('reports whether an external private-key provider is registered', async () => {
+    const { wallet } = await makeXpubWallet();
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
+
+    wallet.setExternalPrivateKeyMethod(async () => undefined);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(true);
+    expect(wallet.storage.hasPrivateKeyMethod()).toBe(true);
+
+    wallet.setExternalPrivateKeyMethod(null);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
+  });
+});
+
 describe('signTx with an external signer', () => {
   const makeTx = () =>
     new Transaction([new Input(`${'0'.repeat(62)}aa`, 0), new Input(`${'0'.repeat(62)}bb`, 1)], []);
