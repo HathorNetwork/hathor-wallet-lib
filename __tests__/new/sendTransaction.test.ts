@@ -1638,6 +1638,8 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
   // A genuine 32-byte custom token UID — createShieldedOutputs requires the
   // token UID to be exactly 32 bytes (a real on-chain token hash).
   const CUSTOM_TOKEN = 'ab'.repeat(32);
+  // A second DEPOSIT token, for sends that select two custom tokens.
+  const OTHER_CUSTOM_TOKEN = 'ef'.repeat(32);
   // A FEE-version token: each transparent output of it costs FEE_PER_OUTPUT,
   // and spending it with no transparent output costs that once (the melt fee).
   const FEE_TOKEN = 'cd'.repeat(32);
@@ -1686,6 +1688,9 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       // DEPOSIT (not FEE) → no transparent per-output fee, isolating the
       // shielded fee arithmetic.
       return { version: TokenVersion.DEPOSIT, uid, symbol: 'CTK', name: 'Custom' };
+    }
+    if (uid === OTHER_CUSTOM_TOKEN) {
+      return { version: TokenVersion.DEPOSIT, uid, symbol: 'OTK', name: 'Other custom' };
     }
     if (uid === FEE_TOKEN) {
       return { version: TokenVersion.FEE, uid, symbol: 'FTK', name: 'Fee token' };
@@ -3068,6 +3073,107 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(result.inputs.map(i => i.txId)).toContain('htr-pub-10');
       const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
       expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test("a second token's sweep counts the inputs the first token already took", async () => {
+      const pool = [
+        ...Array.from({ length: 200 }, (_, i) => poolUtxo(`custom-pub-1-${i}`, 1n, CUSTOM_TOKEN)),
+        ...Array.from({ length: 100 }, (_, i) =>
+          poolUtxo(`other-sh-1-${i}`, 1n, OTHER_CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+        poolUtxo('other-pub-100', 100n, OTHER_CUSTOM_TOKEN),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 200n,
+            token: CUSTOM_TOKEN,
+          },
+          {
+            address: buildShieldedAddr(1),
+            value: 75n,
+            token: OTHER_CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 75n,
+            token: OTHER_CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+      // The CUSTOM 200n takes 200 of the 255 inputs. The other token's shielded
+      // 1n cannot pay its 150n, so they are swept only as far as the 55 inputs
+      // left allow, keeping room for the top-up and the HTR fee input: 52 of
+      // them, topped up with its public 100n. The HTR fee input makes 254.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds.filter(id => id.startsWith('custom-pub-1-'))).toHaveLength(200);
+      expect(inputIds.filter(id => id.startsWith('other-sh-1-'))).toHaveLength(52);
+      expect(inputIds).toEqual(expect.arrayContaining(['other-pub-100', 'htr-pub-10']));
+      expect(result.inputs).toHaveLength(254);
+    });
+
+    test('the HTR sweep counts the inputs the token selection already took', async () => {
+      const pool = [
+        ...Array.from({ length: 250 }, (_, i) =>
+          poolUtxo(`custom-sh-1-${i}`, 1n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+        ...Array.from({ length: 20 }, (_, i) => poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)),
+        poolUtxo('htr-sh-50', 50n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 125n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 125n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 25n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      }).prepareTxData();
+
+      // The CUSTOM 250n takes 250 of the 255 inputs, and HTR keeps one of the 5
+      // left free for a structural pull. The public 1n cannot pay the 27n
+      // (25n + 2n of fees), so they are swept only as far as that allows,
+      // keeping room for the top-up and a change-forcing UTXO: 2 of them,
+      // topped up with the shielded 50n. 250 + 2 + 1 = 253.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds.filter(id => id.startsWith('custom-sh-1-'))).toHaveLength(250);
+      expect(inputIds.filter(id => id.startsWith('htr-pub-1-'))).toHaveLength(2);
+      expect(inputIds).toContain('htr-sh-50');
+      expect(result.inputs).toHaveLength(253);
     });
 
     test('R3a fallback — with no change, the lone shielded output is split', async () => {
