@@ -90,9 +90,13 @@ describe('shielded outputs — Group J: Crypto failures', () => {
     expect(balBefore).toBe(50n);
 
     const stored: any = await walletB.getTx(tx!.hash!);
+    // Shielded outputs are shuffled, so find B's 30n output by its decoded
+    // value, not by position.
+    const target = stored.shielded_outputs.findIndex((so: any) => so.value === 30n);
+    expect(target).toBeGreaterThanOrEqual(0);
     const mutated = asFreshDelivery(stored, 'ff'.repeat(32), shielded =>
       shielded.map((so: any, i: number) =>
-        i === 0 ? { ...so, commitment: flipLastByteHex(so.commitment) } : so
+        i === target ? { ...so, commitment: flipLastByteHex(so.commitment) } : so
       )
     );
 
@@ -100,12 +104,9 @@ describe('shielded outputs — Group J: Crypto failures', () => {
     // the mutated output (rewind will fail verification).
     await walletB.onNewTx({ history: mutated });
     const balAfter = (await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
-    // The intact second output (index 1) would still rewind successfully, so
-    // the credit from the fake tx is at most 20n (second output only). Flip
-    // of the first commitment must NOT credit its 30n.
-    expect(balAfter - balBefore).toBeLessThanOrEqual(20n);
-    // And must never include the tampered output's value.
-    expect(balAfter).toBeLessThan(balBefore + 30n);
+    // B's intact 20n output still rewinds successfully, so the fake tx credits
+    // exactly 20n: never the tampered output's 30n.
+    expect(balAfter - balBefore).toBe(20n);
   });
 
   it('J.41 — Malformed ephemeral_pubkey: does not credit or crash the wallet', async () => {
