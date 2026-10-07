@@ -40,7 +40,9 @@ import Network from '../models/network';
 import networkInstance from '../network';
 import { MemoryStore, Storage } from '../storage';
 import WalletServiceConnection from './connection';
-import SendTransactionWalletService from './sendTransactionWalletService';
+import SendTransactionWalletService, {
+  assertAllInputsSigned,
+} from './sendTransactionWalletService';
 import {
   AddressInfoObject,
   GetBalanceObject,
@@ -1416,24 +1418,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private async signInputsExternally(tx: Transaction, pinCode?: string | null): Promise<void> {
     const storageProxy = new WalletServiceStorageProxy(this, this.storage).createProxy();
     await transaction.signTransaction(tx, storageProxy, pinCode ?? '');
-    HathorWalletServiceWallet.assertAllInputsSigned(tx);
-  }
-
-  /**
-   * Check that external signing signed every input. The storage proxy skips an input whose spent
-   * transaction it couldn't fetch, so without this check a transient fullnode failure would
-   * produce a tx that only fails at push, with an unclear script error.
-   *
-   * @throws {SendTxError} naming the first unsigned input
-   */
-  private static assertAllInputsSigned(tx: Transaction): void {
-    const unsigned = tx.inputs.findIndex(input => !input.data || input.data.length === 0);
-    if (unsigned !== -1) {
-      const { hash, index } = tx.inputs[unsigned];
-      throw new SendTxError(
-        `Could not sign input ${unsigned} (${hash}:${index}). Please try again.`
-      );
-    }
+    // Every input of these txs is the wallet's own.
+    assertAllInputsSigned(tx);
   }
 
   /**
@@ -3378,6 +3364,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (options.signTx !== false && (pinCode || this.storage.hasTxSignatureMethod())) {
       await this.signTx(tx, { pinCode });
+      if (this.storage.hasTxSignatureMethod()) {
+        // Every input of a nano tx built here is the wallet's own.
+        assertAllInputsSigned(tx);
+      }
     }
 
     const sendTransaction = new SendTransactionWalletService(this, {
@@ -3513,9 +3503,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       storageProxy.createProxy(),
       options.pinCode ?? ''
     );
-    if (this.storage.hasTxSignatureMethod()) {
-      HathorWalletServiceWallet.assertAllInputsSigned(signedTx);
-    }
     signedTx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
     return signedTx;
   }

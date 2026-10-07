@@ -55,6 +55,23 @@ type optionsType = {
  * @internal Exported only so unit tests can use the real class instead
  *   of a duck-typed stand-in. Not part of the public API of this module.
  */
+/**
+ * Check that external signing signed every input of a transaction whose inputs are ALL the
+ * wallet's own (the facade's send, token, authority and nano paths). The storage proxy skips an
+ * input whose spent transaction it couldn't fetch, so without this check a transient fullnode
+ * failure would produce a tx that only fails at push, with an unclear script error. Not for the
+ * public signTx, which legitimately leaves a counterparty's inputs unsigned.
+ *
+ * @throws {SendTxError} naming the first unsigned input
+ */
+export function assertAllInputsSigned(tx: Transaction): void {
+  const unsigned = tx.inputs.findIndex(input => !input.data || input.data.length === 0);
+  if (unsigned !== -1) {
+    const { hash, index } = tx.inputs[unsigned];
+    throw new SendTxError(`Could not sign input ${unsigned} (${hash}:${index}). Please try again.`);
+  }
+}
+
 export class AddressPathMap {
   private readonly map = new Map<string, string>();
 
@@ -845,6 +862,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       // input's address from the spent output, then prepares the tx to be sent.
       this.emit('sign-tx-start');
       await this.wallet.signTx(this.transaction, { pinCode: pin ?? this.pin });
+      assertAllInputsSigned(this.transaction);
       this._currentStep = 'signed';
       this.emit('sign-tx-end', this.transaction);
       return this.transaction;
