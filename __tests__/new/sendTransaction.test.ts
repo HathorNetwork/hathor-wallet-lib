@@ -2654,6 +2654,39 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(feeHeader.entries[0].amount).toBe(2n);
     });
 
+    test('a pinned shielded change too small for its fee fails when the only shielded output is 1n', async () => {
+      const storage = buildPoolStorage([
+        poolUtxo('custom-pub-6', 6n, CUSTOM_TOKEN),
+        poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+
+      // The 1n HTR change cannot pay its own 1n fee, and the 1n output cannot
+      // be split to take it as the split's fee: the missing HTR is the cause.
+      await expect(
+        new SendTransaction({
+          wallet,
+          outputs: [
+            {
+              address: buildShieldedAddr(1),
+              value: 1n,
+              token: CUSTOM_TOKEN,
+              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+            },
+            {
+              type: OutputType.P2PKH,
+              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              value: 5n,
+              token: CUSTOM_TOKEN,
+            },
+          ],
+          changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        }).prepareTxData()
+      ).rejects.toThrow(
+        'HTR change is too small to fund its shielded-output fee and no additional HTR is available'
+      );
+    });
+
     test('a change mirroring a shielded input, too small for its fee, becomes the split fee', async () => {
       const storage = buildPoolStorage([
         poolUtxo('custom-pub-16', 16n, CUSTOM_TOKEN),

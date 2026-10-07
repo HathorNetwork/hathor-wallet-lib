@@ -762,12 +762,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // A change too small for its own fee, with no HTR to add to it, may stay as
     // it is in two cases. It is shielded only in place of a missing shielded
     // input, so it carries no shielded value. Or the tx's only shielded output
-    // is split next, and that split's fee takes the whole change, so no
-    // transparent change is left.
+    // is split next (it holds at least 2n), and that split's fee takes the
+    // whole change, so no transparent change is left.
     const htrChangeMayStay =
       (htrShieldChange && decideChangeMode(htrChangeArgs) === OutputKind.TRANSPARENT) ||
       (htrChangeIndex !== -1 &&
         shieldedOutputDefs.length === 1 &&
+        shieldedOutputDefs[0].value >= 2n &&
         partialHtrTxData.outputs[htrChangeIndex].value <=
           shieldedOutputFee(shieldedOutputDefs[0].shieldedMode));
     const { addedFee } = await convertHtrChangeIfRequested(
