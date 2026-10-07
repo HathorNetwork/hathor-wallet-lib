@@ -185,6 +185,8 @@ class PartialTxProposal {
   ) {
     this.resetSignatures();
 
+    // Added before the await on purpose: callers that don't await addInput still see the input
+    // in the partial tx synchronously, as before this method was async.
     this.partialTx.addInput(hash, index, value, address, { token, authorities });
 
     if (markAsSelected) {
@@ -335,6 +337,9 @@ class PartialTxProposal {
       try {
         await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
       } catch (err) {
+        // Log every failure (only the first is rethrown), so it shows which inputs may still be
+        // reserved.
+        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
         if (!failed) {
           failed = true;
           firstError = err;

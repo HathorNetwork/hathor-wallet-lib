@@ -28,6 +28,7 @@ import {
   IDataOutput,
   IDataOutputWithToken,
   IDataTx,
+  getDefaultLogger,
   isDataOutputCreateToken,
   IStorage,
   IUtxo,
@@ -997,9 +998,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.emit('job-done', data);
     });
 
-    // On a mining failure the inputs are released before anyone is told: the error events
-    // and the rejection of the returned promise all wait for the same release, so a caller
-    // that retries right away doesn't find its UTXOs still selected.
+    // On a mining failure the inputs are released before this class reports it: its error events
+    // and the rejection of the promise mineTx() returns all wait for the same release, so a
+    // caller that retries right away doesn't find its UTXOs still selected. (MineTransaction's
+    // own promise and listeners fire first; they don't wait.)
     let releasing: Promise<void> | null = null;
     const releaseInputs = () => {
       if (!releasing) {
@@ -1010,12 +1012,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     this.mineTransaction.on('error', async message => {
       await releaseInputs();
-      this.emit('send-error', message);
+      this.emitAfterRelease('send-error', message);
     });
 
     this.mineTransaction.on('unexpected-error', async message => {
       await releaseInputs();
-      this.emit('unexpected-error', message);
+      this.emitAfterRelease('unexpected-error', message);
     });
 
     this.mineTransaction.on('success', data => {
@@ -1094,7 +1096,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         })
         .catch(async e => {
           await this.releaseUtxos();
-          this.emit('send-error', e.message);
+          this.emitAfterRelease('send-error', e.message);
           reject(e);
         });
     });
@@ -1227,6 +1229,20 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * Release all UTXOs that were marked as selected for this transaction.
    * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
    */
+  /**
+   * Emit an event once the inputs were released. The callers run where nothing awaits them (an
+   * async event listener, a promise callback), so a listener that throws must not escape: it
+   * would become an unhandled rejection (fatal on Node 15+) and could keep the send's promise
+   * from settling. Log it instead.
+   */
+  private emitAfterRelease(event: string, ...args: unknown[]): void {
+    try {
+      this.emit(event, ...args);
+    } catch (err) {
+      (this.storage?.logger ?? getDefaultLogger()).error(`A '${event}' listener threw:`, err);
+    }
+  }
+
   async releaseUtxos(): Promise<void> {
     if (this.transaction === null) {
       return;
