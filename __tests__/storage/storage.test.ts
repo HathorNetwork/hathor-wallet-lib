@@ -27,6 +27,8 @@ import {
 } from '../../src/constants';
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
+import { keyMaterialFromExtendedKey } from '../../src/shielded/keys';
+import { shieldedSessionOf } from '../../src/shielded/session';
 import Network from '../../src/models/network';
 import {
   IHistoryTx,
@@ -1418,5 +1420,180 @@ describe('utxo selection ttl', () => {
     await storage.utxoSelectAsInput(utxo, false);
 
     expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+describe('saveAccessData refuses private key material', () => {
+  const PIN = '1234';
+  const seed = walletUtils.generateWalletWords();
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: PIN,
+    password: PIN,
+    networkName: 'testnet',
+  });
+  const root = walletUtils.getXPrivKeyFromSeed(seed, { networkName: 'testnet' });
+  const mainnetRoot = walletUtils.getXPrivKeyFromSeed(seed, { networkName: 'mainnet' });
+
+  /** The key text with its last character replaced, which breaks its checksum. */
+  function withBadChecksum(xprivkey: string): string {
+    const last = xprivkey[xprivkey.length - 1];
+    return `${xprivkey.slice(0, -1)}${last === '1' ? '2' : '1'}`;
+  }
+
+  it.each([
+    ['an HDPrivateKey', 'scanXpubkey', () => root],
+    ['a Buffer', 'scanXpubkey', () => Buffer.from('00', 'hex')],
+    ['an htpr string', 'xpubkey', () => mainnetRoot.xprivkey],
+    ['a tnpr string', 'spendXpubkey', () => root.xprivkey],
+    ['an xprv string', 'scanXpubkey', () => new HDPrivateKey().xprivkey],
+    // A field that IWalletAccessData does not define.
+    ['a tnpr string', 'scanKey', () => root.xprivkey],
+    ['a tnpr string with a trailing newline', 'scanXpubkey', () => `${root.xprivkey}\n`],
+    ['an htpr string with surrounding spaces', 'xpubkey', () => ` ${mainnetRoot.xprivkey} `],
+    ['a tnpr string with a bad checksum', 'spendXpubkey', () => withBadChecksum(root.xprivkey)],
+    [
+      'the buffers of a key held in memory',
+      'scanKey',
+      () => ({
+        privateKey: root.privateKey.toBuffer(),
+        chainCode: Buffer.from(root.toObject().chainCode, 'hex'),
+        publicKey: root.publicKey.toBuffer(),
+      }),
+    ],
+    ['an array that holds a Buffer', 'scanKey', () => [Buffer.from('00', 'hex')]],
+  ])('refuses %s in the field %s, and writes nothing', async (_name, field, makeValue) => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await storage.saveAccessData(accessData);
+    const before = JSON.stringify(await storage.getAccessData());
+    const storeSpy = jest.spyOn(store, 'saveAccessData');
+
+    const tainted = { ...accessData, [field]: makeValue() };
+    await expect(storage.saveAccessData(tainted)).rejects.toThrow(
+      `Private key material cannot be saved in the access data field '${field}'.`
+    );
+
+    expect(storeSpy).not.toHaveBeenCalled();
+    expect(JSON.stringify(await storage.getAccessData())).toEqual(before);
+  });
+
+  it('never puts the key in its error', async () => {
+    const storage = new Storage(new MemoryStore());
+    const error = await storage
+      .saveAccessData({ ...accessData, xpubkey: root.xprivkey })
+      .catch(e => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(`${error.message} ${error.stack}`).not.toMatch(/htpr|tnpr|xprv/);
+  });
+
+  it('saves records with xpubs, encrypted keys and placeholder strings', async () => {
+    const storage = new Storage(new MemoryStore());
+    await storage.saveAccessData(accessData);
+    await expect(storage.getAccessData()).resolves.toEqual(accessData);
+
+    const placeholders = {
+      xpubkey: 'xpub-placeholder',
+      walletType: 'p2pkh' as const,
+      walletFlags: 0,
+      scanXpubkey: 'scan-xpub',
+      spendXpubkey: '',
+    };
+    await storage.saveAccessData(placeholders);
+    await expect(storage.getAccessData()).resolves.toEqual(placeholders);
+  });
+});
+
+describe('handleStop and the shielded session', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  let scanMaterial: { privateKey: Buffer; chainCode: Buffer; publicKey: Buffer } | null = null;
+
+  /** A storage whose session holds the scan key of the test seed. */
+  function storageWithFilledSession() {
+    if (!scanMaterial) {
+      const scan = walletUtils
+        .getXPrivKeyFromSeed(seed, { networkName: 'testnet' })
+        .deriveChild("m/44'/280'/1'")
+        .deriveChild(0);
+      scanMaterial = keyMaterialFromExtendedKey(scan);
+    }
+    const material = {
+      privateKey: Buffer.from(scanMaterial.privateKey),
+      chainCode: Buffer.from(scanMaterial.chainCode),
+      publicKey: Buffer.from(scanMaterial.publicKey),
+    };
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const session = shieldedSessionOf(storage);
+    session.open();
+    session.fill(material, session.epoch);
+    return { store, storage, session, material };
+  }
+
+  it('closes the session and zeroes its key, with or without cleaning the storage', async () => {
+    for (const cleanStorage of [false, true]) {
+      const { storage, session, material } = storageWithFilledSession();
+      await storage.handleStop({ cleanStorage });
+      expect(session.active).toBe(false);
+      expect(session.hasKey).toBe(false);
+      expect(material.privateKey).toEqual(Buffer.alloc(32));
+    }
+  }, 30000);
+
+  it('closes the session when a stop step throws', async () => {
+    const { storage, session } = storageWithFilledSession();
+    jest.spyOn(storage, 'cleanStorage').mockRejectedValue(new Error('store write failed'));
+
+    await expect(storage.handleStop({ cleanStorage: true })).rejects.toThrow('store write failed');
+
+    expect(session.active).toBe(false);
+    expect(session.hasKey).toBe(false);
+  });
+
+  it('keeps the session when the storage is cleaned', async () => {
+    const { storage, session } = storageWithFilledSession();
+    await storage.cleanStorage(true, true, true);
+    expect(session.active).toBe(true);
+    expect(session.hasKey).toBe(true);
+  });
+
+  it('leaves alone a session that a start() opened while it ran', async () => {
+    const { storage, session } = storageWithFilledSession();
+    const connection = { unsubscribeAddress: jest.fn(), removeMetricsHandlers: jest.fn() };
+
+    // The previous wallet stops without awaiting, and the next wallet on this
+    // storage starts while the stop unsubscribes its addresses.
+    session.close();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stopping = storage.handleStop({ connection: connection as any });
+    session.open();
+    const { epoch } = session;
+    await stopping;
+
+    expect(session.active).toBe(true);
+    expect(session.epoch).toBe(epoch);
+  });
+
+  it('never hands the key to the store', async () => {
+    const { store, storage, material } = storageWithFilledSession();
+    const secrets = [material.privateKey.toString('hex'), 'htpr', 'tnpr', 'xprv'];
+    const saveSpy = jest.spyOn(store, 'saveAccessData');
+    const setItemSpy = jest.spyOn(store, 'setItem');
+    await storage.saveAccessData(
+      walletUtils.generateAccessDataFromXpub(
+        walletUtils
+          .getXPrivKeyFromSeed(seed, { networkName: 'testnet' })
+          .deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey
+      )
+    );
+    await storage.handleStop({ cleanStorage: true });
+
+    const written = JSON.stringify([...saveSpy.mock.calls, ...setItemSpy.mock.calls], (_k, v) =>
+      typeof v === 'bigint' ? v.toString() : v
+    );
+    expect(saveSpy).toHaveBeenCalled();
+    for (const secret of secrets) {
+      expect(written).not.toContain(secret);
+    }
   });
 });

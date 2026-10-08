@@ -217,3 +217,65 @@ export interface IShieldedAddressParts {
   /** 4-byte checksum over the first 67 bytes */
   checksum: Buffer;
 }
+
+// ─── shielded view key ─────────────────────────────────────────────────────
+
+/**
+ * Why a wallet cannot decode its shielded outputs.
+ *
+ * Its scan key was not unlocked:
+ * - `not-supplied`: no PIN was given, or the record holds no encrypted scan key;
+ * - `wrong-pin`: the PIN does not decrypt the scan key;
+ * - `corrupt-key`: the PIN decrypts the scan key record, but it holds no valid
+ *   extended private key;
+ * - `error`: unlocking failed with an unexpected error, such as a store read.
+ *
+ * The record has no shielded keys because the migration that adds them failed:
+ * - `wrong-password`: the password does not decrypt the words;
+ * - `wrong-pin`: the PIN does not decrypt the wallet's keys;
+ * - `passphrase-mismatch`: the words and passphrase do not derive the wallet's
+ *   own keys.
+ *
+ * The record is inconsistent, so its shielded keys are not used:
+ * - `key-mismatch`: the scan key the PIN decrypts is not the key of the
+ *   record's `scanXpubkey`.
+ */
+export type ShieldedCapabilityCause =
+  | 'not-supplied'
+  | 'wrong-pin'
+  | 'corrupt-key'
+  | 'error'
+  | 'wrong-password'
+  | 'passphrase-mismatch'
+  | 'key-mismatch';
+
+/**
+ * The wallet's own shielded outputs that it holds but has not decoded, over
+ * the history it has loaded. An output is the wallet's when it carries an
+ * ephemeral public key and its address is one of the wallet's shielded spend
+ * addresses, which needs no key to check.
+ *
+ * The counts are approximate in both directions: an output's address is wire
+ * data, so crafted outputs can raise them, and they only cover the address
+ * windows the wallet loaded. They never change a balance.
+ */
+export interface IShieldedUndecodedSummary {
+  /** The txs with at least one such output, sorted. */
+  txIds: string[];
+  /**
+   * Outputs not decoded because no scan key or no crypto provider was
+   * available. Unlocking the key, or registering the provider, and processing
+   * the history again decodes them.
+   */
+  locked: number;
+  /**
+   * Outputs that a decode ran on and that did not open with the wallet's scan
+   * key, or that are malformed. Processing them again gives the same result.
+   */
+  unreadable: number;
+  /**
+   * Outputs whose decode failed in a way a retry may fix, such as a store read
+   * failure. Processing the history again retries them.
+   */
+  error: number;
+}

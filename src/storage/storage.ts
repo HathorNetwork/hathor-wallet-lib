@@ -44,6 +44,8 @@ import {
   IAddressChainOptions,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
+import { assertNoPrivateKeyMaterial } from '../shielded/keys';
+import { shieldedSessionOf } from '../shielded/session';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -1088,10 +1090,17 @@ export class Storage implements IStorage {
   /**
    * Save the access data, initializing the wallet.
    *
+   * The access data is persisted as it is, so a record with private key
+   * material in the clear in a top-level field (an HDPrivateKey, a Buffer, a
+   * string that is or starts like an extended private key, or an object that
+   * holds buffers) is refused and nothing is written. Encrypted keys and public
+   * strings are saved as before.
+   *
    * @param {IWalletAccessData} data The wallet access data
    * @returns {Promise<void>}
    */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
+    assertNoPrivateKeyMaterial(data);
     return this.store.saveAccessData(data);
   }
 
@@ -1256,6 +1265,12 @@ export class Storage implements IStorage {
     // The addresses loadAddresses derived belong to this wallet session. Drop
     // them before anything that can throw.
     clearDerivedAddressCache(this);
+    // The shielded session ends with the wallet, whatever the options, before
+    // any step below can throw or await. A start() on this storage while those
+    // steps await, by the next wallet that uses it, keeps the session it opens.
+    // cleanStorage does not end the session: a reconnect cleans the storage of
+    // a running wallet.
+    shieldedSessionOf(this).close();
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
