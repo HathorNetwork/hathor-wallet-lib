@@ -38,7 +38,7 @@ import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { getOracleBuffer, unsafeGetOracleInputData } from '../../src/nano_contracts/utils';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 
 class FakeHathorWallet {
@@ -314,6 +314,20 @@ test('sendManyOutputsSendTransaction maps shielded and transparent outputs', asy
     token: '01',
     shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
   });
+});
+
+test('sendTransactionInstance passes the change mode on to the send', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendTransactionInstance('transparent-addr', 10n, {
+    changeShieldedMode: OutputKind.TRANSPARENT,
+  });
+
+  expect(sendTx.changeShieldedMode).toBe(OutputKind.TRANSPARENT);
 });
 
 test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => {

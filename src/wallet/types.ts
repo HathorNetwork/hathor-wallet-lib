@@ -24,7 +24,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
-import type { IShieldedCryptoProvider } from '../shielded/types';
+import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -359,12 +359,20 @@ export interface IHathorWallet {
   }): Promise<GetHistoryObject[]>;
   sendManyOutputsTransaction(
     outputs: OutputRequestObj[],
-    options: { inputs?: InputRequestObj[]; changeAddress?: string }
+    options: {
+      inputs?: InputRequestObj[];
+      changeAddress?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    }
   ): Promise<Transaction>;
   sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { token?: string; changeAddress?: string }
+    options: {
+      token?: string;
+      changeAddress?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string>;

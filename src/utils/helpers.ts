@@ -651,6 +651,9 @@ const helpers = {
       authorities: utxo.authorities,
       token: utxo.token,
       address: utxo.address,
+      // Carry the shielded marker: Fee.calculate must not count shielded
+      // inputs, and dropping the flag here would silently re-add them.
+      ...(utxo.shielded ? { shielded: true } : {}),
     } as IDataInput;
   },
 
