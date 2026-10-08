@@ -26,7 +26,7 @@ import {
   NATIVE_TOKEN_UID,
 } from '../../src/constants';
 import * as cryptoUtils from '../../src/utils/crypto';
-import { InvalidPasswdError, WalletError } from '../../src/errors';
+import { InvalidPasswdError, ShieldedKeyError } from '../../src/errors';
 import Network from '../../src/models/network';
 import {
   IHistoryTx,
@@ -1273,9 +1273,14 @@ describe('shielded key access (smoke)', () => {
     { getter: 'getScanXPubKey', read: (storage: Storage) => storage.getScanXPubKey() },
     { getter: 'getSpendXPubKey', read: (storage: Storage) => storage.getSpendXPubKey() },
   ];
-  // The refusal says why.
-  const MULTISIG_REFUSAL =
-    /^Multisig wallets have no shielded keys or addresses: .*one participant.* alone/;
+  // The refusal carries its reason in errorCode, and its message says why.
+  const MULTISIG_REFUSAL = {
+    name: 'ShieldedKeyError',
+    errorCode: 'shielded-multisig',
+    message: expect.stringMatching(
+      /^Multisig wallets have no shielded keys or addresses: .*one participant.* alone/
+    ),
+  };
 
   it('returns the scan/spend xpubs and decrypts the xprivs with the PIN', async () => {
     const { storage, scan, spend } = await shieldedWallet();
@@ -1314,8 +1319,8 @@ describe('shielded key access (smoke)', () => {
     '$getter refuses the shielded keys an older version stored on a multisig record',
     async ({ read }) => {
       const { storage } = await shieldedWallet(WalletType.MULTISIG);
-      await expect(read(storage)).rejects.toThrow(WalletError);
-      await expect(read(storage)).rejects.toThrow(MULTISIG_REFUSAL);
+      await expect(read(storage)).rejects.toThrow(ShieldedKeyError);
+      await expect(read(storage)).rejects.toMatchObject(MULTISIG_REFUSAL);
     }
   );
 
@@ -1336,8 +1341,8 @@ describe('shielded key access (smoke)', () => {
           numSignatures: 2,
         },
       });
-      await expect(read(storage)).rejects.toThrow(WalletError);
-      await expect(read(storage)).rejects.toThrow(MULTISIG_REFUSAL);
+      await expect(read(storage)).rejects.toThrow(ShieldedKeyError);
+      await expect(read(storage)).rejects.toMatchObject(MULTISIG_REFUSAL);
     }
   );
 

@@ -23,7 +23,7 @@ import {
   P2PKH_ACCT_PATH,
 } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
-import { WalletError, WalletFromXPubGuard } from '../../../src/errors';
+import { WalletFromXPubGuard } from '../../../src/errors';
 import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
@@ -242,7 +242,11 @@ describe('[Fullnode-specific] start', () => {
       const addressAtIndex = await hWallet.getAddressAtIndex(i);
       expect(precalcAddress).toStrictEqual(addressAtIndex);
     }
-    await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(WalletError);
+    // A multisig wallet has no shielded addresses.
+    await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toMatchObject({
+      name: 'ShieldedKeyError',
+      errorCode: 'shielded-multisig',
+    });
   });
 
   it('should start a wallet to manage a specific token', async () => {

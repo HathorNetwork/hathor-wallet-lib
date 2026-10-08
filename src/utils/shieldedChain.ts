@@ -6,7 +6,8 @@
  */
 
 import { IAddressChainOptions, IStorage, IWalletAccessData, WalletType } from '../types';
-import { WalletError } from '../errors';
+import { ShieldedKeyError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 import walletUtils from './wallet';
 
 /**
@@ -67,11 +68,11 @@ const MULTISIG_SHIELDED_KEYS_MESSAGE =
  * this error.
  *
  * @param accessData The wallet access data. A wallet without one is not refused here.
- * @throws {WalletError} For a multisig wallet
+ * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet
  */
 export function refuseMultisigShieldedKeys(accessData: IWalletAccessData | null): void {
   if (accessData?.walletType === WalletType.MULTISIG) {
-    throw new WalletError(MULTISIG_SHIELDED_KEYS_MESSAGE);
+    throw new ShieldedKeyError(ErrorMessages.SHIELDED_MULTISIG, MULTISIG_SHIELDED_KEYS_MESSAGE);
   }
 }
 
@@ -81,7 +82,8 @@ export function refuseMultisigShieldedKeys(accessData: IWalletAccessData | null)
  *
  * @param storage The wallet storage
  * @param opts The chain the read is for
- * @throws {WalletError} For the shielded chain of a multisig wallet
+ * @throws {ShieldedKeyError} `shielded-multisig` for the shielded chain of a
+ *   multisig wallet
  */
 export async function refuseMultisigShieldedChain(
   storage: IStorage,

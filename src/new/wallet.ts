@@ -852,8 +852,8 @@ class HathorWallet extends EventEmitter {
    * @async
    * @generator
    * @returns Address object with the count of txs for this address
-   * @throws {WalletError} For the shielded chain (`opts.legacy` false) of a
-   *   multisig wallet, which has no shielded addresses
+   * @throws {ShieldedKeyError} `shielded-multisig` for the shielded chain
+   *   (`opts.legacy` false) of a multisig wallet, which has no shielded addresses
    * @memberof HathorWallet
    * */
   async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<{
@@ -910,8 +910,8 @@ class HathorWallet extends EventEmitter {
    * Get address from specific derivation index
    *
    * @returns Address
-   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
-   *   multisig wallet, which has none
+   * @throws {ShieldedKeyError} `shielded-multisig` for a shielded address
+   *   (`opts.legacy` false) of a multisig wallet, which has none
    *
    * @memberof HathorWallet
    * @inner
@@ -974,8 +974,8 @@ class HathorWallet extends EventEmitter {
    *
    * @param [options]
    * @param [options.markAsUsed] if true, we will locally mark this address as used and won't return it again to be used
-   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
-   *   multisig wallet, which has none
+   * @throws {ShieldedKeyError} `shielded-multisig` for a shielded address
+   *   (`opts.legacy` false) of a multisig wallet, which has none
    *
    * @memberof HathorWallet
    * @inner
@@ -1000,8 +1000,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Get the next address after the current available
    *
-   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
-   *   multisig wallet, which has none
+   * @throws {ShieldedKeyError} `shielded-multisig` for a shielded address
+   *   (`opts.legacy` false) of a multisig wallet, which has none
    */
   async getNextAddress(
     opts?: IAddressChainOptions

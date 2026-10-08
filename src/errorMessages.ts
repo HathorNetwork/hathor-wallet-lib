@@ -45,4 +45,6 @@ export enum ErrorMessages {
   SHIELDED_WRONG_PIN = 'shielded-wrong-pin',
   // The words and passphrase give a root that does not derive the wallet's own keys
   SHIELDED_PASSPHRASE_MISMATCH = 'shielded-passphrase-mismatch',
+  // The wallet is multisig, whose shielded keys are single-signature keys
+  SHIELDED_MULTISIG = 'shielded-multisig',
 }

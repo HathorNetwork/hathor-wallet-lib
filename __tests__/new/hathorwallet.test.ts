@@ -11,8 +11,8 @@ import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import {
   NanoContractTransactionError,
+  ShieldedKeyError,
   TxNotFoundError,
-  WalletError,
   WalletFromXPubGuard,
 } from '../../src/errors';
 import Network from '../../src/models/network';
@@ -3439,9 +3439,14 @@ describe('multisig wallets and shielded keys', () => {
     { walletType: WalletType.P2PKH, walletMultisig: undefined, hasKeys: true },
     { walletType: WalletType.MULTISIG, walletMultisig: multisig, hasKeys: false },
   ];
-  // The refusal says why.
-  const MULTISIG_REFUSAL =
-    /^Multisig wallets have no shielded keys or addresses: .*one participant.* alone/;
+  // The refusal carries its reason in errorCode, and its message says why.
+  const MULTISIG_REFUSAL = {
+    name: 'ShieldedKeyError',
+    errorCode: 'shielded-multisig',
+    message: expect.stringMatching(
+      /^Multisig wallets have no shielded keys or addresses: .*one participant.* alone/
+    ),
+  };
   // The shielded chain needs a registered provider; nothing is decoded here.
   const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
 
@@ -3637,18 +3642,22 @@ describe('multisig wallets and shielded keys', () => {
         // The pairs are in the store.
         expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
 
-        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(WalletError);
         await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(
+          ShieldedKeyError
+        );
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toMatchObject(
           MULTISIG_REFUSAL
         );
-        await expect(hWallet.getAddressAtIndex(5, { legacy: false })).rejects.toThrow(
+        await expect(hWallet.getAddressAtIndex(5, { legacy: false })).rejects.toMatchObject(
           MULTISIG_REFUSAL
         );
-        await expect(hWallet.getCurrentAddress({}, { legacy: false })).rejects.toThrow(
+        await expect(hWallet.getCurrentAddress({}, { legacy: false })).rejects.toMatchObject(
           MULTISIG_REFUSAL
         );
-        await expect(hWallet.getNextAddress({ legacy: false })).rejects.toThrow(MULTISIG_REFUSAL);
-        await expect(hWallet.getAllAddresses({ legacy: false }).next()).rejects.toThrow(
+        await expect(hWallet.getNextAddress({ legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        await expect(hWallet.getAllAddresses({ legacy: false }).next()).rejects.toMatchObject(
           MULTISIG_REFUSAL
         );
         // No refusal moved the shielded cursor.
@@ -3673,7 +3682,7 @@ describe('multisig wallets and shielded keys', () => {
         const hWallet = new FakeHathorWallet();
         hWallet.storage = storage;
 
-        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toMatchObject(
           MULTISIG_REFUSAL
         );
       },

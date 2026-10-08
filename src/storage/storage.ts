@@ -1177,7 +1177,8 @@ export class Storage implements IStorage {
    * Get the scan chain xprivkey for shielded ECDH.
    * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
    *
-   * @throws {WalletError} For a multisig wallet, which has no shielded keys
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
@@ -1192,7 +1193,8 @@ export class Storage implements IStorage {
    * Get the spend chain xprivkey for shielded UTXO signing.
    * Uses account 2' (m/44'/280'/2'/0).
    *
-   * @throws {WalletError} For a multisig wallet, which has no shielded keys
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
@@ -1208,7 +1210,8 @@ export class Storage implements IStorage {
    * Uses account 1' (m/44'/280'/1'/0).
    * Returns undefined if wallet was created before shielded feature.
    *
-   * @throws {WalletError} For a multisig wallet, which has no shielded keys
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
@@ -1221,7 +1224,8 @@ export class Storage implements IStorage {
    * Uses account 2' (m/44'/280'/2'/0).
    * Returns undefined if wallet was created before shielded feature.
    *
-   * @throws {WalletError} For a multisig wallet, which has no shielded keys
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();

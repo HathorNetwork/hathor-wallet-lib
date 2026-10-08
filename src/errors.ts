@@ -314,13 +314,15 @@ export class WalletFromXPubGuard extends WalletError {}
 export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_WRONG_PASSWORD
   | ErrorMessages.SHIELDED_WRONG_PIN
-  | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH;
+  | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH
+  | ErrorMessages.SHIELDED_MULTISIG;
 
 /**
  * Error thrown when the shielded keys cannot be derived or used with the
- * secrets given; the reason is in `errorCode`. Its message is fixed and never
- * contains key material or seed words. `cause` holds the underlying error
- * only when that error carries no secret either.
+ * secrets given, or when the wallet cannot do what was asked of its shielded
+ * side in its current state; the reason is in `errorCode`. Its message is
+ * fixed and never contains key material or seed words. `cause` holds the
+ * underlying error only when that error carries no secret either.
  *
  * @memberof Errors
  * @inner
