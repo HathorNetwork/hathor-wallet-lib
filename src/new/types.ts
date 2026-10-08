@@ -432,10 +432,10 @@ export interface SendTransactionFullnodeOptions {
  *   wallet lacks, which fails the send where it cannot be shielded;
  *   transparent otherwise; the HTR change is also shielded when the only
  *   shielded output holds 1 unit, which cannot be split, so the change is its
- *   second shielded output). A token whose selection leaves no change has
- *   none to stand in, so the amount of its lone shielded output can still be
- *   computed by subtraction, but for the HTR output that is the tx's only
- *   shielded one: HTR is pulled to make its change. Explicit
+ *   second shielded output). A custom token whose selection leaves no change
+ *   has none to stand in, so the amount of its lone shielded output can still
+ *   be computed by subtraction; for an HTR output, HTR is pulled to make its
+ *   change, whatever other shielded outputs the tx has. Explicit
  *   OutputKind.TRANSPARENT: every change output stays transparent, even when
  *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
  *   every change output — the HTR fee-change and custom-token change — is

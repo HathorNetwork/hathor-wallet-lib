@@ -169,12 +169,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * spent, all of the token's outputs are shielded, or it stands in for the
    * shielded input a lone shielded output needs and the wallet lacks, which
    * fails the send where it cannot be shielded; transparent otherwise (see
-   * shieldedSelection). A token whose selection leaves no change has none to
-   * stand in, so the amount of its lone shielded output can still be computed
-   * by subtraction, but for the HTR output that is the tx's only shielded
-   * one: HTR is pulled to make its change. The HTR change is also shielded
-   * when the tx's only shielded output holds 1 unit, which cannot be split, so
-   * the change is its second shielded output.
+   * shieldedSelection). A custom token whose selection leaves no change has
+   * none to stand in, so the amount of its lone shielded output can still be
+   * computed by subtraction; for an HTR output, HTR is pulled to make its
+   * change, whatever other shielded outputs the tx has. The HTR change is also
+   * shielded when the tx's only shielded output holds 1 unit, which cannot be
+   * split, so the change is its second shielded output.
    * `OutputKind.TRANSPARENT` keeps every change output transparent, even when
    * shielded inputs are spent. AMOUNT_SHIELDED or FULLY_SHIELDED emits every change
    * output — the HTR fee-change and any custom-token change — shielded in
@@ -884,10 +884,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     };
     const htrChangeIndex = findHtrChangeIndex(partialHtrTxData.outputs);
     // With no HTR change, its mode only matters to a change the structural pass
-    // may pull for a lone shielded output.
-    const htrShieldChange =
-      (htrChangeIndex !== -1 || shieldedOutputDefs.length === 1) &&
-      (await shieldsChangeInstead(HTR_UID));
+    // makes of pulled HTR: one standing in for a missing shielded input,
+    // whatever other shielded outputs the tx has, or one for a lone shielded
+    // output.
+    const htrShieldChange = await shieldsChangeInstead(HTR_UID);
     const htrChangeMode = decideChangeMode({ ...htrChangeArgs, shieldChange: htrShieldChange });
     // Whether the HTR change is shielded only in place of a missing shielded
     // input: no other rule shields it.
@@ -941,7 +941,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       partialHtrTxData,
       partialInputs,
       htrChangeMode,
-      htrStandsIn,
+      // A change standing in that the HTR selection left is shielded above;
+      // the pass makes one of pulled HTR when the selection left none.
+      htrStandsIn: htrStandsIn && htrChangeIndex === -1,
       changeModeOverride,
       htrPreference: htrPolicy.preference,
       shouldChooseHTRInputs,
@@ -2132,9 +2134,10 @@ export interface IShieldedMinimumContext {
   htrChangeMode: ChangeOutputMode;
   /**
    * Whether the HTR change is shielded only in place of a missing shielded
-   * input. A lone def is then the HTR output whose amount that input would
-   * hide, and is never split: the HTR change is its second output, or the
-   * pass fails.
+   * input, and the HTR selection left none: the pass makes that change of
+   * pulled HTR, whatever the number of shielded outputs. A lone def is then
+   * the HTR output whose amount that input would hide, and is never split:
+   * the HTR change is its second output, or the pass fails.
    */
   htrStandsIn: boolean;
   /** The caller's changeShieldedMode, or null when the rules decide. */
@@ -2180,19 +2183,24 @@ export interface IShieldedMinimumContext {
  * that shielded change when the change's own fee is the smaller one. A 1-unit
  * def cannot be split, so the HTR change becomes the second output instead,
  * unless the def is that change itself, which is topped up with more HTR and
- * then split. Nor is the lone HTR output split whose change stands in for a
- * missing shielded input (`ctx.htrStandsIn`), as its halves would add up to
- * its amount: HTR is pulled, smallest-first, until a change pays its own fee,
- * and that change is the second output, also for a 1-unit output. Its change
- * address is checked once the change pays its own fee, so a change that
- * cannot fails for that first.
+ * then split.
+ *
+ * The pass also makes the HTR change that stands in for a missing shielded
+ * input when the HTR selection left none (`ctx.htrStandsIn`), whatever the
+ * number of shielded outputs: without it, the amount of the HTR output that
+ * input would hide can be computed by subtraction. HTR is pulled,
+ * smallest-first, until a change pays its own fee, and that change is
+ * shielded. A lone def is then that HTR output, never split, as its halves
+ * would add up to its amount: the change is the second output, also for a
+ * 1-unit output. Its change address is checked once the change pays its own
+ * fee, so a change that cannot fails for that first.
  *
  * Mutates `ctx.shieldedOutputDefs` (the lone def shaved or split, or the
  * shielded change appended) and `ctx.partialHtrTxData` (pulled HTR inputs; the
  * HTR change resized, added or removed).
  *
  * @returns The fee of the shielded output the pass adds, or `0n` when the tx
- *   does not have exactly one shielded output.
+ *   does not have exactly one shielded output and no HTR change stands in.
  * @throws SendTxError when the second shielded output cannot be funded or
  *   received, which for a change standing in for a missing shielded input
  *   says why the change must be shielded and ends with
@@ -2222,10 +2230,12 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
     walletCanHostShieldedChange,
     assertChangeAddressSupportsShieldedChange,
   } = ctx;
-  if (shieldedOutputDefs.length !== 1) {
+  if (shieldedOutputDefs.length !== 1 && !htrStandsIn) {
     return 0n;
   }
   let addedFee = 0n;
+  // The lone def. Beside other shielded outputs the pass only makes the HTR
+  // change standing in, which reads neither of these.
   const lone = shieldedOutputDefs[0];
   const extraFee = shieldedOutputFee(lone.shieldedMode);
   const usedUtxos = new Set<string>();
@@ -2403,13 +2413,14 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
   let needsSplit = true;
 
   if (htrStandsIn) {
-    // The lone def is the HTR output whose change stands in for a missing
-    // shielded input, and the selection left no change: one is made from
-    // pulled HTR as the second output, whatever the def holds. A legacy
-    // change address fails it only once it pays its own fee. With too little
-    // HTR left for that, or none, the error says so, and suggests keeping the
-    // change transparent only where the def could be split instead, with that
-    // HTR paying the split's fee.
+    // The HTR change stands in for a missing shielded input, and the selection
+    // left none: one is made from pulled HTR, whatever the number of shielded
+    // outputs. A lone def is the HTR output whose amount the change hides, and
+    // the change is its second output, whatever the def holds. A legacy change
+    // address fails it only once it pays its own fee. With too little HTR left
+    // for that, or none, the error says so, and suggests keeping the change
+    // transparent only where the send is not known to fail that way too (see
+    // transparentChangeFailsToo).
     await shieldFundedHtrChange(
       (userSupplied, available) =>
         new SendTxError(

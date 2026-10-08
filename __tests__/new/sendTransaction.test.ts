@@ -7864,6 +7864,62 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         await expect(allShieldedHtrSend(storage)).rejects.toThrow(READ_FAILURE_ERROR);
       });
 
+      test('an exact HTR match beside other shielded outputs fails with the failure, as its change stands in for a shielded input', async () => {
+        const storage = () =>
+          withUnreadableShieldedAddress(
+            buildPoolStorage([
+              poolUtxo('htr-pub-18', 18n, NATIVE_TOKEN_UID),
+              poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
+            ])
+          );
+        const send = (sendStorage: Storage, changeShieldedMode: ChangeOutputMode | null) =>
+          new SendTransaction({
+            storage: sendStorage,
+            outputs: [
+              {
+                address: buildShieldedAddr(1),
+                value: 10n,
+                token: NATIVE_TOKEN_UID,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+              {
+                type: OutputType.P2PKH,
+                address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+                value: 5n,
+                token: NATIVE_TOKEN_UID,
+              },
+              {
+                address: buildShieldedAddr(2),
+                value: 10n,
+                token: CUSTOM_TOKEN,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+              {
+                address: buildShieldedAddr(3),
+                value: 10n,
+                token: CUSTOM_TOKEN,
+                shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              },
+            ],
+            changeShieldedMode,
+          }).prepareTxData();
+
+        // The lone shielded HTR output beside a transparent one, with no
+        // shielded HTR in the wallet, has its change shielded instead. The HTR
+        // selection matches exactly, so HTR is pulled for that change, which
+        // asks whether the wallet can receive it.
+        await expect(send(storage(), null)).rejects.toThrow(READ_FAILURE_ERROR);
+        // Pinned transparent, no change stands in and the address is not read.
+        // HTR: 18 = 10 + 5 + 3 (fees); custom: 20 = 10 + 10. No change at all.
+        const pinnedStorage = storage();
+        const result = await send(pinnedStorage, OutputKind.TRANSPARENT);
+        expect(pinnedStorage.getCurrentAddress).not.toHaveBeenCalledWith(false, { legacy: false });
+        expect(result.shieldedOutputs!.map(o => o.value)).toEqual([10n, 10n, 10n]);
+        expect(result.outputs.filter(o => (o as { isChange?: boolean }).isChange)).toEqual([]);
+        const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+        expect(feeHeader.entries[0].amount).toBe(3n);
+      });
+
       test('a failure reading the wallet type fails the send as a failure to resolve the address', async () => {
         const storage = buildPoolStorage([
           poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
@@ -8062,53 +8118,284 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
         expect(feeHeader.entries[0].amount).toBe(2n);
       });
+    });
 
-      test('an exact HTR match leaves no change to shield in place of a shielded input', async () => {
-        const storage = withUnreadableShieldedAddress(
-          buildPoolStorage([
-            poolUtxo('htr-pub-18', 18n, NATIVE_TOKEN_UID),
-            poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
-          ])
-        );
-
-        // The lone shielded HTR output beside a transparent one, with no
-        // shielded HTR in the wallet, would have its change shielded instead,
-        // but the HTR selection matches exactly.
-        const result = await new SendTransaction({
-          storage,
+    // A mixed HTR send with one shielded HTR output, from a wallet with no
+    // shielded HTR, beside shielded outputs of the custom token: the HTR change
+    // stands in for the missing shielded input. Unless a test says otherwise,
+    // the custom 20n pays the custom outputs exactly, and the HTR 18n pays
+    // 10 + 5 + 3 (the shielded outputs' fees) exactly, so the HTR selection
+    // leaves no change.
+    describe('an HTR change standing in beside other shielded outputs', () => {
+      const exactPool = () => [
+        poolUtxo('htr-pub-18', 18n, NATIVE_TOKEN_UID),
+        poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
+      ];
+      const sendBesideOthers = (
+        source: { wallet: ReturnType<typeof buildWallet> } | { storage: Storage },
+        {
+          htrMode = ShieldedOutputMode.AMOUNT_SHIELDED,
+          customValues = [10n, 10n],
+          ...options
+        }: {
+          htrMode?: ShieldedOutputMode;
+          customValues?: bigint[];
+          changeShieldedMode?: ChangeOutputMode | null;
+          changeAddress?: string;
+          inputs?: { txId: string; index: number }[];
+        } = {}
+      ) => {
+        const customAddresses = [buildShieldedAddr(2), buildShieldedAddr(3)];
+        return new SendTransaction({
+          ...source,
           outputs: [
             {
               address: buildShieldedAddr(1),
               value: 10n,
               token: NATIVE_TOKEN_UID,
-              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+              shieldedMode: htrMode,
             },
             {
               type: OutputType.P2PKH,
-              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
               value: 5n,
               token: NATIVE_TOKEN_UID,
             },
-            {
-              address: buildShieldedAddr(2),
-              value: 10n,
+            ...customValues.map((value, i) => ({
+              address: customAddresses[i % 2],
+              value,
               token: CUSTOM_TOKEN,
               shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
-            },
-            {
-              address: buildShieldedAddr(3),
-              value: 10n,
-              token: CUSTOM_TOKEN,
-              shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
-            },
+            })),
           ],
+          ...options,
         }).prepareTxData();
+      };
+      const fromWallet = (pool: PoolUtxo[]) => ({
+        wallet: buildWallet(buildPoolStorage(pool), buildShieldedAddr(0)),
+      });
+      const feeOf = (result: IDataTx) =>
+        (result.headers!.find(h => h instanceof FeeHeader) as FeeHeader).entries[0].amount;
+      const changesOf = (result: IDataTx) =>
+        result.outputs.filter(o => (o as { isChange?: boolean }).isChange);
+      const htrShieldedOutputsOf = (result: IDataTx) =>
+        result
+          .shieldedOutputs!.filter(o => o.token === NATIVE_TOKEN_UID)
+          .sort((a, b) => Number(a.value - b.value));
 
-        // HTR: 18 = 10 + 5 + 3 (fees); custom: 20 = 10 + 10. No change at all.
+      test('HTR is pulled, smallest-first, for a change that pays its own shielded-output fee', async () => {
+        const pool = [
+          poolUtxo('htr-pub-19', 19n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID),
+          poolUtxo('custom-sh-25', 25n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: 'd1'.repeat(32),
+          }),
+        ];
+
+        const result = await sendBesideOthers(fromWallet(pool));
+
+        // The shielded custom 25n leaves a 5n change, shielded. The HTR 19n pays
+        // 10 + 5 + 4 (fees) exactly, so the 7n is pulled for a change, which
+        // pays its own 1n fee: 7 − 1 = 6n. HTR: 26 = 10 + 5 + 6 + 5 (fees).
+        expect(result.inputs.map(i => i.txId).sort()).toEqual([
+          'custom-sh-25',
+          'htr-pub-19',
+          'htr-pub-7',
+        ]);
+        expect(changesOf(result)).toEqual([]);
+        const [htrChange, htrRecipient] = htrShieldedOutputsOf(result);
+        expect(htrChange).toMatchObject({
+          value: 6n,
+          address: walletSpend(),
+          shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        });
+        expect(htrRecipient).toMatchObject({ value: 10n, address: recipientSpend() });
+        expect(
+          result
+            .shieldedOutputs!.filter(o => o.token === CUSTOM_TOKEN)
+            .map(o => o.value)
+            .sort((a, b) => Number(a - b))
+        ).toEqual([5n, 10n, 10n]);
+        expect(feeOf(result)).toBe(4n + FEE_PER_AMOUNT_SHIELDED_OUTPUT);
+        // Pinned transparent, both changes stay transparent and no HTR is
+        // pulled. HTR: 19 = 10 + 5 + 1 + 3 (fees).
+        const pinned = await sendBesideOthers(fromWallet(pool), {
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
+        expect(pinned.inputs.map(i => i.txId).sort()).toEqual(['custom-sh-25', 'htr-pub-19']);
+        expect(changesOf(pinned).map(o => [(o as { token?: string }).token, o.value])).toEqual(
+          expect.arrayContaining([
+            [NATIVE_TOKEN_UID, 1n],
+            [CUSTOM_TOKEN, 5n],
+          ])
+        );
+        expect(changesOf(pinned)).toHaveLength(2);
+        expect(htrShieldedOutputsOf(pinned).map(o => o.value)).toEqual([10n]);
+        expect(feeOf(pinned)).toBe(3n);
+      });
+
+      test('a fully shielded HTR output takes a fully shielded change that pays its own fee', async () => {
+        const pool = [
+          poolUtxo('htr-pub-19', 19n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-2', 2n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+          poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
+        ];
+
+        const result = await sendBesideOthers(fromWallet(pool), {
+          htrMode: ShieldedOutputMode.FULLY_SHIELDED,
+        });
+
+        // 19 = 10 + 5 + 4 (fees) exactly. The 2n alone cannot pay the change's
+        // own 2n fee, so the 5n is pulled too: 2 + 5 − 2 = 5n.
+        // HTR: 26 = 10 + 5 + 5 + 6 (fees).
+        expect(result.inputs.map(i => i.txId).sort()).toEqual([
+          'custom-pub-20',
+          'htr-pub-19',
+          'htr-pub-2',
+          'htr-pub-5',
+        ]);
+        expect(changesOf(result)).toEqual([]);
+        expect(htrShieldedOutputsOf(result).map(o => [o.value, o.address, o.shieldedMode])).toEqual(
+          [
+            [5n, walletSpend(), ShieldedOutputMode.FULLY_SHIELDED],
+            [10n, recipientSpend(), ShieldedOutputMode.FULLY_SHIELDED],
+          ]
+        );
+        expect(feeOf(result)).toBe(4n + FEE_PER_FULL_SHIELDED_OUTPUT);
+      });
+
+      test('with no HTR left to make the change from, the send fails', async () => {
+        await expect(sendBesideOthers(fromWallet(exactPool()))).rejects.toThrow(
+          new SendTxError(standInChangeMessage(NO_HTR_CHANGE))
+        );
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await sendBesideOthers(fromWallet(exactPool()), {
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
         expect(result.shieldedOutputs!.map(o => o.value)).toEqual([10n, 10n, 10n]);
-        expect(result.outputs.filter(o => (o as { isChange?: boolean }).isChange)).toEqual([]);
-        const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
-        expect(feeHeader.entries[0].amount).toBe(3n);
+        expect(changesOf(result)).toEqual([]);
+        expect(feeOf(result)).toBe(3n);
+      });
+
+      test('with caller-supplied HTR, the send fails rather than add HTR to it', async () => {
+        const callerHtr = poolUtxo('caller-htr-18', 18n, NATIVE_TOKEN_UID);
+        const source = () => {
+          const storage = buildPoolStorage([
+            callerHtr,
+            poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID),
+            poolUtxo('custom-pub-20', 20n, CUSTOM_TOKEN),
+          ]);
+          supplyCallerInputs(storage, [callerHtr]);
+          return { wallet: buildWallet(storage, buildShieldedAddr(0)) };
+        };
+        const inputs = [{ txId: 'caller-htr-18', index: 0 }];
+
+        // The caller's 18n pays 10 + 5 + 3 (fees) exactly, and the wallet's 7n
+        // is not added to a caller's inputs.
+        await expect(sendBesideOthers(source(), { inputs })).rejects.toThrow(
+          new SendTxError(standInChangeMessage(NO_HTR_CHANGE_OF_CALLER_HTR))
+        );
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await sendBesideOthers(source(), {
+          inputs,
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
+        expect(result.inputs.map(i => i.txId).sort()).toEqual(['caller-htr-18', 'custom-pub-20']);
+        expect(changesOf(result)).toEqual([]);
+        expect(feeOf(result)).toBe(3n);
+      });
+
+      test('a multisig wallet is refused before any HTR is pulled', async () => {
+        const multisig = () => {
+          const storage = withShieldedAddress(
+            buildPoolStorage([...exactPool(), poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID)]),
+            buildShieldedAddr(0)
+          );
+          jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.MULTISIG);
+          return { storage };
+        };
+
+        const refused = sendBesideOthers(multisig());
+        await expect(refused).rejects.toThrow(
+          new SendTxError(STAND_IN_CHANGE_FOR_A_MULTISIG_WALLET)
+        );
+        await expect(refused).rejects.toBeInstanceOf(ShieldedChangeUnavailableError);
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await sendBesideOthers(multisig(), {
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
+        expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-pub-20', 'htr-pub-18']);
+        expect(changesOf(result)).toEqual([]);
+      });
+
+      test('a wallet with no shielded address is refused before any HTR is pulled', async () => {
+        // Built from storage alone, the wallet has no shielded address.
+        const fromStorageAlone = () => ({
+          storage: buildPoolStorage([...exactPool(), poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID)]),
+        });
+
+        const refused = sendBesideOthers(fromStorageAlone());
+        await expect(refused).rejects.toThrow(
+          new SendTxError(STAND_IN_CHANGE_WITHOUT_A_SHIELDED_ADDRESS)
+        );
+        await expect(refused).rejects.toBeInstanceOf(ShieldedChangeUnavailableError);
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await sendBesideOthers(fromStorageAlone(), {
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
+        expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-pub-20', 'htr-pub-18']);
+        expect(changesOf(result)).toEqual([]);
+      });
+
+      test('at the shielded-output limit, the send is refused', async () => {
+        // 32 shielded outputs: the HTR 10n and 31 custom 1n, which the custom
+        // 31n pays exactly. The HTR 47n pays 10 + 5 + 32 (fees) exactly.
+        const pool = [
+          poolUtxo('htr-pub-47', 47n, NATIVE_TOKEN_UID),
+          poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID),
+          poolUtxo('custom-pub-31', 31n, CUSTOM_TOKEN),
+        ];
+        const customValues = Array.from({ length: MAX_SHIELDED_OUTPUTS - 1 }, () => 1n);
+
+        await expect(sendBesideOthers(fromWallet(pool), { customValues })).rejects.toThrow(
+          new SendTxError(STAND_IN_CHANGE_AT_THE_LIMIT)
+        );
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await sendBesideOthers(fromWallet(pool), {
+          customValues,
+          changeShieldedMode: OutputKind.TRANSPARENT,
+        });
+        expect(result.shieldedOutputs).toHaveLength(MAX_SHIELDED_OUTPUTS);
+        expect(changesOf(result)).toEqual([]);
+        expect(feeOf(result)).toBe(32n);
+      });
+
+      test('a legacy changeAddress fails the send once HTR is pulled for the change', async () => {
+        const toLegacyChange = (pool: PoolUtxo[], changeShieldedMode: ChangeOutputMode | null) => {
+          const storage = buildPoolStorage(pool);
+          ownLegacyChangeAddress(storage);
+          return sendBesideOthers(
+            { wallet: buildWallet(storage, buildShieldedAddr(0)) },
+            { changeAddress: LEGACY_CHANGE_ADDRESS, changeShieldedMode }
+          );
+        };
+        const withSpareHtr = [...exactPool(), poolUtxo('htr-pub-7', 7n, NATIVE_TOKEN_UID)];
+
+        // With no HTR to make the change from, that fails the send first.
+        await expect(toLegacyChange(exactPool(), null)).rejects.toThrow(
+          new SendTxError(standInChangeMessage(NO_HTR_CHANGE))
+        );
+        // With the 7n pulled for it, the change cannot go to the legacy address.
+        await expect(toLegacyChange(withSpareHtr, null)).rejects.toThrow(
+          new SendTxError(LEGACY_CHANGE_ADDRESS_FOR_STAND_IN_CHANGE)
+        );
+        // As suggested: pinned transparent, the send builds with no change.
+        const result = await toLegacyChange(withSpareHtr, OutputKind.TRANSPARENT);
+        expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-pub-20', 'htr-pub-18']);
+        expect(changesOf(result)).toEqual([]);
       });
     });
 

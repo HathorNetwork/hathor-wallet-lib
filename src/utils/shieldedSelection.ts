@@ -46,15 +46,16 @@ import { bestUtxoSelection } from './utxo';
  * shielded output holds 1 unit, which cannot be split, or, for an HTR change
  * that cannot pay its own fee, the HTR left would not pay the fee of splitting
  * that output either. An HTR change takes more HTR, smallest-first, until it
- * pays its own fee. When the tx's only shielded output is the HTR output whose
- * change stands in, that output is never split, which would publish its
- * amount: when the HTR selection leaves no change, HTR is pulled for one, and
- * a send that then needs more inputs than a tx holds fails on its input count.
+ * pays its own fee, and when the HTR selection leaves no change, HTR is pulled
+ * for one, whatever other shielded outputs the tx has; a send that then needs
+ * more inputs than a tx holds fails on its input count. When the tx's only
+ * shielded output is the HTR output whose change stands in, that output is
+ * never split, which would publish its amount: the change is its second
+ * shielded output.
  *
- * A token whose selection leaves no change has none to stand in, so the amount
- * of its shielded output can be computed by subtraction: a custom token's is
- * split when it is the tx's only shielded output and left whole beside others,
- * as is an HTR output beside others.
+ * A custom token whose selection leaves no change has none to stand in, so the
+ * amount of its shielded output can be computed by subtraction: it is split
+ * when it is the tx's only shielded output and left whole beside others.
  *
  * When no selection under these rules fits the transaction's input limit, the
  * UTXOs that cover the amount are taken from both pools, largest-first, along
@@ -195,9 +196,9 @@ export async function hasShieldedUtxo(
 /**
  * Compute the selection policy for one token, and whether its change must be
  * shielded (see the header) because the wallet cannot supply the shielded
- * input the rules want for its lone shielded output. A selection that leaves
- * no change has none to shield, but for the HTR output that is the tx's only
- * shielded one, for which HTR is pulled to make the change.
+ * input the rules want for its lone shielded output. A custom token's
+ * selection that leaves no change has none to shield; for an HTR output, HTR
+ * is pulled to make the change.
  *
  * `profile === undefined` means the token appears in no output — HTR entering
  * only to pay fees — which follows the all-transparent-outputs rule.
