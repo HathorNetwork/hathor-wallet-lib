@@ -14,6 +14,7 @@ import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WalletError } from '../../src/errors';
 import { IWalletAccessData } from '../../src/types';
+import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import {
   shieldedFixtureSeed,
@@ -268,5 +269,16 @@ describe('stored access data without shielded keys', () => {
     const wallet = buildSeedWallet(storage);
     await wallet.start({ pinCode: PIN });
     expect(createWalletSpy.mock.calls[0][7]).not.toBeNull();
+  });
+});
+
+describe('setShieldedCryptoProvider', () => {
+  it('stores the provider on the wallet storage, and clears it', () => {
+    const wallet = buildSeedWallet();
+    const provider = { name: 'mock-provider' } as unknown as IShieldedCryptoProvider;
+    wallet.setShieldedCryptoProvider(provider);
+    expect(wallet.storage.getShieldedCryptoProvider()).toBe(provider);
+    wallet.setShieldedCryptoProvider(undefined);
+    expect(wallet.storage.shieldedCryptoProvider).toBeUndefined();
   });
 });
