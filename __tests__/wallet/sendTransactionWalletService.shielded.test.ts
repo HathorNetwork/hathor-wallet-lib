@@ -27,6 +27,7 @@ import { FeeHeader } from '../../src/headers';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import { Utxo } from '../../src/wallet/types';
 import Transaction from '../../src/models/transaction';
+import Address from '../../src/models/address';
 import {
   shieldedFixtureSeed,
   shieldedFixtureAddresses,
@@ -337,5 +338,32 @@ describe('tx proposal errors', () => {
     });
     jest.spyOn(walletApi, 'createTxProposal').mockRejectedValue(proposalError(500, 'other'));
     await expect(sendTx.handleSendTxProposal()).rejects.toThrow('Error sending tx proposal.');
+  });
+});
+
+describe('wallets without shielded keys and new-format addresses', () => {
+  it('pay a transparent output to a shielded address at its spend address', async () => {
+    const { wallet, legacySelection } = await setup({ shieldedKeys: false });
+    legacySelection.mockResolvedValue({ utxos: [htrUtxo(0, 100)], changeAmount: 70n });
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [{ address: externalShieldedAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      { pinCode: PIN }
+    );
+    const tx = await sendTx.prepareTx();
+    const spendAddress = new Address(externalShieldedAddress, { network }).getSpendAddress();
+    const paid = tx.outputs.find(o => o.value === 30n)!;
+    expect(paid.parseScript(network)!.address!.base58).toBe(spendAddress.base58);
+  });
+
+  it('reject an unknown change mode with the engine message', async () => {
+    const { wallet } = await setup({ shieldedKeys: false });
+    await expect(
+      wallet.sendManyOutputsSendTransaction(
+        [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+        { pinCode: PIN, changeShieldedMode: 'bogus' as never }
+      )
+    ).rejects.toThrow(
+      "Invalid changeShieldedMode 'bogus': expected OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED."
+    );
   });
 });
