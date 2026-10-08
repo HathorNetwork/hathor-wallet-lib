@@ -863,6 +863,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
+    if (!shouldGetNewAddresses && this.newShieldedAddresses.length > 0) {
+      // Shielded outputs carry only their on-chain spend address; `addresses`
+      // lists every address the tx involves
+      const involved = new Set(newTx.addresses ?? []);
+      for (const output of newTx.shielded_outputs ?? []) {
+        if (output.decoded.address) {
+          involved.add(output.decoded.address);
+        }
+      }
+      shouldGetNewAddresses = this.newShieldedAddresses.some(({ spendAddress }) =>
+        involved.has(spendAddress)
+      );
+    }
+
     // We need to update the `newAddresses` array on every new transaction
     // because the new tx might have used one of those addresses and we try to guarantee
     // that every transaction uses a new address for increased privacy

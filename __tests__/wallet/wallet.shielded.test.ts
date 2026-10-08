@@ -25,7 +25,7 @@ import {
   buildSplitBalanceResponse,
   buildShieldedTxOutputEntry,
 } from '../__mock_helpers__/shielded-ws.fixtures';
-import { Utxo } from '../../src/wallet/types';
+import { Utxo, WsTransaction } from '../../src/wallet/types';
 
 const network = new Network('testnet');
 const PIN = '1234';
@@ -592,5 +592,54 @@ describe('utxo kind', () => {
     const spy = jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue(emptyOutputs);
     await wallet.getUtxoFromId('tx', 1);
     expect(spy.mock.calls[0][1]).not.toHaveProperty('kind');
+  });
+});
+
+describe('websocket refresh', () => {
+  const txWith = (extra: Partial<WsTransaction>): WsTransaction => ({
+    tx_id: 'tx',
+    nonce: 0,
+    timestamp: 0,
+    signal_bits: 0,
+    version: 1,
+    weight: 1,
+    parents: [],
+    inputs: [],
+    outputs: [],
+    ...extra,
+  });
+
+  it('refreshes when a shielded output pays a listed shielded address', async () => {
+    const wallet = await readyWallet();
+    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    const spend = shieldedFixtureAddresses[1].spendBase58;
+    await wallet.onNewTx(
+      txWith({ shielded_outputs: [{ mode: 1, decoded: { address: spend } }], addresses: [spend] })
+    );
+    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+  });
+
+  it('refreshes when only the involved addresses name a listed spend address', async () => {
+    const wallet = await readyWallet();
+    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    await wallet.onNewTx(txWith({ addresses: [shieldedFixtureAddresses[2].spendBase58] }));
+    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not refresh for an unrelated transaction', async () => {
+    const wallet = await readyWallet();
+    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    const emitted = jest.fn();
+    wallet.on('new-tx', emitted);
+    await wallet.onNewTx(
+      txWith({
+        shielded_outputs: [
+          { mode: 1, decoded: { address: shieldedFixtureAddresses[5].spendBase58 } },
+        ],
+        addresses: [shieldedFixtureAddresses[5].spendBase58],
+      })
+    );
+    expect(walletApi.getShieldedNewAddresses).not.toHaveBeenCalled();
+    expect(emitted).toHaveBeenCalledTimes(1);
   });
 });
