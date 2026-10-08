@@ -427,24 +427,29 @@ export interface SendTransactionFullnodeOptions {
  * @property pinCode Pin to decrypt xpriv information
  * @property changeShieldedMode The change-output mode. Absent or null: the
  *   wallet's automatic selection rules decide per token (change is shielded
- *   when shielded inputs are spent, all of a token's outputs are shielded, or,
- *   where it can be, it stands in for the shielded input a lone shielded
- *   output needs and the wallet lacks; transparent otherwise; the HTR change
- *   is also shielded when the only shielded output holds 1 unit, which cannot
- *   be split, so the change is its second shielded output). Explicit
+ *   when shielded inputs are spent, all of a token's outputs are shielded, or
+ *   it stands in for the shielded input a lone shielded output needs and the
+ *   wallet lacks, which fails the send where it cannot be shielded;
+ *   transparent otherwise; the HTR change is also shielded when the only
+ *   shielded output holds 1 unit, which cannot be split, so the change is its
+ *   second shielded output). A token whose selection leaves no change has
+ *   none to stand in, so the amount of its lone shielded output can still be
+ *   computed by subtraction, but for the HTR output that is the tx's only
+ *   shielded one: HTR is pulled to make its change. Explicit
  *   OutputKind.TRANSPARENT: every change output stays transparent, even when
  *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
  *   every change output — the HTR fee-change and custom-token change — is
  *   emitted shielded in that mode; on a transaction with no other shielded
  *   element a second shielded output is added for the protocol's
  *   two-shielded-outputs minimum: the change is split into two halves, or an
- *   HTR change is shielded beside it. The send REJECTS (throws SendTxError) when a
- *   shielded change cannot fund its own per-output fee and no additional UTXO
- *   is available, unless the split of the tx's only shielded output takes the
- *   whole change as its fee — it never silently downgrades to transparent. A
- *   multisig wallet never gets a shielded change: a send that needs one throws.
- *   A legacy changeAddress cannot receive a shielded change, so a send that
- *   shields its change throws when given one.
+ *   HTR change is shielded beside it. The send REJECTS (throws SendTxError)
+ *   when a shielded change cannot fund its own per-output fee and no
+ *   additional UTXO is available, unless the split of the tx's only shielded
+ *   output takes the whole change as its fee, which a change standing in for a
+ *   missing shielded input never does — it never silently downgrades to
+ *   transparent. A multisig wallet never gets a shielded change: a send that
+ *   needs one throws. A legacy changeAddress cannot receive a shielded change,
+ *   so a send that shields its change throws when given one.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];

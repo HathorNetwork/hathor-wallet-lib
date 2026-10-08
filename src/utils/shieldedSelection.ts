@@ -36,12 +36,25 @@ import { bestUtxoSelection } from './utxo';
  *     input.
  *   - HTR entering only to pay fees behaves like the all-transparent case.
  *
- * A change standing in for a missing shielded input is shielded only where it
- * can be: it stays transparent when the tx has no room for another shielded
- * output, the wallet has no shielded address to receive it (a multisig wallet
- * never does), or (HTR) it cannot pay its own fee and no more HTR can be added
- * to it. Otherwise a legacy change address, which cannot receive it, fails the
- * send, as it does wherever these rules shield the change.
+ * A change standing in for a missing shielded input is always shielded, or the
+ * send fails, in this order: the wallet has no shielded address to receive it
+ * (a multisig wallet never does), the tx has no room for another shielded
+ * output, (HTR) it cannot pay its own fee and no more HTR can be added to it,
+ * or a legacy change address cannot receive it, as wherever these rules shield
+ * the change. The error says why the change must be shielded, and how to keep
+ * it transparent, except where that is known to fail too: the tx's only
+ * shielded output holds 1 unit, which cannot be split, or, for an HTR change
+ * that cannot pay its own fee, the HTR left would not pay the fee of splitting
+ * that output either. An HTR change takes more HTR, smallest-first, until it
+ * pays its own fee. When the tx's only shielded output is the HTR output whose
+ * change stands in, that output is never split, which would publish its
+ * amount: when the HTR selection leaves no change, HTR is pulled for one, and
+ * a send that then needs more inputs than a tx holds fails on its input count.
+ *
+ * A token whose selection leaves no change has none to stand in, so the amount
+ * of its shielded output can be computed by subtraction: a custom token's is
+ * split when it is the tx's only shielded output and left whole beside others,
+ * as is an HTR output beside others.
  *
  * When no selection under these rules fits the transaction's input limit, the
  * UTXOs that cover the amount are taken from both pools, largest-first, along
@@ -180,9 +193,11 @@ export async function hasShieldedUtxo(
 }
 
 /**
- * Compute the selection policy for one token, and whether its change should be
- * shielded, where it can be (see the header), because the wallet cannot supply
- * the shielded input the rules want for its lone shielded output.
+ * Compute the selection policy for one token, and whether its change must be
+ * shielded (see the header) because the wallet cannot supply the shielded
+ * input the rules want for its lone shielded output. A selection that leaves
+ * no change has none to shield, but for the HTR output that is the tx's only
+ * shielded one, for which HTR is pulled to make the change.
  *
  * `profile === undefined` means the token appears in no output — HTR entering
  * only to pay fees — which follows the all-transparent-outputs rule.
