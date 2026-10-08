@@ -26,7 +26,10 @@ import { bestUtxoSelection } from './utxo';
  *     transparent funds are insufficient. Any shielded input used makes the
  *     change shielded, mode mirroring the inputs. An exact match spent from
  *     exactly ONE shielded input forces a change (an extra input is added) so
- *     the input's value is not revealed by subtraction.
+ *     the input's value is not revealed by subtraction. That change is
+ *     shielded, so it must pay its own fee and, as the tx's only shielded
+ *     output, be split; when no HTR can be added for that, the send fails,
+ *     saying why, rather than spend the input exactly.
  *   - Mixed: one shielded output forces at least one shielded input; when the
  *     wallet has none, the change is shielded instead so the output's amount
  *     cannot be computed by subtraction. Two or more shielded outputs force
@@ -98,10 +101,11 @@ import { bestUtxoSelection } from './utxo';
  * total of two or more shielded outputs of a token that nothing hides, of
  * several shielded inputs spent exactly, and of what a wallet moves into its
  * own shielded outputs. Unless the change is pinned transparent, a single
- * shielded UTXO's value is published only where the alternative is failing the
- * send: the last shielded UTXO of a token spent exactly, a fee-sized shielded
- * HTR UTXO spent exactly on the fee, and caller-supplied inputs, which are
- * never added to. A shielded HTR change made from transparent HTR alone,
+ * shielded UTXO's value is published in these cases only: the last shielded
+ * UTXO of a token spent exactly, a fee-sized shielded HTR UTXO spent exactly on
+ * the fee, and caller-supplied inputs, which are never added to. A change
+ * forced on an exact match that cannot be funded fails the send instead. A
+ * shielded HTR change made from transparent HTR alone,
  * beside no other shielded HTR output, has a public value and hides nothing
  * when spent later. The largest-first fallback over the input limit may pay a
  * token whose outputs are all shielded from transparent UTXOs alone.
@@ -153,6 +157,11 @@ export interface ISelectionReport {
   shieldedInputCount: number;
   /** Any spent shielded UTXO was fully shielded (has an asset blinding factor). */
   anyFullyShieldedInput: boolean;
+  /**
+   * A shielded UTXO was added to an exact match spent from a single shielded
+   * input, so that a change output hides that input's value.
+   */
+  forcedChange?: boolean;
 }
 
 /** The minimal output shape the profile builder needs. */
@@ -389,13 +398,17 @@ export function decideChangeMode(args: {
     : ShieldedOutputMode.AMOUNT_SHIELDED;
 }
 
-/** What a selection spending `utxos` reports to the change-mode decision. */
-function selectionReport(utxos: IUtxo[]): ISelectionReport {
+/**
+ * What a selection spending `utxos` reports to the change-mode decision, and
+ * whether it added a UTXO to force a change (`forcedChange`).
+ */
+function selectionReport(utxos: IUtxo[], forcedChange: boolean): ISelectionReport {
   return {
     shieldedInputCount: utxos.filter(utxo => utxo.shielded).length,
     anyFullyShieldedInput: utxos.some(
       utxo => utxo.shielded && utxo.assetBlindingFactor !== undefined
     ),
+    forcedChange,
   };
 }
 
@@ -672,15 +685,17 @@ export async function shieldedAwareSelection(
   // An exact match spent from a single shielded input would reveal its value
   // by subtraction, so one more shielded UTXO is added for a change output to
   // hide it.
+  let forcedChange = false;
   if (policy.forceChangeOnExactSingleShielded && isExactSingleShieldedMatch(picked, sum, amount)) {
     const extra = await changeForcingUtxo(storage, token, notPicked, policy.shieldedModeFirst);
     if (extra) {
       add(extra);
+      forcedChange = true;
     }
   }
 
   if (onReport) {
-    onReport(selectionReport(picked));
+    onReport(selectionReport(picked, forcedChange));
   }
 
   return { utxos: picked, amount: sum };
@@ -750,15 +765,17 @@ export async function largestFirstSelection(
     rest.utxos.forEach(add);
   }
 
+  let forcedChange = false;
   if (policy.forceChangeOnExactSingleShielded && isExactSingleShieldedMatch(picked, sum, amount)) {
     const extra = await changeForcingUtxo(storage, token, notPicked, policy.shieldedModeFirst);
     if (extra) {
       add(extra);
+      forcedChange = true;
     }
   }
 
   if (onReport) {
-    onReport(selectionReport(picked));
+    onReport(selectionReport(picked, forcedChange));
   }
 
   return { utxos: picked, amount: sum };

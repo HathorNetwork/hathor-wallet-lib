@@ -926,6 +926,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // input: no other rule shields it.
     const htrStandsIn =
       htrShieldChange && decideChangeMode(htrChangeArgs) === OutputKind.TRANSPARENT;
+    // Whether the rules forced the HTR change on an exact match spent from a
+    // single shielded input; its errors then say why it must be shielded.
+    const htrChangeForced =
+      changeModeOverride === null && (selectionReports.get(HTR_UID)?.forcedChange ?? false);
     // Only a change that will actually be shielded needs a shielded-capable
     // destination; with no HTR change (an exact match) the address is unused.
     // One standing in for a missing shielded input is checked by the
@@ -963,7 +967,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       keepTransparentHint,
       htrStandsIn ? () => assertChangeAddressSupportsShieldedChange(true) : undefined,
       htrStandsIn,
-      feeTokens
+      feeTokens,
+      htrChangeForced
     );
     totalFee += addedFee;
 
@@ -986,6 +991,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       legacyChangeAddress,
       keepTransparentHint,
       feeTokens,
+      htrChangeForced,
       walletCanHostShieldedChange,
       assertChangeAddressSupportsShieldedChange,
     });
@@ -1810,6 +1816,24 @@ const STAND_IN_REASON =
   "so the amount of its token's only shielded output cannot be computed by subtraction";
 
 /**
+ * Why a change forced on an exact match spent from a single shielded input
+ * must be shielded.
+ */
+const FORCED_CHANGE_REASON =
+  'so the value of the shielded UTXO spent exactly cannot be computed by subtraction';
+
+/**
+ * The message of the error that fails a send whose change was forced on an
+ * exact match spent from a single shielded input, but cannot be funded:
+ * why the change must be shielded, `whyNot` it can be, and
+ * `keepTransparentHint`. Pinned transparent, nothing is forced and the UTXO is
+ * spent exactly, publishing its value.
+ */
+function forcedChangeMessage(whyNot: string, keepTransparentHint: string): string {
+  return `The change must be shielded (${FORCED_CHANGE_REASON}), but ${whyNot}${keepTransparentHint}`;
+}
+
+/**
  * The message of the error that fails a send whose change stands in for a
  * missing shielded input but cannot be shielded: why the change must be
  * shielded, `whyNot` it cannot be, and `keepTransparentHint`.
@@ -2043,7 +2067,8 @@ export async function convertHtrChangeIfRequested(
   keepTransparentHint: string = '.',
   assertDestination: () => Promise<void> = async () => {},
   standsIn: boolean = false,
-  feeTokens: ReadonlySet<string> = new Set()
+  feeTokens: ReadonlySet<string> = new Set(),
+  forced: boolean = false
 ): Promise<{ addedFee: bigint }> {
   if (!mode || mode === OutputKind.TRANSPARENT) return { addedFee: 0n };
 
@@ -2065,9 +2090,10 @@ export async function convertHtrChangeIfRequested(
 
   const transparentChange = partialHtrTxData.outputs[changeIdx];
   let changeValue = transparentChange.value;
-  // Ends the error of a change standing in for a missing shielded input that
-  // cannot fund its fee with the HTR `available` to it.
-  const standInHint = (available: bigint): string =>
+  // Ends the error of a change the rules shield (one standing in for a missing
+  // shielded input, or one forced on an exact match) that cannot fund its fee
+  // with the HTR `available` to it.
+  const ruleChangeHint = (available: bigint): string =>
     transparentChangeFailsToo(shieldedOutputDefs, available, feeTokens) ? '.' : keepTransparentHint;
 
   if (changeValue <= additionalFee) {
@@ -2083,7 +2109,7 @@ export async function convertHtrChangeIfRequested(
       }
       throw new SendTxError(
         standsIn
-          ? unfundedStandInChangeMessage(true, standInHint(changeValue))
+          ? unfundedStandInChangeMessage(true, ruleChangeHint(changeValue))
           : 'HTR change is too small to fund its shielded-output fee, and HTR inputs were ' +
             'user-supplied so no additional HTR can be selected to cover the difference.'
       );
@@ -2123,12 +2149,19 @@ export async function convertHtrChangeIfRequested(
       // against that intent. Fail loudly so the caller can decide (send less,
       // consolidate HTR, or pass changeShieldedMode: OutputKind.TRANSPARENT)
       // rather than have privacy silently downgraded.
-      throw new SendTxError(
-        standsIn
-          ? unfundedStandInChangeMessage(false, standInHint(changeValue + pulledSum))
-          : 'HTR change is too small to fund its shielded-output fee and no additional ' +
-            'HTR is available to cover the difference.'
-      );
+      let message =
+        'HTR change is too small to fund its shielded-output fee and no additional ' +
+        'HTR is available to cover the difference.';
+      if (standsIn) {
+        message = unfundedStandInChangeMessage(false, ruleChangeHint(changeValue + pulledSum));
+      } else if (forced) {
+        message = forcedChangeMessage(
+          'it is too small to fund its shielded-output fee and no additional HTR is available ' +
+            'to cover the difference',
+          ruleChangeHint(changeValue + pulledSum)
+        );
+      }
+      throw new SendTxError(message);
     }
 
     partialHtrTxData.inputs.push(...pulledInputs);
@@ -2201,6 +2234,11 @@ export interface IShieldedMinimumContext {
   keepTransparentHint: string;
   /** The tx's FEE tokens, whose changes owe a per-output fee when transparent. */
   feeTokens?: ReadonlySet<string>;
+  /**
+   * Whether the rules forced the HTR change, adding a shielded UTXO to an exact
+   * match spent from a single shielded input so the change hides its value.
+   */
+  htrChangeForced?: boolean;
   /**
    * Whether the wallet can receive a shielded change, at the caller's
    * new-format change address or its own shielded address; an unexpected
@@ -2275,6 +2313,7 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
     legacyChangeAddress,
     keepTransparentHint,
     feeTokens,
+    htrChangeForced = false,
     walletCanHostShieldedChange,
     assertChangeAddressSupportsShieldedChange,
   } = ctx;
@@ -2505,9 +2544,17 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
         sum => sum >= deficit
       );
       if (pulledSum < deficit) {
+        // A forced change says why it exists: pinned transparent, nothing is
+        // forced and the send builds.
         throw new SendTxError(
-          'The shielded HTR change is too small to split into the two shielded outputs ' +
-            'the protocol requires, and no additional HTR is available.'
+          htrChangeForced
+            ? forcedChangeMessage(
+                'it is too small to split into the two shielded outputs the protocol ' +
+                  'requires, and no additional HTR is available',
+                keepTransparentHint
+              )
+            : 'The shielded HTR change is too small to split into the two shielded outputs ' +
+              'the protocol requires, and no additional HTR is available.'
         );
       }
       partialHtrTxData.inputs.push(...pulledInputs);

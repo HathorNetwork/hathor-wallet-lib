@@ -8314,6 +8314,114 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     // the custom 20n pays the custom outputs exactly, and the HTR 18n pays
     // 10 + 5 + 3 (the shielded outputs' fees) exactly, so the HTR selection
     // leaves no change.
+    describe('a change forced on an exact match', () => {
+      // The wallet holds a shielded 30 and one shielded dust UTXO, and the send
+      // pays exactly 30 to a transparent address. Spent alone, the 30 would
+      // publish its value, so the rules add the dust for a change to hide it.
+      const shieldedPool = (token: string, dust: bigint, fullyShielded = false) =>
+        (
+          [
+            ['sh-30', 30n],
+            ['sh-dust', dust],
+          ] as const
+        ).map(([id, value]) =>
+          poolUtxo(id, value, token, {
+            shielded: true,
+            blindingFactor: 'd1'.repeat(32),
+            ...(fullyShielded ? { assetBlindingFactor: 'a1'.repeat(32) } : {}),
+          })
+        );
+      const send = (pool: PoolUtxo[], token: string, options = {}) =>
+        new SendTransaction({
+          wallet: buildWallet(buildPoolStorage(pool), buildShieldedAddr(0)),
+          outputs: [
+            {
+              type: OutputType.P2PKH,
+              address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+              value: 30n,
+              token,
+            },
+          ],
+          ...options,
+        }).prepareTxData();
+      const forcedChangeMessage = (whyNot: string) =>
+        'The change must be shielded (so the value of the shielded UTXO spent exactly cannot ' +
+        `be computed by subtraction), but ${whyNot}${KEEP_TRANSPARENT_HINT}`;
+      const CANNOT_PAY_ITS_FEE =
+        'it is too small to fund its shielded-output fee and no additional HTR is available ' +
+        'to cover the difference';
+      const CANNOT_BE_SPLIT =
+        'it is too small to split into the two shielded outputs the protocol requires, and no ' +
+        'additional HTR is available';
+      // As the error suggests: pinned transparent, nothing is forced, and the
+      // 30 is spent exactly, publishing its value.
+      const expectSentPinnedTransparent = async (pool: PoolUtxo[], token: string) => {
+        const pinned = await send(pool, token, { changeShieldedMode: OutputKind.TRANSPARENT });
+        expect(pinned.inputs.map(i => i.txId)).toEqual(['sh-30']);
+        expect(pinned.shieldedOutputs ?? []).toEqual([]);
+        expect(pinned.outputs.filter(o => (o as { isChange?: boolean }).isChange)).toEqual([]);
+      };
+
+      test('a forced HTR change too small for its own fee fails the send, saying why', async () => {
+        const pool = shieldedPool(NATIVE_TOKEN_UID, 1n);
+        await expect(send(pool, NATIVE_TOKEN_UID)).rejects.toThrow(
+          new SendTxError(forcedChangeMessage(CANNOT_PAY_ITS_FEE))
+        );
+        await expectSentPinnedTransparent(pool, NATIVE_TOKEN_UID);
+      });
+
+      test('a forced fully shielded HTR change too small for its own fee fails the send, saying why', async () => {
+        // A fully shielded change pays 2n, so a dust of 2n cannot.
+        const pool = shieldedPool(NATIVE_TOKEN_UID, 2n, true);
+        await expect(send(pool, NATIVE_TOKEN_UID)).rejects.toThrow(
+          new SendTxError(forcedChangeMessage(CANNOT_PAY_ITS_FEE))
+        );
+        await expectSentPinnedTransparent(pool, NATIVE_TOKEN_UID);
+      });
+
+      test.each([2n, 3n])(
+        'a forced HTR change of %p too small to split fails the send, saying why',
+        async dust => {
+          // The change pays its own 1n fee, but it is then the only shielded
+          // output, and what is left cannot be split in two.
+          const pool = shieldedPool(NATIVE_TOKEN_UID, dust);
+          await expect(send(pool, NATIVE_TOKEN_UID)).rejects.toThrow(
+            new SendTxError(forcedChangeMessage(CANNOT_BE_SPLIT))
+          );
+          await expectSentPinnedTransparent(pool, NATIVE_TOKEN_UID);
+        }
+      );
+
+      test('a forced HTR change that pays its fee and the split still hides the value', async () => {
+        // 4n: its own 1n fee leaves 3n, the split's 1n fee leaves two 1n halves.
+        const result = await send(shieldedPool(NATIVE_TOKEN_UID, 4n), NATIVE_TOKEN_UID);
+        expect(result.inputs.map(i => i.txId).sort()).toEqual(['sh-30', 'sh-dust']);
+        expect(result.shieldedOutputs!.map(o => o.value)).toEqual([1n, 1n]);
+      });
+
+      test('a forced custom-token change whose fee the wallet cannot pay fails the send, saying so', async () => {
+        // The wallet holds no HTR to pay the shielded change's fee.
+        const pool = shieldedPool(CUSTOM_TOKEN, 1n);
+        await expect(send(pool, CUSTOM_TOKEN)).rejects.toThrow(
+          `The amount includes the fee to shield the change${KEEP_TRANSPARENT_HINT}`
+        );
+        await expectSentPinnedTransparent(pool, CUSTOM_TOKEN);
+      });
+
+      test('with an explicit shielded change mode, the error keeps its plain wording', async () => {
+        await expect(
+          send(shieldedPool(NATIVE_TOKEN_UID, 1n), NATIVE_TOKEN_UID, {
+            changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          })
+        ).rejects.toThrow(
+          new SendTxError(
+            'HTR change is too small to fund its shielded-output fee and no additional HTR is ' +
+              'available to cover the difference.'
+          )
+        );
+      });
+    });
+
     describe('an HTR change standing in beside other shielded outputs', () => {
       const exactPool = () => [
         poolUtxo('htr-pub-18', 18n, NATIVE_TOKEN_UID),

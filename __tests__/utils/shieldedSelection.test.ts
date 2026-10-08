@@ -144,6 +144,7 @@ describe('shieldedAwareSelection', () => {
     expect(ids(result)).toEqual(['sh-37', 'sh-5', 'tiny-pub']);
     expect(result.amount).toBe(45n);
     expect(report!.shieldedInputCount).toBe(2);
+    expect(report!.forcedChange).toBe(true);
   });
 
   it('the change-forcing UTXO is shielded even when transparent UTXOs are left', async () => {
@@ -410,6 +411,7 @@ describe('shieldedAwareSelection', () => {
     expect(result.amount).toBe(280n);
     // Its shielded inputs are reported, so the change mode mirrors them.
     expect(report!.shieldedInputCount).toBe(30);
+    expect(report!.forcedChange).toBe(false);
   });
 
   it('when no selection fits, the UTXOs that cover the amount are returned past the limit', async () => {
