@@ -1096,11 +1096,11 @@ describe('processNewTx — shielded outputs of a multisig wallet', () => {
   });
 
   it.each([
-    { walletType: WalletType.P2PKH, record: p2pkhRecord, decodes: 1 },
-    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, decodes: 0 },
+    { walletType: WalletType.P2PKH, record: p2pkhRecord, decodeAttempts: 1 },
+    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, decodeAttempts: 0 },
   ])(
-    '$walletType wallet with a stored shielded pair: the output is decoded $decodes time(s), and the transparent output is credited',
-    async ({ walletType, record, decodes }) => {
+    '$walletType wallet with a stored shielded pair: a decode is attempted $decodeAttempts time(s), and the transparent output is credited',
+    async ({ walletType, record, decodeAttempts }) => {
       expect(record.walletType).toBe(walletType);
       const store = new MemoryStore();
       const storage = new Storage(store);
@@ -1125,8 +1125,8 @@ describe('processNewTx — shielded outputs of a multisig wallet', () => {
 
       await processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
 
-      expect(scanKeySpy).toHaveBeenCalledTimes(decodes);
-      expect(rewind).toHaveBeenCalledTimes(decodes);
+      expect(scanKeySpy).toHaveBeenCalledTimes(decodeAttempts);
+      expect(rewind).toHaveBeenCalledTimes(decodeAttempts);
       expect(tx.shielded_outputs![0].value).toBeUndefined();
       const utxo = await store.getUtxo({ txId: TX_ID, index: 0 });
       expect(utxo?.value).toBe(50n);
