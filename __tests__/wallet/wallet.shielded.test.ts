@@ -23,7 +23,9 @@ import {
   buildShieldedAddressRow,
   buildShieldedNewAddressesResponse,
   buildSplitBalanceResponse,
+  buildShieldedTxOutputEntry,
 } from '../__mock_helpers__/shielded-ws.fixtures';
+import { Utxo } from '../../src/wallet/types';
 
 const network = new Network('testnet');
 const PIN = '1234';
@@ -540,5 +542,55 @@ describe('balance and history', () => {
       voided: false,
       version: 1,
     });
+  });
+});
+
+describe('utxo kind', () => {
+  const emptyOutputs = { success: true, txOutputs: [] };
+
+  it('getUtxos asks for transparent utxos by default', async () => {
+    const wallet = await readyWallet();
+    const spy = jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue(emptyOutputs);
+    await wallet.getUtxos();
+    expect(spy.mock.calls[0][1]).toMatchObject({ kind: 'transparent' });
+  });
+
+  it('getUtxos asks for shielded utxos on request', async () => {
+    const wallet = await readyWallet();
+    const spy = jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      success: true,
+      txOutputs: [
+        {
+          ...buildShieldedTxOutputEntry(),
+          value: 150n,
+          authorities: 0n,
+        } as unknown as Utxo,
+      ],
+    });
+    const result = await wallet.getUtxos({ shielded: true });
+    expect(spy.mock.calls[0][1]).toMatchObject({ kind: 'shielded' });
+    expect(result.utxos[0]).toMatchObject({
+      amount: 150n,
+      address: shieldedFixtureAddresses[1].spendBase58,
+    });
+  });
+
+  it('getUtxosForAmount only selects transparent utxos', async () => {
+    const wallet = await readyWallet();
+    const spy = jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      success: true,
+      txOutputs: [
+        { ...buildShieldedTxOutputEntry(), value: 150n, authorities: 0n } as unknown as Utxo,
+      ],
+    });
+    await expect(wallet.getUtxosForAmount(10n)).rejects.toThrow();
+    expect(spy.mock.calls[0][1]).toMatchObject({ kind: 'transparent' });
+  });
+
+  it('getUtxoFromId accepts either kind', async () => {
+    const wallet = await readyWallet();
+    const spy = jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue(emptyOutputs);
+    await wallet.getUtxoFromId('tx', 1);
+    expect(spy.mock.calls[0][1]).not.toHaveProperty('kind');
   });
 });

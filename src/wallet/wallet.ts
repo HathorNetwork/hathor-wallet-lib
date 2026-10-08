@@ -1250,6 +1250,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {number} [options.amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list.
    * @param {number} [options.max_amount] - Limit the maximum total amount to consolidate summing all utxos.
    * @param {boolean} [options.only_available_utxos] - Use only available utxos (not locked)
+   * @param {boolean} [options.shielded] - Select shielded utxos instead of transparent ones.
    *
    * @returns Promise that resolves with utxos and meta information about them
    *
@@ -1266,6 +1267,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       amount_bigger_than?: number;
       max_amount?: number;
       only_available_utxos?: boolean;
+      shielded?: boolean;
     } = {}
   ): Promise<{
     total_amount_available: bigint;
@@ -1303,6 +1305,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       maxOutputs: newOptions.max_utxos || 255,
       ignoreLocked: true,
       skipSpent: newOptions.only_available_utxos !== false,
+      // Without a kind the wallet-service returns both kinds; ask explicitly
+      // so shielded utxos never pass for transparent ones
+      kind: options.shielded ? ('shielded' as const) : ('transparent' as const),
     };
 
     // Call the internal API to get UTXOs
@@ -1368,6 +1373,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       totalAmount: amount,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent' as const,
     };
 
     if (!newOptions.totalAmount) {
@@ -1375,9 +1381,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const data = await walletApi.getTxOutputs(this, newOptions);
+    // Spending a shielded utxo needs its blinding factors, which this path
+    // does not handle
+    const transparentUtxos = data.txOutputs.filter(utxo => utxo.kind !== 'shielded');
 
     // Use selectUtxos to handle all error conditions and utxo selection
-    const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
+    const ret = transaction.selectUtxos(transparentUtxos, newOptions.totalAmount!);
     return { utxos: ret.utxos, changeAmount: ret.changeAmount };
   }
 
