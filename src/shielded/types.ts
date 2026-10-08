@@ -279,3 +279,83 @@ export interface IShieldedUndecodedSummary {
    */
   error: number;
 }
+
+/**
+ * What the wallet can do with shielded outputs:
+ * - `none`: nothing. It has no shielded chain it can use, so it derives,
+ *   watches and gives out no shielded address;
+ * - `watch`: it watches its shielded addresses and counts the outputs paid to
+ *   them, but cannot decode them, because its scan key is not unlocked;
+ * - `view`: it decodes its shielded outputs, but cannot spend them;
+ * - `full`: it decodes and spends its shielded outputs.
+ */
+export type ShieldedCapabilityLevel = 'none' | 'watch' | 'view' | 'full';
+
+/**
+ * Why the capability level is below `full`:
+ * - `not-started`: the wallet is not started (before `start()`, after
+ *   `stop()`, or after a failed start);
+ * - `wallet-service`: the wallet-service facade has no shielded support;
+ * - `multisig`: the wallet is multisig, whose shielded keys are
+ *   single-signature keys;
+ * - `integrity`: the record's shielded keys do not match each other, so they
+ *   are not used (the cause says which);
+ * - `needs-password`: the record has no shielded keys, and its words can
+ *   derive them with the wallet's password (the cause says why an attempt at
+ *   start failed, if one did);
+ * - `hardware`: the record of a hardware wallet has no shielded keys;
+ * - `no-shielded-keys`: the record has no shielded keys, and nothing to derive
+ *   them from;
+ * - `no-provider`: no shielded crypto provider is registered;
+ * - `locked`: the wallet's scan key is not unlocked (the cause says why);
+ * - `no-spend-authority`: the wallet cannot sign the inputs that spend its
+ *   shielded outputs.
+ */
+export type ShieldedCapabilityReason =
+  | 'not-started'
+  | 'wallet-service'
+  | 'multisig'
+  | 'integrity'
+  | 'needs-password'
+  | 'hardware'
+  | 'no-shielded-keys'
+  | 'no-provider'
+  | 'locked'
+  | 'no-spend-authority';
+
+/**
+ * What the wallet can do with shielded outputs, and why it cannot do more.
+ * `HathorWallet.getShieldedCapability()` returns it, and the wallet emits it
+ * with the `'shielded-capability'` event whenever it changes. It holds no key
+ * material.
+ */
+export interface IShieldedCapability {
+  level: ShieldedCapabilityLevel;
+  /** Why the level is below `full`; null at `full`. */
+  reason: ShieldedCapabilityReason | null;
+  /**
+   * The detail of the `locked`, `needs-password` and `integrity` reasons, or
+   * null.
+   */
+  cause: ShieldedCapabilityCause | null;
+  /**
+   * Whether the wallet sees what its shielded addresses receive: the level is
+   * `view` or `full`, and the history is synced by polling. The streaming sync
+   * modes do not watch the addresses shielded outputs are paid to.
+   */
+  canReceive: boolean;
+  /**
+   * Whether the wallet can sign the inputs that spend its shielded outputs:
+   * with an external tx signer, whether the signer declared that it signs
+   * them; otherwise whether the record holds the encrypted spend key.
+   */
+  canSpend: boolean;
+  /**
+   * Whether the wallet loaded all of its shielded history. False at level
+   * `none`, in the streaming sync modes, and when the address discovery of
+   * the last history walk stopped at its round limit.
+   */
+  historyComplete: boolean;
+  /** The wallet's own shielded outputs that it holds but has not decoded. */
+  undecoded: IShieldedUndecodedSummary;
+}

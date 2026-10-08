@@ -1460,6 +1460,31 @@ describe('shielded chain predicate', () => {
   });
 
   it(
+    'a session that found the record shielded keys inconsistent has no shielded chain',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      storage.setShieldedCryptoProvider(provider);
+      const session = shieldedSessionOf(storage);
+      session.open();
+      session.setIntegrity('key-mismatch');
+
+      await expect(loadAddresses(0, 1, storage)).resolves.toHaveLength(1);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+      await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      await expect(checkGapLimit(storage)).resolves.toBeNull();
+
+      // The chain is back once the session holds no integrity failure.
+      session.setIntegrity(null);
+      await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.not.toBeNull();
+      await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 1, count: 1 });
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
     'a provider registered after a load turns the chain on from index 0',
     async () => {
       const storage = new Storage(new MemoryStore());

@@ -312,10 +312,16 @@ export class Storage implements IStorage {
 
   /**
    * Set the tx signing function
+   *
+   * Setting or clearing it also clears the declaration that the signer signs
+   * shielded spend inputs (see `HathorWallet.setExternalTxSigningMethod`): a
+   * declaration belongs to the signer it was made with.
+   *
    * @param txSign The signing function, or a null value to clear it
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+    shieldedSessionOf(this).setSpendSigner(false);
   }
 
   /**

@@ -7,6 +7,7 @@
 
 import { IStorage } from '../types';
 import walletUtils from './wallet';
+import { shieldedSessionOf } from '../shielded/session';
 
 /**
  * Get the scan and spend xpubs the wallet's shielded chain is derived from, or
@@ -27,6 +28,10 @@ import walletUtils from './wallet';
  * chain unloaded until the next reconnect. A storage without access data has
  * no shielded chain.
  *
+ * Nor has a wallet whose started session found the record's shielded keys
+ * inconsistent: the stored xpubs are not trusted, so nothing is derived from
+ * them until the record is repaired.
+ *
  * This module is internal: the lib does not export it.
  *
  * @param storage The wallet storage
@@ -35,7 +40,7 @@ import walletUtils from './wallet';
 export async function getShieldedChainXpubs(
   storage: IStorage
 ): Promise<{ scanXpubkey: string; spendXpubkey: string } | null> {
-  if (!storage.shieldedCryptoProvider) {
+  if (!storage.shieldedCryptoProvider || shieldedSessionOf(storage).integrity !== null) {
     return null;
   }
   const accessData = await storage.getAccessData();

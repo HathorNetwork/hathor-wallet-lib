@@ -320,13 +320,19 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_CORRUPT_KEY
   | ErrorMessages.SHIELDED_KEY_MISMATCH
   | ErrorMessages.SHIELDED_INVALID_KEY
-  | ErrorMessages.SHIELDED_NOT_STARTED;
+  | ErrorMessages.SHIELDED_NOT_STARTED
+  | ErrorMessages.SHIELDED_MULTISIG
+  | ErrorMessages.SHIELDED_LOCKED
+  | ErrorMessages.SHIELDED_INTEGRITY
+  | ErrorMessages.SHIELDED_NO_PROVIDER
+  | ErrorMessages.SHIELDED_NOT_SUPPORTED;
 
 /**
  * Error thrown when the shielded keys cannot be derived or used with the
- * secrets given; the reason is in `errorCode`. Its message is fixed and never
- * contains key material or seed words. `cause` holds the underlying error
- * only when that error carries no secret either.
+ * secrets given, or when the wallet cannot do what was asked of its shielded
+ * side in its current state; the reason is in `errorCode`. Its message is
+ * fixed and never contains key material or seed words. `cause` holds the
+ * underlying error only when that error carries no secret either.
  *
  * @memberof Errors
  * @inner

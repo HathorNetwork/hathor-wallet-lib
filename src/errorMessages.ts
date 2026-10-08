@@ -55,4 +55,14 @@ export enum ErrorMessages {
   SHIELDED_INVALID_KEY = 'shielded-invalid-key',
   // The wallet is not started, or it was stopped or started again meanwhile
   SHIELDED_NOT_STARTED = 'shielded-not-started',
+  // The wallet is multisig, whose shielded keys are single-signature keys
+  SHIELDED_MULTISIG = 'shielded-multisig',
+  // The wallet's scan key is not unlocked, so it cannot decode its shielded outputs
+  SHIELDED_LOCKED = 'shielded-locked',
+  // The wallet's shielded keys do not match each other, so they are not used
+  SHIELDED_INTEGRITY = 'shielded-integrity',
+  // No shielded crypto provider is registered
+  SHIELDED_NO_PROVIDER = 'shielded-no-provider',
+  // The wallet facade does not support shielded outputs
+  SHIELDED_NOT_SUPPORTED = 'shielded-not-supported',
 }

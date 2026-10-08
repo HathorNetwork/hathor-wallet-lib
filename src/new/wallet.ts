@@ -116,7 +116,7 @@ import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import type { HistoryTransactionOutput } from '../models/types';
-import type { IShieldedCryptoProvider } from '../shielded/types';
+import type { IShieldedCapability, IShieldedCryptoProvider } from '../shielded/types';
 import {
   IScanKeyMaterial,
   SessionClosedError,
@@ -124,6 +124,11 @@ import {
   shieldedSessionOf,
 } from '../shielded/session';
 import { unlockScanKeyWithPin } from '../shielded/keys';
+import {
+  computeShieldedCapability,
+  shieldedAddressError,
+  shieldedAddressRefusal,
+} from '../shielded/capability';
 import { ConnectionState, FullNodeVersionData, IHathorWallet, Utxo } from '../wallet/types';
 import Transaction from '../models/transaction';
 import {
@@ -173,6 +178,31 @@ import NanoContractHeader from '../nano_contracts/header';
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
 const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
+
+/**
+ * Refuse a read of the shielded chain (`opts.legacy` false) that the wallet
+ * must not serve: a multisig wallet's shielded keys are single-signature keys,
+ * and during an integrity failure the record's shielded keys are not trusted.
+ *
+ * @param storage The wallet storage
+ * @param opts The chain the read is for
+ * @throws {ShieldedKeyError} `shielded-multisig` or `shielded-integrity`
+ */
+async function refuseUntrustedShieldedChain(
+  storage: IStorage,
+  opts?: IAddressChainOptions
+): Promise<void> {
+  if (opts?.legacy !== false) {
+    return;
+  }
+  const accessData = await storage.getAccessData();
+  if (accessData?.walletType === WalletType.MULTISIG) {
+    throw shieldedAddressError('multisig');
+  }
+  if (shieldedSessionOf(storage).integrity !== null) {
+    throw shieldedAddressError('integrity');
+  }
+}
 
 /**
  * Why the record has no shielded keys after start(), by the code of the
@@ -232,6 +262,8 @@ export function normalizePreCalculatedAddresses(
  * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
  * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
  *                          one for each request sent to the server.
+ * - shielded-capability: Fired with the wallet's IShieldedCapability when it changes, while the
+ *                        wallet is started (see getShieldedCapability).
  */
 class HathorWallet extends EventEmitter {
   // Core dependencies
@@ -293,6 +325,22 @@ class HathorWallet extends EventEmitter {
    * reloads one at a time (see runOnHistoryChain).
    */
   newTxPromise: Promise<void>;
+
+  /**
+   * The JSON of the capability the last 'shielded-capability' event carried,
+   * or null before the first event of a start(): the event fires only when
+   * the capability differs from it.
+   */
+  shieldedCapabilityEmitted: string | null;
+
+  /** Whether a check of the shielded capability is queued and has not run yet. */
+  shieldedCapabilityCheckQueued: boolean;
+
+  /**
+   * Tail of the chain the checks of the shielded capability run on, one at a
+   * time (see queueShieldedCapabilityEvent).
+   */
+  shieldedCapabilityChecks: Promise<void>;
 
   // Scanning & sync configuration
   scanPolicy: AddressScanPolicyData | null;
@@ -482,6 +530,10 @@ class HathorWallet extends EventEmitter {
 
     this.wsTxQueue = new Queue<WalletWebSocketData>();
     this.newTxPromise = Promise.resolve();
+
+    this.shieldedCapabilityEmitted = null;
+    this.shieldedCapabilityCheckQueued = false;
+    this.shieldedCapabilityChecks = Promise.resolve();
 
     // Defaults to single address scanning policy
     if (scanPolicy == null) {
@@ -879,7 +931,12 @@ class HathorWallet extends EventEmitter {
    *
    * @async
    * @generator
+   * @param [opts.legacy] false for the shielded chain
    * @returns Address object with the count of txs for this address
+   * @throws {ShieldedKeyError} For the shielded chain, `shielded-multisig` for a
+   *   multisig wallet, whose shielded keys are single-signature keys, and
+   *   `shielded-integrity` while the record's shielded keys do not match each
+   *   other.
    * @memberof HathorWallet
    * */
   async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<{
@@ -887,6 +944,7 @@ class HathorWallet extends EventEmitter {
     index: number;
     transactions: number;
   }> {
+    await refuseUntrustedShieldedChain(this.storage, opts);
     // We add the count of transactions
     // in order to replicate the same return as the new
     // wallet service facade.
@@ -934,12 +992,23 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address from specific derivation index
    *
+   * @param index The derivation index
+   * @param opts.legacy false for the shielded address at the index
    * @returns Address
+   * @throws {ShieldedKeyError} For a shielded address:
+   *   - `shielded-multisig` for a multisig wallet, whose shielded keys are
+   *     single-signature keys;
+   *   - `shielded-integrity` while the record's shielded keys do not match each
+   *     other;
+   *   - for an index that is not loaded, `shielded-no-keys` when the record
+   *     lacks a shielded xpub, and `shielded-no-provider` when no crypto
+   *     provider is registered.
    *
    * @memberof HathorWallet
    * @inner
    */
   async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    await refuseUntrustedShieldedChain(this.storage, opts);
     let address = await this.storage.getAddressAtIndex(index, opts);
 
     if (address === null) {
@@ -952,7 +1021,13 @@ class HathorWallet extends EventEmitter {
         // Shielded address not yet derived at this index
         const result = await deriveShieldedAddressFromStorage(index, this.storage);
         if (!result) {
-          throw new Error('Shielded keys not available');
+          // No shielded chain to derive it from: the record lacks a shielded
+          // xpub, or no crypto provider is registered.
+          throw shieldedAddressError(
+            walletUtils.hasShieldedXpubs(await this.storage.getAccessData())
+              ? 'no-provider'
+              : 'no-shielded-keys'
+          );
         }
         return result.shieldedAddress.base58;
       }
@@ -994,8 +1069,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address to be used in the wallet
    *
+   * A shielded address (`opts.legacy` false) is given out only at the
+   * shielded capability level `view` or `full` (see getShieldedCapability).
+   * The current shielded address moves on only when an output paid to it is
+   * decoded, so a wallet that cannot decode would give out the same address
+   * forever.
+   *
    * @param [options]
    * @param [options.markAsUsed] if true, we will locally mark this address as used and won't return it again to be used
+   * @param [opts.legacy] false for the shielded chain
+   * @throws {ShieldedKeyError} For a shielded address below level `view`:
+   *   `shielded-locked` at level `watch`; at level `none`, the code of its
+   *   reason (`shielded-not-started`, `shielded-multisig`,
+   *   `shielded-integrity`, `shielded-no-keys` or `shielded-no-provider`).
    *
    * @memberof HathorWallet
    * @inner
@@ -1009,6 +1095,12 @@ class HathorWallet extends EventEmitter {
     index: number | null;
     addressPath: string;
   }> {
+    if (opts?.legacy === false) {
+      const refusal = shieldedAddressRefusal(await this.getShieldedCapability());
+      if (refusal) {
+        throw refusal;
+      }
+    }
     const address = await this.storage.getCurrentAddress(markAsUsed, opts);
     const index = await this.getAddressIndex(address);
     const addressPath = await this.getAddressPathForIndex(index!, opts);
@@ -1018,6 +1110,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the next address after the current available
+   *
+   * @param [opts.legacy] false for the shielded chain, under the rules of
+   *   getCurrentAddress
+   * @throws {ShieldedKeyError} As getCurrentAddress
    */
   async getNextAddress(
     opts?: IAddressChainOptions
@@ -1842,6 +1938,9 @@ class HathorWallet extends EventEmitter {
       }
       this.logger.error('Error processing the wallet history', { error });
       this.setState(HathorWallet.ERROR);
+    } finally {
+      // The walk rebuilt the undecoded outputs of the whole history.
+      this.queueShieldedCapabilityEvent();
     }
   }
 
@@ -1964,6 +2063,9 @@ class HathorWallet extends EventEmitter {
     // stored pin for WebSocket-delivered txs.
     const pin = txPin ?? this.pinCode ?? undefined;
 
+    // The undecoded outputs this tx leaves are part of the shielded capability.
+    const session = shieldedSessionOf(this.storage);
+    const undecodedBefore = JSON.stringify(session.undecodedSummary());
     try {
       if (isNewTx) {
         // Process this single transaction.
@@ -1983,7 +2085,11 @@ class HathorWallet extends EventEmitter {
         // which wrote nothing more: the tx belongs to the closed session.
         return;
       }
+      this.queueShieldedCapabilityEvent();
       throw error;
+    }
+    if (JSON.stringify(session.undecodedSummary()) !== undecodedBefore) {
+      this.queueShieldedCapabilityEvent();
     }
 
     // If the wallet was stopped while this tx was mid-processing (a concurrent
@@ -2193,7 +2299,7 @@ class HathorWallet extends EventEmitter {
     // HERE, but whatever an entry omits is derived during address loading, along
     // with every index past the injected window. Injection never overwrites: an
     // index storage already holds is skipped, and a disagreement throws. The
-    // shielded pairs are persisted once the access data is in place (below).
+    // shielded pairs are persisted after the view key is unlocked (below).
     const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
     await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
 
@@ -2266,22 +2372,6 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    // The injected shielded pairs are persisted only when the wallet has a
-    // shielded chain, which needs the record's shielded xpubs and a crypto
-    // provider. Without one, nothing on the chain is subscribed or fetched, so
-    // a stored pair would be a shielded address given out and never watched.
-    const injectedShieldedPairs = injectedAddresses
-      .filter(entry => entry.shielded)
-      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
-      // the type but not from the value, and excess-property checks only fire on
-      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
-      // (which the repo's own fixtures are) carries one, and spreading it last
-      // would file this entry's pair under the nested index instead.
-      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
-    if (injectedShieldedPairs.length > 0 && (await getShieldedChainXpubs(this.storage)) !== null) {
-      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
-    }
-
     this.clearSensitiveData();
     this.getTokenData();
     this.walletStopped = false;
@@ -2295,9 +2385,35 @@ class HathorWallet extends EventEmitter {
     // storage can replace it while this start awaits, and a failure here must
     // not end the session of that start.
     const { epoch } = session;
+    // Every start emits the 'shielded-capability' event once, then on change.
+    this.shieldedCapabilityEmitted = null;
     try {
+      // Until the first sync tells the mode it used, the configured one.
+      session.setSyncMode(this.historySyncMode);
       session.setCause(shieldedMigrationFailure);
       await this.fillShieldedSession(pinCode);
+
+      // The injected shielded pairs are persisted only when the wallet has a
+      // shielded chain, which needs the record's shielded xpubs, a crypto
+      // provider, and keys the unlock above did not find inconsistent. Without
+      // one, nothing on the chain is subscribed or fetched, so a stored pair
+      // would be a shielded address given out and never watched.
+      const injectedShieldedPairs = injectedAddresses
+        .filter(entry => entry.shielded)
+        // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
+        // the type but not from the value, and excess-property checks only fire on
+        // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
+        // (which the repo's own fixtures are) carries one, and spreading it last
+        // would file this entry's pair under the nested index instead.
+        .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
+      if (
+        injectedShieldedPairs.length > 0 &&
+        (await getShieldedChainXpubs(this.storage)) !== null
+      ) {
+        await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
+      }
+
+      this.queueShieldedCapabilityEvent();
       this.setState(HathorWallet.CONNECTING);
 
       const info = await new Promise<ApiVersion>((resolve, reject) => {
@@ -2383,6 +2499,63 @@ class HathorWallet extends EventEmitter {
       return;
     }
     session.fill(material, epoch);
+  }
+
+  /**
+   * What the wallet can do with shielded outputs, and why it cannot do more:
+   * the level (`none`, `watch`, `view` or `full`) with its reason and cause,
+   * whether the wallet sees what its shielded addresses receive and can spend
+   * what they hold, whether its shielded history is complete, and how many of
+   * its own shielded outputs it holds without having decoded them.
+   *
+   * The wallet emits it with the 'shielded-capability' event whenever it
+   * changes. While the wallet is PROCESSING, the counts are being rebuilt.
+   */
+  async getShieldedCapability(): Promise<IShieldedCapability> {
+    return computeShieldedCapability(this.storage);
+  }
+
+  /**
+   * Queue a check of the shielded capability, which emits the
+   * 'shielded-capability' event when the capability differs from the one the
+   * last event carried.
+   *
+   * The check runs from a microtask, after the caller returns, so the event
+   * never fires inside start(), stop(), a realtime tx or a walk. Checks run one
+   * at a time, and the checks queued before the next one runs are one check.
+   * Nothing is queued while the wallet is not started.
+   */
+  queueShieldedCapabilityEvent(): void {
+    if (this.shieldedCapabilityCheckQueued || !shieldedSessionOf(this.storage).active) {
+      return;
+    }
+    this.shieldedCapabilityCheckQueued = true;
+    this.shieldedCapabilityChecks = this.shieldedCapabilityChecks
+      .then(async () => {
+        this.shieldedCapabilityCheckQueued = false;
+        await this.emitShieldedCapabilityIfChanged();
+      })
+      .catch(error => {
+        this.logger.error('Error checking the shielded capability', { error });
+      });
+  }
+
+  /**
+   * Emit the 'shielded-capability' event when the capability differs from the
+   * one the last event carried. An error thrown by a listener is logged.
+   */
+  async emitShieldedCapabilityIfChanged(): Promise<void> {
+    const capability = await this.getShieldedCapability();
+    const snapshot = JSON.stringify(capability);
+    if (snapshot === this.shieldedCapabilityEmitted) {
+      return;
+    }
+    this.shieldedCapabilityEmitted = snapshot;
+    try {
+      this.emit('shielded-capability', capability);
+    } catch (error) {
+      this.logger.error("A 'shielded-capability' listener failed", { error });
+    }
   }
 
   /**
@@ -4122,10 +4295,20 @@ class HathorWallet extends EventEmitter {
    * Set the external tx signing method.
    *
    * @param method The external transaction signing method, or null to clear
+   * @param [options.shieldedSpend] Whether the method signs the inputs that
+   *   spend shielded outputs, which `signTxInputs` asks for with the 'spend'
+   *   request. While an external method is set, the wallet can spend its
+   *   shielded outputs only when it does (see IShieldedCapability.canSpend).
+   *   Defaults to false, and clearing the method clears it.
    */
-  setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
+  setExternalTxSigningMethod(
+    method: EcdsaTxSign | null,
+    options: { shieldedSpend?: boolean } = {}
+  ): void {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+    shieldedSessionOf(this.storage).setSpendSigner(!!method && options.shieldedSpend === true);
+    this.queueShieldedCapabilityEvent();
   }
 
   /**
@@ -4156,6 +4339,7 @@ class HathorWallet extends EventEmitter {
    */
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
     this.storage.setShieldedCryptoProvider(provider);
+    this.queueShieldedCapabilityEvent();
   }
 
   /**
@@ -4169,6 +4353,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Sync wallet history starting from a specific address index.
+   *
+   * The sync mode it uses is part of the shielded capability: the streaming
+   * modes do not watch the addresses shielded outputs are paid to.
    *
    * @param startIndex The index of the first address to sync
    * @param count The number of addresses to sync
@@ -4197,6 +4384,11 @@ class HathorWallet extends EventEmitter {
       );
       this.logger.debug('Falling back to http polling API');
       syncMode = HistorySyncMode.POLLING_HTTP_API;
+    }
+    const session = shieldedSessionOf(this.storage);
+    if (session.active && session.syncMode !== syncMode) {
+      session.setSyncMode(syncMode);
+      this.queueShieldedCapabilityEvent();
     }
     const syncMethod = getHistorySyncMethod(syncMode);
     // This will add the task to the GLL queue and return a promise that
