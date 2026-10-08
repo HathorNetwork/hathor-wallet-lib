@@ -23,7 +23,7 @@ import {
   P2PKH_ACCT_PATH,
 } from '../../../src/constants';
 import { ConnectionState } from '../../../src/wallet/types';
-import { WalletFromXPubGuard } from '../../../src/errors';
+import { WalletError, WalletFromXPubGuard } from '../../../src/errors';
 import { AuthorityType, TokenVersion } from '../../../src/types';
 import Network from '../../../src/models/network';
 import { MemoryStore, Storage } from '../../../src/storage';
@@ -44,7 +44,6 @@ import {
   multisigWalletsData,
   precalculationHelpers,
 } from '../helpers/wallet-precalculation.helper';
-import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import WalletConnection from '../../../src/new/connection';
 import { FullnodeWalletTestAdapter } from '../adapters/fullnode.adapter';
@@ -220,15 +219,11 @@ describe('[Fullnode-specific] start', () => {
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      // Shielded pairs only, deliberately: injecting the legacy P2SH addresses
-      // too would make the assertion below read back what this config wrote,
-      // and a broken redeem script or P2SH derivation would still pass. The
-      // legacy chain is derived live from pubkeys/numSignatures; the shielded
-      // pairs are still injected, so the expensive half stays pre-calculated.
-      preCalculatedAddresses: mergePrecalculatedAddresses(
-        undefined,
-        getPrecalculatedShieldedForSeed(multisigWalletsData.words[0])
-      ),
+      // No pre-calculated addresses, deliberately: injecting the legacy P2SH
+      // addresses would make the assertion below read back what this config
+      // wrote, and a broken redeem script or P2SH derivation would still pass.
+      // The legacy chain is derived live from pubkeys/numSignatures, and a
+      // multisig wallet has no shielded chain.
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
@@ -247,6 +242,7 @@ describe('[Fullnode-specific] start', () => {
       const addressAtIndex = await hWallet.getAddressAtIndex(i);
       expect(precalcAddress).toStrictEqual(addressAtIndex);
     }
+    await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(WalletError);
   });
 
   it('should start a wallet to manage a specific token', async () => {
