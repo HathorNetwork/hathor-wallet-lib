@@ -411,6 +411,27 @@ describe('tokens and addresses', () => {
     await expect(proxy.getCurrentAddress()).resolves.toBe(legacyFixtureAddress);
   });
 
+  it('marks a current address used only when the transaction pays it', async () => {
+    const { proxy, adapter, wallet } = await setup();
+    await proxy.getCurrentAddress(false, { legacy: false });
+    await proxy.getChangeAddress();
+    // Reading the addresses (as the engine does while probing) uses none
+    expect(wallet.getCurrentAddress({}, { legacy: false }).address).toBe(
+      shieldedFixtureAddresses[0].shieldedBase58
+    );
+    adapter.markChangeAddressesUsed({
+      inputs: [],
+      outputs: [],
+      tokens: [],
+      shieldedOutputs: [{ address: shieldedFixtureAddresses[0].spendBase58 } as never],
+    });
+    // The shielded change was paid, the legacy one was not
+    expect(wallet.getCurrentAddress({}, { legacy: false }).address).toBe(
+      shieldedFixtureAddresses[1].shieldedBase58
+    );
+    expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
+  });
+
   it('keeps the reason when the wallet has no unused shielded address', async () => {
     const { wallet, proxy } = await setup();
     (wallet as unknown as { newShieldedAddresses: unknown[] }).newShieldedAddresses = [];
