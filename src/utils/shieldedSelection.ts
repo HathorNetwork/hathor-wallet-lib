@@ -53,10 +53,6 @@ import { bestUtxoSelection } from './utxo';
  * never split, which would publish its amount: the change is its second
  * shielded output.
  *
- * A custom token whose selection leaves no change has none to stand in, so the
- * amount of its shielded output can be computed by subtraction: it is split
- * when it is the tx's only shielded output and left whole beside others.
- *
  * Shielded UTXOs are taken in the mode that keeps their token private. A token
  * is public in the transaction when any of its outputs is transparent or
  * amount-shielded, and HTR, which pays the fee, always is: its amount-shielded
@@ -87,6 +83,27 @@ import { bestUtxoSelection } from './utxo';
  * An explicit `changeShieldedMode` always wins over the change-mode rules:
  * `OutputKind.TRANSPARENT` keeps every change transparent, AS/FS forces that
  * mode.
+ *
+ * What a send can still compute: a shielded output's amount is hidden, but the
+ * total of a token's shielded outputs can be computed by subtraction when no
+ * shielded input or shielded change of the token hides it. So a transaction
+ * may publish the total a recipient's address receives, never each output's
+ * amount. A custom token whose selection matches exactly has no change to
+ * stand in, so its lone shielded output, split in two or whole beside other
+ * shielded outputs, publishes its recipient's total. So does a lone shielded
+ * output split because its change would only pay its own fee, with no HTR to
+ * add, or because the pull for the split's fee lands exactly, and an explicit
+ * shielded change mode can end the same way. Sums can also be computed: the
+ * total of two or more shielded outputs of a token that nothing hides, of
+ * several shielded inputs spent exactly, and of what a wallet moves into its
+ * own shielded outputs. Unless the change is pinned transparent, a single
+ * shielded UTXO's value is published only where the alternative is failing the
+ * send: the last shielded UTXO of a token spent exactly, a fee-sized shielded
+ * HTR UTXO spent exactly on the fee, and caller-supplied inputs, which are
+ * never added to. A shielded HTR change made from transparent HTR alone,
+ * beside no other shielded HTR output, has a public value and hides nothing
+ * when spent later. The largest-first fallback over the input limit may pay a
+ * token whose outputs are all shielded from transparent UTXOs alone.
  */
 
 /** Which UTXO pool a token's selection draws from first. */
@@ -317,8 +334,8 @@ export function computeTokenPolicy(
   // The rules want a shielded input the wallet does not have. For a lone
   // shielded output the change is shielded instead: with only transparent
   // inputs, a transparent change would publish the output's amount by
-  // subtraction. Two or more shielded outputs are left as they are; their
-  // total is public either way.
+  // subtraction. Two or more shielded outputs are left as they are, and only
+  // their total is published.
   return {
     policy: {
       preference: OutputKind.TRANSPARENT,

@@ -7412,8 +7412,9 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         ],
       }).prepareTxData();
 
-      // Moving the wallet's own funds into its own shielded outputs hides nothing
-      // more with a shielded input: the transparent 100n pays, the 40n stays.
+      // Shielded outputs that all pay the wallet take no shielded input, so
+      // their total is published, which the rules accept when the wallet pays
+      // itself: the transparent 100n pays, the 40n stays.
       const inputIds = result.inputs.map(i => i.txId);
       expect(inputIds).toContain('custom-pub-100');
       expect(inputIds).not.toContain('custom-sh-40');
