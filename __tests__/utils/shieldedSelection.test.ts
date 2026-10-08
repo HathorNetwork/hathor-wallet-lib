@@ -564,6 +564,223 @@ describe('shieldedAwareSelection', () => {
   });
 });
 
+describe('shielded UTXOs taken in the mode the policy puts first', () => {
+  const transparentPolicy = {
+    preference: OutputKind.TRANSPARENT,
+    forceShieldedInput: false,
+    forceChangeOnExactSingleShielded: false,
+  };
+  const shieldedPolicy = { ...transparentPolicy, preference: OutputKind.SHIELDED };
+  const amountShielded = (txId: string, value: bigint) =>
+    utxo({ txId, value, shielded: true, blindingFactor: 'bf' });
+  const fullyShielded = (txId: string, value: bigint) =>
+    utxo({ txId, value, shielded: true, blindingFactor: 'bf', assetBlindingFactor: 'abf' });
+  async function storageOf(utxos: IUtxo[]): Promise<Storage> {
+    const store = new MemoryStore();
+    for (const u of utxos) {
+      await store.saveUtxo(u);
+    }
+    return new Storage(store);
+  }
+
+  it('the shielded pool takes the first mode, by value within it', async () => {
+    const storage = await storageOf([
+      amountShielded('as-80', 80n),
+      amountShielded('as-50', 50n),
+      amountShielded('as-5', 5n),
+      fullyShielded('fs-60', 60n),
+      fullyShielded('fs-46', 46n),
+    ]);
+    const asFirst = { ...shieldedPolicy, shieldedModeFirst: AMOUNT_SHIELDED };
+    // By value alone, 45n takes the fully shielded 46n. Amount-shielded first,
+    // it takes the smallest amount-shielded UTXO that pays it alone, 50n.
+    expect(ids(await shieldedAwareSelection(storage, '00', 45n, asFirst))).toEqual(['as-50']);
+    // No amount-shielded UTXO pays 85n alone: the largest are taken first.
+    expect(ids(await shieldedAwareSelection(storage, '00', 85n, asFirst))).toEqual([
+      'as-50',
+      'as-80',
+    ]);
+    // Fully shielded first, 50n takes the fully shielded 60n, not the
+    // amount-shielded 50n that matches it.
+    const fsFirst = { ...shieldedPolicy, shieldedModeFirst: FULLY_SHIELDED };
+    expect(ids(await shieldedAwareSelection(storage, '00', 50n, fsFirst))).toEqual(['fs-60']);
+  });
+
+  it('a mode that cannot pay the amount alone is topped up from the other', async () => {
+    const storage = await storageOf([
+      amountShielded('as-30', 30n),
+      amountShielded('as-5', 5n),
+      fullyShielded('fs-40', 40n),
+      fullyShielded('fs-20', 20n),
+    ]);
+    // The amount-shielded 35n cannot pay 50n: all of it is taken, and the
+    // fully shielded 20n pays the other 15n.
+    const asFirst = { ...shieldedPolicy, shieldedModeFirst: AMOUNT_SHIELDED };
+    expect(ids(await shieldedAwareSelection(storage, '00', 50n, asFirst))).toEqual([
+      'as-30',
+      'as-5',
+      'fs-20',
+    ]);
+    // The fully shielded 60n cannot pay 70n: all of it is taken, and the
+    // amount-shielded 30n pays the other 10n.
+    const fsFirst = { ...shieldedPolicy, shieldedModeFirst: FULLY_SHIELDED };
+    expect(ids(await shieldedAwareSelection(storage, '00', 70n, fsFirst))).toEqual([
+      'as-30',
+      'fs-20',
+      'fs-40',
+    ]);
+  });
+
+  it('the shielded top-up of a short transparent pool takes the first mode', async () => {
+    const storage = await storageOf([
+      utxo({ txId: 'pub-40', value: 40n }),
+      fullyShielded('fs-20', 20n),
+      amountShielded('as-30', 30n),
+    ]);
+    // The transparent 40n falls 10n short of 50n, which the fully shielded 20n
+    // pays by value alone.
+    const asFirst = { ...transparentPolicy, shieldedModeFirst: AMOUNT_SHIELDED };
+    expect(ids(await shieldedAwareSelection(storage, '00', 50n, asFirst))).toEqual([
+      'as-30',
+      'pub-40',
+    ]);
+  });
+
+  it('a forced shielded input is the smallest of the first mode, else of the other', async () => {
+    const forced = { ...transparentPolicy, forceShieldedInput: true };
+    const storage = await storageOf([
+      utxo({ txId: 'pub-50', value: 50n }),
+      fullyShielded('fs-3', 3n),
+      amountShielded('as-30', 30n),
+      amountShielded('as-20', 20n),
+    ]);
+    expect(
+      ids(
+        await shieldedAwareSelection(storage, '00', 50n, {
+          ...forced,
+          shieldedModeFirst: AMOUNT_SHIELDED,
+        })
+      )
+    ).toEqual(['as-20', 'pub-50']);
+    expect(
+      ids(
+        await shieldedAwareSelection(storage, '00', 50n, {
+          ...forced,
+          shieldedModeFirst: FULLY_SHIELDED,
+        })
+      )
+    ).toEqual(['fs-3', 'pub-50']);
+
+    // With no amount-shielded UTXO, the smallest fully shielded one.
+    const fullyShieldedOnly = await storageOf([
+      utxo({ txId: 'pub-50', value: 50n }),
+      fullyShielded('fs-7', 7n),
+      fullyShielded('fs-3', 3n),
+    ]);
+    expect(
+      ids(
+        await shieldedAwareSelection(fullyShieldedOnly, '00', 50n, {
+          ...forced,
+          shieldedModeFirst: AMOUNT_SHIELDED,
+        })
+      )
+    ).toEqual(['fs-3', 'pub-50']);
+  });
+
+  it('the change-forcing UTXO is the smallest of the first mode left, else of the other', async () => {
+    // Transparent funds (3n) cannot pay 40n, and the shielded top-up matches the
+    // remaining 37n exactly with a single shielded input.
+    const pool = [
+      utxo({ txId: 'tiny-pub', value: 3n }),
+      amountShielded('as-37', 37n),
+      fullyShielded('fs-2', 2n),
+    ];
+    const policy = {
+      ...transparentPolicy,
+      forceChangeOnExactSingleShielded: true,
+      shieldedModeFirst: AMOUNT_SHIELDED,
+    };
+
+    // The amount-shielded 5n forces the change, not the smaller fully shielded 2n.
+    const withAmountShielded = await storageOf([...pool, amountShielded('as-5', 5n)]);
+    expect(ids(await shieldedAwareSelection(withAmountShielded, '00', 40n, policy))).toEqual([
+      'as-37',
+      'as-5',
+      'tiny-pub',
+    ]);
+
+    // With no other amount-shielded UTXO left, the fully shielded 2n does.
+    const withoutAmountShielded = await storageOf(pool);
+    expect(ids(await shieldedAwareSelection(withoutAmountShielded, '00', 40n, policy))).toEqual([
+      'as-37',
+      'fs-2',
+      'tiny-pub',
+    ]);
+  });
+
+  it('when no selection under the rules fits, a forced shielded input is the largest of the first mode', async () => {
+    const storage = await storageOf([
+      utxo({ txId: 'pub-100', value: 100n }),
+      utxo({ txId: 'pub-50', value: 50n }),
+      utxo({ txId: 'pub-10', value: 10n }),
+      amountShielded('as-5', 5n),
+      amountShielded('as-60', 60n),
+      fullyShielded('fs-120', 120n),
+    ]);
+    const select = makeShieldedAwareSelection(
+      { ...transparentPolicy, forceShieldedInput: true, shieldedModeFirst: AMOUNT_SHIELDED },
+      undefined,
+      2
+    );
+
+    // No selection under the rules pays 150n with 2 inputs. The forced input
+    // is the largest amount-shielded UTXO, 60n, not the fully shielded 120n,
+    // and the transparent 100n pays the other 90n.
+    expect(ids(await select(storage, '00', 150n))).toEqual(['as-60', 'pub-100']);
+  });
+
+  it('a first mode that pays the amount only with more inputs than fit gives way to value order', async () => {
+    const pool = [fullyShielded('fs-280', 280n)];
+    for (let i = 0; i < 300; i += 1) {
+      pool.push(amountShielded(`as-1-${i}`, 1n));
+    }
+    const storage = await storageOf(pool);
+    const select = makeShieldedAwareSelection({
+      ...shieldedPolicy,
+      shieldedModeFirst: AMOUNT_SHIELDED,
+    });
+
+    // The amount-shielded 1n pay 270n only with 270 inputs; the fully shielded
+    // 280n pays it alone, as by value alone.
+    expect(ids(await select(storage, '00', 270n))).toEqual(['fs-280']);
+  });
+
+  it('a shielded top-up that fits the input limit only by value is taken by value', async () => {
+    const pool = [
+      utxo({ txId: 'pub-10', value: 10n }),
+      utxo({ txId: 'pub-9', value: 9n }),
+      utxo({ txId: 'pub-8', value: 8n }),
+      utxo({ txId: 'pub-7', value: 7n }),
+      fullyShielded('fs-50', 50n),
+    ];
+    for (let i = 0; i < 5; i += 1) {
+      pool.push(amountShielded(`as-1-${i}`, 1n));
+    }
+    const storage = await storageOf(pool);
+    const select = makeShieldedAwareSelection(
+      { ...transparentPolicy, shieldedModeFirst: AMOUNT_SHIELDED },
+      undefined,
+      4
+    );
+
+    // The transparent 34n cannot pay 40n: its largest three are swept, and the
+    // other 13n is topped up. All five amount-shielded 1n and the fully
+    // shielded 50n would take 6 inputs where 4 fit; by value, the 50n alone
+    // tops it up.
+    expect(ids(await select(storage, '00', 40n))).toEqual(['fs-50', 'pub-10', 'pub-8', 'pub-9']);
+  });
+});
+
 describe('hasShieldedUtxo / needsAvailabilityProbe', () => {
   it('probes true only when a shielded UTXO of the token exists', async () => {
     const storage = await makeStorage();
@@ -623,12 +840,15 @@ describe('computeTokenPolicy', () => {
     shieldedOutputCount: number,
     transparentOutputCount: number,
     allMine = true,
-    hasFS = false
+    hasFS = false,
+    hasAS = shieldedOutputCount > 0 && !hasFS,
+    token = '00'
   ) => ({
-    token: '00',
+    token,
     shieldedOutputCount,
     transparentOutputCount,
     hasFullyShieldedOutput: hasFS,
+    hasAmountShieldedOutput: hasAS,
     allShieldedOutputsMine: allMine,
   });
 
@@ -683,6 +903,35 @@ describe('computeTokenPolicy', () => {
     const { policy, shieldChange } = computeTokenPolicy(profile(2, 1, false), false, null);
     expect(policy.forceShieldedInput).toBe(false);
     expect(shieldChange).toBe(false);
+  });
+
+  it('puts fully shielded UTXOs first only for a custom token whose outputs are all fully shielded', () => {
+    const firstMode = (...args: Parameters<typeof profile>) =>
+      computeTokenPolicy(profile(...args), true, null).policy.shieldedModeFirst;
+    expect(firstMode(2, 0, true, true, false, '01')).toBe(FULLY_SHIELDED);
+    expect(firstMode(1, 0, false, true, false, '01')).toBe(FULLY_SHIELDED);
+    // An amount-shielded or a transparent output makes the token public.
+    expect(firstMode(2, 0, true, true, true, '01')).toBe(AMOUNT_SHIELDED);
+    expect(firstMode(1, 1, true, true, false, '01')).toBe(AMOUNT_SHIELDED);
+    expect(firstMode(2, 1, false, true, false, '01')).toBe(AMOUNT_SHIELDED);
+    expect(firstMode(0, 2, true, false, false, '01')).toBe(AMOUNT_SHIELDED);
+    expect(
+      computeTokenPolicy(profile(1, 1, true, true, false, '01'), false, null).policy
+        .shieldedModeFirst
+    ).toBe(AMOUNT_SHIELDED);
+    // HTR pays the fee, so it is public: fully shielded outputs of it, or
+    // none at all, put amount-shielded UTXOs first.
+    expect(firstMode(2, 0, true, true, false)).toBe(AMOUNT_SHIELDED);
+    expect(computeTokenPolicy(undefined, true, null).policy.shieldedModeFirst).toBe(
+      AMOUNT_SHIELDED
+    );
+    // An explicit change mode does not change the order.
+    for (const override of [AMOUNT_SHIELDED, OutputKind.TRANSPARENT]) {
+      expect(
+        computeTokenPolicy(profile(2, 0, true, true, false, '01'), true, override).policy
+          .shieldedModeFirst
+      ).toBe(FULLY_SHIELDED);
+    }
   });
 });
 
@@ -808,10 +1057,13 @@ describe('buildTokenOutputProfiles', () => {
     expect(p01.shieldedOutputCount).toBe(2);
     expect(p01.transparentOutputCount).toBe(1);
     expect(p01.hasFullyShieldedOutput).toBe(true);
+    expect(p01.hasAmountShieldedOutput).toBe(true);
     expect(p01.allShieldedOutputsMine).toBe(false);
 
     const htr = profiles.get('00')!;
     expect(htr.shieldedOutputCount).toBe(0);
     expect(htr.transparentOutputCount).toBe(2);
+    expect(htr.hasFullyShieldedOutput).toBe(false);
+    expect(htr.hasAmountShieldedOutput).toBe(false);
   });
 });

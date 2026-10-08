@@ -18,7 +18,12 @@ import {
   FEE_PER_FULL_SHIELDED_OUTPUT,
 } from '../constants';
 import { ErrorMessages } from '../errorMessages';
-import { SendTxError, ShieldedChangeUnavailableError, WalletError } from '../errors';
+import {
+  InputLimitError,
+  SendTxError,
+  ShieldedChangeUnavailableError,
+  WalletError,
+} from '../errors';
 import Address from '../models/address';
 import { getAddressType, resolveOutputScriptAddress } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -260,6 +265,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * Prepare transaction data from inputs and outputs
    * Fill the inputs if needed, create output change if needed
    *
+   * Each token's shielded UTXOs are taken in the mode that keeps the token
+   * private, which can take more inputs than taking them by value alone. When
+   * the send then needs more inputs than a transaction holds, it is built again
+   * with shielded UTXOs taken by value alone, so a send that fits that way still
+   * builds.
+   *
    * @throws SendTxError
    *
    * @return {Object} fullTxData with tokens array, inputs and outputs
@@ -268,6 +279,21 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
    * @inner
    */
   async prepareTxData(): Promise<IDataTx> {
+    try {
+      return await this.buildTxData(true);
+    } catch (err) {
+      if (err instanceof InputLimitError) {
+        return this.buildTxData(false);
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * The body of `prepareTxData`: with `shieldedModesFirst` false, every token's
+   * shielded UTXOs are taken by value alone, whatever their mode.
+   */
+  private async buildTxData(shieldedModesFirst: boolean): Promise<IDataTx> {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
@@ -514,6 +540,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     const selectionPolicies = new Map<string, ITokenSelectionPolicy>();
     const selectionReports = new Map<string, ISelectionReport>();
     const shieldedChangeTokens = new Set<string>();
+    // A send built again for the input limit takes shielded UTXOs by value
+    // alone (see prepareTxData).
+    const inSendOrder = (policy: ITokenSelectionPolicy): ITokenSelectionPolicy =>
+      shieldedModesFirst ? policy : { ...policy, shieldedModeFirst: undefined };
     for (const [token, profile] of outputProfiles) {
       const chooseInputs = token === HTR_UID ? shouldChooseHTRInputs : tokenMap.get(token) ?? false;
       // The availability the rules test: the wallet's shielded pool for tokens
@@ -530,7 +560,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         changeModeOverride
       );
       if (chooseInputs) {
-        selectionPolicies.set(token, policy);
+        selectionPolicies.set(token, inSendOrder(policy));
       }
       if (shieldChange) {
         shieldedChangeTokens.add(token);
@@ -665,7 +695,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         inputCount > this.inputs.length && this.inputs.length <= MAX_INPUTS
           ? " Consolidate the wallet's UTXOs and try again."
           : '';
-      throw new SendTxError(
+      throw new InputLimitError(
         `The transaction needs ${more ? 'at least ' : ''}${inputCount} inputs, more than the ` +
           `${MAX_INPUTS} a transaction can hold.${advice}`
       );
@@ -825,7 +855,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     // forcing.
     const htrPolicy =
       selectionPolicies.get(HTR_UID) ??
-      computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy;
+      inSendOrder(computeTokenPolicy(outputProfiles.get(HTR_UID), true, changeModeOverride).policy);
     if (shouldChooseHTRInputs) {
       // Room left in the input limit, keeping one input for a structural pull
       // when the amount allows. A split's fee may take that one; a change

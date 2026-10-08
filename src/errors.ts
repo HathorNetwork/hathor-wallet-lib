@@ -273,6 +273,17 @@ export class SendTxError extends WalletError {
 export class ShieldedChangeUnavailableError extends SendTxError {}
 
 /**
+ * Error thrown when a send needs more inputs than a transaction can hold. It is
+ * a distinct type so the send can tell it apart from its other failures: a send
+ * that takes each token's shielded UTXOs in the mode that keeps the token
+ * private is then built again with them taken by value alone.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InputLimitError extends SendTxError {}
+
+/**
  * Error thrown when mining tx
  *
  * @memberof Errors

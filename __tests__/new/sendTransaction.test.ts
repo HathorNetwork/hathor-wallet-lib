@@ -7758,6 +7758,193 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       }
     );
 
+    describe('shielded UTXOs spent in the mode that keeps their token private', () => {
+      const amountShielded = (byte: string): Partial<PoolUtxo> => ({
+        shielded: true,
+        blindingFactor: byte.repeat(32),
+      });
+      const fullyShielded = (byte: string, assetByte: string): Partial<PoolUtxo> => ({
+        shielded: true,
+        blindingFactor: byte.repeat(32),
+        assetBlindingFactor: assetByte.repeat(32),
+      });
+      const customTo = (i: number, value: bigint, shieldedMode: ShieldedOutputMode) => ({
+        address: buildShieldedAddr(i),
+        value,
+        token: CUSTOM_TOKEN,
+        shieldedMode,
+      });
+      const transparentCustom = (value: bigint) => ({
+        type: OutputType.P2PKH,
+        address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+        value,
+        token: CUSTOM_TOKEN,
+      });
+      const inputIdsOf = (tx: IDataTx) => tx.inputs.map(i => i.txId).sort();
+      const modesOf = (tx: IDataTx) => (tx.shieldedOutputs ?? []).map(o => o.shieldedMode);
+
+      test('an amount-shielded send spends an amount-shielded UTXO before a smaller fully shielded one', async () => {
+        const storage = buildPoolStorage([
+          poolUtxo('custom-fs-30', 30n, CUSTOM_TOKEN, fullyShielded('43', '44')),
+          poolUtxo('custom-as-40', 40n, CUSTOM_TOKEN, amountShielded('45')),
+          poolUtxo('htr-pub-5', 5n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [customTo(1, 10n, ShieldedOutputMode.AMOUNT_SHIELDED)],
+        }).prepareTxData();
+
+        // The amount-shielded output makes the token public; spending the fully
+        // shielded 30n would reveal that it held that token.
+        expect(inputIdsOf(result)).toEqual(['custom-as-40', 'htr-pub-5']);
+        expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+          10n,
+          30n,
+        ]);
+        expect(modesOf(result)).toEqual([
+          ShieldedOutputMode.AMOUNT_SHIELDED,
+          ShieldedOutputMode.AMOUNT_SHIELDED,
+        ]);
+      });
+
+      test('the forced shielded input of a mixed send is the smallest amount-shielded UTXO', async () => {
+        const storage = buildPoolStorage([
+          poolUtxo('custom-fs-3', 3n, CUSTOM_TOKEN, fullyShielded('46', '47')),
+          poolUtxo('custom-as-30', 30n, CUSTOM_TOKEN, amountShielded('48')),
+          poolUtxo('custom-pub-50', 50n, CUSTOM_TOKEN),
+          poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [customTo(1, 11n, ShieldedOutputMode.AMOUNT_SHIELDED), transparentCustom(5n)],
+        }).prepareTxData();
+
+        // The fully shielded 3n is the smallest shielded UTXO. The forced
+        // amount-shielded 30n pays the 16n alone, leaving a 14n change.
+        expect(inputIdsOf(result)).toEqual(['custom-as-30', 'htr-pub-9']);
+        expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+          11n,
+          14n,
+        ]);
+        expect(modesOf(result)).toEqual([
+          ShieldedOutputMode.AMOUNT_SHIELDED,
+          ShieldedOutputMode.AMOUNT_SHIELDED,
+        ]);
+      });
+
+      test('a transparent send short of transparent UTXOs tops up with an amount-shielded UTXO', async () => {
+        const storage = buildPoolStorage([
+          poolUtxo('custom-pub-40', 40n, CUSTOM_TOKEN),
+          poolUtxo('custom-fs-20', 20n, CUSTOM_TOKEN, fullyShielded('4a', '4b')),
+          poolUtxo('custom-as-30', 30n, CUSTOM_TOKEN, amountShielded('4c')),
+          poolUtxo('htr-pub-9', 9n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [transparentCustom(50n)],
+        }).prepareTxData();
+
+        // The transparent 40n falls 10n short of the transparent output, which
+        // the fully shielded 20n would pay by value alone.
+        expect(inputIdsOf(result)).toEqual(['custom-as-30', 'custom-pub-40', 'htr-pub-9']);
+        expect(modesOf(result).every(m => m === ShieldedOutputMode.AMOUNT_SHIELDED)).toBe(true);
+      });
+
+      test('a token whose outputs are all fully shielded spends a fully shielded UTXO before a smaller amount-shielded one', async () => {
+        const send = (changeShieldedMode?: ChangeOutputMode) =>
+          new SendTransaction({
+            wallet: buildWallet(
+              buildPoolStorage([
+                poolUtxo('custom-as-30', 30n, CUSTOM_TOKEN, amountShielded('4d')),
+                poolUtxo('custom-fs-40', 40n, CUSTOM_TOKEN, fullyShielded('4e', '4f')),
+                poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+              ]),
+              buildShieldedAddr(0)
+            ),
+            outputs: [
+              customTo(1, 10n, ShieldedOutputMode.FULLY_SHIELDED),
+              customTo(2, 10n, ShieldedOutputMode.FULLY_SHIELDED),
+            ],
+            changeShieldedMode,
+          }).prepareTxData();
+
+        // Spending the amount-shielded 30n would reveal the token, which every
+        // output of it hides.
+        const byRules = await send();
+        expect(inputIdsOf(byRules)).toEqual(['custom-fs-40', 'htr-pub-10']);
+        expect(modesOf(byRules)).toEqual([
+          ShieldedOutputMode.FULLY_SHIELDED,
+          ShieldedOutputMode.FULLY_SHIELDED,
+          ShieldedOutputMode.FULLY_SHIELDED,
+        ]);
+        expect(byRules.tokens).toEqual([]);
+
+        // An explicit change mode does not change the order.
+        for (const mode of [ShieldedOutputMode.AMOUNT_SHIELDED, OutputKind.TRANSPARENT]) {
+          expect(inputIdsOf(await send(mode))).toEqual(['custom-fs-40', 'htr-pub-10']);
+        }
+      });
+
+      test('a send whose amount-shielded UTXOs leave no input for the HTR fee takes shielded UTXOs by value', async () => {
+        const storage = buildPoolStorage([
+          ...Array.from({ length: MAX_INPUTS }, (_, i) =>
+            poolUtxo(`custom-as-1-${i}`, 1n, CUSTOM_TOKEN, amountShielded('52'))
+          ),
+          poolUtxo('custom-fs-1000', 1000n, CUSTOM_TOKEN, fullyShielded('53', '54')),
+          poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [customTo(1, BigInt(MAX_INPUTS), ShieldedOutputMode.AMOUNT_SHIELDED)],
+        }).prepareTxData();
+
+        // The 255 amount-shielded 1n pay the output with every input a
+        // transaction holds, leaving none for the HTR fee. By value, the fully
+        // shielded 1000n pays it alone.
+        expect(inputIdsOf(result)).toEqual(['custom-fs-1000', 'htr-pub-10']);
+      });
+
+      test("a send whose amount-shielded UTXOs leave too few inputs for another token's takes shielded UTXOs by value", async () => {
+        const storage = buildPoolStorage([
+          ...Array.from({ length: 200 }, (_, i) =>
+            poolUtxo(`custom-as-1-${i}`, 1n, CUSTOM_TOKEN, amountShielded('55'))
+          ),
+          poolUtxo('custom-fs-1000', 1000n, CUSTOM_TOKEN, fullyShielded('56', '57')),
+          ...Array.from({ length: 100 }, (_, i) =>
+            poolUtxo(`other-pub-1-${i}`, 1n, OTHER_CUSTOM_TOKEN)
+          ),
+          poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+        ]);
+
+        const result = await new SendTransaction({
+          wallet: buildWallet(storage, buildShieldedAddr(0)),
+          outputs: [
+            customTo(1, 200n, ShieldedOutputMode.AMOUNT_SHIELDED),
+            {
+              type: OutputType.P2PKH,
+              address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              value: 100n,
+              token: OTHER_CUSTOM_TOKEN,
+            },
+          ],
+        }).prepareTxData();
+
+        // The 200 amount-shielded 1n pay the first token within the inputs left
+        // to it, but leave 55 for the other token's 100 public 1n. By value, the
+        // fully shielded 1000n pays the first token alone.
+        const inputIds = result.inputs.map(i => i.txId);
+        expect(inputIds).toContain('custom-fs-1000');
+        expect(inputIds.filter(id => id.startsWith('custom-as-1-'))).toHaveLength(0);
+        expect(inputIds.filter(id => id.startsWith('other-pub-1-'))).toHaveLength(100);
+        expect(inputIds).toContain('htr-pub-10');
+        expect(result.inputs).toHaveLength(102);
+      });
+    });
+
     describe('a wallet whose shielded address cannot be read', () => {
       const READ_FAILURE_ERROR = new SendTxError(
         `The wallet's shielded change address could not be resolved: ${SHIELDED_ADDRESS_READ_FAILURE}`
