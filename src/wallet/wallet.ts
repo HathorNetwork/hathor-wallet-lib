@@ -1799,7 +1799,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         changeShieldedMode !== null &&
         changeShieldedMode !== OutputKind.TRANSPARENT
       ) {
-        throw new SendTxError(`Unsupported changeShieldedMode '${String(changeShieldedMode)}'.`);
+        throw new SendTxError(
+          `Invalid changeShieldedMode '${String(changeShieldedMode)}': expected ` +
+            'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
+        );
       }
     }
     const newOptions = {
@@ -1820,10 +1823,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const sendTransactionOutputs = outputs.map(output => {
-      const typedOutput = output as OutputSendTransaction;
+      const typedOutput = { ...output } as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
         typedOutput.value = 1n;
         typedOutput.token = NATIVE_TOKEN_UID;
+      } else if (!this.shieldedEnabled && !typedOutput.shielded) {
+        // This path builds the scripts itself: a transparent output to a
+        // shielded address pays the spend address it embeds
+        typedOutput.address = this.toOnChainAddress(typedOutput.address!);
+        typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address, this.network);
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
       }
