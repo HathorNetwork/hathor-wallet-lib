@@ -2276,7 +2276,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns Promise that resolves with address details including index, transactions count, and seqnum
    */
   async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
-    const addressDetails = await walletApi.getAddressDetails(this, address);
+    const addressDetails = await walletApi.getAddressDetails(this, this.toOnChainAddress(address));
     return addressDetails.data;
   }
 
@@ -2326,9 +2326,34 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       return {};
     }
 
-    const response = await walletApi.checkAddressesMine(this, addresses);
+    // The wallet-service knows shielded addresses by their on-chain spend
+    // address; the result is keyed by the addresses the caller passed.
+    const onChain = addresses.map(address => this.toOnChainAddress(address));
+    const response = await walletApi.checkAddressesMine(this, onChain);
 
-    return response.addresses;
+    const result: WalletAddressMap = {};
+    addresses.forEach((address, i) => {
+      if (onChain[i] in response.addresses) {
+        result[address] = response.addresses[onChain[i]];
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Map a shielded address to the on-chain spend address its outputs are
+   * locked to. Other addresses, including malformed ones, are returned as is.
+   */
+  private toOnChainAddress(address: string): string {
+    try {
+      const addressObj = new Address(address, { network: this.network });
+      if (addressObj.isShielded()) {
+        return addressObj.getSpendAddress().base58;
+      }
+    } catch (_e) {
+      // Not a shielded address we can parse: let the wallet-service decide
+    }
+    return address;
   }
 
   /**
