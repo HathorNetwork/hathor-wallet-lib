@@ -182,6 +182,14 @@ const scenarios: Scenario[] = [
     outputs: [{ address: externalAddress, value: 100n, token: FEE_TOKEN }],
   },
   {
+    name: 'exact match below more than 255 larger utxos',
+    utxos: [
+      ...Array.from({ length: 300 }, (_v, i) => ({ index: i, value: 1000 - i })),
+      { index: 300, value: 5 },
+    ],
+    outputs: [{ address: externalAddress, value: 5n, token: NATIVE_TOKEN_UID }],
+  },
+  {
     name: 'explicit transparent change',
     utxos: [
       { index: 0, value: 20 },
@@ -336,11 +344,18 @@ async function buildWithWalletService(
         txOutputs: entries.filter(e => e.txId === options.txId && e.index === options.index),
       };
     }
+    // The wallet-service query: value < smallerThan, largest first, limited
+    const smallerThan = options.smallerThan === undefined ? undefined : BigInt(options.smallerThan);
     return {
       success: true,
-      txOutputs: entries.filter(
-        e => (e.kind ?? 'transparent') === options.kind && e.tokenId === options.tokenId
-      ),
+      txOutputs: entries
+        .filter(
+          e =>
+            (e.kind ?? 'transparent') === options.kind &&
+            e.tokenId === options.tokenId &&
+            (smallerThan === undefined || e.value < smallerThan)
+        )
+        .slice(0, options.maxOutputs),
     };
   });
   jest.spyOn(walletApi, 'checkAddressesMine').mockImplementation(async (_w, addresses) => ({
