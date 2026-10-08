@@ -48,11 +48,13 @@ const ABF = Buffer.alloc(32, 0x13);
 const FS_ASSET_COMMITMENT = Buffer.from('0a'.padEnd(66, 'f'), 'hex');
 
 const otherRoot = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x2b), 'testnet');
-const externalShielded = encodeShieldedAddress(
-  otherRoot.deriveChild("m/0'/0").publicKey.toBuffer(),
-  otherRoot.deriveChild("m/1'/0").publicKey.toBuffer(),
-  network
-);
+const externalShieldedAt = (i: number) =>
+  encodeShieldedAddress(
+    otherRoot.deriveChild(`m/0'/${i}`).publicKey.toBuffer(),
+    otherRoot.deriveChild(`m/1'/${i}`).publicKey.toBuffer(),
+    network
+  );
+const externalShielded = externalShieldedAt(0);
 const externalAddress = 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc';
 const ownChange = legacyFixtureAddress;
 const ownShieldedChange = shieldedFixtureAddresses[0].shieldedBase58;
@@ -71,6 +73,15 @@ interface ScenarioUtxo {
 }
 
 const FEE_TOKEN = 'cd'.repeat(32);
+const DEPOSIT_TOKEN = 'ab'.repeat(32);
+
+const tokenData = (uid: string) => {
+  if (uid === FEE_TOKEN) return { uid, name: 'Fee', symbol: 'FEE', version: TokenVersion.FEE };
+  if (uid === DEPOSIT_TOKEN) {
+    return { uid, name: 'Deposit', symbol: 'DEP', version: TokenVersion.DEPOSIT };
+  }
+  return { uid, name: 'Hathor', symbol: 'HTR', version: TokenVersion.NATIVE };
+};
 
 interface Scenario {
   name: string;
@@ -180,6 +191,68 @@ const scenarios: Scenario[] = [
       { index: 1, value: 150, mode: 1, token: FEE_TOKEN },
     ],
     outputs: [{ address: externalAddress, value: 100n, token: FEE_TOKEN }],
+  },
+  {
+    name: 'amount-shielded send with both shielded modes in the pool',
+    utxos: [
+      { index: 0, value: 1000 },
+      { index: 1, value: 150, mode: 1 },
+      { index: 2, value: 160, mode: 2 },
+    ],
+    outputs: [
+      {
+        address: externalShielded,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ],
+  },
+  {
+    name: 'fully shielded send with both shielded modes in the pool',
+    utxos: [
+      { index: 0, value: 1000 },
+      { index: 1, value: 150, mode: 1 },
+      { index: 2, value: 160, mode: 2 },
+    ],
+    outputs: [
+      {
+        address: externalShielded,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ],
+  },
+  {
+    name: 'HTR change standing in beside other shielded outputs',
+    utxos: [
+      { index: 0, value: 19 },
+      { index: 1, value: 9 },
+      { index: 2, value: 7 },
+      { index: 3, value: 25, mode: 1, token: DEPOSIT_TOKEN },
+    ],
+    outputs: [
+      {
+        address: externalShieldedAt(1),
+        value: 10n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      { address: externalAddress, value: 5n, token: NATIVE_TOKEN_UID },
+      {
+        address: externalShieldedAt(2),
+        value: 10n,
+        token: DEPOSIT_TOKEN,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+      {
+        address: externalShieldedAt(3),
+        value: 10n,
+        token: DEPOSIT_TOKEN,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ],
   },
   {
     name: 'exact match below more than 255 larger utxos',
@@ -300,13 +373,7 @@ async function buildWithFullnodeStorage(scenario: Scenario): Promise<IDataTx> {
       opts?.legacy === false ? ownShieldedChange : ownChange
     );
   jest.spyOn(storage, 'isAddressMine').mockImplementation(async address => owned.has(address));
-  jest
-    .spyOn(storage, 'getToken')
-    .mockImplementation(async uid =>
-      uid === FEE_TOKEN
-        ? { uid, name: 'Fee', symbol: 'FEE', version: TokenVersion.FEE }
-        : { uid, name: 'Hathor', symbol: 'HTR', version: TokenVersion.NATIVE }
-    );
+  jest.spyOn(storage, 'getToken').mockImplementation(async uid => tokenData(uid));
   const sendTransaction = new SendTransaction({
     storage,
     outputs: engineOutputs(scenario.outputs),
@@ -365,7 +432,7 @@ async function buildWithWalletService(
   jest.spyOn(walletApi, 'getTokenDetails').mockImplementation(async (_w, uid) => ({
     success: true,
     details: {
-      tokenInfo: { id: uid, name: 'Fee', symbol: 'FEE', version: TokenVersion.FEE },
+      tokenInfo: { ...tokenData(uid), id: uid },
       totalSupply: 0n,
       totalTransactions: 0,
       authorities: { mint: false, melt: false },
