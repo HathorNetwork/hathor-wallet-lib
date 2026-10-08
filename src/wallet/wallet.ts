@@ -77,6 +77,7 @@ import {
   CreateTokenOptionsInput,
   ShieldedRegistrationFields,
   ShieldedAddressInfoObject,
+  GetSplitBalanceObject,
 } from './types';
 import { OutputKind } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
@@ -1170,8 +1171,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
+  async getBalance(token?: string | null): Promise<GetBalanceObject[]>;
+
+  async getBalance(token: string | null, opts: { split: true }): Promise<GetSplitBalanceObject[]>;
+
+  async getBalance(
+    token: string | null = null,
+    opts: { split?: boolean } = {}
+  ): Promise<GetBalanceObject[] | GetSplitBalanceObject[]> {
     this.failIfWalletNotReady();
+    if (opts.split) {
+      // Each amount split into its transparent and shielded parts
+      const data = await walletApi.getSplitBalances(this, token);
+      return data.balances;
+    }
     const data = await walletApi.getBalances(this, token);
     return data.balances;
   }
@@ -1193,7 +1206,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<GetHistoryObject[]> {
     this.failIfWalletNotReady();
     const data = await walletApi.getHistory(this, options);
-    return data.history;
+    // eslint-disable-next-line camelcase
+    return data.history.map(({ tx_kind, ...entry }) =>
+      tx_kind === undefined ? entry : { ...entry, txKind: tx_kind }
+    );
   }
 
   /**
