@@ -628,6 +628,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       return path;
     });
     this.fullTxData = sendTransaction.fullTxData;
+    if (this.fullTxData) {
+      adapter.markChangeAddressesUsed(this.fullTxData);
+    }
     this.transaction = transaction;
     this._currentStep = 'prepared';
     this.emit('prepare-tx-end', this.transaction);

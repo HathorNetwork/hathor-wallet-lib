@@ -9,6 +9,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import { orderBy } from 'lodash';
 import {
   IAddressChainOptions,
+  IDataTx,
   IHistoryTx,
   IStorage,
   ITokenData,
@@ -35,6 +36,12 @@ import Network from '../models/network';
 import Address from '../models/address';
 
 type UtxoKind = 'transparent' | 'shielded';
+
+type AddressChain = 'legacy' | 'shielded';
+
+const chainOptions = (chain: AddressChain): IAddressChainOptions => ({
+  legacy: chain === 'legacy',
+});
 
 /** Outputs per wallet-service `tx_outputs` request. */
 const PAGE_SIZE = MAX_INPUTS;
@@ -104,7 +111,9 @@ export class WalletServiceSendStorage {
 
   private readonly addressPaths = new Map<string, string>();
 
-  private readonly currentAddresses = new Map<'legacy' | 'shielded', string>();
+  // Current address of each chain handed to the engine, with the on-chain
+  // address an output paying it carries
+  private readonly currentAddresses = new Map<AddressChain, { address: string; onChain: string }>();
 
   private readonly accessed = new Set<string>();
 
@@ -459,13 +468,39 @@ export class WalletServiceSendStorage {
   }
 
   private async getCurrentAddress(opts?: IAddressChainOptions): Promise<string> {
-    const chain = opts?.legacy === false ? 'shielded' : 'legacy';
-    let address = this.currentAddresses.get(chain);
-    if (!address) {
-      address = this.wallet.getCurrentAddress({ markAsUsed: true }, opts).address;
-      this.currentAddresses.set(chain, address);
+    const chain: AddressChain = opts?.legacy === false ? 'shielded' : 'legacy';
+    let current = this.currentAddresses.get(chain);
+    if (!current) {
+      // Not marked as used here: the engine also reads it only to check that a
+      // shielded change could be hosted (see markChangeAddressesUsed)
+      const info = this.wallet.getCurrentAddress({}, chainOptions(chain));
+      const onChain = (info as { spendAddress?: string }).spendAddress ?? info.address;
+      current = { address: info.address, onChain };
+      this.currentAddresses.set(chain, current);
     }
-    return address;
+    return current.address;
+  }
+
+  /**
+   * Mark as used the current address of each chain the built transaction
+   * pays, so the next send gets a new one. All change outputs of a chain go
+   * to its current address.
+   */
+  markChangeAddressesUsed(txData: IDataTx): void {
+    const paid = new Set<string>();
+    for (const output of txData.outputs) {
+      if ('address' in output && output.address) {
+        paid.add(output.address);
+      }
+    }
+    for (const output of txData.shieldedOutputs ?? []) {
+      paid.add(output.address);
+    }
+    for (const [chain, { onChain }] of this.currentAddresses) {
+      if (paid.has(onChain)) {
+        this.wallet.getCurrentAddress({ markAsUsed: true }, chainOptions(chain));
+      }
+    }
   }
 
   private async getToken(uid: string): Promise<ITokenData> {
