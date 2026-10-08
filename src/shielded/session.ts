@@ -50,10 +50,10 @@ export type ShieldedUndecodedCounts = Pick<
 >;
 
 /** Why the session holds no key, or why the record has no shielded keys. */
-type ShieldedSessionCause = Exclude<ShieldedCapabilityCause, 'key-mismatch'>;
+export type ShieldedSessionCause = Exclude<ShieldedCapabilityCause, 'key-mismatch'>;
 
 /** A record whose own scan key and scan xpub disagree. */
-type ShieldedIntegrityCause = Extract<ShieldedCapabilityCause, 'key-mismatch'>;
+export type ShieldedIntegrityCause = Extract<ShieldedCapabilityCause, 'key-mismatch'>;
 
 /** The first hardened BIP32 index. */
 const HARDENED_INDEX = 0x80000000;
