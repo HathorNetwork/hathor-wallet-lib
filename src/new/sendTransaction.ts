@@ -905,302 +905,24 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     totalFee += addedFee;
 
     // ── Structural minimum: never emit a lone shielded output ─────────────
-    // A single shielded output carries a random blinding factor and can never
-    // satisfy the node's balance equation, so a tx ending with exactly one —
-    // whatever produced it — gets a second one. Its fee is funded without ever
-    // touching a recipient's value: shave the lone def when it is itself the
-    // HTR change, else shave the transparent HTR change, else pull extra HTR.
-    // The lone def is normally split into two halves. When the extra pull ends
-    // in an HTR change that must be shielded (the rules shield the HTR change,
-    // or the pull spent shielded HTR), that shielded change is the second
-    // output and the lone def stays whole: a transparent change must never
-    // carry the value of a shielded input. A pull that lands exactly on the
-    // split's fee also ends in that shielded change when the change's own fee
-    // is the smaller one. A 1-unit def cannot be split, so the HTR change
-    // becomes the second output instead, unless the def is that change itself,
-    // which is topped up with more HTR and then split.
-    if (shieldedOutputDefs.length === 1) {
-      const lone = shieldedOutputDefs[0];
-      const extraFee = shieldedOutputFee(lone.shieldedMode);
-      const usedUtxos = new Set<string>();
-      for (const inp of [...partialInputs, ...partialHtrTxData.inputs]) {
-        usedUtxos.add(`${inp.txId}:${inp.index}`);
-      }
-      const walletStorage = this.storage;
-      // A change the caller pinned transparent should unshield no more than it
-      // must, so its extra HTR comes from the transparent pool first.
-      const extraHtrPreference =
-        changeModeOverride === OutputKind.TRANSPARENT
-          ? OutputKind.TRANSPARENT
-          : htrPolicy.preference;
-      // Shielded HTR spent entirely on the public fee is revealed by
-      // subtraction unless shielded HTR outputs absorb it (the lone def is
-      // HTR). Such a pull goes on until it can fund a shielded change of its
-      // own, which becomes the second output; an exact landing stands only
-      // when no pull gets there, or when the wallet cannot receive a shielded
-      // change. A legacy change address cannot receive one either, but stops
-      // only a shielded change that would just save a fee, after a pull that
-      // spent no shielded HTR: a pull that spent some goes on, and the send
-      // fails where its change is shielded. Hosting is asked about only where
-      // the answer decides something, and never for a change pinned
-      // transparent, which is never shielded.
-      const changeHostable = async (pulled: PulledHtrKinds): Promise<boolean> =>
-        changeModeOverride !== OutputKind.TRANSPARENT &&
-        (!legacyChangeAddress || pulled.anyShielded) &&
-        walletCanHostShieldedChange();
-      // Pulls the `owed` HTR the split still needs, on top of the `held`
-      // transparent HTR change (0n when there is none).
-      const pullForSplit = async (owed: bigint, held: bigint) => {
-        const shortest = await pullExtraHtrUtxos(
-          walletStorage,
-          new Set(usedUtxos),
-          extraHtrPreference,
-          sum => sum >= owed
-        );
-        // Only a pull that covers `owed` by spending shielded HTR, for a lone
-        // def of another token, goes on for a shielded change, and only when
-        // the wallet can receive one. Otherwise the shortest pull is the answer.
-        if (
-          shortest.pulledSum < owed ||
-          !shortest.anyShielded ||
-          lone.token === HTR_UID ||
-          !(await changeHostable(shortest))
-        ) {
-          return shortest;
-        }
-        const isEnough = (sum: bigint, pulled: PulledHtrKinds): boolean => {
-          if (sum < owed) {
-            return false;
-          }
-          if (!pulled.anyShielded) {
-            return true;
-          }
-          // The change takes the mode the pull so far calls for.
-          const mode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
-          return mode !== null && held + sum > shieldedOutputFee(mode);
-        };
-        const pulled = await pullExtraHtrUtxos(
-          walletStorage,
-          new Set(usedUtxos),
-          extraHtrPreference,
-          isEnough
-        );
-        // No pull funds a shielded change: the shortest pull stands.
-        return isEnough(pulled.pulledSum, pulled) ? pulled : shortest;
-      };
-      // Shields the transparent HTR change as the tx's second shielded output.
-      const shieldHtrChange = async (mode: ShieldedOutputMode): Promise<void> => {
-        await assertChangeAddressSupportsShieldedChange(htrStandsIn);
-        const { addedFee: changeFee } = await convertHtrChangeIfRequested(
-          partialHtrTxData,
-          shieldedOutputDefs,
-          mode,
-          network,
-          walletStorage,
-          partialInputs,
-          shouldChooseHTRInputs,
-          extraHtrPreference,
-          shieldedChangeAddress,
-          true,
-          keepTransparentHint
-        );
-        totalFee += changeFee;
-      };
-      // A 1-unit def cannot be split, so the HTR change becomes the second
-      // output, taking more HTR when it cannot pay its own fee. Its mode is
-      // decided after any pull: the rules' mode, else mirroring a shielded
-      // pull, else amount-shielded.
-      const shieldHtrChangeAsSecondOutput = async (): Promise<void> => {
-        const unsplittable = (reason: string) =>
-          new SendTxError(
-            `The transaction's only shielded output holds ${lone.value} unit, too little to ` +
-              `split into the two shielded outputs the protocol requires, and ${reason}.`
-          );
-        if (changeModeOverride === OutputKind.TRANSPARENT) {
-          throw unsplittable(
-            'changeShieldedMode: OutputKind.TRANSPARENT keeps the change from being shielded ' +
-              'as the second one'
-          );
-        }
-        // The wallet comes first: a new-format change address is no way out for
-        // one that cannot receive a shielded change.
-        if (!(await walletCanHostShieldedChange())) {
-          throw unsplittable('the wallet cannot receive a shielded change as the second one');
-        }
-        if (legacyChangeAddress) {
-          throw unsplittable(
-            'a legacy change address cannot receive a shielded change as the second one'
-          );
-        }
-        const modeFor = (pulled: PulledHtrKinds): ShieldedOutputMode =>
-          pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled) ??
-          ShieldedOutputMode.AMOUNT_SHIELDED;
-        const changeIdx = findHtrChangeIndex(partialHtrTxData.outputs);
-        const held = changeIdx === -1 ? 0n : partialHtrTxData.outputs[changeIdx].value;
-        let pulled: PulledHtrKinds = { anyShielded: false, anyFullyShielded: false };
-        if (held <= shieldedOutputFee(modeFor(pulled))) {
-          if (!shouldChooseHTRInputs) {
-            throw unsplittable(
-              'the HTR inputs were user-supplied, so no HTR can be selected for a shielded change'
-            );
-          }
-          const pull = await pullExtraHtrUtxos(
-            walletStorage,
-            new Set(usedUtxos),
-            extraHtrPreference,
-            (sum, kinds) => held + sum > shieldedOutputFee(modeFor(kinds))
-          );
-          if (held + pull.pulledSum <= shieldedOutputFee(modeFor(pull))) {
-            throw unsplittable('no HTR is available for a shielded change');
-          }
-          partialHtrTxData.inputs.push(...pull.pulledInputs);
-          if (changeIdx === -1) {
-            partialHtrTxData.outputs.push({
-              type: await getOutputTypeFromWallet(walletStorage),
-              token: HTR_UID,
-              value: pull.pulledSum,
-              address: await walletStorage.getChangeAddress({
-                changeAddress: this.changeAddress ?? undefined,
-              }),
-              authorities: 0n,
-              timelock: null,
-              isChange: true,
-            });
-          } else {
-            partialHtrTxData.outputs[changeIdx].value += pull.pulledSum;
-          }
-          pulled = pull;
-        }
-        // The change now pays its own fee, so shielding it pulls nothing more.
-        await shieldHtrChange(modeFor(pulled));
-      };
-      let needsSplit = true;
-
-      if (lone.value < 2n && !(lone.isChange && lone.token === HTR_UID)) {
-        await shieldHtrChangeAsSecondOutput();
-        needsSplit = false;
-      } else if (lone.isChange && lone.token === HTR_UID) {
-        // The lone def is the shielded HTR change: fund the split's fee from
-        // itself, pulling extra HTR only if the shave would make a half
-        // impossible (each half must be at least 1n).
-        const deficit = extraFee + 2n - lone.value;
-        if (deficit > 0n) {
-          if (!shouldChooseHTRInputs) {
-            throw new SendTxError(
-              'The shielded HTR change is too small to split into the two shielded outputs ' +
-                'the protocol requires, and HTR inputs were user-supplied so no additional ' +
-                'HTR can be selected.'
-            );
-          }
-          const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
-            this.storage,
-            usedUtxos,
-            htrPolicy.preference,
-            sum => sum >= deficit
-          );
-          if (pulledSum < deficit) {
-            throw new SendTxError(
-              'The shielded HTR change is too small to split into the two shielded outputs ' +
-                'the protocol requires, and no additional HTR is available.'
-            );
-          }
-          partialHtrTxData.inputs.push(...pulledInputs);
-          lone.value += pulledSum;
-        }
-        lone.value -= extraFee;
-      } else {
-        const htrChangeIdx = findHtrChangeIndex(partialHtrTxData.outputs);
-        if (htrChangeIdx !== -1) {
-          const htrChange = partialHtrTxData.outputs[htrChangeIdx];
-          if (htrChange.value > extraFee) {
-            htrChange.value -= extraFee;
-          } else if (htrChange.value === extraFee) {
-            partialHtrTxData.outputs.splice(htrChangeIdx, 1);
-          } else {
-            if (!shouldChooseHTRInputs) {
-              throw new SendTxError(
-                'The HTR change cannot fund the shielded-output split the protocol requires, ' +
-                  'and HTR inputs were user-supplied so no additional HTR can be selected.'
-              );
-            }
-            const deficit = extraFee - htrChange.value;
-            const pulled = await pullForSplit(deficit, htrChange.value);
-            if (pulled.pulledSum < deficit) {
-              throw new SendTxError(
-                'The HTR change cannot fund the shielded-output split the protocol requires, ' +
-                  'and no additional HTR is available.'
-              );
-            }
-            partialHtrTxData.inputs.push(...pulled.pulledInputs);
-            const surplus = pulled.pulledSum - deficit;
-            const changeMode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
-            // A change that must be shielded keeps everything pulled and pays
-            // its own fee instead of the split's; on an exact landing, only
-            // when that fee is the smaller one and the change can be hosted.
-            if (
-              changeMode !== null &&
-              (surplus > 0n ||
-                (htrChange.value + pulled.pulledSum > shieldedOutputFee(changeMode) &&
-                  (await changeHostable(pulled))))
-            ) {
-              htrChange.value += pulled.pulledSum;
-              await shieldHtrChange(changeMode);
-              needsSplit = false;
-            } else if (surplus > 0n) {
-              htrChange.value = surplus;
-            } else {
-              partialHtrTxData.outputs.splice(htrChangeIdx, 1);
-            }
-          }
-        } else {
-          if (!shouldChooseHTRInputs) {
-            throw new SendTxError(
-              'Splitting the lone shielded output requires extra HTR for its fee, and HTR ' +
-                'inputs were user-supplied so no additional HTR can be selected.'
-            );
-          }
-          const pulled = await pullForSplit(extraFee, 0n);
-          if (pulled.pulledSum < extraFee) {
-            throw new SendTxError(
-              'Splitting the lone shielded output requires extra HTR for its fee, and no ' +
-                'additional HTR is available.'
-            );
-          }
-          partialHtrTxData.inputs.push(...pulled.pulledInputs);
-          const surplus = pulled.pulledSum - extraFee;
-          const changeMode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
-          // As above: on an exact landing, only when the change's fee is the
-          // smaller one and the change can be hosted.
-          const shieldChange =
-            changeMode !== null &&
-            (surplus > 0n ||
-              (pulled.pulledSum > shieldedOutputFee(changeMode) && (await changeHostable(pulled))));
-          if (shieldChange || surplus > 0n) {
-            partialHtrTxData.outputs.push({
-              type: await getOutputTypeFromWallet(this.storage),
-              token: HTR_UID,
-              // A change that will be shielded keeps everything pulled and pays
-              // its own fee instead of the split's.
-              value: shieldChange ? pulled.pulledSum : surplus,
-              address: await this.storage.getChangeAddress({
-                changeAddress: this.changeAddress ?? undefined,
-              }),
-              authorities: 0n,
-              timelock: null,
-              isChange: true,
-            });
-            if (shieldChange) {
-              await shieldHtrChange(changeMode);
-              needsSplit = false;
-            }
-          }
-        }
-      }
-      if (needsSplit) {
-        totalFee += extraFee;
-        splitShieldedDef(shieldedOutputDefs, 0);
-      }
-    }
+    totalFee += await ensureShieldedOutputMinimum({
+      storage: this.storage,
+      network,
+      shieldedOutputDefs,
+      partialHtrTxData,
+      partialInputs,
+      htrChangeMode,
+      htrStandsIn,
+      changeModeOverride,
+      htrPreference: htrPolicy.preference,
+      shouldChooseHTRInputs,
+      changeAddress: this.changeAddress,
+      shieldedChangeAddress,
+      legacyChangeAddress,
+      keepTransparentHint,
+      walletCanHostShieldedChange,
+      assertChangeAddressSupportsShieldedChange,
+    });
 
     // FeeHeader is pushed AFTER the conversion and the structural pass so it
     // carries the final total. The header gates on `totalFee > 0`; that's
@@ -2263,6 +1985,379 @@ export async function convertHtrChangeIfRequested(
   });
 
   return { addedFee: additionalFee };
+}
+
+/** The state of a send that the structural minimum pass reads and updates. */
+export interface IShieldedMinimumContext {
+  storage: IStorage;
+  network: ReturnType<IStorage['config']['getNetwork']>;
+  /** Every shielded output of the tx so far, recipients' and change. */
+  shieldedOutputDefs: IResolvedShieldedOutputDef[];
+  /** The HTR selection's inputs and outputs, with any transparent HTR change. */
+  partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>;
+  /** The inputs chosen before the HTR selection. */
+  partialInputs: IDataInput[];
+  /** The HTR change mode the rules decided. */
+  htrChangeMode: ChangeOutputMode;
+  /** Whether the HTR change is shielded only in place of a missing shielded input. */
+  htrStandsIn: boolean;
+  /** The caller's changeShieldedMode, or null when the rules decide. */
+  changeModeOverride: ChangeOutputMode | null;
+  /** The HTR selection's pool preference. */
+  htrPreference: InputPreference;
+  /** Whether the wallet selects HTR; false when the caller supplied the HTR inputs. */
+  shouldChooseHTRInputs: boolean;
+  /** The caller's change address, or null. */
+  changeAddress: string | null;
+  /** The caller's change address when it is new-format, else null. */
+  shieldedChangeAddress: string | null;
+  /** Whether the caller's change address is legacy, which cannot receive a shielded change. */
+  legacyChangeAddress: boolean;
+  /** Ends an error about a shielded change: the way to keep it transparent, or '.'. */
+  keepTransparentHint: string;
+  /**
+   * Whether the wallet can receive a shielded change, at the caller's
+   * new-format change address or its own shielded address; an unexpected
+   * failure rejects.
+   */
+  walletCanHostShieldedChange: () => Promise<boolean>;
+  /**
+   * Throws when a change about to be shielded cannot go to the caller's change
+   * address; `standsIn` says the change stands in for a missing shielded input.
+   */
+  assertChangeAddressSupportsShieldedChange: (standsIn?: boolean) => Promise<void>;
+}
+
+/**
+ * The structural minimum: never emit a lone shielded output. A single shielded
+ * output carries a random blinding factor and can never satisfy the node's
+ * balance equation, so a tx ending with exactly one — whatever produced it —
+ * gets a second one. Its fee is funded without ever touching a recipient's
+ * value: shave the lone def when it is itself the HTR change, else shave the
+ * transparent HTR change, else pull extra HTR.
+ *
+ * The lone def is normally split into two halves. When the extra pull ends in
+ * an HTR change that must be shielded (the rules shield the HTR change, or the
+ * pull spent shielded HTR), that shielded change is the second output and the
+ * lone def stays whole: a transparent change must never carry the value of a
+ * shielded input. A pull that lands exactly on the split's fee also ends in
+ * that shielded change when the change's own fee is the smaller one. A 1-unit
+ * def cannot be split, so the HTR change becomes the second output instead,
+ * unless the def is that change itself, which is topped up with more HTR and
+ * then split.
+ *
+ * Mutates `ctx.shieldedOutputDefs` (the lone def shaved or split, or the
+ * shielded change appended) and `ctx.partialHtrTxData` (pulled HTR inputs; the
+ * HTR change resized, added or removed).
+ *
+ * @returns The fee of the shielded output the pass adds, or `0n` when the tx
+ *   does not have exactly one shielded output.
+ * @throws SendTxError when the second shielded output cannot be funded or
+ *   received.
+ * @throws whatever `ctx.walletCanHostShieldedChange` or
+ *   `ctx.assertChangeAddressSupportsShieldedChange` throws.
+ */
+export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext): Promise<bigint> {
+  const {
+    storage,
+    network,
+    shieldedOutputDefs,
+    partialHtrTxData,
+    partialInputs,
+    htrChangeMode,
+    htrStandsIn,
+    changeModeOverride,
+    htrPreference,
+    shouldChooseHTRInputs,
+    changeAddress,
+    shieldedChangeAddress,
+    legacyChangeAddress,
+    keepTransparentHint,
+    walletCanHostShieldedChange,
+    assertChangeAddressSupportsShieldedChange,
+  } = ctx;
+  if (shieldedOutputDefs.length !== 1) {
+    return 0n;
+  }
+  let addedFee = 0n;
+  const lone = shieldedOutputDefs[0];
+  const extraFee = shieldedOutputFee(lone.shieldedMode);
+  const usedUtxos = new Set<string>();
+  for (const inp of [...partialInputs, ...partialHtrTxData.inputs]) {
+    usedUtxos.add(`${inp.txId}:${inp.index}`);
+  }
+  // A change the caller pinned transparent should unshield no more than it
+  // must, so its extra HTR comes from the transparent pool first.
+  const extraHtrPreference =
+    changeModeOverride === OutputKind.TRANSPARENT ? OutputKind.TRANSPARENT : htrPreference;
+  // Shielded HTR spent entirely on the public fee is revealed by
+  // subtraction unless shielded HTR outputs absorb it (the lone def is
+  // HTR). Such a pull goes on until it can fund a shielded change of its
+  // own, which becomes the second output; an exact landing stands only
+  // when no pull gets there, or when the wallet cannot receive a shielded
+  // change. A legacy change address cannot receive one either, but stops
+  // only a shielded change that would just save a fee, after a pull that
+  // spent no shielded HTR: a pull that spent some goes on, and the send
+  // fails where its change is shielded. Hosting is asked about only where
+  // the answer decides something, and never for a change pinned
+  // transparent, which is never shielded.
+  const changeHostable = async (pulled: PulledHtrKinds): Promise<boolean> =>
+    changeModeOverride !== OutputKind.TRANSPARENT &&
+    (!legacyChangeAddress || pulled.anyShielded) &&
+    walletCanHostShieldedChange();
+  // Pulls the `owed` HTR the split still needs, on top of the `held`
+  // transparent HTR change (0n when there is none).
+  const pullForSplit = async (owed: bigint, held: bigint) => {
+    const shortest = await pullExtraHtrUtxos(
+      storage,
+      new Set(usedUtxos),
+      extraHtrPreference,
+      sum => sum >= owed
+    );
+    // Only a pull that covers `owed` by spending shielded HTR, for a lone
+    // def of another token, goes on for a shielded change, and only when
+    // the wallet can receive one. Otherwise the shortest pull is the answer.
+    if (
+      shortest.pulledSum < owed ||
+      !shortest.anyShielded ||
+      lone.token === NATIVE_TOKEN_UID ||
+      !(await changeHostable(shortest))
+    ) {
+      return shortest;
+    }
+    const isEnough = (sum: bigint, pulled: PulledHtrKinds): boolean => {
+      if (sum < owed) {
+        return false;
+      }
+      if (!pulled.anyShielded) {
+        return true;
+      }
+      // The change takes the mode the pull so far calls for.
+      const mode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
+      return mode !== null && held + sum > shieldedOutputFee(mode);
+    };
+    const pulled = await pullExtraHtrUtxos(
+      storage,
+      new Set(usedUtxos),
+      extraHtrPreference,
+      isEnough
+    );
+    // No pull funds a shielded change: the shortest pull stands.
+    return isEnough(pulled.pulledSum, pulled) ? pulled : shortest;
+  };
+  // Shields the transparent HTR change as the tx's second shielded output.
+  const shieldHtrChange = async (mode: ShieldedOutputMode): Promise<void> => {
+    await assertChangeAddressSupportsShieldedChange(htrStandsIn);
+    const { addedFee: changeFee } = await convertHtrChangeIfRequested(
+      partialHtrTxData,
+      shieldedOutputDefs,
+      mode,
+      network,
+      storage,
+      partialInputs,
+      shouldChooseHTRInputs,
+      extraHtrPreference,
+      shieldedChangeAddress,
+      true,
+      keepTransparentHint
+    );
+    addedFee += changeFee;
+  };
+  // A 1-unit def cannot be split, so the HTR change becomes the second
+  // output, taking more HTR when it cannot pay its own fee. Its mode is
+  // decided after any pull: the rules' mode, else mirroring a shielded
+  // pull, else amount-shielded.
+  const shieldHtrChangeAsSecondOutput = async (): Promise<void> => {
+    const unsplittable = (reason: string) =>
+      new SendTxError(
+        `The transaction's only shielded output holds ${lone.value} unit, too little to ` +
+          `split into the two shielded outputs the protocol requires, and ${reason}.`
+      );
+    if (changeModeOverride === OutputKind.TRANSPARENT) {
+      throw unsplittable(
+        'changeShieldedMode: OutputKind.TRANSPARENT keeps the change from being shielded ' +
+          'as the second one'
+      );
+    }
+    // The wallet comes first: a new-format change address is no way out for
+    // one that cannot receive a shielded change.
+    if (!(await walletCanHostShieldedChange())) {
+      throw unsplittable('the wallet cannot receive a shielded change as the second one');
+    }
+    if (legacyChangeAddress) {
+      throw unsplittable(
+        'a legacy change address cannot receive a shielded change as the second one'
+      );
+    }
+    const modeFor = (pulled: PulledHtrKinds): ShieldedOutputMode =>
+      pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled) ??
+      ShieldedOutputMode.AMOUNT_SHIELDED;
+    const changeIdx = findHtrChangeIndex(partialHtrTxData.outputs);
+    const held = changeIdx === -1 ? 0n : partialHtrTxData.outputs[changeIdx].value;
+    let pulled: PulledHtrKinds = { anyShielded: false, anyFullyShielded: false };
+    if (held <= shieldedOutputFee(modeFor(pulled))) {
+      if (!shouldChooseHTRInputs) {
+        throw unsplittable(
+          'the HTR inputs were user-supplied, so no HTR can be selected for a shielded change'
+        );
+      }
+      const pull = await pullExtraHtrUtxos(
+        storage,
+        new Set(usedUtxos),
+        extraHtrPreference,
+        (sum, kinds) => held + sum > shieldedOutputFee(modeFor(kinds))
+      );
+      if (held + pull.pulledSum <= shieldedOutputFee(modeFor(pull))) {
+        throw unsplittable('no HTR is available for a shielded change');
+      }
+      partialHtrTxData.inputs.push(...pull.pulledInputs);
+      if (changeIdx === -1) {
+        partialHtrTxData.outputs.push({
+          type: await getOutputTypeFromWallet(storage),
+          token: NATIVE_TOKEN_UID,
+          value: pull.pulledSum,
+          address: await storage.getChangeAddress({
+            changeAddress: changeAddress ?? undefined,
+          }),
+          authorities: 0n,
+          timelock: null,
+          isChange: true,
+        });
+      } else {
+        partialHtrTxData.outputs[changeIdx].value += pull.pulledSum;
+      }
+      pulled = pull;
+    }
+    // The change now pays its own fee, so shielding it pulls nothing more.
+    await shieldHtrChange(modeFor(pulled));
+  };
+  let needsSplit = true;
+
+  if (lone.value < 2n && !(lone.isChange && lone.token === NATIVE_TOKEN_UID)) {
+    await shieldHtrChangeAsSecondOutput();
+    needsSplit = false;
+  } else if (lone.isChange && lone.token === NATIVE_TOKEN_UID) {
+    // The lone def is the shielded HTR change: fund the split's fee from
+    // itself, pulling extra HTR only if the shave would make a half
+    // impossible (each half must be at least 1n).
+    const deficit = extraFee + 2n - lone.value;
+    if (deficit > 0n) {
+      if (!shouldChooseHTRInputs) {
+        throw new SendTxError(
+          'The shielded HTR change is too small to split into the two shielded outputs ' +
+            'the protocol requires, and HTR inputs were user-supplied so no additional ' +
+            'HTR can be selected.'
+        );
+      }
+      const { pulledInputs, pulledSum } = await pullExtraHtrUtxos(
+        storage,
+        usedUtxos,
+        htrPreference,
+        sum => sum >= deficit
+      );
+      if (pulledSum < deficit) {
+        throw new SendTxError(
+          'The shielded HTR change is too small to split into the two shielded outputs ' +
+            'the protocol requires, and no additional HTR is available.'
+        );
+      }
+      partialHtrTxData.inputs.push(...pulledInputs);
+      lone.value += pulledSum;
+    }
+    lone.value -= extraFee;
+  } else {
+    const htrChangeIdx = findHtrChangeIndex(partialHtrTxData.outputs);
+    if (htrChangeIdx !== -1) {
+      const htrChange = partialHtrTxData.outputs[htrChangeIdx];
+      if (htrChange.value > extraFee) {
+        htrChange.value -= extraFee;
+      } else if (htrChange.value === extraFee) {
+        partialHtrTxData.outputs.splice(htrChangeIdx, 1);
+      } else {
+        if (!shouldChooseHTRInputs) {
+          throw new SendTxError(
+            'The HTR change cannot fund the shielded-output split the protocol requires, ' +
+              'and HTR inputs were user-supplied so no additional HTR can be selected.'
+          );
+        }
+        const deficit = extraFee - htrChange.value;
+        const pulled = await pullForSplit(deficit, htrChange.value);
+        if (pulled.pulledSum < deficit) {
+          throw new SendTxError(
+            'The HTR change cannot fund the shielded-output split the protocol requires, ' +
+              'and no additional HTR is available.'
+          );
+        }
+        partialHtrTxData.inputs.push(...pulled.pulledInputs);
+        const surplus = pulled.pulledSum - deficit;
+        const changeMode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
+        // A change that must be shielded keeps everything pulled and pays
+        // its own fee instead of the split's; on an exact landing, only
+        // when that fee is the smaller one and the change can be hosted.
+        if (
+          changeMode !== null &&
+          (surplus > 0n ||
+            (htrChange.value + pulled.pulledSum > shieldedOutputFee(changeMode) &&
+              (await changeHostable(pulled))))
+        ) {
+          htrChange.value += pulled.pulledSum;
+          await shieldHtrChange(changeMode);
+          needsSplit = false;
+        } else if (surplus > 0n) {
+          htrChange.value = surplus;
+        } else {
+          partialHtrTxData.outputs.splice(htrChangeIdx, 1);
+        }
+      }
+    } else {
+      if (!shouldChooseHTRInputs) {
+        throw new SendTxError(
+          'Splitting the lone shielded output requires extra HTR for its fee, and HTR ' +
+            'inputs were user-supplied so no additional HTR can be selected.'
+        );
+      }
+      const pulled = await pullForSplit(extraFee, 0n);
+      if (pulled.pulledSum < extraFee) {
+        throw new SendTxError(
+          'Splitting the lone shielded output requires extra HTR for its fee, and no ' +
+            'additional HTR is available.'
+        );
+      }
+      partialHtrTxData.inputs.push(...pulled.pulledInputs);
+      const surplus = pulled.pulledSum - extraFee;
+      const changeMode = pulledHtrChangeMode(htrChangeMode, changeModeOverride, pulled);
+      // As above: on an exact landing, only when the change's fee is the
+      // smaller one and the change can be hosted.
+      const shieldChange =
+        changeMode !== null &&
+        (surplus > 0n ||
+          (pulled.pulledSum > shieldedOutputFee(changeMode) && (await changeHostable(pulled))));
+      if (shieldChange || surplus > 0n) {
+        partialHtrTxData.outputs.push({
+          type: await getOutputTypeFromWallet(storage),
+          token: NATIVE_TOKEN_UID,
+          // A change that will be shielded keeps everything pulled and pays
+          // its own fee instead of the split's.
+          value: shieldChange ? pulled.pulledSum : surplus,
+          address: await storage.getChangeAddress({
+            changeAddress: changeAddress ?? undefined,
+          }),
+          authorities: 0n,
+          timelock: null,
+          isChange: true,
+        });
+        if (shieldChange) {
+          await shieldHtrChange(changeMode);
+          needsSplit = false;
+        }
+      }
+    }
+  }
+  if (needsSplit) {
+    addedFee += extraFee;
+    splitShieldedDef(shieldedOutputDefs, 0);
+  }
+  return addedFee;
 }
 
 async function getOutputTypeFromWallet(storage: IStorage): Promise<'p2pkh' | 'p2sh'> {
