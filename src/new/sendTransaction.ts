@@ -16,6 +16,7 @@ import {
   ZERO_TWEAK,
   FEE_PER_AMOUNT_SHIELDED_OUTPUT,
   FEE_PER_FULL_SHIELDED_OUTPUT,
+  FEE_PER_OUTPUT,
 } from '../constants';
 import { ErrorMessages } from '../errorMessages';
 import {
@@ -41,6 +42,7 @@ import {
   IUtxoSelectionOptions,
   UtxoSelectionAlgorithm,
   OutputValueType,
+  TokenVersion,
   WalletType,
 } from '../types';
 import {
@@ -810,10 +812,11 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
 
     // calculate the fee based in the inputs and outputs, including the change output
     // fee is always in HTR
-    const fee = await Fee.calculate(
-      partialInputs,
-      feeOutputs,
-      await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()))
+    const tokensData = await tokens.getTokensByManyIds(this.storage, new Set(tokenMap.keys()));
+    const fee = await Fee.calculate(partialInputs, feeOutputs, tokensData);
+    // A FEE token's change owes a per-output fee when it stays transparent.
+    const feeTokens = new Set(
+      [...tokensData].filter(([, data]) => data.version === TokenVersion.FEE).map(([uid]) => uid)
     );
 
     // Calculate shielded output fee
@@ -959,7 +962,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       !htrChangeMayStay,
       keepTransparentHint,
       htrStandsIn ? () => assertChangeAddressSupportsShieldedChange(true) : undefined,
-      htrStandsIn
+      htrStandsIn,
+      feeTokens
     );
     totalFee += addedFee;
 
@@ -981,6 +985,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       shieldedChangeAddress,
       legacyChangeAddress,
       keepTransparentHint,
+      feeTokens,
       walletCanHostShieldedChange,
       assertChangeAddressSupportsShieldedChange,
     });
@@ -1846,17 +1851,17 @@ function unfundedStandInChangeMessage(
  * to fail pinned transparent as well, so that its error does not suggest
  * keeping the change transparent. Pinned transparent, a send whose caller
  * asked for one shielded output (the only one in `shieldedOutputDefs` that is
- * no change) splits it in two, which a 1-unit output cannot be. When that
- * output is the tx's only shielded output so far, the split's fee, the same
- * as the change's own, comes from the HTR `available` to an HTR change that
- * cannot fund its fee: what the change holds, plus all the wallet could add
- * when it selects the HTR. Beside a shielded change of another token, the
- * send owes another fee pinned transparent, so there only a 1-unit output
- * decides it.
+ * no change) splits it in two, which a 1-unit output cannot be. The split's
+ * fee, the same as the change's own, is paid by the HTR `available` to an HTR
+ * change that cannot fund its fee (what the change holds, plus all the wallet
+ * could add when it selects the HTR) and by the shielded-output fees the tx's
+ * other changes stop paying once they are transparent. A change of one of
+ * `feeTokens`, the tx's FEE tokens, then owes a per-output fee instead.
  */
 function transparentChangeFailsToo(
   shieldedOutputDefs: IResolvedShieldedOutputDef[],
-  available: bigint | null = null
+  available: bigint | null = null,
+  feeTokens: ReadonlySet<string> = new Set()
 ): boolean {
   const callerOutputs = shieldedOutputDefs.filter(def => !def.isChange);
   if (callerOutputs.length !== 1) {
@@ -1865,11 +1870,19 @@ function transparentChangeFailsToo(
   if (callerOutputs[0].value < 2n) {
     return true;
   }
-  return (
-    available !== null &&
-    shieldedOutputDefs.length === 1 &&
-    available < shieldedOutputFee(callerOutputs[0].shieldedMode)
-  );
+  if (available === null) {
+    return false;
+  }
+  const freed = shieldedOutputDefs
+    .filter(def => def.isChange)
+    .reduce(
+      (sum, def) =>
+        sum +
+        shieldedOutputFee(def.shieldedMode) -
+        (feeTokens.has(def.token) ? FEE_PER_OUTPUT : 0n),
+      0n
+    );
+  return available + freed < shieldedOutputFee(callerOutputs[0].shieldedMode);
 }
 
 /**
@@ -1999,9 +2012,10 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
  * to fund its fee: the way to keep the change transparent when the rules
  * shield it, a plain '.' when the caller asked for `mode`. The latter ends with
  * '.' too where the send is known to fail pinned transparent as well: the
- * tx's only shielded output holds 1 unit, or the HTR the change holds and the
- * HTR left to add cannot pay the fee of splitting it (see
- * transparentChangeFailsToo).
+ * tx's only shielded output holds 1 unit, or the HTR the change holds, the
+ * HTR left to add and the fees the other changes stop paying once
+ * transparent cannot pay the fee of splitting it (see
+ * transparentChangeFailsToo, which reads `feeTokens`, the tx's FEE tokens).
  *
  * `assertDestination` runs once the change will be shielded, after any HTR it
  * needs was added and before its address is resolved: the caller throws there
@@ -2028,7 +2042,8 @@ export async function convertHtrChangeIfRequested(
   shieldingRequired: boolean = true,
   keepTransparentHint: string = '.',
   assertDestination: () => Promise<void> = async () => {},
-  standsIn: boolean = false
+  standsIn: boolean = false,
+  feeTokens: ReadonlySet<string> = new Set()
 ): Promise<{ addedFee: bigint }> {
   if (!mode || mode === OutputKind.TRANSPARENT) return { addedFee: 0n };
 
@@ -2053,7 +2068,7 @@ export async function convertHtrChangeIfRequested(
   // Ends the error of a change standing in for a missing shielded input that
   // cannot fund its fee with the HTR `available` to it.
   const standInHint = (available: bigint): string =>
-    transparentChangeFailsToo(shieldedOutputDefs, available) ? '.' : keepTransparentHint;
+    transparentChangeFailsToo(shieldedOutputDefs, available, feeTokens) ? '.' : keepTransparentHint;
 
   if (changeValue <= additionalFee) {
     // The change alone can't fund the shielded-output fee. If the wallet is NOT
@@ -2184,6 +2199,8 @@ export interface IShieldedMinimumContext {
   legacyChangeAddress: boolean;
   /** Ends an error about a shielded change: the way to keep it transparent, or '.'. */
   keepTransparentHint: string;
+  /** The tx's FEE tokens, whose changes owe a per-output fee when transparent. */
+  feeTokens?: ReadonlySet<string>;
   /**
    * Whether the wallet can receive a shielded change, at the caller's
    * new-format change address or its own shielded address; an unexpected
@@ -2257,6 +2274,7 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
     shieldedChangeAddress,
     legacyChangeAddress,
     keepTransparentHint,
+    feeTokens,
     walletCanHostShieldedChange,
     assertChangeAddressSupportsShieldedChange,
   } = ctx;
@@ -2456,7 +2474,9 @@ export async function ensureShieldedOutputMinimum(ctx: IShieldedMinimumContext):
         new SendTxError(
           unfundedStandInChangeMessage(
             userSupplied,
-            transparentChangeFailsToo(shieldedOutputDefs, available) ? '.' : keepTransparentHint,
+            transparentChangeFailsToo(shieldedOutputDefs, available, feeTokens)
+              ? '.'
+              : keepTransparentHint,
             available === 0n
           )
         )

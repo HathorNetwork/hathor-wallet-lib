@@ -44,8 +44,9 @@ import { bestUtxoSelection } from './utxo';
  * the change. The error says why the change must be shielded, and how to keep
  * it transparent, except where that is known to fail too: the tx's only
  * shielded output holds 1 unit, which cannot be split, or, for an HTR change
- * that cannot pay its own fee, the HTR left would not pay the fee of splitting
- * that output either. An HTR change takes more HTR, smallest-first, until it
+ * that cannot pay its own fee, the HTR left, with the fees the other changes
+ * stop paying once transparent, would not pay the fee of splitting that output
+ * either. An HTR change takes more HTR, smallest-first, until it
  * pays its own fee, and when the HTR selection leaves no change, HTR is pulled
  * for one, whatever other shielded outputs the tx has; a send that then needs
  * more inputs than a tx holds fails on its input count. When the tx's only

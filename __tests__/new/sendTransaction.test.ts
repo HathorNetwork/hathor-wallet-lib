@@ -8468,6 +8468,98 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         expect(feeOf(result)).toBe(3n);
       });
 
+      // A shielded 15n of `token` pays a transparent 10n, so its 5n change is
+      // the only other shielded output.
+      const sendBesideAChange = (
+        token: string,
+        htr: bigint,
+        htrMode: ShieldedOutputMode,
+        changeShieldedMode: ChangeOutputMode | null = null
+      ) =>
+        new SendTransaction({
+          ...fromWallet([
+            poolUtxo('htr-pub', htr, NATIVE_TOKEN_UID),
+            poolUtxo('token-sh-15', 15n, token, {
+              shielded: true,
+              blindingFactor: 'd1'.repeat(32),
+            }),
+          ]),
+          outputs: [
+            {
+              address: buildShieldedAddr(1),
+              value: 10n,
+              token: NATIVE_TOKEN_UID,
+              shieldedMode: htrMode,
+            },
+            {
+              type: OutputType.P2PKH,
+              address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+              value: 5n,
+              token: NATIVE_TOKEN_UID,
+            },
+            {
+              type: OutputType.P2PKH,
+              address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+              value: 10n,
+              token,
+            },
+          ],
+          changeShieldedMode,
+        }).prepareTxData();
+
+      test('with no HTR left, the error does not suggest a transparent change that cannot pay for the split either', async () => {
+        // HTR: 18 = 10 + 5 + 3 (fees) exactly.
+        await expect(
+          sendBesideAChange(CUSTOM_TOKEN, 18n, ShieldedOutputMode.FULLY_SHIELDED)
+        ).rejects.toThrow(new SendTxError(standInChangeMessage(NO_HTR_CHANGE, '.')));
+        // Pinned transparent, the custom change no longer pays its 1n fee, but
+        // splitting the fully shielded output costs 2n.
+        await expect(
+          sendBesideAChange(
+            CUSTOM_TOKEN,
+            18n,
+            ShieldedOutputMode.FULLY_SHIELDED,
+            OutputKind.TRANSPARENT
+          )
+        ).rejects.toThrow('cannot fund the shielded-output split');
+      });
+
+      test('with no HTR left, the error suggests a transparent change when the fee it frees pays for the split', async () => {
+        // HTR: 17 = 10 + 5 + 2 (fees) exactly.
+        await expect(
+          sendBesideAChange(CUSTOM_TOKEN, 17n, ShieldedOutputMode.AMOUNT_SHIELDED)
+        ).rejects.toThrow(new SendTxError(standInChangeMessage(NO_HTR_CHANGE)));
+        // As suggested: pinned transparent, the custom change's freed 1n fee
+        // pays for splitting the amount-shielded output.
+        const pinned = await sendBesideAChange(
+          CUSTOM_TOKEN,
+          17n,
+          ShieldedOutputMode.AMOUNT_SHIELDED,
+          OutputKind.TRANSPARENT
+        );
+        expect(htrShieldedOutputsOf(pinned).map(o => o.value)).toEqual([5n, 5n]);
+        expect(feeOf(pinned)).toBe(2n);
+      });
+
+      test("with no HTR left, the error does not suggest a transparent change whose FEE token's change owes a fee instead", async () => {
+        // The FEE token's transparent output owes 1n. HTR: 18 = 10 + 5 + 3
+        // (fees) exactly.
+        await expect(
+          sendBesideAChange(FEE_TOKEN, 18n, ShieldedOutputMode.AMOUNT_SHIELDED)
+        ).rejects.toThrow(new SendTxError(standInChangeMessage(NO_HTR_CHANGE, '.')));
+        // Pinned transparent, the FEE token's change owes 1n as a transparent
+        // output in place of its 1n shielded-output fee, so nothing pays the 1n
+        // of splitting the amount-shielded output.
+        await expect(
+          sendBesideAChange(
+            FEE_TOKEN,
+            18n,
+            ShieldedOutputMode.AMOUNT_SHIELDED,
+            OutputKind.TRANSPARENT
+          )
+        ).rejects.toThrow('Splitting the lone shielded output requires extra HTR for its fee');
+      });
+
       test('with caller-supplied HTR, the send fails rather than add HTR to it', async () => {
         const callerHtr = poolUtxo('caller-htr-18', 18n, NATIVE_TOKEN_UID);
         const source = () => {
