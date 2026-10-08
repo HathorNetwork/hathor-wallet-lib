@@ -43,6 +43,41 @@ type optionsType = {
 };
 
 /**
+ * Check that external signing signed every input of a transaction whose inputs are ALL the
+ * wallet's own (the facade's send, token, authority and nano paths). The storage proxy skips an
+ * input whose spent transaction it couldn't fetch, so without this check a transient fullnode
+ * failure would produce a tx that only fails at push, with an unclear script error. Not for the
+ * public signTx, which legitimately leaves a counterparty's inputs unsigned.
+ *
+ * @throws {SendTxError} naming the first unsigned input
+ */
+export function assertAllInputsSigned(tx: Transaction): void {
+  const unsigned = tx.inputs.findIndex(input => !input.data || input.data.length === 0);
+  if (unsigned !== -1) {
+    const { hash, index } = tx.inputs[unsigned];
+    throw new SendTxError(`Could not sign input ${unsigned} (${hash}:${index}). Please try again.`);
+  }
+}
+
+/**
+ * Check that external signing produced the nano contract caller signature of a transaction whose
+ * caller is the wallet (the facade's nano paths). The signer returns it as `ncCallerSignature` and
+ * signTransaction copies it into every nano header's script as-is, so a signer that returns none
+ * yields a tx that only fails at push. Nano calls can have no inputs, where assertAllInputsSigned
+ * checks nothing.
+ *
+ * @throws {SendTxError} when a nano header has no caller signature
+ */
+export function assertNanoCallerSigned(tx: Transaction): void {
+  if (!tx.isNanoContract()) {
+    return;
+  }
+  if (tx.getNanoHeaders().some(header => !header.script || header.script.length === 0)) {
+    throw new SendTxError('Could not sign the nano contract caller. Please try again.');
+  }
+}
+
+/**
  * Maps a transaction input (identified by its txId + index) to its
  * BIP-44 address path. Thin wrapper around {@link Map} that centralizes
  * the key format so the read and write sides cannot drift out of sync.
@@ -838,6 +873,17 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   async signTx(pin?: string | null): Promise<Transaction> {
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
+    }
+    if (this.wallet.storage.hasTxSignatureMethod()) {
+      // External tx-signing method (e.g. a passkey signer): no pin and no stored key. The wallet
+      // signs through its storage proxy, which hands the proxy to the signer and resolves each
+      // input's address from the spent output, then prepares the tx to be sent.
+      this.emit('sign-tx-start');
+      await this.wallet.signTx(this.transaction, { pinCode: pin ?? this.pin });
+      assertAllInputsSigned(this.transaction);
+      this._currentStep = 'signed';
+      this.emit('sign-tx-end', this.transaction);
+      return this.transaction;
     }
     const pinToUse = pin ?? this.pin ?? '';
     if (!pinToUse) {
