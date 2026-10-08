@@ -20,6 +20,7 @@ import {
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
   GAP_LIMIT,
+  SHIELDED_SPEND_ACCT_PATH,
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -75,6 +76,7 @@ import {
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
   ShieldedRegistrationFields,
+  ShieldedAddressInfoObject,
 } from './types';
 import { OutputKind } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
@@ -88,6 +90,7 @@ import {
   PinRequiredError,
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
+  ShieldedNotEnabledError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
@@ -115,6 +118,7 @@ import {
   TokenVersion,
   SCANNING_POLICY,
   WalletAddressMode,
+  IAddressChainOptions,
 } from '../types';
 import { Fee } from '../utils/fee';
 
@@ -137,6 +141,13 @@ const WS_STATUS_CREATING = 'creating';
 // That renewal is awaited and errors propagate, we need an explicit bounded retry
 // to keep integration tests (and real clients) tolerant of the same settling race.
 const MAX_AUTH_TOKEN_RENEW_ATTEMPTS = 3;
+
+/**
+ * Whether the caller asked for the shielded address chain.
+ */
+function isShieldedChain(opts?: IAddressChainOptions): boolean {
+  return opts?.legacy === false;
+}
 
 enum walletState {
   NOT_STARTED = 'Not started',
@@ -200,6 +211,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Whether the wallet's access data holds the shielded scan and spend keys,
   // so they were registered with the wallet-service on start
   private shieldedEnabled: boolean;
+
+  // Unused shielded addresses, refreshed together with `newAddresses`
+  private newShieldedAddresses: ShieldedAddressInfoObject[];
+
+  // Index of the shielded address to use in `newShieldedAddresses`
+  private shieldedIndexToUse: number;
 
   public storage: IStorage;
 
@@ -296,6 +313,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.singleAddress = singleAddressMode;
     this.firstAddress = null;
     this.shieldedEnabled = false;
+    this.newShieldedAddresses = [];
+    this.shieldedIndexToUse = -1;
 
     // TODO should we have a debug mode?
   }
@@ -1064,11 +1083,41 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async *getAllAddresses(): AsyncGenerator<GetAddressesObject> {
+  async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject> {
     this.failIfWalletNotReady();
+    if (isShieldedChain(opts)) {
+      this.failIfShieldedNotEnabled();
+      // Shielded rows also carry the on-chain `spendAddress`
+      const data = await walletApi.getShieldedAddresses(this);
+      for (const address of data.addresses) {
+        yield address;
+      }
+      return;
+    }
     const data = await walletApi.getAddresses(this);
     for (const address of data.addresses) {
       yield address;
+    }
+  }
+
+  /**
+   * Throw if the wallet did not register shielded keys.
+   */
+  private failIfShieldedNotEnabled(): void {
+    if (!this.shieldedEnabled) {
+      throw new ShieldedNotEnabledError(
+        'This wallet has no shielded keys. Only wallets started from a seed support shielded addresses.'
+      );
+    }
+  }
+
+  /**
+   * Throw if the shielded address chain cannot be used to pick addresses.
+   */
+  private failIfShieldedChainUnavailable(): void {
+    this.failIfShieldedNotEnabled();
+    if (this.singleAddress) {
+      throw new WalletError('Shielded addresses are not supported in single-address mode.');
     }
   }
 
@@ -1090,6 +1139,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
     if (this.singleAddress) {
       await this.prepareSingleAddressMode();
+      return;
+    }
+    if (this.shieldedEnabled) {
+      // One request returns the unused addresses of both chains
+      const data = await walletApi.getShieldedNewAddresses(this);
+      this.newAddresses = data.legacyAddresses;
+      this.indexToUse = 0;
+      const spendByIndex = new Map(data.spendAddresses.map(a => [a.index, a.address]));
+      this.newShieldedAddresses = data.addresses.map(addressInfo => {
+        const spendAddress = spendByIndex.get(addressInfo.index);
+        if (!spendAddress) {
+          throw new WalletRequestError(
+            `Missing the spend address of shielded address index ${addressInfo.index}.`
+          );
+        }
+        return { ...addressInfo, spendAddress };
+      });
+      this.shieldedIndexToUse = 0;
       return;
     }
     const data = await walletApi.getNewAddresses(this);
@@ -1841,7 +1908,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAddressAtIndex(index: number): Promise<string> {
+  async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    if (isShieldedChain(opts)) {
+      this.failIfShieldedNotEnabled();
+      const { addresses } = await walletApi.getShieldedAddresses(this, index);
+      if (addresses.length <= 0) {
+        throw new Error('Error getting wallet shielded addresses.');
+      }
+      return addresses[0].address;
+    }
     const { addresses } = await walletApi.getAddresses(this, index);
 
     if (addresses.length <= 0) {
@@ -1893,7 +1968,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
+  getCurrentAddress(
+    // eslint-disable-next-line default-param-last
+    { markAsUsed = false } = {},
+    opts?: IAddressChainOptions
+  ): AddressInfoObject {
+    if (isShieldedChain(opts)) {
+      return this.getCurrentShieldedAddress(markAsUsed);
+    }
     if (this.singleAddress) {
       return this.newAddresses[0];
     }
@@ -1907,6 +1989,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const addressInfo = this.newAddresses[this.indexToUse];
     if (markAsUsed) {
       this.indexToUse += 1;
+    }
+    return addressInfo;
+  }
+
+  /**
+   * Get the current unused shielded address. The returned object also carries
+   * the on-chain `spendAddress` its outputs are locked to.
+   */
+  private getCurrentShieldedAddress(markAsUsed: boolean): ShieldedAddressInfoObject {
+    this.failIfShieldedChainUnavailable();
+    const count = this.newShieldedAddresses.length;
+    if (count === 0) {
+      // Deriving one locally would hand out an address the wallet-service does
+      // not watch, so funds sent to it would go unseen.
+      throw new WalletError('The wallet-service has no unused shielded address for this wallet.');
+    }
+    if (this.shieldedIndexToUse > count - 1) {
+      return { ...this.newShieldedAddresses[count - 1], info: 'GAP_LIMIT_REACHED' };
+    }
+    const addressInfo = this.newShieldedAddresses[this.shieldedIndexToUse];
+    if (markAsUsed) {
+      this.shieldedIndexToUse += 1;
     }
     return addressInfo;
   }
@@ -1947,7 +2051,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getNextAddress(): AddressInfoObject {
+  getNextAddress(opts?: IAddressChainOptions): AddressInfoObject {
+    if (isShieldedChain(opts)) {
+      this.getCurrentShieldedAddress(true);
+      return this.getCurrentShieldedAddress(false);
+    }
     if (this.singleAddress) {
       return this.newAddresses[0];
     }
@@ -3373,7 +3481,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAddressPathForIndex(index: number): Promise<string> {
+  async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    if (isShieldedChain(opts)) {
+      this.failIfShieldedNotEnabled();
+      return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
+    }
     const walletType = await this.storage.getWalletType();
 
     if (walletType === WalletType.MULTISIG) {
