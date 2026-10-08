@@ -773,6 +773,7 @@ export interface CreateWalletAuthData {
   timestampNow: number;
   firstAddress: string;
   authDerivedPrivKey: bitcore.HDPrivateKey;
+  shielded: ShieldedRegistrationFields | null; // null when the wallet has no shielded keys
 }
 
 export interface FullNodeVersionData {

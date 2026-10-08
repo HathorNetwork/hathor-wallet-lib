@@ -25,6 +25,7 @@ import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
 import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
+import { deriveShieldedAddress } from '../utils/shieldedAddress';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -73,6 +74,7 @@ import {
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
+  ShieldedRegistrationFields,
 } from './types';
 import { OutputKind } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
@@ -195,6 +197,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Address at index 0
   private firstAddress: string | null;
 
+  // Whether the wallet's access data holds the shielded scan and spend keys,
+  // so they were registered with the wallet-service on start
+  private shieldedEnabled: boolean;
+
   public storage: IStorage;
 
   /**
@@ -289,6 +295,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.indexToUse = -1;
     this.singleAddress = singleAddressMode;
     this.firstAddress = null;
+    this.shieldedEnabled = false;
 
     // TODO should we have a debug mode?
   }
@@ -476,6 +483,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       await this.storage.saveAccessData(accessData);
     }
 
+    await this.addShieldedKeysToAccessData(accessData, pinCode, password);
+    this.shieldedEnabled = HathorWalletServiceWallet.hasShieldedKeys(accessData);
+
     const {
       xpub,
       authXpub,
@@ -484,6 +494,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress,
       authDerivedPrivKey,
+      shielded,
     } = await this.generateCreateWalletAuthData(accessData, pinCode);
     this.firstAddress = firstAddress;
 
@@ -497,7 +508,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authXpub,
       authXpubkeySignature,
       timestampNow,
-      firstAddress
+      firstAddress,
+      shielded
     );
 
     this.walletId = data.status.walletId;
@@ -541,6 +553,63 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // interceptor can obtain a token without needing the PIN.
     await this.onWalletReady();
     this.clearSensitiveData();
+  }
+
+  /**
+   * Whether the access data holds the shielded scan and spend keys.
+   */
+  private static hasShieldedKeys(accessData: IWalletAccessData): boolean {
+    return !!(
+      accessData.scanXpubkey &&
+      accessData.scanMainKey &&
+      accessData.spendXpubkey &&
+      accessData.spendMainKey
+    );
+  }
+
+  /**
+   * Whether this wallet registered shielded keys with the wallet-service, so
+   * shielded addresses and outputs can be used. Only wallets started from a
+   * seed have them; xpriv and xpub wallets are legacy-only.
+   */
+  isShieldedEnabled(): boolean {
+    return this.shieldedEnabled;
+  }
+
+  /**
+   * Derive the shielded keys for access data stored before shielded support,
+   * and save them. Needs the password, since the keys come from the encrypted
+   * seed. Access data without a seed (xpriv or xpub wallets) is left as is.
+   */
+  private async addShieldedKeysToAccessData(
+    accessData: IWalletAccessData,
+    pinCode: string,
+    password?: string
+  ): Promise<void> {
+    if (HathorWalletServiceWallet.hasShieldedKeys(accessData) || !accessData.words) {
+      return;
+    }
+    if (!password) {
+      throw new WalletError(
+        'The wallet password is required to add the shielded keys to this wallet.'
+      );
+    }
+    let migrated: boolean;
+    try {
+      migrated = walletUtils.migrateShieldedAccessData(accessData, {
+        pin: pinCode,
+        password,
+        passphrase: this.passphrase,
+        networkName: this.network.name,
+      });
+    } catch (e) {
+      const err = new WalletError(e instanceof Error ? e.message : String(e));
+      (err as WalletError & { cause?: unknown }).cause = e;
+      throw err;
+    }
+    if (migrated) {
+      await this.storage.saveAccessData(accessData);
+    }
   }
 
   /**
@@ -679,6 +748,65 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress,
       authDerivedPrivKey,
+      shielded: this.generateShieldedRegistration(
+        accessData,
+        pinCode,
+        timestampNow,
+        walletId,
+        authDerivedPrivKey
+      ),
+    };
+  }
+
+  /**
+   * Build the fields that register the shielded keys with the wallet-service:
+   * the scan xpriv (so the service can find and decrypt the wallet's shielded
+   * outputs), the spend xpub (never the private key), the first shielded
+   * address, and two proofs. The spend key signs its own xpub, proving control
+   * of it; the auth key signs the first shielded address, consenting to these
+   * exact keys.
+   *
+   * @returns null when the access data has no shielded keys
+   */
+  private generateShieldedRegistration(
+    accessData: IWalletAccessData,
+    pinCode: string,
+    timestamp: number,
+    walletId: string,
+    authPrivKey: bitcore.HDPrivateKey
+  ): ShieldedRegistrationFields | null {
+    if (!HathorWalletServiceWallet.hasShieldedKeys(accessData)) {
+      return null;
+    }
+    const scanXpriv = decryptData(accessData.scanMainKey!, pinCode);
+    const spendPrivKey = new bitcore.HDPrivateKey(decryptData(accessData.spendMainKey!, pinCode));
+    const spendXpub = spendPrivKey.xpubkey;
+    if (spendXpub !== accessData.spendXpubkey) {
+      throw new WalletError('The stored spend key does not match the stored spend xpubkey.');
+    }
+    const { base58: firstCtAddress } = deriveShieldedAddress(
+      accessData.scanXpubkey!,
+      spendXpub,
+      0,
+      this.network.name
+    );
+
+    return {
+      scanXpriv,
+      spendXpub,
+      firstCtAddress,
+      spendXpubSignature: HathorWalletServiceWallet.signPayload(
+        spendPrivKey,
+        timestamp,
+        walletId,
+        spendXpub
+      ),
+      ctAddressSignature: HathorWalletServiceWallet.signPayload(
+        authPrivKey,
+        timestamp,
+        walletId,
+        firstCtAddress
+      ),
     };
   }
 
@@ -1178,8 +1306,23 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   signMessage(hdPrivKey: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
     const address = hdPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = String(timestamp).concat(walletId).concat(address);
+    return HathorWalletServiceWallet.signPayload(hdPrivKey, timestamp, walletId, address);
+  }
 
+  /**
+   * Sign `timestamp + walletId + payload` with a private key, the message
+   * format the wallet-service verifies for its authenticated requests.
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static signPayload(
+    hdPrivKey: bitcore.HDPrivateKey,
+    timestamp: number,
+    walletId: string,
+    payload: string
+  ): string {
+    const message = String(timestamp).concat(walletId).concat(payload);
     return signMessage(message, hdPrivKey.privateKey);
   }
 
