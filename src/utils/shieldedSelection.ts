@@ -42,6 +42,11 @@ import { bestUtxoSelection } from './utxo';
  * address to receive it (a multisig wallet never does), or (HTR) it cannot pay
  * its own fee and no more HTR can be added to it.
  *
+ * When no selection under these rules fits the transaction's input limit, the
+ * UTXOs that cover the amount are taken from both pools, largest-first, along
+ * with the inputs the rules force; a shielded input among them still makes the
+ * change shielded.
+ *
  * Whatever the rules decide, a transaction never ends with exactly one shielded
  * output: the structural pass in SendTransaction adds a second one, splitting
  * the output in two or shielding an HTR change as the second one.
@@ -294,25 +299,77 @@ export function decideChangeMode(args: {
     : ShieldedOutputMode.AMOUNT_SHIELDED;
 }
 
+/** What a selection spending `utxos` reports to the change-mode decision. */
+function selectionReport(utxos: IUtxo[]): ISelectionReport {
+  return {
+    shieldedInputCount: utxos.filter(utxo => utxo.shielded).length,
+    anyFullyShieldedInput: utxos.some(
+      utxo => utxo.shielded && utxo.assetBlindingFactor !== undefined
+    ),
+  };
+}
+
+/**
+ * Whether `utxos`, summing `sum`, pay `amount` exactly from a single shielded
+ * input, whose value the transaction would then reveal by subtraction.
+ */
+function isExactSingleShieldedMatch(
+  utxos: IUtxo[],
+  sum: OutputValueType,
+  amount: OutputValueType
+): boolean {
+  return sum === amount && utxos.filter(utxo => utxo.shielded).length === 1;
+}
+
+/**
+ * The UTXO added to an exact match spent from a single shielded input so a
+ * change output hides that input's value: the smallest shielded UTXO not yet
+ * picked, since the change will equal its value and only a shielded one keeps
+ * it hidden. Null when no other shielded UTXO is left: the selection then
+ * proceeds unforced, as there is nothing to hide the value behind (spending
+ * the last shielded UTXO would otherwise be impossible).
+ */
+async function changeForcingUtxo(
+  storage: IStorage,
+  token: string,
+  notPicked: (utxo: IUtxo) => boolean
+): Promise<IUtxo | null> {
+  // eslint-disable-next-line no-unreachable-loop -- one yielded UTXO is the answer
+  for await (const utxo of storage.selectUtxos({
+    token,
+    authorities: 0n,
+    only_available_utxos: true,
+    order_by_value: 'asc',
+    shielded: true,
+    filter_method: notPicked,
+    max_utxos: 1,
+  })) {
+    return utxo;
+  }
+  return null;
+}
+
 /**
  * Pool-aware UTXO selection implementing a token's policy.
  *
  * Composition of `bestUtxoSelection` per pool:
  *   1. force-include the smallest shielded UTXO when the policy demands one;
  *   2. select from the preferred pool;
- *   3. top up from the other pool when the preferred one is insufficient
- *      (sweeping the preferred pool first, largest-first, as far as the
- *      input limit allows, and dropping its smallest UTXOs again when the
- *      top-up needs the room);
+ *   3. top up from the other pool when the preferred one is insufficient, or
+ *      covers the amount only with more inputs than fit (sweeping the
+ *      preferred pool first, largest-first, as far as the input limit
+ *      allows, and dropping its smallest UTXOs again when the top-up needs
+ *      the room);
  *   4. on an exact match spent from exactly one shielded input, add the
- *      smallest other shielded UTXO so a change output exists — when there is
- *      none, proceed unforced (spending the last shielded UTXO would otherwise
- *      be impossible).
+ *      smallest other shielded UTXO so a change output exists (see
+ *      `changeForcingUtxo`).
  *
- * The result either covers `amount` or, when even the top-up falls short, is
- * empty, which the caller reports as insufficient funds (the same contract as
- * `bestUtxoSelection`). `maxInputs` is the room this selection has in the
- * transaction's input limit; the sweep and the top-up stay within it.
+ * The result either covers `amount` or, when even the top-up falls short
+ * within the limit, is empty (the same contract as `bestUtxoSelection`).
+ * `maxInputs` is how many inputs this selection may take of the
+ * transaction's limit, and `room` how many of those a sweep and its top-up
+ * keep free for inputs that may follow. The preferred pool's own selection is
+ * taken whenever it fits `maxInputs`.
  */
 export async function shieldedAwareSelection(
   storage: IStorage,
@@ -320,7 +377,8 @@ export async function shieldedAwareSelection(
   amount: OutputValueType,
   policy: ITokenSelectionPolicy,
   onReport?: (report: ISelectionReport) => void,
-  maxInputs: number = MAX_INPUTS
+  maxInputs: number = MAX_INPUTS,
+  room: number = 0
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const picked: IUtxo[] = [];
   const pickedIds = new Set<string>();
@@ -347,20 +405,32 @@ export async function shieldedAwareSelection(
   }
 
   // Unless the forced input already covers it, take the rest from the preferred
-  // pool alone when it can.
+  // pool alone when it can within the input limit.
   if (sum < amount) {
     const preferShielded = policy.preference === OutputKind.SHIELDED;
     const primary = await bestUtxoSelection(storage, token, amount - sum, {
       shielded: preferShielded,
       filter_method: notPicked,
     });
-    if (primary.utxos.length > 0) {
+    // Counted with the forced input, the pool's selection takes one input
+    // more when it is an exact match spent from a single shielded input: the
+    // change-forcing UTXO. The policies computeTokenPolicy makes never get
+    // here with a shielded input in the cover (they force a change only with
+    // the transparent pool preferred and no forced input); the count keeps the
+    // selection right for any other policy a caller passes.
+    const cover = [...picked, ...primary.utxos];
+    const coverForcesChange =
+      policy.forceChangeOnExactSingleShielded &&
+      isExactSingleShieldedMatch(cover, sum + primary.amount, amount);
+    if (primary.utxos.length > 0 && cover.length + (coverForcesChange ? 1 : 0) <= maxInputs) {
       primary.utxos.forEach(add);
     } else {
-      // Preferred pool is insufficient on its own: sweep it (largest-first) and
-      // top up from the other pool, leaving room within the input limit for
-      // the top-up and, when the policy may force one, a change-forcing UTXO.
-      const sweepLimit = maxInputs - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
+      // Preferred pool is insufficient on its own, or needs more inputs than
+      // fit: sweep it (largest-first) and top up from the other pool. The
+      // sweep keeps `room` free within the input limit, plus an input for the
+      // top-up and, when the policy may force one, one for a change-forcing
+      // UTXO.
+      const sweepLimit = maxInputs - room - (policy.forceChangeOnExactSingleShielded ? 2 : 1);
       const sweepStart = picked.length;
       for await (const utxo of storage.selectUtxos({
         token,
@@ -381,8 +451,8 @@ export async function shieldedAwareSelection(
           shielded: !preferShielded,
           filter_method: notPicked,
         });
-        // Both pools together fall short: return an empty selection, as
-        // bestUtxoSelection does, with the total that was available.
+        // The other pool cannot make up the rest: return an empty selection,
+        // as bestUtxoSelection does, with the total that was within reach.
         if (secondary.utxos.length === 0) {
           return {
             utxos: [],
@@ -393,7 +463,7 @@ export async function shieldedAwareSelection(
         secondary.utxos.forEach(add);
         // A top-up of several UTXOs can still exceed the input limit: drop the
         // smallest swept UTXOs while the rest still covers the amount.
-        const inputLimit = maxInputs - (policy.forceChangeOnExactSingleShielded ? 1 : 0);
+        const inputLimit = maxInputs - room - (policy.forceChangeOnExactSingleShielded ? 1 : 0);
         for (let cut = sweepEnd; picked.length > inputLimit && cut > sweepStart; cut -= 1) {
           const dropped = picked[cut - 1];
           if (sum - dropped.value < amount) {
@@ -410,34 +480,88 @@ export async function shieldedAwareSelection(
   // An exact match spent from a single shielded input would reveal its value
   // by subtraction, so one more shielded UTXO is added for a change output to
   // hide it.
-  if (policy.forceChangeOnExactSingleShielded && sum === amount) {
-    const shieldedCount = picked.filter(utxo => utxo.shielded).length;
-    if (shieldedCount === 1) {
-      // The change will equal the extra UTXO's value, so only a shielded one
-      // keeps it hidden.
-      for await (const utxo of storage.selectUtxos({
-        token,
-        authorities: 0n,
-        only_available_utxos: true,
-        order_by_value: 'asc',
-        shielded: true,
-        filter_method: notPicked,
-        max_utxos: 1,
-      })) {
-        add(utxo);
-      }
-      // No other shielded UTXO: proceed unforced — there is nothing left to
-      // hide the value behind.
+  if (policy.forceChangeOnExactSingleShielded && isExactSingleShieldedMatch(picked, sum, amount)) {
+    const extra = await changeForcingUtxo(storage, token, notPicked);
+    if (extra) {
+      add(extra);
     }
   }
 
   if (onReport) {
-    onReport({
-      shieldedInputCount: picked.filter(utxo => utxo.shielded).length,
-      anyFullyShieldedInput: picked.some(
-        utxo => utxo.shielded && utxo.assetBlindingFactor !== undefined
-      ),
+    onReport(selectionReport(picked));
+  }
+
+  return { utxos: picked, amount: sum };
+}
+
+/**
+ * The UTXOs that cover `amount` from both pools, with the inputs the policy
+ * forces: `bestUtxoSelection` with no pool filter, which takes the largest
+ * first.
+ *   - A forced shielded input is the largest shielded UTXO, which leaves the
+ *     least for the other inputs to cover.
+ *   - An exact match spent from a single shielded input also takes the
+ *     smallest other shielded UTXO, as in `shieldedAwareSelection`.
+ *
+ * These are the fewest UTXOs that cover `amount` but for an exact match spent
+ * from a single shielded input, whose change-forcing UTXO makes one more where
+ * another cover would need none: like `bestUtxoSelection`, it takes a UTXO
+ * matching the amount exactly over a larger one that alone would do, and among
+ * UTXOs of equal value it takes a shielded one as readily as a transparent one.
+ *
+ * It is the selection to fall back on when none under the rules fits the
+ * input limit. Like `shieldedAwareSelection`, the result covers `amount` or is
+ * empty, then with everything the wallet holds of the token as `available`.
+ */
+export async function largestFirstSelection(
+  storage: IStorage,
+  token: string,
+  amount: OutputValueType,
+  policy: ITokenSelectionPolicy,
+  onReport?: (report: ISelectionReport) => void
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
+  const picked: IUtxo[] = [];
+  const pickedIds = new Set<string>();
+  let sum = 0n;
+  const add = (utxo: IUtxo): void => {
+    picked.push(utxo);
+    pickedIds.add(`${utxo.txId}:${utxo.index}`);
+    sum += utxo.value;
+  };
+  const notPicked = (utxo: IUtxo): boolean => !pickedIds.has(`${utxo.txId}:${utxo.index}`);
+
+  if (policy.forceShieldedInput) {
+    for await (const utxo of storage.selectUtxos({
+      token,
+      authorities: 0n,
+      only_available_utxos: true,
+      order_by_value: 'desc',
+      shielded: true,
+      max_utxos: 1,
+    })) {
+      add(utxo);
+    }
+  }
+
+  if (sum < amount) {
+    const rest = await bestUtxoSelection(storage, token, amount - sum, {
+      filter_method: notPicked,
     });
+    if (rest.utxos.length === 0) {
+      return { utxos: [], amount: 0n, available: sum + (rest.available ?? 0n) };
+    }
+    rest.utxos.forEach(add);
+  }
+
+  if (policy.forceChangeOnExactSingleShielded && isExactSingleShieldedMatch(picked, sum, amount)) {
+    const extra = await changeForcingUtxo(storage, token, notPicked);
+    if (extra) {
+      add(extra);
+    }
+  }
+
+  if (onReport) {
+    onReport(selectionReport(picked));
   }
 
   return { utxos: picked, amount: sum };
@@ -448,9 +572,18 @@ export async function shieldedAwareSelection(
  * existing selection plumbing can run it unchanged.
  *
  * The selection first leaves `room` of its `maxInputs` free for inputs that
- * may follow it; when the amount cannot be covered that way, it uses all of
- * them, and the transaction's own input check decides whether what follows
- * still fits.
+ * may follow it, though only a sweep of the preferred pool does: a cover that
+ * pool pays on its own within `maxInputs` is taken even when it uses the room,
+ * rather than draw on the other pool. When the amount cannot be covered while
+ * leaving the room, the selection uses all of `maxInputs`, and the
+ * transaction's own input check decides whether what follows still fits.
+ *
+ * When no selection under the rules covers the amount within `maxInputs`, the
+ * selection falls back on the UTXOs that cover it largest-first, from both
+ * pools (`largestFirstSelection`). Those are returned even when they do not fit
+ * either, so the send fails on its input count rather than on a shortage of
+ * funds; a wallet holding too little gets an empty selection, as from
+ * `bestUtxoSelection`.
  */
 export function makeShieldedAwareSelection(
   policy: ITokenSelectionPolicy,
@@ -459,19 +592,20 @@ export function makeShieldedAwareSelection(
   room: number = 0
 ): UtxoSelectionAlgorithm {
   return async (storage, token, amount) => {
+    const select = (roomLeft: number) =>
+      shieldedAwareSelection(storage, token, amount, policy, onReport, maxInputs, roomLeft);
+    const fits = (selection: { utxos: IUtxo[]; amount: OutputValueType }) =>
+      selection.amount >= amount && selection.utxos.length <= maxInputs;
     if (room > 0) {
-      const leavingRoom = await shieldedAwareSelection(
-        storage,
-        token,
-        amount,
-        policy,
-        onReport,
-        maxInputs - room
-      );
-      if (leavingRoom.amount >= amount) {
+      const leavingRoom = await select(room);
+      if (fits(leavingRoom)) {
         return leavingRoom;
       }
     }
-    return shieldedAwareSelection(storage, token, amount, policy, onReport, maxInputs);
+    const usingAll = await select(0);
+    if (fits(usingAll)) {
+      return usingAll;
+    }
+    return largestFirstSelection(storage, token, amount, policy, onReport);
   };
 }

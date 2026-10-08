@@ -254,6 +254,97 @@ describe('shieldedAwareSelection', () => {
     expect(result.amount).toBe(1253n);
   });
 
+  it('a preferred pool that covers only with more inputs than fit is swept and topped up', async () => {
+    // The 300 transparent 1n UTXOs pay 280n on their own, but only with 280
+    // inputs.
+    const store = new MemoryStore();
+    for (let i = 0; i < 300; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(
+      utxo({ txId: 'sh-1000', value: 1000n, shielded: true, blindingFactor: 'bf' })
+    );
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', 280n, {
+      ...transparentPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+
+    // So the pool is swept as when it cannot pay, leaving room for the top-up
+    // and a change-forcing UTXO: 253 transparent UTXOs, then the shielded
+    // 1000n.
+    expect(result.utxos.map(u => u.txId)).toContain('sh-1000');
+    expect(result.utxos).toHaveLength(MAX_INPUTS - 1);
+    expect(result.amount).toBe(1253n);
+  });
+
+  it('the forced shielded input counts against the input limit', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 300; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(utxo({ txId: 'sh-5', value: 5n, shielded: true, blindingFactor: 'bf' }));
+    await store.saveUtxo(
+      utxo({ txId: 'sh-1000', value: 1000n, shielded: true, blindingFactor: 'bf' })
+    );
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', 280n, {
+      ...transparentPolicy,
+      forceShieldedInput: true,
+    });
+
+    // The forced 5n leaves 275n, which the transparent pool pays only with 275
+    // inputs: 276 with the forced one. The sweep instead stops at 253, leaving
+    // the last input for the shielded 1000n.
+    const picked = result.utxos.map(u => u.txId);
+    expect(picked).toEqual(expect.arrayContaining(['sh-5', 'sh-1000']));
+    expect(result.utxos).toHaveLength(MAX_INPUTS);
+    expect(result.amount).toBe(1258n);
+  });
+
+  it('a preferred-pool cover that fills the input limit exactly is taken', async () => {
+    // A cover with no shielded input can never need a change-forcing UTXO, so
+    // no input is kept free for one.
+    const store = new MemoryStore();
+    for (let i = 0; i < MAX_INPUTS; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(
+      utxo({ txId: 'sh-1000', value: 1000n, shielded: true, blindingFactor: 'bf' })
+    );
+    const storage = new Storage(store);
+
+    const result = await shieldedAwareSelection(storage, '00', BigInt(MAX_INPUTS), {
+      ...transparentPolicy,
+      forceChangeOnExactSingleShielded: true,
+    });
+
+    expect(result.utxos).toHaveLength(MAX_INPUTS);
+    expect(result.utxos.every(u => !u.shielded)).toBe(true);
+  });
+
+  it('a preferred-pool cover keeps an input free for the change-forcing UTXO it needs', async () => {
+    const store = new MemoryStore();
+    await store.saveUtxo(utxo({ txId: 'sh-10', value: 10n, shielded: true, blindingFactor: 'bf' }));
+    await store.saveUtxo(utxo({ txId: 'sh-3', value: 3n, shielded: true, blindingFactor: 'bf' }));
+    await store.saveUtxo(utxo({ txId: 'pub-20', value: 20n }));
+    const storage = new Storage(store);
+
+    // The shielded 10n matches exactly and would take the 3n with it: two
+    // inputs where one is left, so the transparent 20n pays instead.
+    const result = await shieldedAwareSelection(
+      storage,
+      '00',
+      10n,
+      { ...shieldedPolicy, forceChangeOnExactSingleShielded: true },
+      undefined,
+      1
+    );
+    expect(ids(result)).toEqual(['pub-20']);
+  });
+
   it('leaves room for inputs that may follow, unless covering the amount needs it', async () => {
     // Eight transparent 1n UTXOs cannot pay on their own, so the selection
     // sweeps them and tops up with the shielded 5n, within 8 inputs of which
@@ -275,6 +366,125 @@ describe('shieldedAwareSelection', () => {
     const usingAll = await select(storage, '00', 12n);
     expect(usingAll.utxos).toHaveLength(8);
     expect(usingAll.amount).toBe(12n);
+  });
+
+  it('uses the room it would leave before drawing from the other pool', async () => {
+    const store = new MemoryStore();
+    await store.saveUtxo(utxo({ txId: 'pub-10', value: 10n }));
+    await store.saveUtxo(utxo({ txId: 'sh-20', value: 20n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+    // One input left, which the selection tries to leave free.
+    const select = makeShieldedAwareSelection(transparentPolicy, undefined, 1, 1);
+
+    const result = await select(storage, '00', 5n);
+    expect(ids(result)).toEqual(['pub-10']);
+  });
+
+  it('when no selection under the rules fits, UTXOs from both pools are taken largest-first', async () => {
+    // 300 transparent 1n and 30 shielded 2n. Sweeping the 1n and topping up
+    // with the 2n pays 280n with 266 inputs; largest-first over both pools pays
+    // it with 250: the 30 shielded 2n and 220 transparent 1n.
+    const store = new MemoryStore();
+    for (let i = 0; i < 300; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    for (let i = 0; i < 30; i += 1) {
+      await store.saveUtxo(
+        utxo({ txId: `sh-2-${i}`, value: 2n, shielded: true, blindingFactor: 'bf' })
+      );
+    }
+    const storage = new Storage(store);
+    let report: ISelectionReport | undefined;
+    const select = makeShieldedAwareSelection(
+      { ...transparentPolicy, forceChangeOnExactSingleShielded: true },
+      r => {
+        report = r;
+      },
+      MAX_INPUTS,
+      1
+    );
+
+    const result = await select(storage, '00', 280n);
+    expect(result.utxos).toHaveLength(250);
+    expect(result.utxos.filter(u => u.shielded)).toHaveLength(30);
+    expect(result.amount).toBe(280n);
+    // Its shielded inputs are reported, so the change mode mirrors them.
+    expect(report!.shieldedInputCount).toBe(30);
+  });
+
+  it('when no selection fits, the UTXOs that cover the amount are returned past the limit', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 300; i += 1) {
+      await store.saveUtxo(utxo({ txId: `dust-${i}`, value: 1n }));
+    }
+    await store.saveUtxo(utxo({ txId: 'sh-60', value: 60n, shielded: true, blindingFactor: 'bf' }));
+    const storage = new Storage(store);
+    const select = makeShieldedAwareSelection(
+      { ...transparentPolicy, forceChangeOnExactSingleShielded: true },
+      undefined,
+      MAX_INPUTS,
+      1
+    );
+
+    // The wallet holds enough, so the selection covers the amount and the
+    // transaction's input check reports the inputs it needs instead of a
+    // shortage of funds: 350n takes the shielded 60n and 290 of the 1n, the
+    // 291 inputs that pay it with the fewest.
+    const covered = await select(storage, '00', 350n);
+    expect(covered.utxos.map(u => u.txId)).toContain('sh-60');
+    expect(covered.utxos).toHaveLength(291);
+    expect(covered.amount).toBe(350n);
+
+    // 400n is more than the wallet holds: everything it holds is reported.
+    const short = await select(storage, '00', 400n);
+    expect(short.utxos).toEqual([]);
+    expect(short.available).toBe(360n);
+  });
+
+  it('taken largest-first from both pools, an exact single-shielded match still takes the change-forcing UTXO', async () => {
+    const store = new MemoryStore();
+    for (let i = 0; i < 10; i += 1) {
+      await store.saveUtxo(utxo({ txId: `pub-2-${i}`, value: 2n }));
+    }
+    await store.saveUtxo(utxo({ txId: 'sh-9', value: 9n, shielded: true, blindingFactor: 'bf' }));
+    for (let i = 0; i < 3; i += 1) {
+      await store.saveUtxo(
+        utxo({ txId: `sh-1-${i}`, value: 1n, shielded: true, blindingFactor: 'bf' })
+      );
+    }
+    const storage = new Storage(store);
+    const select = makeShieldedAwareSelection(
+      { ...transparentPolicy, forceChangeOnExactSingleShielded: true },
+      undefined,
+      2
+    );
+
+    // No selection under the rules fits 2 inputs. The shielded 9n and a
+    // transparent 2n match 11n exactly with a single shielded input, so a
+    // shielded 1n is added for a change: 3 inputs, one past the limit, where
+    // the transparent pool alone takes 6.
+    const result = await select(storage, '00', 11n);
+    const picked = result.utxos.map(u => u.txId);
+    expect(picked).toContain('sh-9');
+    expect(picked.filter(id => id.startsWith('pub-2-'))).toHaveLength(1);
+    expect(picked.filter(id => id.startsWith('sh-1-'))).toHaveLength(1);
+    expect(result.amount).toBe(12n);
+  });
+
+  it('when no selection under the rules fits, a forced shielded input is the largest one', async () => {
+    const storage = await makeStorage();
+    const policy = { ...transparentPolicy, forceShieldedInput: true };
+
+    // The rules force the smallest shielded UTXO, 5n, after which 150n takes
+    // two transparent inputs more: 3 where 2 fit. The largest, 80n, leaves
+    // 70n, which the transparent 100n pays alone.
+    const withTwoInputs = makeShieldedAwareSelection(policy, undefined, 2);
+    expect(ids(await withTwoInputs(storage, '00', 150n))).toEqual(['pub-100', 'sh-80']);
+
+    // With one input left, the transparent 100n alone would pay 90n, but the
+    // forced input keeps its place: the 80n and the 10n, one past the limit.
+    const withOneInput = makeShieldedAwareSelection(policy, undefined, 1);
+    expect(ids(await withOneInput(storage, '00', 90n))).toEqual(['pub-10', 'sh-80']);
   });
 
   it('the forced shielded input is never a UTXO that is not available', async () => {

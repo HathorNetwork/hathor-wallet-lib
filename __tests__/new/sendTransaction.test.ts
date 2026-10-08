@@ -2996,11 +2996,12 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
         ],
       });
 
-      // 280n of 1n UTXOs cannot fit in a transaction.
+      // 280n of 1n UTXOs cannot fit in a transaction: the send fails on the
+      // token's inputs, before its HTR fee input is chosen.
       await expect(sendTransaction.prepareTxData()).rejects.toThrow(
         new SendTxError(
-          `The transaction needs 281 inputs, more than the ${MAX_INPUTS} a transaction can ` +
-            "hold. Consolidate the wallet's UTXOs and try again."
+          `The transaction needs at least 280 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
         )
       );
     });
@@ -3174,6 +3175,631 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       expect(inputIds.filter(id => id.startsWith('htr-pub-1-'))).toHaveLength(2);
       expect(inputIds).toContain('htr-sh-50');
       expect(result.inputs).toHaveLength(253);
+    });
+
+    test('a transparent HTR pool that pays only with too many inputs is topped up from the shielded one', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)),
+        poolUtxo('htr-sh-1000', 1000n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 280n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      }).prepareTxData();
+
+      // 280 of the public 1n would pay 280n, more inputs than a transaction
+      // holds. They are swept only as far as the limit allows, keeping one
+      // input free for a structural pull and one for a change-forcing UTXO:
+      // 252 of them, topped up with the shielded 1000n.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds.filter(id => id.startsWith('htr-pub-1-'))).toHaveLength(252);
+      expect(inputIds).toContain('htr-sh-1000');
+      expect(result.inputs).toHaveLength(253);
+      // The 972n change mirrors the shielded input and is split in two:
+      // 1252 = 280 + 970 + 2 (fees).
+      expect(result.shieldedOutputs!.reduce((sum, o) => sum + o.value, 0n)).toBe(970n);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('the forced shielded input counts against the input limit of the token selection', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`custom-pub-1-${i}`, 1n, CUSTOM_TOKEN)),
+        poolUtxo('custom-sh-5', 5n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '05'.repeat(32),
+        }),
+        poolUtxo('custom-sh-1000', 1000n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 100n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 180n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      }).prepareTxData();
+
+      // The lone shielded output forces the smallest shielded UTXO (5n). The
+      // public 1n would pay the other 275n only with 275 inputs, so they are
+      // swept only as far as the 253 inputs the token may take while leaving
+      // two free allow: 251 of them, topped up with the shielded 1000n. The
+      // HTR fee input makes 254.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds.filter(id => id.startsWith('custom-pub-1-'))).toHaveLength(251);
+      expect(inputIds).toEqual(
+        expect.arrayContaining(['custom-sh-5', 'custom-sh-1000', 'htr-pub-10'])
+      );
+      expect(result.inputs).toHaveLength(254);
+    });
+
+    test('a transparent send that needs more inputs than a transaction holds fails with the count', async () => {
+      const pool = Array.from({ length: 300 }, (_, i) =>
+        poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)
+      );
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 280n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      });
+
+      // Only the 1n UTXOs can pay: the wallet holds enough, in too many pieces.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 280 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
+    });
+
+    test('a send both pools pay only past the input limit fails with the fewest inputs it needs', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)),
+        poolUtxo('htr-sh-60', 60n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '3c'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 350n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      });
+
+      // The wallet holds 360n, so this is no shortage. 350n takes the shielded
+      // 60n and 290 public 1n: 291 inputs, the fewest that pay it.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 291 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
+    });
+
+    test('a send the rules cannot fit within the input limit takes the fewest UTXOs from both pools', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)),
+        ...Array.from({ length: 30 }, (_, i) =>
+          poolUtxo(`htr-sh-2-${i}`, 2n, NATIVE_TOKEN_UID, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 280n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      }).prepareTxData();
+
+      // Sweeping the public 1n and topping up with the shielded 2n pays 280n
+      // with 266 inputs. Largest-first over both pools pays it with 250, an
+      // exact match: the 30 shielded 2n and 220 public 1n, spent into the
+      // transparent output alone.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds.filter(id => id.startsWith('htr-sh-2-'))).toHaveLength(30);
+      expect(inputIds.filter(id => id.startsWith('htr-pub-1-'))).toHaveLength(220);
+      expect(result.inputs).toHaveLength(250);
+      expect(result.outputs).toHaveLength(1);
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      expect(result.excessBlindingFactor).toBeDefined();
+    });
+
+    test('a transparent HTR cover that takes every input is kept instead of a shielded top-up', async () => {
+      const pool = [
+        ...Array.from({ length: MAX_INPUTS }, (_, i) =>
+          poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID)
+        ),
+        poolUtxo('htr-sh-1000', 1000n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: BigInt(MAX_INPUTS),
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+      }).prepareTxData();
+
+      // The 255 public 1n pay it with the input the selection would leave for a
+      // structural pull, which this transparent send never makes.
+      expect(result.inputs).toHaveLength(MAX_INPUTS);
+      expect(result.inputs.map(i => i.txId)).not.toContain('htr-sh-1000');
+      expect(result.outputs).toHaveLength(1);
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      expect(result.headers ?? []).toHaveLength(0);
+    });
+
+    test('a transparent HTR cover that takes every input keeps its change at a legacy changeAddress', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-2-${i}`, 2n, NATIVE_TOKEN_UID)),
+        poolUtxo('htr-sh-1000', 1000n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 509n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      }).prepareTxData();
+
+      // 255 public 2n pay 509n, and the 1n change stays transparent at the
+      // caller's address. A shielded input would shield it, which a legacy
+      // address cannot receive.
+      expect(result.inputs).toHaveLength(MAX_INPUTS);
+      expect(result.inputs.map(i => i.txId)).not.toContain('htr-sh-1000');
+      const change = result.outputs.find(o => (o as { isChange?: boolean }).isChange);
+      expect(change!.value).toBe(1n);
+      expect((change as { address?: string }).address).toBe('WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+    });
+
+    test('with the change pinned transparent, a transparent HTR cover that takes every input unshields nothing', async () => {
+      const pool = [
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-2-${i}`, 2n, NATIVE_TOKEN_UID)),
+        poolUtxo('htr-sh-1000', 1000n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 510n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+        changeShieldedMode: OutputKind.TRANSPARENT,
+      }).prepareTxData();
+
+      // 255 public 2n pay 510n exactly. Spending the shielded 1000n into
+      // transparent outputs alone would publish its value by subtraction.
+      expect(result.inputs).toHaveLength(MAX_INPUTS);
+      expect(result.inputs.map(i => i.txId)).not.toContain('htr-sh-1000');
+      expect(result.outputs).toHaveLength(1);
+      expect(result.excessBlindingFactor).toBeUndefined();
+    });
+
+    // A send of 254n of the custom token, which 254 public 1n pay, from a
+    // wallet that also holds a shielded 1000n of it.
+    const fullCustomCoverSend = (htrPool: PoolUtxo[]) => {
+      const storage = buildPoolStorage([
+        ...Array.from({ length: MAX_INPUTS - 1 }, (_, i) =>
+          poolUtxo(`custom-pub-1-${i}`, 1n, CUSTOM_TOKEN)
+        ),
+        poolUtxo('custom-sh-1000', 1000n, CUSTOM_TOKEN, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+        ...htrPool,
+      ]);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      return new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: BigInt(MAX_INPUTS - 1),
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      }).prepareTxData();
+    };
+
+    test('a transparent token cover that takes the inputs kept for fees builds in a wallet with no HTR', async () => {
+      const result = await fullCustomCoverSend([]);
+
+      // The 254 public 1n take one of the two inputs the selection would keep
+      // for an HTR fee and a structural pull, neither of which this send needs.
+      // A shielded input would shield the change, whose fee the wallet has no
+      // HTR to pay.
+      expect(result.inputs).toHaveLength(MAX_INPUTS - 1);
+      expect(result.inputs.map(i => i.txId)).not.toContain('custom-sh-1000');
+      expect(result.outputs).toHaveLength(1);
+      expect(result.headers ?? []).toHaveLength(0);
+    });
+
+    test('a transparent token cover that takes the inputs kept for fees pays no shielded fee', async () => {
+      const result = await fullCustomCoverSend([poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID)]);
+
+      expect(result.inputs).toHaveLength(MAX_INPUTS - 1);
+      expect(result.inputs.map(i => i.txId)).not.toContain('custom-sh-1000');
+      expect(result.inputs.map(i => i.txId)).not.toContain('htr-pub-10');
+      expect(result.shieldedOutputs ?? []).toHaveLength(0);
+      expect(result.headers ?? []).toHaveLength(0);
+    });
+
+    test('the HTR fee takes the transparent inputs left before a shielded one', async () => {
+      const pool = [
+        ...Array.from({ length: 253 }, (_, i) =>
+          poolUtxo(`custom-sh-1-${i}`, 1n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: (i + 1).toString(16).padStart(2, '0').repeat(32),
+          })
+        ),
+        poolUtxo('htr-pub-1-a', 1n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-pub-1-b', 1n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-50', 50n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const result = await new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 126n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+          {
+            address: buildShieldedAddr(2),
+            value: 127n,
+            token: CUSTOM_TOKEN,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+      }).prepareTxData();
+
+      // The token's 253 shielded 1n leave 2 inputs, and the 2 public 1n pay the
+      // 2n of fees in them: 255 inputs, with no HTR change to shield.
+      const inputIds = result.inputs.map(i => i.txId);
+      expect(inputIds).toEqual(expect.arrayContaining(['htr-pub-1-a', 'htr-pub-1-b']));
+      expect(inputIds).not.toContain('htr-sh-50');
+      expect(result.inputs).toHaveLength(MAX_INPUTS);
+      expect(result.shieldedOutputs!.map(o => o.value).sort((a, b) => Number(a - b))).toEqual([
+        126n,
+        127n,
+      ]);
+      const feeHeader = result.headers!.find(h => h instanceof FeeHeader) as FeeHeader;
+      expect(feeHeader.entries[0].amount).toBe(2n);
+    });
+
+    test('a FEE-token cover that takes every input leaves none for its HTR fee', async () => {
+      const pool = [
+        ...Array.from({ length: MAX_INPUTS }, (_, i) => poolUtxo(`fee-pub-1-${i}`, 1n, FEE_TOKEN)),
+        poolUtxo('fee-sh-1000', 1000n, FEE_TOKEN, {
+          shielded: true,
+          blindingFactor: '5a'.repeat(32),
+        }),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+      ];
+      const storage = buildPoolStorage(pool);
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: BigInt(MAX_INPUTS),
+            token: FEE_TOKEN,
+          },
+        ],
+      });
+
+      // The 255 public 1n pay the token, so the rules take them and leave no
+      // input for the 1n fee the transparent output owes. Spending the
+      // shielded 1000n would make room for it, but a cover from the public
+      // pool that fits is never traded for one that spends shielded funds.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 256 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
+    });
+
+    test('too many user-supplied inputs fail with the count, without advice to consolidate', async () => {
+      const storage = buildPoolStorage([]);
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: Array.from({ length: 300 }, () => ({
+          value: 1n,
+          token: NATIVE_TOKEN_UID,
+          token_data: 0,
+          script: '',
+          decoded: { address: 'addr-parent' },
+          spent_by: null,
+        })),
+        shielded_outputs: [],
+        inputs: [],
+      } as never);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === 'addr-parent');
+      const wallet = buildWallet(storage, buildShieldedAddr(0));
+      const sendTransaction = new SendTransaction({
+        wallet,
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+            value: 256n,
+            token: NATIVE_TOKEN_UID,
+          },
+        ],
+        inputs: Array.from({ length: 256 }, (_, index) => ({ txId: 'parent', index })),
+      });
+
+      // The caller chose these inputs: consolidating the wallet's UTXOs would
+      // not change them.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 256 inputs, more than the ${MAX_INPUTS} a ` +
+            'transaction can hold.'
+        )
+      );
+    });
+
+    test('the advice to consolidate stays when the wallet chose the inputs past the limit', async () => {
+      const storage = buildPoolStorage(
+        Array.from({ length: 300 }, (_, i) => poolUtxo(`htr-pub-1-${i}`, 1n, NATIVE_TOKEN_UID))
+      );
+      jest.spyOn(storage, 'getTx').mockResolvedValue({
+        tx_id: 'parent',
+        outputs: [
+          {
+            value: 5n,
+            token: CUSTOM_TOKEN,
+            token_data: 1,
+            script: '',
+            decoded: { address: 'addr-parent' },
+            spent_by: null,
+          },
+        ],
+        shielded_outputs: [],
+        inputs: [],
+        tokens: [CUSTOM_TOKEN],
+      } as never);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === 'addr-parent');
+      const sendTransaction = new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 280n,
+            token: NATIVE_TOKEN_UID,
+          },
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 5n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+        inputs: [{ txId: 'parent', index: 0 }],
+      });
+
+      // The caller supplied the custom-token input, but the wallet chose the
+      // 280 HTR 1n that do not fit.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 281 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
+    });
+
+    // 520n from 300 public 2n and a shielded 5n: no selection under the rules
+    // fits, and the UTXOs that pay it largest-first, 259 of them, spend the
+    // shielded 5n, which makes the HTR change shielded.
+    test.each([
+      ['a legacy changeAddress', true],
+      ['a wallet with no shielded address', false],
+    ])(
+      'an HTR send that cannot fit the input limit fails with its input count, not for %s',
+      async (_, withLegacyChangeAddress) => {
+        const storage = buildPoolStorage([
+          ...Array.from({ length: 300 }, (_unused, i) =>
+            poolUtxo(`htr-pub-2-${i}`, 2n, NATIVE_TOKEN_UID)
+          ),
+          poolUtxo('htr-sh-5', 5n, NATIVE_TOKEN_UID, {
+            shielded: true,
+            blindingFactor: '5c'.repeat(32),
+          }),
+        ]);
+        jest
+          .spyOn(storage, 'isAddressMine')
+          .mockImplementation(async address => address === 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+        const sendTransaction = new SendTransaction({
+          // Built from storage alone, the wallet has no shielded address.
+          ...(withLegacyChangeAddress
+            ? {
+                wallet: buildWallet(storage, buildShieldedAddr(0)),
+                changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+              }
+            : { storage }),
+          outputs: [
+            {
+              type: OutputType.P2PKH,
+              address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+              value: 520n,
+              token: NATIVE_TOKEN_UID,
+            },
+          ],
+        });
+
+        await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+          new SendTxError(
+            `The transaction needs at least 259 inputs, more than the ${MAX_INPUTS} a ` +
+              "transaction can hold. Consolidate the wallet's UTXOs and try again."
+          )
+        );
+      }
+    );
+
+    test('a token that cannot fit the input limit fails with its input count, not for a legacy changeAddress', async () => {
+      const storage = buildPoolStorage([
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`fee-pub-1-${i}`, 1n, FEE_TOKEN)),
+        poolUtxo('htr-pub-10', 10n, NATIVE_TOKEN_UID),
+        poolUtxo('htr-sh-5', 5n, NATIVE_TOKEN_UID, {
+          shielded: true,
+          blindingFactor: '5d'.repeat(32),
+        }),
+      ]);
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi');
+      const sendTransaction = new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 280n,
+            token: FEE_TOKEN,
+          },
+        ],
+        changeAddress: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      });
+
+      // The token takes 280 public 1n. Its 1n fee would then take the shielded
+      // 5n, the smallest HTR UTXO above it, whose change a legacy address
+      // cannot receive; the send fails on the token's inputs first.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 280 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
+    });
+
+    test('a token that cannot fit the input limit fails with its input count, not for want of HTR', async () => {
+      const storage = buildPoolStorage([
+        ...Array.from({ length: 300 }, (_, i) => poolUtxo(`custom-pub-2-${i}`, 2n, CUSTOM_TOKEN)),
+        ...['a', 'b', 'c'].map(suffix =>
+          poolUtxo(`custom-sh-3${suffix}`, 3n, CUSTOM_TOKEN, {
+            shielded: true,
+            blindingFactor: `3${suffix}`.repeat(32),
+          })
+        ),
+      ]);
+      const sendTransaction = new SendTransaction({
+        wallet: buildWallet(storage, buildShieldedAddr(0)),
+        outputs: [
+          {
+            type: OutputType.P2PKH,
+            address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+            value: 580n,
+            token: CUSTOM_TOKEN,
+          },
+        ],
+      });
+
+      // Largest-first, the three shielded 3n and 286 public 2n pay 580n with a
+      // 1n change, which mirrors the shielded inputs and so owes an HTR fee the
+      // wallet cannot pay; the send fails on the token's inputs first.
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          `The transaction needs at least 289 inputs, more than the ${MAX_INPUTS} a ` +
+            "transaction can hold. Consolidate the wallet's UTXOs and try again."
+        )
+      );
     });
 
     test('R3a fallback — with no change, the lone shielded output is split', async () => {

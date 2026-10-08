@@ -602,6 +602,27 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
     };
+    // A selection that cannot fit the input limit still returns the UTXOs that
+    // cover its amount, so a send that cannot fit fails with how many inputs it
+    // takes, before any proof is built. Inputs are only ever added, so the
+    // count is checked as each selection ends: past the limit, the send fails
+    // with it before its change is shielded, which could fail first for another
+    // reason. `more` says that later steps may still add inputs. Consolidating
+    // the wallet's UTXOs is no answer when the caller supplied every input, or
+    // more than fit.
+    const assertInputsFit = (inputCount: number, more: boolean): void => {
+      if (inputCount <= MAX_INPUTS) {
+        return;
+      }
+      const advice =
+        inputCount > this.inputs.length && this.inputs.length <= MAX_INPUTS
+          ? " Consolidate the wallet's UTXOs and try again."
+          : '';
+      throw new SendTxError(
+        `The transaction needs ${more ? 'at least ' : ''}${inputCount} inputs, more than the ` +
+          `${MAX_INPUTS} a transaction can hold.${advice}`
+      );
+    };
 
     const partialTxData = await prepareSendManyTokensData(
       this.storage,
@@ -615,7 +636,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         }
         // The input limit is the whole transaction's: count the inputs already
         // in it, and leave room for the HTR fee input and a structural pull
-        // when the amount allows.
+        // when the amount allows. A cover the preferred pool pays on its own
+        // takes that room rather than draw on the other pool, so a token whose
+        // send owes an HTR fee (a FEE token's transparent outputs, or shielded
+        // outputs) and whose preferred pool covers its amount with every input
+        // left leaves none for that fee: the send fails for needing more inputs
+        // than a transaction holds, although drawing on the other pool could
+        // make room.
         return makeShieldedAwareSelection(
           policy,
           report => selectionReports.set(token, report),
@@ -624,6 +651,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         );
       }
     );
+    assertInputsFit(txData.inputs.length + partialTxData.inputs.length, true);
 
     // Custom-token change: the rules decide, per token, whether the change is
     // shielded — shielded when that token's inputs include a shielded one, all
@@ -785,6 +813,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       }
       throw e;
     });
+    assertInputsFit(partialInputs.length + partialHtrTxData.inputs.length, true);
 
     // The HTR change mode follows the same rules: shielded when shielded HTR
     // inputs were spent (mirroring them), all HTR outputs are shielded, or it
@@ -1143,6 +1172,10 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       outputs = outputs.filter(out => !phantomOutputs.has(out));
     }
 
+    // Every input is chosen by now, with any HTR the conversion of the HTR
+    // change and the structural pass pulled.
+    assertInputsFit(partialInputs.length + partialHtrTxData.inputs.length, false);
+
     // Walk every input (user-supplied + auto-selected per token, including
     // the HTR fee inputs) once, regardless of
     // whether we're building shielded outputs. We need these both for:
@@ -1241,13 +1274,6 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         throw new SendTxError(
           `Cannot create more than ${MAX_SHIELDED_OUTPUTS} shielded outputs per transaction ` +
             `(requested ${shieldedOutputDefs.length}).`
-        );
-      }
-      const inputCount = partialInputs.length + partialHtrTxData.inputs.length;
-      if (inputCount > MAX_INPUTS) {
-        throw new SendTxError(
-          `The transaction needs ${inputCount} inputs, more than the ${MAX_INPUTS} a ` +
-            "transaction can hold. Consolidate the wallet's UTXOs and try again."
         );
       }
 
