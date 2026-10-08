@@ -38,9 +38,10 @@ import { bestUtxoSelection } from './utxo';
  *
  * A change standing in for a missing shielded input is shielded only where it
  * can be: it stays transparent when the tx has no room for another shielded
- * output, the caller gave a legacy change address, the wallet has no shielded
- * address to receive it (a multisig wallet never does), or (HTR) it cannot pay
- * its own fee and no more HTR can be added to it.
+ * output, the wallet has no shielded address to receive it (a multisig wallet
+ * never does), or (HTR) it cannot pay its own fee and no more HTR can be added
+ * to it. Otherwise a legacy change address, which cannot receive it, fails the
+ * send, as it does wherever these rules shield the change.
  *
  * When no selection under these rules fits the transaction's input limit, the
  * UTXOs that cover the amount are taken from both pools, largest-first, along

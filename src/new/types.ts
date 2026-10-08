@@ -443,6 +443,8 @@ export interface SendTransactionFullnodeOptions {
  *   is available, unless the split of the tx's only shielded output takes the
  *   whole change as its fee — it never silently downgrades to transparent. A
  *   multisig wallet never gets a shielded change: a send that needs one throws.
+ *   A legacy changeAddress cannot receive a shielded change, so a send that
+ *   shields its change throws when given one.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
