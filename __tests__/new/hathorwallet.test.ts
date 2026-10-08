@@ -27,8 +27,8 @@ import {
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
-import { EcdsaTxSign, IHistoryTx, WalletType } from '../../src/types';
-import { OutputType } from '../../src/wallet/types';
+import { EcdsaTxSign, IHistoryTx, SCANNING_POLICY, WalletType } from '../../src/types';
+import { ConnectionState, OutputType } from '../../src/wallet/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
@@ -40,6 +40,8 @@ import { getOracleBuffer, unsafeGetOracleInputData } from '../../src/nano_contra
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
 import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
+import walletApi from '../../src/api/wallet';
+import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 
 class FakeHathorWallet {
   constructor() {
@@ -2718,4 +2720,70 @@ describe('getAddressInfo shielded accounting (SEPARATED model)', () => {
     expect(info.token).toBe(token);
     expect(info.index).toBe(7);
   });
+});
+
+describe('address loading across a reconnect', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  // The shielded chain only needs a provider to be registered; an empty history decodes nothing.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  function makeConn() {
+    return {
+      getState: jest.fn().mockReturnValue(ConnectionState.CLOSED),
+      getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+      getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
+      startControlHandlers: jest.fn(),
+      removeMetricsHandlers: jest.fn(),
+      on: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      onReload: jest.fn().mockResolvedValue(undefined),
+      subscribeAddresses: jest.fn(),
+      unsubscribeAddress: jest.fn(),
+      emit: jest.fn(),
+    };
+  }
+
+  it('a reconnect loads the same addresses without deriving any', async () => {
+    jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+      resolve({ network: 'testnet' });
+    });
+    jest
+      .spyOn(walletApi, 'getAddressHistoryForAwait')
+      .mockResolvedValue({ data: { success: true, history: [], has_more: false } } as never);
+    const conn = makeConn();
+    const hWallet = new HathorWallet({
+      seed,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      connection: conn as any,
+      password: '456',
+      pinCode: '123',
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 3 },
+    });
+    hWallet.setShieldedCryptoProvider(provider);
+    await hWallet.start();
+
+    // The first sync derives both chains for indexes 0-2.
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    while (!hWallet.isReady()) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 10);
+      });
+    }
+    const firstSubscriptions = conn.subscribeAddresses.mock.calls.flatMap(call => call[0]);
+    expect(firstSubscriptions).toHaveLength(6);
+
+    conn.subscribeAddresses.mockClear();
+    const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+    const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+    // A reconnect wipes the stored addresses and loads the same window again.
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+
+    expect(legacySpy).not.toHaveBeenCalled();
+    expect(pairSpy).not.toHaveBeenCalled();
+    expect(conn.subscribeAddresses.mock.calls.flatMap(call => call[0])).toEqual(firstSubscriptions);
+    await hWallet.stop();
+  }, 60000);
 });

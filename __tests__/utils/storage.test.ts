@@ -32,6 +32,7 @@ import {
   processHistory,
   loadAddresses,
 } from '../../src/utils/storage';
+import * as addressUtils from '../../src/utils/address';
 import { deriveShieldedAddressFromStorage } from '../../src/utils/address';
 import walletUtils from '../../src/utils/wallet';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
@@ -1511,6 +1512,183 @@ describe('shielded chain predicate', () => {
 
       // One window of two legacy addresses, one request.
       expect(historySpy).toHaveBeenCalledTimes(1);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+});
+
+describe('derived address cache', () => {
+  // Real legacy and shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 60000;
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: '123',
+    password: '456',
+    networkName: 'testnet',
+  });
+  // A second wallet, to swap single keys of the first record for its keys.
+  const otherAccessData = walletUtils.generateAccessDataFromSeed(
+    'avocado spot town typical traffic vault danger century property shallow divorce festival spend attack anchor afford rotate green audit adjust fade wagon depart level',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+  // The shielded chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  async function storedAddresses(storage: Storage, count: number) {
+    const records: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      const legacy = await storage.getAddressAtIndex(i);
+      const shielded = await storage.getAddressAtIndex(i, { legacy: false });
+      const spend = shielded?.ctMappingAddress
+        ? await storage.store.getAddress(shielded.ctMappingAddress)
+        : null;
+      records.push({ legacy, shielded, spend });
+    }
+    return records;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it(
+    'loading a window again after the store wipe of a reconnect derives nothing',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      const first = await loadAddresses(0, 3, storage);
+      const firstRecords = await storedAddresses(storage, 3);
+
+      // The store wipe reloadStorage runs on a reconnect.
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const second = await loadAddresses(0, 3, storage);
+
+      expect(legacySpy).not.toHaveBeenCalled();
+      expect(pairSpy).not.toHaveBeenCalled();
+      // The same addresses to subscribe, and the same records on both chains.
+      expect(second).toEqual(first);
+      expect(await storedAddresses(storage, 3)).toEqual(firstRecords);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each(['xpubkey', 'scanXpubkey', 'spendXpubkey'] as const)(
+    'a record whose %s changed derives every index again, from the new keys',
+    async field => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      const changed = { ...accessData, [field]: otherAccessData[field] };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(changed);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const reloaded = await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
+      // The same as a storage that never saw the old record.
+      const fresh = new Storage(new MemoryStore());
+      await fresh.saveAccessData(changed);
+      fresh.setShieldedCryptoProvider(provider);
+      expect(reloaded).toEqual(await loadAddresses(0, 2, fresh));
+      expect(await storedAddresses(storage, 2)).toEqual(await storedAddresses(fresh, 2));
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a network change derives every index again',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      try {
+        await storage.saveAccessData(accessData);
+        const testnetAddresses = await loadAddresses(0, 2, storage);
+
+        // The xpubs are the same on every network, the addresses are not.
+        storage.config.setNetwork('mainnet');
+        await storage.cleanStorage(true, true);
+        await storage.saveAccessData(accessData);
+        const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+
+        const mainnetAddresses = await loadAddresses(0, 2, storage);
+
+        expect(legacySpy).toHaveBeenCalledTimes(2);
+        expect(mainnetAddresses).not.toEqual(testnetAddresses);
+        for (const address of mainnetAddresses) {
+          expect(address.startsWith('H')).toBe(true);
+        }
+      } finally {
+        storage.config.setNetwork('testnet');
+      }
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a change of the multisig configuration derives the P2SH addresses again',
+    async () => {
+      const pubkeys = [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+        key => key.xpubkey
+      );
+      const multisigRecord = walletUtils.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: { pubkeys, numSignatures: 2 },
+      });
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(multisigRecord);
+      const twoOfThree = await loadAddresses(0, 1, storage);
+
+      const threeOfThree = {
+        ...multisigRecord,
+        multisigData: { ...multisigRecord.multisigData!, numSignatures: 3 },
+      };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(threeOfThree);
+      const p2shSpy = jest.spyOn(addressUtils, 'deriveAddressP2SH');
+
+      const reloaded = await loadAddresses(0, 1, storage);
+
+      expect(p2shSpy).toHaveBeenCalledTimes(1);
+      expect(reloaded).not.toEqual(twoOfThree);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'handleStop drops the cached addresses',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      await storage.handleStop();
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
     },
     DERIVATION_TEST_TIMEOUT
   );
