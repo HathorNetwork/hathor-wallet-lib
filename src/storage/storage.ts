@@ -90,6 +90,12 @@ export class Storage implements IStorage {
 
   utxosSelectedAsInput: Map<string, boolean>;
 
+  /**
+   * The pending ttl timer of each utxo marked as selected. Re-marking or releasing a utxo cancels
+   * its timer, so a stale timer can't clear a later selection of the same utxo.
+   */
+  private utxoSelectionTimers: Map<string, ReturnType<typeof setTimeout>>;
+
   config: Config;
 
   version: ApiVersion | null;
@@ -119,6 +125,7 @@ export class Storage implements IStorage {
   constructor(store: IStore) {
     this.store = store;
     this.utxosSelectedAsInput = new Map<string, boolean>();
+    this.utxoSelectionTimers = new Map<string, ReturnType<typeof setTimeout>>();
     this.config = config;
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
@@ -909,15 +916,22 @@ export class Storage implements IStorage {
     }
 
     const utxoId = `${utxo.txId}:${utxo.index}`;
+    // A previous selection's timer must not clear this one (or a later one): e.g. a send that
+    // failed and released its inputs, then an immediate retry that marks them again.
+    const previousTimer = this.utxoSelectionTimers.get(utxoId);
+    if (previousTimer !== undefined) {
+      clearTimeout(previousTimer);
+      this.utxoSelectionTimers.delete(utxoId);
+    }
     if (markAs) {
       this.utxosSelectedAsInput.set(utxoId, markAs);
       // if a ttl is given, we should reverse
       if (ttl) {
-        setTimeout(() => {
-          if (this.utxosSelectedAsInput.has(utxoId)) {
-            this.utxosSelectedAsInput.delete(utxoId);
-          }
+        const timer = setTimeout(() => {
+          this.utxoSelectionTimers.delete(utxoId);
+          this.utxosSelectedAsInput.delete(utxoId);
         }, ttl);
+        this.utxoSelectionTimers.set(utxoId, timer);
       }
     } else {
       this.utxosSelectedAsInput.delete(utxoId);
