@@ -60,6 +60,7 @@ const SUPPORTED_MEMBERS = new Set<string | symbol>([
   'getCurrentAddress',
   'isAddressMine',
   'getToken',
+  'store',
 ]);
 
 /**
@@ -170,6 +171,26 @@ export class WalletServiceSendStorage {
         this.getCurrentAddress(opts),
       isAddressMine: () => (address: string) => wallet.isAddressMine(address),
       getToken: () => (uid: string) => this.getToken(uid),
+      store: () => this.storeView(),
+    };
+  }
+
+  /**
+   * The engine reads the store only to tell whether the wallet has a shielded
+   * address to receive a shielded change. Here that is an unused shielded
+   * address the wallet-service watches: with none, a shielded change cannot be
+   * hosted, the same as a fullnode wallet without shielded addresses.
+   */
+  private storeView(): Pick<IStorage['store'], 'addressCount'> {
+    return {
+      addressCount: async (opts?: IAddressChainOptions) => {
+        if (opts?.legacy !== false) {
+          throw new WalletError(
+            'Counting legacy addresses is not supported by the wallet-service send adapter.'
+          );
+        }
+        return this.wallet.getUnusedShieldedAddressCount();
+      },
     };
   }
 

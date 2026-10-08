@@ -2042,6 +2042,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * How many unused shielded addresses the wallet-service handed this wallet,
+   * i.e. addresses it can still give out to receive shielded outputs.
+   */
+  getUnusedShieldedAddressCount(): number {
+    return this.newShieldedAddresses.length;
+  }
+
+  /**
    * Get the current unused shielded address. The returned object also carries
    * the on-chain `spendAddress` its outputs are locked to.
    */
