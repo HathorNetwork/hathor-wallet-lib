@@ -34,6 +34,7 @@ describe('sendManyOutputsSendTransaction', () => {
     wallet.failIfWalletNotReady = jest.fn();
     wallet.storage = {
       isReadonly: jest.fn().mockResolvedValue(false),
+      hasTxSignatureMethod: jest.fn().mockReturnValue(false),
     } as Partial<typeof wallet.storage>;
 
     // Mock helpers.getOutputTypeFromAddress

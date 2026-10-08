@@ -958,10 +958,13 @@ test('setExternalPrivateKeyMethod toggles hasPrivateKeyMethod', () => {
   hWallet.storage = storage;
 
   expect(storage.hasPrivateKeyMethod()).toBe(false);
+  expect(hWallet.hasExternalPrivateKeyMethod()).toBe(false);
   hWallet.setExternalPrivateKeyMethod(async () => undefined);
   expect(storage.hasPrivateKeyMethod()).toBe(true);
+  expect(hWallet.hasExternalPrivateKeyMethod()).toBe(true);
   hWallet.setExternalPrivateKeyMethod(null);
   expect(storage.hasPrivateKeyMethod()).toBe(false);
+  expect(hWallet.hasExternalPrivateKeyMethod()).toBe(false);
 });
 
 test('oracle signing uses the external provider on a readonly wallet', async () => {

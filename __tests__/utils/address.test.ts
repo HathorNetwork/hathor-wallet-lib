@@ -19,6 +19,7 @@ import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
   getAddressFromPubkey,
+  fetchVerifiedExternalPrivateKey,
 } from '../../src/utils/address';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 
@@ -280,4 +281,64 @@ test('deriveShieldedAddressFromStorage returns paired shielded + spend records',
   // Both records share the BIP32 index; the spend address is the on-chain
   // P2PKH while the shielded address is the user-facing encoded form.
   expect(result!.shieldedAddress.base58).not.toEqual(result!.spendAddress.base58);
+});
+
+describe('fetchVerifiedExternalPrivateKey', () => {
+  const network = new Network('testnet');
+  const changeXpriv = new HDPrivateKey(network.bitcoreNetwork);
+  const keyAt = (index: number) => changeXpriv.deriveNonCompliantChild(index).privateKey;
+  const addressAt = (index: number) =>
+    getAddressFromPubkey(keyAt(index).publicKey.toString(), network).base58;
+
+  const storageWithProvider = (provider: (index: number, ...rest: unknown[]) => unknown) => {
+    const storage = new Storage(new MemoryStore());
+    storage.setPrivateKeyMethod(jest.fn(provider));
+    return storage;
+  };
+
+  it('returns the provider key when it belongs to the wallet address at the index', async () => {
+    const storage = storageWithProvider(async index => keyAt(index));
+    const getOwnAddress = jest.fn(async (index: number) => addressAt(index));
+
+    const key = await fetchVerifiedExternalPrivateKey(storage, network, 3, getOwnAddress, {
+      pinCode: '123',
+    });
+
+    expect(key.toString()).toBe(keyAt(3).toString());
+    expect(getOwnAddress).toHaveBeenCalledWith(3);
+  });
+
+  it('checks against expectedAddress when given, without looking up the own address', async () => {
+    const provider = jest.fn(async (index: number) => keyAt(index));
+    const storage = new Storage(new MemoryStore());
+    storage.setPrivateKeyMethod(provider);
+    const getOwnAddress = jest.fn(async () => 'never used');
+
+    const key = await fetchVerifiedExternalPrivateKey(storage, network, 2, getOwnAddress, {
+      pinCode: '123',
+      expectedAddress: addressAt(2),
+    });
+
+    expect(key.toString()).toBe(keyAt(2).toString());
+
+    expect(getOwnAddress).not.toHaveBeenCalled();
+    // expectedAddress is verification-only and never reaches the provider.
+    expect(provider).toHaveBeenCalledWith(2, storage, { pinCode: '123' });
+  });
+
+  it('rejects a key for another address', async () => {
+    const storage = storageWithProvider(async index => keyAt(index + 1));
+
+    await expect(
+      fetchVerifiedExternalPrivateKey(storage, network, 0, async index => addressAt(index))
+    ).rejects.toThrow('External private key provider returned a key for the wrong address.');
+  });
+
+  it('rejects a provider that does not return a bitcore PrivateKey', async () => {
+    const storage = storageWithProvider(async () => ({ not: 'a key' }));
+
+    await expect(
+      fetchVerifiedExternalPrivateKey(storage, network, 0, async index => addressAt(index))
+    ).rejects.toThrow('External private key provider must return a bitcore PrivateKey.');
+  });
 });

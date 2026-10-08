@@ -2322,6 +2322,7 @@ test('sendTransaction', async () => {
   // Mock the storage isReadonly method to prevent UninitializedWalletError
   wallet.storage = {
     isReadonly: jest.fn().mockResolvedValue(false),
+    hasTxSignatureMethod: jest.fn().mockReturnValue(false),
     getMainXPrivKey: jest.fn().mockResolvedValue('mock-xpriv-key'),
   } as Partial<typeof wallet.storage>;
 
