@@ -1258,12 +1258,16 @@ export async function processNewTx(
   // gating per-slot lets a tx with one still-undecoded owned slot (e.g. a
   // transient rewind failure on a prior pass) complete its decoding, while
   // processShieldedOutputs itself no-ops the slots already done.
+  // A multisig wallet decodes nothing: it has no shielded keys (see
+  // refuseMultisigShieldedKeys), so its outputs stay undecoded and uncredited,
+  // also the ones paid to a shielded pair an older version stored for it.
   const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
   if (
     hasUndecodedSlot &&
     storage.shieldedCryptoProvider &&
     tx.shielded_outputs?.length &&
-    pinCode !== undefined
+    pinCode !== undefined &&
+    (await storage.getAccessData())?.walletType !== WalletType.MULTISIG
   ) {
     try {
       const decoded = await processShieldedOutputs(

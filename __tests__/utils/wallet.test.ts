@@ -787,6 +787,90 @@ describe('hasShieldedXpubs', () => {
   });
 });
 
+describe('multisig wallets have no shielded keys', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  // Root xpriv of the seed above.
+  const xprivkeyRoot =
+    'htpr4yPomy8kcy5uFJFugmAscbbeih6Cir9ZVaTCSKaCmbAgos8Ymq5BxVDpddzdfbwEnofgFJG3qkMbGS9RMexgju6C2Z9K63c5kJdkWZAwcf2';
+  const multisig: IMultisigData = {
+    pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(k => k.xpubkey),
+    numSignatures: 2,
+  };
+  const SHIELDED_FIELDS = ['scanXpubkey', 'scanMainKey', 'spendXpubkey', 'spendMainKey'];
+  const walletTypes = [
+    { walletType: WalletType.P2PKH, walletMultisig: undefined, hasKeys: true },
+    { walletType: WalletType.MULTISIG, walletMultisig: multisig, hasKeys: false },
+  ];
+
+  function shieldedFieldsOf(accessData: object): string[] {
+    return SHIELDED_FIELDS.filter(field => field in accessData);
+  }
+
+  test.each(walletTypes)(
+    '$walletType access data from a seed',
+    ({ walletType, walletMultisig, hasKeys }) => {
+      const accessData = wallet.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: walletMultisig,
+      });
+
+      expect(accessData.walletType).toBe(walletType);
+      expect(shieldedFieldsOf(accessData)).toEqual(hasKeys ? SHIELDED_FIELDS : []);
+      expect(wallet.hasShieldedXpubs(accessData)).toBe(hasKeys);
+    }
+  );
+
+  test.each(walletTypes)(
+    '$walletType access data from a root xpriv',
+    ({ walletType, walletMultisig, hasKeys }) => {
+      const accessData = wallet.generateAccessDataFromXpriv(xprivkeyRoot, {
+        pin: '123',
+        multisig: walletMultisig,
+      });
+
+      expect(accessData.walletType).toBe(walletType);
+      expect(shieldedFieldsOf(accessData)).toEqual(hasKeys ? SHIELDED_FIELDS : []);
+      expect(wallet.hasShieldedXpubs(accessData)).toBe(hasKeys);
+    }
+  );
+
+  test('read-only multisig access data from an account xpub', () => {
+    const accountXpub = wallet.getMultiSigXPubFromWords(seed, { networkName: 'testnet' });
+    const accessData = wallet.generateAccessDataFromXpub(accountXpub, { multisig });
+
+    expect(accessData.walletType).toBe(WalletType.MULTISIG);
+    expect(shieldedFieldsOf(accessData)).toEqual([]);
+  });
+
+  test('a multisig record that an older version gave shielded keys has no shielded xpubs', () => {
+    // Older versions derived the shielded keys of every wallet created from a
+    // seed or a root xpriv, multisig included: the keys of this seed's own root.
+    const p2pkh = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const olderMultisig = {
+      ...wallet.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig,
+      }),
+      scanXpubkey: p2pkh.scanXpubkey,
+      scanMainKey: p2pkh.scanMainKey,
+      spendXpubkey: p2pkh.spendXpubkey,
+      spendMainKey: p2pkh.spendMainKey,
+    };
+
+    expect(wallet.hasShieldedXpubs(p2pkh)).toBe(true);
+    expect(wallet.hasShieldedXpubs(olderMultisig)).toBe(false);
+  });
+});
+
 describe('migrateShieldedAccessData', () => {
   const seed =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
@@ -1074,25 +1158,34 @@ describe('migrateShieldedAccessData', () => {
       return { full, preShielded };
     }
 
-    // The P2PKH record, with and without a passphrase, is migrated by the tests above.
+    // The P2PKH record, with and without a passphrase, is migrated by the tests
+    // above. A multisig record is never migrated: shielded keys from its root
+    // would be one participant's single-signature keys.
     test.each([
-      { path: 'P2SH', walletMultisig: multisig, passphrase: '' },
-      { path: 'P2SH', walletMultisig: multisig, passphrase: 'my-bip39-passphrase' },
+      { created: '', given: '' },
+      { created: 'my-bip39-passphrase', given: 'my-bip39-passphrase' },
+      { created: 'my-bip39-passphrase', given: '' },
+      { created: '', given: 'my-bip39-passphrase' },
     ])(
-      '$path record, passphrase "$passphrase": the passphrase it was created with migrates it',
-      ({ walletMultisig, passphrase }) => {
-        const { full, preShielded } = preShieldedRecord({ passphrase, walletMultisig });
+      'multisig record created with passphrase "$created", given "$given": derives and writes nothing',
+      ({ created, given }) => {
+        const { preShielded } = preShieldedRecord({
+          passphrase: created,
+          walletMultisig: multisig,
+        });
+        const before = JSON.parse(JSON.stringify(preShielded));
 
         const migrated = wallet.migrateShieldedAccessData(preShielded, {
           pin: '123',
           password: '456',
-          passphrase,
+          passphrase: given,
           networkName: 'testnet',
         });
 
-        expect(migrated).toBe(true);
-        expect(preShielded.scanXpubkey).toBe(full.scanXpubkey);
-        expect(preShielded.spendXpubkey).toBe(full.spendXpubkey);
+        expect(migrated).toBe(false);
+        expect(JSON.parse(JSON.stringify(preShielded))).toEqual(before);
+        expect(preShielded.scanXpubkey).toBeUndefined();
+        expect(preShielded.spendXpubkey).toBeUndefined();
       }
     );
 
@@ -1120,15 +1213,12 @@ describe('migrateShieldedAccessData', () => {
 
     // A P2PKH record given another non-empty passphrase is covered above.
     test.each([
-      { path: 'P2PKH', walletMultisig: undefined, created: 'my-bip39-passphrase', given: '' },
-      { path: 'P2PKH', walletMultisig: undefined, created: '', given: 'my-bip39-passphrase' },
-      { path: 'P2SH', walletMultisig: multisig, created: 'my-bip39-passphrase', given: '' },
-      { path: 'P2SH', walletMultisig: multisig, created: 'my-bip39-passphrase', given: 'other' },
-      { path: 'P2SH', walletMultisig: multisig, created: '', given: 'my-bip39-passphrase' },
+      { created: 'my-bip39-passphrase', given: '' },
+      { created: '', given: 'my-bip39-passphrase' },
     ])(
-      '$path record created with passphrase "$created", given "$given": throws shielded-passphrase-mismatch and writes nothing',
-      ({ walletMultisig, created, given }) => {
-        const { full, preShielded } = preShieldedRecord({ passphrase: created, walletMultisig });
+      'P2PKH record created with passphrase "$created", given "$given": throws shielded-passphrase-mismatch and writes nothing',
+      ({ created, given }) => {
+        const { full, preShielded } = preShieldedRecord({ passphrase: created });
         const before = JSON.parse(JSON.stringify(preShielded));
 
         let caught: unknown;

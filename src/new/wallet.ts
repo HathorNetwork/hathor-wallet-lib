@@ -101,7 +101,7 @@ import {
   fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
-import { getShieldedChainXpubs } from '../utils/shieldedChain';
+import { getShieldedChainXpubs, refuseMultisigShieldedChain } from '../utils/shieldedChain';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -852,6 +852,8 @@ class HathorWallet extends EventEmitter {
    * @async
    * @generator
    * @returns Address object with the count of txs for this address
+   * @throws {WalletError} For the shielded chain (`opts.legacy` false) of a
+   *   multisig wallet, which has no shielded addresses
    * @memberof HathorWallet
    * */
   async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<{
@@ -859,6 +861,7 @@ class HathorWallet extends EventEmitter {
     index: number;
     transactions: number;
   }> {
+    await refuseMultisigShieldedChain(this.storage, opts);
     // We add the count of transactions
     // in order to replicate the same return as the new
     // wallet service facade.
@@ -907,11 +910,14 @@ class HathorWallet extends EventEmitter {
    * Get address from specific derivation index
    *
    * @returns Address
+   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
+   *   multisig wallet, which has none
    *
    * @memberof HathorWallet
    * @inner
    */
   async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
+    await refuseMultisigShieldedChain(this.storage, opts);
     let address = await this.storage.getAddressAtIndex(index, opts);
 
     if (address === null) {
@@ -968,6 +974,8 @@ class HathorWallet extends EventEmitter {
    *
    * @param [options]
    * @param [options.markAsUsed] if true, we will locally mark this address as used and won't return it again to be used
+   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
+   *   multisig wallet, which has none
    *
    * @memberof HathorWallet
    * @inner
@@ -981,6 +989,7 @@ class HathorWallet extends EventEmitter {
     index: number | null;
     addressPath: string;
   }> {
+    await refuseMultisigShieldedChain(this.storage, opts);
     const address = await this.storage.getCurrentAddress(markAsUsed, opts);
     const index = await this.getAddressIndex(address);
     const addressPath = await this.getAddressPathForIndex(index!, opts);
@@ -990,6 +999,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Get the next address after the current available
+   *
+   * @throws {WalletError} For a shielded address (`opts.legacy` false) of a
+   *   multisig wallet, which has none
    */
   async getNextAddress(
     opts?: IAddressChainOptions

@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage } from '../types';
+import { IAddressChainOptions, IStorage, IWalletAccessData, WalletType } from '../types';
+import { WalletError } from '../errors';
 import walletUtils from './wallet';
 
 /**
@@ -17,7 +18,7 @@ import walletUtils from './wallet';
  * a gap-limit check that wants shielded indexes that address loading never
  * derives would request the same window forever.
  *
- * The chain needs both xpubs (see `walletUtils.hasShieldedXpubs`) and a
+ * The chain needs a P2PKH record with both xpubs (see `walletUtils.hasShieldedXpubs`) and a
  * registered shielded crypto provider. Without a provider nothing received on
  * the chain can be decoded, so the wallet derives, stores, subscribes and
  * fetches nothing for it. Register the provider before `start()`: the first
@@ -43,4 +44,50 @@ export async function getShieldedChainXpubs(
     return null;
   }
   return { scanXpubkey: accessData.scanXpubkey, spendXpubkey: accessData.spendXpubkey };
+}
+
+/**
+ * Why a multisig wallet has no shielded keys or addresses.
+ */
+const MULTISIG_SHIELDED_KEYS_MESSAGE =
+  'Multisig wallets have no shielded keys or addresses: shielded keys come from one ' +
+  "participant's seed, so that participant alone could spend what is sent to a shielded " +
+  'address, without the other signatures the wallet requires.';
+
+/**
+ * Refuse a request for the shielded keys or addresses of a multisig wallet.
+ *
+ * Shielded keys are derived from the wallet's own root, at m/44'/280'/1'/0
+ * (scan) and m/44'/280'/2'/0 (spend). On a multisig wallet that root belongs to
+ * one participant, so that participant alone could spend what is sent to a
+ * shielded address of the wallet. Until shielded outputs have a multisig
+ * design, a multisig wallet has no shielded keys or addresses: none are
+ * derived for it, the ones an older version stored in its record are ignored
+ * (see `walletUtils.hasShieldedXpubs`), and every request for them fails with
+ * this error.
+ *
+ * @param accessData The wallet access data. A wallet without one is not refused here.
+ * @throws {WalletError} For a multisig wallet
+ */
+export function refuseMultisigShieldedKeys(accessData: IWalletAccessData | null): void {
+  if (accessData?.walletType === WalletType.MULTISIG) {
+    throw new WalletError(MULTISIG_SHIELDED_KEYS_MESSAGE);
+  }
+}
+
+/**
+ * Refuse a read of the shielded chain (`opts.legacy` false) of a multisig
+ * wallet (see refuseMultisigShieldedKeys).
+ *
+ * @param storage The wallet storage
+ * @param opts The chain the read is for
+ * @throws {WalletError} For the shielded chain of a multisig wallet
+ */
+export async function refuseMultisigShieldedChain(
+  storage: IStorage,
+  opts?: IAddressChainOptions
+): Promise<void> {
+  if (opts?.legacy === false) {
+    refuseMultisigShieldedKeys(await storage.getAccessData());
+  }
 }
