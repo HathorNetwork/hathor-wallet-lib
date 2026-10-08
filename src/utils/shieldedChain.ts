@@ -63,9 +63,12 @@ const MULTISIG_SHIELDED_KEYS_MESSAGE =
  * one participant, so that participant alone could spend what is sent to a
  * shielded address of the wallet. Until shielded outputs have a multisig
  * design, a multisig wallet has no shielded keys or addresses: none are
- * derived for it, the ones an older version stored in its record are ignored
- * (see `walletUtils.hasShieldedXpubs`), and every request for them fails with
- * this error.
+ * derived for it, and the keys an older version stored in its record are
+ * ignored (see `walletUtils.hasShieldedXpubs`). The four Storage shielded key
+ * getters refuse them with this error, and so do HathorWallet's address
+ * getters for the shielded chain. The Storage address reads are not refused:
+ * the shielded addresses an older version stored for the wallet are dropped
+ * when it starts instead (see dropMultisigShieldedState).
  *
  * @param accessData The wallet access data. A wallet without one is not refused here.
  * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet
@@ -92,4 +95,39 @@ export async function refuseMultisigShieldedChain(
   if (opts?.legacy === false) {
     refuseMultisigShieldedKeys(await storage.getAccessData());
   }
+}
+
+/**
+ * Drop the shielded state an older version stored for a multisig wallet.
+ *
+ * Older versions gave multisig wallets shielded address pairs of one
+ * participant's keys, saved them, and decoded and credited what was paid to
+ * them. A store that keeps its contents across sessions still holds all of it:
+ * the Storage address reads return the pairs, every processHistory credits the
+ * decoded outputs again and lists them as UTXOs, and
+ * getShieldedUnblindingForTx gives out their openings.
+ *
+ * When the record is multisig and the store holds a shielded address, the
+ * history and the addresses are cleaned, as a reconnect cleans them
+ * (`HathorWallet.reloadStorage`), and the access data is saved back. The first
+ * sync then loads the legacy chain and its history again. Anything else is
+ * left as it is: a P2PKH wallet, and a multisig wallet whose store holds no
+ * shielded address.
+ *
+ * @param storage The wallet storage
+ */
+export async function dropMultisigShieldedState(storage: IStorage): Promise<void> {
+  const accessData = await storage.getAccessData();
+  if (accessData?.walletType !== WalletType.MULTISIG) {
+    return;
+  }
+  if ((await storage.store.addressCount({ legacy: false })) === 0) {
+    return;
+  }
+  await storage.cleanStorage(true, true);
+  await storage.saveAccessData(accessData);
+  storage.logger.info(
+    'Dropped the shielded addresses that an older version stored for this multisig wallet, ' +
+      'and the history credited with them. The history is loaded again.'
+  );
 }

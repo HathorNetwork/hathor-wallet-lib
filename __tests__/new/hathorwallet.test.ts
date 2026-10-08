@@ -3721,5 +3721,130 @@ describe('multisig wallets and shielded keys', () => {
       },
       TEST_TIMEOUT
     );
+
+    /**
+     * A store that keeps its contents across sessions, as an older version left
+     * it: the shielded pairs, and a history it decoded and credited.
+     */
+    describe('start() on what an older version stored', () => {
+      const TX_ID = 'ab00ee11ff22003344556677889900aabbccddeeff00112233445566778899aa';
+
+      /**
+       * A tx that pays 50 to `legacyAddress` and, when `spendAddress` is given,
+       * 77 in a shielded output that an older version decoded.
+       */
+      function txPaying(legacyAddress: string, spendAddress?: string): IHistoryTx {
+        return {
+          tx_id: TX_ID,
+          version: 1,
+          timestamp: 1,
+          is_voided: false,
+          nonce: 0,
+          weight: 1,
+          parents: [],
+          inputs: [],
+          height: 100,
+          tokens: [],
+          outputs: [
+            {
+              value: 50n,
+              token_data: 0,
+              token: NATIVE_TOKEN_UID,
+              decoded: { address: legacyAddress, timelock: null },
+              script: '',
+              spent_by: null,
+            },
+          ],
+          shielded_outputs: spendAddress
+            ? [
+                {
+                  mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+                  commitment: 'aa'.repeat(33),
+                  range_proof: 'bb'.repeat(10),
+                  script: '',
+                  token_data: 0,
+                  ephemeral_pubkey: 'cc'.repeat(33),
+                  decoded: { address: spendAddress, timelock: null },
+                  spent_by: null,
+                  // What the decode of the older version wrote.
+                  value: 77n,
+                  token: NATIVE_TOKEN_UID,
+                  blindingFactor: 'dd'.repeat(32),
+                },
+              ]
+            : [],
+        } as unknown as IHistoryTx;
+      }
+
+      async function unlockedHtrOf(hWallet: Pick<HathorWallet, 'getBalance'>): Promise<bigint> {
+        const [balance] = await hWallet.getBalance(NATIVE_TOKEN_UID);
+        return balance.balance.unlocked;
+      }
+
+      it.each([
+        { walletType: WalletType.P2PKH, record: p2pkhRecord, drops: false },
+        { walletType: WalletType.MULTISIG, record: olderMultisigRecord, drops: true },
+      ])(
+        '$walletType wallet: the shielded pairs and the history credited with them are dropped: $drops',
+        async ({ record, drops }) => {
+          const { storage, networkName } = await walletOn(record);
+          const legacy0 = (await storage.getAddressAtIndex(0))!.base58;
+          const legacy1 = (await storage.getAddressAtIndex(1))!.base58;
+          const spend0 = shieldedPairAt(record, 0, networkName).spendAddress.base58;
+          await storage.store.saveTx(txPaying(legacy0, spend0));
+          await storage.processHistory();
+          const accessData = JSON.parse(JSON.stringify(await storage.getAccessData()));
+          const hWallet = startableWallet(storage);
+          // The legacy addresses are injected again, as an app does on each start.
+          hWallet.preCalculatedAddresses = [legacy0, legacy1];
+          // What the older version left: the shielded output is credited.
+          expect(await unlockedHtrOf(hWallet)).toBe(127n);
+
+          await hWallet.start({ pinCode: '123', password: '456' });
+
+          // The shielded pairs, also for the Storage address reads.
+          expect(await storage.store.addressCount({ legacy: false })).toBe(drops ? 0 : 2);
+          expect((await storage.getAddressAtIndex(0, { legacy: false })) === null).toBe(drops);
+          expect(await storage.isAddressMine(spend0)).toBe(!drops);
+          // The history and what was credited with it. The first sync loads the
+          // history of the legacy chain again.
+          expect((await storage.getTx(TX_ID)) === null).toBe(drops);
+          expect((await storage.store.getUtxo({ txId: TX_ID, index: 1 })) === null).toBe(drops);
+          expect(await unlockedHtrOf(hWallet)).toBe(drops ? 0n : 127n);
+          expect((await hWallet.getShieldedUnblindingForTx(TX_ID)).outputs).toHaveLength(
+            drops ? 0 : 1
+          );
+          // The record is kept as it was, and the injected legacy addresses are saved.
+          expect(JSON.parse(JSON.stringify(await storage.getAccessData()))).toEqual(accessData);
+          expect((await storage.getAddressAtIndex(0))!.base58).toBe(legacy0);
+          expect((await storage.getAddressAtIndex(1))!.base58).toBe(legacy1);
+          expect(hWallet.conn.start).toHaveBeenCalled();
+        },
+        TEST_TIMEOUT
+      );
+
+      it(
+        'a multisig wallet whose store holds no shielded address keeps its history',
+        async () => {
+          // The record holds the shielded keys an older version gave it, but no
+          // shielded pair was stored.
+          const storage = new Storage(new MemoryStore());
+          await storage.saveAccessData(olderMultisigRecord);
+          await storageUtils.loadAddresses(0, 2, storage);
+          const legacy0 = (await storage.getAddressAtIndex(0))!.base58;
+          await storage.store.saveTx(txPaying(legacy0));
+          await storage.processHistory();
+          const cleanSpy = jest.spyOn(storage, 'cleanStorage');
+          const hWallet = startableWallet(storage);
+
+          await hWallet.start({ pinCode: '123', password: '456' });
+
+          expect(cleanSpy).not.toHaveBeenCalled();
+          expect(await storage.getTx(TX_ID)).not.toBeNull();
+          expect(await unlockedHtrOf(hWallet)).toBe(50n);
+        },
+        TEST_TIMEOUT
+      );
+    });
   });
 });

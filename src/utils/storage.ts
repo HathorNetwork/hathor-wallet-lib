@@ -1259,8 +1259,11 @@ export async function processNewTx(
   // transient rewind failure on a prior pass) complete its decoding, while
   // processShieldedOutputs itself no-ops the slots already done.
   // A multisig wallet decodes nothing: it has no shielded keys (see
-  // refuseMultisigShieldedKeys), so its outputs stay undecoded and uncredited,
-  // also the ones paid to a shielded pair an older version stored for it.
+  // refuseMultisigShieldedKeys), and asking for its scan key would fail the
+  // whole tx. The outputs it never decoded stay undecoded and uncredited. The
+  // shielded pairs an older version stored for it, and the history decoded and
+  // credited with them, are dropped when the wallet starts (see
+  // dropMultisigShieldedState).
   const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
   if (
     hasUndecodedSlot &&

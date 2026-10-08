@@ -101,7 +101,11 @@ import {
   fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
-import { getShieldedChainXpubs, refuseMultisigShieldedChain } from '../utils/shieldedChain';
+import {
+  dropMultisigShieldedState,
+  getShieldedChainXpubs,
+  refuseMultisigShieldedChain,
+} from '../utils/shieldedChain';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -2147,6 +2151,10 @@ class HathorWallet extends EventEmitter {
 
     // Check database consistency
     await this.storage.store.validate();
+    // A multisig wallet has no shielded chain. Before anything is saved, drop
+    // the shielded addresses an older version stored for it, and the history
+    // credited with them.
+    await dropMultisigShieldedState(this.storage);
     await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
     this.storage.config.setNetwork(this.conn.getCurrentNetwork());
@@ -2213,9 +2221,10 @@ class HathorWallet extends EventEmitter {
     }
 
     // The injected shielded pairs are persisted only when the wallet has a
-    // shielded chain, which needs the record's shielded xpubs and a crypto
-    // provider. Without one, nothing on the chain is subscribed or fetched, so
-    // a stored pair would be a shielded address given out and never watched.
+    // shielded chain, which needs a P2PKH record with both shielded xpubs and a
+    // crypto provider. Without one, nothing on the chain is subscribed or
+    // fetched, so a stored pair would be a shielded address given out and never
+    // watched.
     const injectedShieldedPairs = injectedAddresses
       .filter(entry => entry.shielded)
       // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
