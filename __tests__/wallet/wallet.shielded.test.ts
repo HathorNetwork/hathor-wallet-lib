@@ -13,7 +13,7 @@ import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { ShieldedNotEnabledError, WalletError } from '../../src/errors';
-import { IWalletAccessData } from '../../src/types';
+import { IWalletAccessData, TokenVersion } from '../../src/types';
 import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import {
@@ -22,6 +22,7 @@ import {
   legacyFixtureAddress,
   buildShieldedAddressRow,
   buildShieldedNewAddressesResponse,
+  buildSplitBalanceResponse,
 } from '../__mock_helpers__/shielded-ws.fixtures';
 
 const network = new Network('testnet');
@@ -462,5 +463,82 @@ describe('address lookups accept shielded addresses', () => {
       .mockResolvedValue({ success: true, addresses: {} });
     await wallet.checkAddressesMine(['not-an-address']);
     expect(checkSpy).toHaveBeenCalledWith(wallet, ['not-an-address']);
+  });
+});
+
+describe('balance and history', () => {
+  it('returns the merged balance by default', async () => {
+    const wallet = await readyWallet();
+    const body = buildSplitBalanceResponse();
+    jest.spyOn(walletApi, 'getBalances').mockResolvedValue({
+      success: true,
+      balances: [
+        {
+          ...body.balances[0],
+          token: { ...body.balances[0].token, version: TokenVersion.NATIVE },
+          balance: { unlocked: 3500n, locked: 0n },
+        },
+      ],
+    });
+    const splitSpy = jest.spyOn(walletApi, 'getSplitBalances');
+    const [balance] = await wallet.getBalance('00');
+    expect(balance.balance).toEqual({ unlocked: 3500n, locked: 0n });
+    expect(splitSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns the split balance on request', async () => {
+    const wallet = await readyWallet();
+    const getSpy = jest.spyOn(walletApi, 'getSplitBalances').mockResolvedValue({
+      success: true,
+      balances: [
+        {
+          ...buildSplitBalanceResponse().balances[0],
+          token: { id: '00', name: 'Hathor', symbol: 'HTR', version: TokenVersion.NATIVE },
+          balance: {
+            unlocked: { transparent: 1000n, shielded: 2500n, total: 3500n },
+            locked: { transparent: 0n, shielded: 0n, total: 0n },
+          },
+        },
+      ],
+    });
+    const [balance] = await wallet.getBalance('00', { split: true });
+    expect(getSpy).toHaveBeenCalledWith(wallet, '00');
+    expect(balance.balance.unlocked).toEqual({ transparent: 1000n, shielded: 2500n, total: 3500n });
+  });
+
+  it('maps the history shielded fields', async () => {
+    const wallet = await readyWallet();
+    jest.spyOn(walletApi, 'getHistory').mockResolvedValue({
+      success: true,
+      history: [
+        {
+          txId: 'tx1',
+          balance: 150n,
+          timestamp: 1,
+          voided: false,
+          version: 1,
+          tx_kind: 'mixed',
+          balanceBreakdown: { transparent: 50n, shielded: 100n },
+        },
+        { txId: 'tx2', balance: 1n, timestamp: 2, voided: false, version: 1 },
+      ],
+    });
+    const history = await wallet.getTxHistory();
+    expect(history[0]).toEqual({
+      txId: 'tx1',
+      balance: 150n,
+      timestamp: 1,
+      voided: false,
+      version: 1,
+      txKind: 'mixed',
+      balanceBreakdown: { transparent: 50n, shielded: 100n },
+    });
+    expect(history[1]).toEqual({
+      txId: 'tx2',
+      balance: 1n,
+      timestamp: 2,
+      voided: false,
+      version: 1,
+    });
   });
 });
