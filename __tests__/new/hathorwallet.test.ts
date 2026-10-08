@@ -27,7 +27,13 @@ import {
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
-import { EcdsaTxSign, IHistoryTx, SCANNING_POLICY, WalletType } from '../../src/types';
+import {
+  EcdsaTxSign,
+  IHistoryTx,
+  SCANNING_POLICY,
+  TxHistoryProcessingStatus,
+  WalletType,
+} from '../../src/types';
 import { ConnectionState, OutputType } from '../../src/wallet/types';
 import { WalletWebSocketData } from '../../src/new/types';
 import txApi from '../../src/api/txApi';
@@ -2786,4 +2792,577 @@ describe('address loading across a reconnect', () => {
     expect(conn.subscribeAddresses.mock.calls.flatMap(call => call[0])).toEqual(firstSubscriptions);
     await hWallet.stop();
   }, 60000);
+});
+
+describe('history rewrites on newTxPromise', () => {
+  // The change-level xpub of the 'upon tennis …' test seed, and its index-0 address on testnet.
+  const XPUB =
+    'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
+  const ADDRESS_0 = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+  // An address of another wallet.
+  const FOREIGN_ADDRESS = 'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f';
+  const TX_A = 'aa'.repeat(32);
+  const TX_B = 'bb'.repeat(32);
+  const TX_C = 'cc'.repeat(32);
+
+  function makeConn() {
+    return {
+      getState: jest.fn().mockReturnValue(ConnectionState.CLOSED),
+      getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+      getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
+      startControlHandlers: jest.fn(),
+      removeMetricsHandlers: jest.fn(),
+      on: jest.fn(),
+      start: jest.fn(),
+      stop: jest.fn(),
+      onReload: jest.fn().mockResolvedValue(undefined),
+      subscribeAddresses: jest.fn(),
+      unsubscribeAddress: jest.fn(),
+      emit: jest.fn(),
+    };
+  }
+
+  function makeWallet(conn: ReturnType<typeof makeConn>): HathorWallet {
+    jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+      resolve({ network: 'testnet' });
+    });
+    return new HathorWallet({
+      xpub: XPUB,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      connection: conn as any,
+      scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 },
+    });
+  }
+
+  /** A promise the test resolves when it wants a stubbed step to finish. */
+  function gate() {
+    let open: () => void = () => {};
+    const opened = new Promise<void>(resolve => {
+      open = resolve;
+    });
+    return { opened, open };
+  }
+
+  async function until(condition: () => boolean, what: string): Promise<void> {
+    for (let i = 0; i < 500; i++) {
+      if (condition()) {
+        return;
+      }
+      await new Promise(resolve => {
+        setTimeout(resolve, 2);
+      });
+    }
+    throw new Error(`Timed out waiting for ${what}`);
+  }
+
+  async function settle(): Promise<void> {
+    await new Promise(resolve => {
+      setTimeout(resolve, 20);
+    });
+  }
+
+  function txPaying(txId: string, address: string) {
+    return {
+      tx_id: txId,
+      version: 1,
+      weight: 1,
+      timestamp: 1700000000,
+      is_voided: false,
+      nonce: 0,
+      inputs: [],
+      outputs: [
+        {
+          value: 100n,
+          token_data: 0,
+          token: NATIVE_TOKEN_UID,
+          script: '',
+          spent_by: null,
+          decoded: { type: 'P2PKH', address, timelock: null },
+        },
+      ],
+      parents: [],
+      tokens: [],
+    };
+  }
+
+  function message(tx: ReturnType<typeof txPaying>): WalletWebSocketData {
+    return { type: 'wallet:address_history', history: tx as unknown as IHistoryTx };
+  }
+
+  it('isReady() stays true while a realtime tx is processed', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    const processing = gate();
+    let readyWhileProcessing: boolean | null = null;
+    jest.spyOn(hWallet.storage, 'processNewTx').mockImplementation(async () => {
+      readyWhileProcessing = hWallet.isReady();
+      await processing.opened;
+    });
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    await until(() => readyWhileProcessing !== null, 'processNewTx');
+    processing.open();
+    await hWallet.newTxPromise;
+
+    expect(readyWhileProcessing).toBe(true);
+    expect(hWallet.isReady()).toBe(true);
+    await hWallet.stop();
+  });
+
+  it('a ws message that arrives while another tx is processed is processed without a reconnect', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    const processingA = gate();
+    const processed: string[] = [];
+    const processNewTxSpy = jest
+      .spyOn(hWallet.storage, 'processNewTx')
+      .mockImplementation(async tx => {
+        if (tx.tx_id === TX_A) {
+          await processingA.opened;
+        }
+        processed.push(tx.tx_id);
+      });
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    await until(() => processNewTxSpy.mock.calls.length === 1, 'tx A');
+    hWallet.handleWebsocketMsg(message(txPaying(TX_B, FOREIGN_ADDRESS)));
+    processingA.open();
+
+    await until(() => processed.length === 2, 'tx B');
+    expect(processed).toEqual([TX_A, TX_B]);
+    expect(hWallet.wsTxQueue.size()).toBe(0);
+    expect((await hWallet.storage.getTx(TX_B))?.processingStatus).toBe(
+      TxHistoryProcessingStatus.FINISHED
+    );
+    await hWallet.stop();
+  });
+
+  it('every message parked during a sync and its walk is processed once, before READY', async () => {
+    const hWallet = makeWallet(makeConn());
+    const sync = gate();
+    jest.spyOn(hWallet, 'syncHistory').mockImplementation(() => sync.opened);
+    const walk = gate();
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(() => walk.opened);
+    const processed: string[] = [];
+    jest.spyOn(hWallet.storage, 'processNewTx').mockImplementation(async tx => {
+      processed.push(tx.tx_id);
+    });
+    let atReady: { parked: number; processed: string[] } | null = null;
+    hWallet.on('state', state => {
+      if (state === HathorWallet.READY) {
+        atReady = { parked: hWallet.wsTxQueue.size(), processed: [...processed] };
+      }
+    });
+    await hWallet.start();
+
+    const connected = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    // Parked while the first sync runs, and replayed by the walk.
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    sync.open();
+    await connected;
+    await until(
+      () => processHistorySpy.mock.calls.length === 1,
+      'the walk to reach processHistory'
+    );
+    // Parked while the walk's processHistory runs.
+    hWallet.handleWebsocketMsg(message(txPaying(TX_B, FOREIGN_ADDRESS)));
+    expect(hWallet.wsTxQueue.size()).toBe(1);
+    walk.open();
+
+    await until(() => hWallet.isReady(), 'READY');
+    expect(atReady).toEqual({ parked: 0, processed: [TX_A, TX_B] });
+    await settle();
+    expect(processed).toEqual([TX_A, TX_B]);
+    await hWallet.stop();
+  });
+
+  it('a sender-local insert during a walk runs after it', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const walk = gate();
+    const order: string[] = [];
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(async () => {
+        await walk.opened;
+        order.push('walk');
+      });
+    jest.spyOn(hWallet.storage, 'processNewTx').mockImplementation(async tx => {
+      order.push(`insert ${tx.tx_id}`);
+    });
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(
+      () => processHistorySpy.mock.calls.length === 1,
+      'the walk to reach processHistory'
+    );
+
+    // What SendTransaction does after a successful push: it bypasses the READY gate.
+    hWallet.enqueueOnNewTx(message(txPaying(TX_C, FOREIGN_ADDRESS)), '123');
+    await settle();
+    expect(order).toEqual([]);
+    walk.open();
+
+    await until(() => order.length === 2, 'the insert');
+    expect(order).toEqual(['walk', `insert ${TX_C}`]);
+    await hWallet.stop();
+  });
+
+  it('reloadStorage waits for an onNewTx in progress', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    const processing = gate();
+    const order: string[] = [];
+    const processNewTxSpy = jest
+      .spyOn(hWallet.storage, 'processNewTx')
+      .mockImplementation(async tx => {
+        await processing.opened;
+        order.push(`processNewTx ${tx.tx_id}`);
+      });
+    jest.spyOn(hWallet.storage, 'cleanStorage').mockImplementation(async () => {
+      order.push('cleanStorage');
+    });
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    await until(() => processNewTxSpy.mock.calls.length === 1, 'tx A');
+
+    const reload = hWallet.reloadStorage();
+    await settle();
+    expect(order).toEqual([]);
+    processing.open();
+    await reload;
+
+    expect(order).toEqual([`processNewTx ${TX_A}`, 'cleanStorage']);
+    await hWallet.stop();
+  });
+
+  it('a reconnect during a walk ends READY once, with the balance and cursors of the reloaded history', async () => {
+    jest.spyOn(walletApi, 'getAddressHistoryForAwait').mockImplementation(
+      async (addresses: string[]) =>
+        ({
+          data: {
+            success: true,
+            history: addresses.includes(ADDRESS_0) ? [txPaying(TX_A, ADDRESS_0)] : [],
+            has_more: false,
+          },
+        }) as never
+    );
+    const hWallet = makeWallet(makeConn());
+    const states: unknown[] = [];
+    hWallet.on('state', state => {
+      states.push(state);
+    });
+    const firstWalk = gate();
+    const realProcessHistory = hWallet.storage.processHistory.bind(hWallet.storage);
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(async pinCode => {
+        await firstWalk.opened;
+        await realProcessHistory(pinCode);
+      });
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => processHistorySpy.mock.calls.length === 1, 'the first walk');
+
+    // The connection drops and comes back while the first walk runs.
+    states.length = 0;
+    const reconnect = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    firstWalk.open();
+    await reconnect;
+    await until(() => hWallet.isReady(), 'READY');
+    await settle();
+
+    // The overtaken walk did not set READY; the reconnect's walk did, after the reload.
+    expect(states).toEqual([HathorWallet.SYNCING, HathorWallet.PROCESSING, HathorWallet.READY]);
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
+      expect.objectContaining({
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
+        balance: { locked: 0n, unlocked: 100n },
+        transactions: 1,
+      }),
+    ]);
+    expect(await hWallet.storage.getWalletData()).toMatchObject({
+      lastLoadedAddressIndex: 2,
+      lastUsedAddressIndex: 0,
+      currentAddressIndex: 1,
+    });
+    await hWallet.stop();
+  }, 60000);
+
+  it('a reconnect during the first sync reloads after it, and every tx is processed', async () => {
+    // Txs on indexes 1 and 3 make the first sync load three windows of two addresses.
+    const history = [
+      txPaying(TX_A, addressUtils.deriveAddressFromXPubP2PKH(XPUB, 1, 'testnet').base58),
+      txPaying(TX_B, addressUtils.deriveAddressFromXPubP2PKH(XPUB, 3, 'testnet').base58),
+      txPaying(TX_C, ADDRESS_0),
+    ];
+    const hWallet = makeWallet(makeConn());
+    let reconnect: Promise<void> | null = null;
+    let requests = 0;
+    jest
+      .spyOn(walletApi, 'getAddressHistoryForAwait')
+      .mockImplementation(async (addresses: string[]) => {
+        requests += 1;
+        if (requests === 1) {
+          // The connection drops and comes back while the first request of the
+          // first sync is on the wire, and tx C arrives while the wallet reloads.
+          setTimeout(() => {
+            reconnect = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+            hWallet.handleWebsocketMsg(message(txPaying(TX_C, ADDRESS_0)));
+          }, 1);
+        }
+        await new Promise(resolve => {
+          setTimeout(resolve, 30);
+        });
+        return {
+          data: {
+            success: true,
+            history: history.filter(tx => addresses.includes(tx.outputs[0].decoded.address)),
+            has_more: false,
+          },
+        } as never;
+      });
+    await hWallet.start();
+
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => reconnect !== null, 'the reconnect');
+    await reconnect;
+    await until(() => hWallet.isReady(), 'READY');
+    await hWallet.newTxPromise;
+
+    expect(hWallet.wsTxQueue.size()).toBe(0);
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
+      expect.objectContaining({
+        balance: { locked: 0n, unlocked: 300n },
+        transactions: 3,
+      }),
+    ]);
+    await hWallet.stop();
+  }, 60000);
+
+  it('a walk that ends after the connection dropped does not set READY', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const walk = gate();
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(() => walk.opened);
+    const states: unknown[] = [];
+    hWallet.on('state', state => {
+      states.push(state);
+    });
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(
+      () => processHistorySpy.mock.calls.length === 1,
+      'the walk to reach processHistory'
+    );
+
+    states.length = 0;
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTING);
+    walk.open();
+    await settle();
+
+    expect(states).toEqual([HathorWallet.CONNECTING]);
+    expect(hWallet.state).toBe(HathorWallet.CONNECTING);
+    await hWallet.stop();
+  });
+
+  it('a connection overtaken by a newer one leaves PROCESSING and READY to the newer one', async () => {
+    const hWallet = makeWallet(makeConn());
+    const syncSpy = jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const states: unknown[] = [];
+    hWallet.on('state', state => {
+      states.push(state);
+    });
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    const staleSync = gate();
+    syncSpy.mockImplementationOnce(() => staleSync.opened);
+    states.length = 0;
+    const second = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => syncSpy.mock.calls.length === 2, 'the second reload to sync');
+    const third = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    staleSync.open();
+    await Promise.all([second, third]);
+    await until(() => hWallet.isReady(), 'READY');
+    await settle();
+
+    expect(states).toEqual([
+      HathorWallet.SYNCING,
+      HathorWallet.SYNCING,
+      HathorWallet.PROCESSING,
+      HathorWallet.READY,
+    ]);
+    await hWallet.stop();
+  });
+
+  it('a reload overtaken by a newer connection does not set ERROR when it fails', async () => {
+    const hWallet = makeWallet(makeConn());
+    const syncSpy = jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const states: unknown[] = [];
+    hWallet.on('state', state => {
+      states.push(state);
+    });
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    // The newer connection's reload aborts the stream the older reload was waiting on.
+    const staleSync = gate();
+    syncSpy.mockImplementationOnce(async () => {
+      await staleSync.opened;
+      throw new Error('Stream aborted');
+    });
+    states.length = 0;
+    const second = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => syncSpy.mock.calls.length === 2, 'the second reload to sync');
+    const third = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    staleSync.open();
+    await Promise.all([second, third]);
+    await until(() => hWallet.isReady(), 'READY');
+    await settle();
+
+    expect(states).toEqual([
+      HathorWallet.SYNCING,
+      HathorWallet.SYNCING,
+      HathorWallet.PROCESSING,
+      HathorWallet.READY,
+    ]);
+    await hWallet.stop();
+  });
+
+  it('a reconnect while a queued tx waits on a stream of the dropped connection does not deadlock', async () => {
+    const conn = makeConn();
+    const hWallet = makeWallet(conn);
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    // A history stream on a dropped connection ends only when the reconnect
+    // aborts it, through conn.onReload(). The tx being processed holds one.
+    const streamAborted = gate();
+    conn.onReload.mockImplementation(async () => {
+      streamAborted.open();
+    });
+    const scanSpy = jest.spyOn(hWallet, 'scanAddressesToLoad').mockImplementationOnce(async () => {
+      await streamAborted.opened;
+      throw new Error('Stream aborted');
+    });
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    await until(() => scanSpy.mock.calls.length === 1, 'tx A to wait on the stream');
+
+    const reconnect = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'READY after the reconnect');
+    await expect(reconnect).resolves.toBeUndefined();
+    expect(conn.onReload).toHaveBeenCalledTimes(1);
+    await hWallet.stop();
+  });
+
+  it("a reload requested from a 'new-tx' listener runs after the tx that emitted the event", async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => hWallet.isReady(), 'the first walk');
+
+    const cleanSpy = jest.spyOn(hWallet.storage, 'cleanStorage');
+    let reload: Promise<void> | null = null;
+    hWallet.on('new-tx', () => {
+      reload = hWallet.reloadStorage();
+    });
+    hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+    await until(() => reload !== null, "the 'new-tx' event");
+    await reload;
+
+    expect(cleanSpy).toHaveBeenCalledTimes(1);
+    await hWallet.stop();
+  });
+
+  it('a sync of a stopped session does not start a walk after the wallet starts again', async () => {
+    const hWallet = makeWallet(makeConn());
+    const staleSync = gate();
+    const syncSpy = jest
+      .spyOn(hWallet, 'syncHistory')
+      .mockImplementationOnce(() => staleSync.opened)
+      .mockResolvedValue(undefined);
+    await hWallet.start();
+    const firstSession = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(() => syncSpy.mock.calls.length === 1, 'the first sync');
+
+    await hWallet.stop();
+    await hWallet.start();
+    const states: unknown[] = [];
+    hWallet.on('state', state => {
+      states.push(state);
+    });
+    staleSync.open();
+    await firstSession;
+    await settle();
+
+    expect(states).toEqual([]);
+    expect(hWallet.state).toBe(HathorWallet.CONNECTING);
+    await hWallet.stop();
+  });
+
+  it('a reload queued behind a walk is skipped when a newer connection queued its own', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const walk = gate();
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(() => walk.opened);
+    const cleanSpy = jest.spyOn(hWallet.storage, 'cleanStorage');
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(
+      () => processHistorySpy.mock.calls.length === 1,
+      'the walk to reach processHistory'
+    );
+
+    // Two reconnects while the walk runs: both reloads queue behind it.
+    const second = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    const third = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    walk.open();
+    await Promise.all([second, third]);
+    await until(() => hWallet.isReady(), 'READY');
+
+    expect(cleanSpy).toHaveBeenCalledTimes(1);
+    await hWallet.stop();
+  });
+
+  it('a walk that ends after stop() leaves the wallet CLOSED', async () => {
+    const hWallet = makeWallet(makeConn());
+    jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+    const walk = gate();
+    const processHistorySpy = jest
+      .spyOn(hWallet.storage, 'processHistory')
+      .mockImplementationOnce(() => walk.opened);
+    await hWallet.start();
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    await until(
+      () => processHistorySpy.mock.calls.length === 1,
+      'the walk to reach processHistory'
+    );
+
+    await hWallet.stop();
+    walk.open();
+    await settle();
+
+    expect(hWallet.state).toBe(HathorWallet.CLOSED);
+  });
 });
