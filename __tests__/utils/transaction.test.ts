@@ -871,6 +871,27 @@ test('convertTransactionToHistoryTx', async () => {
   }
 });
 
+test('convertTransactionToHistoryTx carries the nano caller seqnum', async () => {
+  const storage = new Storage(new MemoryStore());
+  storage.config.setNetwork('testnet');
+  const nano = new NanoContractHeader(
+    'cafed4d0',
+    'drip',
+    Buffer.from('cafe', 'hex'),
+    [],
+    7,
+    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp')
+  );
+  const tx = new Transaction([], [], { hash: 'nano-tx', headers: [nano] });
+
+  const histTx = await transaction.convertTransactionToHistoryTx(tx, storage);
+
+  // Processing this local copy is what advances the caller's seqnum in storage
+  // right after a send; without it the next nano tx from the caller reuses it.
+  expect(histTx.nc_address).toBe('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp');
+  expect(histTx.nc_seqnum).toBe(7);
+});
+
 /**
  * Reusable `ApiVersion` literal for tests that need a populated
  * `storage.version`. Defaults match a privnet-shaped configuration so

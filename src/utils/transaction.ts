@@ -1395,6 +1395,9 @@ const transaction = {
       histTx.nc_method = nanoHeader.method;
       histTx.nc_args = nanoHeader.args.toString('hex');
       histTx.nc_address = nanoHeader.address!.base58;
+      // Processing this tx advances the caller's seqnum in storage, so the
+      // next nano tx from the same caller doesn't reuse it.
+      histTx.nc_seqnum = nanoHeader.seqnum;
       // XXX: should we build nc_context from nanoHeader information?
       // Cannot fetch histTx.nc_blueprint_id with the current data
     }
