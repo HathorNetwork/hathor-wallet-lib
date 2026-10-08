@@ -546,6 +546,7 @@ const txOutputBaseShape = {
   heightlock: z.number().nullable(),
   locked: z.boolean(),
   addressPath: AddressPathSchema,
+  txProposalId: z.string().nullable().optional(),
 };
 
 /**

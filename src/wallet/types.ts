@@ -322,6 +322,7 @@ export interface TransparentUtxo {
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
   addressPath: string; // path to generate output address
+  txProposalId?: string | null; // tx proposal holding this output, if any
 }
 
 interface ShieldedUtxoBase extends Omit<TransparentUtxo, 'kind'> {
