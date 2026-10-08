@@ -79,7 +79,7 @@ import {
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
 } from './types';
-import { OutputKind } from '../shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
@@ -1781,18 +1781,26 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
     }
-    // This wallet builds no shielded outputs, so its change is always
-    // transparent: refuse any other change mode rather than ignore it.
     const { changeShieldedMode } = options;
-    if (
-      changeShieldedMode !== undefined &&
-      changeShieldedMode !== null &&
-      changeShieldedMode !== OutputKind.TRANSPARENT
-    ) {
-      throw new SendTxError(
-        `Unsupported changeShieldedMode '${String(changeShieldedMode)}': the wallet service ` +
-          'only supports OutputKind.TRANSPARENT.'
-      );
+    if (!this.shieldedEnabled) {
+      // Without shielded keys the wallet neither builds nor receives shielded
+      // outputs: refuse them rather than send transparently.
+      if (outputs.some(output => 'shielded' in output && output.shielded)) {
+        this.failIfShieldedNotEnabled();
+      }
+      if (
+        changeShieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED ||
+        changeShieldedMode === ShieldedOutputMode.FULLY_SHIELDED
+      ) {
+        this.failIfShieldedNotEnabled();
+      }
+      if (
+        changeShieldedMode !== undefined &&
+        changeShieldedMode !== null &&
+        changeShieldedMode !== OutputKind.TRANSPARENT
+      ) {
+        throw new SendTxError(`Unsupported changeShieldedMode '${String(changeShieldedMode)}'.`);
+      }
     }
     const newOptions = {
       inputs: [],
@@ -1827,6 +1835,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputs,
       changeAddress,
       pin,
+      changeShieldedMode,
     });
     return sendTransaction;
   }

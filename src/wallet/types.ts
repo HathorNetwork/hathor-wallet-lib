@@ -25,7 +25,11 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
-import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
+import type {
+  ChangeOutputMode,
+  IShieldedCryptoProvider,
+  ShieldedOutputMode,
+} from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -372,6 +376,7 @@ export interface OutputRequestObj {
   value: OutputValueType; // output value
   token: string; // output token
   timelock?: number | null; // output timelock
+  shielded?: ShieldedOutputMode; // send to the shielded address in this mode
 }
 
 export interface DataScriptOutputRequestObj {
@@ -387,6 +392,7 @@ export interface OutputSendTransaction {
   address?: string; // output address. required for p2pkh or p2sh
   timelock?: number | null; // output timelock
   data?: string; // data to store in the output script. required for data script.
+  shielded?: ShieldedOutputMode; // shielded output mode, for a shielded address
 }
 
 export interface InputRequestObj {
