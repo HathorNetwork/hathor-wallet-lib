@@ -225,6 +225,11 @@ export class MemoryStore implements IStore {
    *   - legacy  → `addressIndexes`         (p2pkh / p2sh / undefined)
    *   - !legacy → `shieldedAddressIndexes` (user-facing 'shielded' receives)
    *
+   * Only `legacy: false` selects the shielded chain, as in getCurrentAddress,
+   * setCurrentAddressIndex and the wallet's shielded-chain checks. Any other
+   * value, such as 0 or '' from an untyped caller, selects the legacy chain,
+   * so every read of one call agrees on the chain.
+   *
    * `saveAddress` is the sole writer of both maps and routes by address type:
    * 'shielded' into `shieldedAddressIndexes`, legacy into `addressIndexes`, and
    * 'shielded-spend' into NEITHER. That last exclusion is deliberate and
@@ -236,8 +241,7 @@ export class MemoryStore implements IStore {
    * automatically — the partition is defined once, here + in `saveAddress`.
    */
   private chainIndexMap(opts?: IAddressChainOptions): Map<number, string> {
-    const legacy = opts?.legacy ?? true;
-    return legacy ? this.addressIndexes : this.shieldedAddressIndexes;
+    return opts?.legacy === false ? this.shieldedAddressIndexes : this.addressIndexes;
   }
 
   /**

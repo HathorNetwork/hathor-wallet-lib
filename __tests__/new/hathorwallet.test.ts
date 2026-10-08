@@ -3710,6 +3710,14 @@ describe('multisig wallets and shielded keys', () => {
           address: legacy0,
           index: 0,
         });
+        // A legacy flag that is not false, as an untyped caller may pass, reads
+        // the legacy chain: the refusal and the store pick the same chain, so
+        // the shielded pairs in the store are not given out.
+        const notFalse = { legacy: 0 as unknown as boolean };
+        await expect(hWallet.getAddressAtIndex(0, notFalse)).resolves.toBe(legacy0);
+        await expect(hWallet.getAllAddresses(notFalse).next()).resolves.toMatchObject({
+          value: { address: legacy0, index: 0 },
+        });
       },
       TEST_TIMEOUT
     );
