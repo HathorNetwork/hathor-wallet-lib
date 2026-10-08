@@ -96,6 +96,10 @@ export async function buildWalletInstance({
  * Use this when you need to wait for a wallet-service side-effect that lags behind
  * tx visibility (e.g. UTXO index updates after a delegation).
  *
+ * The predicate must be a read (e.g. `getUtxos`, `getBalance`): a request that times out is
+ * retried within the stall budget (see `REQUEST_TIMEOUT_RETRY_BUDGET_MS`) and doesn't count
+ * as an attempt, like in `pollForTx`. Any other error propagates.
+ *
  * @param predicate - Async function that returns a truthy value when the condition is met.
  * @param label - Human-readable description for log/error messages.
  * @param maxAttempts - Maximum number of polling attempts (default: 10).
@@ -111,7 +115,19 @@ export async function pollUntilCondition<T>(
   let attempts = 0;
 
   while (attempts < maxAttempts) {
-    const result = await predicate();
+    let result: T;
+    try {
+      result = await predicate();
+    } catch (error) {
+      if (canRetryRequestTimeout(error)) {
+        // A timed-out request says nothing about the condition, so it doesn't spend an attempt
+        loggers.test!.warn(`Condition "${label}": request timed out, retrying`);
+        await delay(delayMs);
+        continue;
+      }
+      throw error;
+    }
+    markServiceAnswered();
     if (result) {
       loggers.test!.log(`Condition "${label}" met after ${attempts + 1} attempts`);
       return result;
