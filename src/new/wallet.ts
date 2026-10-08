@@ -98,6 +98,7 @@ import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
   deriveShieldedAddressFromStorage,
+  fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
@@ -2194,10 +2195,8 @@ class HathorWallet extends EventEmitter {
    * requested address. A buggy or mismatched provider could otherwise return the wrong key, which
    * would sign with the wrong key and could create an unspendable utxo.
    *
-   * Callers that know the requested address must pass it as `options.expectedAddress`. An index
-   * alone is ambiguous — the legacy, shielded and shielded-spend addresses of one BIP32 index share
-   * it — so checking only against the address at the index could accept the legacy key for a
-   * shielded-spend request. Index-based callers fall back to the legacy address at that index.
+   * See fetchVerifiedExternalPrivateKey (utils/address) for the checks and `expectedAddress`.
+   * Index-based callers are checked against the legacy address at that index.
    *
    * @param addressIndex - Index whose private key to fetch
    * @param [options.pinCode] - Forwarded to the provider
@@ -2208,22 +2207,14 @@ class HathorWallet extends EventEmitter {
   async getVerifiedExternalPrivateKey(
     addressIndex: number,
     options: { pinCode?: string; expectedAddress?: string } = {}
-  ): Promise<unknown> {
-    // expectedAddress is verification-only: keep it out of the PrivateKeyProvider contract.
-    const { expectedAddress, ...providerOptions } = options;
-    const privateKey = await this.storage.getExternalPrivateKey(addressIndex, providerOptions);
-    if (!(privateKey instanceof bitcore.PrivateKey)) {
-      throw new WalletError('External private key provider must return a bitcore PrivateKey.');
-    }
-    const derivedAddress = getAddressFromPubkey(
-      (privateKey as bitcore.PrivateKey).publicKey.toString(),
-      this.getNetworkObject()
-    ).base58;
-    const ownerAddress = expectedAddress ?? (await this.getAddressAtIndex(addressIndex));
-    if (derivedAddress !== ownerAddress) {
-      throw new WalletError('External private key provider returned a key for the wrong address.');
-    }
-    return privateKey;
+  ): Promise<bitcore.PrivateKey> {
+    return fetchVerifiedExternalPrivateKey(
+      this.storage,
+      this.getNetworkObject(),
+      addressIndex,
+      index => this.getAddressAtIndex(index),
+      options
+    );
   }
 
   /**
@@ -2237,7 +2228,7 @@ class HathorWallet extends EventEmitter {
    * @returns Promise that resolves with the signed message
    */
   async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
-    let privateKey: unknown;
+    let privateKey: bitcore.PrivateKey;
     if (this.storage.hasPrivateKeyMethod()) {
       // External provider (e.g. passkey signer): derive the key on demand by index; no pin needed.
       // Verified against the wallet's address at this index (see getVerifiedExternalPrivateKey).
@@ -2252,11 +2243,11 @@ class HathorWallet extends EventEmitter {
         throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
       }
       const addressHDPrivKey = (await this.getAddressPrivKey(pin, index)) as {
-        privateKey: unknown;
+        privateKey: bitcore.PrivateKey;
       };
       privateKey = addressHDPrivKey.privateKey;
     }
-    const signedMessage = signMessage(message, privateKey as bitcore.PrivateKey);
+    const signedMessage = signMessage(message, privateKey);
 
     return signedMessage;
   }
@@ -3901,6 +3892,14 @@ class HathorWallet extends EventEmitter {
    */
   setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
     this.storage.setPrivateKeyMethod(getPrivKey);
+  }
+
+  /**
+   * Whether an external private-key provider is registered (see setExternalPrivateKeyMethod),
+   * i.e. whether this wallet can sign messages and oracle data without a stored key.
+   */
+  hasExternalPrivateKeyMethod(): boolean {
+    return this.storage.hasPrivateKeyMethod();
   }
 
   /**
