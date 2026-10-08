@@ -2199,10 +2199,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     throw new WalletError('Not implemented.');
   }
 
-  /* eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars */
+  /**
+   * Set the crypto provider used to recover shielded outputs and build
+   * shielded transactions. Pass `undefined` to clear it.
+   */
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
-    // Shielded outputs are not supported on the wallet-service backend.
-    throw new WalletError('Not implemented.');
+    this.storage.setShieldedCryptoProvider(provider);
   }
 
   /**
