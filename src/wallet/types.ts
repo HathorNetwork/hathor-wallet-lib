@@ -753,6 +753,18 @@ export interface WsTransaction {
   addresses?: string[]; // every address the tx involves
 }
 
+/**
+ * Fields of `POST wallet/init` that register the wallet's shielded keys. The
+ * wallet-service requires all of them together.
+ */
+export interface ShieldedRegistrationFields {
+  scanXpriv: string; // scan chain xpriv at m/44'/280'/1'/0
+  spendXpub: string; // spend chain xpub at m/44'/280'/2'/0 (never the private key)
+  firstCtAddress: string; // shielded address at index 0
+  spendXpubSignature: string; // spend key signs timestamp + walletId + spendXpub
+  ctAddressSignature: string; // auth key signs timestamp + walletId + firstCtAddress
+}
+
 export interface CreateWalletAuthData {
   xpub: bitcore.HDPublicKey;
   xpubkeySignature: string;
