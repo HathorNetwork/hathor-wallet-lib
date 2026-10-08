@@ -309,6 +309,34 @@ export class InvalidPartialTxError extends WalletError {}
 export class WalletFromXPubGuard extends WalletError {}
 
 /**
+ * The `errorCode` values a {@link ShieldedKeyError} carries.
+ */
+export type ShieldedKeyErrorCode =
+  | ErrorMessages.SHIELDED_WRONG_PASSWORD
+  | ErrorMessages.SHIELDED_WRONG_PIN
+  | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH;
+
+/**
+ * Error thrown when the shielded keys cannot be derived or used with the
+ * secrets given; the reason is in `errorCode`. Its message is fixed and never
+ * contains key material or seed words. `cause` holds the underlying error
+ * only when that error carries no secret either.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ShieldedKeyError extends WalletError {
+  cause: unknown;
+
+  constructor(errorCode: ShieldedKeyErrorCode, message: string, cause?: unknown) {
+    super(message);
+    this.name = 'ShieldedKeyError';
+    this.errorCode = errorCode;
+    this.cause = cause;
+  }
+}
+
+/**
  * Error thrown when there is an error getting dag metadata using wallet service
  *
  * @memberof Errors

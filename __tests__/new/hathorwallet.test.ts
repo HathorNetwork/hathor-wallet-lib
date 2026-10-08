@@ -3366,3 +3366,55 @@ describe('history rewrites on newTxPromise', () => {
     expect(hWallet.state).toBe(HathorWallet.CLOSED);
   });
 });
+
+describe('start() with a record that predates shielded support', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  it('rejects a migration from another passphrase and keeps the stored record', async () => {
+    // A wallet started from its root xpriv runs the migration with an empty
+    // passphrase, whatever passphrase its words were created with.
+    const root = walletUtils.getXPrivKeyFromSeed(seed, {
+      passphrase: 'my-bip39-passphrase',
+      networkName: 'testnet',
+    });
+    const full = walletUtils.generateAccessDataFromXpriv(root.xprivkey, {
+      pin: '123',
+      seed,
+      password: '456',
+    });
+    const {
+      scanXpubkey: _scanXpubkey,
+      scanMainKey: _scanMainKey,
+      spendXpubkey: _spendXpubkey,
+      spendMainKey: _spendMainKey,
+      ...preShielded
+    } = full;
+    const storage = new Storage(new MemoryStore());
+    await storage.saveAccessData(preShielded);
+    const before = JSON.parse(JSON.stringify(preShielded));
+    jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+      resolve({ network: 'testnet' });
+    });
+    const conn = {
+      network: 'testnet',
+      getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+      on: jest.fn(),
+      start: jest.fn(),
+      getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
+    };
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.xpriv = root.xprivkey;
+    hWallet.passphrase = '';
+    hWallet.conn = conn;
+    hWallet.getTokenData = jest.fn();
+    hWallet.setState = jest.fn();
+
+    await expect(hWallet.start({ pinCode: '123', password: '456' })).rejects.toMatchObject({
+      errorCode: 'shielded-passphrase-mismatch',
+    });
+    expect(JSON.parse(JSON.stringify(await storage.getAccessData()))).toEqual(before);
+    expect(conn.start).not.toHaveBeenCalled();
+  }, 30000);
+});

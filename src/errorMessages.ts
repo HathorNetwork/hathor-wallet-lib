@@ -38,4 +38,11 @@ export enum ErrorMessages {
   // When PIN is required in a method and not set
   PIN_REQUIRED = 'pin-required',
   HAS_TX_OUTSIDE_FIRST_ADDRESS = 'has-tx-outside-first-address',
+  // Shielded key errors (ShieldedKeyError.errorCode)
+  // The password does not decrypt the words the shielded keys are derived from
+  SHIELDED_WRONG_PASSWORD = 'shielded-wrong-password',
+  // The PIN does not decrypt the wallet's keys
+  SHIELDED_WRONG_PIN = 'shielded-wrong-pin',
+  // The words and passphrase give a root that does not derive the wallet's own keys
+  SHIELDED_PASSPHRASE_MISMATCH = 'shielded-passphrase-mismatch',
 }

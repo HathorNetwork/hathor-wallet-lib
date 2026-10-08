@@ -18,7 +18,8 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import { OP_0 } from '../opcodes';
-import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError, ShieldedKeyError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 import Network from '../models/network';
 import helpers from './helpers';
 
@@ -30,6 +31,30 @@ import {
   WALLET_FLAGS,
 } from '../types';
 import { encryptData, decryptData } from './crypto';
+
+/**
+ * Whether `key` is the extended public key serialized in `xpubkey`: the same
+ * public key and chain code. Network version bytes are not compared, so the
+ * same key serialized for another network matches.
+ *
+ * @param key The extended public key
+ * @param xpubkey The serialized extended public key to compare with
+ * @returns true when both are the same key
+ */
+function isSameExtendedPublicKey(key: HDPublicKey, xpubkey: string): boolean {
+  if (key.xpubkey === xpubkey) {
+    return true;
+  }
+  let other: HDPublicKey;
+  try {
+    other = new HDPublicKey(xpubkey);
+  } catch {
+    return false;
+  }
+  const a = key.toObject();
+  const b = other.toObject();
+  return a.publicKey === b.publicKey && a.chainCode === b.chainCode;
+}
 
 const wallet = {
   /**
@@ -772,13 +797,21 @@ const wallet = {
    * (index=-1)". Running this migration on the next `wallet.start()` fixes
    * the state permanently.
    *
-   * IMPORTANT: `passphrase` must be the wallet's original BIP39 passphrase.
-   * A different passphrase derives the shielded keys from a different root
-   * than the wallet's legacy keys — and this is NOT detectable here, since
-   * BIP39 passphrases are unverifiable by design (any passphrase yields a
-   * valid seed). The PIN, however, IS cross-checked against `mainKey` below
-   * so the new blobs can never be encrypted under a PIN that differs from
-   * the rest of the record.
+   * `passphrase` must be the wallet's original BIP39 passphrase. A passphrase
+   * cannot be checked on its own (any passphrase yields a valid seed), so the
+   * root it gives is checked instead: it must derive the record's own legacy
+   * change key (`xpubkey`), on the P2PKH or the P2SH path by `walletType`.
+   * Otherwise the shielded keys would come from another root than the
+   * wallet's legacy keys, and a restore from the words and the right
+   * passphrase would not find the shielded funds. The PIN is cross-checked
+   * against `mainKey`, so the new blobs can never be encrypted under a PIN
+   * that differs from the rest of the record. Nothing is written unless every
+   * check passes.
+   *
+   * @throws {ShieldedKeyError} `shielded-wrong-password` when the password does
+   *   not decrypt the words, `shielded-wrong-pin` when the PIN does not decrypt
+   *   `mainKey`, and `shielded-passphrase-mismatch` when the root does not
+   *   derive `xpubkey`.
    */
   migrateShieldedAccessData(
     accessData: IWalletAccessData,
@@ -808,38 +841,52 @@ const wallet = {
     try {
       words = decryptData(accessData.words, password);
     } catch (e) {
-      // Project tsconfig predates ES2022 ErrorOptions; attach `cause` via
-      // property assignment so the original InvalidPasswdError/DecryptionError
-      // is still recoverable from `(err as Error & { cause? }).cause`.
-      const wrapped = new Error(
+      // The original InvalidPasswdError/DecryptionError stays in `cause`; it
+      // carries no key material.
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_WRONG_PASSWORD,
         'Shielded migration requires the wallet password (not PIN) to decrypt the seed. ' +
-          'Ensure you provided the password and not the PIN, then retry wallet.start.'
+          'Ensure you provided the password and not the PIN, then retry wallet.start.',
+        e
       );
-      (wrapped as Error & { cause?: unknown }).cause = e;
-      throw wrapped;
     }
 
     // Cross-check the PIN against the record's existing key material before
     // writing anything: without this, a mismatched PIN silently produces
     // scan/spend blobs encrypted under a DIFFERENT pin than mainKey — the
     // wallet then fails to decrypt its shielded keys on every unlock, with
-    // no hint that the migration was the cause. BIP39 passphrases cannot be
-    // validated the same way (see doc comment), but the PIN can and must be.
+    // no hint that the migration was the cause.
     if (accessData.mainKey) {
       try {
         decryptData(accessData.mainKey, pin);
       } catch (e) {
-        const wrapped = new Error(
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_WRONG_PIN,
           'Shielded migration PIN does not match the wallet mainKey. ' +
-            'The new shielded keys must be encrypted under the same PIN as the rest of the record.'
+            'The new shielded keys must be encrypted under the same PIN as the rest of the record.',
+          e
         );
-        (wrapped as Error & { cause?: unknown }).cause = e;
-        throw wrapped;
       }
     }
 
     const code = new Mnemonic(words);
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
+
+    // The passphrase cannot be checked on its own, but the root it gives must
+    // derive the record's own legacy change key, on the path
+    // generateAccessDataFromSeed uses for this wallet type.
+    const legacyAcctPath =
+      accessData.walletType === WalletType.MULTISIG ? P2SH_ACCT_PATH : P2PKH_ACCT_PATH;
+    const legacyXpub = rootXpriv
+      .deriveNonCompliantChild(legacyAcctPath)
+      .deriveNonCompliantChild(0).hdPublicKey;
+    if (!isSameExtendedPublicKey(legacyXpub, accessData.xpubkey)) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH,
+        'Shielded migration passphrase does not match the wallet: the words and passphrase ' +
+          'do not derive the wallet xpubkey. Provide the passphrase the wallet was created with.'
+      );
+    }
 
     // Paths + encryption must match `generateAccessDataFromSeed` exactly.
     const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);

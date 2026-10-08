@@ -13,6 +13,8 @@ import {
   InvalidWords,
   UncompressedPubKeyError,
   InvalidPasswdError,
+  ShieldedKeyError,
+  WalletError,
 } from '../../src/errors';
 import Network from '../../src/models/network';
 import {
@@ -23,7 +25,7 @@ import {
   SHIELDED_SPEND_ACCT_PATH,
 } from '../../src/constants';
 import { hexToBuffer } from '../../src/utils/buffer';
-import { WalletType, WALLET_FLAGS } from '../../src/types';
+import { IMultisigData, WalletType, WALLET_FLAGS } from '../../src/types';
 import { checkPassword, decryptData } from '../../src/utils/crypto';
 
 test('Words', () => {
@@ -909,6 +911,8 @@ describe('migrateShieldedAccessData', () => {
     // know to provide the wallet password (not PIN). The original
     // InvalidPasswdError stays available via .cause.
     expect(caught).toBeInstanceOf(Error);
+    expect(caught).toBeInstanceOf(ShieldedKeyError);
+    expect((caught as ShieldedKeyError).errorCode).toBe('shielded-wrong-password');
     expect((caught as Error).message).toMatch(/wallet password \(not PIN\)/);
     expect((caught as Error & { cause?: unknown }).cause).toBeInstanceOf(InvalidPasswdError);
     // Critical: no fields should have been assigned before the throw. If
@@ -936,6 +940,8 @@ describe('migrateShieldedAccessData', () => {
       caught = e;
     }
     expect(caught).toBeInstanceOf(Error);
+    expect(caught).toBeInstanceOf(ShieldedKeyError);
+    expect((caught as ShieldedKeyError).errorCode).toBe('shielded-wrong-pin');
     expect((caught as Error).message).toMatch(/PIN does not match the wallet mainKey/);
     expect((caught as Error & { cause?: unknown }).cause).toBeInstanceOf(InvalidPasswdError);
     expect(record.scanXpubkey).toBeUndefined();
@@ -973,11 +979,10 @@ describe('migrateShieldedAccessData', () => {
     expect(preShielded.spendXpubkey).toBe(spendXpubkey);
   });
 
-  test('M.8 — passphrase wallet: a different passphrase silently derives different keys', () => {
-    // BIP39 passphrases are unverifiable by design (any passphrase yields a
-    // valid seed), so migration CANNOT detect this. This test pins the
-    // failure mode the doc comment warns about: callers must supply the
-    // wallet's original passphrase.
+  test('M.8 — passphrase wallet: a different passphrase throws and leaves the record untouched', () => {
+    // BIP39 passphrases cannot be checked on their own (any passphrase yields a
+    // valid seed), but the root a passphrase gives must derive the record's own
+    // legacy xpub. A different one does not, so nothing is written.
     const passphrase = 'my-bip39-passphrase';
     const full = wallet.generateAccessDataFromSeed(seed, {
       pin: '123',
@@ -989,17 +994,23 @@ describe('migrateShieldedAccessData', () => {
     delete preShielded.scanMainKey;
     delete preShielded.spendXpubkey;
     delete preShielded.spendMainKey;
+    const before = JSON.parse(JSON.stringify(preShielded));
 
-    const migrated = wallet.migrateShieldedAccessData(preShielded, {
-      pin: '123',
-      password: '456',
-      passphrase: 'a-different-passphrase',
-      networkName: 'testnet',
-    });
-    // No error — but the keys come from a different root than the wallet's
-    // legacy keys.
-    expect(migrated).toBe(true);
-    expect(preShielded.scanXpubkey).not.toBe(scanXpubkey);
+    let caught: unknown;
+    try {
+      wallet.migrateShieldedAccessData(preShielded, {
+        pin: '123',
+        password: '456',
+        passphrase: 'a-different-passphrase',
+        networkName: 'testnet',
+      });
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(ShieldedKeyError);
+    expect((caught as ShieldedKeyError).errorCode).toBe('shielded-passphrase-mismatch');
+    expect(JSON.parse(JSON.stringify(preShielded))).toEqual(before);
+    expect(scanXpubkey).toBeDefined();
   });
 
   test('M.9 — partial record (some shielded fields missing) is healed by re-derivation', () => {
@@ -1030,6 +1041,118 @@ describe('migrateShieldedAccessData', () => {
     expect(decryptData(partial.scanMainKey!, '123')).toEqual(decryptData(full.scanMainKey!, '123'));
     expect(decryptData(partial.spendMainKey!, '123')).toEqual(
       decryptData(full.spendMainKey!, '123')
+    );
+  });
+
+  describe("the root the passphrase gives must derive the record's legacy xpub", () => {
+    const multisig: IMultisigData = {
+      pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(k => k.xpubkey),
+      numSignatures: 2,
+    };
+
+    function preShieldedRecord({
+      passphrase,
+      walletMultisig,
+    }: {
+      passphrase: string;
+      walletMultisig?: IMultisigData;
+    }) {
+      const full = wallet.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        passphrase,
+        multisig: walletMultisig,
+        networkName: 'testnet',
+      });
+      const {
+        scanXpubkey: _scanXpubkey,
+        scanMainKey: _scanMainKey,
+        spendXpubkey: _spendXpubkey,
+        spendMainKey: _spendMainKey,
+        ...preShielded
+      } = full;
+      return { full, preShielded };
+    }
+
+    // The P2PKH record, with and without a passphrase, is migrated by the tests above.
+    test.each([
+      { path: 'P2SH', walletMultisig: multisig, passphrase: '' },
+      { path: 'P2SH', walletMultisig: multisig, passphrase: 'my-bip39-passphrase' },
+    ])(
+      '$path record, passphrase "$passphrase": the passphrase it was created with migrates it',
+      ({ walletMultisig, passphrase }) => {
+        const { full, preShielded } = preShieldedRecord({ passphrase, walletMultisig });
+
+        const migrated = wallet.migrateShieldedAccessData(preShielded, {
+          pin: '123',
+          password: '456',
+          passphrase,
+          networkName: 'testnet',
+        });
+
+        expect(migrated).toBe(true);
+        expect(preShielded.scanXpubkey).toBe(full.scanXpubkey);
+        expect(preShielded.spendXpubkey).toBe(full.spendXpubkey);
+      }
+    );
+
+    test('a record whose xpubkey was serialized with other version bytes migrates', () => {
+      const { full, preShielded } = preShieldedRecord({ passphrase: '' });
+      // The same key and chain code, with Bitcoin testnet version bytes.
+      const {
+        checksum: _checksum,
+        xpubkey: _xpubkey,
+        ...fields
+      } = new HDPublicKey(full.xpubkey).toObject();
+      const reserialized = new HDPublicKey({ ...fields, network: 'testnet' }).xpubkey;
+      expect(reserialized.startsWith('tpub')).toBe(true);
+      preShielded.xpubkey = reserialized;
+
+      const migrated = wallet.migrateShieldedAccessData(preShielded, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+      });
+
+      expect(migrated).toBe(true);
+      expect(preShielded.scanXpubkey).toBe(full.scanXpubkey);
+    });
+
+    // A P2PKH record given another non-empty passphrase is covered above.
+    test.each([
+      { path: 'P2PKH', walletMultisig: undefined, created: 'my-bip39-passphrase', given: '' },
+      { path: 'P2PKH', walletMultisig: undefined, created: '', given: 'my-bip39-passphrase' },
+      { path: 'P2SH', walletMultisig: multisig, created: 'my-bip39-passphrase', given: '' },
+      { path: 'P2SH', walletMultisig: multisig, created: 'my-bip39-passphrase', given: 'other' },
+      { path: 'P2SH', walletMultisig: multisig, created: '', given: 'my-bip39-passphrase' },
+    ])(
+      '$path record created with passphrase "$created", given "$given": throws shielded-passphrase-mismatch and writes nothing',
+      ({ walletMultisig, created, given }) => {
+        const { full, preShielded } = preShieldedRecord({ passphrase: created, walletMultisig });
+        const before = JSON.parse(JSON.stringify(preShielded));
+
+        let caught: unknown;
+        try {
+          wallet.migrateShieldedAccessData(preShielded, {
+            pin: '123',
+            password: '456',
+            passphrase: given,
+            networkName: 'testnet',
+          });
+        } catch (e) {
+          caught = e;
+        }
+
+        expect(caught).toBeInstanceOf(ShieldedKeyError);
+        expect(caught).toBeInstanceOf(WalletError);
+        expect((caught as ShieldedKeyError).errorCode).toBe('shielded-passphrase-mismatch');
+        expect(JSON.parse(JSON.stringify(preShielded))).toEqual(before);
+        // The error carries no key material or seed words.
+        const { message } = caught as Error;
+        for (const secret of [seed, full.xpubkey, full.scanXpubkey!, full.spendXpubkey!]) {
+          expect(message).not.toContain(secret);
+        }
+      }
     );
   });
 });
