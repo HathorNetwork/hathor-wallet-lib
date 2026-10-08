@@ -12,13 +12,15 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { WalletError } from '../../src/errors';
+import { ShieldedNotEnabledError, WalletError } from '../../src/errors';
 import { IWalletAccessData } from '../../src/types';
 import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import {
   shieldedFixtureSeed,
   shieldedFixtureAddresses,
+  legacyFixtureAddress,
+  buildShieldedAddressRow,
   buildShieldedNewAddressesResponse,
 } from '../__mock_helpers__/shielded-ws.fixtures';
 
@@ -280,5 +282,147 @@ describe('setShieldedCryptoProvider', () => {
     expect(wallet.storage.getShieldedCryptoProvider()).toBe(provider);
     wallet.setShieldedCryptoProvider(undefined);
     expect(wallet.storage.shieldedCryptoProvider).toBeUndefined();
+  });
+});
+
+/**
+ * A wallet marked ready with shielded keys registered, without running the
+ * (slow) seed derivation of start().
+ */
+const readyWallet = async ({ shielded = true, singleAddress = false } = {}) => {
+  const storage = new Storage(new MemoryStore());
+  // xpub-only access data is enough for these tests and skips seed derivation
+  await storage.saveAccessData(
+    walletUtils.generateAccessDataFromXpub(
+      rootKey().deriveNonCompliantChild("m/44'/280'/0'").xpubkey
+    )
+  );
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword: jest.fn(),
+    seed: shieldedFixtureSeed,
+    network,
+    storage,
+    singleAddressMode: singleAddress,
+  });
+  wallet.setState('Ready');
+  (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = shielded;
+  await (wallet as unknown as { getNewAddresses: () => Promise<void> }).getNewAddresses();
+  return wallet;
+};
+
+describe('address chain options', () => {
+  const ct = (i: number) => shieldedFixtureAddresses[i].shieldedBase58;
+  const spend = (i: number) => shieldedFixtureAddresses[i].spendBase58;
+
+  beforeEach(() => {
+    jest.spyOn(walletApi, 'getShieldedAddresses').mockResolvedValue({
+      success: true,
+      addresses: [buildShieldedAddressRow(0, 2), buildShieldedAddressRow(1)],
+    });
+    jest.spyOn(walletApi, 'getAddresses').mockResolvedValue({
+      success: true,
+      addresses: [{ address: legacyFixtureAddress, index: 0, transactions: 0 }],
+    });
+  });
+
+  it('fills both unused-address lists from one request', async () => {
+    const wallet = await readyWallet();
+    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+    expect(walletApi.getNewAddresses).not.toHaveBeenCalled();
+    expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
+    expect(wallet.getCurrentAddress({}, { legacy: false })).toEqual({
+      address: ct(0),
+      spendAddress: spend(0),
+      index: 0,
+      addressPath: "m/44'/280'/2'/0/0",
+    });
+  });
+
+  it('keeps legacy-only wallets on the legacy request', async () => {
+    const wallet = await readyWallet({ shielded: false });
+    expect(walletApi.getNewAddresses).toHaveBeenCalledTimes(1);
+    expect(walletApi.getShieldedNewAddresses).not.toHaveBeenCalled();
+    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(ShieldedNotEnabledError);
+  });
+
+  it('moves the shielded cursor independently of the legacy one', async () => {
+    const wallet = await readyWallet();
+    expect(wallet.getNextAddress({ legacy: false }).address).toBe(ct(1));
+    expect(wallet.getCurrentAddress({ markAsUsed: true }, { legacy: false }).address).toBe(ct(1));
+    expect(wallet.getCurrentAddress({}, { legacy: false }).address).toBe(ct(2));
+    // The legacy chain is untouched
+    expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
+    wallet.getNextAddress();
+    expect(wallet.getCurrentAddress({}, { legacy: false }).address).toBe(ct(2));
+  });
+
+  it('reports the gap limit past the last shielded address', async () => {
+    const wallet = await readyWallet();
+    wallet.getCurrentAddress({ markAsUsed: true }, { legacy: false });
+    wallet.getCurrentAddress({ markAsUsed: true }, { legacy: false });
+    wallet.getCurrentAddress({ markAsUsed: true }, { legacy: false });
+    expect(wallet.getCurrentAddress({}, { legacy: false })).toMatchObject({
+      address: ct(2),
+      info: 'GAP_LIMIT_REACHED',
+    });
+  });
+
+  it('fails clearly when the server has no unused shielded address', async () => {
+    (walletApi.getShieldedNewAddresses as jest.Mock).mockResolvedValue({
+      ...buildShieldedNewAddressesResponse([]),
+    });
+    const wallet = await readyWallet();
+    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(
+      /no unused shielded address/
+    );
+  });
+
+  it('refuses the shielded chain in single-address mode', async () => {
+    const wallet = await readyWallet({ singleAddress: true });
+    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(/single-address mode/);
+    expect(() => wallet.getNextAddress({ legacy: false })).toThrow(/single-address mode/);
+  });
+
+  it('lists the shielded addresses', async () => {
+    const wallet = await readyWallet();
+    const rows = [];
+    for await (const row of wallet.getAllAddresses({ legacy: false })) {
+      rows.push(row);
+    }
+    expect(rows.map(r => r.address)).toEqual([ct(0), ct(1)]);
+    expect(rows[0]).toMatchObject({ spendAddress: spend(0), transactions: 2 });
+    expect(walletApi.getAddresses).not.toHaveBeenCalled();
+  });
+
+  it('gets the shielded address at an index', async () => {
+    (walletApi.getShieldedAddresses as jest.Mock).mockResolvedValue({
+      success: true,
+      addresses: [buildShieldedAddressRow(1)],
+    });
+    const wallet = await readyWallet();
+    await expect(wallet.getAddressAtIndex(1, { legacy: false })).resolves.toBe(ct(1));
+    expect(walletApi.getShieldedAddresses).toHaveBeenCalledWith(wallet, 1);
+  });
+
+  it('builds the spend-chain path for a shielded index', async () => {
+    const wallet = await readyWallet();
+    await expect(wallet.getAddressPathForIndex(7, { legacy: false })).resolves.toBe(
+      "m/44'/280'/2'/0/7"
+    );
+    await expect(wallet.getAddressPathForIndex(7)).resolves.toBe("m/44'/280'/0'/0/7");
+  });
+
+  it('refuses every shielded address method on a legacy-only wallet', async () => {
+    const wallet = await readyWallet({ shielded: false });
+    await expect(wallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(
+      ShieldedNotEnabledError
+    );
+    await expect(wallet.getAddressPathForIndex(0, { legacy: false })).rejects.toThrow(
+      ShieldedNotEnabledError
+    );
+    await expect(wallet.getAllAddresses({ legacy: false }).next()).rejects.toThrow(
+      ShieldedNotEnabledError
+    );
+    expect(() => wallet.getNextAddress({ legacy: false })).toThrow(ShieldedNotEnabledError);
   });
 });
