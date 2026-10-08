@@ -22,6 +22,7 @@ import walletUtils from '../../../src/utils/wallet';
 import {
   buildWalletInstance,
   pollForTx,
+  pollUntilCondition,
   retryOnTransientWalletInit,
 } from '../helpers/service-facade.helper';
 import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
@@ -95,6 +96,12 @@ describeShieldedSend('[Service-specific] shielded sends', () => {
       { pinCode }
     );
     await pollForTx(receiver, shieldedTx.hash!);
+    // The tx is visible before the wallet-service indexes its utxos: wait for
+    // the received shielded utxo before spending it
+    await pollUntilCondition(
+      async () => (await receiver.getUtxos({ shielded: true })).utxos.length > 0,
+      'received shielded utxo indexed'
+    );
 
     const [received] = await receiver.getBalance(NATIVE_TOKEN_UID, { split: true });
     expect(received.balance.unlocked.shielded).toBe(30n);
