@@ -338,6 +338,8 @@ export async function savePrecalculatedShieldedAddresses(
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
+ * @param {string} [pinCode] The PIN that unlocks the scan key to decode the
+ *   wallet's shielded outputs, while the shielded session holds no key
  */
 export async function apiSyncHistory(
   startIndex: number,
@@ -665,6 +667,9 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  *
  * @param {IStorage} storage Storage instance.
  * @param {{rewardLock: number}} [options={}] Use this configuration when processing the storage
+ * @param {string} [options.pinCode] The PIN that unlocks the scan key while the
+ *   session holds none. An empty PIN and null are not tried, and a PIN that
+ *   unlocks no key leaves the wallet's shielded outputs counted locked.
  * @async
  * @returns {Promise<void>}
  */
@@ -783,6 +788,17 @@ export async function processHistory(
   }
 }
 
+/**
+ * Process one new transaction, as a realtime tx, and update the wallet data
+ * with what it used.
+ *
+ * @param storage Storage instance.
+ * @param tx The transaction to process
+ * @param [options.rewardLock] The reward lock of the network
+ * @param [options.pinCode] The PIN that unlocks the scan key to decode the
+ *   wallet's shielded outputs of `tx`, while the shielded session holds no key
+ *   (see processNewTx)
+ */
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
@@ -1169,7 +1185,11 @@ async function decodeWalletShieldedOutputs(
  * @param {number} [options.rewardLock] The reward lock of the network
  * @param {number} [options.nowTs] The current timestamp
  * @param {number} [options.currentHeight] The current height of the best chain
- * @param {string} [options.pinCode] PIN code for shielded-output decryption
+ * @param {string} [options.pinCode] The PIN that unlocks the scan key while the
+ *   shielded session holds none; the session's key decodes the tx when it
+ *   holds one. An empty PIN and null are not tried. A missing PIN, or one that
+ *   unlocks no key, throws nothing: the transparent outputs are credited and
+ *   the wallet's shielded outputs are counted locked.
  * @param {ScanKeyContext} [options.scanKeys] The scan key of the walk this tx is
  *   part of. A walk passes it so the PIN is unlocked once for all its txs, and
  *   logs the undecoded outputs once for all of them. Without it, the tx is a

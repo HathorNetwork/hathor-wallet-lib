@@ -332,6 +332,13 @@ class HathorWallet extends EventEmitter {
   // Security
   passphrase: string;
 
+  /**
+   * The PIN given to the constructor. start() uses it when given no PIN, and
+   * signing uses it when given none. For shielded outputs it is only a
+   * fallback: the scan key the session holds from start() to stop() decodes
+   * them, and this PIN unlocks the key for one pass only while the session
+   * holds none.
+   */
   pinCode: string | null;
 
   password: string | null;
@@ -1897,7 +1904,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Process the transactions on the websocket transaction queue as if they just
-   * arrived, then process the whole history.
+   * arrived, then process the whole history. Shielded outputs are decoded with
+   * the session's scan key, or with the wallet's `pinCode` while the session
+   * holds none.
    */
   async processTxQueue(): Promise<void> {
     await this.drainWsTxQueue();
@@ -2201,11 +2210,13 @@ class HathorWallet extends EventEmitter {
    * messages while keeping the underlying failure visible.
    *
    * @param wsData WebSocket message data containing transaction history
-   * @param txPin Optional PIN for THIS message's shielded decryption. The
-   *   sender-local insert passes the pin it used for the send so a wallet
-   *   constructed without a stored `pinCode` (per-call-pin flow) still decodes
-   *   and credits its own shielded change. WebSocket-delivered messages omit it
-   *   and fall back to `this.pinCode`.
+   * @param txPin Optional PIN for THIS message's shielded outputs, used only
+   *   while the wallet's shielded session holds no scan key: the session's key,
+   *   unlocked at start() or by unlockShieldedView(), decodes them whatever PIN
+   *   is given. The sender-local insert passes the PIN it used for the send;
+   *   WebSocket-delivered messages omit it and fall back to `this.pinCode`. A
+   *   PIN that unlocks no key leaves the wallet's shielded outputs counted
+   *   locked, and the tx is processed all the same.
    */
   enqueueOnNewTx(wsData: WalletWebSocketData, txPin?: string): void {
     this.newTxPromise = this.newTxPromise
@@ -2224,8 +2235,9 @@ class HathorWallet extends EventEmitter {
    * stays true while a realtime tx is processed.
    *
    * @param wsData WebSocket message data containing transaction history
-   * @param txPin Optional PIN for this tx's shielded decryption (see
-   *   enqueueOnNewTx); falls back to the wallet's stored `pinCode`.
+   * @param txPin Optional PIN for this tx's shielded outputs, used only while
+   *   the shielded session holds no scan key (see enqueueOnNewTx); falls back to
+   *   the wallet's stored `pinCode`.
    */
   async onNewTx(wsData: WalletWebSocketData, txPin?: string): Promise<void> {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
@@ -2266,9 +2278,9 @@ class HathorWallet extends EventEmitter {
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
 
-    // Prefer the per-message pin (sender-local insert) so a wallet with no
-    // stored pinCode still decrypts its own shielded change; fall back to the
-    // stored pin for WebSocket-delivered txs.
+    // Decoding uses the session's scan key. While the session holds none, the
+    // per-message pin (sender-local insert) or else the stored pin unlocks the
+    // key for this tx only.
     const pin = txPin ?? this.pinCode ?? undefined;
 
     // The undecoded outputs this tx leaves are part of the shielded capability.
@@ -4778,6 +4790,8 @@ class HathorWallet extends EventEmitter {
    * @param startIndex The index of the first address to sync
    * @param count The number of addresses to sync
    * @param shouldProcessHistory If we should process the transaction history found
+   * @param pinCode The PIN that unlocks the scan key to decode the shielded
+   *   outputs found, used only while the shielded session holds no key
    */
   async syncHistory(
     startIndex: number,

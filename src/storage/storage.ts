@@ -651,6 +651,9 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param pinCode The PIN that unlocks the scan key, once for the whole
+   *   history, to decode the wallet's shielded outputs while the shielded
+   *   session holds no key. The session's key is used when it holds one.
    * @returns {Promise<void>}
    */
   async processHistory(pinCode?: string): Promise<void> {
@@ -663,6 +666,10 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param tx The transaction to process
+   * @param pinCode The PIN that unlocks the scan key to decode the wallet's
+   *   shielded outputs of `tx` while the shielded session holds no key. The
+   *   session's key is used when it holds one.
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {

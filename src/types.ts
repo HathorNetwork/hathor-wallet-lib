@@ -115,8 +115,9 @@ export type HistorySyncFunction = (
   storage: IStorage,
   connection: FullNodeConnection,
   shouldProcessHistory?: boolean,
-  // PIN code threaded so processHistory can derive the per-address scan key
-  // and decrypt wallet-owned shielded outputs after the history loads.
+  // The PIN processHistory unlocks the scan key with, to decode the wallet's
+  // shielded outputs after the history loads, while the wallet's shielded
+  // session holds no key. The session's key is used when it holds one.
   pinCode?: string
 ) => Promise<void>;
 
@@ -577,6 +578,12 @@ export interface IWalletAccessData {
   // the scan/spend chains are hardened accounts (1'/2'), derivable only
   // from the root xpriv, so xpub-only (read-only) wallets and wallets
   // initialized from an account-level xpriv can never populate these.
+  // HathorWallet.start() and unlockShieldedView() decrypt scanMainKey with
+  // the PIN, check it against scanXpubkey, and keep it decrypted in memory
+  // only, in the wallet's shielded session, until stop(): it is never stored
+  // decrypted, and saveAccessData refuses private keys in the clear. Other
+  // PINs given for decoding unlock it only while the session holds no key.
+  // spendMainKey is decrypted only to sign.
   scanXpubkey?: string; // xpub at m/44'/280'/1'/0 (scan chain — view-only access)
   scanMainKey?: IEncryptedData; // encrypted xpriv at m/44'/280'/1'/0
   spendXpubkey?: string; // xpub at m/44'/280'/2'/0 (spend chain — signing authority)
@@ -872,8 +879,10 @@ export interface IStorage {
   getTx(txId: string): Promise<IHistoryTx | null>;
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
-  // pinCode is threaded so the scan-key derivation can decrypt wallet-owned
-  // shielded outputs while (re)processing the history.
+  // The wallet's shielded outputs are decoded with the scan key its shielded
+  // session holds. While the session holds none, pinCode unlocks the key for
+  // this call only. A missing or wrong PIN throws nothing: the transparent
+  // outputs are credited and the wallet's shielded outputs are counted locked.
   processHistory(pinCode?: string): Promise<void>;
   processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void>;
   getUtxo(utxoId: IUtxoId): Promise<IUtxo | null>;
