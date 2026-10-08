@@ -602,8 +602,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   private async prepareTxWithSharedEngine(): Promise<Transaction> {
     if (!this.pin) {
-      // The PIN unlocks the scan key that opens shielded utxos
-      throw new SendTxError('Pin is not set.');
+      // The PIN unlocks the scan key that opens shielded utxos, so an external
+      // signer alone cannot drive this send
+      throw new SendTxError(
+        "A wallet with shielded keys needs the PIN to open the wallet's shielded utxos; " +
+          'sending without it (e.g. with an external signer) is not supported.'
+      );
     }
     const adapter = new WalletServiceSendStorage(this.wallet, this.pin);
     const sendTransaction = new SendTransaction({
