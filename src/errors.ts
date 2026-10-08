@@ -260,6 +260,19 @@ export class SendTxError extends WalletError {
 }
 
 /**
+ * Error thrown when a send needs a shielded change the wallet cannot receive:
+ * the wallet is multisig, whose shielded addresses are single-signature, or it
+ * has no shielded address, because it lacks the shielded scan or spend key or
+ * because its store holds none. It is a distinct type so the send can tell it
+ * apart from a failure to read the address, such as a storage error: where
+ * shielding the change is optional, only this error skips it.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ShieldedChangeUnavailableError extends SendTxError {}
+
+/**
  * Error thrown when mining tx
  *
  * @memberof Errors

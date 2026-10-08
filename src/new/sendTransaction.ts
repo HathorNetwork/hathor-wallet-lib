@@ -18,7 +18,7 @@ import {
   FEE_PER_FULL_SHIELDED_OUTPUT,
 } from '../constants';
 import { ErrorMessages } from '../errorMessages';
-import { SendTxError, WalletError } from '../errors';
+import { SendTxError, ShieldedChangeUnavailableError, WalletError } from '../errors';
 import Address from '../models/address';
 import { getAddressType, resolveOutputScriptAddress } from '../utils/address';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -557,28 +557,45 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     }
     const shieldedChangeAddress = changeAddressIsNewFormat ? this.changeAddress : null;
     // Whether a shielded change can be hosted at all: not at a legacy change
-    // address, nor by a wallet with no shielded address. Where shielding the
-    // change is optional, a false answer skips it; the 1-unit case of the
-    // structural pass throws with that reason; elsewhere a required shielding
-    // fails at the legacy address check or when resolving the address.
+    // address, nor by a multisig wallet or one with no shielded address (it
+    // lacks the shielded scan or spend key, or its store holds none). Where
+    // shielding the change is optional, a false answer skips it; the 1-unit
+    // case of the structural pass throws with that reason; elsewhere a
+    // required shielding fails at the legacy address check or when resolving
+    // the address. Any other failure to resolve the address, such as a
+    // storage error, propagates.
     const changeStorage = this.storage;
     let shieldedChangeHostable: Promise<boolean> | null = null;
     const canHostShieldedChange = (): Promise<boolean> => {
       if (shieldedChangeHostable === null) {
         shieldedChangeHostable = legacyChangeAddress
           ? Promise.resolve(false)
-          : resolveShieldedChangeAddress(changeStorage, shieldedChangeAddress).then(
+          : resolveShieldedChangeAddress(
+              changeStorage,
+              shieldedChangeAddress,
+              keepTransparentHint
+            ).then(
               () => true,
-              () => false
+              (e: unknown) => {
+                if (e instanceof ShieldedChangeUnavailableError) {
+                  return false;
+                }
+                throw e;
+              }
             );
       }
       return shieldedChangeHostable;
     };
     // Shielding a token's change in place of a shielded input the wallet lacks
     // is optional: it is skipped when the tx has no room for another shielded
-    // output or the change cannot be hosted shielded.
+    // output or the change cannot be hosted shielded. An explicit change mode
+    // decides the change itself, so hosting is not asked about then.
     const shieldsChangeInstead = async (token: string): Promise<boolean> => {
-      if (!shieldedChangeTokens.has(token) || shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS) {
+      if (
+        changeModeOverride !== null ||
+        !shieldedChangeTokens.has(token) ||
+        shieldedOutputDefs.length >= MAX_SHIELDED_OUTPUTS
+      ) {
         return false;
       }
       return canHostShieldedChange();
@@ -592,7 +609,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       if (legacyChangeAddress) {
         // No address can take a multisig wallet's shielded change.
         if ((await changeStorage.getWalletType()) !== WalletType.P2PKH) {
-          throw new SendTxError(MULTISIG_SHIELDED_CHANGE_ERROR);
+          throw new ShieldedChangeUnavailableError(MULTISIG_SHIELDED_CHANGE_ERROR);
         }
         throw new SendTxError(
           "The change must be shielded (all of its token's outputs are shielded, or the " +
@@ -694,7 +711,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // downgrade.
       const shieldedAddress = await resolveShieldedChangeAddress(
         this.storage,
-        shieldedChangeAddress
+        shieldedChangeAddress,
+        keepTransparentHint
       );
       const addressObj = new Address(shieldedAddress, { network });
       if (!addressObj.isShielded()) {
@@ -829,9 +847,13 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       report: selectionReports.get(HTR_UID) ?? userInputSummaries.get(HTR_UID) ?? null,
       override: changeModeOverride,
     };
-    const htrShieldChange = await shieldsChangeInstead(HTR_UID);
-    const htrChangeMode = decideChangeMode({ ...htrChangeArgs, shieldChange: htrShieldChange });
     const htrChangeIndex = findHtrChangeIndex(partialHtrTxData.outputs);
+    // With no HTR change, its mode only matters to a change the structural pass
+    // may pull for a lone shielded output.
+    const htrShieldChange =
+      (htrChangeIndex !== -1 || shieldedOutputDefs.length === 1) &&
+      (await shieldsChangeInstead(HTR_UID));
+    const htrChangeMode = decideChangeMode({ ...htrChangeArgs, shieldChange: htrShieldChange });
     // Only a change that will actually be shielded needs a shielded-capable
     // destination; with no HTR change (an exact match) the address is unused.
     if (htrChangeMode !== OutputKind.TRANSPARENT && htrChangeIndex !== -1) {
@@ -862,7 +884,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       shouldChooseHTRInputs,
       htrPolicy.preference,
       shieldedChangeAddress,
-      !htrChangeMayStay
+      !htrChangeMayStay,
+      keepTransparentHint
     );
     totalFee += addedFee;
 
@@ -900,20 +923,35 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       // HTR). Such a pull goes on until it can fund a shielded change of its
       // own, which becomes the second output; an exact landing stands only
       // when no pull gets there, or when no shielded change can be hosted.
-      const changeHostable = await canHostShieldedChange();
-      const needsRemainder = (anyShielded: boolean): boolean =>
-        anyShielded &&
-        lone.token !== HTR_UID &&
-        changeModeOverride !== OutputKind.TRANSPARENT &&
-        changeHostable;
+      // Hosting is asked about only where the answer decides something, and
+      // never for a change pinned transparent, which is never shielded.
+      const changeHostable = async (): Promise<boolean> =>
+        changeModeOverride !== OutputKind.TRANSPARENT && canHostShieldedChange();
       // Pulls the `owed` HTR the split still needs, on top of the `held`
       // transparent HTR change (0n when there is none).
       const pullForSplit = async (owed: bigint, held: bigint) => {
+        const shortest = await pullExtraHtrUtxos(
+          walletStorage,
+          new Set(usedUtxos),
+          extraHtrPreference,
+          sum => sum >= owed
+        );
+        // Only a pull that covers `owed` by spending shielded HTR, for a lone
+        // def of another token, goes on for a shielded change, and only when
+        // the change can be hosted. Otherwise the shortest pull is the answer.
+        if (
+          shortest.pulledSum < owed ||
+          !shortest.anyShielded ||
+          lone.token === HTR_UID ||
+          !(await changeHostable())
+        ) {
+          return shortest;
+        }
         const isEnough = (sum: bigint, pulled: PulledHtrKinds): boolean => {
           if (sum < owed) {
             return false;
           }
-          if (!needsRemainder(pulled.anyShielded)) {
+          if (!pulled.anyShielded) {
             return true;
           }
           // The change takes the mode the pull so far calls for.
@@ -926,17 +964,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           extraHtrPreference,
           isEnough
         );
-        if (isEnough(pulled.pulledSum, pulled)) {
-          return pulled;
-        }
-        // No pull funds a shielded change: fall back to the shortest pull that
-        // covers `owed`.
-        return pullExtraHtrUtxos(
-          walletStorage,
-          new Set(usedUtxos),
-          extraHtrPreference,
-          sum => sum >= owed
-        );
+        // No pull funds a shielded change: the shortest pull stands.
+        return isEnough(pulled.pulledSum, pulled) ? pulled : shortest;
       };
       // Shields the transparent HTR change as the tx's second shielded output.
       const shieldHtrChange = async (mode: ShieldedOutputMode): Promise<void> => {
@@ -950,7 +979,9 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           partialInputs,
           shouldChooseHTRInputs,
           extraHtrPreference,
-          shieldedChangeAddress
+          shieldedChangeAddress,
+          true,
+          keepTransparentHint
         );
         totalFee += changeFee;
       };
@@ -975,7 +1006,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             'a legacy change address cannot receive a shielded change as the second one'
           );
         }
-        if (!changeHostable) {
+        if (!(await changeHostable())) {
           throw unsplittable('the wallet cannot receive a shielded change as the second one');
         }
         const modeFor = (pulled: PulledHtrKinds): ShieldedOutputMode =>
@@ -1086,8 +1117,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             if (
               changeMode !== null &&
               (surplus > 0n ||
-                (changeHostable &&
-                  htrChange.value + pulled.pulledSum > shieldedOutputFee(changeMode)))
+                (htrChange.value + pulled.pulledSum > shieldedOutputFee(changeMode) &&
+                  (await changeHostable())))
             ) {
               htrChange.value += pulled.pulledSum;
               await shieldHtrChange(changeMode);
@@ -1119,7 +1150,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
           // smaller one and the change can be hosted.
           const shieldChange =
             changeMode !== null &&
-            (surplus > 0n || (changeHostable && pulled.pulledSum > shieldedOutputFee(changeMode)));
+            (surplus > 0n ||
+              (pulled.pulledSum > shieldedOutputFee(changeMode) && (await changeHostable())));
           if (shieldChange || surplus > 0n) {
             partialHtrTxData.outputs.push({
               type: await getOutputTypeFromWallet(this.storage),
@@ -1969,16 +2001,31 @@ const MULTISIG_SHIELDED_CHANGE_ERROR =
  *
  * A multisig wallet has none: the shielded addresses it derives are
  * single-signature, so change sent there would leave the multisig's control.
+ * Nor does a wallet with no shielded address: it lacks the shielded scan or
+ * spend key, so it derives none, or its store holds none. That error ends
+ * with `keepTransparentHint`.
  *
- * @throws SendTxError for a multisig wallet, or when the wallet's shielded
- *   address cannot be resolved.
+ * @throws ShieldedChangeUnavailableError for a multisig wallet, or one with no
+ *   shielded address.
+ * @throws SendTxError when the wallet's type or shielded address cannot be
+ *   read.
  */
 async function resolveShieldedChangeAddress(
   storage: IStorage,
-  shieldedChangeAddress: string | null
+  shieldedChangeAddress: string | null,
+  keepTransparentHint: string
 ): Promise<string> {
-  if ((await storage.getWalletType()) !== WalletType.P2PKH) {
-    throw new SendTxError(MULTISIG_SHIELDED_CHANGE_ERROR);
+  const unresolved = (e: unknown) =>
+    new SendTxError(
+      `The wallet's shielded change address could not be resolved: ${
+        e instanceof Error ? e.message : String(e)
+      }`
+    );
+  const walletType = await storage.getWalletType().catch((e: unknown) => {
+    throw unresolved(e);
+  });
+  if (walletType !== WalletType.P2PKH) {
+    throw new ShieldedChangeUnavailableError(MULTISIG_SHIELDED_CHANGE_ERROR);
   }
   if (shieldedChangeAddress) {
     return shieldedChangeAddress;
@@ -1986,10 +2033,31 @@ async function resolveShieldedChangeAddress(
   try {
     return await storage.getCurrentAddress(false, { legacy: false });
   } catch (e) {
-    const reason = e instanceof Error ? e.message : String(e);
-    throw new SendTxError(
-      `A shielded change is required, but the wallet's shielded address could not be resolved: ${reason}`
-    );
+    if (await hasNoShieldedAddress(storage)) {
+      throw new ShieldedChangeUnavailableError(
+        'A shielded change is required, but the wallet has no shielded address to receive ' +
+          `it${keepTransparentHint}`
+      );
+    }
+    throw unresolved(e);
+  }
+}
+
+/**
+ * Whether the wallet has no shielded address: it lacks the shielded scan or
+ * spend key, so it derives none, or its store holds none. False when the keys
+ * or the store's count cannot be read, so a failed read of the address is
+ * reported as such.
+ */
+async function hasNoShieldedAddress(storage: IStorage): Promise<boolean> {
+  try {
+    const [scanXpub, spendXpub] = await Promise.all([
+      storage.getScanXPubKey(),
+      storage.getSpendXPubKey(),
+    ]);
+    return !scanXpub || !spendXpub || (await storage.store.addressCount({ legacy: false })) === 0;
+  } catch (_e) {
+    return false;
   }
 }
 
@@ -2032,10 +2100,16 @@ function findHtrChangeIndex(outputs: IDataOutput[]): number {
  * here: the structural pass downstream splits a lone shielded output into two
  * halves, restoring the protocol minimum.
  *
+ * `keepTransparentHint` ends the error for a wallet with no shielded address:
+ * the way to keep the change transparent when the rules shield it, a plain
+ * '.' when the caller asked for `mode`.
+ *
+ * @throws ShieldedChangeUnavailableError when the wallet cannot receive the
+ *   shielded change: a multisig wallet, or one with no shielded address.
  * @throws SendTxError when the change is too small to fund its shielded
  *   fee, no additional HTR UTXO is available to cover the difference and
- *   `shieldingRequired` is true, or when the wallet has no shielded address to
- *   receive the change.
+ *   `shieldingRequired` is true, or when the wallet's shielded address cannot
+ *   be read.
  */
 export async function convertHtrChangeIfRequested(
   partialHtrTxData: Pick<IDataTx, 'inputs' | 'outputs'>,
@@ -2047,7 +2121,8 @@ export async function convertHtrChangeIfRequested(
   canSelectMoreHtr: boolean = true,
   pullPreference: InputPreference = OutputKind.TRANSPARENT,
   shieldedChangeAddress: string | null = null,
-  shieldingRequired: boolean = true
+  shieldingRequired: boolean = true,
+  keepTransparentHint: string = '.'
 ): Promise<{ addedFee: bigint }> {
   if (!mode || mode === OutputKind.TRANSPARENT) return { addedFee: 0n };
 
@@ -2131,7 +2206,11 @@ export async function convertHtrChangeIfRequested(
     changeValue += pulledSum;
   }
 
-  const shieldedAddress = await resolveShieldedChangeAddress(storage, shieldedChangeAddress);
+  const shieldedAddress = await resolveShieldedChangeAddress(
+    storage,
+    shieldedChangeAddress,
+    keepTransparentHint
+  );
   const addressObj = new Address(shieldedAddress, { network });
   if (!addressObj.isShielded()) {
     throw new SendTxError('Wallet did not return a shielded address for HTR change conversion.');
