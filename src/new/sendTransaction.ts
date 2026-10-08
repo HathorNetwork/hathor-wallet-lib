@@ -35,6 +35,7 @@ import {
   IDataOutput,
   IDataOutputWithToken,
   IDataTx,
+  getDefaultLogger,
   isDataOutputCreateToken,
   IStorage,
   IUtxo,
@@ -1419,14 +1420,26 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.emit('job-done', data);
     });
 
-    this.mineTransaction.on('error', message => {
-      this.updateOutputSelected(false);
-      this.emit('send-error', message);
+    // On a mining failure the inputs are released before this class reports it: its error events
+    // and the rejection of the promise mineTx() returns all wait for the same release, so a
+    // caller that retries right away doesn't find its UTXOs still selected. (MineTransaction's
+    // own promise and listeners fire first; they don't wait.)
+    let releasing: Promise<void> | null = null;
+    const releaseInputs = () => {
+      if (!releasing) {
+        releasing = this.releaseUtxos();
+      }
+      return releasing;
+    };
+
+    this.mineTransaction.on('error', async message => {
+      await releaseInputs();
+      this.emitAfterRelease('send-error', message);
     });
 
-    this.mineTransaction.on('unexpected-error', message => {
-      this.updateOutputSelected(false);
-      this.emit('unexpected-error', message);
+    this.mineTransaction.on('unexpected-error', async message => {
+      await releaseInputs();
+      this.emitAfterRelease('unexpected-error', message);
     });
 
     this.mineTransaction.on('success', data => {
@@ -1437,7 +1450,12 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       this.mineTransaction.start();
     }
 
-    return this.mineTransaction.promise;
+    try {
+      return await this.mineTransaction.promise;
+    } catch (err) {
+      await releaseInputs();
+      throw err;
+    }
   }
 
   /**
@@ -1493,14 +1511,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
             this.emit('send-tx-success', this.transaction);
             resolve(this.transaction);
           } else {
-            this.updateOutputSelected(false);
+            // Release the inputs before rejecting, so a retry can select them again.
             const err = new SendTxError(response.message);
-            reject(err);
+            this.releaseUtxos().then(() => reject(err));
           }
         })
-        .catch(e => {
-          this.updateOutputSelected(false);
-          this.emit('send-error', e.message);
+        .catch(async e => {
+          await this.releaseUtxos();
+          this.emitAfterRelease('send-error', e.message);
           reject(e);
         });
     });
@@ -1630,6 +1648,20 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
   }
 
   /**
+   * Emit an event once the inputs were released. The callers run where nothing awaits them (an
+   * async event listener, a promise callback), so a listener that throws must not escape: it
+   * would become an unhandled rejection (fatal on Node 15+) and could keep the send's promise
+   * from settling. Log it instead.
+   */
+  private emitAfterRelease(event: string, ...args: unknown[]): void {
+    try {
+      this.emit(event, ...args);
+    } catch (err) {
+      (this.storage?.logger ?? getDefaultLogger()).error(`A '${event}' listener threw:`, err);
+    }
+  }
+
+  /**
    * Release all UTXOs that were marked as selected for this transaction.
    * Call this when the transaction is rejected or abandoned to free the locked UTXOs.
    */
@@ -1646,8 +1678,14 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
       try {
         await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
       } catch (err) {
-        // Best-effort: continue releasing remaining UTXOs
-        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+        // Best-effort: continue releasing remaining UTXOs. This method must never reject: the
+        // send's failure paths wait for it before reporting their own error, so even a failing
+        // logger must not escape here.
+        try {
+          this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+        } catch {
+          // Nothing else to do: logging was the last resort.
+        }
       }
     }
   }

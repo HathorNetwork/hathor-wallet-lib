@@ -20,6 +20,7 @@ import {
   initializeServiceGlobalConfigs,
   markServiceAnswered,
   pollForTx,
+  pollUntilCondition,
   REQUEST_TIMEOUT_RETRY_BUDGET_MS,
   retryOnTransientWalletInit,
 } from './service-facade.helper';
@@ -84,6 +85,44 @@ describe('pollForTx', () => {
 
     await expect(pollForTx(pollingWallet(getTxById), 'tx-id')).rejects.toThrow('unexpected');
     expect(getTxById).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('pollUntilCondition', () => {
+  it.each(TIMEOUT_CODES)(
+    'keeps polling after a request timeout, without spending an attempt (%s)',
+    async code => {
+      const predicate = jest
+        .fn()
+        .mockRejectedValueOnce(requestTimeout(code))
+        .mockResolvedValueOnce(true);
+
+      // One attempt is enough: the timed-out call doesn't count.
+      await expect(pollUntilCondition(predicate, 'test', 1, 0)).resolves.toBe(true);
+      expect(predicate).toHaveBeenCalledTimes(2);
+    }
+  );
+
+  it('keeps polling while the condition is not met', async () => {
+    const predicate = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce('done');
+
+    await expect(pollUntilCondition(predicate, 'test', 3, 0)).resolves.toBe('done');
+    expect(predicate).toHaveBeenCalledTimes(2);
+  });
+
+  it('rethrows a request failure that is not a timeout', async () => {
+    const predicate = jest.fn().mockRejectedValueOnce(connectionRefused()).mockResolvedValue(true);
+
+    await expect(pollUntilCondition(predicate, 'test', 3, 0)).rejects.toThrow('ECONNREFUSED');
+    expect(predicate).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails once the attempts run out', async () => {
+    const predicate = jest.fn().mockResolvedValue(false);
+
+    await expect(pollUntilCondition(predicate, 'test', 2, 0)).rejects.toThrow(
+      'Condition "test" not met after 2 attempts'
+    );
   });
 });
 
@@ -159,6 +198,11 @@ describe('request-timeout budget', () => {
       .mockResolvedValueOnce({ success: true });
     await expect(pollForTx(pollingWallet(getTxById), 'tx-id')).rejects.toThrow('timeout');
     expect(getTxById).toHaveBeenCalledTimes(1);
+
+    // pollUntilCondition shares the same budget.
+    const predicate = jest.fn().mockRejectedValueOnce(requestTimeout()).mockResolvedValue(true);
+    await expect(pollUntilCondition(predicate, 'test', 3, 0)).rejects.toThrow('timeout');
+    expect(predicate).toHaveBeenCalledTimes(1);
   });
 
   it('starts over once the service answers', async () => {

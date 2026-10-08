@@ -1360,3 +1360,63 @@ describe('getDefaultAddressMeta — per-call balance Map (no shared aliasing)', 
     expect(b.balance.has(NATIVE_TOKEN_UID)).toBe(false);
   });
 });
+
+describe('utxo selection ttl', () => {
+  const utxo = { txId: 'a-tx-id9', index: 0 };
+
+  const storageWithUnspentOutput = () => {
+    const storage = new Storage(new MemoryStore());
+    jest.spyOn(storage, 'getTx').mockResolvedValue({
+      txId: utxo.txId,
+      outputs: [{ value: 10, token: '00', spent_by: null }],
+    } as unknown as IHistoryTx);
+    return storage;
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.restoreAllMocks();
+  });
+
+  // A send fails and releases its inputs, then an immediate retry marks them again: the first
+  // selection's timer must not clear the retry's mark.
+  it("a released selection's timer doesn't clear a later selection", async () => {
+    const storage = storageWithUnspentOutput();
+    await storage.utxoSelectAsInput(utxo, true, 1000);
+    jest.advanceTimersByTime(500);
+    await storage.utxoSelectAsInput(utxo, false);
+    await storage.utxoSelectAsInput(utxo, true, 1000);
+
+    // The first timer would have fired at 1000ms.
+    jest.advanceTimersByTime(600);
+    await expect(storage.isUtxoSelectedAsInput(utxo)).resolves.toBe(true);
+
+    // The retry's own timer still clears it at 1500ms.
+    jest.advanceTimersByTime(500);
+    await expect(storage.isUtxoSelectedAsInput(utxo)).resolves.toBe(false);
+  });
+
+  it('marking again restarts the ttl instead of keeping the old timer', async () => {
+    const storage = storageWithUnspentOutput();
+    await storage.utxoSelectAsInput(utxo, true, 1000);
+    jest.advanceTimersByTime(800);
+    await storage.utxoSelectAsInput(utxo, true, 1000);
+
+    jest.advanceTimersByTime(300); // 1100ms: past the first timer, within the second
+    await expect(storage.isUtxoSelectedAsInput(utxo)).resolves.toBe(true);
+    jest.advanceTimersByTime(800); // 1900ms: past the second
+    await expect(storage.isUtxoSelectedAsInput(utxo)).resolves.toBe(false);
+  });
+
+  it('releasing cancels the pending timer', async () => {
+    const storage = storageWithUnspentOutput();
+    await storage.utxoSelectAsInput(utxo, true, 1000);
+    await storage.utxoSelectAsInput(utxo, false);
+
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
