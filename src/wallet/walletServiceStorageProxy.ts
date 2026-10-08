@@ -183,7 +183,7 @@ export class WalletServiceStorageProxy {
    * This bridges the gap between full node API format and wallet storage format
    */
   // eslint-disable-next-line class-methods-use-this
-  private convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
+  convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
     const { tx, meta } = fullTxResponse;
 
     // SEPARATED model: `outputs[]` is transparent-only. The dedicated

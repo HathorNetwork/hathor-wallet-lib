@@ -196,6 +196,17 @@ describe('txOutputResponseSchema shielded entries', () => {
     );
   });
 
+  it('keeps the tx proposal holding an output', () => {
+    const parsed = txOutputResponseSchema.parse({
+      success: true,
+      txOutputs: [
+        { ...buildTransparentTxOutputEntry(), txProposalId: 'proposal-1' },
+        { ...buildShieldedTxOutputEntry(), txProposalId: null },
+      ],
+    });
+    expect(parsed.txOutputs.map(o => o.txProposalId)).toEqual(['proposal-1', null]);
+  });
+
   it('treats an entry without kind (older server) as transparent', () => {
     const parsed = txOutputResponseSchema.parse({
       success: true,
