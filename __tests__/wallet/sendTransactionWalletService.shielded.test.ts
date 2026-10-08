@@ -367,3 +367,16 @@ describe('wallets without shielded keys and new-format addresses', () => {
     );
   });
 });
+
+describe('external signers', () => {
+  it('cannot send from a wallet with shielded keys without the PIN', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 100)] });
+    const sendTx = new SendTransactionWalletService(wallet, {
+      outputs: [{ type: 'p2pkh', address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      pin: null,
+    });
+    await expect(sendTx.prepareTx()).rejects.toThrow(
+      /needs the PIN to open the wallet's shielded utxos/
+    );
+  });
+});
