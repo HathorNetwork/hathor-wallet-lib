@@ -22,7 +22,13 @@ import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import walletUtils from '../../src/utils/wallet';
-import { NATIVE_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { getAddressFromPubkey } from '../../src/utils/address';
+import {
+  NATIVE_TOKEN_UID,
+  P2PKH_ACCT_PATH,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../src/constants';
 import { PinRequiredError, WalletFromXPubGuard } from '../../src/errors';
 import { EcdsaTxSign, TokenVersion } from '../../src/types';
 
@@ -132,6 +138,94 @@ describe('setExternalTxSigningMethod / isReadonly', () => {
     wallet.storage.setTxSignatureMethod(makeSigner() as unknown as EcdsaTxSign);
 
     expect(wallet.isSignedExternally).toBe(true);
+  });
+});
+
+describe('external private-key provider checks', () => {
+  // The key of the wallet's legacy address at `index` (m/44'/280'/0'/0/<index>).
+  const addressKey = (index: number) =>
+    new Mnemonic(seed)
+      .toHDPrivateKey('', network.getNetwork())
+      .deriveNonCompliantChild(P2PKH_ACCT_PATH)
+      .deriveNonCompliantChild(0)
+      .deriveNonCompliantChild(index).privateKey;
+
+  /** An xpub-only wallet built from the account-level or the change-level xpub. */
+  const walletFromXpub = async (level: 'account' | 'change') => {
+    const accountXpub = walletUtils.getXPubKeyFromSeed(seed, { networkName: 'testnet' });
+    const xpub = level === 'account' ? accountXpub : walletUtils.xpubDeriveChild(accountXpub, 0);
+    const wallet = new HathorWalletServiceWallet({ requestPassword: jest.fn(), xpub, network });
+    await wallet.storage.saveAccessData(walletUtils.generateAccessDataFromXpub(xpub));
+    return wallet;
+  };
+
+  // generateAccessDataFromXpub accepts either depth, so the own-address check must too: it
+  // derives from the stored (normalized) access data, not from the constructor's xpub.
+  it.each(['account', 'change'] as const)(
+    'accepts the right key for a wallet built from the %s-level xpub, without asking the service',
+    async level => {
+      const wallet = await walletFromXpub(level);
+      const getAddressAtIndex = jest.spyOn(wallet, 'getAddressAtIndex');
+      wallet.setExternalPrivateKeyMethod(async index => addressKey(index));
+
+      const key = await wallet.getVerifiedExternalPrivateKey(3);
+
+      expect(key.toString()).toBe(addressKey(3).toString());
+      expect(getAddressAtIndex).not.toHaveBeenCalled();
+    }
+  );
+
+  // getPrivateKeyFromAddress checks the key against the REQUESTED address, not the own address at
+  // the index the wallet-service reported: a wrong index must lead to a rejection, never to
+  // signing with another of our keys.
+  it('rejects the key of another of our addresses when the service reports a wrong index', async () => {
+    const wallet = await walletFromXpub('account');
+    wallet.setExternalPrivateKeyMethod(async index => addressKey(index));
+    const requested = getAddressFromPubkey(addressKey(2).publicKey.toString(), network).base58;
+    jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(4); // wrong: the address is at 2
+
+    await expect(wallet.getPrivateKeyFromAddress(requested)).rejects.toThrow(
+      'External private key provider returned a key for the wrong address.'
+    );
+  });
+
+  it('passes the pin on to the provider', async () => {
+    const wallet = await walletFromXpub('account');
+    const provider = jest.fn(async (index: number) => addressKey(index));
+    wallet.setExternalPrivateKeyMethod(provider);
+
+    await wallet.signMessageWithAddress('a message', 0, '123');
+
+    expect(provider).toHaveBeenCalledWith(0, expect.anything(), { pinCode: '123' });
+  });
+
+  it('signMessageWithAddress asks for the pin when neither a pin nor a provider is set', async () => {
+    const { wallet, requestPassword } = await makeXpubWallet();
+    requestPassword.mockResolvedValue('1234');
+    const getAddressPrivKey = jest
+      .spyOn(wallet, 'getAddressPrivKey')
+      .mockResolvedValue({ privateKey: addressKey(0) } as never);
+
+    await expect(wallet.signMessageWithAddress('a message', 0)).resolves.toEqual(
+      expect.any(String)
+    );
+
+    expect(requestPassword).toHaveBeenCalledTimes(1);
+    expect(getAddressPrivKey).toHaveBeenCalledWith('1234', 0);
+  });
+});
+
+describe('setExternalPrivateKeyMethod / hasExternalPrivateKeyMethod', () => {
+  it('reports whether an external private-key provider is registered', async () => {
+    const { wallet } = await makeXpubWallet();
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
+
+    wallet.setExternalPrivateKeyMethod(async () => undefined);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(true);
+    expect(wallet.storage.hasPrivateKeyMethod()).toBe(true);
+
+    wallet.setExternalPrivateKeyMethod(null);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
   });
 });
 
