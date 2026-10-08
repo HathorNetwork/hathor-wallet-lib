@@ -17,8 +17,15 @@ import walletUtils from './wallet';
  * a gap-limit check that wants shielded indexes that address loading never
  * derives would request the same window forever.
  *
- * The chain needs both xpubs (see `walletUtils.hasShieldedXpubs`). A storage
- * without access data has no shielded chain.
+ * The chain needs both xpubs (see `walletUtils.hasShieldedXpubs`) and a
+ * registered shielded crypto provider. Without a provider nothing received on
+ * the chain can be decoded, so the wallet derives, stores, subscribes and
+ * fetches nothing for it. Register the provider before `start()`: the first
+ * sync and each reconnect load the chain from the first index of the scanning
+ * policy, but the loads in between continue from the last loaded index, so a
+ * provider registered on a started wallet leaves the first indexes of the
+ * chain unloaded until the next reconnect. A storage without access data has
+ * no shielded chain.
  *
  * This module is internal: the lib does not export it.
  *
@@ -28,6 +35,9 @@ import walletUtils from './wallet';
 export async function getShieldedChainXpubs(
   storage: IStorage
 ): Promise<{ scanXpubkey: string; spendXpubkey: string } | null> {
+  if (!storage.shieldedCryptoProvider) {
+    return null;
+  }
   const accessData = await storage.getAccessData();
   if (!walletUtils.hasShieldedXpubs(accessData)) {
     return null;

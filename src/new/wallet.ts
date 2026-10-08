@@ -101,6 +101,7 @@ import {
   fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
+import { getShieldedChainXpubs } from '../utils/shieldedChain';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -2062,20 +2063,10 @@ class HathorWallet extends EventEmitter {
     // legacy-only and takes the index of its array position. Nothing is derived
     // HERE, but whatever an entry omits is derived during address loading, along
     // with every index past the injected window. Injection never overwrites: an
-    // index storage already holds is skipped, and a disagreement throws.
+    // index storage already holds is skipped, and a disagreement throws. The
+    // shielded pairs are persisted once the access data is in place (below).
     const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
     await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
-    const injectedShieldedPairs = injectedAddresses
-      .filter(entry => entry.shielded)
-      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
-      // the type but not from the value, and excess-property checks only fire on
-      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
-      // (which the repo's own fixtures are) carries one, and spreading it last
-      // would file this entry's pair under the nested index instead.
-      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
-    if (injectedShieldedPairs.length > 0) {
-      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
-    }
 
     let accessData = await this.storage.getAccessData();
     if (!accessData) {
@@ -2123,6 +2114,22 @@ class HathorWallet extends EventEmitter {
       if (migrated) {
         await this.storage.saveAccessData(accessData);
       }
+    }
+
+    // The injected shielded pairs are persisted only when the wallet has a
+    // shielded chain, which needs the record's shielded xpubs and a crypto
+    // provider. Without one, nothing on the chain is subscribed or fetched, so
+    // a stored pair would be a shielded address given out and never watched.
+    const injectedShieldedPairs = injectedAddresses
+      .filter(entry => entry.shielded)
+      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
+      // the type but not from the value, and excess-property checks only fire on
+      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
+      // (which the repo's own fixtures are) carries one, and spreading it last
+      // would file this entry's pair under the nested index instead.
+      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
+    if (injectedShieldedPairs.length > 0 && (await getShieldedChainXpubs(this.storage)) !== null) {
+      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
     }
 
     this.clearSensitiveData();

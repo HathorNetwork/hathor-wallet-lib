@@ -38,7 +38,7 @@ import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { encryptData } from '../../src/utils/crypto';
 import walletApi from '../../src/api/wallet';
 import FullnodeConnection from '../../src/new/connection';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
@@ -1144,6 +1144,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     gapLimit,
     walletData,
     shieldedXpubs,
+    withProvider,
   }: {
     gapLimit: number;
     walletData: {
@@ -1152,11 +1153,17 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       shieldedLastLoadedAddressIndex: number;
       shieldedLastUsedAddressIndex: number;
     };
-    // true => the access data carries both the scan and the spend xpub, so the
-    // wallet has a shielded chain; false => it carries neither.
+    // true => the access data carries both the scan and the spend xpub;
+    // false => it carries neither.
     shieldedXpubs: boolean;
+    // Whether a shielded crypto provider is registered. The wallet has a
+    // shielded chain only with both xpubs and a provider.
+    withProvider: boolean;
   }): Storage {
     const storage = new Storage(new MemoryStore());
+    if (withProvider) {
+      storage.setShieldedCryptoProvider({ id: 'mock' } as unknown as IShieldedCryptoProvider);
+    }
     jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
     jest
       .spyOn(storage, 'getScanningPolicyData')
@@ -1195,6 +1202,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastUsedAddressIndex: 0,
       },
       shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 6, count: 15 });
   });
@@ -1217,6 +1225,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastUsedAddressIndex: 5,
       },
       shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 11, count: 20 });
   });
@@ -1232,6 +1241,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastUsedAddressIndex: 0,
       },
       shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1255,11 +1265,29 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastUsedAddressIndex: 0,
       },
       shieldedXpubs: true,
+      withProvider: true,
     });
     const result = await checkGapLimit(storage);
     expect(result).toEqual({ nextIndex: 5, count: 1 });
     // Explicitly pin the floor: count is never below 1.
     expect(result?.count).toBeGreaterThanOrEqual(1);
+  });
+
+  it('both shielded xpubs but no crypto provider: a lagging shielded chain does NOT trigger a load', async () => {
+    // Same wallet data as the next case. Without a provider the wallet has no
+    // shielded chain, so only the legacy chain counts, and it is satisfied.
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 50,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 0,
+        shieldedLastUsedAddressIndex: 30,
+      },
+      shieldedXpubs: true,
+      withProvider: false,
+    });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
 
   it('no shielded chain: a lagging shielded chain does NOT trigger a load', async () => {
@@ -1274,6 +1302,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastUsedAddressIndex: 30,
       },
       shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1330,6 +1359,8 @@ describe('shielded chain predicate', () => {
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
     { pin: '123', password: '456', networkName: 'testnet' }
   );
+  // The chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
 
   function recordWith({ scan, spend }: { scan: boolean; spend: boolean }) {
     return {
@@ -1343,20 +1374,31 @@ describe('shielded chain predicate', () => {
     jest.restoreAllMocks();
   });
 
-  it.each([
-    { shape: 'no shielded xpubs', scan: false, spend: false, hasChain: false },
-    { shape: 'only the scan xpub', scan: true, spend: false, hasChain: false },
-    { shape: 'only the spend xpub', scan: false, spend: true, hasChain: false },
-    { shape: 'both shielded xpubs', scan: true, spend: true, hasChain: true },
-  ])(
-    'a record with $shape: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
-    async ({ scan, spend, hasChain }) => {
+  it.each(
+    [
+      { shape: 'no shielded xpubs', scan: false, spend: false },
+      { shape: 'only the scan xpub', scan: true, spend: false },
+      { shape: 'only the spend xpub', scan: false, spend: true },
+      { shape: 'both shielded xpubs', scan: true, spend: true },
+    ].flatMap(record => [
+      { ...record, withProvider: false, setup: 'no crypto provider' },
+      { ...record, withProvider: true, setup: 'a crypto provider' },
+    ])
+  )(
+    'a record with $shape and $setup: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ scan, spend, withProvider }) => {
+      // The record half is what hasShieldedXpubs reports; the chain also needs
+      // a registered provider.
       const record = recordWith({ scan, spend });
-      expect(walletUtils.hasShieldedXpubs(record)).toBe(hasChain);
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(scan && spend);
+      const hasChain = scan && spend && withProvider;
 
       const storage = new Storage(new MemoryStore());
       await storage.saveAccessData(record);
       await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
 
       // One legacy address per index, plus the spend P2PKH when there is a chain.
       const loaded = await loadAddresses(0, 1, storage);
@@ -1379,6 +1421,8 @@ describe('shielded chain predicate', () => {
     expect(walletUtils.hasShieldedXpubs(null)).toBe(false);
 
     const storage = new Storage(new MemoryStore());
+    // With a provider registered, the missing record is what rules the chain out.
+    storage.setShieldedCryptoProvider(provider);
     await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
     // Index 0 is already stored, so loadAddresses derives nothing on the legacy
     // chain and the shielded check is the only reader of the missing record.
@@ -1391,11 +1435,63 @@ describe('shielded chain predicate', () => {
   });
 
   it(
+    'a provider registered after a load turns the chain on from index 0',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(2);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+
+      storage.setShieldedCryptoProvider(provider);
+      // The same window again: the legacy addresses are stored, and the
+      // shielded pairs are derived from index 0.
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(4);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
+      expect(await storage.getAddressAtIndex(1, { legacy: false })).not.toBeNull();
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each([
+    { setup: 'no crypto provider', withProvider: false, expected: 2 },
+    { setup: 'a crypto provider', withProvider: true, expected: 4 },
+  ])(
+    'apiSyncHistory with $setup subscribes and fetches the history of $expected addresses for two indexes',
+    async ({ withProvider, expected }) => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockResolvedValue({ data: { success: true, history: [], has_more: false } } as never);
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      const subscribed = (connection.subscribeAddresses as jest.Mock).mock.calls.flatMap(
+        call => call[0]
+      );
+      expect(subscribed).toHaveLength(expected);
+      expect(historySpy.mock.calls.flatMap(call => call[0])).toEqual(subscribed);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
     'apiSyncHistory terminates for a record with only the spend xpub',
     async () => {
       const storage = new Storage(new MemoryStore());
       await storage.saveAccessData(recordWith({ scan: false, spend: true }));
       await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      // With a provider registered, the missing scan xpub is what rules the chain out.
+      storage.setShieldedCryptoProvider(provider);
       // A sync that keeps requesting a window it never loads does not end: fail
       // after a bound instead of hanging the test.
       const historySpy = jest
