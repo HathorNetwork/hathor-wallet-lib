@@ -1061,9 +1061,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       return this.transaction;
     } catch (err) {
       if (err instanceof WalletRequestError) {
-        const errMessage = 'Error sending tx proposal.';
+        const errMessage = txProposalErrorMessage(err);
         this.emit('send-error', errMessage);
-        throw new SendTxError(errMessage);
+        const sendError = new SendTxError(errMessage);
+        (sendError as SendTxError & { cause?: unknown }).cause = err;
+        throw sendError;
       } else {
         throw err;
       }
@@ -1155,6 +1157,27 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       throw err;
     }
   }
+}
+
+/**
+ * Messages for the tx proposal refusals a caller can act on.
+ */
+const TX_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
+  'inputs-shielded-unsupported':
+    'The wallet-service does not accept shielded inputs yet, so shielded utxos cannot be spent.',
+  'inputs-already-used': 'Some inputs are already used by another transaction proposal. Try again.',
+  'inputs-not-found': 'Some inputs are not unspent outputs of this wallet.',
+  'inputs-not-in-wallet': 'Some inputs do not belong to this wallet.',
+};
+
+function txProposalErrorMessage(err: WalletRequestError): string {
+  const { cause } = err;
+  const code =
+    cause && 'data' in cause ? (cause.data as { error?: unknown } | undefined)?.error : undefined;
+  if (typeof code === 'string' && code in TX_PROPOSAL_ERROR_MESSAGES) {
+    return TX_PROPOSAL_ERROR_MESSAGES[code];
+  }
+  return 'Error sending tx proposal.';
 }
 
 /**

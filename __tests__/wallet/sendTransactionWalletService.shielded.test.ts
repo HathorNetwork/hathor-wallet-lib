@@ -14,13 +14,14 @@ import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData } from '../../src/utils/crypto';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
-import { ShieldedNotEnabledError, SendTxError } from '../../src/errors';
+import { ShieldedNotEnabledError, SendTxError, WalletRequestError } from '../../src/errors';
 import { IWalletAccessData } from '../../src/types';
 import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { FeeHeader } from '../../src/headers';
 import ShieldedOutputsHeader from '../../src/headers/shielded_outputs';
 import { Utxo } from '../../src/wallet/types';
+import Transaction from '../../src/models/transaction';
 import {
   shieldedFixtureSeed,
   shieldedFixtureAddresses,
@@ -272,5 +273,39 @@ describe('wallets without shielded keys', () => {
     );
     await sendTx.prepareTx();
     expect(legacySelection).toHaveBeenCalled();
+  });
+});
+
+describe('tx proposal errors', () => {
+  const proposalError = (status: number, error: string) =>
+    new WalletRequestError('Error creating tx proposal.', {
+      cause: { status, data: { success: false, error } },
+    });
+
+  it.each([
+    ['inputs-shielded-unsupported', /does not accept shielded inputs/],
+    ['inputs-already-used', /already used by another transaction proposal/],
+    ['inputs-not-found', /not unspent outputs of this wallet/],
+    ['inputs-not-in-wallet', /do not belong to this wallet/],
+  ])('names the %s failure', async (code, message) => {
+    const { wallet } = await setup();
+    const sendTx = new SendTransactionWalletService(wallet, {
+      transaction: new Transaction([], []),
+    });
+    const created = proposalError(400, code);
+    jest.spyOn(walletApi, 'createTxProposal').mockRejectedValue(created);
+    const err = await sendTx.handleSendTxProposal().catch(e => e);
+    expect(err).toBeInstanceOf(SendTxError);
+    expect(err.message).toMatch(message);
+    expect(err.cause).toBe(created);
+  });
+
+  it('keeps the generic message for other failures', async () => {
+    const { wallet } = await setup();
+    const sendTx = new SendTransactionWalletService(wallet, {
+      transaction: new Transaction([], []),
+    });
+    jest.spyOn(walletApi, 'createTxProposal').mockRejectedValue(proposalError(500, 'other'));
+    await expect(sendTx.handleSendTxProposal()).rejects.toThrow('Error sending tx proposal.');
   });
 });
