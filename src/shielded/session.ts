@@ -195,9 +195,14 @@ export class SessionClosedError extends Error {
 export class ShieldedSession {
   #key: IScanKeyMaterial | null = null;
 
+  /** The keys decode passes unlocked with a PIN, while they run. */
+  #passKeys = new Set<IScanKeyMaterial>();
+
   #epoch = 0;
 
   #active = false;
+
+  #closed = false;
 
   #cause: ShieldedSessionCause | null = null;
 
@@ -223,6 +228,14 @@ export class ShieldedSession {
   /** Whether the wallet is started: true from open() until close(). */
   get active(): boolean {
     return this.#active;
+  }
+
+  /**
+   * Whether the session was closed and not opened again: the wallet was
+   * stopped. A session that was never opened is not closed.
+   */
+  get closed(): boolean {
+    return this.#closed;
   }
 
   /** Whether the session holds a scan key. */
@@ -271,18 +284,34 @@ export class ShieldedSession {
   open(): void {
     this.#reset();
     this.#active = true;
+    this.#closed = false;
     this.#epoch += 1;
   }
 
   /**
-   * End the session, at `stop()`: zero the key and drop everything except the
-   * signer declaration. It is synchronous, so it takes effect before the caller
-   * awaits anything.
+   * End the session, at `stop()`: zero the key, and the keys decode passes
+   * unlocked with a PIN, and drop everything except the signer declaration. It
+   * is synchronous, so it takes effect before the caller awaits anything.
    */
   close(): void {
     this.#reset();
     this.#active = false;
+    this.#closed = true;
     this.#epoch += 1;
+  }
+
+  /**
+   * Hold `material`, a scan key a decode pass unlocked with a PIN while the
+   * session held none, until the pass releases it. Opening or closing the
+   * session zeroes it, so stop() leaves no key of a pass behind either.
+   */
+  holdPassKey(material: IScanKeyMaterial): void {
+    this.#passKeys.add(material);
+  }
+
+  /** Stop holding a pass key, which the pass zeroes itself. */
+  releasePassKey(material: IScanKeyMaterial): void {
+    this.#passKeys.delete(material);
   }
 
   /**
@@ -409,6 +438,10 @@ export class ShieldedSession {
       wipeScanKeyMaterial(this.#key);
       this.#key = null;
     }
+    for (const material of this.#passKeys) {
+      wipeScanKeyMaterial(material);
+    }
+    this.#passKeys.clear();
     this.#cause = null;
     this.#integrity = null;
     this.#syncMode = null;

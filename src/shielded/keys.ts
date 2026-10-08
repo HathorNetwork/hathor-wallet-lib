@@ -9,7 +9,15 @@ import { crypto, encoding, HDPrivateKey } from 'bitcore-lib';
 import { DecryptionError, InvalidPasswdError, ShieldedKeyError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import type { IStorage, IWalletAccessData } from '../types';
-import { IScanKeyMaterial, isValidPrivateKey, wipeScanKeyMaterial } from './session';
+import {
+  IScanKeyMaterial,
+  IScanKeySource,
+  SessionClosedError,
+  deriveScanChildKey,
+  isValidPrivateKey,
+  shieldedSessionOf,
+  wipeScanKeyMaterial,
+} from './session';
 
 /** The length of a serialized extended key, without its checksum (BIP32). */
 const EXTENDED_KEY_LENGTH = 78;
@@ -302,6 +310,126 @@ export function assertNoPrivateKeyMaterial(accessData: IWalletAccessData): void 
   for (const [field, value] of Object.entries(accessData)) {
     if (holdsPrivateKeyMaterial(value)) {
       throw new Error(`Private key material cannot be saved in the access data field '${field}'.`);
+    }
+  }
+}
+
+/**
+ * The scan key of one decode pass: a walk over the whole history, or one
+ * realtime tx.
+ *
+ * The session's key wins: while the session holds one, the pass's PIN is not
+ * used. While it holds none, a non-empty PIN unlocks the key, at most once for
+ * the whole pass, and the key is checked against the record. That key is never
+ * put in the session (only the wallet's start and unlock fill it), and it is
+ * zeroed by dispose(). A PIN that fails for a known reason (see
+ * {@link unlockScanKeyWithPin}) gives no key, so the wallet's outputs are
+ * counted locked, and is not tried again in the pass. An unexpected failure is
+ * thrown, and tried again for the next tx.
+ *
+ * The pass is bound to the session it started in. The session holds the key
+ * the PIN unlocked until the pass ends, so closing or opening the session
+ * zeroes it, and its source stops deriving. A pass that starts after the
+ * session was closed, once the wallet was stopped, belongs to no session: it
+ * unlocks nothing and writes nothing.
+ */
+export class ScanKeyContext {
+  /** The session epoch when the pass started. */
+  readonly epoch: number;
+
+  readonly #storage: IStorage;
+
+  readonly #pinCode: string | null;
+
+  /** Whether the session was already closed when the pass started. */
+  readonly #startedClosed: boolean;
+
+  #material: IScanKeyMaterial | null = null;
+
+  #pinFailed = false;
+
+  /**
+   * @param storage The wallet storage
+   * @param pinCode The PIN to unlock the key with while the session holds
+   *   none. An empty string and null are not tried.
+   */
+  constructor(storage: IStorage, pinCode?: string | null) {
+    this.#storage = storage;
+    this.#pinCode = typeof pinCode === 'string' && pinCode.length > 0 ? pinCode : null;
+    const session = shieldedSessionOf(storage);
+    this.epoch = session.epoch;
+    this.#startedClosed = session.closed;
+  }
+
+  /**
+   * The key source for the next decode, or null when there is no key.
+   *
+   * @throws {SessionClosedError} When the session was closed or opened again
+   *   since the pass started, or was closed when it started. A source it gave
+   *   throws it too.
+   */
+  async getSource(): Promise<IScanKeySource | null> {
+    this.assertCurrent();
+    const session = shieldedSessionOf(this.#storage);
+    const sessionSource = session.source();
+    if (sessionSource) {
+      return sessionSource;
+    }
+    if (this.#pinCode === null || this.#pinFailed) {
+      return null;
+    }
+    if (this.#material === null) {
+      let material: IScanKeyMaterial;
+      try {
+        material = await unlockScanKeyWithPin(this.#storage, this.#pinCode);
+      } catch (e) {
+        if (!(e instanceof ShieldedKeyError)) {
+          throw e;
+        }
+        this.#pinFailed = true;
+        this.#storage.logger.warn(
+          `The PIN given to decode shielded outputs gives no usable scan key (${e.errorCode}), ` +
+            "so the wallet's shielded outputs stay locked."
+        );
+        return null;
+      }
+      if (session.epoch !== this.epoch) {
+        // Closed or opened again during the unlock: the pass is over.
+        wipeScanKeyMaterial(material);
+        throw new SessionClosedError();
+      }
+      session.holdPassKey(material);
+      this.#material = material;
+    }
+    const material = this.#material;
+    return {
+      derive: (index: number): Buffer => {
+        this.assertCurrent();
+        if (this.#material !== material) {
+          throw new Error('The scan key of this decode pass was dropped.');
+        }
+        return deriveScanChildKey(material, index);
+      },
+    };
+  }
+
+  /**
+   * Throw SessionClosedError when the session was closed or opened again since
+   * the pass started, or was closed when it started: the wallet was stopped or
+   * started again, and what the pass computed must not be written.
+   */
+  assertCurrent(): void {
+    if (this.#startedClosed || shieldedSessionOf(this.#storage).epoch !== this.epoch) {
+      throw new SessionClosedError();
+    }
+  }
+
+  /** Zero the key the PIN unlocked, if any. */
+  dispose(): void {
+    if (this.#material !== null) {
+      shieldedSessionOf(this.#storage).releasePassKey(this.#material);
+      wipeScanKeyMaterial(this.#material);
+      this.#material = null;
     }
   }
 }

@@ -1574,6 +1574,128 @@ describe('handleStop and the shielded session', () => {
     expect(session.epoch).toBe(epoch);
   });
 
+  it('cleans the storage after the processing that was crediting a tx when the session closed', async () => {
+    const { store, storage, session } = storageWithFilledSession();
+    const address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+    await storage.saveAddress({ base58: address, bip32AddressIndex: 0 });
+    const tx = {
+      tx_id: 'd1'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      inputs: [],
+      tokens: [],
+      height: 1,
+      outputs: [
+        {
+          value: 7n,
+          token: NATIVE_TOKEN_UID,
+          token_data: 0,
+          script: '',
+          decoded: { type: 'P2PKH', address, timelock: null },
+          spent_by: null,
+        },
+      ],
+    } as unknown as IHistoryTx;
+    await storage.addTx(tx);
+    // Hold the save of the UTXO the crediting writes.
+    const saveUtxo = store.saveUtxo.bind(store);
+    let crediting = false;
+    let finishCredit: () => void = () => {};
+    const creditFinished = new Promise<void>(resolve => {
+      finishCredit = resolve;
+    });
+    jest.spyOn(store, 'saveUtxo').mockImplementation(async utxo => {
+      crediting = true;
+      await creditFinished;
+      return saveUtxo(utxo);
+    });
+
+    const processing = storage.processNewTx(tx);
+    for (let i = 0; i < 1000 && !crediting; i++) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 2);
+      });
+    }
+    expect(crediting).toBe(true);
+    // stop(): the session closes, then the storage is cleaned without awaiting the crediting.
+    session.close();
+    const stopping = storage.handleStop({ cleanStorage: true });
+    await new Promise(resolve => {
+      setTimeout(resolve, 30);
+    });
+    finishCredit();
+    await processing;
+    await stopping;
+
+    expect(await store.getUtxo({ txId: tx.tx_id, index: 0 })).toBeNull();
+    expect(await storage.getTx(tx.tx_id)).toBeNull();
+    expect(await store.getTokenMeta(NATIVE_TOKEN_UID)).toBeNull();
+  });
+
+  it('cleans the storage without waiting for the token info a credited tx asks for', async () => {
+    const { storage, session } = storageWithFilledSession();
+    const address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+    const token = '01'.repeat(32);
+    await storage.saveAddress({ base58: address, bip32AddressIndex: 0 });
+    const tx = {
+      tx_id: 'd2'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      inputs: [],
+      tokens: [token],
+      height: 1,
+      outputs: [
+        {
+          value: 7n,
+          token,
+          token_data: 1,
+          script: '',
+          decoded: { type: 'P2PKH', address, timelock: null },
+          spent_by: null,
+        },
+      ],
+    } as unknown as IHistoryTx;
+    await storage.addTx(tx);
+    // The tx is credited; then the request for the info of its new token hangs.
+    let fetching = false;
+    let answer: () => void = () => {};
+    const answered = new Promise<void>(resolve => {
+      answer = resolve;
+    });
+    jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation(async (_uid, resolve) => {
+      fetching = true;
+      await answered;
+      resolve({ success: true, name: 'Token', symbol: 'TKN' } as never);
+    });
+
+    const processing = storage.processNewTx(tx);
+    for (let i = 0; i < 1000 && !fetching; i++) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 2);
+      });
+    }
+    expect(fetching).toBe(true);
+    session.close();
+    const outcome = await Promise.race([
+      storage.handleStop({ cleanStorage: true }).then(() => 'cleaned'),
+      new Promise(resolve => {
+        setTimeout(() => resolve('waiting'), 200);
+      }),
+    ]);
+    answer();
+    await processing;
+
+    expect(outcome).toBe('cleaned');
+  });
+
   it('never hands the key to the store', async () => {
     const { store, storage, material } = storageWithFilledSession();
     const secrets = [material.privateKey.toString('hex'), 'htpr', 'tnpr', 'xprv'];

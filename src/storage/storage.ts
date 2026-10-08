@@ -160,6 +160,47 @@ export function clearDerivedAddressCache(storage: IStorage): void {
   derivedAddressCaches.delete(storage);
 }
 
+/**
+ * The txs being processed on each storage object (decoded and credited, see
+ * `processNewTx` in the storage utils), which Storage.handleStop waits for
+ * before it cleans the storage.
+ */
+const txsInProcessing = new WeakMap<IStorage, Set<Promise<unknown>>>();
+
+/**
+ * Keep `processing`, the processing of one tx on `storage`, in the set that
+ * Storage.handleStop waits for, until it settles.
+ *
+ * @param storage The wallet storage
+ * @param processing The processing of the tx
+ * @returns `processing`
+ */
+export function trackTxProcessing<T>(storage: IStorage, processing: Promise<T>): Promise<T> {
+  let running = txsInProcessing.get(storage);
+  if (!running) {
+    running = new Set();
+    txsInProcessing.set(storage, running);
+  }
+  const txs = running;
+  txs.add(processing);
+  const settled = () => {
+    txs.delete(processing);
+  };
+  processing.then(settled, settled);
+  return processing;
+}
+
+/**
+ * Wait until no tx is being processed on `storage`, counting the txs whose
+ * processing starts while it waits. Their failures belong to their own callers.
+ */
+async function txProcessingSettled(storage: IStorage): Promise<void> {
+  const running = txsInProcessing.get(storage);
+  while (running && running.size > 0) {
+    await Promise.allSettled([...running]);
+  }
+}
+
 export class Storage implements IStorage {
   store: IStore;
 
@@ -1279,6 +1320,11 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses || cleanTokens) {
+      // A tx that passed its last check of the session before it was closed
+      // is still being credited. The clean waits for it, so it removes what
+      // the tx writes. A tx whose processing starts after the close writes
+      // nothing.
+      await txProcessingSettled(this);
       await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }
   }
