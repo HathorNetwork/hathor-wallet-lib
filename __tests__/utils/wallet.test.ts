@@ -764,6 +764,27 @@ test('getXprivFromData', () => {
   expect(xpriv).toEqual(hdPrivKey.xprivkey);
 });
 
+describe('hasShieldedXpubs', () => {
+  const full = wallet.generateAccessDataFromSeed(
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+
+  test('is true only when the record carries both the scan and the spend xpub', () => {
+    expect(wallet.hasShieldedXpubs(full)).toBe(true);
+    expect(wallet.hasShieldedXpubs({ ...full, scanXpubkey: undefined })).toBe(false);
+    expect(wallet.hasShieldedXpubs({ ...full, spendXpubkey: undefined })).toBe(false);
+    expect(
+      wallet.hasShieldedXpubs({ ...full, scanXpubkey: undefined, spendXpubkey: undefined })
+    ).toBe(false);
+    expect(wallet.hasShieldedXpubs({ ...full, scanXpubkey: '', spendXpubkey: '' })).toBe(false);
+  });
+
+  test('is false for a wallet that has no access data', () => {
+    expect(wallet.hasShieldedXpubs(null)).toBe(false);
+  });
+});
+
 describe('migrateShieldedAccessData', () => {
   const seed =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';

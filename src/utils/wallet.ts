@@ -731,6 +731,23 @@ const wallet = {
   },
 
   /**
+   * Whether an access-data record carries both shielded xpubs, scan and spend.
+   *
+   * Shielded addresses are derived from the pair, so a record with only one of
+   * them has no shielded chain. This is the record half of the check the wallet
+   * makes before deriving, subscribing or gap-scanning the shielded chain, and
+   * apps can call it before `start()`.
+   *
+   * @param accessData The wallet access data, or null for a wallet without one
+   * @returns true when both xpubs are present
+   */
+  hasShieldedXpubs(
+    accessData: IWalletAccessData | null
+  ): accessData is IWalletAccessData & { scanXpubkey: string; spendXpubkey: string } {
+    return !!accessData?.scanXpubkey && !!accessData?.spendXpubkey;
+  },
+
+  /**
    * Re-derive the shielded scan/spend keys on an access-data record that was
    * persisted before shielded support existed. No-op if the record already
    * has all four shielded fields, or if the record lacks the encrypted seed

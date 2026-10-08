@@ -30,7 +30,10 @@ import {
   processNewTx,
   processSingleTx,
   processHistory,
+  loadAddresses,
 } from '../../src/utils/storage';
+import { deriveShieldedAddressFromStorage } from '../../src/utils/address';
+import walletUtils from '../../src/utils/wallet';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { encryptData } from '../../src/utils/crypto';
 import walletApi from '../../src/api/wallet';
@@ -1140,7 +1143,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
   function buildStorage({
     gapLimit,
     walletData,
-    spendXpubkey,
+    shieldedXpubs,
   }: {
     gapLimit: number;
     walletData: {
@@ -1149,8 +1152,9 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       shieldedLastLoadedAddressIndex: number;
       shieldedLastUsedAddressIndex: number;
     };
-    // undefined => hasShieldedKeys === false (no spendXpubkey on access data)
-    spendXpubkey?: string;
+    // true => the access data carries both the scan and the spend xpub, so the
+    // wallet has a shielded chain; false => it carries neither.
+    shieldedXpubs: boolean;
   }): Storage {
     const storage = new Storage(new MemoryStore());
     jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
@@ -1160,10 +1164,10 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       .mockResolvedValue({ policy: 'gap-limit', gapLimit } as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     jest.spyOn(storage, 'getWalletData').mockResolvedValue(walletData as any);
-    jest
-      .spyOn(storage, 'getAccessData')
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .mockResolvedValue((spendXpubkey ? { spendXpubkey } : {}) as any);
+      (shieldedXpubs ? { scanXpubkey: 'xpub-scan', spendXpubkey: 'xpub-spend' } : {}) as any
+    );
     return storage;
   }
 
@@ -1173,11 +1177,11 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
 
-  it('legacy-only wallet (hasShieldedKeys=false): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
-    // No spendXpubkey => hasShieldedKeys === false. The shielded fields below
-    // are deliberately "behind" their target, but must be IGNORED because the
-    // shielded branch is gated on hasShieldedKeys. Result must depend only on
-    // the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
+  it('legacy-only wallet (no shielded chain): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
+    // No shielded xpubs => no shielded chain. The shielded fields below are
+    // deliberately "behind" their target, but must be IGNORED because the
+    // shielded branch is gated on the wallet having a shielded chain. Result
+    // must depend only on the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
     //   legacyTarget = lastUsed + gapLimit = 20
     //   minLastLoaded = lastLoaded = 5 (shielded NOT considered)
     //   nextIndex = 6, count = max(20 - 5, 1) = 15
@@ -1190,7 +1194,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 6, count: 15 });
   });
@@ -1212,7 +1216,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 10,
         shieldedLastUsedAddressIndex: 5,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 11, count: 20 });
   });
@@ -1227,7 +1231,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 40,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1250,7 +1254,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 5,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
     });
     const result = await checkGapLimit(storage);
     expect(result).toEqual({ nextIndex: 5, count: 1 });
@@ -1258,8 +1262,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     expect(result?.count).toBeGreaterThanOrEqual(1);
   });
 
-  it('hasShieldedKeys === false branch: a lagging shielded chain does NOT trigger a load', async () => {
-    // Legacy fully satisfied; shielded badly behind. With no spendXpubkey the
+  it('no shielded chain: a lagging shielded chain does NOT trigger a load', async () => {
+    // Legacy fully satisfied; shielded badly behind. With no shielded xpubs the
     // shielded gap is invisible, so the overall result is null.
     const storage = buildStorage({
       gapLimit: 20,
@@ -1269,7 +1273,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 30,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1317,4 +1321,101 @@ describe('apiSyncHistory partial-update emission', () => {
     expect(partialUpdates).toHaveLength(1);
     expect(partialUpdates[0][1]).toEqual({ addressesFound: 40, historyLength: 0 });
   });
+});
+
+describe('shielded chain predicate', () => {
+  // Real shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 30000;
+  const full = walletUtils.generateAccessDataFromSeed(
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+
+  function recordWith({ scan, spend }: { scan: boolean; spend: boolean }) {
+    return {
+      ...full,
+      scanXpubkey: scan ? full.scanXpubkey : undefined,
+      spendXpubkey: spend ? full.spendXpubkey : undefined,
+    };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each([
+    { shape: 'no shielded xpubs', scan: false, spend: false, hasChain: false },
+    { shape: 'only the scan xpub', scan: true, spend: false, hasChain: false },
+    { shape: 'only the spend xpub', scan: false, spend: true, hasChain: false },
+    { shape: 'both shielded xpubs', scan: true, spend: true, hasChain: true },
+  ])(
+    'a record with $shape: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ scan, spend, hasChain }) => {
+      const record = recordWith({ scan, spend });
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(hasChain);
+
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+
+      // One legacy address per index, plus the spend P2PKH when there is a chain.
+      const loaded = await loadAddresses(0, 1, storage);
+      expect(loaded).toHaveLength(hasChain ? 2 : 1);
+      expect((await storage.getAddressAtIndex(0, { legacy: false })) !== null).toBe(hasChain);
+
+      expect((await deriveShieldedAddressFromStorage(0, storage)) !== null).toBe(hasChain);
+
+      // The legacy chain is satisfied (nothing used, index 0 loaded), and the
+      // shielded chain has used index 0 with a gap limit of 1, so only a wallet
+      // with a shielded chain needs index 1.
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      const nextWindow = await checkGapLimit(storage);
+      expect(nextWindow).toEqual(hasChain ? { nextIndex: 1, count: 1 } : null);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it('a wallet without access data has no shielded chain', async () => {
+    expect(walletUtils.hasShieldedXpubs(null)).toBe(false);
+
+    const storage = new Storage(new MemoryStore());
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+    // Index 0 is already stored, so loadAddresses derives nothing on the legacy
+    // chain and the shielded check is the only reader of the missing record.
+    await storage.saveAddress({ base58: 'W-legacy-0', bip32AddressIndex: 0 });
+
+    await expect(loadAddresses(0, 1, storage)).resolves.toEqual(['W-legacy-0']);
+    await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
+    await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it(
+    'apiSyncHistory terminates for a record with only the spend xpub',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(recordWith({ scan: false, spend: true }));
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      // A sync that keeps requesting a window it never loads does not end: fail
+      // after a bound instead of hanging the test.
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockImplementation(async () => {
+          if (historySpy.mock.calls.length > 20) {
+            throw new Error('address_history was requested more than 20 times');
+          }
+          return { data: { success: true, history: [], has_more: false } } as never;
+        });
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      // One window of two legacy addresses, one request.
+      expect(historySpy).toHaveBeenCalledTimes(1);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
 });
