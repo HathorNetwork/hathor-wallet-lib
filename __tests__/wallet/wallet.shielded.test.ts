@@ -426,3 +426,41 @@ describe('address chain options', () => {
     expect(() => wallet.getNextAddress({ legacy: false })).toThrow(ShieldedNotEnabledError);
   });
 });
+
+describe('address lookups accept shielded addresses', () => {
+  const ct = (i: number) => shieldedFixtureAddresses[i].shieldedBase58;
+  const spend = (i: number) => shieldedFixtureAddresses[i].spendBase58;
+
+  it('checks ownership of the on-chain spend address', async () => {
+    const wallet = await readyWallet();
+    const checkSpy = jest.spyOn(walletApi, 'checkAddressesMine').mockResolvedValue({
+      success: true,
+      addresses: { [spend(0)]: true, [legacyFixtureAddress]: false },
+    });
+    await expect(wallet.checkAddressesMine([ct(0), legacyFixtureAddress])).resolves.toEqual({
+      [ct(0)]: true,
+      [legacyFixtureAddress]: false,
+    });
+    expect(checkSpy).toHaveBeenCalledWith(wallet, [spend(0), legacyFixtureAddress]);
+    await expect(wallet.isAddressMine(ct(0))).resolves.toBe(true);
+  });
+
+  it('looks up details and index by the spend address', async () => {
+    const wallet = await readyWallet();
+    const detailsSpy = jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+      success: true,
+      data: { address: spend(1), index: 1, transactions: 0, seqnum: 0 },
+    });
+    await expect(wallet.getAddressIndex(ct(1))).resolves.toBe(1);
+    expect(detailsSpy).toHaveBeenCalledWith(wallet, spend(1));
+  });
+
+  it('passes malformed addresses through for the server to reject', async () => {
+    const wallet = await readyWallet();
+    const checkSpy = jest
+      .spyOn(walletApi, 'checkAddressesMine')
+      .mockResolvedValue({ success: true, addresses: {} });
+    await wallet.checkAddressesMine(['not-an-address']);
+    expect(checkSpy).toHaveBeenCalledWith(wallet, ['not-an-address']);
+  });
+});
