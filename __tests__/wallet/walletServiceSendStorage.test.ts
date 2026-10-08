@@ -148,7 +148,14 @@ describe('skeleton', () => {
   it('refuses members it does not support, naming them', async () => {
     const { proxy } = await setup();
     expect(() => (proxy as IStorage).getAllUtxos).toThrow(/getAllUtxos/);
-    expect(() => (proxy as IStorage).store).toThrow(/store/);
+  });
+
+  it('counts the unused shielded addresses as the store shielded address count', async () => {
+    const { proxy, wallet } = await setup();
+    await expect(proxy.store.addressCount({ legacy: false })).resolves.toBe(3);
+    (wallet as unknown as { newShieldedAddresses: unknown[] }).newShieldedAddresses = [];
+    await expect(proxy.store.addressCount({ legacy: false })).resolves.toBe(0);
+    await expect(proxy.store.addressCount()).rejects.toThrow(/not supported/);
   });
 
   it('records the members used', async () => {
