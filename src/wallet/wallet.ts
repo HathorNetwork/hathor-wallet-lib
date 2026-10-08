@@ -79,6 +79,8 @@ import type {
   ChangeOutputMode,
   IShieldedCapability,
   IShieldedCryptoProvider,
+  IShieldedUnlockResult,
+  ShieldedViewKeyInput,
 } from '../shielded/types';
 import {
   SendTxError,
@@ -90,6 +92,7 @@ import {
   PinRequiredError,
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
+  ShieldedKeyError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
@@ -2119,6 +2122,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       historyComplete: false,
       undecoded: { txIds: [], locked: 0, unreadable: 0, error: 0 },
     };
+  }
+
+  /**
+   * Not supported: the wallet-service backend does not support shielded
+   * outputs, so this facade has no shielded view key.
+   *
+   * @throws {ShieldedKeyError} `shielded-not-supported`
+   */
+  /* eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars */
+  async unlockShieldedView(input: ShieldedViewKeyInput): Promise<IShieldedUnlockResult> {
+    throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_SUPPORTED, 'Not implemented.');
+  }
+
+  /**
+   * Not supported: the wallet-service backend does not support shielded
+   * outputs, so this facade has none to process.
+   *
+   * @throws {ShieldedKeyError} `shielded-not-supported`
+   */
+  // eslint-disable-next-line class-methods-use-this
+  async reprocessShieldedOutputs(): Promise<IShieldedCapability> {
+    throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_SUPPORTED, 'Not implemented.');
   }
 
   /**

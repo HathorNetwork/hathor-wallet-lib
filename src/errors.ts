@@ -325,7 +325,8 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_LOCKED
   | ErrorMessages.SHIELDED_INTEGRITY
   | ErrorMessages.SHIELDED_NO_PROVIDER
-  | ErrorMessages.SHIELDED_NOT_SUPPORTED;
+  | ErrorMessages.SHIELDED_NOT_SUPPORTED
+  | ErrorMessages.SHIELDED_NOT_READY;
 
 /**
  * Error thrown when the shielded keys cannot be derived or used with the

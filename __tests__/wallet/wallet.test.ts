@@ -4722,6 +4722,17 @@ describe('HathorWalletServiceWallet shielded support', () => {
     // The legacy chain is served as before.
     expect(wallet.getCurrentAddress({}, { legacy: true }).address).toBe('address1');
   });
+
+  it('rejects unlockShieldedView and reprocessShieldedOutputs with shielded-not-supported', async () => {
+    await expect(wallet.unlockShieldedView({ pinCode: '123' })).rejects.toMatchObject({
+      errorCode: 'shielded-not-supported',
+      message: 'Not implemented.',
+    });
+    await expect(wallet.reprocessShieldedOutputs()).rejects.toMatchObject({
+      errorCode: 'shielded-not-supported',
+      message: 'Not implemented.',
+    });
+  });
 });
 
 describe('HathorWalletServiceWallet private key and nano methods', () => {

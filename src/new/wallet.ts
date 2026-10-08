@@ -68,10 +68,12 @@ import {
   ILogger,
   IMultisigData,
   IPrecalculatedAddress,
+  IScanPolicyLoadAddresses,
   IStorage,
   ITokenData,
   IUtxo,
   IWalletAccessData,
+  IWalletData,
   OutputValueType,
   SCANNING_POLICY,
   TokenVersion,
@@ -116,7 +118,12 @@ import GLL from '../sync/gll';
 import { TransactionTemplate, WalletTxTemplateInterpreter } from '../template/transaction';
 import Address from '../models/address';
 import type { HistoryTransactionOutput } from '../models/types';
-import type { IShieldedCapability, IShieldedCryptoProvider } from '../shielded/types';
+import type {
+  IShieldedCapability,
+  IShieldedCryptoProvider,
+  IShieldedUnlockResult,
+  ShieldedViewKeyInput,
+} from '../shielded/types';
 import {
   IScanKeyMaterial,
   SessionClosedError,
@@ -223,6 +230,40 @@ const SHIELDED_UNLOCK_FAILURE_CAUSES: Partial<Record<string, ShieldedSessionCaus
   [ErrorMessages.SHIELDED_CORRUPT_KEY]: 'corrupt-key',
   [ErrorMessages.SHIELDED_NO_KEYS]: 'not-supplied',
 };
+
+/**
+ * The most rounds the address discovery at the end of a walk runs. Each round
+ * loads one more window of shielded addresses, so a wallet whose shielded
+ * addresses are used further than that is left with an incomplete history,
+ * which its capability reports (see IShieldedCapability.historyComplete).
+ */
+const ADDRESS_DISCOVERY_MAX_ROUNDS = 50;
+
+/**
+ * Settles a caller waiting for the next PROCESSING walk to end. It is called
+ * with the state the wallet reached (READY, ERROR or CLOSED) and the shielded
+ * capability then, or with null and the error that reading the capability
+ * threw.
+ */
+type ShieldedWalkWaiter = (
+  state: WalletState,
+  capability: IShieldedCapability | null,
+  error?: unknown
+) => void;
+
+/**
+ * The address cursors a round of the address discovery can move, as one
+ * value: the last loaded index of each chain and the last used index of the
+ * shielded chain. The legacy chain's last used index moves while its history
+ * loads, so it never needs another round.
+ */
+function discoveryCursors(walletData: IWalletData): string {
+  return [
+    walletData.lastLoadedAddressIndex,
+    walletData.shieldedLastLoadedAddressIndex,
+    walletData.shieldedLastUsedAddressIndex,
+  ].join('/');
+}
 
 /**
  * Normalize the `preCalculatedAddresses` option into per-index entries.
@@ -341,6 +382,19 @@ class HathorWallet extends EventEmitter {
    * time (see queueShieldedCapabilityEvent).
    */
   shieldedCapabilityChecks: Promise<void>;
+
+  /**
+   * Set when a walk is requested while one runs: the running walk processes
+   * the history once more before it sets READY, since it may have started
+   * before what the request is for.
+   */
+  walkPending: boolean;
+
+  /**
+   * The callers waiting for the next PROCESSING walk to end, settled when the
+   * wallet reaches READY, ERROR or CLOSED (see reprocessShieldedOutputs).
+   */
+  shieldedWalkWaiters: ShieldedWalkWaiter[];
 
   // Scanning & sync configuration
   scanPolicy: AddressScanPolicyData | null;
@@ -534,6 +588,9 @@ class HathorWallet extends EventEmitter {
     this.shieldedCapabilityEmitted = null;
     this.shieldedCapabilityCheckQueued = false;
     this.shieldedCapabilityChecks = Promise.resolve();
+
+    this.walkPending = false;
+    this.shieldedWalkWaiters = [];
 
     // Defaults to single address scanning policy
     if (scanPolicy == null) {
@@ -1891,8 +1948,13 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * The PROCESSING walk: replay the parked websocket txs, process the whole
-   * history, process the txs parked meanwhile, then set READY.
+   * The PROCESSING walk: load the shielded chain when it is not loaded yet,
+   * replay the parked websocket txs, process the whole history, load the
+   * address windows the processed history shows are needed, process the txs
+   * parked meanwhile, then set READY.
+   *
+   * A walk requested while this one runs (see `walkPending`) makes it do all of
+   * that once more before READY.
    *
    * It runs as a task on `newTxPromise`, after the realtime txs and the reloads
    * queued before it, so nothing else rewrites history-derived state while it
@@ -1910,15 +1972,37 @@ class HathorWallet extends EventEmitter {
         if (!isCurrent()) {
           return;
         }
-        await this.processTxQueue();
-        if (!isCurrent()) {
-          // The newer walk replays what is still parked.
-          return;
-        }
-        // Process what was parked while processHistory ran. The queue is empty
-        // when this returns and READY is set in the same tick, so no message
-        // stays parked until the next walk.
-        await this.drainWsTxQueue();
+        do {
+          this.walkPending = false;
+          // A shielded chain the wallet could not load with its other addresses:
+          // its crypto provider was registered, or its record was repaired,
+          // after they were loaded.
+          const shieldedChain = await this.shieldedChainToLoad();
+          if (shieldedChain) {
+            await this.syncHistory(
+              shieldedChain.nextIndex,
+              shieldedChain.count,
+              false,
+              this.pinCode ?? undefined
+            );
+            if (!isCurrent()) {
+              return;
+            }
+          }
+          await this.processTxQueue();
+          if (!isCurrent()) {
+            // The newer walk replays what is still parked.
+            return;
+          }
+          await this.rediscoverAddresses(isCurrent);
+          if (!isCurrent()) {
+            return;
+          }
+          // Process what was parked meanwhile. The queue is empty when this
+          // returns, and nothing below yields until READY is set, so no message
+          // stays parked until the next walk and no walk request goes unserved.
+          await this.drainWsTxQueue();
+        } while (this.walkPending && isCurrent());
         if (isCurrent() && this.state === HathorWallet.PROCESSING) {
           this.setState(HathorWallet.READY);
         }
@@ -1973,7 +2057,131 @@ class HathorWallet extends EventEmitter {
       });
     }
     this.state = state;
+    // Before the event, whose listeners can throw.
+    this.settleShieldedWalkWaiters(state);
     this.emit('state', state);
+  }
+
+  /**
+   * Settle the callers waiting for the next walk to end, when `state` ends it:
+   * READY, or ERROR and CLOSED, which a walk never leaves on its own. Each one
+   * gets the shielded capability as it is then.
+   *
+   * @param state The state the wallet reached
+   */
+  settleShieldedWalkWaiters(state: WalletState): void {
+    if (
+      this.shieldedWalkWaiters.length === 0 ||
+      ![HathorWallet.READY, HathorWallet.ERROR, HathorWallet.CLOSED].includes(state)
+    ) {
+      return;
+    }
+    const waiters = this.shieldedWalkWaiters;
+    this.shieldedWalkWaiters = [];
+    this.getShieldedCapability().then(
+      capability => {
+        for (const settle of waiters) {
+          settle(state, capability);
+        }
+      },
+      error => {
+        for (const settle of waiters) {
+          settle(state, null, error);
+        }
+      }
+    );
+  }
+
+  /**
+   * Ask for a PROCESSING walk over the whole history, and tell whether one is
+   * due:
+   * - READY: a walk starts;
+   * - PROCESSING: the running walk processes the history once more;
+   * - SYNCING: the walk that follows the sync is due anyway.
+   *
+   * In any other state no walk is due, and nothing is done.
+   *
+   * @returns Whether a walk will run and reach READY, unless the wallet fails,
+   *   stops or reconnects first.
+   */
+  requestHistoryWalk(): boolean {
+    switch (this.state) {
+      case HathorWallet.READY:
+        try {
+          this.setState(HathorWallet.PROCESSING);
+        } catch (error) {
+          // The walk started; only a listener of the 'state' event failed.
+          this.logger.error("A 'state' listener failed", { error });
+        }
+        return true;
+      case HathorWallet.PROCESSING:
+        this.walkPending = true;
+        return true;
+      case HathorWallet.SYNCING:
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * The first address window of the shielded chain, when the wallet has the
+   * chain and the store holds none of it: the chain could not be loaded with
+   * the other addresses, because the crypto provider was registered or the
+   * record was repaired after they were. Null otherwise, and in the streaming
+   * sync modes, which do not load the chain's history.
+   */
+  async shieldedChainToLoad(): Promise<IScanPolicyLoadAddresses | null> {
+    if (
+      shieldedSessionOf(this.storage).syncMode !== HistorySyncMode.POLLING_HTTP_API ||
+      (await getShieldedChainXpubs(this.storage)) === null
+    ) {
+      return null;
+    }
+    const start = await scanPolicyStartAddresses(this.storage);
+    const first = await this.storage.getAddressAtIndex(start.nextIndex, { legacy: false });
+    return first?.addressType === 'shielded' ? null : start;
+  }
+
+  /**
+   * Load the address windows the processed history shows the wallet needs.
+   *
+   * An output paid to a shielded address moves the chain's used address only
+   * once it is decoded, which happens when the history is processed, after the
+   * addresses were loaded. So each round loads the window the scanning policy
+   * asks for and processes the history again, which can ask for one more
+   * window. It stops when a round moves none of the cursors that decide the
+   * next window, and after ADDRESS_DISCOVERY_MAX_ROUNDS rounds, which leaves the
+   * shielded history incomplete. It runs in the polling sync mode only.
+   *
+   * @param isCurrent Whether the walk still owns the wallet state
+   */
+  async rediscoverAddresses(isCurrent: () => boolean): Promise<void> {
+    const session = shieldedSessionOf(this.storage);
+    let capped = false;
+    if (session.syncMode === HistorySyncMode.POLLING_HTTP_API) {
+      let range = await checkScanningPolicy(this.storage);
+      for (let round = 0; range !== null; round += 1) {
+        if (round === ADDRESS_DISCOVERY_MAX_ROUNDS) {
+          capped = true;
+          this.logger.error(
+            `The address discovery stopped after ${ADDRESS_DISCOVERY_MAX_ROUNDS} rounds, ` +
+              'so the shielded history may be incomplete.'
+          );
+          break;
+        }
+        const before = discoveryCursors(await this.storage.getWalletData());
+        await this.syncHistory(range.nextIndex, range.count, true, this.pinCode ?? undefined);
+        if (!isCurrent()) {
+          return;
+        }
+        if (discoveryCursors(await this.storage.getWalletData()) === before) {
+          break;
+        }
+        range = await checkScanningPolicy(this.storage);
+      }
+    }
+    session.setDiscoveryCapped(capped);
   }
 
   /**
@@ -2556,6 +2764,189 @@ class HathorWallet extends EventEmitter {
     } catch (error) {
       this.logger.error("A 'shielded-capability' listener failed", { error });
     }
+  }
+
+  /**
+   * Whether a walk over the history would decode something with the key the
+   * session holds now: the wallet has a shielded chain it can use, and either
+   * outputs paid to it are locked or the chain is not loaded yet.
+   */
+  async shieldedWalkNeeded(): Promise<boolean> {
+    if ((await getShieldedChainXpubs(this.storage)) === null) {
+      return false;
+    }
+    if (shieldedSessionOf(this.storage).undecodedSummary().locked > 0) {
+      return true;
+    }
+    return (await this.shieldedChainToLoad()) !== null;
+  }
+
+  /**
+   * Process the whole history again, with the shielded view key the session
+   * holds now, in a PROCESSING walk, and resolve with the shielded capability
+   * when the walk reaches READY. It decodes the outputs that a missing key left
+   * locked, or that a failure left in error.
+   *
+   * It is the walk a reconnect runs: the wallet is PROCESSING, so `isReady()`
+   * is false, and websocket messages wait until the walk ends.
+   * - READY: a walk starts;
+   * - PROCESSING: the running walk processes the history once more, since it
+   *   may have started before the key was unlocked;
+   * - SYNCING: the walk that follows the sync does it.
+   *
+   * Do not await it inside a tx signer or a request handler: a walk processes
+   * the whole history.
+   *
+   * @returns The shielded capability once the walk reaches READY
+   * @throws {ShieldedKeyError}
+   *   - `shielded-not-started` before start() and after stop(), and when the
+   *     wallet is stopped before the walk ends;
+   *   - `shielded-not-ready` while the wallet is CONNECTING, in ERROR or
+   *     CLOSED, where the walk of the next connection processes the history,
+   *     and when the wallet reaches ERROR before the walk ends.
+   */
+  async reprocessShieldedOutputs(): Promise<IShieldedCapability> {
+    if (!shieldedSessionOf(this.storage).active) {
+      throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_STARTED, 'The wallet is not started.');
+    }
+    if (![HathorWallet.READY, HathorWallet.PROCESSING, HathorWallet.SYNCING].includes(this.state)) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_NOT_READY,
+        `The wallet cannot process its history while it is ${this.state}.`
+      );
+    }
+    return new Promise<IShieldedCapability>((resolve, reject) => {
+      this.shieldedWalkWaiters.push((state, capability, error) => {
+        if (state === HathorWallet.CLOSED) {
+          reject(
+            new ShieldedKeyError(
+              ErrorMessages.SHIELDED_NOT_STARTED,
+              'The wallet was stopped before its history was processed again.'
+            )
+          );
+        } else if (state === HathorWallet.ERROR) {
+          reject(
+            new ShieldedKeyError(
+              ErrorMessages.SHIELDED_NOT_READY,
+              'The wallet failed before its history was processed again.'
+            )
+          );
+        } else if (capability) {
+          resolve(capability);
+        } else {
+          reject(error);
+        }
+      });
+      this.requestHistoryWalk();
+    });
+  }
+
+  /**
+   * Unlock the shielded view key of the running wallet with its PIN.
+   *
+   * The scan key the PIN decrypts is checked against the record's scanXpubkey
+   * and held in the session until stop(), as start() does. It returns once the
+   * key is in the session, without waiting for the history to be decoded with
+   * it, so it can run inside a PIN prompt:
+   * - `capability` is the shielded capability with the key;
+   * - `reprocessed` resolves with the capability once the walk that decodes the
+   *   locked outputs reaches READY. It never rejects: when the wallet reaches
+   *   ERROR or is stopped first, it resolves with the capability then.
+   *
+   * The walk is requested as reprocessShieldedOutputs requests it, and while
+   * the wallet is CONNECTING, the walk of the next connection does it. No walk
+   * runs when the session already held this key, or when no output is locked
+   * and the shielded chain is loaded; `reprocessed` then resolves with
+   * `capability`.
+   *
+   * @param input.pinCode The wallet's PIN
+   * @returns The shielded capability now, and once the history is decoded
+   * @throws {ShieldedKeyError} Nothing changes, except on a key mismatch:
+   *   - `shielded-not-started` before start(), after stop(), and when stop() or
+   *     another start() runs during the unlock;
+   *   - `shielded-multisig` for a multisig wallet, whose shielded keys are
+   *     single-signature keys;
+   *   - `shielded-no-keys` when the record has no encrypted scan key or lacks a
+   *     shielded xpub;
+   *   - `shielded-wrong-pin` when the PIN does not decrypt the scan key;
+   *   - `shielded-corrupt-key` when the record holds no valid scan key;
+   *   - `shielded-key-mismatch` when the scan key is not the key of the
+   *     record's scanXpubkey. The record's shielded keys are then not used
+   *     until it is repaired: the capability is none, integrity.
+   *
+   *   A seed wallet repairs both records by deriving the shielded keys again:
+   *   `walletUtils.migrateShieldedAccessData` with `replaceShieldedKeys`,
+   *   `storage.saveAccessData`, then this unlock.
+   *
+   *   Any other error, such as a failed store read, is thrown as it is.
+   */
+  async unlockShieldedView(input: ShieldedViewKeyInput): Promise<IShieldedUnlockResult> {
+    const session = shieldedSessionOf(this.storage);
+    if (!session.active) {
+      throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_STARTED, 'The wallet is not started.');
+    }
+    const { epoch } = session;
+    const accessData = await this.storage.getAccessData();
+    if (accessData?.walletType === WalletType.MULTISIG) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_MULTISIG,
+        'A multisig wallet has no shielded view key: its shielded keys are single-signature keys.'
+      );
+    }
+    if (!accessData?.scanMainKey || !walletUtils.hasShieldedXpubs(accessData)) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_NO_KEYS,
+        'The wallet record has no shielded view key.'
+      );
+    }
+    if (typeof input?.pinCode !== 'string' || input.pinCode.length === 0) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_WRONG_PIN,
+        'The PIN does not decrypt the shielded view key.'
+      );
+    }
+
+    let material: IScanKeyMaterial;
+    try {
+      material = await unlockScanKeyWithPin(this.storage, input.pinCode);
+    } catch (error) {
+      if (
+        error instanceof ShieldedKeyError &&
+        error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH &&
+        session.active &&
+        session.epoch === epoch
+      ) {
+        // The record's own scan key and scan xpub disagree.
+        session.setIntegrity('key-mismatch');
+        this.queueShieldedCapabilityEvent();
+      }
+      throw error;
+    }
+    const sameKey = session.holdsKey(material);
+    session.fill(material, epoch);
+    this.queueShieldedCapabilityEvent();
+
+    const capability = await this.getShieldedCapability();
+    if (sameKey || !(await this.shieldedWalkNeeded())) {
+      return { capability, reprocessed: Promise.resolve(capability) };
+    }
+    const reprocessed = new Promise<IShieldedCapability>(resolve => {
+      if (
+        ![
+          HathorWallet.READY,
+          HathorWallet.PROCESSING,
+          HathorWallet.SYNCING,
+          HathorWallet.CONNECTING,
+        ].includes(this.state)
+      ) {
+        // ERROR or CLOSED: no walk is due.
+        resolve(capability);
+        return;
+      }
+      this.shieldedWalkWaiters.push((_state, latest) => resolve(latest ?? capability));
+      this.requestHistoryWalk();
+    });
+    return { capability, reprocessed };
   }
 
   /**
@@ -4335,11 +4726,38 @@ class HathorWallet extends EventEmitter {
    * Set the shielded crypto provider for confidential transaction support.
    * Use this for explicit injection (e.g., mobile apps using UniFFI bindings).
    *
+   * Without a provider the wallet loads no shielded chain. A provider set on a
+   * started wallet that had none starts a PROCESSING walk, which loads the
+   * chain from its first index and decodes it, when the wallet has a shielded
+   * chain it can use. The 'shielded-capability' event then fires at the end of
+   * that walk, once the chain is loaded and decoded.
+   *
    * @param provider The shielded crypto provider, or undefined to disable
    */
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
+    const hadProvider = !!this.storage.shieldedCryptoProvider;
     this.storage.setShieldedCryptoProvider(provider);
-    this.queueShieldedCapabilityEvent();
+    if (!provider || hadProvider || !shieldedSessionOf(this.storage).active) {
+      this.queueShieldedCapabilityEvent();
+      return;
+    }
+    // A wallet that ran without a provider loaded no shielded chain, and
+    // decoded nothing: a walk loads the chain from its first index and decodes
+    // it. The capability event waits for the end of that walk, which queues
+    // it, so a listener never acts on a chain that is not loaded yet.
+    this.shieldedWalkNeeded().then(
+      needed => {
+        if (!needed || !this.requestHistoryWalk()) {
+          this.queueShieldedCapabilityEvent();
+        }
+      },
+      error => {
+        this.logger.error('Error checking the shielded chain after a provider was set', {
+          error,
+        });
+        this.queueShieldedCapabilityEvent();
+      }
+    );
   }
 
   /**

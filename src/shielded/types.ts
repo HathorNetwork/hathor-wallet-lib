@@ -239,6 +239,11 @@ export interface IShieldedAddressParts {
  * The record is inconsistent, so its shielded keys are not used:
  * - `key-mismatch`: the scan key the PIN decrypts is not the key of the
  *   record's `scanXpubkey`.
+ *
+ * A seed wallet repairs `corrupt-key` and `key-mismatch` by deriving its
+ * shielded keys again from its words:
+ * `walletUtils.migrateShieldedAccessData` with `replaceShieldedKeys`, then
+ * `Storage.saveAccessData`, then `HathorWallet.unlockShieldedView`.
  */
 export type ShieldedCapabilityCause =
   | 'not-supplied'
@@ -358,4 +363,25 @@ export interface IShieldedCapability {
   historyComplete: boolean;
   /** The wallet's own shielded outputs that it holds but has not decoded. */
   undecoded: IShieldedUndecodedSummary;
+}
+
+/**
+ * What unlocks the shielded view key of a running wallet: the wallet's PIN,
+ * which decrypts the scan key of its record.
+ */
+export type ShieldedViewKeyInput = { pinCode: string };
+
+/**
+ * The result of unlocking the shielded view key of a running wallet.
+ */
+export interface IShieldedUnlockResult {
+  /** The capability once the key is unlocked, before any output is decoded with it. */
+  capability: IShieldedCapability;
+  /**
+   * The capability once the walk that decodes the wallet's locked outputs
+   * reaches READY. It never rejects: when the wallet reaches ERROR or is
+   * stopped first, it resolves with the capability then. When no walk is
+   * needed, it resolves with `capability`.
+   */
+  reprocessed: Promise<IShieldedCapability>;
 }

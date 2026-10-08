@@ -65,4 +65,6 @@ export enum ErrorMessages {
   SHIELDED_NO_PROVIDER = 'shielded-no-provider',
   // The wallet facade does not support shielded outputs
   SHIELDED_NOT_SUPPORTED = 'shielded-not-supported',
+  // The wallet cannot process its history in its current state
+  SHIELDED_NOT_READY = 'shielded-not-ready',
 }

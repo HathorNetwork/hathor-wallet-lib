@@ -711,6 +711,8 @@ test('setState', async () => {
   hWallet.onEnterStateProcessing.mockImplementation(() => Promise.resolve());
   hWallet.emit = () => {};
   hWallet.state = 0;
+  // setState settles the callers waiting for a walk.
+  hWallet.shieldedWalkWaiters = [];
 
   hWallet.setState(HathorWallet.SYNCING);
   await new Promise(resolve => {
@@ -3219,8 +3221,10 @@ describe('history rewrites on newTxPromise', () => {
     const staleSync = gate();
     syncSpy.mockImplementationOnce(() => staleSync.opened);
     states.length = 0;
+    // The first walk's address discovery syncs too, so count from here.
+    const syncsBefore = syncSpy.mock.calls.length;
     const second = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
-    await until(() => syncSpy.mock.calls.length === 2, 'the second reload to sync');
+    await until(() => syncSpy.mock.calls.length === syncsBefore + 1, 'the second reload to sync');
     const third = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
     staleSync.open();
     await Promise.all([second, third]);
@@ -3254,8 +3258,10 @@ describe('history rewrites on newTxPromise', () => {
       throw new Error('Stream aborted');
     });
     states.length = 0;
+    // The first walk's address discovery syncs too, so count from here.
+    const syncsBefore = syncSpy.mock.calls.length;
     const second = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
-    await until(() => syncSpy.mock.calls.length === 2, 'the second reload to sync');
+    await until(() => syncSpy.mock.calls.length === syncsBefore + 1, 'the second reload to sync');
     const third = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
     staleSync.open();
     await Promise.all([second, third]);
@@ -3535,8 +3541,9 @@ describe('the shielded view key from start() to stop()', () => {
     ['0b'.repeat(33)]: { addressIndex: 1, value: 30n },
     ['0c'.repeat(33)]: { addressIndex: 0, value: 20n },
     ['0d'.repeat(33)]: { addressIndex: 1, value: 5n },
+    ['0e'.repeat(33)]: { addressIndex: 3, value: 7n },
   };
-  const [OPENS_50, OPENS_30, OPENS_20, OPENS_5] = Object.keys(OPENINGS);
+  const [OPENS_50, OPENS_30, OPENS_20, OPENS_5, OPENS_7] = Object.keys(OPENINGS);
 
   let fixture: {
     accessData: string;
@@ -3545,7 +3552,7 @@ describe('the shielded view key from start() to stop()', () => {
     spend: string[];
   } | null = null;
   /**
-   * The test seed's record, its scan xpriv, the scan keys of its first two
+   * The test seed's record, its scan xpriv, the scan keys of its first four
    * shielded addresses as bitcore derives them, and their spend addresses.
    */
   function walletFixture() {
@@ -3559,11 +3566,12 @@ describe('the shielded view key from start() to stop()', () => {
         .getXPrivKeyFromSeed(SEED, { networkName: 'testnet' })
         .deriveChild("m/44'/280'/1'")
         .deriveChild(0);
+      const indexes = [0, 1, 2, 3];
       fixture = {
         accessData: JSON.stringify(accessData),
         scanXpriv: scanKey.xprivkey,
-        childKeys: [0, 1].map(i => scanKey.deriveChild(i).privateKey.toBuffer().toString('hex')),
-        spend: [0, 1].map(
+        childKeys: indexes.map(i => scanKey.deriveChild(i).privateKey.toBuffer().toString('hex')),
+        spend: indexes.map(
           i =>
             addressUtils.deriveShieldedAddressPair(
               accessData.scanXpubkey!,
@@ -4779,6 +4787,540 @@ describe('the shielded view key from start() to stop()', () => {
       });
       expect(events).toHaveBeenCalledTimes(2);
       await wallet.stop();
+    }, 60000);
+  });
+
+  describe('unlockShieldedView, reprocessShieldedOutputs and the address discovery', () => {
+    const TX_FAR = 'e5'.repeat(32);
+
+    function recordStates(wallet: HathorWallet): unknown[] {
+      const states: unknown[] = [];
+      wallet.on('state', state => {
+        states.push(state);
+      });
+      return states;
+    }
+
+    function verdictOf({ level, reason, cause }: IShieldedCapability) {
+      return { level, reason, cause };
+    }
+
+    it('unlockShieldedView fills the key and returns before the walk, whose READY resolves reprocessed', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+      const { wallet, storage, session } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      await sync(wallet);
+      expect((await wallet.getShieldedCapability()).undecoded.locked).toBe(1);
+      const states = recordStates(wallet);
+      const rewind = holdNextRewind(storage);
+
+      const { capability, reprocessed } = await wallet.unlockShieldedView({ pinCode: PIN });
+
+      // The key is in the session; the walk that decodes with it has not decoded yet.
+      expect(session.hasKey).toBe(true);
+      expect(capability).toMatchObject({ level: 'full', undecoded: { locked: 1 } });
+      expect(wallet.state).toBe(HathorWallet.PROCESSING);
+      await until(() => rewind.reached, 'the walk to decode');
+      rewind.open();
+      await expect(reprocessed).resolves.toMatchObject({
+        level: 'full',
+        undecoded: { txIds: [], locked: 0, unreadable: 0, error: 0 },
+      });
+      expect(wallet.state).toBe(HathorWallet.READY);
+      expect(states).toEqual([HathorWallet.PROCESSING, HathorWallet.READY]);
+      expect(await htrBalance(wallet)).toBe(50n);
+      await wallet.stop();
+    }, 60000);
+
+    it('unlockShieldedView runs no walk when no output is locked, nor when the session held the same key', async () => {
+      const { wallet } = await makeWallet();
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      await sync(wallet);
+      const states = recordStates(wallet);
+
+      const first = await wallet.unlockShieldedView({ pinCode: PIN });
+      expect(first.capability.level).toBe('full');
+      await expect(first.reprocessed).resolves.toEqual(first.capability);
+
+      const again = await wallet.unlockShieldedView({ pinCode: PIN });
+      await expect(again.reprocessed).resolves.toEqual(again.capability);
+      await settle();
+      expect(states).toEqual([]);
+      expect(wallet.isReady()).toBe(true);
+      await wallet.stop();
+    }, 60000);
+
+    it('a wrong-PIN unlockShieldedView throws shielded-wrong-pin and changes nothing', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+      const { wallet, session } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      await sync(wallet);
+      const before = await wallet.getShieldedCapability();
+      const states = recordStates(wallet);
+
+      await expect(wallet.unlockShieldedView({ pinCode: '888' })).rejects.toMatchObject({
+        errorCode: 'shielded-wrong-pin',
+      });
+      await expect(wallet.unlockShieldedView({ pinCode: '' })).rejects.toMatchObject({
+        errorCode: 'shielded-wrong-pin',
+      });
+
+      expect(session.hasKey).toBe(false);
+      expect(await wallet.getShieldedCapability()).toEqual(before);
+      await settle();
+      expect(states).toEqual([]);
+      await wallet.stop();
+    }, 60000);
+
+    it('unlockShieldedView and reprocessShieldedOutputs reject with shielded-not-started before start() and after stop()', async () => {
+      const { wallet } = await makeWallet();
+      await expect(wallet.unlockShieldedView({ pinCode: PIN })).rejects.toMatchObject({
+        errorCode: 'shielded-not-started',
+      });
+      await expect(wallet.reprocessShieldedOutputs()).rejects.toMatchObject({
+        errorCode: 'shielded-not-started',
+      });
+
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await wallet.stop();
+
+      await expect(wallet.unlockShieldedView({ pinCode: PIN })).rejects.toMatchObject({
+        errorCode: 'shielded-not-started',
+      });
+      await expect(wallet.reprocessShieldedOutputs()).rejects.toMatchObject({
+        errorCode: 'shielded-not-started',
+      });
+    }, 60000);
+
+    it('an unlockShieldedView whose key does not match the record marks its shielded keys inconsistent', async () => {
+      const { wallet, storage } = await makeWallet();
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      await sync(wallet);
+      const record = (await storage.getAccessData())!;
+      // The scan key of another seed, encrypted under the wallet's PIN.
+      const otherScan = walletUtils
+        .getXPrivKeyFromSeed(walletUtils.generateWalletWords(), { networkName: 'testnet' })
+        .deriveChild("m/44'/280'/1'")
+        .deriveChild(0);
+      await storage.saveAccessData({
+        ...record,
+        scanMainKey: encryptData(otherScan.xprivkey, PIN),
+      });
+
+      await expect(wallet.unlockShieldedView({ pinCode: PIN })).rejects.toMatchObject({
+        errorCode: 'shielded-key-mismatch',
+      });
+
+      expect(verdictOf(await wallet.getShieldedCapability())).toEqual({
+        level: 'none',
+        reason: 'integrity',
+        cause: 'key-mismatch',
+      });
+      await wallet.stop();
+    }, 60000);
+
+    it.each([
+      {
+        record: 'whose encrypted scan key holds no extended private key',
+        before: { level: 'watch', reason: 'locked', cause: 'corrupt-key' },
+        damage: (record: IWalletAccessData) => ({
+          ...record,
+          scanMainKey: encryptData('not an extended key', PIN),
+        }),
+      },
+      {
+        record: 'whose scan xpub is not the xpub of its scan key',
+        before: { level: 'none', reason: 'integrity', cause: 'key-mismatch' },
+        damage: (record: IWalletAccessData) => ({
+          ...record,
+          // The scan xpub of another seed.
+          scanXpubkey: walletUtils
+            .getXPrivKeyFromSeed(walletUtils.generateWalletWords(), { networkName: 'testnet' })
+            .deriveChild("m/44'/280'/1'")
+            .deriveChild(0).xpubkey,
+        }),
+      },
+    ])(
+      'repairs a record $record when its shielded keys are derived again, saved and unlocked',
+      async ({ before, damage }) => {
+        const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+        const { wallet, storage } = await makeWallet({
+          history: () => synced.map(tx => structuredClone(tx)),
+        });
+        await storage.saveAccessData(damage((await storage.getAccessData())!));
+        await wallet.start({ pinCode: PIN, password: PASSWORD });
+        await sync(wallet);
+        expect(verdictOf(await wallet.getShieldedCapability())).toEqual(before);
+
+        const accessData = (await storage.getAccessData())!;
+        expect(
+          walletUtils.migrateShieldedAccessData(accessData, {
+            pin: PIN,
+            password: PASSWORD,
+            networkName: 'testnet',
+            replaceShieldedKeys: true,
+          })
+        ).toBe(true);
+        await storage.saveAccessData(accessData);
+        const { capability, reprocessed } = await wallet.unlockShieldedView({ pinCode: PIN });
+
+        expect(verdictOf(capability)).toEqual({ level: 'full', reason: null, cause: null });
+        await expect(reprocessed).resolves.toMatchObject({ level: 'full' });
+        expect(await htrBalance(wallet)).toBe(50n);
+        await wallet.stop();
+      },
+      60000
+    );
+
+    it('unlockShieldedView rejects with shielded-not-started, and zeroes the key, when stop() runs during the unlock', async () => {
+      const { wallet, storage, session } = await makeWallet();
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      const unlocked = keepUnlockedKeys();
+      const readKey = storage.getScanXPrivKey.bind(storage);
+      const unlocking = gate();
+      let reached = false;
+      jest.spyOn(storage, 'getScanXPrivKey').mockImplementation(async pin => {
+        reached = true;
+        await unlocking.opened;
+        return readKey(pin);
+      });
+
+      const unlock = wallet.unlockShieldedView({ pinCode: PIN });
+      await until(() => reached, 'the unlock');
+      await wallet.stop();
+      unlocking.open();
+
+      await expect(unlock).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+      expect(unlocked).toHaveLength(1);
+      expect(unlocked[0].privateKey).toEqual(Buffer.alloc(32));
+      expect(session.hasKey).toBe(false);
+    }, 60000);
+
+    it('reprocessShieldedOutputs rejects with shielded-not-ready while the wallet is connecting', async () => {
+      const { wallet } = await makeWallet();
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      expect(wallet.state).toBe(HathorWallet.CONNECTING);
+
+      await expect(wallet.reprocessShieldedOutputs()).rejects.toMatchObject({
+        errorCode: 'shielded-not-ready',
+      });
+      await wallet.stop();
+    }, 60000);
+
+    it('reprocessShieldedOutputs runs a walk that decodes the outputs a failure left in error, and resolves at READY', async () => {
+      const { wallet, storage } = await makeWallet();
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      // A store read fails while a realtime tx is decoded: its output is counted in error.
+      jest.spyOn(storage, 'getAddressInfo').mockRejectedValueOnce(new Error('store read failed'));
+      wallet.handleWebsocketMsg(message(shieldedTx(TX_REALTIME, OPENS_20)));
+      await wallet.newTxPromise;
+      expect((await wallet.getShieldedCapability()).undecoded).toEqual({
+        txIds: [TX_REALTIME],
+        locked: 0,
+        unreadable: 0,
+        error: 1,
+      });
+      expect(await htrBalance(wallet)).toBe(0n);
+      const states = recordStates(wallet);
+
+      const capability = await wallet.reprocessShieldedOutputs();
+
+      expect(capability.undecoded).toEqual({ txIds: [], locked: 0, unreadable: 0, error: 0 });
+      expect(states).toEqual([HathorWallet.PROCESSING, HathorWallet.READY]);
+      expect(await htrBalance(wallet)).toBe(20n);
+      await wallet.stop();
+    }, 60000);
+
+    it('a reprocessShieldedOutputs request during a walk makes the walk process the history once more', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+      const { wallet, storage } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      const processSpy = jest.spyOn(storage, 'processHistory');
+      const rewind = holdNextRewind(storage);
+      const states = recordStates(wallet);
+
+      await wallet.onConnectionChangedState(ConnectionState.CONNECTED);
+      await until(() => rewind.reached, 'the walk to decode');
+      expect(wallet.state).toBe(HathorWallet.PROCESSING);
+      const reprocessing = wallet.reprocessShieldedOutputs();
+      rewind.open();
+
+      await expect(reprocessing).resolves.toMatchObject({ level: 'full' });
+      expect(processSpy).toHaveBeenCalledTimes(2);
+      expect(states).toEqual([HathorWallet.SYNCING, HathorWallet.PROCESSING, HathorWallet.READY]);
+      expect(await htrBalance(wallet)).toBe(50n);
+      await wallet.stop();
+    }, 60000);
+
+    it('reprocessShieldedOutputs rejects with shielded-not-ready when the walk fails', async () => {
+      const { wallet, storage } = await makeWallet();
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      jest.spyOn(storage, 'processHistory').mockRejectedValueOnce(new Error('store write failed'));
+
+      await expect(wallet.reprocessShieldedOutputs()).rejects.toMatchObject({
+        errorCode: 'shielded-not-ready',
+      });
+      expect(wallet.state).toBe(HathorWallet.ERROR);
+      await wallet.stop();
+    }, 60000);
+
+    it('when stop() ends a walk, reprocessShieldedOutputs rejects and the reprocessed promise of unlockShieldedView resolves', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+      const { wallet, storage } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      await wallet.start({ pinCode: '999', password: PASSWORD });
+      await sync(wallet);
+      const rewind = holdNextRewind(storage);
+      const { reprocessed } = await wallet.unlockShieldedView({ pinCode: PIN });
+      const reprocessing = wallet.reprocessShieldedOutputs();
+      await until(() => rewind.reached, 'the walk to decode');
+
+      await wallet.stop({ cleanStorage: false });
+      rewind.open();
+
+      await expect(reprocessed).resolves.toMatchObject({ level: 'none', reason: 'not-started' });
+      await expect(reprocessing).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+    }, 60000);
+
+    it('the walk loads the next shielded window when decoding moves the used address, until no cursor moves', async () => {
+      // Paid to shielded indexes 1 and 3: index 3 is past the first window of a gap limit of 2.
+      const synced = [shieldedTx(TX_SYNCED, OPENS_30), shieldedTx(TX_FAR, OPENS_7)];
+      const { wallet, storage } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      const syncSpy = jest.spyOn(wallet, 'syncHistory');
+
+      await sync(wallet);
+
+      expect(await htrBalance(wallet)).toBe(37n);
+      expect(await storage.getAddressAtIndex(3, { legacy: false })).not.toBeNull();
+      // The first sync, then one round per window: [2, 3] holds the second
+      // output, and [4, 5] holds nothing, so no cursor moves after it.
+      expect(syncSpy.mock.calls.map(([startIndex, count]) => [startIndex, count])).toEqual([
+        [0, 2],
+        [2, 2],
+        [4, 2],
+      ]);
+      expect((await wallet.getShieldedCapability()).historyComplete).toBe(true);
+      await wallet.stop();
+    }, 60000);
+
+    it('the address discovery stops after a round that moves no cursor', async () => {
+      const { wallet } = await makeWallet();
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      // A scanning policy that keeps asking for a window the wallet already loaded.
+      jest.spyOn(storageUtils, 'checkScanningPolicy').mockResolvedValue({ nextIndex: 0, count: 1 });
+      const syncSpy = jest.spyOn(wallet, 'syncHistory');
+
+      const capability = await wallet.reprocessShieldedOutputs();
+
+      expect(syncSpy).toHaveBeenCalledTimes(1);
+      expect(capability.historyComplete).toBe(true);
+      await wallet.stop();
+    }, 60000);
+
+    it('the address discovery stops at its round limit, logs it, and reports an incomplete history until a walk completes it', async () => {
+      const { wallet, storage, logger } = await makeWallet();
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      // Every round loads one more address, and the scanning policy always asks for another.
+      let next = 100;
+      const policySpy = jest
+        .spyOn(storageUtils, 'checkScanningPolicy')
+        .mockImplementation(async () => ({ nextIndex: next, count: 1 }));
+      const syncSpy = jest.spyOn(wallet, 'syncHistory').mockImplementation(async () => {
+        await storage.saveAddress({ base58: `W-discovered-${next}`, bip32AddressIndex: next });
+        next += 1;
+      });
+
+      const capped = await wallet.reprocessShieldedOutputs();
+
+      expect(syncSpy).toHaveBeenCalledTimes(50);
+      expect(capped.historyComplete).toBe(false);
+      expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('after 50 rounds'));
+
+      policySpy.mockRestore();
+      syncSpy.mockRestore();
+      const completed = await wallet.reprocessShieldedOutputs();
+      expect(completed.historyComplete).toBe(true);
+      await wallet.stop();
+    }, 60000);
+
+    it('a provider set on a started wallet loads the shielded chain from index 0 and decodes it, in one walk', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50), shieldedTx(TX_PARKED, OPENS_30)];
+      const { wallet, storage, conn } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      wallet.setShieldedCryptoProvider(undefined);
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+      expect(await htrBalance(wallet)).toBe(0n);
+      const states = recordStates(wallet);
+      conn.subscribeAddresses.mockClear();
+
+      wallet.setShieldedCryptoProvider(makeCryptoProvider());
+      await until(() => states.includes(HathorWallet.READY), 'the walk');
+      await settle();
+
+      expect(states).toEqual([HathorWallet.PROCESSING, HathorWallet.READY]);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
+      const { spend } = walletFixture();
+      expect(conn.subscribeAddresses.mock.calls.flat(2)).toEqual(
+        expect.arrayContaining([spend[0], spend[1]])
+      );
+      expect(await htrBalance(wallet)).toBe(80n);
+      expect(verdictOf(await wallet.getShieldedCapability())).toEqual({
+        level: 'full',
+        reason: null,
+        cause: null,
+      });
+      await wallet.stop();
+    }, 60000);
+
+    it('emits the capability a provider set on a started wallet gives once its walk loaded and decoded the chain', async () => {
+      const synced = [shieldedTx(TX_SYNCED, OPENS_50)];
+      const { wallet } = await makeWallet({
+        history: () => synced.map(tx => structuredClone(tx)),
+      });
+      wallet.setShieldedCryptoProvider(undefined);
+      await wallet.start({ pinCode: PIN, password: PASSWORD });
+      await sync(wallet);
+      await settle();
+      // What a UI does on each event: show a shielded receive address and the balance.
+      const seen: Array<{ state: unknown; level: string; address: string; balance: bigint }> = [];
+      wallet.on('shielded-capability', capability => {
+        const { state } = wallet;
+        Promise.all([
+          wallet.getCurrentAddress({}, { legacy: false }).then(
+            ({ address }) => address,
+            (error: Error) => `error: ${error.message}`
+          ),
+          htrBalance(wallet),
+        ]).then(([address, balance]) => {
+          seen.push({ state, level: capability.level, address, balance });
+        });
+      });
+
+      wallet.setShieldedCryptoProvider(makeCryptoProvider());
+      await until(() => seen.length > 0, 'the event');
+      await settle();
+
+      expect(seen).toEqual([
+        {
+          state: HathorWallet.READY,
+          level: 'full',
+          address: (await wallet.getCurrentAddress({}, { legacy: false })).address,
+          balance: 50n,
+        },
+      ]);
+      await wallet.stop();
+    }, 60000);
+
+    it('the mobile seed flow: a start with the PIN, a reload with a stale PIN, an unlock and a stop', async () => {
+      // One tx pays 100 to the wallet's first address and 50 to its first shielded address.
+      let firstAddress = '';
+      const history = () => {
+        const tx = structuredClone(shieldedTx(TX_SYNCED, OPENS_50));
+        return [
+          {
+            ...tx,
+            outputs: [
+              {
+                value: 100n,
+                token_data: 0,
+                token: NATIVE_TOKEN_UID,
+                script: '',
+                spent_by: null,
+                decoded: { type: 'P2PKH', address: firstAddress, timelock: null },
+              },
+            ],
+          } as unknown as ReturnType<typeof shieldedTx>,
+        ];
+      };
+      const NEW_PIN = '777';
+      const first = await makeWallet({ history });
+      const unlocked = keepUnlockedKeys();
+
+      // The first start, with the PIN.
+      await first.wallet.start({ pinCode: PIN, password: PASSWORD });
+      // Derived once start() set the network.
+      firstAddress = (await addressUtils.deriveAddressP2PKH(0, first.storage)).base58;
+      await sync(first.wallet);
+      expect(verdictOf(await first.wallet.getShieldedCapability())).toEqual({
+        level: 'full',
+        reason: null,
+        cause: null,
+      });
+      expect(await htrBalance(first.wallet)).toBe(150n);
+
+      // The PIN changes, and the app reloads the wallet: it stops the old one and
+      // starts a new one, on a new Storage over the same store, with the old PIN.
+      await first.storage.changePin(PIN, NEW_PIN);
+      await first.wallet.stop();
+      const storage = new Storage(first.storage.store);
+      const wallet = new HathorWallet({
+        seed: SEED,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        connection: makeConn() as any,
+        storage,
+        password: PASSWORD,
+        scanPolicy: { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 },
+        logger: makeLogger(),
+      });
+      wallet.setShieldedCryptoProvider(makeCryptoProvider());
+      await expect(wallet.start({ pinCode: PIN, password: PASSWORD })).resolves.toEqual({
+        network: 'testnet',
+      });
+      await sync(wallet);
+
+      // The transparent side works; the shielded output is counted locked.
+      expect(await wallet.getShieldedCapability()).toMatchObject({
+        level: 'watch',
+        reason: 'locked',
+        cause: 'wrong-pin',
+        undecoded: { txIds: [TX_SYNCED], locked: 1 },
+      });
+      expect(await htrBalance(wallet)).toBe(100n);
+      // The first address was used, so the wallet gives out the next one.
+      await expect(wallet.getCurrentAddress()).resolves.toMatchObject({ index: 1 });
+      await expect(wallet.getCurrentAddress({}, { legacy: false })).rejects.toMatchObject({
+        errorCode: 'shielded-locked',
+      });
+
+      // The lock screen gives the current PIN.
+      const { capability, reprocessed } = await wallet.unlockShieldedView({ pinCode: NEW_PIN });
+      expect(capability.level).toBe('full');
+      expect(await reprocessed).toMatchObject({
+        level: 'full',
+        undecoded: { txIds: [], locked: 0, unreadable: 0, error: 0 },
+      });
+      expect(await htrBalance(wallet)).toBe(150n);
+
+      await wallet.stop();
+      expect(verdictOf(await wallet.getShieldedCapability())).toEqual({
+        level: 'none',
+        reason: 'not-started',
+        cause: null,
+      });
+      expect(shieldedSessionOf(storage).hasKey).toBe(false);
+      expect(shieldedSessionOf(first.storage).hasKey).toBe(false);
+      // Every key the PIN unlocked was zeroed.
+      expect(unlocked.length).toBeGreaterThan(0);
+      for (const key of unlocked) {
+        expect(key.privateKey).toEqual(Buffer.alloc(32));
+      }
     }, 60000);
   });
 });

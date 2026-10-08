@@ -238,6 +238,8 @@ import {
   type ShieldedCapabilityReason,
   type ShieldedCapabilityCause,
   type IShieldedUndecodedSummary,
+  type IShieldedUnlockResult,
+  type ShieldedViewKeyInput,
 
   // ============================================================
   // Header types from src/headers/types.ts
@@ -586,6 +588,14 @@ describe('type-only exports compile correctly', () => {
       undecoded,
     };
     expect(capability.undecoded.locked).toBe(1);
+
+    const input: ShieldedViewKeyInput = { pinCode: '123' };
+    const unlocked: IShieldedUnlockResult = {
+      capability,
+      reprocessed: Promise.resolve(capability),
+    };
+    expect(input.pinCode).toBe('123');
+    expect(unlocked.capability).toBe(capability);
   });
 
   it('should allow constructing IAddressInfo', () => {

@@ -363,6 +363,18 @@ describe('ShieldedSession', () => {
     expect(next.privateKey).not.toEqual(Buffer.alloc(32));
   });
 
+  it('holdsKey() compares a key with the one the session holds', () => {
+    const { session } = filledSession();
+    expect(session.holdsKey(materialOf(scanParent()))).toBe(true);
+    expect(session.holdsKey(materialOf(new HDPrivateKey()))).toBe(false);
+    // The same private key with another chain code is another extended key.
+    const sameKey = materialOf(scanParent());
+    expect(session.holdsKey({ ...sameKey, chainCode: Buffer.alloc(32, 1) })).toBe(false);
+
+    session.close();
+    expect(session.holdsKey(materialOf(scanParent()))).toBe(false);
+  });
+
   it('fill() after close() zeroes the material and throws shielded-not-started', () => {
     const session = new ShieldedSession();
     session.open();

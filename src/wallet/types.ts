@@ -28,6 +28,8 @@ import type {
   ChangeOutputMode,
   IShieldedCapability,
   IShieldedCryptoProvider,
+  IShieldedUnlockResult,
+  ShieldedViewKeyInput,
 } from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
@@ -354,6 +356,8 @@ export interface IHathorWallet {
   setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
   hasExternalPrivateKeyMethod(): boolean;
   getShieldedCapability?(): Promise<IShieldedCapability>;
+  unlockShieldedView?(input: ShieldedViewKeyInput): Promise<IShieldedUnlockResult>;
+  reprocessShieldedOutputs?(): Promise<IShieldedCapability>;
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;

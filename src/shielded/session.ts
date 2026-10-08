@@ -244,6 +244,18 @@ export class ShieldedSession {
   }
 
   /**
+   * Whether the session holds the key of `material`: the same private key and
+   * chain code.
+   */
+  holdsKey(material: IScanKeyMaterial): boolean {
+    return (
+      this.#key !== null &&
+      this.#key.privateKey.equals(material.privateKey) &&
+      this.#key.chainCode.equals(material.chainCode)
+    );
+  }
+
+  /**
    * Why the session holds no key, or why the record has no shielded keys.
    * Null when there is a key, or when nothing failed.
    */

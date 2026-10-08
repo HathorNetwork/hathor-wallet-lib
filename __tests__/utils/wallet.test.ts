@@ -1044,6 +1044,60 @@ describe('migrateShieldedAccessData', () => {
     );
   });
 
+  test('replaceShieldedKeys derives again the four fields of a record that has them', () => {
+    const full = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    // The scan key and scan xpub of another seed, under the same PIN.
+    const other = wallet.generateAccessDataFromSeed(wallet.generateWalletWords(), {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const damaged = { ...full, scanXpubkey: other.scanXpubkey, scanMainKey: other.scanMainKey };
+
+    const migrated = wallet.migrateShieldedAccessData(damaged, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+      replaceShieldedKeys: true,
+    });
+
+    expect(migrated).toBe(true);
+    expect(damaged.scanXpubkey).toBe(full.scanXpubkey);
+    expect(damaged.spendXpubkey).toBe(full.spendXpubkey);
+    expect(decryptData(damaged.scanMainKey!, '123')).toEqual(decryptData(full.scanMainKey!, '123'));
+    expect(decryptData(damaged.spendMainKey!, '123')).toEqual(
+      decryptData(full.spendMainKey!, '123')
+    );
+  });
+
+  test('replaceShieldedKeys runs the same checks: a wrong password throws and leaves the record untouched', () => {
+    const full = wallet.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    const before = JSON.parse(JSON.stringify(full));
+
+    let caught: unknown;
+    try {
+      wallet.migrateShieldedAccessData(full, {
+        pin: '123',
+        password: 'not-the-password',
+        networkName: 'testnet',
+        replaceShieldedKeys: true,
+      });
+    } catch (e) {
+      caught = e;
+    }
+
+    expect(caught).toMatchObject({ errorCode: 'shielded-wrong-password' });
+    expect(JSON.parse(JSON.stringify(full))).toEqual(before);
+  });
+
   describe("the root the passphrase gives must derive the record's legacy xpub", () => {
     const multisig: IMultisigData = {
       pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(k => k.xpubkey),
