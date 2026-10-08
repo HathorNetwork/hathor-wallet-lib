@@ -300,8 +300,8 @@ export interface GetTxOutputsOptions {
   maxOutputs?: number;
   addresses?: string[] | null;
   totalAmount?: OutputValueType;
-  smallerThan?: number;
-  biggerThan?: number;
+  smallerThan?: number | string; // a string carries values beyond Number.MAX_SAFE_INTEGER
+  biggerThan?: number | string;
   count?: number;
   ignoreLocked?: boolean;
   txId?: string;

@@ -36,6 +36,11 @@ import Address from '../models/address';
 
 type UtxoKind = 'transparent' | 'shielded';
 
+/** Outputs per wallet-service `tx_outputs` request. */
+const PAGE_SIZE = MAX_INPUTS;
+
+const RECOVERED = 'recovered';
+
 /**
  * The storage members the shared send engine (SendTransaction.prepareTxData /
  * prepareTx) may read. Anything else throws, so an engine change that needs a
@@ -74,11 +79,9 @@ const IGNORED_MEMBERS = new Set<string | symbol>(['then', 'toJSON', 'asymmetricM
  * fullnode facade's send engine (SendTransaction, with the shielded selection
  * and change rules) builds wallet-service transactions too.
  *
- * - UTXOs come from `GET wallet/tx_outputs`, fetched once per token and kind
- *   and cached for the send. The server does not paginate: a pool holds the
- *   wallet's MAX_INPUTS largest UTXOs of that token and kind, so selection
- *   matches the fullnode exactly up to that many UTXOs per pool (a transaction
- *   cannot hold more inputs anyway).
+ * - UTXOs come from `GET wallet/tx_outputs`, every unspent output of a token
+ *   and kind, paged by value and cached for the send, so selection sees the
+ *   same UTXOs a fullnode wallet would.
  * - Shielded UTXOs are rewound with the wallet's scan key when their pool is
  *   fetched: the engine reads their blinding factors during selection.
  * - Availability is the wallet-service's: pools exclude locked and spent
@@ -259,20 +262,60 @@ export class WalletServiceSendStorage {
   }
 
   private async fetchPool(token: string, kind: UtxoKind): Promise<IUtxo[]> {
-    const { txOutputs } = await walletApi.getTxOutputs(this.wallet, {
-      tokenId: token,
-      kind,
-      skipSpent: true,
-      ignoreLocked: true,
-      authority: 0n,
-      maxOutputs: MAX_INPUTS,
-    });
+    const entries = await this.fetchAllOutputs(token, kind);
     const utxos: IUtxo[] = [];
-    for (const entry of txOutputs) {
+    for (const entry of entries) {
+      if (entry.kind === 'shielded' && entry.recoveryState !== RECOVERED) {
+        // Only recovered outputs have a value the wallet-service vouches for
+        continue;
+      }
       // eslint-disable-next-line no-await-in-loop -- rewinds share the decrypted scan key
       utxos.push(await this.toUtxo(entry));
     }
     return utxos;
+  }
+
+  /**
+   * Every unspent, unlocked output of a token and kind. The wallet-service
+   * returns at most PAGE_SIZE outputs per request, largest first, filtered by
+   * `value < smallerThan`; each next page starts at the last value seen (ties
+   * included) and repeated outputs are dropped.
+   */
+  private async fetchAllOutputs(token: string, kind: UtxoKind): Promise<Utxo[]> {
+    const seen = new Map<string, Utxo>();
+    let smallerThan: bigint | undefined;
+    for (;;) {
+      // eslint-disable-next-line no-await-in-loop -- pages depend on the previous one
+      const { txOutputs } = await walletApi.getTxOutputs(this.wallet, {
+        tokenId: token,
+        kind,
+        skipSpent: true,
+        ignoreLocked: true,
+        authority: 0n,
+        maxOutputs: PAGE_SIZE,
+        ...(smallerThan !== undefined ? { smallerThan: smallerThan.toString() } : {}),
+      });
+      let added = 0;
+      for (const entry of txOutputs) {
+        const key = utxoKey(entry.txId, entry.index);
+        if (!seen.has(key)) {
+          seen.set(key, entry);
+          added += 1;
+        }
+      }
+      if (txOutputs.length < PAGE_SIZE) {
+        break;
+      }
+      const lastValue = txOutputs[txOutputs.length - 1].value;
+      // Start the next page at the last value, to keep the outputs tied with it.
+      // When a whole page was already seen, a single value has more outputs than
+      // a page holds: move past it, as no request can return the rest.
+      smallerThan = added > 0 ? lastValue + 1n : lastValue;
+      if (smallerThan <= 1n) {
+        break;
+      }
+    }
+    return Array.from(seen.values());
   }
 
   private async getUtxo({ txId, index }: IUtxoId): Promise<IUtxo> {

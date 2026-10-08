@@ -278,6 +278,60 @@ describe('utxo pools', () => {
   });
 });
 
+describe('pool pagination', () => {
+  /** The wallet-service query: value < smallerThan, largest first, at most maxOutputs. */
+  const serverQuery =
+    (pool: Utxo[]) =>
+    async (_w: unknown, options: Record<string, unknown> = {}) => {
+      const smallerThan =
+        options.smallerThan === undefined ? undefined : BigInt(options.smallerThan as string);
+      const rows = pool
+        .filter(u => smallerThan === undefined || u.value < smallerThan)
+        .sort((a, b) => Number(b.value - a.value))
+        .slice(0, options.maxOutputs as number);
+      return { success: true, txOutputs: rows };
+    };
+
+  it('reads a pool of more than 255 utxos completely, ties at page edges included', async () => {
+    // 600 utxos with values 1..300, each value twice: every page edge falls on a tie
+    const pool = Array.from({ length: 600 }, (_v, i) =>
+      transparentUtxo({ index: i, value: 300 - Math.floor(i / 2) })
+    );
+    const { proxy, txOutputsSpy } = await setup();
+    txOutputsSpy.mockImplementation(serverQuery(pool) as never);
+    const utxos = await collect(proxy.selectUtxos({ shielded: false }));
+    expect(utxos).toHaveLength(600);
+    expect(new Set(utxos.map(u => u.index)).size).toBe(600);
+    expect(txOutputsSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(txOutputsSpy.mock.calls[1][1]).toMatchObject({ maxOutputs: 255 });
+  });
+
+  it('gets past more than 255 utxos of the same value', async () => {
+    const pool = [
+      ...Array.from({ length: 300 }, (_v, i) => transparentUtxo({ index: i, value: 50 })),
+      transparentUtxo({ index: 300, value: 10 }),
+    ];
+    const { proxy, txOutputsSpy } = await setup();
+    txOutputsSpy.mockImplementation(serverQuery(pool) as never);
+    const utxos = await collect(proxy.selectUtxos({ shielded: false }));
+    // The small utxo below the oversized tie is still reached
+    expect(utxos.map(u => u.index)).toContain(300);
+  });
+
+  it('skips shielded entries the wallet-service has not recovered', async () => {
+    const { proxy } = await setup({
+      pools: {
+        shielded: [
+          shieldedUtxo({ mode: 1, index: 5 }),
+          { ...shieldedUtxo({ mode: 1, index: 6 }), recoveryState: 'pending' } as Utxo,
+        ],
+      },
+    });
+    const utxos = await collect(proxy.selectUtxos({ shielded: true }));
+    expect(utxos.map(u => u.index)).toEqual([5]);
+  });
+});
+
 describe('getUtxo', () => {
   it('returns a pooled utxo without another request', async () => {
     const { proxy, txOutputsSpy } = await setup({ pools: { transparent: [transparentUtxo()] } });
