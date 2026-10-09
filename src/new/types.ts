@@ -14,7 +14,7 @@ import {
   OutputValueType,
   TokenVersion,
 } from '../types';
-import { ShieldedOutputMode } from '../shielded/types';
+import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
 import Address from '../models/address';
@@ -112,9 +112,13 @@ export interface UtxoOptions {
   max_amount?: bigint;
   only_available_utxos?: boolean;
   /**
-   * Value ordering of the returned UTXOs. Defaults to 'desc' (highest value
-   * first), so `max_utxos` keeps the top-N by value rather than whatever the
-   * storage insertion order happens to be — matching getUtxosForAmount.
+   * Value ordering of the returned UTXOs. The default depends on the method:
+   * - `getUtxos` defaults to 'desc' (highest value first), so `max_utxos` keeps
+   *   the top-N by value rather than whatever the storage insertion order
+   *   happens to be — matching getUtxosForAmount.
+   * - `prepareConsolidateUtxosData`, `consolidateUtxosSendTransaction` and
+   *   `consolidateUtxos` default to 'asc' (smallest first), so their limits
+   *   consolidate the dust first.
    * Fullnode facade only: the wallet-service facade and `IHathorWallet` don't
    * accept it, and the wallet-service API always returns highest value first.
    */
@@ -404,10 +408,15 @@ export interface ProposedInput {
   token: string;
 }
 
+/**
+ * Options for sending a transaction with a single output
+ * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions
+ */
 export interface SendTransactionFullnodeOptions {
   changeAddress?: string | null;
   token?: string;
   pinCode?: string | null;
+  changeShieldedMode?: ChangeOutputMode | null;
 }
 
 /**
@@ -416,25 +425,38 @@ export interface SendTransactionFullnodeOptions {
  * @property changeAddress Address for change output
  * @property startMiningTx Boolean to trigger start mining (default true)
  * @property pinCode Pin to decrypt xpriv information
- * @property changeShieldedMode When set AND the transaction already carries
- *   explicit shielded outputs, change outputs are rewritten as shielded
- *   outputs in the given mode — mirroring the transaction's privacy mode so
- *   change doesn't leak the sender alongside an otherwise-private send. This
- *   covers both the HTR change (the surplus over any HTR being sent plus ALL
- *   fees — fees are always charged in HTR, including per-shielded-output fees)
- *   and custom-token change. On a pure-transparent send (no shielded outputs)
- *   it is a no-op: the change stays transparent. The send REJECTS (throws
- *   SendTxError) when the HTR change is too small to fund its own
- *   shielded-output fee and no additional HTR UTXO is available to cover the
- *   difference — it never silently downgrades the change to transparent.
- *   Undefined keeps the default transparent change.
+ * @property changeShieldedMode The change-output mode. Absent or null: the
+ *   wallet's automatic selection rules decide per token (change is shielded
+ *   when shielded inputs are spent, all of a token's outputs are shielded, or
+ *   it stands in for the shielded input a lone shielded output needs and the
+ *   wallet lacks, which fails the send where it cannot be shielded;
+ *   transparent otherwise; the HTR change is also shielded when the only
+ *   shielded output holds 1 unit, which cannot be split, so the change is its
+ *   second shielded output). A custom token whose selection leaves no change
+ *   has none to stand in, so the amount of its lone shielded output can still
+ *   be computed by subtraction; for an HTR output, HTR is pulled to make its
+ *   change, whatever other shielded outputs the tx has. Explicit
+ *   OutputKind.TRANSPARENT: every change output stays transparent, even when
+ *   shielded inputs are spent. Explicit AMOUNT_SHIELDED or FULLY_SHIELDED:
+ *   every change output — the HTR fee-change and custom-token change — is
+ *   emitted shielded in that mode; on a transaction with no other shielded
+ *   element a second shielded output is added for the protocol's
+ *   two-shielded-outputs minimum: the change is split into two halves, or an
+ *   HTR change is shielded beside it. The send REJECTS (throws SendTxError)
+ *   when a shielded change cannot fund its own per-output fee and no
+ *   additional UTXO is available, unless the split of the tx's only shielded
+ *   output takes the whole change as its fee, which a change standing in for a
+ *   missing shielded input never does — it never silently downgrades to
+ *   transparent. A multisig wallet never gets a shielded change: a send that
+ *   needs one throws. A legacy changeAddress cannot receive a shielded change,
+ *   so a send that shields its change throws when given one.
  */
 export interface SendManyOutputsOptions {
   inputs?: ProposedInput[];
   changeAddress?: string | null;
   startMiningTx?: boolean;
   pinCode?: string | null;
-  changeShieldedMode?: ShieldedOutputMode;
+  changeShieldedMode?: ChangeOutputMode | null;
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   pollForNcState,
   pollForTokenDetails,
   pollForTx,
+  retryOnTransientWalletInit,
 } from './helpers/service-facade.helper';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../src/constants';
@@ -31,7 +32,10 @@ describe('WalletService Nano Contract Fee Tests', () => {
     const buildResult = await buildWalletInstance({});
     wsWallet = buildResult.wallet;
     walletAddresses = buildResult.addresses;
-    await wsWallet.start({ pinCode, password });
+    await retryOnTransientWalletInit(
+      () => wsWallet.start({ pinCode, password }),
+      'walletservice_nano_fee wsWallet.start'
+    );
 
     // 3. Fund wallet with HTR
     const address0 = walletAddresses[0];

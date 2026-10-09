@@ -21,7 +21,11 @@ import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 import Transaction from '../../../src/models/transaction';
 import { HathorWalletServiceWallet } from '../../../src';
-import { buildWalletInstance, pollForTx } from './service-facade.helper';
+import {
+  buildWalletInstance,
+  pollForTx,
+  retryOnTransientWalletInit,
+} from './service-facade.helper';
 
 interface InjectFundsOptions {
   waitTimeout?: number;
@@ -224,10 +228,14 @@ export class GenesisWalletServiceHelper {
     await GenesisWalletServiceHelper.pollForServerlessAvailable();
 
     const gWallet = await GenesisWalletServiceHelper.getSingleton();
-    await gWallet.start({
-      pinCode: GenesisWalletServiceHelper.pinCode,
-      password: GenesisWalletServiceHelper.password,
-    });
+    await retryOnTransientWalletInit(
+      () =>
+        gWallet.start({
+          pinCode: GenesisWalletServiceHelper.pinCode,
+          password: GenesisWalletServiceHelper.password,
+        }),
+      'GenesisWalletServiceHelper.start'
+    );
   }
 
   static async injectFunds(

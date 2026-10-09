@@ -16,10 +16,13 @@ import transactionUtils from '../utils/transaction';
  * Storage proxy that implements missing storage methods for wallet service
  * by delegating to wallet service API calls.
  *
- * This proxy enables nano contract transaction signing by providing:
+ * The wallet-service facade signs through this proxy whenever it signs with a resolver instead of
+ * its inline stored-key path: nano contract transactions, and every send, token and authority
+ * operation when an external tx-signing method is registered. It provides:
  * - getAddressInfo: Maps addresses to BIP32 indices
- * - getTx: Fetches transaction data from full node API
- * - getTxSignatures: Delegates to transaction signing utilities
+ * - getTx / getSpentTxs: Fetch the spent transactions from the full node API
+ * - getTxSignatures: Calls the external tx-signing method (with this proxy as its storage) when
+ *   one is registered, otherwise the transaction signing utilities with the stored key
  */
 export class WalletServiceStorageProxy {
   private wallet: HathorWalletServiceWallet;
@@ -32,8 +35,9 @@ export class WalletServiceStorageProxy {
   }
 
   /**
-   * Creates a proxy that wraps the original storage with additional methods
-   * needed for nano contract transaction signing.
+   * Creates a proxy that wraps the original storage with the wallet-service methods the facade's
+   * signing needs: nano contract transactions, and every send, token and authority operation when
+   * an external tx-signing method is registered.
    */
   createProxy(): IStorage {
     return new Proxy(this.originalStorage, {
@@ -106,10 +110,18 @@ export class WalletServiceStorageProxy {
   }
 
   /**
-   * Get transaction signatures using the transaction utility
+   * Get transaction signatures.
+   *
+   * When an external tx-signing method is registered (e.g. a passkey signer), it is called with
+   * the PROXY as its storage, so it can resolve spent outputs and address indexes through the
+   * wallet-service methods above. Delegating to the target's own `getTxSignatures` would pass the
+   * raw storage instead. Otherwise the transaction utility signs with the stored key.
    */
-  // eslint-disable-next-line class-methods-use-this
   private async getTxSignatures(receiver: IStorage, tx: Transaction, pinCode: string) {
+    const externalSigner = this.originalStorage.getTxSignatureMethod?.() ?? null;
+    if (externalSigner) {
+      return externalSigner(tx, receiver, pinCode);
+    }
     const result = await transactionUtils.getSignatureForTx(tx, receiver, pinCode);
     return result;
   }

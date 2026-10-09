@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export { ShieldedOutputMode } from './types';
+export { OutputKind, ShieldedOutputMode } from './types';
 
 export type {
+  ChangeOutputMode,
   IShieldedOutput,
   IShieldedOutputDecoded,
   IDecryptedShieldedOutput,

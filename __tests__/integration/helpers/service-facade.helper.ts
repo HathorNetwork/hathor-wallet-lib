@@ -1,4 +1,5 @@
 import { isEmpty } from 'lodash';
+import axios, { AxiosError } from 'axios';
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { HathorWalletServiceWallet, MemoryStore, Storage, walletUtils } from '../../../src';
@@ -95,6 +96,10 @@ export async function buildWalletInstance({
  * Use this when you need to wait for a wallet-service side-effect that lags behind
  * tx visibility (e.g. UTXO index updates after a delegation).
  *
+ * The predicate must be a read (e.g. `getUtxos`, `getBalance`): a request that times out is
+ * retried within the stall budget (see `REQUEST_TIMEOUT_RETRY_BUDGET_MS`) and doesn't count
+ * as an attempt, like in `pollForTx`. Any other error propagates.
+ *
  * @param predicate - Async function that returns a truthy value when the condition is met.
  * @param label - Human-readable description for log/error messages.
  * @param maxAttempts - Maximum number of polling attempts (default: 10).
@@ -110,7 +115,19 @@ export async function pollUntilCondition<T>(
   let attempts = 0;
 
   while (attempts < maxAttempts) {
-    const result = await predicate();
+    let result: T;
+    try {
+      result = await predicate();
+    } catch (error) {
+      if (canRetryRequestTimeout(error)) {
+        // A timed-out request says nothing about the condition, so it doesn't spend an attempt
+        loggers.test!.warn(`Condition "${label}": request timed out, retrying`);
+        await delay(delayMs);
+        continue;
+      }
+      throw error;
+    }
+    markServiceAnswered();
     if (result) {
       loggers.test!.log(`Condition "${label}" met after ${attempts + 1} attempts`);
       return result;
@@ -122,7 +139,63 @@ export async function pollUntilCondition<T>(
 }
 
 /**
- * Polls the wallet for a transaction by its ID until found or max attempts reached
+ * How long the retrying helpers keep waiting while the wallet-service keeps timing
+ * out. In CI it has stopped answering for up to ~3 minutes before recovering.
+ */
+export const REQUEST_TIMEOUT_RETRY_BUDGET_MS = 4 * 60 * 1000;
+
+/** Delay before retrying an operation whose request timed out. */
+const REQUEST_TIMEOUT_RETRY_DELAY_MS = 2000;
+
+type StallState = { walletServiceUnresponsiveSince?: number };
+
+const localStallState: StallState = {};
+
+/**
+ * Where the current stall's start time lives. The integration environment's shared state
+ * spans test files, so a stall that never ends costs the run one budget in total instead
+ * of one per retrying call.
+ */
+function stallState(): StallState {
+  const { __SHARED_STATE__: shared } = global as unknown as { __SHARED_STATE__?: StallState };
+  return shared ?? localStallState;
+}
+
+/** Records that the wallet-service answered, ending any stall in progress. */
+export function markServiceAnswered(): void {
+  stallState().walletServiceUnresponsiveSince = undefined;
+}
+
+/**
+ * Whether `err` is a request that got no answer within its timeout. The service
+ * may or may not have processed it, so only idempotent operations retry on it.
+ */
+function isRequestTimeout(err: unknown): boolean {
+  return (
+    axios.isAxiosError(err) &&
+    (err.code === AxiosError.ECONNABORTED || err.code === AxiosError.ETIMEDOUT)
+  );
+}
+
+/**
+ * Whether to retry `err`: only a request timeout, and only while the current stall is
+ * within `REQUEST_TIMEOUT_RETRY_BUDGET_MS`. The first timeout of a stall starts its clock.
+ */
+function canRetryRequestTimeout(err: unknown): boolean {
+  if (!isRequestTimeout(err)) {
+    return false;
+  }
+  const state = stallState();
+  if (state.walletServiceUnresponsiveSince === undefined) {
+    state.walletServiceUnresponsiveSince = Date.now();
+  }
+  return Date.now() - state.walletServiceUnresponsiveSince < REQUEST_TIMEOUT_RETRY_BUDGET_MS;
+}
+
+/**
+ * Polls the wallet for a transaction by its ID until found or max attempts reached.
+ * Requests that time out are retried within the stall budget (see
+ * `REQUEST_TIMEOUT_RETRY_BUDGET_MS`) and don't count as attempts.
  * @param walletForPolling - The wallet instance to poll
  * @param txId - The transaction ID to look for
  * @returns The transaction object if found
@@ -136,15 +209,23 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
   while (attempts < maxAttempts) {
     try {
       const tx = await walletForPolling.getTxById(txId);
+      markServiceAnswered();
       if (tx) {
         loggers.test!.log(`Polling for ${txId} took ${attempts + 1} attempts`);
         return tx;
       }
     } catch (error) {
+      if (canRetryRequestTimeout(error)) {
+        // A timed-out request says nothing about the tx, so it doesn't spend an attempt
+        loggers.test!.warn(`Polling for ${txId}: request timed out, retrying`);
+        await delay(delayMs);
+        continue;
+      }
       // If the error is of type TxNotFoundError, we continue polling
       if (!(error instanceof TxNotFoundError)) {
         throw error; // Re-throw unexpected errors
       }
+      markServiceAnswered();
     }
     attempts++;
     await delay(delayMs);
@@ -198,8 +279,8 @@ export async function pollForUtxoConsistency(
 }
 
 /**
- * Backoff sequence between retry attempts on a transient `wallet/init` failure.
- * 4 total attempts (initial + 3 backoffs), ~3.5s worst-case added latency.
+ * Backoff sequence between retries after a transient `wallet/init` rejection.
+ * Up to 3 retries, ~3.5s worst-case added latency.
  */
 const TRANSIENT_WALLET_INIT_BACKOFFS_MS = [500, 1000, 2000];
 
@@ -211,44 +292,53 @@ const TRANSIENT_WALLET_INIT_BACKOFFS_MS = [500, 1000, 2000];
 const TRANSIENT_WALLET_INIT_ERROR_MESSAGE = 'Error creating wallet.';
 
 /**
- * Retries a wallet-init operation on transient `wallet/init` HTTP failures.
+ * Retries a wallet-init operation on transient wallet-service failures.
  *
  * The wallet-service backend can briefly reject `POST wallet/init` while a freshly-spawned
- * docker stack is still settling. Jest's `retryTimes(2)` cannot help, because the failure
- * typically happens inside `beforeAll` — and Jest only retries `it()` bodies.
+ * docker stack is still settling, and it can stop answering requests for a few minutes
+ * mid-run. Jest's `retryTimes(2)` cannot help, because the failure typically happens inside
+ * `beforeAll` — and Jest only retries `it()` bodies.
  *
- * Retry surface is intentionally narrow: only `WalletRequestError` with message
- * `"Error creating wallet."` is treated as transient. Test-injected mocks (e.g.
- * `new Error('Crash')`) and other errors propagate immediately on the first attempt.
+ * Retry surface is intentionally narrow: `WalletRequestError` with message
+ * `"Error creating wallet."` (up to 3 retries) and request timeouts (within the stall
+ * budget, see `REQUEST_TIMEOUT_RETRY_BUDGET_MS`). Retrying a timed-out `start()` is safe:
+ * if the first `wallet/init` did reach the service, the retry gets `wallet-already-loaded`,
+ * which `walletApi.createWallet` accepts. Test-injected mocks (e.g. `new Error('Crash')`)
+ * and other errors propagate immediately on the first attempt.
  */
 export async function retryOnTransientWalletInit<T>(
   op: () => Promise<T>,
   label: string
 ): Promise<T> {
-  const maxAttempts = TRANSIENT_WALLET_INIT_BACKOFFS_MS.length + 1;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  let rejections = 0;
+  for (let attempt = 1; ; attempt += 1) {
     try {
       const result = await op();
+      markServiceAnswered();
       if (attempt > 1) {
         loggers.test!.log(`${label} succeeded on attempt ${attempt}`);
       }
       return result;
     } catch (err) {
-      const isTransient =
+      const isInitRejection =
         err instanceof WalletRequestError && err.message === TRANSIENT_WALLET_INIT_ERROR_MESSAGE;
-      if (!isTransient || attempt === maxAttempts) {
+      let backoffMs: number;
+      if (isInitRejection && rejections < TRANSIENT_WALLET_INIT_BACKOFFS_MS.length) {
+        markServiceAnswered();
+        backoffMs = TRANSIENT_WALLET_INIT_BACKOFFS_MS[rejections];
+        rejections += 1;
+      } else if (canRetryRequestTimeout(err)) {
+        backoffMs = REQUEST_TIMEOUT_RETRY_DELAY_MS;
+      } else {
         throw err;
       }
-      const backoffMs = TRANSIENT_WALLET_INIT_BACKOFFS_MS[attempt - 1];
       loggers.test!.warn(
-        `${label} hit transient wallet/init flake on attempt ${attempt}, retrying in ${backoffMs}ms`,
+        `${label} hit a transient wallet-service failure on attempt ${attempt}, retrying in ${backoffMs}ms`,
         { error: (err as Error).message }
       );
       await delay(backoffMs);
     }
   }
-  // Unreachable: the loop above either returns or throws on the final attempt.
-  throw new Error(`retryOnTransientWalletInit: unreachable for ${label}`);
 }
 
 /**

@@ -7,6 +7,7 @@
 
 import {
   Address as BitcoreAddress,
+  PrivateKey,
   PublicKey as bitcorePublicKey,
   Script,
   HDPublicKey,
@@ -19,6 +20,7 @@ import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
 import { deriveShieldedAddress } from './shieldedAddress';
+import { WalletError } from '../errors';
 
 /**
  * Parse address and return its OUTPUT SCRIPT type.
@@ -210,6 +212,50 @@ export function getAddressFromPubkey(pubkey: string, network: Network): Address 
     network.bitcoreNetwork
   ).toString();
   return new Address(base58, { network });
+}
+
+/**
+ * Fetch an address private key from the storage's external provider and verify it corresponds to
+ * the requested address. A buggy or mismatched provider could otherwise return the wrong key, which
+ * would sign with the wrong key and could create an unspendable utxo. Shared by both facades'
+ * `getVerifiedExternalPrivateKey`.
+ *
+ * Callers that know the requested address must pass it as `options.expectedAddress`. An index
+ * alone is ambiguous (the legacy, shielded and shielded-spend addresses of one BIP32 index share
+ * it), so checking only against the address at the index could accept the legacy key for a
+ * shielded-spend request. Index-based callers fall back to `getOwnAddress(addressIndex)`.
+ *
+ * @param storage Storage holding the external private-key provider
+ * @param network The wallet's network
+ * @param addressIndex Index whose private key to fetch
+ * @param getOwnAddress Resolves the wallet's own (legacy) address at an index; each facade passes
+ *   its own lookup
+ * @param [options.pinCode] Forwarded to the provider
+ * @param [options.expectedAddress] The address the key must own, when the caller knows it. Used
+ *   only for verification; it is not forwarded to the provider.
+ * @returns The verified private key
+ */
+export async function fetchVerifiedExternalPrivateKey(
+  storage: IStorage,
+  network: Network,
+  addressIndex: number,
+  getOwnAddress: (index: number) => Promise<string>,
+  options: { pinCode?: string; expectedAddress?: string } = {}
+): Promise<PrivateKey> {
+  // expectedAddress is verification-only: keep it out of the PrivateKeyProvider contract.
+  const { expectedAddress, ...providerOptions } = options;
+  const privateKey = await storage.getExternalPrivateKey(addressIndex, providerOptions);
+  if (!(privateKey instanceof PrivateKey)) {
+    throw new WalletError('External private key provider must return a bitcore PrivateKey.');
+  }
+  // bitcore's typings don't narrow `unknown` through instanceof, hence the cast.
+  const key = privateKey as PrivateKey;
+  const derivedAddress = getAddressFromPubkey(key.publicKey.toString(), network).base58;
+  const ownerAddress = expectedAddress ?? (await getOwnAddress(addressIndex));
+  if (derivedAddress !== ownerAddress) {
+    throw new WalletError('External private key provider returned a key for the wrong address.');
+  }
+  return key;
 }
 
 /**

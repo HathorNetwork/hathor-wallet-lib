@@ -138,4 +138,99 @@ describe('Fee test suite', () => {
     // Assert
     expect(fee).toStrictEqual(3n * FEE_PER_OUTPUT);
   });
+
+  /**
+   * The fullnode cannot attribute a shielded input to a token at all — its
+   * value (and for fully-shielded, its token) is hidden in commitments, so a
+   * shielded input never counts toward chargeable_inputs on the node. The
+   * wallet must mirror that, or an all-shielded spend of a FEE token would
+   * over-declare the flat melt fee and fail the node's exact-match check.
+   */
+  describe('shielded input exclusion', () => {
+    const shieldedFbtInput = { ...inputs.fbt.swap, shielded: true };
+
+    it('excludes shielded FEE-token inputs from the melt branch', async () => {
+      const _inputs = [shieldedFbtInput];
+      const _outputs = [];
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt']));
+      const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
+
+      // All fbt inputs are shielded and there are no outputs: the node expects
+      // no transparent fee at all. Before the exclusion this was FEE_PER_OUTPUT.
+      expect(fee).toStrictEqual(0n);
+    });
+
+    it('keeps the melt fee when a transparent FEE-token input remains', async () => {
+      const _inputs = [shieldedFbtInput, inputs.fbt.swap];
+      const _outputs = [];
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt']));
+      const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
+
+      // The transparent input IS chargeable on the node, so the melt fee stays.
+      expect(fee).toStrictEqual(FEE_PER_OUTPUT);
+    });
+
+    it('does not pull a shielded input token into the fee token set', async () => {
+      // Without the exclusion, the shielded fbt input alone would add fbt to the
+      // token set and the melt branch would charge it. dbt stays free either way.
+      const _inputs = [shieldedFbtInput, inputs.dbt.swap];
+      const _outputs = [mockTokenOutput('dbt', 100n)];
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt', 'dbt']));
+      const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
+
+      expect(fee).toStrictEqual(0n);
+    });
+
+    it('excludes IUtxo-shaped shielded inputs identically', async () => {
+      const utxoShaped = {
+        txId: 'a'.repeat(64),
+        index: 0,
+        token: 'fbt',
+        address: 'W-addr',
+        value: 100n,
+        authorities: 0n,
+        timelock: null,
+        type: 1,
+        height: null,
+        shielded: true,
+      };
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt']));
+      const fee = await Fee.calculate([utxoShaped] as never, [] as never, _tokens);
+
+      expect(fee).toStrictEqual(0n);
+    });
+
+    it('keeps unflagged inputs chargeable (back-compat)', async () => {
+      // The wallet-service facade Utxo shape carries no `shielded` field; it
+      // must keep today's behavior.
+      const _inputs = [inputs.fbt.swap];
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt']));
+      const fee = await Fee.calculate(_inputs as never, [] as never, _tokens);
+
+      expect(fee).toStrictEqual(FEE_PER_OUTPUT);
+    });
+
+    it('applies to inputs only — output counting is unchanged', async () => {
+      const _inputs = [shieldedFbtInput];
+      const _outputs = [mockTokenOutput('fbt', 50n), mockTokenOutput('fbt', 50n)];
+      jest.spyOn(storage, 'getToken').mockImplementation(mockGetToken);
+
+      const _tokens = await tokens.getTokensByManyIds(storage, new Set(['fbt']));
+      const fee = await Fee.calculate(_inputs as never, _outputs as never, _tokens);
+
+      // Two transparent fbt outputs are charged per-output; the shielded input
+      // neither adds a melt fee nor removes the output charges.
+      expect(fee).toStrictEqual(2n * FEE_PER_OUTPUT);
+    });
+  });
 });
