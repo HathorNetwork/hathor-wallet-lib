@@ -33,7 +33,7 @@ import walletApi from './api/walletApi';
 import HathorWalletServiceWallet from './wallet';
 import { ShieldedUtxo, Utxo } from './types';
 import Network from '../models/network';
-import Address from '../models/address';
+import { toOnChainAddress } from '../utils/address';
 
 type UtxoKind = 'transparent' | 'shielded';
 
@@ -230,7 +230,7 @@ export class WalletServiceSendStorage {
     }
 
     const filterAddress = options.filter_address
-      ? this.toOnChainAddress(options.filter_address)
+      ? toOnChainAddress(options.filter_address, this.wallet.network)
       : undefined;
     const nowTs = Math.floor(Date.now() / 1000);
     let sumAmount = 0n;
@@ -515,18 +515,6 @@ export class WalletServiceSendStorage {
       symbol: tokenInfo.symbol,
       version: tokenInfo.version,
     };
-  }
-
-  private toOnChainAddress(address: string): string {
-    try {
-      const addressObj = new Address(address, { network: this.wallet.network });
-      if (addressObj.isShielded()) {
-        return addressObj.getSpendAddress().base58;
-      }
-    } catch (_e) {
-      // Not a shielded address we can parse
-    }
-    return address;
   }
 }
 
