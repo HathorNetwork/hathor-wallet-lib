@@ -12,6 +12,7 @@ import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import {
   NanoContractTransactionError,
+  ShieldedKeyError,
   TxNotFoundError,
   WalletFromXPubGuard,
 } from '../../src/errors';
@@ -52,6 +53,7 @@ import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
 import walletApi from '../../src/api/wallet';
 import type { IShieldedCapability, IShieldedCryptoProvider } from '../../src/shielded/types';
+import { unlockScanXPrivKey } from '../../src/shielded/scanKey';
 
 /** What a wallet keeps on its storage about its shielded view, as these tests read it. */
 function shieldedOf(storage: Storage) {
@@ -5513,5 +5515,446 @@ describe('the shielded view key from start() to stop()', () => {
       expect(shieldedOf(storage).hasKey).toBe(false);
       expect(shieldedOf(first.storage).hasKey).toBe(false);
     }, 60000);
+  });
+});
+
+describe('multisig wallets and shielded keys', () => {
+  // Seed derivation and real shielded EC derivation run here, which jest's vm
+  // sandbox slows down.
+  const TEST_TIMEOUT = 60000;
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const multisig = {
+    pubkeys: [
+      walletUtils.getMultiSigXPubFromWords(seed, { networkName: 'testnet' }),
+      new bitcore.HDPrivateKey().xpubkey,
+      new bitcore.HDPrivateKey().xpubkey,
+    ],
+    numSignatures: 2,
+  };
+  const SHIELDED_FIELDS = ['scanXpubkey', 'scanMainKey', 'spendXpubkey', 'spendMainKey'];
+  const walletTypes = [
+    { walletType: WalletType.P2PKH, walletMultisig: undefined, hasKeys: true },
+    { walletType: WalletType.MULTISIG, walletMultisig: multisig, hasKeys: false },
+  ];
+  // The refusal carries its reason in errorCode, and its message says why.
+  const MULTISIG_REFUSAL = {
+    name: 'ShieldedKeyError',
+    errorCode: 'shielded-multisig',
+    message: expect.stringMatching(
+      /^A multisig wallet has no shielded addresses: its shielded keys are single-signature keys/
+    ),
+  };
+  // The shielded chain needs a registered provider; nothing is decoded here.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  function shieldedFieldsOf(accessData: object | null): string[] {
+    return SHIELDED_FIELDS.filter(field => accessData !== null && field in accessData);
+  }
+
+  /**
+   * A wallet that start() can run on `storage` without a fullnode.
+   */
+  function startableWallet(storage: Storage) {
+    jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+      resolve({ network: 'testnet' });
+    });
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = storage;
+    hWallet.conn = {
+      network: 'testnet',
+      getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+      on: jest.fn(),
+      start: jest.fn(),
+      getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
+    };
+    hWallet.getTokenData = jest.fn();
+    hWallet.setState = jest.fn();
+    // start() queues the 'shielded-capability' event.
+    hWallet.shieldedCapabilityEmitted = null;
+    hWallet.shieldedCapabilityCheckQueued = false;
+    hWallet.shieldedCapabilityChecks = Promise.resolve();
+    hWallet.emit = jest.fn();
+    return hWallet;
+  }
+
+  describe('start()', () => {
+    it.each(walletTypes)(
+      '$walletType wallet started from a seed: shielded keys saved: $hasKeys',
+      async ({ walletType, walletMultisig, hasKeys }) => {
+        const storage = new Storage(new MemoryStore());
+        const hWallet = startableWallet(storage);
+        hWallet.seed = seed;
+        hWallet.multisig = walletMultisig;
+
+        await hWallet.start({ pinCode: '123', password: '456' });
+
+        const accessData = await storage.getAccessData();
+        expect(accessData!.walletType).toBe(walletType);
+        expect(shieldedFieldsOf(accessData)).toEqual(hasKeys ? SHIELDED_FIELDS : []);
+      },
+      TEST_TIMEOUT
+    );
+
+    it.each(walletTypes)(
+      '$walletType wallet started from a root xpriv: shielded keys saved: $hasKeys',
+      async ({ walletType, walletMultisig, hasKeys }) => {
+        const storage = new Storage(new MemoryStore());
+        const hWallet = startableWallet(storage);
+        hWallet.xpriv = walletUtils.getXPrivKeyFromSeed(seed, { networkName: 'testnet' }).xprivkey;
+        hWallet.multisig = walletMultisig;
+
+        await hWallet.start({ pinCode: '123', password: '456' });
+
+        const accessData = await storage.getAccessData();
+        expect(accessData!.walletType).toBe(walletType);
+        expect(shieldedFieldsOf(accessData)).toEqual(hasKeys ? SHIELDED_FIELDS : []);
+      },
+      TEST_TIMEOUT
+    );
+
+    it.each(walletTypes)(
+      '$walletType record that predates shielded support: the migration adds shielded keys: $hasKeys',
+      async ({ walletType, walletMultisig, hasKeys }) => {
+        const {
+          scanXpubkey: _scanXpubkey,
+          scanMainKey: _scanMainKey,
+          spendXpubkey: _spendXpubkey,
+          spendMainKey: _spendMainKey,
+          ...preShielded
+        } = walletUtils.generateAccessDataFromSeed(seed, {
+          pin: '123',
+          password: '456',
+          networkName: 'testnet',
+          multisig: walletMultisig,
+        });
+        const storage = new Storage(new MemoryStore());
+        await storage.saveAccessData(preShielded);
+        const saveSpy = jest.spyOn(storage, 'saveAccessData');
+        const hWallet = startableWallet(storage);
+        hWallet.seed = seed;
+        hWallet.multisig = walletMultisig;
+
+        await hWallet.start({ pinCode: '123', password: '456' });
+
+        const accessData = await storage.getAccessData();
+        expect(accessData!.walletType).toBe(walletType);
+        expect(shieldedFieldsOf(accessData)).toEqual(hasKeys ? SHIELDED_FIELDS : []);
+        expect(saveSpy).toHaveBeenCalledTimes(hasKeys ? 1 : 0);
+        expect(hWallet.conn.start).toHaveBeenCalled();
+      },
+      TEST_TIMEOUT
+    );
+  });
+
+  describe('shielded addresses', () => {
+    const p2pkhRecord = walletUtils.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+    // A multisig record that an older version gave the shielded keys of its
+    // root, which are the keys of the P2PKH record of the same seed.
+    const olderMultisigRecord = {
+      ...walletUtils.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig,
+      }),
+      scanXpubkey: p2pkhRecord.scanXpubkey,
+      scanMainKey: p2pkhRecord.scanMainKey,
+      spendXpubkey: p2pkhRecord.spendXpubkey,
+      spendMainKey: p2pkhRecord.spendMainKey,
+    };
+
+    /**
+     * The shielded pair the record's shielded xpubs derive at `index`.
+     */
+    function shieldedPairAt(record: typeof p2pkhRecord, index: number, networkName: string) {
+      return addressUtils.deriveShieldedAddressPair(
+        record.scanXpubkey!,
+        record.spendXpubkey!,
+        index,
+        networkName
+      );
+    }
+
+    /**
+     * A wallet on `record`, with a crypto provider and the addresses of indexes
+     * 0 and 1 in its storage: the legacy addresses, and the shielded pairs of
+     * the record's shielded xpubs, which older versions stored for multisig
+     * wallets too.
+     */
+    async function walletOn(record: typeof p2pkhRecord) {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 20 });
+      storage.setShieldedCryptoProvider(provider);
+      const networkName = storage.config.getNetwork().name;
+      await storageUtils.savePrecalculatedShieldedAddresses(
+        storage,
+        [0, 1].map(index => {
+          const { shieldedAddress, spendAddress } = shieldedPairAt(record, index, networkName);
+          return {
+            bip32AddressIndex: index,
+            shieldedBase58: shieldedAddress.base58,
+            spendBase58: spendAddress.base58,
+            scanPubkey: shieldedAddress.publicKey!,
+            spendPubkey: spendAddress.publicKey!,
+          };
+        })
+      );
+      await storageUtils.loadAddresses(0, 2, storage);
+      const hWallet = new FakeHathorWallet();
+      hWallet.storage = storage;
+      return { hWallet, storage, networkName };
+    }
+
+    it(
+      'a P2PKH wallet gives out its shielded addresses',
+      async () => {
+        const { hWallet, storage, networkName } = await walletOn(p2pkhRecord);
+        // A started wallet, with the scan key start() unlocks in memory: the
+        // current shielded address is given out at the levels view and full only.
+        storage.shieldedView.started = true;
+        storage.scanXPrivKey = await unlockScanXPrivKey(storage, '123');
+        const shielded0 = shieldedPairAt(p2pkhRecord, 0, networkName).shieldedAddress.base58;
+        const shielded1 = shieldedPairAt(p2pkhRecord, 1, networkName).shieldedAddress.base58;
+
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).resolves.toBe(shielded0);
+        // An index that is not stored is derived.
+        await expect(hWallet.getAddressAtIndex(5, { legacy: false })).resolves.toBe(
+          shieldedPairAt(p2pkhRecord, 5, networkName).shieldedAddress.base58
+        );
+        await expect(hWallet.getCurrentAddress({}, { legacy: false })).resolves.toMatchObject({
+          address: shielded0,
+          index: 0,
+        });
+        await expect(hWallet.getNextAddress({ legacy: false })).resolves.toMatchObject({
+          address: shielded1,
+          index: 1,
+        });
+        const all = await hWallet.getAllAddresses({ legacy: false }).next();
+        expect(all.value).toMatchObject({ address: shielded0, index: 0 });
+        expect((await storage.getWalletData()).shieldedCurrentAddressIndex).toBe(1);
+      },
+      TEST_TIMEOUT
+    );
+
+    it(
+      'a multisig wallet refuses every shielded address, also the ones an older version stored',
+      async () => {
+        const { hWallet, storage } = await walletOn(olderMultisigRecord);
+        // A started wallet: before start(), the current shielded address is
+        // refused as not started, whatever the wallet type.
+        storage.shieldedView.started = true;
+        // The pairs are in the store.
+        expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
+
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(
+          ShieldedKeyError
+        );
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        await expect(hWallet.getAddressAtIndex(5, { legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        await expect(hWallet.getCurrentAddress({}, { legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        await expect(hWallet.getNextAddress({ legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        await expect(hWallet.getAllAddresses({ legacy: false }).next()).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+        // No refusal moved the shielded cursor.
+        expect((await storage.getWalletData()).shieldedCurrentAddressIndex).toBe(0);
+      },
+      TEST_TIMEOUT
+    );
+
+    it(
+      'a multisig wallet created without shielded keys refuses shielded addresses for the same reason',
+      async () => {
+        const storage = new Storage(new MemoryStore());
+        await storage.saveAccessData(
+          walletUtils.generateAccessDataFromSeed(seed, {
+            pin: '123',
+            password: '456',
+            networkName: 'testnet',
+            multisig,
+          })
+        );
+        storage.setShieldedCryptoProvider(provider);
+        const hWallet = new FakeHathorWallet();
+        hWallet.storage = storage;
+
+        await expect(hWallet.getAddressAtIndex(0, { legacy: false })).rejects.toMatchObject(
+          MULTISIG_REFUSAL
+        );
+      },
+      TEST_TIMEOUT
+    );
+
+    it(
+      'a multisig wallet gives out its legacy addresses as before',
+      async () => {
+        const { hWallet, storage, networkName } = await walletOn(olderMultisigRecord);
+        const legacy0 = addressUtils.deriveAddressFromDataP2SH(
+          olderMultisigRecord.multisigData!,
+          0,
+          networkName
+        ).base58;
+        expect((await storage.getAddressAtIndex(0))!.base58).toBe(legacy0);
+
+        await expect(hWallet.getAddressAtIndex(0)).resolves.toBe(legacy0);
+        // An index that is not stored is derived.
+        await expect(hWallet.getAddressAtIndex(5)).resolves.toBe(
+          addressUtils.deriveAddressFromDataP2SH(olderMultisigRecord.multisigData!, 5, networkName)
+            .base58
+        );
+        await expect(hWallet.getCurrentAddress()).resolves.toMatchObject({
+          address: legacy0,
+          index: 0,
+        });
+        // A legacy flag that is not false, as an untyped caller may pass, reads
+        // the legacy chain: the refusal and the store pick the same chain, so
+        // the shielded pairs in the store are not given out.
+        const notFalse = { legacy: 0 as unknown as boolean };
+        await expect(hWallet.getAddressAtIndex(0, notFalse)).resolves.toBe(legacy0);
+        await expect(hWallet.getAllAddresses(notFalse).next()).resolves.toMatchObject({
+          value: { address: legacy0, index: 0 },
+        });
+      },
+      TEST_TIMEOUT
+    );
+
+    /**
+     * A store that keeps its contents across sessions, as an older version left
+     * it: the shielded pairs, and a history it decoded and credited.
+     */
+    describe('start() on what an older version stored', () => {
+      const TX_ID = 'ab00ee11ff22003344556677889900aabbccddeeff00112233445566778899aa';
+
+      /**
+       * A tx that pays 50 to `legacyAddress` and, when `spendAddress` is given,
+       * 77 in a shielded output that an older version decoded.
+       */
+      function txPaying(legacyAddress: string, spendAddress?: string): IHistoryTx {
+        return {
+          tx_id: TX_ID,
+          version: 1,
+          timestamp: 1,
+          is_voided: false,
+          nonce: 0,
+          weight: 1,
+          parents: [],
+          inputs: [],
+          height: 100,
+          tokens: [],
+          outputs: [
+            {
+              value: 50n,
+              token_data: 0,
+              token: NATIVE_TOKEN_UID,
+              decoded: { address: legacyAddress, timelock: null },
+              script: '',
+              spent_by: null,
+            },
+          ],
+          shielded_outputs: spendAddress
+            ? [
+                {
+                  mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+                  commitment: 'aa'.repeat(33),
+                  range_proof: 'bb'.repeat(10),
+                  script: '',
+                  token_data: 0,
+                  ephemeral_pubkey: 'cc'.repeat(33),
+                  decoded: { address: spendAddress, timelock: null },
+                  spent_by: null,
+                  // What the decode of the older version wrote.
+                  value: 77n,
+                  token: NATIVE_TOKEN_UID,
+                  blindingFactor: 'dd'.repeat(32),
+                },
+              ]
+            : [],
+        } as unknown as IHistoryTx;
+      }
+
+      async function unlockedHtrOf(hWallet: Pick<HathorWallet, 'getBalance'>): Promise<bigint> {
+        const [balance] = await hWallet.getBalance(NATIVE_TOKEN_UID);
+        return balance.balance.unlocked;
+      }
+
+      it.each([
+        { walletType: WalletType.P2PKH, record: p2pkhRecord, drops: false },
+        { walletType: WalletType.MULTISIG, record: olderMultisigRecord, drops: true },
+      ])(
+        '$walletType wallet: the shielded pairs and the history credited with them are dropped: $drops',
+        async ({ record, drops }) => {
+          const { storage, networkName } = await walletOn(record);
+          const legacy0 = (await storage.getAddressAtIndex(0))!.base58;
+          const legacy1 = (await storage.getAddressAtIndex(1))!.base58;
+          const spend0 = shieldedPairAt(record, 0, networkName).spendAddress.base58;
+          await storage.store.saveTx(txPaying(legacy0, spend0));
+          await storage.processHistory();
+          const accessData = JSON.parse(JSON.stringify(await storage.getAccessData()));
+          const hWallet = startableWallet(storage);
+          // The legacy addresses are injected again, as an app does on each start.
+          hWallet.preCalculatedAddresses = [legacy0, legacy1];
+          // What the older version left: the shielded output is credited.
+          expect(await unlockedHtrOf(hWallet)).toBe(127n);
+
+          await hWallet.start({ pinCode: '123', password: '456' });
+
+          // The shielded pairs, also for the Storage address reads.
+          expect(await storage.store.addressCount({ legacy: false })).toBe(drops ? 0 : 2);
+          expect((await storage.getAddressAtIndex(0, { legacy: false })) === null).toBe(drops);
+          expect(await storage.isAddressMine(spend0)).toBe(!drops);
+          // The history and what was credited with it. The first sync loads the
+          // history of the legacy chain again.
+          expect((await storage.getTx(TX_ID)) === null).toBe(drops);
+          expect((await storage.store.getUtxo({ txId: TX_ID, index: 1 })) === null).toBe(drops);
+          expect(await unlockedHtrOf(hWallet)).toBe(drops ? 0n : 127n);
+          expect((await hWallet.getShieldedUnblindingForTx(TX_ID)).outputs).toHaveLength(
+            drops ? 0 : 1
+          );
+          // The record is kept as it was, and the injected legacy addresses are saved.
+          expect(JSON.parse(JSON.stringify(await storage.getAccessData()))).toEqual(accessData);
+          expect((await storage.getAddressAtIndex(0))!.base58).toBe(legacy0);
+          expect((await storage.getAddressAtIndex(1))!.base58).toBe(legacy1);
+          expect(hWallet.conn.start).toHaveBeenCalled();
+        },
+        TEST_TIMEOUT
+      );
+
+      it(
+        'a multisig wallet whose store holds no shielded address keeps its history',
+        async () => {
+          // The record holds the shielded keys an older version gave it, but no
+          // shielded pair was stored.
+          const storage = new Storage(new MemoryStore());
+          await storage.saveAccessData(olderMultisigRecord);
+          await storageUtils.loadAddresses(0, 2, storage);
+          const legacy0 = (await storage.getAddressAtIndex(0))!.base58;
+          await storage.store.saveTx(txPaying(legacy0));
+          await storage.processHistory();
+          const cleanSpy = jest.spyOn(storage, 'cleanStorage');
+          const hWallet = startableWallet(storage);
+
+          await hWallet.start({ pinCode: '123', password: '456' });
+
+          expect(cleanSpy).not.toHaveBeenCalled();
+          expect(await storage.getTx(TX_ID)).not.toBeNull();
+          expect(await unlockedHtrOf(hWallet)).toBe(50n);
+        },
+        TEST_TIMEOUT
+      );
+    });
   });
 });

@@ -1041,6 +1041,123 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
   }, 30000);
 });
 
+describe('processNewTx — shielded outputs of a multisig wallet', () => {
+  // The PIN decrypts a real scan key here.
+  const DECODE_TEST_TIMEOUT = 30000;
+  const PIN = '123';
+  const LEGACY_ADDR = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+  const SPEND_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'dd00ee11ff22003344556677889900aabbccddeeff00112233445566778899aa';
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const p2pkhRecord = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: PIN,
+    password: '456',
+    networkName: 'testnet',
+  });
+  // A multisig record that an older version gave the shielded keys of its root,
+  // which are the keys of the P2PKH record of the same seed.
+  const olderMultisigRecord = {
+    ...walletUtils.generateAccessDataFromSeed(seed, {
+      pin: PIN,
+      password: '456',
+      networkName: 'testnet',
+      multisig: {
+        pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+          key => key.xpubkey
+        ),
+        numSignatures: 2,
+      },
+    }),
+    scanXpubkey: p2pkhRecord.scanXpubkey,
+    scanMainKey: p2pkhRecord.scanMainKey,
+    spendXpubkey: p2pkhRecord.spendXpubkey,
+    spendMainKey: p2pkhRecord.spendMainKey,
+  };
+
+  // A tx that pays the wallet's legacy address with a transparent output, and
+  // with a shielded output the spend address of a stored shielded pair.
+  const buildTx = (): IHistoryTx =>
+    ({
+      tx_id: TX_ID,
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [
+        {
+          value: 50n,
+          token_data: 0,
+          token: NATIVE_TOKEN_UID,
+          decoded: { address: LEGACY_ADDR, timelock: null },
+          script: '',
+          spent_by: null,
+        },
+      ],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'aa'.repeat(33),
+          range_proof: 'bb'.repeat(10),
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: 'cc'.repeat(33),
+          decoded: { address: SPEND_ADDR, timelock: null },
+          spent_by: null,
+        },
+      ],
+    }) as unknown as IHistoryTx;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each([
+    { walletType: WalletType.P2PKH, record: p2pkhRecord, decodeAttempts: 1 },
+    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, decodeAttempts: 0 },
+  ])(
+    '$walletType wallet with a stored shielded pair: a decode is attempted $decodeAttempts time(s), and the transparent output is credited',
+    async ({ walletType, record, decodeAttempts }) => {
+      expect(record.walletType).toBe(walletType);
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      await storage.saveAccessData(record);
+      await store.saveAddress({ base58: LEGACY_ADDR, bip32AddressIndex: 0 });
+      // The spend address of a shielded pair stored for the wallet, as an older
+      // version stored for multisig wallets too.
+      await store.saveAddress({
+        base58: SPEND_ADDR,
+        bip32AddressIndex: 3,
+        publicKey: '02'.repeat(33),
+        addressType: 'shielded-spend',
+      });
+      // The output does not open, which the decode logs and moves past.
+      const rewind = jest.fn().mockRejectedValue(new Error('the output does not open'));
+      storage.setShieldedCryptoProvider({
+        rewindAmountShieldedOutput: rewind,
+      } as unknown as IShieldedCryptoProvider);
+      jest.spyOn(storage.logger, 'debug').mockImplementation(() => undefined);
+      const scanKeySpy = jest.spyOn(storage, 'getScanXPrivKey');
+      const tx = buildTx();
+
+      await processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
+
+      expect(scanKeySpy).toHaveBeenCalledTimes(decodeAttempts);
+      expect(rewind).toHaveBeenCalledTimes(decodeAttempts);
+      expect(tx.shielded_outputs![0].value).toBeUndefined();
+      const utxo = await store.getUtxo({ txId: TX_ID, index: 0 });
+      expect(utxo?.value).toBe(50n);
+      expect(utxo?.address).toBe(LEGACY_ADDR);
+    },
+    DECODE_TEST_TIMEOUT
+  );
+});
+
 describe('processMetadataChanged — shielded UTXO preservation (SEPARATED model)', () => {
   // Regression for the bug that caused unshield sends to fail with
   // "full-unshield tx (shielded inputs, no shielded outputs) must carry an
@@ -1168,6 +1285,7 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     walletData,
     shieldedXpubs,
     withProvider,
+    walletType = WalletType.P2PKH,
   }: {
     gapLimit: number;
     walletData: {
@@ -1182,6 +1300,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     // Whether a shielded crypto provider is registered. The wallet has a
     // shielded chain only with both xpubs and a provider.
     withProvider: boolean;
+    // Only a P2PKH wallet has a shielded chain.
+    walletType?: WalletType;
   }): Storage {
     const storage = new Storage(new MemoryStore());
     if (withProvider) {
@@ -1194,10 +1314,11 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       .mockResolvedValue({ policy: 'gap-limit', gapLimit } as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     jest.spyOn(storage, 'getWalletData').mockResolvedValue(walletData as any);
-    jest.spyOn(storage, 'getAccessData').mockResolvedValue(
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue({
+      walletType,
+      ...(shieldedXpubs ? { scanXpubkey: 'xpub-scan', spendXpubkey: 'xpub-spend' } : {}),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (shieldedXpubs ? { scanXpubkey: 'xpub-scan', spendXpubkey: 'xpub-spend' } : {}) as any
-    );
+    } as any);
     return storage;
   }
 
@@ -1329,6 +1450,34 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
+
+  it.each([
+    {
+      walletType: WalletType.P2PKH,
+      loads: 'indexes 1 to 50',
+      expected: { nextIndex: 1, count: 50 },
+    },
+    { walletType: WalletType.MULTISIG, loads: 'nothing', expected: null },
+  ])(
+    '$walletType record with both shielded xpubs and a provider: a lagging shielded chain loads $loads',
+    async ({ walletType, expected }) => {
+      // Legacy fully satisfied; shielded badly behind. A multisig record that an
+      // older version gave shielded xpubs still has no shielded chain.
+      const storage = buildStorage({
+        gapLimit: 20,
+        walletData: {
+          lastLoadedAddressIndex: 50,
+          lastUsedAddressIndex: 0,
+          shieldedLastLoadedAddressIndex: 0,
+          shieldedLastUsedAddressIndex: 30,
+        },
+        shieldedXpubs: true,
+        withProvider: true,
+        walletType,
+      });
+      await expect(checkGapLimit(storage)).resolves.toEqual(expected);
+    }
+  );
 });
 
 describe('apiSyncHistory partial-update emission', () => {
@@ -1436,6 +1585,63 @@ describe('shielded chain predicate', () => {
       await storage.store.setLastUsedAddressIndex(0, { legacy: false });
       const nextWindow = await checkGapLimit(storage);
       expect(nextWindow).toEqual(hasChain ? { nextIndex: 1, count: 1 } : null);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  // A multisig record that an older version gave shielded keys: it derived them
+  // from the root of every wallet created from a seed, multisig included, so
+  // they are the same keys as the P2PKH record of the same seed.
+  const olderMultisigRecord = {
+    ...walletUtils.generateAccessDataFromSeed(
+      'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+      {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: {
+          pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+            key => key.xpubkey
+          ),
+          numSignatures: 2,
+        },
+      }
+    ),
+    scanXpubkey: full.scanXpubkey,
+    scanMainKey: full.scanMainKey,
+    spendXpubkey: full.spendXpubkey,
+    spendMainKey: full.spendMainKey,
+  };
+
+  it.each([
+    { walletType: WalletType.P2PKH, record: full, hasChain: true },
+    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, hasChain: false },
+  ])(
+    'a $walletType record with both shielded xpubs and a crypto provider: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ walletType, record, hasChain }) => {
+      expect(record.walletType).toBe(walletType);
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(hasChain);
+
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      storage.setShieldedCryptoProvider(provider);
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      // One legacy address per index, plus the spend P2PKH when there is a chain.
+      const loaded = await loadAddresses(0, 1, storage);
+      expect(loaded).toHaveLength(hasChain ? 2 : 1);
+      expect(pairSpy).toHaveBeenCalledTimes(hasChain ? 1 : 0);
+      expect((await storage.getAddressAtIndex(0, { legacy: false })) !== null).toBe(hasChain);
+
+      expect((await deriveShieldedAddressFromStorage(0, storage)) !== null).toBe(hasChain);
+
+      // The legacy chain is satisfied, and the shielded chain has used index 0
+      // with a gap limit of 1, so only a wallet with a shielded chain needs index 1.
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      await expect(checkGapLimit(storage)).resolves.toEqual(
+        hasChain ? { nextIndex: 1, count: 1 } : null
+      );
     },
     DERIVATION_TEST_TIMEOUT
   );

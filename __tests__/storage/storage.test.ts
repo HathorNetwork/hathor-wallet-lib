@@ -27,7 +27,7 @@ import {
   NATIVE_TOKEN_UID,
 } from '../../src/constants';
 import * as cryptoUtils from '../../src/utils/crypto';
-import { InvalidPasswdError } from '../../src/errors';
+import { InvalidPasswdError, ShieldedKeyError } from '../../src/errors';
 import Network from '../../src/models/network';
 import {
   IHistoryTx,
@@ -39,6 +39,7 @@ import {
   TokenVersion,
   ApiVersion,
   IBalance,
+  WalletType,
 } from '../../src/types';
 
 describe('handleStop', () => {
@@ -1248,7 +1249,7 @@ describe('getAddressPubkey', () => {
 describe('shielded key access (smoke)', () => {
   const PIN = '1234';
 
-  async function shieldedWallet() {
+  async function shieldedWallet(walletType: WalletType = WalletType.P2PKH) {
     const store = new MemoryStore();
     const storage = new Storage(store);
     const legacy = new HDPrivateKey();
@@ -1261,11 +1262,26 @@ describe('shielded key access (smoke)', () => {
       spendMainKey: cryptoUtils.encryptData(spend.xprivkey, PIN),
       scanXpubkey: scan.xpubkey,
       spendXpubkey: spend.xpubkey,
-      walletType: 'p2pkh' as const,
+      walletType,
       walletFlags: 0,
     });
     return { storage, scan, spend };
   }
+
+  const shieldedKeyGetters = [
+    { getter: 'getScanXPrivKey', read: (storage: Storage) => storage.getScanXPrivKey(PIN) },
+    { getter: 'getSpendXPrivKey', read: (storage: Storage) => storage.getSpendXPrivKey(PIN) },
+    { getter: 'getScanXPubKey', read: (storage: Storage) => storage.getScanXPubKey() },
+    { getter: 'getSpendXPubKey', read: (storage: Storage) => storage.getSpendXPubKey() },
+  ];
+  // The refusal carries its reason in errorCode, and its message says why.
+  const MULTISIG_REFUSAL = {
+    name: 'ShieldedKeyError',
+    errorCode: 'shielded-multisig',
+    message: expect.stringMatching(
+      /^Multisig wallets have no shielded keys or addresses: .*one participant.* alone/
+    ),
+  };
 
   it('returns the scan/spend xpubs and decrypts the xprivs with the PIN', async () => {
     const { storage, scan, spend } = await shieldedWallet();
@@ -1297,6 +1313,39 @@ describe('shielded key access (smoke)', () => {
     await expect(storage.getScanXPrivKey('9999')).rejects.toThrow();
     await expect(storage.getSpendXPrivKey('9999')).rejects.toThrow();
   });
+
+  // The record of the P2PKH tests above, on a multisig wallet: older versions
+  // derived the shielded keys of multisig wallets too.
+  it.each(shieldedKeyGetters)(
+    '$getter refuses the shielded keys an older version stored on a multisig record',
+    async ({ read }) => {
+      const { storage } = await shieldedWallet(WalletType.MULTISIG);
+      await expect(read(storage)).rejects.toThrow(ShieldedKeyError);
+      await expect(read(storage)).rejects.toMatchObject(MULTISIG_REFUSAL);
+    }
+  );
+
+  it.each(shieldedKeyGetters)(
+    '$getter refuses a multisig record without shielded keys',
+    async ({ read }) => {
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      const legacy = new HDPrivateKey();
+      await store.saveAccessData({
+        xpubkey: legacy.xpubkey,
+        mainKey: cryptoUtils.encryptData(legacy.xprivkey, PIN),
+        walletType: WalletType.MULTISIG,
+        walletFlags: 0,
+        multisigData: {
+          pubkey: legacy.publicKey.toString('hex'),
+          pubkeys: [legacy.xpubkey, new HDPrivateKey().xpubkey],
+          numSignatures: 2,
+        },
+      });
+      await expect(read(storage)).rejects.toThrow(ShieldedKeyError);
+      await expect(read(storage)).rejects.toMatchObject(MULTISIG_REFUSAL);
+    }
+  );
 
   it('round-trips the shielded crypto provider field/setter', () => {
     const store = new MemoryStore();

@@ -1400,7 +1400,17 @@ export async function processNewTx(
   // Decode the wallet's shielded outputs IN PLACE before the output loops so
   // the owned-shielded loop can credit them, with the key in memory, or with
   // the PIN while there is none.
-  await decodeWalletShieldedOutputs(storage, tx, getScanKey, { logUndecoded: !scanKey });
+  // A multisig wallet decodes nothing: it has no shielded keys (see
+  // refuseMultisigShieldedKeys), so its scan key is not asked for. The outputs
+  // it never decoded stay undecoded and uncredited. The shielded pairs an older
+  // version stored for it, and the history decoded and credited with them, are
+  // dropped when the wallet starts (see dropMultisigShieldedState).
+  if (
+    !tx.shielded_outputs?.length ||
+    (await storage.getAccessData())?.walletType !== WalletType.MULTISIG
+  ) {
+    await decodeWalletShieldedOutputs(storage, tx, getScanKey, { logUndecoded: !scanKey });
+  }
 
   // Transparent outputs: on-chain index === position in tx.outputs[].
   for (const [index, output] of tx.outputs.entries()) {

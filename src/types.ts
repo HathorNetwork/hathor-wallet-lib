@@ -574,7 +574,9 @@ export interface IWalletAccessData {
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
-  // Shielded address key material. Optional: absent on wallets created
+  // Shielded address key material, for P2PKH wallets only: a multisig wallet
+  // gets none, and ignores the fields older versions stored in its record
+  // (see walletUtils.hasShieldedXpubs). Optional: absent on wallets created
   // before the shielded feature AND on wallets without root-key access —
   // the scan/spend chains are hardened accounts (1'/2'), derivable only
   // from the root xpriv, so xpub-only (read-only) wallets and wallets
@@ -929,7 +931,8 @@ export interface IStorage {
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
 
-  // Shielded key methods (return undefined if wallet was created before shielded feature)
+  // Shielded key methods. The xpub getters return undefined if the wallet was
+  // created before the shielded feature; all four throw for a multisig wallet.
   getScanXPrivKey(pinCode: string): Promise<string>;
   getSpendXPrivKey(pinCode: string): Promise<string>;
   getScanXPubKey(): Promise<string | undefined>;

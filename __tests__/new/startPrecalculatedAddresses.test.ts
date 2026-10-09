@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
 import HathorWallet from '../../src/new/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
 import versionApi from '../../src/api/version';
-import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../src/types';
+import { IPrecalculatedAddress, IPrecalculatedShieldedAddress, WalletType } from '../../src/types';
 import { ConnectionState } from '../../src/wallet/types';
 import walletUtils from '../../src/utils/wallet';
 import type { IShieldedCryptoProvider } from '../../src/shielded/types';
@@ -197,5 +198,82 @@ describe('start() with pre-calculated addresses', () => {
     expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
     expect(await storage.isAddressMine('spend-for-index-0')).toBe(false);
     expect((await storage.getAddressAtIndex(0))!.base58).toBe('legacy-index-0');
+  });
+
+  /**
+   * A multisig wallet has no shielded chain, so an injected pair would be a
+   * shielded address of one participant's keys, given out for the wallet.
+   */
+  describe('a multisig wallet', () => {
+    const multisig = {
+      pubkeys: [
+        walletUtils.getMultiSigXPubFromWords(seed, { networkName: 'testnet' }),
+        new HDPrivateKey().xpubkey,
+      ],
+      numSignatures: 2,
+    };
+
+    // A multisig record that an older version gave the shielded keys of its root.
+    function olderMultisigRecord() {
+      const p2pkh = walletUtils.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+      });
+      return {
+        ...walletUtils.generateAccessDataFromSeed(seed, {
+          pin: '123',
+          password: '456',
+          networkName: 'testnet',
+          multisig,
+        }),
+        scanXpubkey: p2pkh.scanXpubkey,
+        scanMainKey: p2pkh.scanMainKey,
+        spendXpubkey: p2pkh.spendXpubkey,
+        spendMainKey: p2pkh.spendMainKey,
+      };
+    }
+
+    it.each([
+      { record: 'a new record', stored: () => null },
+      { record: 'a record an older version gave shielded keys', stored: olderMultisigRecord },
+    ])(
+      'persists no shielded pair, with a crypto provider and $record',
+      async ({ stored }) => {
+        const storage = new Storage(new MemoryStore());
+        const record = stored();
+        if (record) {
+          await storage.saveAccessData(record);
+        }
+        jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+          resolve({ network: 'testnet' });
+        });
+        const hWallet = new HathorWallet({
+          seed,
+          storage,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          connection: makeConn() as any,
+          password: '456',
+          pinCode: '123',
+          multisig,
+          preCalculatedAddresses: entries,
+        });
+        hWallet.setShieldedCryptoProvider(provider);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (hWallet as any).getTokenData = jest.fn();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (hWallet as any).setState = jest.fn();
+
+        await hWallet.start({ pinCode: '123', password: '456' });
+
+        expect((await storage.getAccessData())!.walletType).toBe(WalletType.MULTISIG);
+        expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+        expect(await storage.isAddressMine('shielded-for-index-0')).toBe(false);
+        expect(await storage.isAddressMine('spend-for-index-0')).toBe(false);
+        // The legacy chain is persisted all the same.
+        expect((await storage.getAddressAtIndex(0))!.base58).toBe('legacy-index-0');
+      },
+      30000
+    );
   });
 });

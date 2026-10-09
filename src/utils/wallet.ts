@@ -649,7 +649,9 @@ const wallet = {
     // Derive shielded scan and spend keys if root key is available.
     // Scan (account 1') and spend (account 2') use separate derivation paths from legacy (account 0')
     // so the scan key only grants view access, not spending authority over legacy funds.
-    if (argXpriv.depth === 0) {
+    // A multisig wallet gets none: they would be this participant's single-signature
+    // keys (see hasShieldedXpubs).
+    if (argXpriv.depth === 0 && walletType === WalletType.P2PKH) {
       const scanAcctXpriv = argXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
       const scanXpriv = scanAcctXpriv.deriveChild(0);
       accessData.scanXpubkey = scanXpriv.xpubkey;
@@ -732,14 +734,7 @@ const wallet = {
       };
     }
 
-    // Derive shielded scan (account 1') and spend (account 2') keys.
-    // Separate from legacy (account 0') so scan key only grants view access.
-    const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
-    const scanXpriv = scanAcctXpriv.deriveChild(0);
-    const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
-    const spendXpriv = spendAcctXpriv.deriveChild(0);
-
-    return {
+    const accessData: IWalletAccessData = {
       walletType,
       multisigData,
       xpubkey: xpriv.xpubkey,
@@ -748,35 +743,58 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
-      scanXpubkey: scanXpriv.xpubkey,
-      scanMainKey: encryptData(scanXpriv.xprivkey, pin),
-      spendXpubkey: spendXpriv.xpubkey,
-      spendMainKey: encryptData(spendXpriv.xprivkey, pin),
     };
+
+    // Derive shielded scan (account 1') and spend (account 2') keys.
+    // Separate from legacy (account 0') so scan key only grants view access.
+    // A multisig wallet gets none: they would be this participant's
+    // single-signature keys (see hasShieldedXpubs).
+    if (walletType === WalletType.P2PKH) {
+      const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
+      const scanXpriv = scanAcctXpriv.deriveChild(0);
+      const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
+      const spendXpriv = spendAcctXpriv.deriveChild(0);
+      accessData.scanXpubkey = scanXpriv.xpubkey;
+      accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+      accessData.spendXpubkey = spendXpriv.xpubkey;
+      accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
+    }
+
+    return accessData;
   },
 
   /**
-   * Whether an access-data record carries both shielded xpubs, scan and spend.
+   * Whether an access-data record has a shielded chain: a P2PKH record that
+   * carries both shielded xpubs, scan and spend.
    *
    * Shielded addresses are derived from the pair, so a record with only one of
-   * them has no shielded chain. This is the record half of the check the wallet
-   * makes before deriving, subscribing or gap-scanning the shielded chain, and
-   * apps can call it before `start()`.
+   * them has no shielded chain. A multisig record has none either, even when an
+   * older version stored the pair in it: shielded keys are derived from the
+   * wallet's own root, which on a multisig wallet belongs to one participant,
+   * so that participant alone could spend what is sent to a shielded address,
+   * without the other signatures the wallet requires. This is the record half
+   * of the check the wallet makes before deriving, subscribing or gap-scanning
+   * the shielded chain, and apps can call it before `start()`.
    *
    * @param accessData The wallet access data, or null for a wallet without one
-   * @returns true when both xpubs are present
+   * @returns true for a P2PKH record with both xpubs
    */
   hasShieldedXpubs(
     accessData: IWalletAccessData | null
   ): accessData is IWalletAccessData & { scanXpubkey: string; spendXpubkey: string } {
-    return !!accessData?.scanXpubkey && !!accessData?.spendXpubkey;
+    return (
+      accessData?.walletType === WalletType.P2PKH &&
+      !!accessData.scanXpubkey &&
+      !!accessData.spendXpubkey
+    );
   },
 
   /**
    * Re-derive the shielded scan/spend keys on an access-data record that was
    * persisted before shielded support existed. No-op if the record already
-   * has all four shielded fields, or if the record lacks the encrypted seed
-   * (xpub-only wallets have nothing to derive from).
+   * has all four shielded fields, if the record lacks the encrypted seed
+   * (xpub-only wallets have nothing to derive from), or if it is not a P2PKH
+   * record: a multisig wallet has no shielded keys (see `hasShieldedXpubs`).
    *
    * The derivation MUST exactly match what `generateAccessDataFromSeed`
    * produces for a fresh wallet (same paths, same encryption) so that a
@@ -800,7 +818,7 @@ const wallet = {
    * `passphrase` must be the wallet's original BIP39 passphrase. A passphrase
    * cannot be checked on its own (any passphrase yields a valid seed), so the
    * root it gives is checked instead: it must derive the record's own legacy
-   * change key (`xpubkey`), on the P2PKH or the P2SH path by `walletType`.
+   * change key (`xpubkey`), on the P2PKH path.
    * Otherwise the shielded keys would come from another root than the
    * wallet's legacy keys, and a restore from the words and the right
    * passphrase would not find the shielded funds. The PIN is cross-checked
@@ -845,6 +863,8 @@ const wallet = {
       !!accessData.spendMainKey;
     if (hasAll && !replaceShieldedKeys) return false;
     if (!accessData.words) return false;
+    // A multisig wallet has no shielded keys (see hasShieldedXpubs).
+    if (accessData.walletType !== WalletType.P2PKH) return false;
 
     // `decryptData` throws InvalidPasswdError / DecryptionError. We wrap it
     // here so the operator sees the *specific* failure mode — the wallet
@@ -889,12 +909,10 @@ const wallet = {
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
 
     // The passphrase cannot be checked on its own, but the root it gives must
-    // derive the record's own legacy change key, on the path
-    // generateAccessDataFromSeed uses for this wallet type.
-    const legacyAcctPath =
-      accessData.walletType === WalletType.MULTISIG ? P2SH_ACCT_PATH : P2PKH_ACCT_PATH;
+    // derive the record's own legacy change key, on the P2PKH path
+    // generateAccessDataFromSeed uses.
     const legacyXpub = rootXpriv
-      .deriveNonCompliantChild(legacyAcctPath)
+      .deriveNonCompliantChild(P2PKH_ACCT_PATH)
       .deriveNonCompliantChild(0).hdPublicKey;
     if (!isSameExtendedPublicKey(legacyXpub, accessData.xpubkey)) {
       throw new ShieldedKeyError(

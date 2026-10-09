@@ -56,6 +56,7 @@ import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
+import { refuseMultisigShieldedKeys } from '../utils/shieldedChain';
 import {
   NATIVE_TOKEN_UID,
   MAX_INPUTS,
@@ -1242,9 +1243,13 @@ export class Storage implements IStorage {
   /**
    * Get the scan chain xprivkey for shielded ECDH.
    * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     if (!accessData.scanMainKey) {
       throw new Error('Scan private key is not present on this wallet.');
     }
@@ -1254,9 +1259,13 @@ export class Storage implements IStorage {
   /**
    * Get the spend chain xprivkey for shielded UTXO signing.
    * Uses account 2' (m/44'/280'/2'/0).
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     if (!accessData.spendMainKey) {
       throw new Error('Spend private key is not present on this wallet.');
     }
@@ -1267,9 +1276,13 @@ export class Storage implements IStorage {
    * Get the scan chain xpubkey for shielded address derivation.
    * Uses account 1' (m/44'/280'/1'/0).
    * Returns undefined if wallet was created before shielded feature.
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     return accessData.scanXpubkey;
   }
 
@@ -1277,9 +1290,13 @@ export class Storage implements IStorage {
    * Get the spend chain xpubkey for shielded address derivation.
    * Uses account 2' (m/44'/280'/2'/0).
    * Returns undefined if wallet was created before shielded feature.
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     return accessData.spendXpubkey;
   }
 
