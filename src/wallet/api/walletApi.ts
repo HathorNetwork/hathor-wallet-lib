@@ -6,6 +6,7 @@
  */
 
 import { get, isNumber } from 'lodash';
+import { isAxiosError } from 'axios';
 import { axiosInstance } from './walletServiceAxios';
 import {
   CheckAddressesMineResponseData,
@@ -61,6 +62,23 @@ import {
   shieldedNewAddressesResponseSchema,
   splitBalanceResponseSchema,
 } from './schemas/walletApi';
+
+/**
+ * Strip the request body (and the raw request holding it) from a failed
+ * request's error.
+ */
+function withoutRequestBody(err: unknown): unknown {
+  if (isAxiosError(err)) {
+    // The caller's error is redacted in place, so it keeps its identity
+    /* eslint-disable no-param-reassign */
+    if (err.config) {
+      err.config.data = undefined;
+    }
+    err.request = undefined;
+    /* eslint-enable no-param-reassign */
+  }
+  return err;
+}
 
 /** Body fields of `POST wallet/init` that register the shielded keys. */
 const SHIELDED_REGISTRATION_FIELDS: unknown[] = [
@@ -134,7 +152,14 @@ const walletApi = {
       Object.assign(data, shielded);
     }
     const axios = await axiosInstance(wallet, false);
-    const response = await axios.post('wallet/init', data);
+    let response;
+    try {
+      response = await axios.post('wallet/init', data);
+    } catch (err) {
+      // The body carries the scan xpriv: keep it out of an error that callers
+      // may log, while rethrowing the same error so its type and code remain
+      throw withoutRequestBody(err);
+    }
     if (response.status === 200 && response.data.success) {
       return parseSchema(response.data, walletStatusResponseSchema);
     }
@@ -158,9 +183,9 @@ const walletApi = {
         d => Array.isArray(d.path) && d.path.some(p => SHIELDED_REGISTRATION_FIELDS.includes(p))
       )
     ) {
-      // An older wallet-service rejects the unknown shielded fields. The current
-      // one returns the same shape when the fields are incomplete, so the
-      // server's own message is kept to tell the two apart.
+      // An older wallet-service rejects the shielded fields as unknown keys,
+      // each detail naming the field in its path. The server's messages are
+      // kept in the error.
       const reasons = details.map(d => d.message).filter(Boolean);
       throw new WalletRequestError(
         `The wallet-service does not support shielded registration: ${reasons.join('; ')}`,

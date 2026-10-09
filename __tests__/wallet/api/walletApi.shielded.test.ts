@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AxiosInstance, AxiosResponse } from 'axios';
+import { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
 import walletApi from '../../../src/wallet/api/walletApi';
 import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
@@ -146,6 +146,23 @@ describe('walletApi shielded support', () => {
       const err = await createWallet().catch(e => e);
       expect(err.message).toBe('Error creating wallet.');
       expect(err.cause).toEqual({ status: 500, data });
+    });
+
+    it('keeps the scan key out of a failed request error', async () => {
+      const failure = new AxiosError(
+        'timeout of 10000ms exceeded',
+        AxiosError.ECONNABORTED,
+        { data: JSON.stringify({ scanXpriv: shielded.scanXpriv }) } as never,
+        { _header: 'POST /wallet/init', outputData: [shielded.scanXpriv] }
+      );
+      mockAxiosInstance.post.mockRejectedValueOnce(failure);
+      const err = await createWallet().catch(e => e);
+      // Still the axios error, so callers can tell a timeout apart
+      expect(err).toBe(failure);
+      expect(err.code).toBe(AxiosError.ECONNABORTED);
+      expect(JSON.stringify(err.config ?? {})).not.toContain(shielded.scanXpriv);
+      expect(err.request).toBeUndefined();
+      expect(JSON.stringify(err.toJSON())).not.toContain(shielded.scanXpriv);
     });
 
     it('still accepts wallet-already-loaded', async () => {
