@@ -25,13 +25,13 @@ import {
   NATIVE_TOKEN_UID,
   NATIVE_TOKEN_UID_HEX,
 } from '../constants';
-import { SendTxError, WalletError } from '../errors';
+import { SendTxError, TxNotFoundError, WalletError, WalletRequestError } from '../errors';
 import { deriveScanChildPrivkey, rewindShieldedOutput } from '../shielded/rewind';
 import { ShieldedOutputMode } from '../shielded/types';
-import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
+import { convertFullNodeToHistoryTx } from './walletServiceStorageProxy';
 import walletApi from './api/walletApi';
 import HathorWalletServiceWallet from './wallet';
-import { ShieldedUtxo, Utxo } from './types';
+import { FullNodeTxResponse, ShieldedUtxo, Utxo } from './types';
 import Network from '../models/network';
 import { toOnChainAddress } from '../utils/address';
 
@@ -108,6 +108,11 @@ export class WalletServiceSendStorage {
   private readonly pools = new Map<string, Promise<IUtxo[]>>();
 
   private readonly knownUtxos = new Map<string, IUtxo>();
+
+  // Why a known utxo cannot be spent (locked, or held by another proposal)
+  private readonly unavailable = new Map<string, string>();
+
+  private readonly txs = new Map<string, Promise<IHistoryTx | null>>();
 
   private readonly addressPaths = new Map<string, string>();
 
@@ -327,20 +332,44 @@ export class WalletServiceSendStorage {
     return Array.from(seen.values());
   }
 
+  /**
+   * A utxo the send may spend: never `null`, which the engine would read as a
+   * transparent input.
+   */
   private async getUtxo({ txId, index }: IUtxoId): Promise<IUtxo> {
+    const utxo = await this.findOwnUtxo(txId, index);
+    if (!utxo) {
+      throw new SendTxError(`Utxo ${txId}:${index} is not an unspent output of this wallet.`);
+    }
+    const unavailable = this.unavailable.get(utxoKey(txId, index));
+    if (unavailable) {
+      throw new SendTxError(`Utxo ${txId}:${index} ${unavailable}.`);
+    }
+    return utxo;
+  }
+
+  /**
+   * An unspent output of this wallet, opened if shielded, whether or not it is
+   * available to spend; `null` when the wallet-service has no such output for
+   * this wallet.
+   */
+  private async findOwnUtxo(txId: string, index: number): Promise<IUtxo | null> {
     const known = this.knownUtxos.get(utxoKey(txId, index));
     if (known) {
       return known;
     }
-    const entry = await this.wallet.getUtxoFromId(txId, index);
-    if (!entry) {
-      throw new SendTxError(`Utxo ${txId}:${index} is not an unspent output of this wallet.`);
+    let entry: Utxo | null;
+    try {
+      entry = await this.wallet.getUtxoFromId(txId, index);
+    } catch (e) {
+      if (isClientError(e)) {
+        // The wallet-service refuses the lookup: not an output of this wallet
+        return null;
+      }
+      throw e;
     }
-    if (entry.locked) {
-      throw new SendTxError(`Utxo ${txId}:${index} is locked.`);
-    }
-    if (entry.txProposalId) {
-      throw new SendTxError(`Utxo ${txId}:${index} is already used by another tx proposal.`);
+    if (!entry || (entry.kind === 'shielded' && entry.recoveryState !== RECOVERED)) {
+      return null;
     }
     return this.toUtxo(entry);
   }
@@ -369,6 +398,11 @@ export class WalletServiceSendStorage {
     const key = utxoKey(entry.txId, entry.index);
     this.knownUtxos.set(key, utxo);
     this.addressPaths.set(key, entry.addressPath);
+    if (entry.locked) {
+      this.unavailable.set(key, 'is locked');
+    } else if (entry.txProposalId) {
+      this.unavailable.set(key, 'is already used by another tx proposal');
+    }
     return utxo;
   }
 
@@ -420,28 +454,34 @@ export class WalletServiceSendStorage {
    * value, token, address and blinding factors the fullnode does not expose,
    * as they would be in a fullnode wallet's history.
    */
-  private async getTx(txId: string): Promise<IHistoryTx | null> {
-    let tx: IHistoryTx;
-    try {
-      const response = await this.wallet.getFullTxById(txId);
-      tx = new WalletServiceStorageProxy(this.wallet, this.storage).convertFullNodeToHistoryTx(
-        response
-      );
-    } catch (_e) {
-      return null;
+  private getTx(txId: string): Promise<IHistoryTx | null> {
+    // The engine reads the same transaction several times per input
+    let tx = this.txs.get(txId);
+    if (!tx) {
+      tx = this.fetchTx(txId);
+      this.txs.set(txId, tx);
     }
+    return tx;
+  }
+
+  private async fetchTx(txId: string): Promise<IHistoryTx | null> {
+    let response: FullNodeTxResponse;
+    try {
+      response = await this.wallet.getFullTxById(txId);
+    } catch (e) {
+      if (e instanceof TxNotFoundError) {
+        return null;
+      }
+      throw e;
+    }
+    const tx = convertFullNodeToHistoryTx(response);
     const shieldedOutputs = tx.shielded_outputs ?? [];
     for (const [s, output] of shieldedOutputs.entries()) {
-      const index = tx.outputs.length + s;
-      let utxo: IUtxo | null;
-      try {
-        // eslint-disable-next-line no-await-in-loop -- few shielded outputs per tx
-        utxo = await this.getUtxo({ txId, index });
-      } catch (_e) {
-        // Not an unspent output of this wallet: leave it undecoded
-        utxo = null;
-      }
+      // eslint-disable-next-line no-await-in-loop -- few shielded outputs per tx
+      const utxo = await this.findOwnUtxo(txId, tx.outputs.length + s);
       if (utxo?.shielded) {
+        // What a fullnode wallet's history holds for its own shielded output.
+        // Whether it can be spent is checked when it is used as an input.
         output.value = utxo.value;
         output.token = utxo.token;
         output.blindingFactor = utxo.blindingFactor;
@@ -516,6 +556,17 @@ export class WalletServiceSendStorage {
       version: tokenInfo.version,
     };
   }
+}
+
+/**
+ * A wallet-service request the server refused (4xx), as opposed to one that
+ * failed to reach or be served by it.
+ */
+function isClientError(e: unknown): boolean {
+  if (!(e instanceof WalletRequestError) || !e.cause || !('status' in e.cause)) {
+    return false;
+  }
+  return e.cause.status >= 400 && e.cause.status < 500;
 }
 
 function utxoKey(txId: string, index: number): string {

@@ -15,7 +15,7 @@ import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import transactionUtils from '../../src/utils/transaction';
 import { decryptData } from '../../src/utils/crypto';
-import { SendTxError, WalletError } from '../../src/errors';
+import { SendTxError, TxNotFoundError, WalletRequestError } from '../../src/errors';
 import { IStorage, IWalletAccessData, TokenVersion, WalletType } from '../../src/types';
 import { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../../src/constants';
@@ -540,7 +540,59 @@ describe('getTx', () => {
 
   it('returns null for a transaction the wallet-service does not know', async () => {
     const { proxy, wallet } = await setup();
-    jest.spyOn(wallet, 'getFullTxById').mockRejectedValue(new WalletError('not found'));
+    jest.spyOn(wallet, 'getFullTxById').mockRejectedValue(new TxNotFoundError('not found'));
     await expect(proxy.getTx('unknown')).resolves.toBeNull();
+  });
+
+  it('lets any other failure through', async () => {
+    const { proxy, wallet } = await setup();
+    const outage = new WalletRequestError('Error getting transaction', {
+      cause: { status: 503, data: {} },
+    });
+    jest.spyOn(wallet, 'getFullTxById').mockRejectedValue(outage);
+    await expect(proxy.getTx('tx')).rejects.toBe(outage);
+  });
+
+  it('fetches each transaction once per send', async () => {
+    const { proxy, wallet } = await setup({ pools: { shielded: [ownedEntry] } });
+    const fetch = jest.spyOn(wallet, 'getFullTxById').mockResolvedValue(fullTx());
+    await proxy.getTx(ownedEntry.txId);
+    await proxy.getTx(ownedEntry.txId);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats an output the wallet-service refuses to look up as not the wallet's", async () => {
+    const { proxy, wallet } = await setup({ pools: { shielded: [ownedEntry] } });
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue(fullTx());
+    jest.spyOn(wallet, 'getUtxoFromId').mockImplementation(async (_txId, index) => {
+      if (index === 1) {
+        throw new WalletRequestError('Error requesting utxo.', {
+          cause: { status: 400, data: {} },
+        });
+      }
+      return ownedEntry;
+    });
+    const tx = await proxy.getTx(ownedEntry.txId);
+    expect(tx!.shielded_outputs![0].value).toBeUndefined();
+    expect(tx!.shielded_outputs![1].value).toBe(150n);
+  });
+
+  it('lets a failed output lookup through', async () => {
+    const { proxy, wallet } = await setup();
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue(fullTx());
+    const outage = new WalletRequestError('Error requesting utxo.', {
+      cause: { status: 502, data: {} },
+    });
+    jest.spyOn(wallet, 'getUtxoFromId').mockRejectedValue(outage);
+    await expect(proxy.getTx(ownedEntry.txId)).rejects.toBe(outage);
+  });
+
+  it('decorates an output held by another proposal but refuses to spend it', async () => {
+    const held = { ...ownedEntry, txProposalId: 'other-proposal' } as Utxo;
+    const { proxy, wallet } = await setup({ pools: { shielded: [held] } });
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue(fullTx());
+    const tx = await proxy.getTx(ownedEntry.txId);
+    expect(tx!.shielded_outputs![1].value).toBe(150n);
+    await expect(proxy.getUtxo({ txId: ownedEntry.txId, index: 2 })).rejects.toThrow(/proposal/);
   });
 });

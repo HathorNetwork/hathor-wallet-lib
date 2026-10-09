@@ -186,7 +186,7 @@ export class WalletServiceStorageProxy {
   private async getTx(txId: string) {
     try {
       const fullTxResponse = await this.wallet.getFullTxById(txId);
-      const result = this.convertFullNodeToHistoryTx(fullTxResponse);
+      const result = convertFullNodeToHistoryTx(fullTxResponse);
       return result;
     } catch (error) {
       return null;
@@ -206,51 +206,50 @@ export class WalletServiceStorageProxy {
       throw new Error('Current address is not loaded');
     }
   }
+}
 
-  /**
-   * Convert FullNodeTxResponse to IHistoryTx format
-   * This bridges the gap between full node API format and wallet storage format
-   */
-  // eslint-disable-next-line class-methods-use-this
-  convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
-    const { tx, meta } = fullTxResponse;
+/**
+ * Convert FullNodeTxResponse to IHistoryTx format
+ * This bridges the gap between full node API format and wallet storage format
+ */
+export function convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
+  const { tx, meta } = fullTxResponse;
 
-    // SEPARATED model: `outputs[]` is transparent-only. The dedicated
-    // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
-    // threaded through unchanged so shielded spends can still resolve their
-    // parent slots via getUtxo/resolveSpentOutput.
-    const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
-      .shielded_outputs;
+  // SEPARATED model: `outputs[]` is transparent-only. The dedicated
+  // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
+  // threaded through unchanged so shielded spends can still resolve their
+  // parent slots via getUtxo/resolveSpentOutput.
+  const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
+    .shielded_outputs;
 
-    return {
-      tx_id: tx.hash,
-      signalBits: 0, // Default value since fullnode tx doesn't include signal bits
-      version: tx.version,
-      weight: tx.weight,
-      timestamp: tx.timestamp,
-      is_voided: meta.voided_by.length > 0,
-      nonce: Number.parseInt(tx.nonce ?? '0', 10),
-      inputs: tx.inputs.map(input => ({
-        ...input,
-        decoded: {
-          ...input.decoded,
-          type: input.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['inputs'],
-      outputs: tx.outputs.map(output => ({
-        ...output,
-        decoded: {
-          ...output.decoded,
-          type: output.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['outputs'],
-      parents: tx.parents,
-      tokens: tx.tokens.map(token => token.uid),
-      height: meta.height,
-      first_block: meta.first_block,
-      token_name: tx.token_name ?? undefined,
-      token_symbol: tx.token_symbol ?? undefined,
-      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
-    };
-  }
+  return {
+    tx_id: tx.hash,
+    signalBits: 0, // Default value since fullnode tx doesn't include signal bits
+    version: tx.version,
+    weight: tx.weight,
+    timestamp: tx.timestamp,
+    is_voided: meta.voided_by.length > 0,
+    nonce: Number.parseInt(tx.nonce ?? '0', 10),
+    inputs: tx.inputs.map(input => ({
+      ...input,
+      decoded: {
+        ...input.decoded,
+        type: input.decoded.type ?? undefined,
+      },
+    })) as IHistoryTx['inputs'],
+    outputs: tx.outputs.map(output => ({
+      ...output,
+      decoded: {
+        ...output.decoded,
+        type: output.decoded.type ?? undefined,
+      },
+    })) as IHistoryTx['outputs'],
+    parents: tx.parents,
+    tokens: tx.tokens.map(token => token.uid),
+    height: meta.height,
+    first_block: meta.first_block,
+    token_name: tx.token_name ?? undefined,
+    token_symbol: tx.token_symbol ?? undefined,
+    ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
+  };
 }

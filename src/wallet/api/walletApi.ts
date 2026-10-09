@@ -361,7 +361,9 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, txOutputResponseSchema);
     }
-    throw new WalletRequestError('Error requesting utxo.');
+    throw new WalletRequestError('Error requesting utxo.', {
+      cause: { status: response.status, data: response.data },
+    });
   },
 
   async createTxProposal(
