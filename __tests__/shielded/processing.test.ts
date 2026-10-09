@@ -20,8 +20,6 @@ import {
 } from '../../src/shielded/types';
 import { IHistoryTx, IHistoryShieldedOutput } from '../../src/types';
 import { DecryptionError, InvalidPasswdError, ShieldedKeyError } from '../../src/errors';
-import { keyMaterialFromExtendedKey } from '../../src/shielded/keys';
-import { SessionClosedError, shieldedSessionOf } from '../../src/shielded/session';
 
 function makeShieldedOutput(overrides: Partial<IShieldedOutput> = {}): IHistoryShieldedOutput {
   return {
@@ -320,8 +318,8 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     }
   });
 
-  it('decodes with the key its PIN unlocks, not with the session of the storage', async () => {
-    const sessionKey = new HDPrivateKey().deriveNonCompliantChild(0);
+  it('decodes with the key its PIN unlocks, not with the scan key in memory', async () => {
+    const memoryKey = new HDPrivateKey().deriveNonCompliantChild(0);
     const pinKey = new HDPrivateKey().deriveNonCompliantChild(0);
     const expectedChild = pinKey.deriveChild(0).privateKey.toBuffer().toString('hex');
     const tx = makeHistoryTx({
@@ -333,10 +331,8 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
       getScanXPrivKey: jest.fn().mockResolvedValue(pinKey.xprivkey),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+      scanXPrivKey: memoryKey.xprivkey,
     } as any;
-    const session = shieldedSessionOf(storage);
-    session.open();
-    session.fill(keyMaterialFromExtendedKey(sessionKey), session.epoch);
     const provider = makeMockProvider({
       rewindAmountShieldedOutput: jest.fn().mockImplementation(async (privkey: Buffer) => {
         if (privkey.toString('hex') !== expectedChild) {
@@ -352,13 +348,12 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     expect(tx.shielded_outputs![0].value).toBe(40n);
     expect(storage.getScanXPrivKey).toHaveBeenCalledWith('pin');
 
-    // A wrong PIN still throws while the session holds a key.
+    // A wrong PIN still throws while a key is in memory.
     storage.getScanXPrivKey.mockRejectedValue(new InvalidPasswdError());
     const other = makeHistoryTx({ shielded_outputs: [makeShieldedOutput()], outputs: [] });
     await expect(processShieldedOutputs(storage, other, provider, 'wrong')).rejects.toMatchObject({
       errorCode: 'shielded-wrong-pin',
     });
-    session.close();
   }, 30000);
 
   it('should skip output when rewind throws and log debug message', async () => {
@@ -638,11 +633,18 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
     } as any;
   }
 
-  function keysWith(derive: (index: number) => Buffer = () => Buffer.alloc(32, 7)) {
-    return {
-      getSource: jest.fn().mockResolvedValue({ derive: jest.fn(derive) }),
-      assertCurrent: jest.fn(),
-    };
+  /**
+   * A scan key getter. The key derives with `derive` (the child private key of
+   * each index), or is a real key when none is given: the mock provider does
+   * not depend on the key's bytes.
+   */
+  function scanKeyWith(derive?: (index: number) => Buffer) {
+    const key = derive
+      ? ({
+          deriveChild: (index: number) => ({ privateKey: { toBuffer: () => derive(index) } }),
+        } as unknown as HDPrivateKey)
+      : new HDPrivateKey();
+    return jest.fn(async () => key);
   }
 
   // Two transparent outputs, so shielded output s is at on-chain index 2 + s.
@@ -675,7 +677,7 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
         }),
     });
 
-    const outcome = await decodeShieldedOutputs(makeStorage(), tx, provider, keysWith());
+    const outcome = await decodeShieldedOutputs(makeStorage(), tx, provider, scanKeyWith());
 
     expect(outcome.decoded.map(output => output.index)).toEqual([2]);
     expect(outcome.locked).toEqual([]);
@@ -687,11 +689,8 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
   });
 
   it.each([
-    ['there is no key provider', () => null],
-    [
-      'no key is available',
-      () => ({ getSource: jest.fn().mockResolvedValue(null), assertCurrent: jest.fn() }),
-    ],
+    ['there is no scan key getter', () => null],
+    ['no key is available', () => jest.fn(async () => null)],
   ])('counts the outputs of the wallet as locked when %s', async (_name, makeKeys) => {
     const tx = makeTx([at('own0'), at('foreign'), at('own1')]);
 
@@ -704,25 +703,25 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
   });
 
   it('counts the outputs of the wallet as locked, and asks for no key, without a crypto provider', async () => {
-    const keys = keysWith();
+    const getScanKey = scanKeyWith();
     const tx = makeTx([at('own0'), at('foreign'), at('own1')]);
 
-    const outcome = await decodeShieldedOutputs(makeStorage(), tx, null, keys);
+    const outcome = await decodeShieldedOutputs(makeStorage(), tx, null, getScanKey);
 
     expect(outcome.locked).toEqual([2, 4]);
     expect(outcome.decoded).toEqual([]);
-    expect(keys.getSource).not.toHaveBeenCalled();
+    expect(getScanKey).not.toHaveBeenCalled();
   });
 
   it('asks for no key when no output is the wallet', async () => {
-    const keys = keysWith();
+    const getScanKey = scanKeyWith();
     const outcome = await decodeShieldedOutputs(
       makeStorage(),
       makeTx([at('foreign'), at('other')]),
       makeMockProvider(),
-      keys
+      getScanKey
     );
-    expect(keys.getSource).not.toHaveBeenCalled();
+    expect(getScanKey).not.toHaveBeenCalled();
     expect(outcome).toEqual({ decoded: [], locked: [], unreadable: [], error: [], failure: null });
   });
 
@@ -732,14 +731,14 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
       storage,
       makeTx([at('own0')]),
       makeMockProvider(),
-      keysWith()
+      scanKeyWith()
     );
     expect(outcome.unreadable).toEqual([2]);
   });
 
   it('zeroes the child key of an output whose fields cannot be read, and counts only it unreadable', async () => {
     const children: Buffer[] = [];
-    const keys = keysWith(() => {
+    const getScanKey = scanKeyWith(() => {
       const child = Buffer.alloc(32, 7);
       children.push(child);
       return child;
@@ -756,7 +755,7 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
         .mockResolvedValue({ value: 5n, blindingFactor: Buffer.alloc(32, 9) }),
     });
 
-    const outcome = await decodeShieldedOutputs(makeStorage(), tx, provider, keys);
+    const outcome = await decodeShieldedOutputs(makeStorage(), tx, provider, getScanKey);
 
     expect(children).toHaveLength(2);
     expect(children.every(child => child.equals(Buffer.alloc(32)))).toBe(true);
@@ -774,9 +773,9 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
           .fn()
           .mockResolvedValue({ value: 3n, blindingFactor: Buffer.alloc(32, 1) }),
       }),
-      keysWith(index => {
+      scanKeyWith(index => {
         if (index === 0) {
-          throw new Error('Invalid non-hardened index: 0');
+          throw new Error('Invalid child index: 0');
         }
         return Buffer.alloc(32, 7);
       })
@@ -787,10 +786,10 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
 
   it('reports an unexpected key failure on every output of the wallet', async () => {
     const failure = new Error('store read failed');
-    const keys = { getSource: jest.fn().mockRejectedValue(failure), assertCurrent: jest.fn() };
+    const getScanKey = jest.fn().mockRejectedValue(failure);
     const tx = makeTx([at('own0'), at('foreign'), at('own1')]);
 
-    const outcome = await decodeShieldedOutputs(makeStorage(), tx, makeMockProvider(), keys);
+    const outcome = await decodeShieldedOutputs(makeStorage(), tx, makeMockProvider(), getScanKey);
 
     expect(outcome.failure).toEqual({ cause: failure });
     expect(outcome.error).toEqual([2, 4]);
@@ -808,59 +807,28 @@ describe('decodeShieldedOutputs — what happens to each of the wallet outputs',
         return OWNED.includes(addr);
       }),
     });
-    const keys = keysWith();
+    const getScanKey = scanKeyWith();
     // own0 is the wallet's and foreign is not, both checked before the failure;
     // own1 and own2 are not checked.
     const tx = makeTx([at('own0'), at('foreign'), at('own1'), at('own2')]);
 
-    const outcome = await decodeShieldedOutputs(storage, tx, makeMockProvider(), keys);
+    const outcome = await decodeShieldedOutputs(storage, tx, makeMockProvider(), getScanKey);
 
     expect(outcome.failure).toEqual({ cause: failure });
     expect(outcome.error).toEqual([2, 4, 5]);
-    expect(keys.getSource).not.toHaveBeenCalled();
-  });
-
-  it('lets a closed session end the pass', async () => {
-    const keys = keysWith(() => {
-      throw new SessionClosedError();
-    });
-    const tx = makeTx([at('own0')]);
-    await expect(
-      decodeShieldedOutputs(makeStorage(), tx, makeMockProvider(), keys)
-    ).rejects.toBeInstanceOf(SessionClosedError);
-    expect(tx.shielded_outputs![0].value).toBeUndefined();
-  });
-
-  it('writes nothing when its session was closed while the outputs were decoded', async () => {
-    const keys = keysWith();
-    keys.assertCurrent.mockImplementation(() => {
-      throw new SessionClosedError();
-    });
-    const provider = makeMockProvider({
-      rewindAmountShieldedOutput: jest
-        .fn()
-        .mockResolvedValue({ value: 3n, blindingFactor: Buffer.alloc(32, 1) }),
-    });
-    const tx = makeTx([at('own0'), at('own1')]);
-
-    await expect(decodeShieldedOutputs(makeStorage(), tx, provider, keys)).rejects.toBeInstanceOf(
-      SessionClosedError
-    );
-
-    expect(provider.rewindAmountShieldedOutput).toHaveBeenCalledTimes(2);
-    expect(tx.shielded_outputs!.every(output => output.value === undefined)).toBe(true);
+    expect(getScanKey).not.toHaveBeenCalled();
   });
 
   it('skips the outputs a previous pass decoded', async () => {
     const decoded = at('own0', { value: 9n, token: NATIVE_TOKEN_UID } as any);
-    const keys = keysWith();
+    const getScanKey = scanKeyWith();
     const outcome = await decodeShieldedOutputs(
       makeStorage(),
       makeTx([decoded]),
       makeMockProvider(),
-      keys
+      getScanKey
     );
     expect(outcome).toEqual({ decoded: [], locked: [], unreadable: [], error: [], failure: null });
-    expect(keys.getSource).not.toHaveBeenCalled();
+    expect(getScanKey).not.toHaveBeenCalled();
   });
 });

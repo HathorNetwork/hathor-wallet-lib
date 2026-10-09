@@ -15,6 +15,7 @@ import type {
   IShieldedOutput,
   IDataShieldedOutput,
 } from './shielded/types';
+import type { ShieldedViewState } from './shielded/view';
 
 /**
  * Token version used to identify the type of token during the token creation process.
@@ -843,6 +844,15 @@ export interface IStorage {
   // until the history is processed again. Reset to null when a reload completes
   // with no skips.
   shieldedDecodeSkippedTxIds?: string[] | null;
+  // The wallet's scan private key (xpriv), in plain text: HathorWallet.start()
+  // decrypts it with the PIN and keeps it here until stop(), so the wallet
+  // decodes its shielded outputs without a PIN. It is never persisted; the
+  // spend key stays encrypted in the access data. Null while there is none.
+  scanXPrivKey: string | null;
+  // What the started wallet knows about its shielded view, besides the key:
+  // why it has no key, the integrity of the record's shielded keys, the sync
+  // mode, and its own shielded outputs left undecoded.
+  shieldedView: ShieldedViewState;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
   // Get the provider, or throw if it has not been configured. Confidential
   // code paths require it; a missing provider is a setup error, not a

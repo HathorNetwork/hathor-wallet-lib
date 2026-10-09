@@ -300,7 +300,6 @@ export type ShieldedCapabilityLevel = 'none' | 'watch' | 'view' | 'full';
  * Why the capability level is below `full`:
  * - `not-started`: the wallet is not started (before `start()`, after
  *   `stop()`, or after a failed start);
- * - `wallet-service`: the wallet-service facade has no shielded support;
  * - `multisig`: the wallet is multisig, whose shielded keys are
  *   single-signature keys;
  * - `integrity`: the record's shielded keys do not match each other, so they
@@ -318,7 +317,6 @@ export type ShieldedCapabilityLevel = 'none' | 'watch' | 'view' | 'full';
  */
 export type ShieldedCapabilityReason =
   | 'not-started'
-  | 'wallet-service'
   | 'multisig'
   | 'integrity'
   | 'needs-password'

@@ -9,7 +9,6 @@ import { IAddressChainOptions, IStorage, IWalletAccessData, WalletType } from '.
 import { ShieldedKeyError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import walletUtils from './wallet';
-import { shieldedSessionOf } from '../shielded/session';
 
 /**
  * Get the scan and spend xpubs the wallet's shielded chain is derived from, or
@@ -29,7 +28,7 @@ import { shieldedSessionOf } from '../shielded/session';
  * `HathorWallet.setShieldedCryptoProvider`). The loads in between continue from
  * the last loaded index. A storage without access data has no shielded chain.
  *
- * Nor has a wallet whose started session found the record's shielded keys
+ * Nor has a started wallet that found the record's shielded keys
  * inconsistent: the stored xpubs are not trusted, so nothing is derived from
  * them until the record is repaired.
  *
@@ -41,7 +40,7 @@ import { shieldedSessionOf } from '../shielded/session';
 export async function getShieldedChainXpubs(
   storage: IStorage
 ): Promise<{ scanXpubkey: string; spendXpubkey: string } | null> {
-  if (!storage.shieldedCryptoProvider || shieldedSessionOf(storage).integrity !== null) {
+  if (!storage.shieldedCryptoProvider || storage.shieldedView.integrity !== null) {
     return null;
   }
   const accessData = await storage.getAccessData();

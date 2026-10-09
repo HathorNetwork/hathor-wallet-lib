@@ -5,19 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
 import { IStorage, IHistoryTx, IHistoryShieldedOutput, ILogger } from '../types';
-import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, PRIVATE_KEY_SIZE_BYTES } from '../constants';
 import tokenUtils from '../utils/tokens';
 import { IShieldedCryptoProvider, IProcessedShieldedOutput, ShieldedOutputMode } from './types';
-import {
-  IScanKeyMaterial,
-  IScanKeySource,
-  SessionClosedError,
-  ShieldedUndecodedCounts,
-  deriveScanChildKey,
-  wipeScanKeyMaterial,
-} from './session';
-import { decryptScanKeyWithPin } from './keys';
+import type { ShieldedUndecodedCounts } from './view';
+import { ScanKeyOfPass, decryptScanXPrivKey, parseScanXPrivKey } from './scanKey';
 
 /**
  * Resolve the 32-byte hex token UID (NATIVE_TOKEN_UID_HEX for HTR) from an
@@ -51,22 +45,33 @@ export function resolveTokenUid(tokenData: number | undefined, tx: IHistoryTx): 
 }
 
 /**
- * Gives a decode pass the scan key it decodes with.
+ * Derive the per-address scan private key from an already-decrypted scan
+ * HDPrivateKey. The parent xpriv is unlocked once per pass by the caller; only
+ * the cheap per-address child derivation runs here.
+ *
+ * The scan key uses a separate account (m/44'/280'/1'/0) from legacy P2PKH (account 0').
+ * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
-export interface IScanKeyProvider {
-  /**
-   * The key source, or null when no key is available: the wallet's outputs
-   * are then counted locked. A pass asks for it only once it found an output of
-   * the wallet, so a tx without one never unlocks a key. An error it throws
-   * stops the pass (see {@link IShieldedDecodeOutcome.failure}).
-   */
-  getSource(): Promise<IScanKeySource | null>;
-  /**
-   * Throws SessionClosedError when what the pass decoded must not be written:
-   * the wallet session it belongs to was closed or opened again meanwhile. The
-   * pass calls it right before it writes the decoded fields in place.
-   */
-  assertCurrent(): void;
+function deriveScanChildPrivkey(
+  scanHdPrivKey: HDPrivateKey,
+  addressIndex: number,
+  logger: ILogger
+): Buffer | undefined {
+  try {
+    // Compliant BIP32 derivation, matching the scan PUBLIC key put into the
+    // shielded address (shieldedAddress.ts). Shielded keys are new — there is no
+    // legacy key material to stay bug-compatible with — so unlike the legacy
+    // P2PKH chain (still on deriveNonCompliantChild) they use the correct method.
+    const childKey = scanHdPrivKey.deriveChild(addressIndex);
+    // The native crypto provider (ECDH) needs raw private key bytes. Other
+    // wallet-lib code passes bitcore PrivateKey objects directly to bitcore
+    // signing functions, but here we cross into the native ct-crypto boundary.
+    // { size } ensures zero-padding for keys with leading zeros.
+    return childKey.privateKey.toBuffer({ size: PRIVATE_KEY_SIZE_BYTES });
+  } catch (e) {
+    logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
+    return undefined;
+  }
 }
 
 /**
@@ -188,7 +193,7 @@ async function decodeOwnedOutput(
   storage: IStorage,
   tx: IHistoryTx,
   cryptoProvider: IShieldedCryptoProvider,
-  source: IScanKeySource,
+  scanKey: HDPrivateKey,
   owned: IOwnedShieldedOutput
 ): Promise<IProcessedShieldedOutput | null> {
   const { output: shieldedOutput, address, absoluteIndex } = owned;
@@ -202,24 +207,9 @@ async function decodeOwnedOutput(
     return null;
   }
 
-  // Derive this address's scan private key (ECDH). The scan key uses its own
-  // account (m/44'/280'/1'/0), apart from the legacy P2PKH chain (account 0'),
-  // and the compliant BIP32 derivation that put its public key in the
-  // shielded address (shieldedAddress.ts).
-  let privkey: Buffer;
-  try {
-    privkey = source.derive(owned.addressIndex);
-  } catch (e) {
-    if (e instanceof SessionClosedError) {
-      throw e;
-    }
-    storage.logger.debug(
-      'Failed to derive the scan key of a shielded output for tx',
-      tx.tx_id,
-      'index',
-      absoluteIndex,
-      e
-    );
+  // Derive this address's scan private key (ECDH).
+  const privkey = deriveScanChildPrivkey(scanKey, owned.addressIndex, storage.logger);
+  if (!privkey) {
     return null;
   }
 
@@ -343,23 +333,24 @@ async function decodeOwnedOutput(
  * slots are left untouched, so the on-chain order is preserved and the
  * arithmetic resolver still lands on the right slot.
  *
- * It first finds the wallet's outputs, which takes no key, and asks `keys` for
- * a key source only when it found one. A failure of one output stays with that
- * output. An unexpected error, such as a failed store read, stops the pass and
- * is returned in the outcome's `failure` instead of being thrown. Only a
- * SessionClosedError is thrown: then nothing was written in place.
+ * It first finds the wallet's outputs, which takes no key, and asks
+ * `getScanKey` for the scan key only when it found one, so a tx without one
+ * never unlocks a key. Without a key or a crypto provider, the wallet's outputs
+ * are counted locked. A failure of one output stays with that output. An
+ * unexpected error, such as a failed store read, stops the pass and is returned
+ * in the outcome's `failure` instead of being thrown.
  *
  * @param storage The wallet storage
  * @param tx The transaction whose shielded outputs are decoded (mutated in place)
  * @param cryptoProvider The provider that rewinds outputs, or null when none is set
- * @param keys The provider of the scan key, or null when the wallet has none
+ * @param getScanKey Gives the scan key, or null when the wallet has none
  * @returns What happened to each of the wallet's outputs
  */
 export async function decodeShieldedOutputs(
   storage: IStorage,
   tx: IHistoryTx,
   cryptoProvider: IShieldedCryptoProvider | null,
-  keys: IScanKeyProvider | null
+  getScanKey: ScanKeyOfPass | null
 ): Promise<IShieldedDecodeOutcome> {
   const outcome: IShieldedDecodeOutcome = {
     decoded: [],
@@ -411,15 +402,15 @@ export async function decodeShieldedOutputs(
       return outcome;
     }
 
-    const source = cryptoProvider && keys ? await keys.getSource() : null;
-    if (!cryptoProvider || !source) {
+    const scanKey = cryptoProvider && getScanKey ? await getScanKey() : null;
+    if (!cryptoProvider || !scanKey) {
       outcome.locked = owned.map(slot => slot.absoluteIndex);
       return outcome;
     }
 
     const recovered: Array<{ slot: IOwnedShieldedOutput; decoded: IProcessedShieldedOutput }> = [];
     for (const slot of owned) {
-      const decoded = await decodeOwnedOutput(storage, tx, cryptoProvider, source, slot);
+      const decoded = await decodeOwnedOutput(storage, tx, cryptoProvider, scanKey, slot);
       if (decoded) {
         recovered.push({ slot, decoded });
       } else {
@@ -427,20 +418,11 @@ export async function decodeShieldedOutputs(
       }
       pending.delete(slot.absoluteIndex);
     }
-    // A store can hand out the very objects it keeps, so writing in place is
-    // a write to the store. It happens in the same tick as the check that the
-    // wallet session is still the one the pass started in.
-    if (recovered.length > 0) {
-      keys!.assertCurrent();
-    }
     for (const { slot, decoded } of recovered) {
       writeDecodedOutput(slot.output, decoded);
       outcome.decoded.push(decoded);
     }
   } catch (e) {
-    if (e instanceof SessionClosedError) {
-      throw e;
-    }
     outcome.error = [...pending];
     outcome.failure = { cause: e };
   }
@@ -452,9 +434,9 @@ export async function decodeShieldedOutputs(
  *
  * Decodes the wallet's own shielded outputs with the scan key `pinCode`
  * decrypts, writing the recovered fields IN PLACE on `tx.shielded_outputs`, as
- * {@link decodeShieldedOutputs} does. It does not use the wallet's shielded
- * session: the key is decrypted with the PIN for this call, only once it found
- * an output of the wallet, and zeroed before it returns.
+ * {@link decodeShieldedOutputs} does. It does not use the scan key the wallet
+ * keeps in memory: the key is decrypted with the PIN for this call, only once it
+ * found an output of the wallet.
  *
  * The returned report lists the slots that were decoded (absolute on-chain
  * index `tx.outputs.length + s`), for callers that want the result without
@@ -478,26 +460,12 @@ export async function processShieldedOutputs(
   cryptoProvider: IShieldedCryptoProvider,
   pinCode: string
 ): Promise<IProcessedShieldedOutput[]> {
-  const unlocked: { material: IScanKeyMaterial | null } = { material: null };
-  const keys: IScanKeyProvider = {
-    getSource: async () => {
-      const material = await decryptScanKeyWithPin(storage, pinCode);
-      unlocked.material = material;
-      return { derive: (index: number) => deriveScanChildKey(material, index) };
-    },
-    // This call is bound to no wallet session.
-    assertCurrent: () => undefined,
-  };
-  try {
-    const outcome = await decodeShieldedOutputs(storage, tx, cryptoProvider, keys);
-    if (outcome.failure) {
-      throw outcome.failure.cause;
-    }
-    logUndecodedOutputs(storage.logger, `tx ${tx.tx_id}`, undecodedCountsOf(outcome));
-    return outcome.decoded;
-  } finally {
-    if (unlocked.material) {
-      wipeScanKeyMaterial(unlocked.material);
-    }
+  const outcome = await decodeShieldedOutputs(storage, tx, cryptoProvider, async () =>
+    parseScanXPrivKey(await decryptScanXPrivKey(storage, pinCode))
+  );
+  if (outcome.failure) {
+    throw outcome.failure.cause;
   }
+  logUndecodedOutputs(storage.logger, `tx ${tx.tx_id}`, undecodedCountsOf(outcome));
+  return outcome.decoded;
 }

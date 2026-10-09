@@ -9,7 +9,6 @@ import { ShieldedKeyError, ShieldedKeyErrorCode } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { HistorySyncMode, IStorage, WALLET_FLAGS, WalletType } from '../types';
 import walletUtils from '../utils/wallet';
-import { shieldedSessionOf } from './session';
 import type {
   IShieldedCapability,
   ShieldedCapabilityCause,
@@ -20,7 +19,7 @@ import type {
 /** The reasons a level below `view` can have. */
 type ShieldedAddressRefusalReason = Exclude<ShieldedCapabilityReason, 'no-spend-authority'>;
 
-/** The causes of a session that holds no scan key. */
+/** The causes of a wallet that holds no scan key. */
 const LOCK_CAUSES: ReadonlySet<ShieldedCapabilityCause> = new Set<ShieldedCapabilityCause>([
   'not-supplied',
   'wrong-pin',
@@ -43,10 +42,6 @@ const ADDRESS_REFUSALS: Record<
   'not-started': {
     code: ErrorMessages.SHIELDED_NOT_STARTED,
     message: 'The wallet is not started, so it gives no shielded address.',
-  },
-  'wallet-service': {
-    code: ErrorMessages.SHIELDED_NOT_SUPPORTED,
-    message: 'The wallet-service facade does not support shielded addresses.',
   },
   multisig: {
     code: ErrorMessages.SHIELDED_MULTISIG,
@@ -102,17 +97,13 @@ const ADDRESS_REFUSALS: Record<
  *    `no-spend-authority`;
  * 8. otherwise: `full`.
  *
- * The wallet-service facade reports `none`, `wallet-service` by itself.
- *
  * @param storage The wallet storage
  */
 export async function computeShieldedCapability(storage: IStorage): Promise<IShieldedCapability> {
   const accessData = await storage.getAccessData();
-  const session = shieldedSessionOf(storage);
-  const canSpend = storage.hasTxSignatureMethod()
-    ? session.spendSigner
-    : !!accessData?.spendMainKey;
-  const polling = session.syncMode === HistorySyncMode.POLLING_HTTP_API;
+  const view = storage.shieldedView;
+  const canSpend = storage.hasTxSignatureMethod() ? view.spendSigner : !!accessData?.spendMainKey;
+  const polling = view.syncMode === HistorySyncMode.POLLING_HTTP_API;
   const capability = (
     level: ShieldedCapabilityLevel,
     reason: ShieldedCapabilityReason | null,
@@ -123,22 +114,22 @@ export async function computeShieldedCapability(storage: IStorage): Promise<IShi
     cause,
     canReceive: (level === 'view' || level === 'full') && polling,
     canSpend,
-    historyComplete: level !== 'none' && polling && !session.discoveryCapped,
-    undecoded: session.undecodedSummary(),
+    historyComplete: level !== 'none' && polling && !view.discoveryCapped,
+    undecoded: view.undecodedSummary(),
   });
 
-  if (!session.active) {
+  if (!view.started) {
     return capability('none', 'not-started');
   }
   if (accessData?.walletType === WalletType.MULTISIG) {
     return capability('none', 'multisig');
   }
-  if (session.integrity !== null) {
-    return capability('none', 'integrity', session.integrity);
+  if (view.integrity !== null) {
+    return capability('none', 'integrity', view.integrity);
   }
   if (!walletUtils.hasShieldedXpubs(accessData)) {
     if (accessData?.words && accessData.mainKey) {
-      const { cause } = session;
+      const { cause } = view;
       return capability(
         'none',
         'needs-password',
@@ -153,10 +144,10 @@ export async function computeShieldedCapability(storage: IStorage): Promise<IShi
   if (!storage.shieldedCryptoProvider) {
     return capability('none', 'no-provider');
   }
-  if (!session.hasKey) {
+  if (storage.scanXPrivKey === null) {
     // A record that got its shielded keys after a failed migration was never
     // unlocked: its key was not supplied.
-    const { cause } = session;
+    const { cause } = view;
     return capability(
       'watch',
       'locked',

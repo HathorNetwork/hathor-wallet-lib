@@ -44,8 +44,7 @@ import {
   IAddressChainOptions,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
-import { assertNoPrivateKeyMaterial } from '../shielded/keys';
-import { shieldedSessionOf } from '../shielded/session';
+import { ShieldedViewState } from '../shielded/view';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -227,6 +226,13 @@ export class Storage implements IStorage {
   // processHistory when some owned shielded txs could not be decoded.
   shieldedDecodeSkippedTxIds?: string[] | null;
 
+  // See IStorage.scanXPrivKey: the scan private key, in plain text, from
+  // start() until stop().
+  scanXPrivKey: string | null;
+
+  // See IStorage.shieldedView.
+  shieldedView: ShieldedViewState;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -250,6 +256,8 @@ export class Storage implements IStorage {
     this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
+    this.scanXPrivKey = null;
+    this.shieldedView = new ShieldedViewState();
     this.logger = getDefaultLogger();
   }
 
@@ -322,7 +330,7 @@ export class Storage implements IStorage {
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
-    shieldedSessionOf(this).setSpendSigner(false);
+    this.shieldedView.spendSigner = false;
   }
 
   /**
@@ -653,8 +661,8 @@ export class Storage implements IStorage {
   /**
    * Process the transaction history to calculate the metadata.
    * @param pinCode The PIN that unlocks the scan key, once for the whole
-   *   history, to decode the wallet's shielded outputs while the shielded
-   *   session holds no key. The session's key is used when it holds one.
+   *   history, to decode the wallet's shielded outputs while no scan key is in
+   *   memory (`scanXPrivKey`). The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processHistory(pinCode?: string): Promise<void> {
@@ -669,8 +677,8 @@ export class Storage implements IStorage {
    * Process the transaction history to calculate the metadata.
    * @param tx The transaction to process
    * @param pinCode The PIN that unlocks the scan key to decode the wallet's
-   *   shielded outputs of `tx` while the shielded session holds no key. The
-   *   session's key is used when it holds one.
+   *   shielded outputs of `tx` while no scan key is in memory (`scanXPrivKey`).
+   *   The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
@@ -1145,17 +1153,10 @@ export class Storage implements IStorage {
   /**
    * Save the access data, initializing the wallet.
    *
-   * The access data is persisted as it is, so a record with private key
-   * material in the clear in a top-level field (an HDPrivateKey, a Buffer, a
-   * string that is or starts like an extended private key, or an object that
-   * holds buffers) is refused and nothing is written. Encrypted keys and public
-   * strings are saved as before.
-   *
    * @param {IWalletAccessData} data The wallet access data
    * @returns {Promise<void>}
    */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
-    assertNoPrivateKeyMaterial(data);
     return this.store.saveAccessData(data);
   }
 
@@ -1336,12 +1337,11 @@ export class Storage implements IStorage {
     // The addresses loadAddresses derived belong to this wallet session. Drop
     // them before anything that can throw.
     clearDerivedAddressCache(this);
-    // The shielded session ends with the wallet, whatever the options, before
-    // any step below can throw or await. A start() on this storage while those
-    // steps await, by the next wallet that uses it, keeps the session it opens.
-    // cleanStorage does not end the session: a reconnect cleans the storage of
-    // a running wallet.
-    shieldedSessionOf(this).close();
+    // The scan key in memory and the shielded view end with the wallet, whatever
+    // the options, before any step below can throw or await.
+    this.scanXPrivKey = null;
+    this.shieldedView.started = false;
+    this.shieldedView.reset();
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -1350,10 +1350,8 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses || cleanTokens) {
-      // A tx that passed its last check of the session before it was closed
-      // is still being credited. The clean waits for it, so it removes what
-      // the tx writes. A tx whose processing starts after the close writes
-      // nothing.
+      // A tx still being credited when the wallet stopped is waited for, so
+      // the clean removes what it writes.
       await txProcessingSettled(this);
       await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }

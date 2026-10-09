@@ -75,13 +75,7 @@ import {
   CreateTokenOptionsInput,
 } from './types';
 import { OutputKind } from '../shielded/types';
-import type {
-  ChangeOutputMode,
-  IShieldedCapability,
-  IShieldedCryptoProvider,
-  IShieldedUnlockResult,
-  ShieldedViewKeyInput,
-} from '../shielded/types';
+import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
   UtxoError,
@@ -92,7 +86,6 @@ import {
   PinRequiredError,
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
-  ShieldedKeyError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
@@ -120,10 +113,8 @@ import {
   TokenVersion,
   SCANNING_POLICY,
   WalletAddressMode,
-  IAddressChainOptions,
 } from '../types';
 import { Fee } from '../utils/fee';
-import { shieldedAddressError } from '../shielded/capability';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -149,19 +140,6 @@ enum walletState {
   NOT_STARTED = 'Not started',
   LOADING = 'Loading',
   READY = 'Ready',
-}
-
-/**
- * Refuse a request for the shielded chain (`opts.legacy` false): this facade
- * has none, and answering with legacy addresses would hand out an address of
- * the wrong kind.
- *
- * @throws {ShieldedKeyError} `shielded-not-supported`
- */
-function refuseShieldedChain(opts?: IAddressChainOptions): void {
-  if (opts?.legacy === false) {
-    throw shieldedAddressError('wallet-service');
-  }
 }
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
@@ -955,14 +933,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get all addresses of the wallet
    *
-   * @param [opts.legacy] false for the shielded chain, which this facade does not have
-   * @throws {ShieldedKeyError} `shielded-not-supported` for the shielded chain
-   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject> {
-    refuseShieldedChain(opts);
+  async *getAllAddresses(): AsyncGenerator<GetAddressesObject> {
     this.failIfWalletNotReady();
     const data = await walletApi.getAddresses(this);
     for (const address of data.addresses) {
@@ -1721,15 +1695,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get address at specific index
    *
-   * @param index The derivation index
-   * @param [opts.legacy] false for the shielded chain, which this facade does not have
-   * @throws {ShieldedKeyError} `shielded-not-supported` for the shielded chain
-   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
-    refuseShieldedChain(opts);
+  async getAddressAtIndex(index: number): Promise<string> {
     const { addresses } = await walletApi.getAddresses(this, index);
 
     if (addresses.length <= 0) {
@@ -1778,19 +1747,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the current address to be used
    *
-   * @param [options.markAsUsed] Whether to mark the address as used
-   * @param [opts.legacy] false for the shielded chain, which this facade does not have
-   * @throws {ShieldedKeyError} `shielded-not-supported` for the shielded chain
-   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getCurrentAddress(
-    // eslint-disable-next-line default-param-last
-    { markAsUsed = false } = {},
-    opts?: IAddressChainOptions
-  ): AddressInfoObject {
-    refuseShieldedChain(opts);
+  getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
     if (this.singleAddress) {
       return this.newAddresses[0];
     }
@@ -1841,14 +1801,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the next address after the current available
    *
-   * @param [opts.legacy] false for the shielded chain, which this facade does not have
-   * @throws {ShieldedKeyError} `shielded-not-supported` for the shielded chain
-   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getNextAddress(opts?: IAddressChainOptions): AddressInfoObject {
-    refuseShieldedChain(opts);
+  getNextAddress(): AddressInfoObject {
     if (this.singleAddress) {
       return this.newAddresses[0];
     }
@@ -2104,46 +2060,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void {
     // Shielded outputs are not supported on the wallet-service backend.
     throw new WalletError('Not implemented.');
-  }
-
-  /**
-   * What the wallet can do with shielded outputs: nothing, since the
-   * wallet-service backend does not support them. The level is `none`, for the
-   * reason `wallet-service`.
-   */
-  // eslint-disable-next-line class-methods-use-this
-  async getShieldedCapability(): Promise<IShieldedCapability> {
-    return {
-      level: 'none',
-      reason: 'wallet-service',
-      cause: null,
-      canReceive: false,
-      canSpend: false,
-      historyComplete: false,
-      undecoded: { txIds: [], locked: 0, unreadable: 0, error: 0 },
-    };
-  }
-
-  /**
-   * Not supported: the wallet-service backend does not support shielded
-   * outputs, so this facade has no shielded view key.
-   *
-   * @throws {ShieldedKeyError} `shielded-not-supported`
-   */
-  /* eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars */
-  async unlockShieldedView(input: ShieldedViewKeyInput): Promise<IShieldedUnlockResult> {
-    throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_SUPPORTED, 'Not implemented.');
-  }
-
-  /**
-   * Not supported: the wallet-service backend does not support shielded
-   * outputs, so this facade has none to process.
-   *
-   * @throws {ShieldedKeyError} `shielded-not-supported`
-   */
-  // eslint-disable-next-line class-methods-use-this
-  async reprocessShieldedOutputs(): Promise<IShieldedCapability> {
-    throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_SUPPORTED, 'Not implemented.');
   }
 
   /**

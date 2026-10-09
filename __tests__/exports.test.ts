@@ -725,10 +725,9 @@ describe('type-only exports compile correctly', () => {
 describe('internal shielded view helpers', () => {
   it('are not exported', () => {
     for (const name of [
-      'shieldedSessionOf',
-      'ShieldedSession',
-      'SessionClosedError',
-      'classifyExtendedKey',
+      'ShieldedViewState',
+      'unlockScanXPrivKey',
+      'scanKeyOfPass',
       'decodeShieldedOutputs',
       'computeShieldedCapability',
     ]) {
