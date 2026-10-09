@@ -2986,6 +2986,181 @@ describe('history rewrites on newTxPromise', () => {
     await hWallet.stop();
   });
 
+  describe('a voided-flag change, which processes the whole history again', () => {
+    /**
+     * A READY wallet that already processed tx A, with processNewTx recording
+     * the txs it gets and processHistory held at a gate the test opens.
+     */
+    async function walletAboutToReprocess() {
+      const hWallet = makeWallet(makeConn());
+      jest.spyOn(hWallet, 'syncHistory').mockResolvedValue(undefined);
+      await hWallet.start();
+      await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+      await until(() => hWallet.isReady(), 'the first walk');
+
+      const processed: string[] = [];
+      jest.spyOn(hWallet.storage, 'processNewTx').mockImplementation(async tx => {
+        processed.push(tx.tx_id);
+      });
+      hWallet.handleWebsocketMsg(message(txPaying(TX_A, FOREIGN_ADDRESS)));
+      await until(() => processed.length === 1, 'tx A');
+      await hWallet.newTxPromise;
+
+      const reprocess = gate();
+      let duringReprocess: { ready: boolean; state: unknown } | null = null;
+      let rebuildFails = false;
+      const processHistorySpy = jest
+        .spyOn(hWallet.storage, 'processHistory')
+        .mockImplementation(async () => {
+          duringReprocess = { ready: hWallet.isReady(), state: hWallet.state };
+          await reprocess.opened;
+          if (rebuildFails) {
+            throw new Error('the rebuild failed');
+          }
+        });
+      const voidTxA = () =>
+        hWallet.handleWebsocketMsg(
+          message({ ...txPaying(TX_A, FOREIGN_ADDRESS), is_voided: true })
+        );
+      return {
+        hWallet,
+        processed,
+        reprocess,
+        processHistorySpy,
+        voidTxA,
+        during: () => duringReprocess,
+        failTheRebuild: () => {
+          rebuildFails = true;
+        },
+      };
+    }
+
+    it('reports PROCESSING while it runs, then READY', async () => {
+      const { hWallet, reprocess, processHistorySpy, voidTxA, during } =
+        await walletAboutToReprocess();
+      const states: unknown[] = [];
+      hWallet.on('state', state => states.push(state));
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      reprocess.open();
+      await hWallet.newTxPromise;
+
+      expect(during()).toEqual({ ready: false, state: HathorWallet.PROCESSING });
+      expect(states).toEqual([HathorWallet.PROCESSING, HathorWallet.READY]);
+      // No walk was started on top of it.
+      expect(processHistorySpy).toHaveBeenCalledTimes(1);
+      expect(hWallet.isReady()).toBe(true);
+      await hWallet.stop();
+    });
+
+    it('processes a message that arrives meanwhile right after it, without a reconnect', async () => {
+      const { hWallet, processed, reprocess, voidTxA, during } = await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      hWallet.handleWebsocketMsg(message(txPaying(TX_B, FOREIGN_ADDRESS)));
+      reprocess.open();
+
+      await until(() => processed.includes(TX_B), 'tx B');
+      await hWallet.newTxPromise;
+      expect(processed).toEqual([TX_A, TX_B]);
+      expect(hWallet.wsTxQueue.size()).toBe(0);
+      expect(hWallet.isReady()).toBe(true);
+      expect((await hWallet.storage.getTx(TX_B))?.processingStatus).toBe(
+        TxHistoryProcessingStatus.FINISHED
+      );
+      await hWallet.stop();
+    });
+
+    it('leaves the state to a stop() that comes meanwhile', async () => {
+      const { hWallet, reprocess, voidTxA, during } = await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      const stopping = hWallet.stop();
+      reprocess.open();
+      await stopping;
+      await hWallet.newTxPromise;
+
+      expect(hWallet.state).toBe(HathorWallet.CLOSED);
+    });
+
+    it('leaves the state to a reconnect that comes meanwhile', async () => {
+      const { hWallet, reprocess, voidTxA, during } = await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      const reload = gate();
+      jest.spyOn(hWallet, 'reloadStorage').mockImplementation(() => reload.opened);
+      const reconnecting = hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+      expect(hWallet.state).toBe(HathorWallet.SYNCING);
+      reprocess.open();
+      await hWallet.newTxPromise;
+
+      // The reconnect owns the state: the reprocess did not put READY over it.
+      expect(hWallet.state).toBe(HathorWallet.SYNCING);
+      reload.open();
+      await reconnecting;
+      await until(() => hWallet.isReady(), 'the walk of the reconnect');
+      await hWallet.stop();
+    });
+
+    it('leaves the state, and the parked messages, to a disconnect that comes meanwhile', async () => {
+      const { hWallet, processed, reprocess, voidTxA, during } = await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      await hWallet.onConnectionChangedState(ConnectionState.CONNECTING);
+      hWallet.handleWebsocketMsg(message(txPaying(TX_B, FOREIGN_ADDRESS)));
+      reprocess.open();
+      await hWallet.newTxPromise;
+
+      expect(hWallet.state).toBe(HathorWallet.CONNECTING);
+      // The next connection's walk processes it.
+      expect(hWallet.wsTxQueue.size()).toBe(1);
+      expect(processed).toEqual([TX_A]);
+      await hWallet.stop();
+    });
+
+    it('reports ERROR when the rebuild fails, and leaves the parked messages to the next walk', async () => {
+      const { hWallet, processed, reprocess, voidTxA, during, failTheRebuild } =
+        await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      hWallet.handleWebsocketMsg(message(txPaying(TX_B, FOREIGN_ADDRESS)));
+      failTheRebuild();
+      reprocess.open();
+      await hWallet.newTxPromise;
+
+      expect(hWallet.state).toBe(HathorWallet.ERROR);
+      expect(hWallet.isReady()).toBe(false);
+      expect(hWallet.wsTxQueue.size()).toBe(1);
+      expect(processed).toEqual([TX_A]);
+      await hWallet.stop();
+    });
+
+    it('rebuilds and returns to READY when a state listener throws', async () => {
+      const { hWallet, reprocess, processHistorySpy, voidTxA, during } =
+        await walletAboutToReprocess();
+      hWallet.on('state', state => {
+        if (state === HathorWallet.PROCESSING) {
+          throw new Error('a listener failed');
+        }
+      });
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      reprocess.open();
+      await hWallet.newTxPromise;
+
+      expect(processHistorySpy).toHaveBeenCalledTimes(1);
+      expect(hWallet.isReady()).toBe(true);
+      await hWallet.stop();
+    });
+  });
+
   it('every message parked during a sync and its walk is processed once, before READY', async () => {
     const hWallet = makeWallet(makeConn());
     const sync = gate();
