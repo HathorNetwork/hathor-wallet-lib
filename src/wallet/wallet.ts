@@ -25,7 +25,11 @@ import {
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
-import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
+import {
+  deriveAddressFromXPubP2PKH,
+  fetchVerifiedExternalPrivateKey,
+  toOnChainAddress,
+} from '../utils/address';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -79,7 +83,7 @@ import {
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
 } from './types';
-import { OutputKind } from '../shielded/types';
+import { ShieldedOutputMode } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
@@ -93,6 +97,7 @@ import {
   HasTxOutsideFirstAddressError,
   ShieldedNotEnabledError,
 } from '../errors';
+import { assertChangeShieldedMode } from '../new/sendTransaction';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
 import {
@@ -1781,18 +1786,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
     }
-    // This wallet builds no shielded outputs, so its change is always
-    // transparent: refuse any other change mode rather than ignore it.
     const { changeShieldedMode } = options;
-    if (
-      changeShieldedMode !== undefined &&
-      changeShieldedMode !== null &&
-      changeShieldedMode !== OutputKind.TRANSPARENT
-    ) {
-      throw new SendTxError(
-        `Unsupported changeShieldedMode '${String(changeShieldedMode)}': the wallet service ` +
-          'only supports OutputKind.TRANSPARENT.'
-      );
+    if (!this.shieldedEnabled) {
+      // Without shielded keys the wallet neither builds nor receives shielded
+      // outputs: refuse them rather than send transparently.
+      if (outputs.some(output => 'shielded' in output && output.shielded)) {
+        this.failIfShieldedNotEnabled();
+      }
+      if (
+        changeShieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED ||
+        changeShieldedMode === ShieldedOutputMode.FULLY_SHIELDED
+      ) {
+        this.failIfShieldedNotEnabled();
+      }
+      // This path does not run the send engine, which checks the mode itself
+      assertChangeShieldedMode(changeShieldedMode);
     }
     const newOptions = {
       inputs: [],
@@ -1812,10 +1820,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const sendTransactionOutputs = outputs.map(output => {
-      const typedOutput = output as OutputSendTransaction;
+      const typedOutput = { ...output } as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
         typedOutput.value = 1n;
         typedOutput.token = NATIVE_TOKEN_UID;
+      } else if (!this.shieldedEnabled && !typedOutput.shielded) {
+        // This path builds the scripts itself: a transparent output to a
+        // shielded address pays the spend address it embeds
+        typedOutput.address = toOnChainAddress(typedOutput.address!, this.network);
+        typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address, this.network);
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
       }
@@ -1827,6 +1840,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputs,
       changeAddress,
       pin,
+      changeShieldedMode,
     });
     return sendTransaction;
   }
@@ -2030,6 +2044,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.indexToUse += 1;
     }
     return addressInfo;
+  }
+
+  /**
+   * How many unused shielded addresses the wallet-service handed this wallet,
+   * i.e. addresses it can still give out to receive shielded outputs.
+   */
+  getUnusedShieldedAddressCount(): number {
+    return this.newShieldedAddresses.length;
   }
 
   /**
@@ -2315,7 +2337,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns Promise that resolves with address details including index, transactions count, and seqnum
    */
   async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
-    const addressDetails = await walletApi.getAddressDetails(this, this.toOnChainAddress(address));
+    const addressDetails = await walletApi.getAddressDetails(
+      this,
+      toOnChainAddress(address, this.network)
+    );
     return addressDetails.data;
   }
 
@@ -2367,7 +2392,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // The wallet-service knows shielded addresses by their on-chain spend
     // address; the result is keyed by the addresses the caller passed.
-    const onChain = addresses.map(address => this.toOnChainAddress(address));
+    const onChain = addresses.map(address => toOnChainAddress(address, this.network));
     const response = await walletApi.checkAddressesMine(this, onChain);
 
     const result: WalletAddressMap = {};
@@ -2377,22 +2402,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     });
     return result;
-  }
-
-  /**
-   * Map a shielded address to the on-chain spend address its outputs are
-   * locked to. Other addresses, including malformed ones, are returned as is.
-   */
-  private toOnChainAddress(address: string): string {
-    try {
-      const addressObj = new Address(address, { network: this.network });
-      if (addressObj.isShielded()) {
-        return addressObj.getSpendAddress().base58;
-      }
-    } catch (_e) {
-      // Not a shielded address we can parse: let the wallet-service decide
-    }
-    return address;
   }
 
   /**

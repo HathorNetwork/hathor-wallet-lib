@@ -11,6 +11,7 @@ import Input from '../models/input';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
+import { deriveShieldedAddress } from '../utils/shieldedAddress';
 
 /**
  * Storage proxy that implements missing storage methods for wallet service
@@ -98,6 +99,9 @@ export class WalletServiceStorageProxy {
     }
 
     return {
+      ...((await this.isShieldedSpendAddress(addressDetails.address, addressDetails.index))
+        ? { addressType: 'shielded-spend' as const }
+        : {}),
       bip32AddressIndex: addressDetails.index,
       base58: addressDetails.address,
       seqnum: addressDetails.seqnum,
@@ -107,6 +111,31 @@ export class WalletServiceStorageProxy {
       // to implement an API to fetch the balance for all tokens given an address
       balance: new Map(),
     };
+  }
+
+  /**
+   * Whether an address is the wallet's shielded spend address at an index, so
+   * signing uses the spend key. The wallet-service does not say which chain an
+   * address index belongs to, so the spend address is derived to compare.
+   */
+  private async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
+    if (!this.wallet.isShieldedEnabled()) {
+      return false;
+    }
+    const [scanXpub, spendXpub] = await Promise.all([
+      this.originalStorage.getScanXPubKey(),
+      this.originalStorage.getSpendXPubKey(),
+    ]);
+    if (!scanXpub || !spendXpub) {
+      return false;
+    }
+    const { spendAddress } = deriveShieldedAddress(
+      scanXpub,
+      spendXpub,
+      index,
+      this.wallet.network.name
+    );
+    return spendAddress === address;
   }
 
   /**
@@ -157,7 +186,7 @@ export class WalletServiceStorageProxy {
   private async getTx(txId: string) {
     try {
       const fullTxResponse = await this.wallet.getFullTxById(txId);
-      const result = this.convertFullNodeToHistoryTx(fullTxResponse);
+      const result = convertFullNodeToHistoryTx(fullTxResponse);
       return result;
     } catch (error) {
       return null;
@@ -177,51 +206,50 @@ export class WalletServiceStorageProxy {
       throw new Error('Current address is not loaded');
     }
   }
+}
 
-  /**
-   * Convert FullNodeTxResponse to IHistoryTx format
-   * This bridges the gap between full node API format and wallet storage format
-   */
-  // eslint-disable-next-line class-methods-use-this
-  private convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
-    const { tx, meta } = fullTxResponse;
+/**
+ * Convert FullNodeTxResponse to IHistoryTx format
+ * This bridges the gap between full node API format and wallet storage format
+ */
+export function convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): IHistoryTx {
+  const { tx, meta } = fullTxResponse;
 
-    // SEPARATED model: `outputs[]` is transparent-only. The dedicated
-    // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
-    // threaded through unchanged so shielded spends can still resolve their
-    // parent slots via getUtxo/resolveSpentOutput.
-    const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
-      .shielded_outputs;
+  // SEPARATED model: `outputs[]` is transparent-only. The dedicated
+  // `shielded_outputs[]` field (passthrough — not on the FullNodeTx type) is
+  // threaded through unchanged so shielded spends can still resolve their
+  // parent slots via getUtxo/resolveSpentOutput.
+  const shieldedOutputs = (tx as { shielded_outputs?: IHistoryTx['shielded_outputs'] })
+    .shielded_outputs;
 
-    return {
-      tx_id: tx.hash,
-      signalBits: 0, // Default value since fullnode tx doesn't include signal bits
-      version: tx.version,
-      weight: tx.weight,
-      timestamp: tx.timestamp,
-      is_voided: meta.voided_by.length > 0,
-      nonce: Number.parseInt(tx.nonce ?? '0', 10),
-      inputs: tx.inputs.map(input => ({
-        ...input,
-        decoded: {
-          ...input.decoded,
-          type: input.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['inputs'],
-      outputs: tx.outputs.map(output => ({
-        ...output,
-        decoded: {
-          ...output.decoded,
-          type: output.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['outputs'],
-      parents: tx.parents,
-      tokens: tx.tokens.map(token => token.uid),
-      height: meta.height,
-      first_block: meta.first_block,
-      token_name: tx.token_name ?? undefined,
-      token_symbol: tx.token_symbol ?? undefined,
-      ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
-    };
-  }
+  return {
+    tx_id: tx.hash,
+    signalBits: 0, // Default value since fullnode tx doesn't include signal bits
+    version: tx.version,
+    weight: tx.weight,
+    timestamp: tx.timestamp,
+    is_voided: meta.voided_by.length > 0,
+    nonce: Number.parseInt(tx.nonce ?? '0', 10),
+    inputs: tx.inputs.map(input => ({
+      ...input,
+      decoded: {
+        ...input.decoded,
+        type: input.decoded.type ?? undefined,
+      },
+    })) as IHistoryTx['inputs'],
+    outputs: tx.outputs.map(output => ({
+      ...output,
+      decoded: {
+        ...output.decoded,
+        type: output.decoded.type ?? undefined,
+      },
+    })) as IHistoryTx['outputs'],
+    parents: tx.parents,
+    tokens: tx.tokens.map(token => token.uid),
+    height: meta.height,
+    first_block: meta.first_block,
+    token_name: tx.token_name ?? undefined,
+    token_symbol: tx.token_symbol ?? undefined,
+    ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
+  };
 }

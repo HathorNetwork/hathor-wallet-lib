@@ -25,7 +25,11 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
-import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
+import type {
+  ChangeOutputMode,
+  IShieldedCryptoProvider,
+  ShieldedOutputMode,
+} from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -296,8 +300,8 @@ export interface GetTxOutputsOptions {
   maxOutputs?: number;
   addresses?: string[] | null;
   totalAmount?: OutputValueType;
-  smallerThan?: number;
-  biggerThan?: number;
+  smallerThan?: number | string; // a string carries values beyond Number.MAX_SAFE_INTEGER
+  biggerThan?: number | string;
   count?: number;
   ignoreLocked?: boolean;
   txId?: string;
@@ -322,6 +326,7 @@ export interface TransparentUtxo {
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
   addressPath: string; // path to generate output address
+  txProposalId?: string | null; // tx proposal holding this output, if any
 }
 
 interface ShieldedUtxoBase extends Omit<TransparentUtxo, 'kind'> {
@@ -371,6 +376,7 @@ export interface OutputRequestObj {
   value: OutputValueType; // output value
   token: string; // output token
   timelock?: number | null; // output timelock
+  shielded?: ShieldedOutputMode; // send to the shielded address in this mode
 }
 
 export interface DataScriptOutputRequestObj {
@@ -386,6 +392,7 @@ export interface OutputSendTransaction {
   address?: string; // output address. required for p2pkh or p2sh
   timelock?: number | null; // output timelock
   data?: string; // data to store in the output script. required for data script.
+  shielded?: ShieldedOutputMode; // shielded output mode, for a shielded address
 }
 
 export interface InputRequestObj {

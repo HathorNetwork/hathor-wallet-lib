@@ -20,6 +20,7 @@ import {
   deriveAddressP2SH,
   getAddressFromPubkey,
   fetchVerifiedExternalPrivateKey,
+  toOnChainAddress,
 } from '../../src/utils/address';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 
@@ -340,5 +341,32 @@ describe('fetchVerifiedExternalPrivateKey', () => {
     await expect(
       fetchVerifiedExternalPrivateKey(storage, network, 0, async index => addressAt(index))
     ).rejects.toThrow('External private key provider must return a bitcore PrivateKey.');
+  });
+});
+
+describe('toOnChainAddress', () => {
+  const network = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x4c), 'testnet');
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey;
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    spendPubkey.toBuffer(),
+    network
+  );
+
+  it('maps a shielded address to the spend P2PKH it embeds', () => {
+    expect(toOnChainAddress(shieldedAddress, network)).toBe(
+      new Address(shieldedAddress, { network }).getSpendAddress().base58
+    );
+  });
+
+  it('keeps a legacy address', () => {
+    expect(toOnChainAddress('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', network)).toBe(
+      'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx'
+    );
+  });
+
+  it('keeps a malformed address for the caller to reject', () => {
+    expect(toOnChainAddress('not-an-address', network)).toBe('not-an-address');
   });
 });

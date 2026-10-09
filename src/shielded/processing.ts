@@ -7,9 +7,10 @@
 
 import { HDPrivateKey } from 'bitcore-lib';
 import { IStorage, IHistoryTx, ILogger } from '../types';
-import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX, PRIVATE_KEY_SIZE_BYTES } from '../constants';
+import { NATIVE_TOKEN_UID, NATIVE_TOKEN_UID_HEX } from '../constants';
 import tokenUtils from '../utils/tokens';
 import { IShieldedCryptoProvider, IProcessedShieldedOutput, ShieldedOutputMode } from './types';
+import { deriveScanChildPrivkey, rewindShieldedOutput, ShieldedRewindError } from './rewind';
 
 /**
  * Resolve the 32-byte hex token UID (NATIVE_TOKEN_UID_HEX for HTR) from an
@@ -50,22 +51,13 @@ export function resolveTokenUid(tokenData: number | undefined, tx: IHistoryTx): 
  * The scan key uses a separate account (m/44'/280'/1'/0) from legacy P2PKH (account 0').
  * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
-function deriveScanChildPrivkey(
+function tryDeriveScanChildPrivkey(
   scanHdPrivKey: HDPrivateKey,
   addressIndex: number,
   logger: ILogger
 ): Buffer | undefined {
   try {
-    // Compliant BIP32 derivation, matching the scan PUBLIC key put into the
-    // shielded address (shieldedAddress.ts). Shielded keys are new — there is no
-    // legacy key material to stay bug-compatible with — so unlike the legacy
-    // P2PKH chain (still on deriveNonCompliantChild) they use the correct method.
-    const childKey = scanHdPrivKey.deriveChild(addressIndex);
-    // The native crypto provider (ECDH) needs raw private key bytes. Other
-    // wallet-lib code passes bitcore PrivateKey objects directly to bitcore
-    // signing functions, but here we cross into the native ct-crypto boundary.
-    // { size } ensures zero-padding for keys with leading zeros.
-    return childKey.privateKey.toBuffer({ size: PRIVATE_KEY_SIZE_BYTES });
+    return deriveScanChildPrivkey(scanHdPrivKey, addressIndex);
   } catch (e) {
     logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
     return undefined;
@@ -153,7 +145,7 @@ export async function processShieldedOutputs(
     // isAddressMine above guarantees the address is in storage, so getAddressInfo
     // is non-null; we fetch it here only for the bip32 derivation index.
     const addressInfo = await storage.getAddressInfo(address);
-    const privkey = deriveScanChildPrivkey(
+    const privkey = tryDeriveScanChildPrivkey(
       scanHdPrivKey,
       addressInfo!.bip32AddressIndex,
       storage.logger
@@ -163,85 +155,28 @@ export async function processShieldedOutputs(
     // valid owned address at a valid index — skip rather than crash the sync.
     if (!privkey) continue;
 
-    const ephPk = Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex');
-    const commitment = Buffer.from(shieldedOutput.commitment, 'hex');
-    const rangeProof = Buffer.from(shieldedOutput.range_proof, 'hex');
     // The fullnode always sets `mode`, so classify directly from it.
     const isFullShielded = shieldedOutput.mode === ShieldedOutputMode.FULLY_SHIELDED;
 
     try {
-      let recoveredValue: bigint;
-      let recoveredBf: Buffer;
-      let recoveredTokenUid: string;
-      let recoveredAbf: Buffer | undefined;
-      let mode: ShieldedOutputMode;
-
-      if (isFullShielded) {
-        // FullShielded: rewind recovers token UID and asset blinding factor
-        // asset_commitment is guaranteed for FullShielded outputs (protocol invariant)
-        const assetCommitment = Buffer.from(shieldedOutput.asset_commitment!, 'hex');
-        const result = await cryptoProvider.rewindFullShieldedOutput(
-          privkey,
-          ephPk,
-          commitment,
-          rangeProof,
-          assetCommitment
-        );
-        recoveredValue = result.value;
-        recoveredBf = result.blindingFactor;
-        recoveredAbf = result.assetBlindingFactor;
-        recoveredTokenUid = result.tokenUid;
-        mode = ShieldedOutputMode.FULLY_SHIELDED;
-
-        // Verify that the recovered token_uid is consistent with the on-chain asset_commitment.
-        const expectedTag = await cryptoProvider.deriveTag(Buffer.from(recoveredTokenUid, 'hex'));
-        const expectedAc = await cryptoProvider.createAssetCommitment(
-          expectedTag,
-          result.assetBlindingFactor
-        );
-        if (!assetCommitment.equals(expectedAc)) {
-          // Drop the output AND log loudly: this branch indicates either a bug
-          // in tag/commitment construction (ours or hathor-core's) or active
-          // forgery — someone constructing an `asset_commitment` that doesn't
-          // match the recovered `tokenUid`. Either way, an operator needs to
-          // see this, so route to `error` and include the recovered tokenUid +
-          // on-chain assetCommitment hex so the failure is debuggable from
-          // logs alone.
-          storage.logger.error(
-            `FullShielded token UID cross-check failed for tx ${tx.tx_id} ` +
-              `output ${absoluteIndex} — asset commitment mismatch. ` +
-              `recovered tokenUid=${recoveredTokenUid}, ` +
-              `on-chain assetCommitment=${assetCommitment.toString('hex')}, ` +
-              `expected assetCommitment=${expectedAc.toString('hex')}`
-          );
-          continue;
-        }
-      } else {
-        // AmountShielded: token UID is known from the visible token_data field
-        const tokenUid = resolveTokenUid(shieldedOutput.token_data, tx);
-        const result = await cryptoProvider.rewindAmountShieldedOutput(
-          privkey,
-          ephPk,
-          commitment,
-          rangeProof,
-          Buffer.from(tokenUid, 'hex')
-        );
-        recoveredValue = result.value;
-        recoveredBf = result.blindingFactor;
-        recoveredTokenUid = tokenUid;
-        mode = ShieldedOutputMode.AMOUNT_SHIELDED;
-      }
-
-      // Validate recovered value — a corrupted rewind could return garbage.
-      // Leave value undefined (do NOT write in place) so the slot stays
-      // "not owned" and is excluded by the `value !== undefined` gate.
-      if (recoveredValue <= 0n) {
-        storage.logger.warn(
-          `Shielded output rewind returned non-positive value ${recoveredValue} ` +
-            `for tx ${tx.tx_id} output ${absoluteIndex} — skipping`
-        );
-        continue;
-      }
+      // asset_commitment is guaranteed for FullShielded outputs (protocol
+      // invariant); AmountShielded outputs carry their token in token_data.
+      const rewound = await rewindShieldedOutput(cryptoProvider, privkey, {
+        mode: isFullShielded
+          ? ShieldedOutputMode.FULLY_SHIELDED
+          : ShieldedOutputMode.AMOUNT_SHIELDED,
+        ephemeralPubkey: Buffer.from(shieldedOutput.ephemeral_pubkey, 'hex'),
+        commitment: Buffer.from(shieldedOutput.commitment, 'hex'),
+        rangeProof: Buffer.from(shieldedOutput.range_proof, 'hex'),
+        ...(isFullShielded
+          ? { assetCommitment: Buffer.from(shieldedOutput.asset_commitment!, 'hex') }
+          : { tokenUid: resolveTokenUid(shieldedOutput.token_data, tx) }),
+      });
+      const recoveredValue = rewound.value;
+      const recoveredBf = rewound.blindingFactor;
+      const recoveredTokenUid = rewound.tokenUid;
+      const recoveredAbf = rewound.assetBlindingFactor;
+      const { mode } = rewound;
 
       const walletTokenUid =
         recoveredTokenUid === NATIVE_TOKEN_UID_HEX ? NATIVE_TOKEN_UID : recoveredTokenUid;
@@ -272,6 +207,27 @@ export async function processShieldedOutputs(
         tokenUid: recoveredTokenUid,
       });
     } catch (e) {
+      if (e instanceof ShieldedRewindError && e.reason === 'asset-commitment-mismatch') {
+        // Drop the output AND log loudly: this indicates either a bug in
+        // tag/commitment construction (ours or hathor-core's) or active forgery
+        // — an `asset_commitment` that doesn't match the recovered `tokenUid`.
+        // Either way, an operator needs to see this.
+        storage.logger.error(
+          `FullShielded token UID cross-check failed for tx ${tx.tx_id} ` +
+            `output ${absoluteIndex} — ${e.message}`
+        );
+        continue;
+      }
+      if (e instanceof ShieldedRewindError && e.reason === 'non-positive-value') {
+        // A corrupted rewind could return garbage. Leave value undefined (do
+        // NOT write in place) so the slot stays "not owned" and is excluded by
+        // the `value !== undefined` gate.
+        storage.logger.warn(
+          `Shielded output rewind returned non-positive value for tx ${tx.tx_id} ` +
+            `output ${absoluteIndex} — skipping`
+        );
+        continue;
+      }
       // Rewind failed — output doesn't belong to us or data is corrupt
       storage.logger.debug(
         'Shielded output rewind failed for tx',

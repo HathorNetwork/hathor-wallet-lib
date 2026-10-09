@@ -326,3 +326,20 @@ export async function deriveShieldedAddressFromStorage(
   const networkName = storage.config.getNetwork().name;
   return deriveShieldedAddressPair(scanXpub, spendXpub, index, networkName);
 }
+
+/**
+ * The on-chain address an output paying `address` is locked to: the spend
+ * P2PKH a shielded address embeds, or the address itself. A malformed address
+ * is returned as is, for the caller to reject.
+ */
+export function toOnChainAddress(address: string, network: Network): string {
+  try {
+    const addressObj = new Address(address, { network });
+    if (addressObj.isShielded()) {
+      return addressObj.getSpendAddress().base58;
+    }
+  } catch (_e) {
+    // Not an address we can parse
+  }
+  return address;
+}

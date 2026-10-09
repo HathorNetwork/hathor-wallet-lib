@@ -236,4 +236,18 @@ describe('walletApi shielded support', () => {
       expect(result.txOutputs[0].kind).toBe('shielded');
     });
   });
+
+  describe('tx proposals', () => {
+    it('keeps the response of a refused proposal as the cause', async () => {
+      const data = { success: false, error: 'inputs-shielded-unsupported', shielded: [] };
+      mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
+      const err = await walletApi.createTxProposal(wallet, '00').catch(e => e);
+      expect(err).toBeInstanceOf(WalletRequestError);
+      expect(err.cause).toEqual({ status: 400, data });
+
+      mockAxiosInstance.put.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
+      const updateErr = await walletApi.updateTxProposal(wallet, 'id', '00').catch(e => e);
+      expect(updateErr.cause).toEqual({ status: 400, data });
+    });
+  });
 });
