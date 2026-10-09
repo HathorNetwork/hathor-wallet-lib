@@ -1933,6 +1933,69 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Process the whole history again from a realtime tx, as a voided-flag change
+   * requires. It rebuilds every balance and UTXO from scratch, so a READY
+   * wallet reports PROCESSING until it ends: callers that wait for
+   * `isReady()` never read them half rebuilt. If the rebuild fails, the wallet
+   * reports ERROR, as a failed walk does.
+   *
+   * It already runs on the history chain, so it enters PROCESSING without
+   * setState(), which would start a walk that waits for this task. When it
+   * ends, the messages parked meanwhile go back on the chain in their arrival
+   * order, after anything already chained, in the same tick as READY, so none
+   * waits for the next walk. READY comes before onNewTx saves the tx as
+   * FINISHED and emits 'update-tx'.
+   *
+   * A stop(), a disconnect or a new connection that comes meanwhile moves the
+   * state off PROCESSING and owns it from then on. Inside a walk the state is
+   * the walk's, and only the history is processed.
+   *
+   * @param pin The PIN for the shielded decode, as in onNewTx
+   */
+  async processHistoryWhileProcessing(pin?: string): Promise<void> {
+    if (this.state !== HathorWallet.READY) {
+      await this.storage.processHistory(pin);
+      return;
+    }
+    this.state = HathorWallet.PROCESSING;
+    try {
+      this.emit('state', HathorWallet.PROCESSING);
+    } catch (error) {
+      // A failing listener must not keep the wallet from rebuilding and
+      // leaving PROCESSING.
+      this.logger.error('A state listener failed', { error });
+    }
+    let rebuilt = false;
+    try {
+      await this.storage.processHistory(pin);
+      rebuilt = true;
+    } finally {
+      if (this.state === HathorWallet.PROCESSING) {
+        if (!rebuilt) {
+          // The balances and UTXOs are half rebuilt. The parked messages wait
+          // for the next walk.
+          this.setState(HathorWallet.ERROR);
+        } else if (this.walkPending) {
+          // An unlock or a reprocess asked for a walk meanwhile. The walk runs
+          // after this task, processes the parked messages and sets READY. Not
+          // awaited: it waits for this task on the history chain.
+          this.onEnterStateProcessing().catch(error => {
+            this.logger.error(error);
+            this.setState(HathorWallet.ERROR);
+          });
+        } else {
+          let wsData = this.wsTxQueue.dequeue();
+          while (wsData !== undefined) {
+            this.enqueueOnNewTx(wsData);
+            wsData = this.wsTxQueue.dequeue();
+          }
+          this.setState(HathorWallet.READY);
+        }
+      }
+    }
+  }
+
+  /**
    * Check if we need to load more addresses and load them if needed.
    * The configured scanning policy will be used to determine the loaded addresses.
    *
@@ -2217,8 +2280,9 @@ class HathorWallet extends EventEmitter {
    * Process a new transaction received from websocket.
    *
    * It runs on `newTxPromise` (see enqueueOnNewTx), or inline in a walk that
-   * already holds it, and it does not change the wallet state: `isReady()`
-   * stays true while a realtime tx is processed.
+   * already holds it. It does not change the wallet state, so `isReady()` stays
+   * true while a realtime tx is processed, except while a voided-flag change
+   * processes the whole history again (see processHistoryWhileProcessing).
    *
    * @param wsData WebSocket message data containing transaction history
    * @param txPin Optional PIN for this tx's shielded outputs, used only while
@@ -2280,7 +2344,7 @@ class HathorWallet extends EventEmitter {
       } else if (storageTx.is_voided !== newTx.is_voided) {
         // Voided flag changed — a full history reprocess is required to avoid
         // double-counting from the prior processNewTx.
-        await this.storage.processHistory(pin);
+        await this.processHistoryWhileProcessing(pin);
       } else if (!newTx.is_voided) {
         // Process other metadata updates (first_block confirmation, height, …).
         await processMetadataChanged(this.storage, newTx);
