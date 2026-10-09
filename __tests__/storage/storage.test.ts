@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { inspect } from 'util';
 import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
@@ -1673,5 +1674,26 @@ describe('handleStop and the scan key in memory', () => {
     for (const secret of secrets) {
       expect(written).not.toContain(secret);
     }
+  });
+
+  it('keeps the key out of what logging or serializing the storage prints', () => {
+    const { storage, xpriv } = storageWithScanKey();
+
+    expect(Object.keys(storage)).not.toContain('scanXPrivKey');
+    expect(inspect(storage, { depth: null })).not.toContain(xpriv);
+    expect(
+      JSON.stringify(storage, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+    ).not.toContain(xpriv);
+    expect(storage.scanXPrivKey).toBe(xpriv);
+  });
+
+  it('reads the key through a proxy that forwards reads to the storage', () => {
+    const { storage, xpriv } = storageWithScanKey();
+    // Forwards like WalletServiceStorageProxy: Reflect.get with the proxy as the receiver.
+    const proxy = new Proxy(storage, {
+      get: (target, prop, receiver) => Reflect.get(target, prop, receiver),
+    });
+
+    expect(proxy.scanXPrivKey).toBe(xpriv);
   });
 });
