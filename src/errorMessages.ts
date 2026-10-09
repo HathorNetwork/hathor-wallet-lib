@@ -51,8 +51,6 @@ export enum ErrorMessages {
   SHIELDED_CORRUPT_KEY = 'shielded-corrupt-key',
   // The scan key the PIN decrypts is not the key of the record's scan xpub
   SHIELDED_KEY_MISMATCH = 'shielded-key-mismatch',
-  // The key given is not a valid extended private key
-  SHIELDED_INVALID_KEY = 'shielded-invalid-key',
   // The wallet is not started, or it was stopped or started again meanwhile
   SHIELDED_NOT_STARTED = 'shielded-not-started',
   // The wallet is multisig, whose shielded keys are single-signature keys

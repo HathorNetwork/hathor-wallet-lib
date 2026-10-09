@@ -319,7 +319,6 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_NO_KEYS
   | ErrorMessages.SHIELDED_CORRUPT_KEY
   | ErrorMessages.SHIELDED_KEY_MISMATCH
-  | ErrorMessages.SHIELDED_INVALID_KEY
   | ErrorMessages.SHIELDED_NOT_STARTED
   | ErrorMessages.SHIELDED_MULTISIG
   | ErrorMessages.SHIELDED_LOCKED

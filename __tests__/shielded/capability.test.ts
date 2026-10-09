@@ -9,8 +9,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletUtils from '../../src/utils/wallet';
 import { computeShieldedCapability, shieldedAddressRefusal } from '../../src/shielded/capability';
-import { keyMaterialFromExtendedKey } from '../../src/shielded/keys';
-import { shieldedSessionOf, ShieldedSessionCause } from '../../src/shielded/session';
+import { ShieldedViewCause } from '../../src/shielded/view';
 import {
   IShieldedCapability,
   IShieldedCryptoProvider,
@@ -62,14 +61,14 @@ function readOnlyWithXpubs(): IWalletAccessData {
   };
 }
 
-/** A key the session can hold: the capability does not check it against the record. */
-function scanKey() {
-  return keyMaterialFromExtendedKey(new HDPrivateKey().xprivkey);
+/** A scan key to keep in memory: the capability does not check it against the record. */
+function scanKey(): string {
+  return new HDPrivateKey().xprivkey;
 }
 
 /**
  * A storage holding `record`, with a provider unless `withProvider` is false,
- * and the session of a started wallet that synced by polling.
+ * and the shielded view of a started wallet that synced by polling.
  */
 async function startedStorage(
   record: IWalletAccessData,
@@ -80,10 +79,10 @@ async function startedStorage(
   if (withProvider) {
     storage.setShieldedCryptoProvider(provider);
   }
-  const session = shieldedSessionOf(storage);
-  session.open();
-  session.setSyncMode(HistorySyncMode.POLLING_HTTP_API);
-  return { storage, session };
+  const view = storage.shieldedView;
+  view.started = true;
+  view.syncMode = HistorySyncMode.POLLING_HTTP_API;
+  return { storage, view };
 }
 
 /** The level, reason and cause of a capability. */
@@ -92,11 +91,10 @@ function verdict({ level, reason, cause }: IShieldedCapability) {
 }
 
 describe('computeShieldedCapability', () => {
-  it('reports none, not-started, before the session opens and after it closes', async () => {
+  it('reports none, not-started, before start and after stop', async () => {
     const storage = new Storage(new MemoryStore());
     await storage.saveAccessData(full);
     storage.setShieldedCryptoProvider(provider);
-    const session = shieldedSessionOf(storage);
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'none',
@@ -104,21 +102,21 @@ describe('computeShieldedCapability', () => {
       cause: null,
     });
 
-    session.open();
-    session.fill(scanKey(), session.epoch);
-    session.close();
+    storage.shieldedView.started = true;
+    storage.scanXPrivKey = scanKey();
+    await storage.handleStop();
     const capability = await computeShieldedCapability(storage);
     expect(verdict(capability)).toEqual({ level: 'none', reason: 'not-started', cause: null });
     expect(capability.canReceive).toBe(false);
     expect(capability.historyComplete).toBe(false);
   });
 
-  it('reports none, multisig, for a multisig wallet, whatever its session holds', async () => {
-    const { storage, session } = await startedStorage({
+  it('reports none, multisig, for a multisig wallet, whatever key it holds', async () => {
+    const { storage } = await startedStorage({
       ...full,
       walletType: WalletType.MULTISIG,
     });
-    session.fill(scanKey(), session.epoch);
+    storage.scanXPrivKey = scanKey();
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'none',
@@ -128,8 +126,8 @@ describe('computeShieldedCapability', () => {
   });
 
   it('reports none, integrity, with its cause, when the record keys disagree', async () => {
-    const { storage, session } = await startedStorage(full);
-    session.setIntegrity('key-mismatch');
+    const { storage, view } = await startedStorage(full);
+    view.integrity = 'key-mismatch';
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'none',
@@ -146,8 +144,8 @@ describe('computeShieldedCapability', () => {
   ])(
     'reports none, needs-password, with the cause $cause, for a seed record without shielded keys',
     async ({ cause }) => {
-      const { storage, session } = await startedStorage(preShielded());
-      session.setCause(cause);
+      const { storage, view } = await startedStorage(preShielded());
+      view.cause = cause;
 
       expect(verdict(await computeShieldedCapability(storage))).toEqual({
         level: 'none',
@@ -157,9 +155,9 @@ describe('computeShieldedCapability', () => {
     }
   );
 
-  it('reports needs-password without a cause when the session holds a cause of a locked key', async () => {
-    const { storage, session } = await startedStorage(preShielded());
-    session.setCause('not-supplied');
+  it('reports needs-password without a cause when the view holds a cause of a locked key', async () => {
+    const { storage, view } = await startedStorage(preShielded());
+    view.cause = 'not-supplied';
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'none',
@@ -210,8 +208,8 @@ describe('computeShieldedCapability', () => {
   });
 
   it('reports none, no-provider, without a crypto provider, even with a key', async () => {
-    const { storage, session } = await startedStorage(full, { withProvider: false });
-    session.fill(scanKey(), session.epoch);
+    const { storage } = await startedStorage(full, { withProvider: false });
+    storage.scanXPrivKey = scanKey();
 
     const capability = await computeShieldedCapability(storage);
     expect(verdict(capability)).toEqual({ level: 'none', reason: 'no-provider', cause: null });
@@ -227,8 +225,8 @@ describe('computeShieldedCapability', () => {
   ])(
     'reports watch, locked, with the cause $cause, while the key is not unlocked',
     async ({ cause }) => {
-      const { storage, session } = await startedStorage(full);
-      session.setCause(cause);
+      const { storage, view } = await startedStorage(full);
+      view.cause = cause;
 
       const capability = await computeShieldedCapability(storage);
       expect(verdict(capability)).toEqual({ level: 'watch', reason: 'locked', cause });
@@ -245,8 +243,8 @@ describe('computeShieldedCapability', () => {
       record: 'a record that got its keys after a failed migration',
     },
   ])('reports the cause not-supplied for $record', async ({ cause }) => {
-    const { storage, session } = await startedStorage(full);
-    session.setCause(cause as ShieldedSessionCause | null);
+    const { storage, view } = await startedStorage(full);
+    view.cause = cause as ShieldedViewCause | null;
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'watch',
@@ -256,8 +254,8 @@ describe('computeShieldedCapability', () => {
   });
 
   it('reports view, no-spend-authority, with an external signer that did not declare shielded spends', async () => {
-    const { storage, session } = await startedStorage(full);
-    session.fill(scanKey(), session.epoch);
+    const { storage } = await startedStorage(full);
+    storage.scanXPrivKey = scanKey();
     storage.setTxSignatureMethod(signer);
 
     const capability = await computeShieldedCapability(storage);
@@ -271,8 +269,8 @@ describe('computeShieldedCapability', () => {
   });
 
   it('reports view for a record without the spend key and no external signer', async () => {
-    const { storage, session } = await startedStorage(readOnlyWithXpubs());
-    session.fill(scanKey(), session.epoch);
+    const { storage } = await startedStorage(readOnlyWithXpubs());
+    storage.scanXPrivKey = scanKey();
 
     expect(verdict(await computeShieldedCapability(storage))).toEqual({
       level: 'view',
@@ -282,8 +280,8 @@ describe('computeShieldedCapability', () => {
   });
 
   it('reports full with the record spend key, or with a signer that declared shielded spends', async () => {
-    const { storage, session } = await startedStorage(full);
-    session.fill(scanKey(), session.epoch);
+    const { storage } = await startedStorage(full);
+    storage.scanXPrivKey = scanKey();
 
     const capability = await computeShieldedCapability(storage);
     expect(capability).toEqual({
@@ -297,9 +295,9 @@ describe('computeShieldedCapability', () => {
     });
 
     const readOnly = await startedStorage(readOnlyWithXpubs());
-    readOnly.session.fill(scanKey(), readOnly.session.epoch);
+    readOnly.storage.scanXPrivKey = scanKey();
     readOnly.storage.setTxSignatureMethod(signer);
-    readOnly.session.setSpendSigner(true);
+    readOnly.view.spendSigner = true;
     expect(verdict(await computeShieldedCapability(readOnly.storage))).toEqual({
       level: 'full',
       reason: null,
@@ -308,10 +306,10 @@ describe('computeShieldedCapability', () => {
   });
 
   it('forgets a signer declaration when the signing method is set again on the storage', async () => {
-    const { storage, session } = await startedStorage(readOnlyWithXpubs());
-    session.fill(scanKey(), session.epoch);
+    const { storage, view } = await startedStorage(readOnlyWithXpubs());
+    storage.scanXPrivKey = scanKey();
     storage.setTxSignatureMethod(signer);
-    session.setSpendSigner(true);
+    view.spendSigner = true;
 
     storage.setTxSignatureMethod(async () => ({ inputSignatures: [], ncCallerSignature: null }));
 
@@ -321,16 +319,16 @@ describe('computeShieldedCapability', () => {
   it.each([HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS])(
     'keeps the level, and reports neither receive nor a complete history, under %s',
     async mode => {
-      const { storage, session } = await startedStorage(full);
-      session.fill(scanKey(), session.epoch);
-      session.setSyncMode(mode);
+      const { storage, view } = await startedStorage(full);
+      storage.scanXPrivKey = scanKey();
+      view.syncMode = mode;
 
       const streaming = await computeShieldedCapability(storage);
       expect(streaming.level).toBe('full');
       expect(streaming.canReceive).toBe(false);
       expect(streaming.historyComplete).toBe(false);
 
-      session.setSyncMode(HistorySyncMode.POLLING_HTTP_API);
+      view.syncMode = HistorySyncMode.POLLING_HTTP_API;
       const polling = await computeShieldedCapability(storage);
       expect(polling.canReceive).toBe(true);
       expect(polling.historyComplete).toBe(true);
@@ -338,19 +336,19 @@ describe('computeShieldedCapability', () => {
   );
 
   it('reports an incomplete history after an address discovery that hit its round limit', async () => {
-    const { storage, session } = await startedStorage(full);
-    session.fill(scanKey(), session.epoch);
-    session.setDiscoveryCapped(true);
+    const { storage, view } = await startedStorage(full);
+    storage.scanXPrivKey = scanKey();
+    view.discoveryCapped = true;
 
     const capability = await computeShieldedCapability(storage);
     expect(capability.level).toBe('full');
     expect(capability.historyComplete).toBe(false);
   });
 
-  it('carries the undecoded outputs the session recorded', async () => {
-    const { storage, session } = await startedStorage(full);
-    session.recordUndecoded('bb'.repeat(32), { locked: 2, unreadable: 0, error: 1 });
-    session.recordUndecoded('aa'.repeat(32), { locked: 1, unreadable: 1, error: 0 });
+  it('carries the undecoded outputs the view recorded', async () => {
+    const { storage, view } = await startedStorage(full);
+    view.recordUndecoded('bb'.repeat(32), { locked: 2, unreadable: 0, error: 1 });
+    view.recordUndecoded('aa'.repeat(32), { locked: 1, unreadable: 1, error: 0 });
 
     expect((await computeShieldedCapability(storage)).undecoded).toEqual({
       txIds: ['aa'.repeat(32), 'bb'.repeat(32)],
@@ -361,11 +359,12 @@ describe('computeShieldedCapability', () => {
   });
 
   it('holds no key material', async () => {
-    const { storage, session } = await startedStorage(full);
-    const key = scanKey();
-    const privateKeyHex = key.privateKey.toString('hex');
-    const chainCodeHex = key.chainCode.toString('hex');
-    session.fill(key, session.epoch);
+    const { storage } = await startedStorage(full);
+    const xpriv = scanKey();
+    const key = new HDPrivateKey(xpriv);
+    const privateKeyHex = key.privateKey.toString();
+    const chainCodeHex = key.toObject().chainCode;
+    storage.scanXPrivKey = xpriv;
 
     const capability = await computeShieldedCapability(storage);
     const seen = JSON.stringify(capability);

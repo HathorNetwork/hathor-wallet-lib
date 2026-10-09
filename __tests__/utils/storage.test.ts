@@ -41,9 +41,7 @@ import { encryptData } from '../../src/utils/crypto';
 import walletApi from '../../src/api/wallet';
 import FullnodeConnection from '../../src/new/connection';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
-import * as sessionModule from '../../src/shielded/session';
-import { SessionClosedError, shieldedSessionOf } from '../../src/shielded/session';
-import { unlockScanKeyWithPin } from '../../src/shielded/keys';
+import { unlockScanXPrivKey } from '../../src/shielded/scanKey';
 import { ShieldedDecodeSystemicError } from '../../src/errors';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
@@ -1034,7 +1032,7 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
       `Shielded outputs of the wallet in tx ${TX_ID} could not be decoded: ` +
         '0 locked, 1 unreadable, 0 in error'
     );
-    expect(shieldedSessionOf(storage).undecodedSummary()).toEqual({
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
       txIds: [TX_ID],
       locked: 0,
       unreadable: 1,
@@ -1460,15 +1458,14 @@ describe('shielded chain predicate', () => {
   });
 
   it(
-    'a session that found the record shielded keys inconsistent has no shielded chain',
+    'a started wallet that found the record shielded keys inconsistent has no shielded chain',
     async () => {
       const storage = new Storage(new MemoryStore());
       await storage.saveAccessData(full);
       await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
       storage.setShieldedCryptoProvider(provider);
-      const session = shieldedSessionOf(storage);
-      session.open();
-      session.setIntegrity('key-mismatch');
+      storage.shieldedView.started = true;
+      storage.shieldedView.integrity = 'key-mismatch';
 
       await expect(loadAddresses(0, 1, storage)).resolves.toHaveLength(1);
       expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
@@ -1476,8 +1473,8 @@ describe('shielded chain predicate', () => {
       await storage.store.setLastUsedAddressIndex(0, { legacy: false });
       await expect(checkGapLimit(storage)).resolves.toBeNull();
 
-      // The chain is back once the session holds no integrity failure.
-      session.setIntegrity(null);
+      // The chain is back once the integrity failure is cleared.
+      storage.shieldedView.integrity = null;
       await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.not.toBeNull();
       await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 1, count: 1 });
     },
@@ -1743,7 +1740,7 @@ describe('derived address cache', () => {
   );
 });
 
-describe('decoding shielded outputs: the session key first, a PIN only while it holds none', () => {
+describe('decoding shielded outputs: the scan key in memory first, a PIN only while there is none', () => {
   const SEED =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
   const PIN = '123';
@@ -1825,11 +1822,12 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     return { storage, provider, legacy, spend };
   }
 
-  async function fillSession(storage: Storage) {
-    const session = shieldedSessionOf(storage);
-    session.open();
-    session.fill(await unlockScanKeyWithPin(storage, PIN), session.epoch);
-    return session;
+  /** What start() does: keep the scan key the PIN unlocks in memory. */
+  async function keepScanKeyInMemory(storage: Storage) {
+    /* eslint-disable no-param-reassign */
+    storage.shieldedView.started = true;
+    storage.scanXPrivKey = await unlockScanXPrivKey(storage, PIN);
+    /* eslint-enable no-param-reassign */
   }
 
   /** A tx paying 7 HTR to `transparentTo` and each shielded output to its address. */
@@ -1883,9 +1881,9 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     jest.restoreAllMocks();
   });
 
-  it('decodes with the session key, whatever PIN the call gives', async () => {
+  it('decodes with the scan key in memory, whatever PIN the call gives', async () => {
     const { storage, legacy, spend } = await setup();
-    const session = await fillSession(storage);
+    await keepScanKeyInMemory(storage);
     const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
     const tx = receiveTx(RECEIVE_TX, legacy, [
       [spend[0], OPENS_AT_0],
@@ -1901,13 +1899,17 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     expect(tx.shielded_outputs![1].value).toBeUndefined();
     expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBe(50n);
     expect(await htrBalance(storage)).toBe(57n);
-    expect(session.undecodedSummary()).toEqual({ txIds: [], locked: 0, unreadable: 0, error: 0 });
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [],
+      locked: 0,
+      unreadable: 0,
+      error: 0,
+    });
   }, 60000);
 
-  it('decodes with a correct PIN while the session holds no key, then zeroes that key', async () => {
+  it('decodes with a correct PIN while no key is in memory, and keeps none', async () => {
     const { storage, legacy, spend } = await setup();
     const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
-    const wipeSpy = jest.spyOn(sessionModule, 'wipeScanKeyMaterial');
     const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
     await storage.addTx(tx);
 
@@ -1916,10 +1918,8 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     expect(unlockSpy).toHaveBeenCalledTimes(1);
     expect(tx.shielded_outputs![0].value).toBe(50n);
     expect(await htrBalance(storage)).toBe(57n);
-    // The PIN is a one-off: it does not fill the session.
-    expect(shieldedSessionOf(storage).hasKey).toBe(false);
-    expect(wipeSpy).toHaveBeenCalledTimes(1);
-    expect(wipeSpy.mock.calls[0][0].privateKey).toEqual(Buffer.alloc(32));
+    // The PIN is a one-off: the key it unlocks is not kept in memory.
+    expect(storage.scanXPrivKey).toBeNull();
   }, 60000);
 
   it('credits the transparent outputs and counts the wallet outputs locked for a wrong PIN', async () => {
@@ -1933,7 +1933,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
 
     expect(tx.shielded_outputs![0].value).toBeUndefined();
     expect(await htrBalance(storage)).toBe(7n);
-    expect(shieldedSessionOf(storage).undecodedSummary()).toEqual({
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
       txIds: [RECEIVE_TX],
       locked: 1,
       unreadable: 0,
@@ -1965,7 +1965,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
 
       expect(unlockSpy).not.toHaveBeenCalled();
       expect(await htrBalance(storage)).toBe(7n);
-      expect(shieldedSessionOf(storage).undecodedSummary().locked).toBe(1);
+      expect(storage.shieldedView.undecodedSummary().locked).toBe(1);
     },
     60000
   );
@@ -1981,12 +1981,12 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
 
     expect(unlockSpy).not.toHaveBeenCalled();
     expect(await htrBalance(storage)).toBe(7n);
-    expect(shieldedSessionOf(storage).undecodedSummary()).toMatchObject({ locked: 1 });
+    expect(storage.shieldedView.undecodedSummary()).toMatchObject({ locked: 1 });
   }, 60000);
 
   it('counts an output of the wallet that does not open as unreadable, and ignores other wallets', async () => {
     const { storage, spend } = await setup();
-    await fillSession(storage);
+    await keepScanKeyInMemory(storage);
     const tx = receiveTx(RECEIVE_TX, null, [
       [spend[0], OPENS_NEVER],
       [FOREIGN_ADDRESS, OPENS_AT_1],
@@ -1997,7 +1997,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     await processNewTx(storage, tx, { currentHeight: 105 });
 
     expect(tx.shielded_outputs!.map(output => output.value)).toEqual([undefined, undefined, 30n]);
-    expect(shieldedSessionOf(storage).undecodedSummary()).toEqual({
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
       txIds: [RECEIVE_TX],
       locked: 0,
       unreadable: 1,
@@ -2013,8 +2013,8 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     const { storage, spend } = await setup();
     await storage.addTx(receiveTx(RECEIVE_TX, null, [[spend[0], OPENS_AT_0]], 1));
     await storage.addTx(receiveTx(OTHER_TX, null, [[spend[1], OPENS_AT_1]], 2));
-    const session = shieldedSessionOf(storage);
-    session.recordUndecoded('an-earlier-tx', { locked: 3, unreadable: 0, error: 0 });
+    const view = storage.shieldedView;
+    view.recordUndecoded('an-earlier-tx', { locked: 3, unreadable: 0, error: 0 });
     const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
     const decryptSpy = jest.spyOn(cryptoUtils, 'decryptData');
 
@@ -2022,7 +2022,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
 
     // A wrong PIN is tried once, not for each tx.
     expect(unlockSpy).toHaveBeenCalledTimes(1);
-    expect(session.undecodedSummary()).toEqual({
+    expect(view.undecodedSummary()).toEqual({
       txIds: [RECEIVE_TX, OTHER_TX],
       locked: 2,
       unreadable: 0,
@@ -2039,7 +2039,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
 
     expect(unlockSpy).toHaveBeenCalledTimes(1);
     expect(decryptSpy).toHaveBeenCalledTimes(1);
-    expect(session.undecodedSummary()).toEqual({ txIds: [], locked: 0, unreadable: 0, error: 0 });
+    expect(view.undecodedSummary()).toEqual({ txIds: [], locked: 0, unreadable: 0, error: 0 });
     expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBe(50n);
     expect((await storage.getTx(OTHER_TX))!.shielded_outputs![0].value).toBe(30n);
     expect(await htrBalance(storage)).toBe(80n);
@@ -2056,7 +2056,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     ).rejects.toBeInstanceOf(ShieldedDecodeSystemicError);
 
     expect(await htrBalance(storage)).toBe(0n);
-    expect(shieldedSessionOf(storage).undecodedSummary()).toEqual({
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
       txIds: [RECEIVE_TX],
       locked: 0,
       unreadable: 0,
@@ -2072,7 +2072,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     await processHistory(storage, { pinCode: PIN });
 
     expect(storage.shieldedDecodeSkippedTxIds).toEqual([RECEIVE_TX]);
-    expect(shieldedSessionOf(storage).undecodedSummary()).toEqual({
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
       txIds: [RECEIVE_TX],
       locked: 0,
       unreadable: 0,
@@ -2084,162 +2084,11 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     );
   }, 60000);
 
-  it('writes and credits nothing when the session is closed while a tx is decoded', async () => {
-    const { storage, provider, legacy, spend } = await setup();
-    const session = await fillSession(storage);
-    (provider.rewindAmountShieldedOutput as jest.Mock).mockImplementationOnce(async () => {
-      // stop() runs while the rewind is in flight.
-      session.close();
-      return { value: 50n, blindingFactor: Buffer.alloc(32, 0x0b) };
-    });
-    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
-    await storage.addTx(tx);
-    const saveTxSpy = jest.spyOn(storage.store, 'saveTx');
-
-    await expect(processNewTx(storage, tx, { currentHeight: 105 })).rejects.toBeInstanceOf(
-      SessionClosedError
-    );
-
-    expect(saveTxSpy).not.toHaveBeenCalled();
-    // The stored tx is the object the store keeps: it was not decoded either.
-    expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBeUndefined();
-    expect(await storage.store.getUtxo({ txId: RECEIVE_TX, index: 0 })).toBeNull();
-    expect(await htrBalance(storage)).toBe(0n);
-    expect(session.undecodedSummary().txIds).toEqual([]);
-  }, 60000);
-
-  it('stops a walk when the session is closed during it', async () => {
-    const { storage, provider, spend } = await setup();
-    const session = await fillSession(storage);
-    await storage.addTx(receiveTx(RECEIVE_TX, null, [[spend[0], OPENS_AT_0]], 1));
-    await storage.addTx(receiveTx(OTHER_TX, null, [[spend[1], OPENS_AT_1]], 2));
-    (provider.rewindAmountShieldedOutput as jest.Mock).mockImplementationOnce(async () => {
-      session.close();
-      return { value: 50n, blindingFactor: Buffer.alloc(32, 0x0b) };
-    });
-
-    await expect(processHistory(storage)).rejects.toBeInstanceOf(SessionClosedError);
-
-    expect(provider.rewindAmountShieldedOutput).toHaveBeenCalledTimes(1);
-    expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBeUndefined();
-    expect((await storage.getTx(OTHER_TX))!.shielded_outputs![0].value).toBeUndefined();
-    expect(await htrBalance(storage)).toBe(0n);
-  }, 60000);
-
-  /**
-   * A step the test holds: `reached` resolves when the code gets to it, and the
-   * code goes on once `finish()` is called. It uses no timer, so it works when
-   * another test left fake timers installed.
-   */
-  function heldStep() {
-    let reach: () => void = () => {};
-    const reached = new Promise<void>(resolve => {
-      reach = resolve;
-    });
-    let finish: () => void = () => {};
-    const finished = new Promise<void>(resolve => {
-      finish = resolve;
-    });
-    return {
-      reached,
-      finish,
-      hold: async () => {
-        reach();
-        await finished;
-      },
-    };
-  }
-
-  it('zeroes the key a PIN unlocked for a pass when the session closes, and derives nothing after it', async () => {
-    const { storage, provider, spend } = await setup();
-    const session = shieldedSessionOf(storage);
-    // An open session without a key: the pass unlocks one with the PIN.
-    session.open();
-    const rewind = provider.rewindAmountShieldedOutput as jest.Mock;
-    const opens = rewind.getMockImplementation()!;
-    const firstRewind = heldStep();
-    rewind.mockImplementationOnce(async (...args: unknown[]) => {
-      await firstRewind.hold();
-      return opens(...args);
-    });
-    const deriveSpy = jest.spyOn(sessionModule, 'deriveScanChildKey');
-    const tx = receiveTx(RECEIVE_TX, null, [
-      [spend[0], OPENS_AT_0],
-      [spend[1], OPENS_AT_1],
-    ]);
-    await storage.addTx(tx);
-
-    const processing = processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
-    await firstRewind.reached;
-    // stop() closes the session while the first output is rewound.
-    session.close();
-
-    expect(deriveSpy).toHaveBeenCalledTimes(1);
-    expect(deriveSpy.mock.calls[0][0].privateKey).toEqual(Buffer.alloc(32));
-    firstRewind.finish();
-    await expect(processing).rejects.toBeInstanceOf(SessionClosedError);
-    expect(deriveSpy).toHaveBeenCalledTimes(1);
-    expect(rewind).toHaveBeenCalledTimes(1);
-    expect(tx.shielded_outputs!.map(output => output.value)).toEqual([undefined, undefined]);
-    expect(await htrBalance(storage)).toBe(0n);
-  }, 60000);
-
-  it('zeroes the key of a PIN unlock that a session close overtakes, and derives nothing with it', async () => {
-    const { storage, spend } = await setup();
-    const session = shieldedSessionOf(storage);
-    session.open();
-    const readKey = storage.getScanXPrivKey.bind(storage);
-    const unlock = heldStep();
-    jest.spyOn(storage, 'getScanXPrivKey').mockImplementation(async pin => {
-      await unlock.hold();
-      return readKey(pin);
-    });
-    const wipeSpy = jest.spyOn(sessionModule, 'wipeScanKeyMaterial');
-    const deriveSpy = jest.spyOn(sessionModule, 'deriveScanChildKey');
-    const tx = receiveTx(RECEIVE_TX, null, [[spend[0], OPENS_AT_0]]);
-    await storage.addTx(tx);
-
-    const processing = processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
-    await unlock.reached;
-    session.close();
-    unlock.finish();
-
-    await expect(processing).rejects.toBeInstanceOf(SessionClosedError);
-    expect(deriveSpy).not.toHaveBeenCalled();
-    expect(wipeSpy).toHaveBeenCalledTimes(1);
-    expect(wipeSpy.mock.calls[0][0].privateKey).toEqual(Buffer.alloc(32));
-    expect(tx.shielded_outputs![0].value).toBeUndefined();
-  }, 60000);
-
-  it('writes nothing for a tx or a walk that starts after the session was closed', async () => {
-    const { storage, legacy, spend } = await setup();
-    const session = await fillSession(storage);
-    // stop() closed the session; this processing started after it.
-    session.close();
-    const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
-    const cleanSpy = jest.spyOn(storage.store, 'cleanMetadata');
-    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
-    await storage.addTx(tx);
-
-    await expect(
-      processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN })
-    ).rejects.toBeInstanceOf(SessionClosedError);
-    await expect(processHistory(storage, { pinCode: PIN })).rejects.toBeInstanceOf(
-      SessionClosedError
-    );
-
-    expect(unlockSpy).not.toHaveBeenCalled();
-    expect(cleanSpy).not.toHaveBeenCalled();
-    expect(tx.shielded_outputs![0].value).toBeUndefined();
-    expect(await storage.store.getUtxo({ txId: RECEIVE_TX, index: 0 })).toBeNull();
-    expect(await htrBalance(storage)).toBe(0n);
-  }, 60000);
-
-  it('decodes the same values with the session key and with the PIN', async () => {
-    const decodedWith = async (useSession: boolean) => {
+  it('decodes the same values with the scan key in memory and with the PIN', async () => {
+    const decodedWith = async (useMemoryKey: boolean) => {
       const { storage, legacy, spend } = await setup();
-      if (useSession) {
-        await fillSession(storage);
+      if (useMemoryKey) {
+        await keepScanKeyInMemory(storage);
       }
       await storage.addTx(
         receiveTx(RECEIVE_TX, legacy, [
@@ -2247,7 +2096,7 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
           [spend[1], OPENS_AT_1],
         ])
       );
-      await processHistory(storage, { pinCode: useSession ? undefined : PIN });
+      await processHistory(storage, { pinCode: useMemoryKey ? undefined : PIN });
       const utxos: IUtxo[] = [];
       for await (const utxo of storage.selectUtxos({ token: NATIVE_TOKEN_UID })) {
         utxos.push(utxo);
@@ -2260,9 +2109,9 @@ describe('decoding shielded outputs: the session key first, a PIN only while it 
     };
 
     const withPin = await decodedWith(false);
-    const withSession = await decodedWith(true);
+    const withMemoryKey = await decodedWith(true);
 
-    expect(withSession).toEqual(withPin);
+    expect(withMemoryKey).toEqual(withPin);
     expect(withPin.balance).toBe(87n);
     expect(withPin.utxos.map(utxo => [utxo.index, utxo.value, utxo.shielded])).toEqual([
       [0, 7n, undefined],
