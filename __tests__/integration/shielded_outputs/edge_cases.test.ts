@@ -17,8 +17,8 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { FEE_PER_AMOUNT_SHIELDED_OUTPUT, NATIVE_TOKEN_UID } from '../../../src/constants';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -31,23 +31,33 @@ describe('shielded outputs — Group I: Edge cases', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  it('I.36 — Single shielded output is rejected (< 2 shielded rule)', async () => {
+  it('I.36 — Single shielded output gets the shielded change as its second (< 2 shielded rule)', async () => {
     const walletA = await generateWalletHelper();
     const walletB = await generateWalletHelper();
     const addrA = await walletA.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
     const sb0 = await walletB.getAddressAtIndex(0, { legacy: false });
 
-    await expect(
-      walletA.sendManyOutputsTransaction([
-        {
-          address: sb0,
-          value: 30n,
-          token: NATIVE_TOKEN_UID,
-          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-        },
-      ])
-    ).rejects.toThrow();
+    // Every HTR output is shielded, so the change is shielded too and the tx
+    // meets the 2-shielded-output minimum without splitting B's output.
+    const tx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sb0,
+        value: 30n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(tx).not.toBeNull();
+    expect(tx!.shieldedOutputs).toHaveLength(2);
+    await waitForTxReceived(walletA, tx!.hash!);
+    await waitForTxReceived(walletB, tx!.hash!);
+
+    expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(30n);
+    // A decodes its AmountShielded change: 100 - 30 - 2*FEE_PER_AMOUNT_SHIELDED_OUTPUT
+    expect((await walletA.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(
+      100n - 30n - 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT
+    );
   });
 
   it('I.37 — Zero-amount shielded output is rejected', async () => {
@@ -161,9 +171,12 @@ describe('shielded outputs — Group I: Edge cases', () => {
     await waitForTxReceived(walletA, shieldTx!.hash!);
     await waitUntilNextTimestamp(walletA, shieldTx!.hash!);
 
-    // Plain transparent send — must consume shielded UTXOs.
+    // Plain transparent send — must consume shielded UTXOs. The change is kept
+    // transparent: one mirroring the FS inputs would be shielded and pay a fee.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
-    const tx = await walletA.sendTransaction(addrC, 30n);
+    const tx = await walletA.sendTransaction(addrC, 30n, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletC, tx!.hash!);
 

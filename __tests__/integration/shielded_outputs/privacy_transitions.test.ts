@@ -22,8 +22,9 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
+import { poolOf } from '../helpers/shielded-send.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -314,15 +315,25 @@ describe('shielded outputs — Group P: privacy-mode transitions', () => {
     await waitForTxReceived(walletB, fsTx!.hash!);
     await waitUntilNextTimestamp(walletA, fsTx!.hash!);
 
-    // B now holds AS + FS HTR. Transparent unshield to C should pull
-    // from BOTH AS and FS UTXO pools depending on selector heuristics.
+    // B now holds AS 35 + AS 25 and FS 30 + FS 20 HTR. HTR pays the fee, so
+    // it is public in the tx, and its amount-shielded UTXOs are taken first:
+    // the AS 35 and AS 25 fall short of 80, so both are taken whole, and the
+    // FS 20 pays the rest exactly. The transparent unshield to C thus spends
+    // BOTH AS and FS UTXOs and leaves no change. The change is kept
+    // transparent anyway, so the tx stays a full unshield whatever the
+    // selection leaves: a change mirroring the shielded inputs would be a
+    // shielded output.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
-    const unshieldTx = await walletB.sendTransaction(addrC, 80n);
+    const unshieldTx = await walletB.sendTransaction(addrC, 80n, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(unshieldTx).not.toBeNull();
     await waitForTxReceived(walletB, unshieldTx!.hash!);
     await waitForTxReceived(walletC, unshieldTx!.hash!);
 
     const balC = await walletC.getBalance(NATIVE_TOKEN_UID);
     expect(balC[0].balance.unlocked).toBe(80n);
+    // Only the FS 30 is left: both AS UTXOs and the FS 20 were spent.
+    expect(await poolOf(walletB, NATIVE_TOKEN_UID, 'HTR')).toEqual(['HTR:FS:30']);
   });
 });

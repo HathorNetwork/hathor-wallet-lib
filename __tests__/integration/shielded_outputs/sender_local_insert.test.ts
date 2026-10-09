@@ -26,7 +26,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import transactionUtils from '../../../src/utils/transaction';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
@@ -60,20 +60,24 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
 
     // Build + sign WITHOUT pushing — this gives us the final Transaction object
     // that `sendTransaction.ts` would have passed to convertTransactionToHistoryTx.
-    const sendTx = await walletA.sendManyOutputsSendTransaction([
-      {
-        address: shieldedAddr0,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: shieldedAddr1,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent so the tx carries exactly these two outputs.
+    const sendTx = await walletA.sendManyOutputsSendTransaction(
+      [
+        {
+          address: shieldedAddr0,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: shieldedAddr1,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     const tx = await sendTx.run('sign-tx');
     // run('sign-tx') stops before mining, so tx.hash is still null. Compute it
     // from the signed structure directly — convertTransactionToHistoryTx
@@ -119,20 +123,24 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
     const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
 
-    const sendTx = await walletA.sendManyOutputsSendTransaction([
-      {
-        address: shieldedAddr0,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: shieldedAddr1,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent so the tx carries exactly these two outputs.
+    const sendTx = await walletA.sendManyOutputsSendTransaction(
+      [
+        {
+          address: shieldedAddr0,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: shieldedAddr1,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     const tx = await sendTx.run('sign-tx');
     // run('sign-tx') stops before mining, so tx.hash is still null. Compute it
     // from the signed structure directly — convertTransactionToHistoryTx
@@ -182,20 +190,24 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
     const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
 
-    const tx = await walletA.sendManyOutputsTransaction([
-      {
-        address: shieldedAddr0,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: shieldedAddr1,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent so the tx carries exactly these two outputs.
+    const tx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: shieldedAddr0,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: shieldedAddr1,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(tx).not.toBeNull();
     expect(tx!.hash).toBeDefined();
 
@@ -237,9 +249,10 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     // pipeline tightened — see sendTransaction.ts:498) requires two
     // shielded outputs; the values are sized to consume the full 100n
     // injected above (49 + 49 + 2n fee = 100n), so step 2 has nothing
-    // but shielded UTXOs to pick from. Without draining transparent,
-    // the UTXO selector prefers transparent inputs in step 2 and the
-    // shielded-input assertion at the bottom of this test fails.
+    // but shielded UTXOs to pick from. Step 2's outputs are all shielded,
+    // so it draws on the shielded pool first and would spend a shielded
+    // input even with transparent HTR left; the drain is a safeguard for the
+    // shielded-input assertion at the bottom of this test.
     const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
     const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
     const fundShieldedTx = await walletA.sendManyOutputsTransaction([
@@ -337,8 +350,10 @@ describe('shielded outputs — Group L: sender-side local insert', () => {
     const addrA = await walletA.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
 
-    // Same shape as L.4: fund shielded UTXOs and drain transparent, so
-    // the spend tx is forced to pick at least one shielded input.
+    // Same shape as L.4: fund shielded UTXOs and drain transparent. The
+    // spend tx's outputs are all shielded, so it draws on the shielded pool
+    // first and picks at least one shielded input; with transparent drained
+    // it has nothing else to pick.
     const shieldedAddr0 = await walletA.getAddressAtIndex(0, { legacy: false });
     const shieldedAddr1 = await walletA.getAddressAtIndex(1, { legacy: false });
     const fundShieldedTx = await walletA.sendManyOutputsTransaction([

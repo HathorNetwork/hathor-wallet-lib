@@ -22,7 +22,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -147,20 +147,24 @@ describe('shielded outputs — Group Q: multi-token shielded txs', () => {
     await waitForTxReceived(walletB, seedTx!.hash!);
     await waitUntilNextTimestamp(walletA, seedTx!.hash!);
 
-    // B unshields BOTH tokens to walletC in one tx.
+    // B unshields BOTH tokens to walletC in one tx. Both changes are kept
+    // transparent; ones mirroring the FS inputs would be shielded outputs.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
-    const tx = await walletB.sendManyOutputsTransaction([
-      {
-        address: addrC,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-      },
-      {
-        address: addrC,
-        value: 350n,
-        token: tokenResp.hash,
-      },
-    ]);
+    const tx = await walletB.sendManyOutputsTransaction(
+      [
+        {
+          address: addrC,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+        },
+        {
+          address: addrC,
+          value: 350n,
+          token: tokenResp.hash,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
     await waitForTxReceived(walletC, tx!.hash!);

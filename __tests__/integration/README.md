@@ -49,7 +49,7 @@ A specific test file (the value is matched as `**/<value>.test.ts`, so omit the
 SPECIFIC_INTEGRATION_TEST_FILE=shielded_outputs/core \
   npm run test_network_integration
 
-# the whole shielded suite (23 files):
+# the whole shielded suite (every file under shielded_outputs/):
 SPECIFIC_INTEGRATION_TEST_FILE='shielded_outputs/*' \
   npm run test_network_integration
 ```

@@ -18,6 +18,10 @@
  * `src/utils/transaction.ts` already routes `shielded-spend` addresses to
  * the spend xprivkey chain. No shielded crypto block runs for this path
  * (no shielded outputs), fee is 0.
+ *
+ * By default a change that mirrors shielded inputs is shielded, so these
+ * tests keep every change transparent (changeShieldedMode:
+ * OutputKind.TRANSPARENT) to stay on this path.
  */
 
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
@@ -29,7 +33,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -54,20 +58,23 @@ describe('shielded outputs — Group U: Unshielding (shielded inputs → transpa
     // Move 50n HTR into two shielded UTXOs (30 + 20) owned by walletA.
     const sa0 = await walletA.getAddressAtIndex(1, { legacy: false });
     const sa1 = await walletA.getAddressAtIndex(2, { legacy: false });
-    const shieldTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sa0,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa1,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const shieldTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sa0,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa1,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletA, shieldTx!.hash!);
     await waitUntilNextTimestamp(walletA, shieldTx!.hash!);
 
@@ -76,7 +83,9 @@ describe('shielded outputs — Group U: Unshielding (shielded inputs → transpa
     //   50n HTR shielded (30 + 20)
     // Transparent send of 60n needs to pull from the shielded UTXOs.
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
-    const sendTx = await walletA.sendTransaction(addrB, 60n);
+    const sendTx = await walletA.sendTransaction(addrB, 60n, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(sendTx).not.toBeNull();
     await waitForTxReceived(walletA, sendTx!.hash!);
     await waitForTxReceived(walletB, sendTx!.hash!);
@@ -104,27 +113,33 @@ describe('shielded outputs — Group U: Unshielding (shielded inputs → transpa
     // Move 900 TST into shielded UTXOs (500 + 400).
     const sa0 = await walletA.getAddressAtIndex(2, { legacy: false });
     const sa1 = await walletA.getAddressAtIndex(3, { legacy: false });
-    const shieldTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sa0,
-        value: 500n,
-        token: tokenResp.hash,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa1,
-        value: 400n,
-        token: tokenResp.hash,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const shieldTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sa0,
+          value: 500n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa1,
+          value: 400n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletA, shieldTx!.hash!);
     await waitUntilNextTimestamp(walletA, shieldTx!.hash!);
 
     // walletA now has 100 TST transparent + 900 TST shielded. Transparent
     // send of 650 TST pulls from both pools.
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
-    const sendTx = await walletA.sendTransaction(addrB, 650n, { token: tokenResp.hash });
+    const sendTx = await walletA.sendTransaction(addrB, 650n, {
+      token: tokenResp.hash,
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(sendTx).not.toBeNull();
     await waitForTxReceived(walletA, sendTx!.hash!);
     await waitForTxReceived(walletB, sendTx!.hash!);
@@ -200,7 +215,10 @@ describe('shielded outputs — Group U: Unshielding (shielded inputs → transpa
 
     // Send a transparent TST output to walletB. All inputs will be shielded TST.
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
-    const sendTx = await walletA.sendTransaction(addrB, 250n, { token: tokenResp.hash });
+    const sendTx = await walletA.sendTransaction(addrB, 250n, {
+      token: tokenResp.hash,
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(sendTx).not.toBeNull();
     await waitForTxReceived(walletA, sendTx!.hash!);
     await waitForTxReceived(walletB, sendTx!.hash!);

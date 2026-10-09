@@ -142,8 +142,9 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     const walletB = await generateWalletHelper();
 
     // Fund A. Then route some of A's HTR into shielded UTXOs that B owns and
-    // spends back to a legacy address of A — this gives A a MIX of
-    // transparent + shielded HTR. Start by setting up A with a usable HTR
+    // spends back to shielded addresses of A — this gives A shielded HTR to
+    // hold beside the transparent HTR injected before the token create, a MIX
+    // of transparent + shielded HTR. Start by setting up A with a usable HTR
     // balance for the token create.
     const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
@@ -169,10 +170,11 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     await waitForTxReceived(walletB, seedTx!.hash!);
     await waitUntilNextTimestamp(walletA, seedTx!.hash!);
 
-    // WalletB now owns 50 shielded HTR but zero transparent HTR. The
-    // back-send below emits 2 AmountShielded outputs, and each AS output
-    // carries a 1 HTR fee that must be paid from transparent HTR — so top B
-    // up with a small transparent HTR balance before it sends.
+    // WalletB now owns 50 shielded HTR but zero transparent HTR, and gets a
+    // small transparent HTR balance too. The back-send below leaves that
+    // unspent: it emits 2 AmountShielded outputs, each carrying a 1 HTR fee,
+    // and with every output shielded it draws on B's shielded pool first,
+    // where the 30 pays both outputs and both fees.
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletB, addrB, 30n);
 
@@ -199,17 +201,21 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     await waitForTxReceived(walletA, backTx!.hash!);
     await waitUntilNextTimestamp(walletA, backTx!.hash!);
 
-    // At this point A has a mix of transparent HTR + shielded HTR. We want
-    // createNewToken to succeed while the wallet holds the mix — but
-    // `bestUtxoSelection` prefers the smallest HTR UTXO ≥ required amount, so
-    // with only 48 HTR transparent + 15/10 HTR shielded it would pick the
-    // 10 HTR shielded UTXO, and `prepareCreateTokenData` → `prepareTransaction`
-    // doesn't run the unshield-balancing branch that `SendTransaction.prepareTxData`
-    // owns, so the fullnode rejects the tx. Injecting a small transparent
-    // UTXO lets the selector pick it for the deposit; the test still proves
-    // createToken works alongside held shielded HTR (those UTXOs remain in
-    // the wallet after the tx). Supporting shielded HTR as the create-token
-    // deposit source is tracked separately.
+    // At this point A holds only shielded HTR: every HTR output of its seed
+    // send was shielded, so its 48 change came back amount-shielded too (47
+    // after its fee), beside the 15/10 HTR from walletB. We want
+    // createNewToken to succeed while the wallet holds a mix of transparent +
+    // shielded HTR — but `bestUtxoSelection` prefers the smallest HTR UTXO ≥
+    // required amount, so with only the 47/15/10 HTR shielded it would pick
+    // the 10 HTR shielded UTXO, and `prepareCreateTokenData` →
+    // `prepareTransaction` doesn't run the unshield-balancing branch that
+    // `SendTransaction.prepareTxData` owns, so the fullnode rejects the tx.
+    // Injecting a small transparent UTXO lets the selector pick it for the
+    // deposit, and it is A's only transparent HTR, so it is also what makes
+    // the pool mixed; the test still proves createToken works alongside held
+    // shielded HTR (those UTXOs remain in the wallet after the tx).
+    // Supporting shielded HTR as the create-token deposit source is tracked
+    // separately.
     const topUpAddr = await walletA.getAddressAtIndex(2, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, topUpAddr, 5n);
     const mintAddr = await walletA.getAddressAtIndex(10, { legacy: true });
@@ -244,8 +250,9 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
       address: mintAddr,
     });
 
-    // Immediately attempt a FullShielded send of 700 TST. Needs 2 shielded
-    // outputs (700 + 300 change) and transparent HTR for the FS fees.
+    // Immediately attempt a FullShielded send of 700 TST, as two FS outputs.
+    // Every TST output is fully shielded, so the 300 TST change is a third FS
+    // output, and transparent HTR pays the FS fees.
     const recipient = await generateWalletHelper();
     const rsa0 = await recipient.getAddressAtIndex(0, { legacy: false });
     const rsa1 = await recipient.getAddressAtIndex(1, { legacy: false });
@@ -267,7 +274,8 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     await waitForTxReceived(wallet, send!.hash!);
     await waitForTxReceived(recipient, send!.hash!);
 
-    // Sender has 300 TST left transparent (1000 - 700), receiver has 700 shielded.
+    // Sender has 300 TST left (1000 - 700), as a fully-shielded change since
+    // every TST output is fully shielded; receiver has 700 shielded.
     const senderBal = await wallet.getBalance(tokenResp.hash);
     expect(senderBal[0].balance.unlocked).toBe(300n);
     const recvBal = await recipient.getBalance(tokenResp.hash);
@@ -399,8 +407,9 @@ describe('shielded outputs — Group K: Token creation with shielded addresses',
     await waitForTxReceived(wallet, fsSend!.hash!);
     await waitForTxReceived(recipient, fsSend!.hash!);
 
-    // Recipient got 700 TST credited as FS. Sender has 300 TST transparent
-    // remaining (1000 minted - 700 sent).
+    // Recipient got 700 TST credited as FS. Sender has 300 TST remaining
+    // (1000 minted - 700 sent), as a fully-shielded change since every output
+    // of the token is fully shielded.
     const recvBal = await recipient.getBalance(tokenResp.hash);
     expect(recvBal[0].balance.unlocked).toBe(700n);
     const senderBal = await wallet.getBalance(tokenResp.hash);

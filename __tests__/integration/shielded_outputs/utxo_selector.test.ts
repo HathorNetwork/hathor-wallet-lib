@@ -346,8 +346,10 @@ describe('shielded outputs — Group B: UTXO selector', () => {
     ]);
     await waitForTxReceived(walletB, seed!.hash!);
 
-    // Give B a tiny transparent UTXO for AS fees but deliberately target
-    // more value than is available, forcing the build to throw.
+    // Give B a tiny transparent UTXO as well, but deliberately target more
+    // value than is available, forcing the build to throw. The follow-up send
+    // leaves that UTXO unspent: its outputs are all shielded, so it draws on
+    // the shielded pool first, which pays its AS fees too.
     const legacyB = await walletB.getAddressAtIndex(5, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletB, legacyB, 5n);
 

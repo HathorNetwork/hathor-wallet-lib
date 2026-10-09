@@ -17,9 +17,10 @@
  * declared fee for an EXACT match, so the over-declared tx is rejected outright.
  *
  * This test sends a FEE-token to two shielded addresses (the protocol requires
- * at least two shielded outputs per tx), leaving a transparent change. The
- * correct fee is FEE_PER_OUTPUT (for the one transparent change) + the two
- * shielded fees. On a build that leaks the phantoms the wallet declares
+ * at least two shielded outputs per tx), leaving a transparent change (pinned
+ * with changeShieldedMode: OutputKind.TRANSPARENT; by default the change of a
+ * token whose outputs are all shielded is shielded too). The correct fee is
+ * FEE_PER_OUTPUT (for the one transparent change) + the two shielded fees. On a build that leaks the phantoms the wallet declares
  * 3 * FEE_PER_OUTPUT + shielded fees and the fullnode rejects the exact-match
  * fee — so this test fails on any phantom-leaking build.
  */
@@ -37,7 +38,7 @@ import {
   FEE_PER_OUTPUT,
   NATIVE_TOKEN_UID,
 } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { TokenVersion } from '../../../src/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
@@ -72,7 +73,7 @@ describe('shielded outputs — fee-token shielded fee', () => {
 
     // Send part of the FEE token to two shielded addresses (the protocol
     // minimum per tx); the remainder returns as a single TRANSPARENT change
-    // output. Correct fee =
+    // output, pinned so. Correct fee =
     //   FEE_PER_OUTPUT (the one transparent change output)
     //   + 2 * FEE_PER_FULL_SHIELDED_OUTPUT (the two shielded outputs).
     // A phantom-leaking build instead declares 3 * FEE_PER_OUTPUT + shielded
@@ -80,20 +81,23 @@ describe('shielded outputs — fee-token shielded fee', () => {
     // fee.
     const sbB0 = await walletB.getAddressAtIndex(0, { legacy: false });
     const sbB1 = await walletB.getAddressAtIndex(1, { legacy: false });
-    const tx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB0,
-        value: 250n,
-        token: tokenResp.hash,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: sbB1,
-        value: 150n,
-        token: tokenResp.hash,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    const tx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB0,
+          value: 250n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: sbB1,
+          value: 150n,
+          token: tokenResp.hash,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletA, tx!.hash!);
 

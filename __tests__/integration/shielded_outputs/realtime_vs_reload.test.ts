@@ -48,7 +48,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
@@ -289,7 +289,8 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     });
     const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletB, addrB, 100n);
-    // Shield most of the HTR onto walletB's own shielded addresses.
+    // Shield all of walletB's HTR onto its own shielded addresses: every HTR output of this tx
+    // is shielded, so its change is too (AS 47 after its fee).
     const sb0 = await walletB.getAddressAtIndex(1, { legacy: false });
     const sb1 = await walletB.getAddressAtIndex(2, { legacy: false });
     const shieldTx = await walletB.sendManyOutputsTransaction([
@@ -308,9 +309,13 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     ]);
     await waitForTxReceived(walletB, shieldTx!.hash!);
     await waitUntilNextTimestamp(walletB, shieldTx!.hash!);
-    // Unshielding send: transparent output funded by the shielded UTXOs.
+    // Unshielding send: transparent output funded by the shielded UTXOs (AS 47 + AS 30). The
+    // change is kept transparent so the tx is a full unshield: one mirroring the shielded
+    // inputs would be a shielded output.
     const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
-    const tx = await walletB.sendTransaction(addrA, 60n);
+    const tx = await walletB.sendTransaction(addrA, 60n, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
     await assertRealtimeMatchesReload(walletB, walletDataB.words, tx!.hash!, [NATIVE_TOKEN_UID]);
@@ -352,9 +357,10 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     const sb2 = await walletB.getAddressAtIndex(3, { legacy: false });
     const sb3 = await walletB.getAddressAtIndex(4, { legacy: false });
     const sb4 = await walletB.getAddressAtIndex(5, { legacy: false });
-    // We cannot avoid also selecting a transparent HTR UTXO for the AS fee,
-    // so the tx will include a transparent input too — but the critical
-    // coverage is a SHIELDED input being spent by walletB itself.
+    // Every HTR output of the shield tx was shielded, its change included
+    // (AS 47), so walletB holds no transparent HTR: the AS 100 alone pays the
+    // 90, the 4 fees and an AS 6 change, and every input is shielded. The
+    // critical coverage is a SHIELDED input being spent by walletB itself.
     const tx = await walletB.sendManyOutputsTransaction([
       {
         address: sb2,
@@ -586,24 +592,32 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     await GenesisWalletHelper.injectFunds(walletB, addrB, 200n);
     const sb0 = await walletB.getAddressAtIndex(1, { legacy: false });
     const sb1 = await walletB.getAddressAtIndex(2, { legacy: false });
-    const shieldTx = await walletB.sendManyOutputsTransaction([
-      {
-        address: sb0,
-        value: 50n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sb1,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent: every HTR output of this tx is shielded,
+    // so the rules would shield the change too, and walletB would hold no
+    // transparent HTR for the mixed-input send below.
+    const shieldTx = await walletB.sendManyOutputsTransaction(
+      [
+        {
+          address: sb0,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sb1,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletB, shieldTx!.hash!);
     await waitUntilNextTimestamp(walletB, shieldTx!.hash!);
-    // Spending a quantity that exceeds the transparent remainder will force
-    // the selector to pick from both the transparent and shielded UTXOs.
+    // Spending a quantity that exceeds the transparent remainder (118) forces
+    // the selector to pick from both the transparent and shielded UTXOs: the
+    // T 118 is swept and the AS 50 tops it up. The 6 change is shielded (AS 5
+    // after its fee), as a shielded input was spent.
     const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
     const sb2 = await walletB.getAddressAtIndex(3, { legacy: false });
     const sb3 = await walletB.getAddressAtIndex(4, { legacy: false });
@@ -689,13 +703,19 @@ describe('shielded outputs — Group R: Real-time vs reload invariant', () => {
     // eslint-disable-next-line no-promise-executor-return
     await new Promise(r => setTimeout(r, 500));
 
-    // Unshielding send: shielded UTXOs in, transparent output out. This
-    // is the exact `prepareTxData` path where excessBlindingFactor is
-    // computed iff `blindedInputsArr.length > 0`, which in turn requires
-    // `utxo.shielded === true` on the picked UTXOs. If the metadata
-    // update corrupted that flag, the fullnode rejects.
+    // Unshielding send: shielded UTXOs in, transparent output out. The
+    // shield tx's change is shielded too (AS 47, as every HTR output of it
+    // is shielded), and this send of 40 spends it; the change is kept
+    // transparent so the tx is a full unshield, as one mirroring the shielded
+    // input would be a shielded output. This is the exact `prepareTxData`
+    // path where excessBlindingFactor is computed iff
+    // `blindedInputsArr.length > 0`, which in turn requires
+    // `utxo.shielded === true` on the picked UTXOs. If the metadata update
+    // corrupted that flag, the fullnode rejects.
     const addrA = await walletA.getAddressAtIndex(0, { legacy: true });
-    const tx = await walletB.sendTransaction(addrA, 40n);
+    const tx = await walletB.sendTransaction(addrA, 40n, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletB, tx!.hash!);
 

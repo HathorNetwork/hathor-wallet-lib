@@ -22,7 +22,7 @@
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -62,14 +62,20 @@ describe('shielded outputs — Group D: processHistory over a dirty store', () =
     await waitForTxReceived(walletB, recvTx!.hash!);
     expect((await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
 
-    // walletB spends a shielded UTXO (unshield 20n back to walletA transparent).
-    const spendTx = await walletB.sendManyOutputsTransaction([
-      { address: addrA, value: 20n, token: NATIVE_TOKEN_UID },
-    ]);
+    // walletB spends its shielded 20n alone (unshield 20n back to walletA
+    // transparent). The change is pinned transparent, which also turns off the
+    // exact-match forcing: unpinned, the 20 matching 20n exactly would pull
+    // the 30 in to force a shielded change, spending both UTXOs. Pinned, the
+    // tx fully unshields the 20, with no change and no fee, and walletB keeps
+    // the 30.
+    const spendTx = await walletB.sendManyOutputsTransaction(
+      [{ address: addrA, value: 20n, token: NATIVE_TOKEN_UID }],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(spendTx).not.toBeNull();
     await waitForTxReceived(walletB, spendTx!.hash!);
     const balanceAfterSpend = (await walletB.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked;
-    expect(balanceAfterSpend).toBeLessThan(50n); // the spend (incl. fees) reduced the balance
+    expect(balanceAfterSpend).toBe(30n); // only the spent 20 left the balance
 
     // Reprocess history over the SAME (dirty) store — the processTxQueue path.
     // With the per-tx input-deletion loop removed, the spent shielded UTXO must
@@ -82,9 +88,10 @@ describe('shielded outputs — Group D: processHistory over a dirty store', () =
     expect(balanceAfterReprocess).toBe(balanceAfterSpend);
 
     // And the spent UTXO is truly gone from selection: a follow-up send succeeds.
-    // A resurrected, already-spent input would fail full validation at the
-    // fullnode ('input already spent'), rejecting this send. (After unshielding
-    // 20n of 50n the remaining shielded change is well above 5n.)
+    // walletB holds only the shielded 30, so a resurrected 20 would be this
+    // send's pick (the smallest UTXO that covers 5n), and that already-spent
+    // input would fail full validation at the fullnode ('input already
+    // spent'), rejecting this send.
     expect(balanceAfterReprocess).toBeGreaterThanOrEqual(10n);
     const followTx = await walletB.sendManyOutputsTransaction([
       { address: addrA, value: 5n, token: NATIVE_TOKEN_UID },

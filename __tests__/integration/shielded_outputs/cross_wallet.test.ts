@@ -7,8 +7,6 @@
  * Group C — Sender vs receiver views of shielded transactions.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateWalletHelper,
@@ -17,7 +15,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -38,20 +36,24 @@ describe('shielded outputs — Group C: Cross-wallet views', () => {
 
     const sb0 = await walletB.getAddressAtIndex(0, { legacy: false });
     const sb1 = await walletB.getAddressAtIndex(1, { legacy: false });
-    const tx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sb0,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sb1,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent, so the sender decrypts no shielded output.
+    const tx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sb0,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sb1,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(tx).not.toBeNull();
     await waitForTxReceived(walletA, tx!.hash!);
     await waitForTxReceived(walletB, tx!.hash!);
@@ -94,16 +96,28 @@ describe('shielded outputs — Group C: Cross-wallet views', () => {
     ]);
     await waitForTxReceived(walletA, tx!.hash!);
 
-    // walletA's stored tx: outputs[] should NOT contain decoded shielded
-    // entries attributable to walletA — it can't decrypt receiver outputs.
+    // walletA's stored tx keeps its shielded outputs in shielded_outputs[]
+    // (outputs[] is transparent-only), and an entry walletA decodes carries
+    // its value. Every HTR output is shielded, so walletA's change is a third
+    // shielded output: 100 - 50 - 2 (the recipient outputs' fees) = 48, minus
+    // its own 1 fee = 47. walletA decodes that change, at its own address, and
+    // nothing of the receiver's two outputs, at addresses it does not own.
     const senderTx = await walletA.getTx(tx!.hash!);
-    const decodedShielded = (senderTx!.outputs ?? []).filter((o: any) => o?.type === 'shielded');
-    // Resolve each potential shielded output to an isMine flag; every result
-    // must be false (none of them should be credited to walletA).
-    const ownership = await Promise.all(
-      decodedShielded.map((o: any) => walletA.storage.isAddressMine(o.decoded?.address))
+    const seenBySender = await Promise.all(
+      (senderTx!.shielded_outputs ?? []).map(async so => ({
+        mine: await walletA.storage.isAddressMine(so.decoded.address ?? ''),
+        value: so.value,
+      }))
     );
-    expect(ownership.every(isMine => isMine === false)).toBe(true);
+    expect(seenBySender.filter(entry => entry.mine)).toEqual([{ mine: true, value: 47n }]);
+    expect(seenBySender.filter(entry => !entry.mine)).toEqual([
+      { mine: false, value: undefined },
+      { mine: false, value: undefined },
+    ]);
+    // So walletA credits its change and none of the receiver's outputs:
+    // -(50 sent + 3 fee).
+    const senderBal = await walletA.getTxBalance(senderTx!);
+    expect(senderBal[NATIVE_TOKEN_UID]).toBe(-53n);
   });
 
   it('C.17 — Round-trip A → B → A: both wallets see correct deltas in both txs', async () => {
@@ -112,23 +126,26 @@ describe('shielded outputs — Group C: Cross-wallet views', () => {
     const addrA = await walletA.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(walletA, addrA, 100n);
 
-    // tx1: A → B shielded
+    // tx1: A → B shielded, with A's change kept transparent
     const sb0 = await walletB.getAddressAtIndex(0, { legacy: false });
     const sb1 = await walletB.getAddressAtIndex(1, { legacy: false });
-    const tx1 = await walletA.sendManyOutputsTransaction([
-      {
-        address: sb0,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sb1,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const tx1 = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sb0,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sb1,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletA, tx1!.hash!);
     await waitForTxReceived(walletB, tx1!.hash!);
     await waitUntilNextTimestamp(walletA, tx1!.hash!);
@@ -162,19 +179,18 @@ describe('shielded outputs — Group C: Cross-wallet views', () => {
       50n
     );
 
-    // tx2: B's view: 30+20=50 in shielded UTXOs spent, 0 returned to B (no
-    // change) + 2 fee → -50 if both UTXOs spent (40 sent + 2 fee + change?).
-    // The test trusts the ledger: B's net is -fee - amount_sent_to_A.
+    // tx2: B's view: its shielded 30 + 20 = 50 are both spent for the 40
+    // sent and the 2 fees of A's outputs. Every HTR output is shielded, so the
+    // 8 left returns to B as a shielded change: 8 - 1 (its own fee) = 7, and
+    // the fee is 3. B's net = -(40 sent + 3 fee) = -43.
     // A's net for tx2 = +40 (received 25+15 shielded).
     expect((await walletA.getTxBalance((await walletA.getTx(tx2!.hash!))!))[NATIVE_TOKEN_UID]).toBe(
       40n
     );
-    // We don't pin B's exact value (depends on UTXO selection details), but
-    // it should be negative and at least -fee (-2n).
     const bDeltaTx2 = (await walletB.getTxBalance((await walletB.getTx(tx2!.hash!))!))[
       NATIVE_TOKEN_UID
     ];
-    expect(bDeltaTx2).toBeLessThan(0n);
+    expect(bDeltaTx2).toBe(-43n);
   });
 
   it('C.18 — Receiver balance reverses when tx is voided from their perspective', async () => {

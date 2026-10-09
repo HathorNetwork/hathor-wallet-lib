@@ -41,7 +41,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -72,25 +72,29 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
 
     // A sends 30 HTR FS to B and 20 HTR FS back to itself in the same tx.
-    // The on-chain layout is `transparent_change + shielded[B-out, A-out]`.
+    // With the change kept transparent, the on-chain layout is
+    // `transparent_change + shielded[B-out, A-out]`.
     // A's wallet, when it processes its own tx, can rewind only the A-out
     // shielded entry — the bug's sparse-decode trigger.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const saA = await walletA.getAddressAtIndex(2, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: saA,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: saA,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -134,22 +138,26 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
 
+    // The change is kept transparent, as in N.1.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const saA = await walletA.getAddressAtIndex(2, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: saA,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: saA,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -190,29 +198,33 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, fundA, 200n);
 
+    // The change is kept transparent, so A owns exactly one shielded entry.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const saA = await walletA.getAddressAtIndex(3, { legacy: false });
     const sbC = await walletC.getAddressAtIndex(0, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: saA,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: sbC,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: saA,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: sbC,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -390,23 +402,28 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
 
-    // Same sparse-trigger setup as N.1: 30 FS to B, 20 FS back to self.
+    // Same sparse-trigger setup as N.1: 30 FS to B, 20 FS back to self. The
+    // change is kept transparent, so the parent has a transparent change and
+    // two shielded slots.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const saA = await walletA.getAddressAtIndex(2, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: saA,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: saA,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -420,8 +437,12 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     const transparentChange = balABefore - 20n;
     const sendAmount = transparentChange + 10n;
 
+    // The change is kept transparent: one mirroring the FS input would be
+    // shielded, and its fee would add to the debit asserted below.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
-    const finalTx = await walletA.sendTransaction(addrC, sendAmount);
+    const finalTx = await walletA.sendTransaction(addrC, sendAmount, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(finalTx).not.toBeNull();
     await waitForTxReceived(walletA, finalTx!.hash!);
     await waitForTxReceived(walletC, finalTx!.hash!);
@@ -486,26 +507,30 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
 
     // Order matters: recipient FIRST so its confidential output occupies
     // shielded_outputs[0] — the on-chain index that the walletA can't decode.
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa1,
-        value: 50n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa2,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    // The change is kept transparent, giving the layout above (T = 1).
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa1,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa2,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -519,10 +544,13 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     // Send essentially everything to walletC. With 167 total and 1 left as
     // transparent change, the wallet has to consume ALL three UTXOs as
     // inputs — including the bug-triggering walletA self#1 UTXO at parent
-    // on-chain idx 2.
+    // on-chain idx 2. The change is kept transparent: one mirroring the AS
+    // inputs would have to be shielded, and 1 HTR cannot pay its fee.
     const sendAmount = 166n;
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
-    const finalTx = await walletA.sendTransaction(addrC, sendAmount);
+    const finalTx = await walletA.sendTransaction(addrC, sendAmount, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(finalTx).not.toBeNull();
     await waitForTxReceived(walletA, finalTx!.hash!);
     await waitForTxReceived(walletC, finalTx!.hash!);
@@ -564,30 +592,34 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
     await GenesisWalletHelper.injectFunds(walletA, fundA, 200n);
 
     // Recipient first → its confidential output sits at the lowest shielded
-    // on-chain index, shifting walletA's two decoded entries DOWN.
+    // on-chain index, shifting walletA's two decoded entries DOWN. The change
+    // is kept transparent: 77 HTR next to the 50 + 40 shielded.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const sa1 = await walletA.getAddressAtIndex(7, { legacy: false });
     const sa2 = await walletA.getAddressAtIndex(8, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa1,
-        value: 50n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sa2,
-        value: 40n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa1,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sa2,
+          value: 40n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     expect(splitTx).not.toBeNull();
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitForTxReceived(walletB, splitTx!.hash!);
@@ -595,9 +627,13 @@ describe('shielded outputs — Group N: sparse-shielded-decode regression', () =
 
     // First spend: amount > transparent change + smaller shielded UTXO so
     // the selector has to pick the larger sparse-decoded shielded UTXO too.
+    // The change is kept transparent, so the reload below sees a plain 7 HTR
+    // instead of a shielded change split in two.
     const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
     const firstSendAmount = 160n;
-    const firstTx = await walletA.sendTransaction(addrC, firstSendAmount);
+    const firstTx = await walletA.sendTransaction(addrC, firstSendAmount, {
+      changeShieldedMode: OutputKind.TRANSPARENT,
+    });
     expect(firstTx).not.toBeNull();
     await waitForTxReceived(walletA, firstTx!.hash!);
     await waitForTxReceived(walletC, firstTx!.hash!);

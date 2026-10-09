@@ -33,7 +33,7 @@ import {
   DEFAULT_PIN_CODE,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { getGapLimitConfig } from '../utils/core.util';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
@@ -134,7 +134,9 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
     const walletB2 = await reloadFromSeed(walletDataB.words);
     expect((await walletB2.getBalance(NATIVE_TOKEN_UID))[0].balance.unlocked).toBe(50n);
 
-    // Give B2 transparent HTR for AS fees on the outgoing tx.
+    // Give B2 transparent HTR as well. The outgoing tx leaves it unspent: its
+    // outputs are all shielded, so it draws on the shielded pool first, and the
+    // recovered 30 + 20 pay both outputs and their AS fees.
     const legacyB = await walletB2.getAddressAtIndex(5, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletB2, legacyB, 10n);
 
@@ -238,13 +240,14 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
    * commitment-match recovery path.
    *
    * Scenario: walletA sends an FS tx with outputs to BOTH walletB AND
-   * itself in the same tx. walletA's wallet stores the change as a
-   * sparse-decoded UTXO (only one of the parent's two shielded outputs
-   * is owned). After restart, the wallet re-syncs history and re-decodes
-   * the owned shielded slot in place on tx.shielded_outputs[]; the saveUtxo
-   * index is the arithmetic on-chain index `outputs.length + s`, so the
-   * recovered UTXO keys to the same slot the fullnode used regardless of
-   * how many of the parent's shielded outputs the wallet owns.
+   * itself in the same tx, with its change kept transparent. walletA's
+   * wallet stores the FS output to itself as a sparse-decoded UTXO (only one
+   * of the parent's two shielded outputs is owned). After restart, the
+   * wallet re-syncs history and re-decodes the owned shielded slot in place
+   * on tx.shielded_outputs[]; the saveUtxo index is the arithmetic on-chain
+   * index `outputs.length + s`, so the recovered UTXO keys to the same slot
+   * the fullnode used regardless of how many of the parent's shielded
+   * outputs the wallet owns.
    *
    * Pinning the post-restart spend ensures the re-decode + arithmetic index
    * path is exercised and the recovered UTXO is truly spendable.
@@ -261,29 +264,37 @@ describe('shielded outputs — Group F: Wallet restart persistence', () => {
     const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
 
+    // With the change kept transparent, the on-chain layout is
+    // `transparent_change + shielded[B-out, A-out]`. Left to the rules, the
+    // change would be a third shielded output (every HTR output is shielded),
+    // and walletA would own two of the three.
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     const saA = await walletA.getAddressAtIndex(2, { legacy: false });
-    const splitTx = await walletA.sendManyOutputsTransaction([
-      {
-        address: sbB,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-      {
-        address: saA,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.FULLY_SHIELDED,
-      },
-    ]);
+    const splitTx = await walletA.sendManyOutputsTransaction(
+      [
+        {
+          address: sbB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: saA,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletA, splitTx!.hash!);
     await waitUntilNextTimestamp(walletA, splitTx!.hash!);
 
     await walletA.stop({ cleanStorage: true, cleanAddresses: true });
     const walletA2 = await reloadFromSeed(walletDataA.words);
 
-    // After restart, balance includes both transparent change and FS change.
+    // After restart, balance includes both the transparent change and the FS
+    // output to itself.
     const balA2 = await walletA2.getBalance(NATIVE_TOKEN_UID);
     expect(balA2[0].balance.unlocked).toBeGreaterThanOrEqual(60n);
 

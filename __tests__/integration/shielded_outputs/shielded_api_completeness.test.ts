@@ -18,7 +18,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, stopAllWallets, waitForTxReceived } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import Address from '../../../src/models/address';
 import { deriveShieldedAddress } from '../../../src/utils/shieldedAddress';
 import { IHistoryTx } from '../../../src/types';
@@ -111,23 +111,27 @@ describe('shielded outputs — Group C: API completeness for shielded receives',
     await GenesisWalletHelper.injectFunds(walletB, addrB, 100n);
 
     // Self-shield 50n total (>= 2 shielded outputs required) -> walletB owns
-    // 50n of shielded UTXOs + 50n transparent change.
+    // 50n of shielded UTXOs + a transparent change. The change is kept
+    // transparent so both pools hold funds for the partition below.
     const sb0 = await walletB.getAddressAtIndex(0, { legacy: false });
     const sb1 = await walletB.getAddressAtIndex(1, { legacy: false });
-    const shieldTx = await walletB.sendManyOutputsTransaction([
-      {
-        address: sb0,
-        value: 30n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-      {
-        address: sb1,
-        value: 20n,
-        token: NATIVE_TOKEN_UID,
-        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-      },
-    ]);
+    const shieldTx = await walletB.sendManyOutputsTransaction(
+      [
+        {
+          address: sb0,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+        {
+          address: sb1,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { changeShieldedMode: OutputKind.TRANSPARENT }
+    );
     await waitForTxReceived(walletB, shieldTx!.hash!);
 
     // Total balance = transparent change + shielded (minus the tx fee). Assert

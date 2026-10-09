@@ -77,9 +77,11 @@ describe('shielded outputs — Group E: Mixed AS/FS modes', () => {
     const balB = await walletB.getBalance(NATIVE_TOKEN_UID);
     expect(balB[0].balance.unlocked).toBe(60n);
 
-    // Sender: 200 - 60 spent - 2*FEE_AS - 1*FEE_FS.
+    // Sender: 200 - 60 spent - 2*FEE_AS - 2*FEE_FS. Every HTR output is
+    // shielded, so the change is shielded too, in the most private mode among
+    // them (FS).
     const balA = await walletA.getBalance(NATIVE_TOKEN_UID);
-    const expectedFee = 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT + FEE_PER_FULL_SHIELDED_OUTPUT;
+    const expectedFee = 2n * FEE_PER_AMOUNT_SHIELDED_OUTPUT + 2n * FEE_PER_FULL_SHIELDED_OUTPUT;
     expect(balA[0].balance.unlocked).toBe(200n - 60n - expectedFee);
   });
 
@@ -408,9 +410,14 @@ describe('shielded outputs — Group E: Mixed AS/FS modes', () => {
     const aDelta = await walletA.getTxBalance((await walletA.getTx(fullfull!.hash!))!);
     expect(aDelta[NATIVE_TOKEN_UID]).toBe(35n);
 
-    // Sender B's delta is negative (spent 35 + 3 fee).
+    // Sender B's delta: -(35 sent + 5 fee). HTR pays the fee, so its
+    // amount-shielded UTXOs are taken first: the forced shielded input is the
+    // AS 5, the T 20 is swept, and the 13 left takes the AS 10 whole and the
+    // FS 5 by value, 40 for 38. The 2 change, fully shielded like the outputs'
+    // most private mode, cannot pay its own 2 fee, so the FS 10 is pulled into
+    // it: change FS 10, fee 1 + 2 + 2 = 5, and all five UTXOs are spent.
     const bDelta = await walletB.getTxBalance((await walletB.getTx(fullfull!.hash!))!);
-    expect(bDelta[NATIVE_TOKEN_UID]).toBeLessThan(0n);
+    expect(bDelta[NATIVE_TOKEN_UID]).toBe(-40n);
   });
 
   it('E.27 — FS→FS send when wallet has 0 transparent HTR must work (FIX-30)', async () => {

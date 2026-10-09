@@ -153,7 +153,9 @@ describe('shielded outputs — Group H: Concurrency', () => {
     await waitForTxReceived(walletB, tx1!.hash!);
     await waitUntilNextTimestamp(walletA, tx1!.hash!);
 
-    // Give B transparent HTR for fees.
+    // Give B transparent HTR as well. tx2 leaves it unspent: its outputs are
+    // all shielded, so it draws on the shielded pool first, and the 30 pays
+    // both outputs and their fees.
     const legacyB = await walletB.getAddressAtIndex(5, { legacy: true });
     await GenesisWalletHelper.injectFunds(walletB, legacyB, 10n);
 

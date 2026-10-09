@@ -23,7 +23,7 @@ import {
   waitUntilNextTimestamp,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
-import { ShieldedOutputMode } from '../../../src/shielded/types';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
 import { bumpShieldedTestTimeout } from '../configuration/test-constants';
 
 bumpShieldedTestTimeout();
@@ -38,8 +38,12 @@ describe('shielded outputs — Group V: protocol-level rejections', () => {
 
   /**
    * V.1 — `sendManyOutputsTransaction` cannot emit a single shielded
-   * output. The wallet-lib enforces a minimum of 2 shielded outputs to
-   * prevent trivial commitment-matching attacks (anti-decoy).
+   * output. The protocol requires a minimum of 2 shielded outputs to
+   * prevent trivial commitment-matching attacks (anti-decoy), so the
+   * wallet-lib gives a lone output a second one: it splits the output, or
+   * shields the HTR change. A 1-unit output cannot be split, and with the
+   * change pinned transparent there is nothing to shield, so the tx is
+   * refused.
    */
   it('V.1 — single shielded output is rejected client-side', async () => {
     const walletA = await generateWalletHelper();
@@ -50,15 +54,18 @@ describe('shielded outputs — Group V: protocol-level rejections', () => {
 
     const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
     await expect(
-      walletA.sendManyOutputsTransaction([
-        {
-          address: sbB,
-          value: 30n,
-          token: NATIVE_TOKEN_UID,
-          shielded: ShieldedOutputMode.FULLY_SHIELDED,
-        },
-      ])
-    ).rejects.toThrow(/at least 2 shielded outputs/i);
+      walletA.sendManyOutputsTransaction(
+        [
+          {
+            address: sbB,
+            value: 1n,
+            token: NATIVE_TOKEN_UID,
+            shielded: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+        { changeShieldedMode: OutputKind.TRANSPARENT }
+      )
+    ).rejects.toThrow(/two shielded outputs the protocol requires/i);
   });
 
   // V.2 is now a POSITIVE test (TCT/shielded-HTR works after the upstream
