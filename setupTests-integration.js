@@ -23,8 +23,12 @@ import Transaction from './src/models/transaction';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
-// Retry flaky tests up to 2 times before marking them as failed
-jest.retryTimes(2, { logErrorsBeforeRetry: true });
+// Retry flaky tests locally to improve dev ergonomics. Always disabled in CI so flakiness
+// surfaces instead of being masked. Override the local count with FLAKY_RETRIES=N (default: 2).
+const flakyRetries = process.env.CI ? 0 : Number(process.env.FLAKY_RETRIES ?? 2);
+if (flakyRetries > 0) {
+  jest.retryTimes(flakyRetries, { logErrorsBeforeRetry: true });
+}
 
 // Mock calculateWeight to always return 1 for faster mining in integration tests
 Transaction.prototype.calculateWeight = function () {
