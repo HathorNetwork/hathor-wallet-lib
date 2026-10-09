@@ -599,7 +599,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Derive the shielded keys for access data stored before shielded support,
    * and save them. Needs the password, since the keys come from the encrypted
-   * seed. Access data without a seed (xpriv or xpub wallets) is left as is.
+   * seed: without it the wallet starts legacy-only, as before, and gets its
+   * shielded keys the next time it starts with the password. Access data
+   * without a seed (xpriv or xpub wallets) is left as is.
    */
   private async addShieldedKeysToAccessData(
     accessData: IWalletAccessData,
@@ -610,9 +612,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       return;
     }
     if (!password) {
-      throw new WalletError(
-        'The wallet password is required to add the shielded keys to this wallet.'
-      );
+      return;
     }
     let migrated: boolean;
     try {

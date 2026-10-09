@@ -242,14 +242,14 @@ describe('stored access data without shielded keys', () => {
     expect(wallet.isShieldedEnabled()).toBe(true);
   });
 
-  it('asks for the password when it is missing', async () => {
+  it('starts legacy-only without the password, as before shielded support', async () => {
     const storage = new Storage(new MemoryStore());
     await storage.saveAccessData(preShieldedAccessData());
     const wallet = buildSeedWallet(storage);
-    const err = await wallet.start({ pinCode: PIN }).catch(e => e);
-    expect(err).toBeInstanceOf(WalletError);
-    expect(err.message).toMatch(/password/i);
-    expect(createWalletSpy).not.toHaveBeenCalled();
+    await wallet.start({ pinCode: PIN });
+    expect(createWalletSpy.mock.calls[0][7]).toBeNull();
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect((await storage.getAccessData()).scanXpubkey).toBeUndefined();
   });
 
   it('wraps a wrong password in a WalletError', async () => {
