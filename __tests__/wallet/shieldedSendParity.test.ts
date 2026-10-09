@@ -70,6 +70,7 @@ interface ScenarioUtxo {
   value: number;
   mode?: 1 | 2; // shielded mode; absent for transparent
   token?: string; // default HTR
+  timelock?: number; // unix seconds
 }
 
 const FEE_TOKEN = 'cd'.repeat(32);
@@ -88,9 +89,12 @@ interface Scenario {
   utxos: ScenarioUtxo[];
   outputs: OutputRequestObj[];
   changeShieldedMode?: ChangeOutputMode | null;
+  changeAddress?: string;
 }
 
 const transparentTx = buildTransparentTxOutputEntry().txId;
+// A timelock that has not expired
+const FUTURE = Math.floor(Date.now() / 1000) + 3600;
 const shieldedTx = buildShieldedTxOutputEntry().txId;
 // Distinct commitments, so the provider opens each shielded utxo to its value
 const commitmentOf = (index: number) => index.toString(16).padStart(2, '0').padEnd(66, 'a');
@@ -255,6 +259,33 @@ const scenarios: Scenario[] = [
     ],
   },
   {
+    name: 'explicit legacy change address',
+    utxos: [{ index: 0, value: 100 }],
+    outputs: [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+    changeAddress: legacyFixtureAddress,
+  },
+  {
+    name: 'explicit new-format change address hosting a shielded change',
+    utxos: [{ index: 0, value: 1000 }],
+    outputs: [
+      {
+        address: externalShielded,
+        value: 100n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ],
+    changeAddress: shieldedFixtureAddresses[3].shieldedBase58,
+  },
+  {
+    name: 'timelocked utxo left out',
+    utxos: [
+      { index: 0, value: 1000, timelock: FUTURE },
+      { index: 1, value: 50 },
+    ],
+    outputs: [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+  },
+  {
     name: 'exact match below more than 255 larger utxos',
     utxos: [
       ...Array.from({ length: 300 }, (_v, i) => ({ index: i, value: 1000 - i })),
@@ -325,7 +356,13 @@ function serviceEntries(scenario: Scenario): Utxo[] {
             ...(u.mode === 2 ? { assetCommitment: FS_ASSET_COMMITMENT.toString('hex') } : {}),
           }
         : { ...buildTransparentTxOutputEntry(), txId: transparentTx, index: u.index, tokenId };
-      return { ...entry, value: BigInt(u.value), authorities: 0n } as unknown as Utxo;
+      return {
+        ...entry,
+        value: BigInt(u.value),
+        authorities: 0n,
+        // The wallet-service marks an output with an unexpired timelock locked
+        ...(u.timelock ? { timelock: u.timelock, locked: u.timelock > Date.now() / 1000 } : {}),
+      } as unknown as Utxo;
     });
 }
 
@@ -338,7 +375,7 @@ function storeUtxos(scenario: Scenario): IUtxo[] {
     address: u.mode ? shieldedFixtureAddresses[u.index].spendBase58 : legacyFixtureAddress,
     value: BigInt(u.value),
     authorities: 0n,
-    timelock: null,
+    timelock: u.timelock ?? null,
     type: DEFAULT_TX_VERSION,
     height: null,
     ...(u.mode
@@ -378,6 +415,7 @@ async function buildWithFullnodeStorage(scenario: Scenario): Promise<IDataTx> {
     storage,
     outputs: engineOutputs(scenario.outputs),
     changeShieldedMode: scenario.changeShieldedMode ?? null,
+    changeAddress: scenario.changeAddress ?? null,
     pin: PIN,
   });
   return sendTransaction.prepareTxData();
@@ -420,6 +458,7 @@ async function buildWithWalletService(
           e =>
             (e.kind ?? 'transparent') === options.kind &&
             e.tokenId === options.tokenId &&
+            !(options.ignoreLocked && e.locked) &&
             (smallerThan === undefined || e.value < smallerThan)
         )
         .slice(0, options.maxOutputs),
@@ -444,6 +483,7 @@ async function buildWithWalletService(
     storage: adapter.createProxy(),
     outputs: engineOutputs(scenario.outputs),
     changeShieldedMode: scenario.changeShieldedMode ?? null,
+    changeAddress: scenario.changeAddress ?? null,
     pin: PIN,
   });
   const txData = await sendTransaction.prepareTxData();
