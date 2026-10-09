@@ -44,10 +44,6 @@ const ADDRESS_REFUSALS: Record<
     code: ErrorMessages.SHIELDED_NOT_STARTED,
     message: 'The wallet is not started, so it gives no shielded address.',
   },
-  'wallet-service': {
-    code: ErrorMessages.SHIELDED_NOT_SUPPORTED,
-    message: 'The wallet-service facade does not support shielded addresses.',
-  },
   multisig: {
     code: ErrorMessages.SHIELDED_MULTISIG,
     message:
@@ -101,8 +97,6 @@ const ADDRESS_REFUSALS: Record<
  * 7. the wallet cannot sign the inputs that spend shielded outputs: `view`,
  *    `no-spend-authority`;
  * 8. otherwise: `full`.
- *
- * The wallet-service facade reports `none`, `wallet-service` by itself.
  *
  * @param storage The wallet storage
  */

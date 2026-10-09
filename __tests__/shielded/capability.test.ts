@@ -402,7 +402,6 @@ describe('shieldedAddressRefusal', () => {
 
   it.each([
     { reason: 'not-started' as const, code: 'shielded-not-started' },
-    { reason: 'wallet-service' as const, code: 'shielded-not-supported' },
     { reason: 'multisig' as const, code: 'shielded-multisig' },
     { reason: 'integrity' as const, code: 'shielded-integrity' },
     { reason: 'needs-password' as const, code: 'shielded-no-keys' },
