@@ -283,4 +283,25 @@ describe('wsTransactionSchema shielded fields', () => {
     expect(parsed.shielded_outputs).toHaveLength(2);
     expect(parsed.addresses).toEqual([shieldedFixtureAddresses[0].spendBase58]);
   });
+
+  it('accepts a shielded output whose script does not decode', () => {
+    // The daemon sends `decoded: null` when the output script is not standard
+    const parsed = wsTransactionSchema.parse({
+      tx_id: '00000000c3c4a3a1d7a7d2e5b3b6e1f4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0',
+      nonce: 1,
+      timestamp: 1,
+      version: 1,
+      voided: false,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [],
+      token_name: null,
+      token_symbol: null,
+      signal_bits: 0,
+      shielded_outputs: [{ mode: 1, token_data: 0, decoded: null }],
+      addresses: [],
+    });
+    expect(parsed.shielded_outputs![0].decoded).toBeNull();
+  });
 });

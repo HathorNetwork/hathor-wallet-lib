@@ -749,7 +749,11 @@ export interface WsTransaction {
   // Shielded outputs carry no value or crypto material on the websocket, only
   // the on-chain address they pay (shielded-capable servers only).
   // eslint-disable-next-line camelcase
-  shielded_outputs?: { mode: number; token_data?: number; decoded: { address?: string } }[];
+  shielded_outputs?: {
+    mode: number;
+    token_data?: number;
+    decoded: { address?: string } | null; // null when the script is not a standard type
+  }[];
   addresses?: string[]; // every address the tx involves
 }
 

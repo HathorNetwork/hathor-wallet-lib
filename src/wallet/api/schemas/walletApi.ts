@@ -735,7 +735,8 @@ export const wsTransactionSchema = z.object({
       z.object({
         mode: z.number(),
         token_data: z.number().optional(),
-        decoded: z.object({ address: z.string().optional() }),
+        // null when the output script is not a standard type
+        decoded: z.object({ address: z.string().optional() }).nullable(),
       })
     )
     .optional(),
