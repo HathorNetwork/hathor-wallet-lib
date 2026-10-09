@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { inspect } from 'util';
 import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
@@ -1418,5 +1419,232 @@ describe('utxo selection ttl', () => {
     await storage.utxoSelectAsInput(utxo, false);
 
     expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
+describe('handleStop and the scan key in memory', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  let seedScanXPrivKey: string | null = null;
+
+  /** The storage of a started wallet that keeps the scan key of the test seed in memory. */
+  function storageWithScanKey() {
+    if (!seedScanXPrivKey) {
+      seedScanXPrivKey = walletUtils
+        .getXPrivKeyFromSeed(seed, { networkName: 'testnet' })
+        .deriveChild("m/44'/280'/1'")
+        .deriveChild(0).xprivkey;
+    }
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.shieldedView.started = true;
+    storage.scanXPrivKey = seedScanXPrivKey;
+    return { store, storage, xpriv: seedScanXPrivKey };
+  }
+
+  it('drops the scan key and the shielded view, with or without cleaning the storage', async () => {
+    for (const cleanStorage of [false, true]) {
+      const { storage } = storageWithScanKey();
+      await storage.handleStop({ cleanStorage });
+      expect(storage.shieldedView.started).toBe(false);
+      expect(storage.scanXPrivKey).toBeNull();
+    }
+  }, 30000);
+
+  it('drops the scan key when a stop step throws', async () => {
+    const { storage } = storageWithScanKey();
+    jest.spyOn(storage, 'cleanStorage').mockRejectedValue(new Error('store write failed'));
+
+    await expect(storage.handleStop({ cleanStorage: true })).rejects.toThrow('store write failed');
+
+    expect(storage.shieldedView.started).toBe(false);
+    expect(storage.scanXPrivKey).toBeNull();
+  });
+
+  it('keeps the scan key when the storage is cleaned', async () => {
+    const { storage, xpriv } = storageWithScanKey();
+    await storage.cleanStorage(true, true, true);
+    expect(storage.shieldedView.started).toBe(true);
+    expect(storage.scanXPrivKey).toBe(xpriv);
+  });
+
+  it('leaves alone the scan key of a start() that ran while it stopped', async () => {
+    const { storage, xpriv } = storageWithScanKey();
+    const connection = { unsubscribeAddress: jest.fn(), removeMetricsHandlers: jest.fn() };
+
+    // The previous wallet stops without awaiting, and the next wallet on this
+    // storage starts while the stop unsubscribes its addresses.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stopping = storage.handleStop({ connection: connection as any });
+    storage.shieldedView.started = true;
+    storage.scanXPrivKey = xpriv;
+    await stopping;
+
+    expect(storage.shieldedView.started).toBe(true);
+    expect(storage.scanXPrivKey).toBe(xpriv);
+  });
+
+  it('cleans the storage after the processing that was crediting a tx when the wallet stopped', async () => {
+    const { store, storage } = storageWithScanKey();
+    const address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+    await storage.saveAddress({ base58: address, bip32AddressIndex: 0 });
+    const tx = {
+      tx_id: 'd1'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      inputs: [],
+      tokens: [],
+      height: 1,
+      outputs: [
+        {
+          value: 7n,
+          token: NATIVE_TOKEN_UID,
+          token_data: 0,
+          script: '',
+          decoded: { type: 'P2PKH', address, timelock: null },
+          spent_by: null,
+        },
+      ],
+    } as unknown as IHistoryTx;
+    await storage.addTx(tx);
+    // Hold the save of the UTXO the crediting writes.
+    const saveUtxo = store.saveUtxo.bind(store);
+    let crediting = false;
+    let finishCredit: () => void = () => {};
+    const creditFinished = new Promise<void>(resolve => {
+      finishCredit = resolve;
+    });
+    jest.spyOn(store, 'saveUtxo').mockImplementation(async utxo => {
+      crediting = true;
+      await creditFinished;
+      return saveUtxo(utxo);
+    });
+
+    const processing = storage.processNewTx(tx);
+    for (let i = 0; i < 1000 && !crediting; i++) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 2);
+      });
+    }
+    expect(crediting).toBe(true);
+    // stop(): the storage is cleaned without awaiting the crediting.
+    const stopping = storage.handleStop({ cleanStorage: true });
+    await new Promise(resolve => {
+      setTimeout(resolve, 30);
+    });
+    finishCredit();
+    await processing;
+    await stopping;
+
+    expect(await store.getUtxo({ txId: tx.tx_id, index: 0 })).toBeNull();
+    expect(await storage.getTx(tx.tx_id)).toBeNull();
+    expect(await store.getTokenMeta(NATIVE_TOKEN_UID)).toBeNull();
+  });
+
+  it('cleans the storage without waiting for the token info a credited tx asks for', async () => {
+    const { storage } = storageWithScanKey();
+    const address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+    const token = '01'.repeat(32);
+    await storage.saveAddress({ base58: address, bip32AddressIndex: 0 });
+    const tx = {
+      tx_id: 'd2'.repeat(32),
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      inputs: [],
+      tokens: [token],
+      height: 1,
+      outputs: [
+        {
+          value: 7n,
+          token,
+          token_data: 1,
+          script: '',
+          decoded: { type: 'P2PKH', address, timelock: null },
+          spent_by: null,
+        },
+      ],
+    } as unknown as IHistoryTx;
+    await storage.addTx(tx);
+    // The tx is credited; then the request for the info of its new token hangs.
+    let fetching = false;
+    let answer: () => void = () => {};
+    const answered = new Promise<void>(resolve => {
+      answer = resolve;
+    });
+    jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation(async (_uid, resolve) => {
+      fetching = true;
+      await answered;
+      resolve({ success: true, name: 'Token', symbol: 'TKN' } as never);
+    });
+
+    const processing = storage.processNewTx(tx);
+    for (let i = 0; i < 1000 && !fetching; i++) {
+      await new Promise(resolve => {
+        setTimeout(resolve, 2);
+      });
+    }
+    expect(fetching).toBe(true);
+    const outcome = await Promise.race([
+      storage.handleStop({ cleanStorage: true }).then(() => 'cleaned'),
+      new Promise(resolve => {
+        setTimeout(() => resolve('waiting'), 200);
+      }),
+    ]);
+    answer();
+    await processing;
+
+    expect(outcome).toBe('cleaned');
+  });
+
+  it('never hands the key to the store', async () => {
+    const { store, storage, xpriv } = storageWithScanKey();
+    const secrets = [xpriv, 'htpr', 'tnpr', 'xprv'];
+    const saveSpy = jest.spyOn(store, 'saveAccessData');
+    const setItemSpy = jest.spyOn(store, 'setItem');
+    await storage.saveAccessData(
+      walletUtils.generateAccessDataFromXpub(
+        walletUtils
+          .getXPrivKeyFromSeed(seed, { networkName: 'testnet' })
+          .deriveNonCompliantChild(P2PKH_ACCT_PATH).xpubkey
+      )
+    );
+    await storage.handleStop({ cleanStorage: true });
+
+    const written = JSON.stringify([...saveSpy.mock.calls, ...setItemSpy.mock.calls], (_k, v) =>
+      typeof v === 'bigint' ? v.toString() : v
+    );
+    expect(saveSpy).toHaveBeenCalled();
+    for (const secret of secrets) {
+      expect(written).not.toContain(secret);
+    }
+  });
+
+  it('keeps the key out of what logging or serializing the storage prints', () => {
+    const { storage, xpriv } = storageWithScanKey();
+
+    expect(Object.keys(storage)).not.toContain('scanXPrivKey');
+    expect(inspect(storage, { depth: null })).not.toContain(xpriv);
+    expect(
+      JSON.stringify(storage, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))
+    ).not.toContain(xpriv);
+    expect(storage.scanXPrivKey).toBe(xpriv);
+  });
+
+  it('reads the key through a proxy that forwards reads to the storage', () => {
+    const { storage, xpriv } = storageWithScanKey();
+    // Forwards like WalletServiceStorageProxy: Reflect.get with the proxy as the receiver.
+    const proxy = new Proxy(storage, {
+      get: (target, prop, receiver) => Reflect.get(target, prop, receiver),
+    });
+
+    expect(proxy.scanXPrivKey).toBe(xpriv);
   });
 });

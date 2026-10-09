@@ -44,6 +44,7 @@ import {
   IAddressChainOptions,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
+import { ShieldedViewState } from '../shielded/view';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -158,6 +159,47 @@ export function clearDerivedAddressCache(storage: IStorage): void {
   derivedAddressCaches.delete(storage);
 }
 
+/**
+ * The txs being processed on each storage object (decoded and credited, see
+ * `processNewTx` in the storage utils), which Storage.handleStop waits for
+ * before it cleans the storage.
+ */
+const txsInProcessing = new WeakMap<IStorage, Set<Promise<unknown>>>();
+
+/**
+ * Keep `processing`, the processing of one tx on `storage`, in the set that
+ * Storage.handleStop waits for, until it settles.
+ *
+ * @param storage The wallet storage
+ * @param processing The processing of the tx
+ * @returns `processing`
+ */
+export function trackTxProcessing<T>(storage: IStorage, processing: Promise<T>): Promise<T> {
+  let running = txsInProcessing.get(storage);
+  if (!running) {
+    running = new Set();
+    txsInProcessing.set(storage, running);
+  }
+  const txs = running;
+  txs.add(processing);
+  const settled = () => {
+    txs.delete(processing);
+  };
+  processing.then(settled, settled);
+  return processing;
+}
+
+/**
+ * Wait until no tx is being processed on `storage`, counting the txs whose
+ * processing starts while it waits. Their failures belong to their own callers.
+ */
+async function txProcessingSettled(storage: IStorage): Promise<void> {
+  const running = txsInProcessing.get(storage);
+  while (running && running.size > 0) {
+    await Promise.allSettled([...running]);
+  }
+}
+
 export class Storage implements IStorage {
   store: IStore;
 
@@ -183,6 +225,13 @@ export class Storage implements IStorage {
   // processHistory when some owned shielded txs could not be decoded.
   shieldedDecodeSkippedTxIds?: string[] | null;
 
+  // See IStorage.scanXPrivKey: the scan private key, in plain text, from
+  // start() until stop(). The constructor defines it as not enumerable.
+  scanXPrivKey!: string | null;
+
+  // See IStorage.shieldedView.
+  shieldedView: ShieldedViewState;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -206,6 +255,11 @@ export class Storage implements IStorage {
     this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
+    // Not enumerable, so logging or serializing the storage never prints the
+    // key. A data property, so proxies that forward reads to the storage
+    // (WalletServiceStorageProxy) still read it.
+    Object.defineProperty(this, 'scanXPrivKey', { value: null, writable: true, enumerable: false });
+    this.shieldedView = new ShieldedViewState();
     this.logger = getDefaultLogger();
   }
 
@@ -269,10 +323,16 @@ export class Storage implements IStorage {
 
   /**
    * Set the tx signing function
+   *
+   * Setting or clearing it also clears the declaration that the signer signs
+   * shielded spend inputs (see `HathorWallet.setExternalTxSigningMethod`): a
+   * declaration belongs to the signer it was made with.
+   *
    * @param txSign The signing function, or a null value to clear it
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+    this.shieldedView.spendSigner = false;
   }
 
   /**
@@ -602,6 +662,9 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param pinCode The PIN that unlocks the scan key, once for the whole
+   *   history, to decode the wallet's shielded outputs while no scan key is in
+   *   memory (`scanXPrivKey`). The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processHistory(pinCode?: string): Promise<void> {
@@ -614,6 +677,10 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param tx The transaction to process
+   * @param pinCode The PIN that unlocks the scan key to decode the wallet's
+   *   shielded outputs of `tx` while no scan key is in memory (`scanXPrivKey`).
+   *   The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
@@ -1256,6 +1323,11 @@ export class Storage implements IStorage {
     // The addresses loadAddresses derived belong to this wallet session. Drop
     // them before anything that can throw.
     clearDerivedAddressCache(this);
+    // The scan key in memory and the shielded view end with the wallet, whatever
+    // the options, before any step below can throw or await.
+    this.scanXPrivKey = null;
+    this.shieldedView.started = false;
+    this.shieldedView.reset();
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -1264,6 +1336,9 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses || cleanTokens) {
+      // A tx still being credited when the wallet stopped is waited for, so
+      // the clean removes what it writes.
+      await txProcessingSettled(this);
       await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }
   }
