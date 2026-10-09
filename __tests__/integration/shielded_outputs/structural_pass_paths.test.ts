@@ -18,7 +18,8 @@
  * - SP.2: a fee-sized shielded HTR UTXO is spent whole on the fees: its change, too small for
  *   its own fee, pays the split fee.
  * - SP.3: a lone shielded HTR output whose change equals its own fee is split, the change paying
- *   the split fee, amount-shielded and fully shielded.
+ *   the split fee, amount-shielded and fully shielded. A legacy changeAddress still fails the
+ *   send, although no change output would be left.
  * - SP.4: a 1-unit output cannot be split, so the HTR change is its second output: topped up from
  *   fully shielded HTR it mirrors that UTXO, and made of transparent HTR alone it is
  *   amount-shielded.
@@ -215,23 +216,42 @@ describe('shielded outputs — Group SP: Lone-output and structural-pass paths',
     expect(await unlockedBalance(recipient, custom)).toBe(10n);
   });
 
-  it('SP.3 — a lone shielded HTR output whose change equals its own fee is split, the change paying the split fee, in both modes', async () => {
+  it('SP.3 — a lone shielded HTR output whose change equals its own fee is split, the change paying the split fee, in both modes, and a legacy changeAddress fails the send though no change is left', async () => {
     const wallet = await generateWalletHelper();
     const recipient = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(wallet, await legacyAddr(wallet, 0), 12n);
     expect(await poolOf(wallet, HTR, 'HTR')).toEqual(['HTR:public:12']);
     let utxosBefore = await snapshotUtxos(wallet, HTR_LABELS);
     let htrBefore = await unlockedBalance(wallet, HTR);
-
-    // 1. Every HTR output is shielded, so the HTR change is shielded in the output's mode. The
-    // public 12 pays 10 + 1 (the output's fee) and leaves a change of 1, which equals its own
-    // amount-shielded fee and so cannot fund it, and the wallet has no other HTR to add. The 10
-    // is the tx's only shielded output and holds 2 units or more, so it is split next, and the
-    // split's fee takes the whole change: no change output is left. 10 -> 5 + 5.
-    // HTR: 12 = 5 + 5 (sent) + 2 (fee).
-    const amountShielded = await prepareSend(wallet, [
+    const amountShieldedOutputs: ProposedOutput[] = [
       { address: await shieldedAddr(recipient, 0), value: 10n, token: HTR, shielded: AS },
-    ]);
+    ];
+
+    // 1. Every HTR output is shielded, so the HTR change is shielded in the output's mode. A
+    // legacy changeAddress fails wherever the rules shield a change. It is checked as soon as
+    // they do, before step 2 finds the change too small for its own fee and lets the split take
+    // it whole, so the send fails although that address would receive nothing.
+    await expectSendTxError(
+      wallet.sendManyOutputsTransaction(amountShieldedOutputs, {
+        changeAddress: await legacyAddr(wallet, 5),
+      }),
+      "The change must be shielded (all of its token's outputs are shielded, or the transaction " +
+        'spends a shielded UTXO), and a legacy change address cannot receive it. Use a ' +
+        'new-format change address, or changeShieldedMode: OutputKind.TRANSPARENT to keep the ' +
+        'change transparent.'
+    );
+
+    // Nothing was broadcast and nothing stays selected: the same UTXOs are still spendable.
+    const utxosAfterFailure = await snapshotUtxos(wallet, HTR_LABELS);
+    expect(sorted([...utxosAfterFailure.keys()])).toEqual(sorted([...utxosBefore.keys()]));
+    expect(sorted([...utxosAfterFailure.values()])).toEqual(sorted([...utxosBefore.values()]));
+
+    // 2. With no change address, the public 12 pays 10 + 1 (the output's fee) and leaves a change
+    // of 1, which equals its own amount-shielded fee and so cannot fund it, and the wallet has no
+    // other HTR to add. The 10 is the tx's only shielded output and holds 2 units or more, so it
+    // is split next, and the split's fee takes the whole change: no change output is left.
+    // 10 -> 5 + 5. HTR: 12 = 5 + 5 (sent) + 2 (fee).
+    const amountShielded = await prepareSend(wallet, amountShieldedOutputs);
 
     const amountShieldedShape = await describeBuiltTx(amountShielded.txData, utxosBefore, {
       sender: wallet,
@@ -251,7 +271,7 @@ describe('shielded outputs — Group SP: Lone-output and structural-pass paths',
     expect(htrBefore - (await unlockedBalance(wallet, HTR))).toBe(10n + amountShieldedShape.fee);
     expect(await unlockedBalance(recipient, HTR)).toBe(10n);
 
-    // 2. The same send fully shielded: the public 14 pays 10 + 2 and leaves a change of 2, its
+    // 3. The same send fully shielded: the public 14 pays 10 + 2 and leaves a change of 2, its
     // own fully shielded fee, with no other HTR to add; the split takes it whole.
     // HTR: 14 = 5 + 5 (sent) + 4 (fee). Only the node exact-matches these fees of 2 and 4.
     await GenesisWalletHelper.injectFunds(wallet, await legacyAddr(wallet, 1), 14n);
