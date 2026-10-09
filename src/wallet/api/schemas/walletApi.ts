@@ -10,6 +10,7 @@ import { NATIVE_TOKEN_UID } from '../../../constants';
 import { txIdSchema } from '../../../schemas';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
 import { TokenVersion } from '../../../types';
+import { fullnodeTxApiShieldedOutputSchema } from '../../../api/schemas/txApi';
 
 /**
  * Schema for validating Hathor addresses.
@@ -19,6 +20,20 @@ import { TokenVersion } from '../../../types';
 export const AddressSchema = z
   .string()
   .regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
+
+/**
+ * Schema for validating shielded addresses: base58 of the 71-byte payload
+ * (version byte, scan pubkey, spend pubkey, checksum), always 97 characters.
+ * Format check only; the network version byte is validated by `Address`.
+ */
+export const ShieldedAddressSchema = z
+  .string()
+  .regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{97}$/);
+
+/**
+ * Hex-encoded bytes, as the wallet-service returns shielded crypto fields.
+ */
+const hexSchema = z.string().regex(/^[0-9a-f]*$/);
 
 /**
  * Schema for validating BIP44 derivation paths.
@@ -53,6 +68,26 @@ export const getAddressesObjectSchema = z.object({
  */
 export const addressesResponseSchema = baseResponseSchema.extend({
   addresses: z.array(getAddressesObjectSchema),
+});
+
+/**
+ * Schema for a shielded address row (`GET wallet/addresses?legacy=false`).
+ * `address` is the user-facing shielded address; `spendAddress` is the
+ * on-chain P2PKH its outputs are locked to.
+ */
+export const getShieldedAddressesObjectSchema = z.object({
+  address: ShieldedAddressSchema,
+  spendAddress: AddressSchema,
+  index: z.number(),
+  transactions: z.number(),
+  seqnum: z.number().optional(),
+});
+
+/**
+ * Response schema for getting the wallet's shielded addresses.
+ */
+export const shieldedAddressesResponseSchema = baseResponseSchema.extend({
+  addresses: z.array(getShieldedAddressesObjectSchema),
 });
 
 /**
@@ -97,6 +132,28 @@ export const addressInfoObjectSchema = z
  */
 export const newAddressesResponseSchema = baseResponseSchema.extend({
   addresses: z.array(addressInfoObjectSchema),
+});
+
+/**
+ * Schema for an unused shielded address used in new address generation.
+ */
+export const shieldedAddressInfoObjectSchema = z
+  .object({
+    address: ShieldedAddressSchema,
+    index: z.number(),
+    addressPath: AddressPathSchema,
+  })
+  .strict();
+
+/**
+ * Response schema for `GET wallet/addresses/new?legacy=false`: the unused
+ * shielded addresses, their on-chain spend addresses, and the unused legacy
+ * addresses, all in one response.
+ */
+export const shieldedNewAddressesResponseSchema = baseResponseSchema.extend({
+  addresses: z.array(shieldedAddressInfoObjectSchema),
+  spendAddresses: z.array(addressInfoObjectSchema),
+  legacyAddresses: z.array(addressInfoObjectSchema),
 });
 
 /**
@@ -172,6 +229,32 @@ export const getBalanceObjectSchema = z.object({
  */
 export const balanceResponseSchema = baseResponseSchema.extend({
   balances: z.array(getBalanceObjectSchema),
+  status: z.string().optional(),
+});
+
+/**
+ * Schema for one side (unlocked or locked) of a split balance.
+ */
+export const splitBalanceAmountSchema = z.object({
+  transparent: bigIntCoercibleSchema,
+  shielded: bigIntCoercibleSchema,
+  total: bigIntCoercibleSchema,
+});
+
+/**
+ * Schema for a token balance split into transparent and shielded amounts.
+ */
+export const splitBalanceSchema = z.object({
+  unlocked: splitBalanceAmountSchema,
+  locked: splitBalanceAmountSchema,
+});
+
+/**
+ * Response schema for `GET wallet/balances?split=true`.
+ */
+export const splitBalanceResponseSchema = baseResponseSchema.extend({
+  balances: z.array(getBalanceObjectSchema.extend({ balance: splitBalanceSchema })),
+  status: z.string().optional(),
 });
 
 /**
@@ -290,6 +373,7 @@ export const fullNodeOutputSchema = z.object({
   token: tokenIdSchema.nullable().optional(),
   authorities: bigIntCoercibleSchema.optional(),
   timelock: z.number().nullable().optional(),
+  type: z.string().optional(),
 });
 
 /**
@@ -339,6 +423,7 @@ export const fullNodeTxSchema = z.object({
   parents: z.array(z.string()),
   inputs: z.array(fullNodeInputSchema),
   outputs: z.array(fullNodeOutputSchema),
+  shielded_outputs: z.array(fullnodeTxApiShieldedOutputSchema).nullish(),
   tokens: z.array(fullNodeTokenSchema),
   token_name: z.string().nullable().optional(),
   token_symbol: z.string().nullable().optional(),
@@ -409,6 +494,8 @@ export const walletStatusResponseSchema = baseResponseSchema.extend({
     maxGap: z.number(),
     createdAt: z.number(),
     readyAt: z.number().nullable(),
+    shieldedMaxGap: z.number().nullable().optional(),
+    lastUsedShieldedIndex: z.number().nullable().optional(),
   }),
   error: z.string().optional(),
 });
@@ -433,6 +520,13 @@ export const historyResponseSchema = baseResponseSchema.extend({
       timestamp: z.number(),
       voided: z.number().transform(val => val === 1),
       version: z.number(),
+      tx_kind: z.enum(['transparent', 'shielded', 'mixed']).optional(),
+      balanceBreakdown: z
+        .object({
+          transparent: bigIntCoercibleSchema,
+          shielded: bigIntCoercibleSchema,
+        })
+        .optional(),
     })
   ),
 });
@@ -441,21 +535,70 @@ export const historyResponseSchema = baseResponseSchema.extend({
  * Response schema for transaction outputs.
  * Contains an array of unspent transaction outputs.
  */
+const txOutputBaseShape = {
+  txId: z.string(),
+  index: z.number(),
+  tokenId: z.string(),
+  address: AddressSchema,
+  value: bigIntCoercibleSchema,
+  authorities: bigIntCoercibleSchema,
+  timelock: z.number().nullable(),
+  heightlock: z.number().nullable(),
+  locked: z.boolean(),
+  addressPath: AddressPathSchema,
+};
+
+/**
+ * A transparent unspent output. Servers without shielded support omit `kind`,
+ * which is defaulted to 'transparent' before parsing.
+ */
+export const transparentTxOutputSchema = z.object({
+  ...txOutputBaseShape,
+  kind: z.literal('transparent'),
+});
+
+const shieldedTxOutputBaseShape = {
+  ...txOutputBaseShape,
+  kind: z.literal('shielded'),
+  recoveryState: z.string(),
+  shieldedIndex: z.number(),
+  ctAddress: ShieldedAddressSchema,
+  commitment: hexSchema,
+  ephemeralPubkey: hexSchema,
+  rangeProof: hexSchema,
+  script: hexSchema,
+};
+
+/**
+ * A shielded unspent output the wallet-service recovered for this wallet.
+ * `address` is the on-chain spend address; `index` is the absolute output
+ * index (transparent outputs first, then shielded). No blinding factors are
+ * returned: the client recovers them from the scan key.
+ */
+export const shieldedTxOutputSchema = z.union([
+  z.object({
+    ...shieldedTxOutputBaseShape,
+    mode: z.literal(1),
+    tokenData: z.number(),
+  }),
+  z.object({
+    ...shieldedTxOutputBaseShape,
+    mode: z.literal(2),
+    assetCommitment: hexSchema,
+    surjectionProof: hexSchema,
+  }),
+]);
+
+export const walletTxOutputSchema = z.preprocess(
+  value =>
+    value && typeof value === 'object' && !('kind' in value)
+      ? { ...value, kind: 'transparent' }
+      : value,
+  z.union([transparentTxOutputSchema, shieldedTxOutputSchema])
+);
+
 export const txOutputResponseSchema = baseResponseSchema.extend({
-  txOutputs: z.array(
-    z.object({
-      txId: z.string(),
-      index: z.number(),
-      tokenId: z.string(),
-      address: AddressSchema,
-      value: bigIntCoercibleSchema,
-      authorities: bigIntCoercibleSchema,
-      timelock: z.number().nullable(),
-      heightlock: z.number().nullable(),
-      locked: z.boolean(),
-      addressPath: AddressPathSchema,
-    })
-  ),
+  txOutputs: z.array(walletTxOutputSchema),
 });
 
 /**
@@ -587,6 +730,17 @@ export const wsTransactionSchema = z.object({
   token_name: z.string().nullable(),
   token_symbol: z.string().nullable(),
   signal_bits: z.number(),
+  shielded_outputs: z
+    .array(
+      z.object({
+        mode: z.number(),
+        token_data: z.number().optional(),
+        // null when the output script is not a standard type
+        decoded: z.object({ address: z.string().optional() }).nullable(),
+      })
+    )
+    .optional(),
+  addresses: z.array(z.string()).optional(),
 });
 
 /**

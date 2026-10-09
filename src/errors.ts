@@ -240,6 +240,24 @@ export class WalletRequestError extends WalletError {
 }
 
 /**
+ * Error thrown when the wallet-service already holds different shielded keys
+ * for this wallet (HTTP 409 `shielded-keys-conflict` on wallet registration).
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ShieldedKeysConflictError extends WalletRequestError {}
+
+/**
+ * Error thrown when a shielded feature is used on a wallet without shielded
+ * keys (xpriv and xpub wallets on the wallet-service facade).
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ShieldedNotEnabledError extends WalletError {}
+
+/**
  * Error thrown when get utxo fails
  *
  * @memberof Errors

@@ -2849,6 +2849,12 @@ test('start', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  // Seed wallets register shielded keys, so they fetch both address chains at once
+  jest
+    .spyOn(walletApi, 'getShieldedNewAddresses')
+    .mockImplementation(() =>
+      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
+    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
@@ -2951,6 +2957,12 @@ test('getAddressPrivKey', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  // Seed wallets register shielded keys, so they fetch both address chains at once
+  jest
+    .spyOn(walletApi, 'getShieldedNewAddresses')
+    .mockImplementation(() =>
+      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
+    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
@@ -3008,6 +3020,12 @@ test('signMessageWithAddress', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  // Seed wallets register shielded keys, so they fetch both address chains at once
+  jest
+    .spyOn(walletApi, 'getShieldedNewAddresses')
+    .mockImplementation(() =>
+      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
+    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
@@ -3103,6 +3121,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 
@@ -3155,6 +3174,7 @@ describe('getUtxos', () => {
       maxOutputs: 1,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 
@@ -3249,6 +3269,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
 
     // Mock the second call (amount_bigger_than: 100)
@@ -3297,6 +3318,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 

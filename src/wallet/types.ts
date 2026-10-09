@@ -16,6 +16,7 @@ import {
   IDataTx,
   WalletAddressMode,
   IAddressChainOptions,
+  IHistoryShieldedOutput,
 } from '../types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -84,12 +85,46 @@ export interface WalletServiceAuthority {
   melt: boolean; // if has melt authority
 }
 
+export type TxKind = 'transparent' | 'shielded' | 'mixed';
+
+export interface BalanceBreakdown {
+  transparent: OutputValueType;
+  shielded: OutputValueType;
+}
+
 export interface GetHistoryObject {
   txId: string; // Transaction ID
   balance: OutputValueType; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
   voided: boolean; // If transaction is voided
   version: number; // Transaction version
+  txKind?: TxKind; // Which outputs moved this wallet's balance (shielded-capable servers only)
+  balanceBreakdown?: BalanceBreakdown; // `balance` split into transparent and shielded parts
+}
+
+/**
+ * History row as returned by the wallet-service, before the facade maps
+ * `tx_kind` to `txKind`.
+ */
+export interface HistoryResponseObject extends Omit<GetHistoryObject, 'txKind'> {
+  // eslint-disable-next-line camelcase
+  tx_kind?: TxKind;
+}
+
+export interface ShieldedAddressRow {
+  address: string; // Shielded address in base58
+  spendAddress: string; // On-chain P2PKH the shielded address's outputs are locked to
+  index: number; // derivation index of the address
+  transactions: number; // quantity of transactions
+  seqnum?: number;
+}
+
+export interface ShieldedAddressInfoObject {
+  address: string; // Shielded address in base58
+  spendAddress: string; // On-chain P2PKH paired with the shielded address
+  index: number; // derivation index of the address
+  addressPath: string; // Path of the spend key for this address
+  info?: string | undefined; // Optional extra info when getting address info
 }
 
 export interface AddressInfoObject {
@@ -119,6 +154,8 @@ export interface WalletStatus {
   maxGap: number; // gap limit of the wallet
   createdAt: number; // wallet creation timestamp
   readyAt: number | null; // wallet timestamp when it got ready
+  shieldedMaxGap?: number | null; // gap limit of the shielded chain, null when not registered
+  lastUsedShieldedIndex?: number | null; // last used shielded address index
 }
 
 export interface AddressesResponseData {
@@ -141,9 +178,43 @@ export interface NewAddressesResponseData {
   addresses: AddressInfoObject[];
 }
 
+export interface ShieldedAddressesResponseData {
+  success: boolean;
+  addresses: ShieldedAddressRow[];
+}
+
+export interface ShieldedNewAddressesResponseData {
+  success: boolean;
+  addresses: AddressInfoObject[]; // unused shielded addresses
+  spendAddresses: AddressInfoObject[]; // their on-chain spend addresses
+  legacyAddresses: AddressInfoObject[]; // unused legacy addresses
+}
+
 export interface BalanceResponseData {
   success: boolean;
   balances: GetBalanceObject[];
+  status?: string;
+}
+
+export interface SplitBalanceAmount {
+  transparent: OutputValueType;
+  shielded: OutputValueType;
+  total: OutputValueType;
+}
+
+export interface SplitWalletServiceBalance {
+  unlocked: SplitBalanceAmount;
+  locked: SplitBalanceAmount;
+}
+
+export interface GetSplitBalanceObject extends Omit<GetBalanceObject, 'balance'> {
+  balance: SplitWalletServiceBalance;
+}
+
+export interface SplitBalanceResponseData {
+  success: boolean;
+  balances: GetSplitBalanceObject[];
+  status?: string;
 }
 
 export interface TokenDetailsResponseData {
@@ -165,7 +236,7 @@ export interface TokenDetailsObject {
 
 export interface HistoryResponseData {
   success: boolean;
-  history: GetHistoryObject[];
+  history: HistoryResponseObject[];
 }
 
 export interface TxProposalCreateResponseData {
@@ -231,6 +302,7 @@ export interface GetTxOutputsOptions {
   ignoreLocked?: boolean;
   txId?: string;
   index?: number;
+  kind?: 'transparent' | 'shielded';
 }
 
 export interface TxOutputResponseData {
@@ -238,7 +310,8 @@ export interface TxOutputResponseData {
   txOutputs: Utxo[];
 }
 
-export interface Utxo {
+export interface TransparentUtxo {
+  kind?: 'transparent'; // absent on utxos built locally and on older servers
   txId: string; // output transaction id
   index: number; // output index
   tokenId: string; // output token
@@ -250,6 +323,36 @@ export interface Utxo {
   locked: boolean; // if output is locked
   addressPath: string; // path to generate output address
 }
+
+interface ShieldedUtxoBase extends Omit<TransparentUtxo, 'kind'> {
+  kind: 'shielded';
+  recoveryState: string; // server-side recovery state, always 'recovered' when returned
+  shieldedIndex: number; // derivation index of the shielded address
+  ctAddress: string; // shielded address that received the output
+  commitment: string; // hex
+  ephemeralPubkey: string; // hex
+  rangeProof: string; // hex
+  script: string; // hex
+}
+
+export interface AmountShieldedUtxo extends ShieldedUtxoBase {
+  mode: 1;
+  tokenData: number;
+}
+
+export interface FullShieldedUtxo extends ShieldedUtxoBase {
+  mode: 2;
+  assetCommitment: string; // hex
+  surjectionProof: string; // hex
+}
+
+export type ShieldedUtxo = AmountShieldedUtxo | FullShieldedUtxo;
+
+/**
+ * An unspent output as returned by `GET wallet/tx_outputs`. `index` is the
+ * absolute output index: transparent outputs first, then shielded ones.
+ */
+export type Utxo = TransparentUtxo | ShieldedUtxo;
 
 export interface AuthorityTxOutput {
   txId: string; // output transaction id
@@ -643,6 +746,27 @@ export interface WsTransaction {
   token_name?: string | null;
   // eslint-disable-next-line camelcase
   token_symbol?: string | null;
+  // Shielded outputs carry no value or crypto material on the websocket, only
+  // the on-chain address they pay (shielded-capable servers only).
+  // eslint-disable-next-line camelcase
+  shielded_outputs?: {
+    mode: number;
+    token_data?: number;
+    decoded: { address?: string } | null; // null when the script is not a standard type
+  }[];
+  addresses?: string[]; // every address the tx involves
+}
+
+/**
+ * Fields of `POST wallet/init` that register the wallet's shielded keys. The
+ * wallet-service requires all of them together.
+ */
+export interface ShieldedRegistrationFields {
+  scanXpriv: string; // scan chain xpriv at m/44'/280'/1'/0
+  spendXpub: string; // spend chain xpub at m/44'/280'/2'/0 (never the private key)
+  firstCtAddress: string; // shielded address at index 0
+  spendXpubSignature: string; // spend key signs timestamp + walletId + spendXpub
+  ctAddressSignature: string; // auth key signs timestamp + walletId + firstCtAddress
 }
 
 export interface CreateWalletAuthData {
@@ -653,6 +777,7 @@ export interface CreateWalletAuthData {
   timestampNow: number;
   firstAddress: string;
   authDerivedPrivKey: bitcore.HDPrivateKey;
+  shielded: ShieldedRegistrationFields | null; // null when the wallet has no shielded keys
 }
 
 export interface FullNodeVersionData {
@@ -764,6 +889,8 @@ export interface FullNodeTx {
   parents: string[];
   inputs: FullNodeInput[];
   outputs: FullNodeOutput[];
+  // eslint-disable-next-line camelcase
+  shielded_outputs?: IHistoryShieldedOutput[] | null;
   tokens: FullNodeToken[];
   token_name?: string | null;
   token_symbol?: string | null;
