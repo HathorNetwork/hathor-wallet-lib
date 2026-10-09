@@ -82,7 +82,10 @@ const walletApi = {
     if (response.status === 200 && data.success) {
       return parseSchema(data.data, fullNodeVersionDataSchema);
     }
-    throw new WalletRequestError('Error getting fullnode data.');
+    throw new WalletRequestError(
+      `Error getting fullnode data. Status: ${response.status}, response: ${JSON.stringify(data)}`,
+      { cause: data }
+    );
   },
 
   async createWallet(
@@ -121,7 +124,10 @@ const walletApi = {
       // If it was already loaded, we have to check if it's ready
       return parseSchema(response.data, walletStatusResponseSchema);
     }
-    throw new WalletRequestError('Error creating wallet.');
+    throw new WalletRequestError(
+      `Error creating wallet. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getAddresses(
@@ -137,7 +143,10 @@ const walletApi = {
       return parseSchema(response.data, addressesResponseSchema);
     }
 
-    throw new WalletRequestError('Error getting wallet addresses.');
+    throw new WalletRequestError(
+      `Error getting wallet addresses. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getAddressDetails(
@@ -153,7 +162,10 @@ const walletApi = {
       return parseSchema(response.data, addressDetailsResponseSchema);
     }
 
-    throw new WalletRequestError('Error getting address info.');
+    throw new WalletRequestError(
+      `Error getting address info. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async checkAddressesMine(
@@ -166,7 +178,10 @@ const walletApi = {
       return parseSchema(response.data, checkAddressesMineResponseSchema);
     }
 
-    throw new WalletRequestError('Error checking wallet addresses.');
+    throw new WalletRequestError(
+      `Error checking wallet addresses. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getNewAddresses(wallet: HathorWalletServiceWallet): Promise<NewAddressesResponseData> {
@@ -175,7 +190,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, newAddressesResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet addresses to use.');
+    throw new WalletRequestError(
+      `Error getting wallet addresses to use. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getTokenDetails(
@@ -188,7 +206,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, tokenDetailsResponseSchema);
     }
-    throw new WalletRequestError(`Error getting token ${tokenId} details.`);
+    throw new WalletRequestError(
+      `Error getting token ${tokenId} details. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getBalances(
@@ -204,7 +225,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, balanceResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet balance.');
+    throw new WalletRequestError(
+      `Error getting wallet balance. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
@@ -213,7 +237,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, tokensResponseSchema);
     }
-    throw new WalletRequestError('Error getting list of tokens.');
+    throw new WalletRequestError(
+      `Error getting list of tokens. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
@@ -223,7 +250,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, historyResponseSchema);
     }
-    throw new WalletRequestError('Error getting wallet history.');
+    throw new WalletRequestError(
+      `Error getting wallet history. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async getTxOutputs(
@@ -236,7 +266,10 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return parseSchema(response.data, txOutputResponseSchema);
     }
-    throw new WalletRequestError('Error requesting utxo.');
+    throw new WalletRequestError(
+      `Error requesting utxo. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async createTxProposal(
@@ -249,7 +282,10 @@ const walletApi = {
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
     }
-    throw new WalletRequestError('Error creating tx proposal.');
+    throw new WalletRequestError(
+      `Error creating tx proposal. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async updateTxProposal(
@@ -263,7 +299,10 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    throw new WalletRequestError('Error sending tx proposal.');
+    throw new WalletRequestError(
+      `Error updating tx proposal. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async deleteTxProposal(
@@ -275,7 +314,10 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalDeleteResponseSchema);
     }
-    throw new WalletRequestError('Error deleting tx proposal.');
+    throw new WalletRequestError(
+      `Error deleting tx proposal. Status: ${response.status}, response: ${JSON.stringify(response.data)}`,
+      { cause: response.data }
+    );
   },
 
   async createAuthToken(
