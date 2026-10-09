@@ -3141,6 +3141,23 @@ describe('history rewrites on newTxPromise', () => {
       await hWallet.stop();
     });
 
+    it('runs the walk that a reprocess asks for meanwhile, after it', async () => {
+      const { hWallet, reprocess, processHistorySpy, voidTxA, during } =
+        await walletAboutToReprocess();
+
+      voidTxA();
+      await until(() => during() !== null, 'the reprocess');
+      const reprocessed = hWallet.reprocessShieldedOutputs();
+      reprocess.open();
+      await reprocessed;
+
+      // The voided reprocess, then the walk the request asked for.
+      expect(processHistorySpy).toHaveBeenCalledTimes(2);
+      expect(hWallet.isReady()).toBe(true);
+      expect(hWallet.walkPending).toBe(false);
+      await hWallet.stop();
+    });
+
     it('rebuilds and returns to READY when a state listener throws', async () => {
       const { hWallet, reprocess, processHistorySpy, voidTxA, during } =
         await walletAboutToReprocess();

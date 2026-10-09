@@ -1975,6 +1975,14 @@ class HathorWallet extends EventEmitter {
           // The balances and UTXOs are half rebuilt. The parked messages wait
           // for the next walk.
           this.setState(HathorWallet.ERROR);
+        } else if (this.walkPending) {
+          // An unlock or a reprocess asked for a walk meanwhile. The walk runs
+          // after this task, processes the parked messages and sets READY. Not
+          // awaited: it waits for this task on the history chain.
+          this.onEnterStateProcessing().catch(error => {
+            this.logger.error(error);
+            this.setState(HathorWallet.ERROR);
+          });
         } else {
           let wsData = this.wsTxQueue.dequeue();
           while (wsData !== undefined) {
