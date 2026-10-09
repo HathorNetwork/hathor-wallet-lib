@@ -10,6 +10,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import { loadAddresses, savePrecalculatedShieldedAddresses } from '../../src/utils/storage';
 import * as addressUtils from '../../src/utils/address';
 import { IPrecalculatedShieldedAddress } from '../../src/types';
+import { IShieldedCryptoProvider } from '../../src/shielded/types';
 
 // These tests exercise real shielded EC derivation, which jest's vm sandbox
 // slows down enough that a full run can exceed jest's 5s default under load.
@@ -22,6 +23,8 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
   // (1) an index already in storage is NEVER re-derived, and (2) injected
   // pre-calculated pairs are indistinguishable from live-derived ones.
   const PIN = '0000';
+  // The shielded chain needs a registered crypto provider; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
   const seed = walletUtils.generateWalletWords();
   const accessData = walletUtils.generateAccessDataFromSeed(seed, {
     pin: PIN,
@@ -69,6 +72,7 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
     'derives each index once and skips re-derivation on re-loads',
     async () => {
       const storage = await makeStorage();
+      storage.setShieldedCryptoProvider(provider);
       const deriveSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
 
       const first = await loadAddresses(0, 5, storage);
@@ -94,11 +98,13 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
     async () => {
       // Reference: live derivation.
       const liveStorage = await makeStorage();
+      liveStorage.setShieldedCryptoProvider(provider);
       const liveList = await loadAddresses(0, 4, liveStorage);
 
       // Same wallet, but with the pairs injected up front (what the wallet start
       // does with the shielded pairs on the unified preCalculatedAddresses).
       const injectedStorage = await makeStorage();
+      injectedStorage.setShieldedCryptoProvider(provider);
       await savePrecalculatedShieldedAddresses(injectedStorage, deriveEntries(4, injectedStorage));
 
       const deriveSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
@@ -140,6 +146,7 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
     'derives live past the injected window (fallback stays exercised)',
     async () => {
       const storage = await makeStorage();
+      storage.setShieldedCryptoProvider(provider);
       await savePrecalculatedShieldedAddresses(storage, deriveEntries(2, storage));
       const deriveSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
 
@@ -162,11 +169,31 @@ describe('loadAddresses — shielded chain derivation lifecycle', () => {
         scanXpubkey: undefined,
         spendXpubkey: undefined,
       });
+      // With a provider registered, the missing xpubs are what rule the chain out.
+      storage.setShieldedCryptoProvider(provider);
       const deriveSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
 
       const list = await loadAddresses(0, 3, storage);
       expect(deriveSpy).not.toHaveBeenCalled();
       // Legacy-only: one address per index, no shielded entries.
+      expect(list).toHaveLength(3);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+    },
+    DEFAULT_DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'wallets without a shielded crypto provider never touch the shielded chain',
+    async () => {
+      const storage = await makeStorage();
+      const deriveSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+      const saveSpy = jest.spyOn(storage, 'saveAddress');
+
+      const list = await loadAddresses(0, 3, storage);
+      // The record has both xpubs, but nothing can be decoded without a
+      // provider: no derivation, no shielded record, nothing to subscribe.
+      expect(deriveSpy).not.toHaveBeenCalled();
+      expect(saveSpy).toHaveBeenCalledTimes(3);
       expect(list).toHaveLength(3);
       expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
     },

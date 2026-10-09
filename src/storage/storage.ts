@@ -85,6 +85,79 @@ export function getDefaultAddressMeta(): IAddressMetadata {
   };
 }
 
+/**
+ * Addresses `loadAddresses` derived for one BIP32 index: the legacy address,
+ * and the shielded pair (the shielded address and its on-chain spend P2PKH).
+ */
+export interface IDerivedIndexAddresses {
+  legacy?: IAddressInfo;
+  shielded?: { shieldedAddress: IAddressInfo; spendAddress: IAddressInfo };
+}
+
+/**
+ * The addresses `loadAddresses` derived, by storage object, together with the
+ * key they were derived under.
+ *
+ * `reloadStorage` wipes the stored addresses on every reconnect and loads the
+ * same windows again. `loadAddresses` reads this cache before deriving, so the
+ * reload saves the cached records instead of deriving them again. The cache
+ * lives in memory only and holds public data. Keying it by the storage object,
+ * instead of adding a member to `Storage`, makes it work for any `IStorage`
+ * and keeps it out of anything that serializes the storage.
+ */
+const derivedAddressCaches = new WeakMap<
+  IStorage,
+  { key: string; byIndex: Map<number, IDerivedIndexAddresses> }
+>();
+
+/**
+ * Get the addresses `loadAddresses` derived for `storage`, by BIP32 index.
+ *
+ * A derived address depends on the network, the wallet type, the legacy xpub or
+ * the multisig configuration, and the shielded xpubs. When any of them differs
+ * from what the cached addresses were derived from (a migration, a key import,
+ * another wallet or another network on the same storage), every entry is
+ * dropped.
+ *
+ * @param storage The wallet storage
+ * @param accessData The access data the addresses are derived from
+ * @param networkName The network the addresses are encoded for
+ * @returns The cached addresses, or null for a storage without access data
+ */
+export function getDerivedAddressCache(
+  storage: IStorage,
+  accessData: IWalletAccessData | null,
+  networkName: string
+): Map<number, IDerivedIndexAddresses> | null {
+  if (!accessData) {
+    return null;
+  }
+  const key = JSON.stringify([
+    networkName,
+    accessData.walletType,
+    accessData.xpubkey,
+    accessData.multisigData?.numSignatures ?? null,
+    accessData.multisigData?.pubkeys ?? null,
+    accessData.scanXpubkey ?? null,
+    accessData.spendXpubkey ?? null,
+  ]);
+  let cache = derivedAddressCaches.get(storage);
+  if (!cache || cache.key !== key) {
+    cache = { key, byIndex: new Map() };
+    derivedAddressCaches.set(storage, cache);
+  }
+  return cache.byIndex;
+}
+
+/**
+ * Drop every address cached for `storage` by `loadAddresses`.
+ *
+ * @param storage The wallet storage
+ */
+export function clearDerivedAddressCache(storage: IStorage): void {
+  derivedAddressCaches.delete(storage);
+}
+
 export class Storage implements IStorage {
   store: IStore;
 
@@ -1180,6 +1253,9 @@ export class Storage implements IStorage {
     cleanAddresses?: boolean;
     cleanTokens?: boolean;
   } = {}): Promise<void> {
+    // The addresses loadAddresses derived belong to this wallet session. Drop
+    // them before anything that can throw.
+    clearDerivedAddressCache(this);
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);

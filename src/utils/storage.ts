@@ -38,6 +38,7 @@ import {
   deriveShieldedAddressPair,
   getAddressFromPubkey,
 } from './address';
+import { getShieldedChainXpubs } from './shieldedChain';
 import { processShieldedOutputs } from '../shielded/processing';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
@@ -50,7 +51,7 @@ import {
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
-import { getDefaultAddressMeta } from '../storage/storage';
+import { getDefaultAddressMeta, getDerivedAddressCache } from '../storage/storage';
 import { AddressError, ShieldedDecodeSystemicError } from '../errors';
 
 /**
@@ -99,17 +100,21 @@ export async function loadAddresses(
 ): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
-
-  // Shielded derivation setup, hoisted out of the loop: wallets without
-  // scan/spend xpubs (read-only, pre-shielded) skip the whole shielded branch,
-  // and for wallets that have them the parent HDPublicKeys are parsed ONCE per
-  // call — bitcore's xpub parsing is expensive and identical for every index.
-  const scanXpub = await storage.getScanXPubKey();
-  const spendXpub = await storage.getSpendXPubKey();
-  const hasShieldedKeys = !!scanXpub && !!spendXpub;
-  const scanHdPub = hasShieldedKeys ? new HDPublicKey(scanXpub) : null;
-  const spendHdPub = hasShieldedKeys ? new HDPublicKey(spendXpub) : null;
   const networkName = storage.config.getNetwork().name;
+
+  // Addresses an earlier call derived for this storage. A reconnect wipes the
+  // stored addresses (reloadStorage) and loads the same windows again, so the
+  // cached records are saved again instead of being derived again. Records are
+  // copied in and out, so the store never shares an object with the cache.
+  const derived = getDerivedAddressCache(storage, await storage.getAccessData(), networkName);
+
+  // Shielded derivation setup: wallets without a shielded chain (read-only,
+  // pre-shielded, no crypto provider) skip the whole shielded branch. For
+  // wallets that have one, the parent HDPublicKeys are parsed ONCE per call, at
+  // the first index that has to be derived — bitcore's xpub parsing is
+  // expensive and identical for every index.
+  const shieldedXpubs = await getShieldedChainXpubs(storage);
+  let shieldedParents: { scan: HDPublicKey; spend: HDPublicKey } | null = null;
 
   for (let i = startIndex; i < stopIndex; i++) {
     const storageAddr = await storage.getAddressAtIndex(i);
@@ -117,23 +122,30 @@ export async function loadAddresses(
       // This address is already generated, we can skip legacy derivation
       addresses.push(storageAddr.base58);
     } else {
-      // derive legacy address at index i
+      // derive legacy address at index i, unless an earlier call already did
+      const cachedLegacy = derived?.get(i)?.legacy;
       let address: IAddressInfo;
-      if ((await storage.getWalletType()) === 'p2pkh') {
-        address = await deriveAddressP2PKH(i, storage);
+      if (cachedLegacy) {
+        address = { ...cachedLegacy };
       } else {
-        address = await deriveAddressP2SH(i, storage);
+        if ((await storage.getWalletType()) === 'p2pkh') {
+          address = await deriveAddressP2PKH(i, storage);
+        } else {
+          address = await deriveAddressP2SH(i, storage);
+        }
+        derived?.set(i, { ...derived.get(i), legacy: { ...address } });
       }
       await storage.saveAddress(address);
       addresses.push(address.base58);
     }
 
-    // Generate the shielded address pair at the same BIP32 index (when shielded
-    // keys are available). Like the legacy branch above, an index already in
-    // storage (a previous load, or pre-calculated/injected addresses) skips the
-    // EC derivation entirely — re-walks from index 0 happen on every sync/reload,
-    // so without this skip the whole window would be re-derived each time.
-    if (hasShieldedKeys) {
+    // Generate the shielded address pair at the same BIP32 index (when the
+    // wallet has a shielded chain). Like the legacy branch above, an index
+    // already in storage (a previous load, or pre-calculated/injected addresses)
+    // skips the EC derivation entirely — re-walks from index 0 happen on every
+    // sync/reload, so without this skip the whole window would be re-derived
+    // each time.
+    if (shieldedXpubs) {
       const existingShielded = await storage.getAddressAtIndex(i, { legacy: false });
       if (existingShielded?.addressType === 'shielded' && existingShielded.ctMappingAddress) {
         // Already derived/injected: re-push the paired on-chain spend address
@@ -148,17 +160,38 @@ export async function loadAddresses(
         //     is what the branch above needs to push for subscription;
         //   - a store that ignores the { legacy: false } option and returns the
         //     legacy record instead (IStore is a public interface).
-        // Re-deriving is the safe recovery for all of these: the derivation is
-        // a pure function of the xpubs and the index, so it reproduces the
-        // exact same pair, and the isAddressMine guards below make the saves
-        // idempotent — whichever half already exists is skipped and the missing
-        // half is filled in.
-        const { shieldedAddress, spendAddress } = deriveShieldedAddressPair(
-          scanHdPub!,
-          spendHdPub!,
-          i,
-          networkName
-        );
+        // Re-deriving (or reusing the pair an earlier call derived) is the safe
+        // recovery for all of these: the derivation is a pure function of the
+        // xpubs and the index, so it reproduces the exact same pair, and the
+        // isAddressMine guards below make the saves idempotent — whichever half
+        // already exists is skipped and the missing half is filled in.
+        const cachedPair = derived?.get(i)?.shielded;
+        let shieldedAddress: IAddressInfo;
+        let spendAddress: IAddressInfo;
+        if (cachedPair) {
+          shieldedAddress = { ...cachedPair.shieldedAddress };
+          spendAddress = { ...cachedPair.spendAddress };
+        } else {
+          if (!shieldedParents) {
+            shieldedParents = {
+              scan: new HDPublicKey(shieldedXpubs.scanXpubkey),
+              spend: new HDPublicKey(shieldedXpubs.spendXpubkey),
+            };
+          }
+          ({ shieldedAddress, spendAddress } = deriveShieldedAddressPair(
+            shieldedParents.scan,
+            shieldedParents.spend,
+            i,
+            networkName
+          ));
+          derived?.set(i, {
+            ...derived.get(i),
+            shielded: {
+              shieldedAddress: { ...shieldedAddress },
+              spendAddress: { ...spendAddress },
+            },
+          });
+        }
         if (!(await storage.isAddressMine(shieldedAddress.base58))) {
           await storage.saveAddress(shieldedAddress);
         }
@@ -573,10 +606,12 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // loaded range, so a wallet receiving on shielded indexes beyond the
   // legacy-used range would never load (and thus never decrypt) them.
   const legacyNeedMore = lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex;
-  // Only check the shielded gap when shielded keys are available.
-  const hasShieldedKeys = !!(await storage.getAccessData())?.spendXpubkey;
+  // Only check the shielded gap when the wallet has a shielded chain, decided
+  // by the same check loadAddresses uses: a shielded gap on a chain that
+  // loadAddresses never derives would request the same window forever.
+  const hasShieldedChain = (await getShieldedChainXpubs(storage)) !== null;
   const shieldedNeedMore =
-    hasShieldedKeys && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
+    hasShieldedChain && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
 
   if (!legacyNeedMore && !shieldedNeedMore) {
     return null;
@@ -586,7 +621,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // lagging chain catches up, and extend up to whichever target is furthest.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
   let shieldedTarget: number;
-  if (!hasShieldedKeys) {
+  if (!hasShieldedChain) {
     shieldedTarget = legacyTarget;
   } else if (shieldedNeedMore) {
     shieldedTarget = shieldedLastUsedAddressIndex + gapLimit;
@@ -594,7 +629,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     shieldedTarget = shieldedLastLoadedAddressIndex;
   }
   const maxTarget = Math.max(legacyTarget, shieldedTarget);
-  const minLastLoaded = hasShieldedKeys
+  const minLastLoaded = hasShieldedChain
     ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
     : lastLoadedAddressIndex;
 

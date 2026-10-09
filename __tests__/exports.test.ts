@@ -420,6 +420,10 @@ describe('exported utility namespaces', () => {
     expect(typeof addressUtils.getAddressType).toBe('function');
   });
 
+  it('does not export the shielded chain check the storage uses', () => {
+    expect(addressUtils).not.toHaveProperty('getShieldedChainXpubs');
+  });
+
   it('should export cryptoUtils', () => {
     expect(cryptoUtils).toBeDefined();
     expect(typeof cryptoUtils.encryptData).toBe('function');

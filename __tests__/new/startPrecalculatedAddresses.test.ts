@@ -10,6 +10,8 @@ import { MemoryStore, Storage } from '../../src/storage';
 import versionApi from '../../src/api/version';
 import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../src/types';
 import { ConnectionState } from '../../src/wallet/types';
+import walletUtils from '../../src/utils/wallet';
+import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 
 /**
  * End-to-end wiring for the `preCalculatedAddresses` option.
@@ -37,7 +39,13 @@ describe('start() with pre-calculated addresses', () => {
     };
   }
 
-  async function startWith(preCalculatedAddresses: IPrecalculatedAddress[]) {
+  // The shielded chain only needs a provider to be registered; nothing is decoded here.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  async function startWith(
+    preCalculatedAddresses: IPrecalculatedAddress[],
+    { shieldedCryptoProvider }: { shieldedCryptoProvider?: IShieldedCryptoProvider } = {}
+  ) {
     const storage = new Storage(new MemoryStore());
     jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
       resolve({ network: 'testnet' });
@@ -52,6 +60,9 @@ describe('start() with pre-calculated addresses', () => {
       pinCode: '123',
       preCalculatedAddresses,
     });
+    if (shieldedCryptoProvider) {
+      hWallet.setShieldedCryptoProvider(shieldedCryptoProvider);
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (hWallet as any).getTokenData = jest.fn();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -85,7 +96,7 @@ describe('start() with pre-calculated addresses', () => {
   });
 
   it('persists the shielded pair only for the entry that carries one', async () => {
-    const { storage } = await startWith(entries);
+    const { storage } = await startWith(entries, { shieldedCryptoProvider: provider });
 
     const shielded0 = await storage.getAddressAtIndex(0, { legacy: false });
     expect(shielded0).not.toBeNull();
@@ -104,17 +115,20 @@ describe('start() with pre-calculated addresses', () => {
    * placeholder instead would make the junk value that index's address for good.
    */
   it('injects a shielded-only entry without poisoning its legacy index', async () => {
-    const { storage } = await startWith([
-      {
-        bip32AddressIndex: 0,
-        shielded: {
-          shieldedBase58: 'shielded-only-0',
-          spendBase58: 'spend-only-0',
-          scanPubkey: '02cc',
-          spendPubkey: '03dd',
+    const { storage } = await startWith(
+      [
+        {
+          bip32AddressIndex: 0,
+          shielded: {
+            shieldedBase58: 'shielded-only-0',
+            spendBase58: 'spend-only-0',
+            scanPubkey: '02cc',
+            spendPubkey: '03dd',
+          },
         },
-      },
-    ]);
+      ],
+      { shieldedCryptoProvider: provider }
+    );
 
     const shielded0 = await storage.getAddressAtIndex(0, { legacy: false });
     expect(shielded0!.base58).toBe('shielded-only-0');
@@ -133,7 +147,7 @@ describe('start() with pre-calculated addresses', () => {
    * pair under index 7.
    */
   it('files the shielded pair under the entry index, not one nested in the pair', async () => {
-    const { storage } = await startWith(entries);
+    const { storage } = await startWith(entries, { shieldedCryptoProvider: provider });
 
     // The fixture declares bip32AddressIndex 7; the entry declares 0.
     expect(shieldedFixture.bip32AddressIndex).toBe(7);
@@ -141,5 +155,47 @@ describe('start() with pre-calculated addresses', () => {
 
     const shielded0 = await storage.getAddressAtIndex(0, { legacy: false });
     expect(shielded0!.bip32AddressIndex).toBe(0);
+  });
+
+  /**
+   * Without a crypto provider the wallet subscribes and fetches nothing on the
+   * shielded chain, so an injected pair would be a shielded address the wallet
+   * gives out but does not watch.
+   */
+  it('persists no shielded pair while no crypto provider is registered', async () => {
+    const { storage } = await startWith(entries);
+
+    expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+    expect(await storage.isAddressMine('shielded-for-index-0')).toBe(false);
+    expect(await storage.isAddressMine('spend-for-index-0')).toBe(false);
+    // The legacy chain is persisted all the same.
+    expect((await storage.getAddressAtIndex(0))!.base58).toBe('legacy-index-0');
+  });
+
+  it('persists no shielded pair for a record without the shielded xpubs', async () => {
+    const storage = new Storage(new MemoryStore());
+    jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
+      resolve({ network: 'testnet' });
+    });
+    const xpub = walletUtils.getXPubKeyFromSeed(seed, { networkName: 'testnet' });
+    const hWallet = new HathorWallet({
+      xpub,
+      storage,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      connection: makeConn() as any,
+      preCalculatedAddresses: entries,
+    });
+    hWallet.setShieldedCryptoProvider(provider);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (hWallet as any).getTokenData = jest.fn();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (hWallet as any).setState = jest.fn();
+
+    await hWallet.start();
+
+    expect(walletUtils.hasShieldedXpubs(await storage.getAccessData())).toBe(false);
+    expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+    expect(await storage.isAddressMine('spend-for-index-0')).toBe(false);
+    expect((await storage.getAddressAtIndex(0))!.base58).toBe('legacy-index-0');
   });
 });

@@ -101,6 +101,7 @@ import {
   fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
+import { getShieldedChainXpubs } from '../utils/shieldedChain';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction, setNanoHeaderCallerFromWallet } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
@@ -242,6 +243,13 @@ class HathorWallet extends EventEmitter {
 
   walletStopped: boolean;
 
+  /**
+   * Incremented on every connection to the fullnode (CONNECTED) and by stop().
+   * A sync, reload or walk started under an older value was overtaken: it does
+   * not change the wallet state, which belongs to the newer one.
+   */
+  syncGeneration: number;
+
   // Configuration
   debug: boolean;
 
@@ -252,6 +260,10 @@ class HathorWallet extends EventEmitter {
   // Transaction queue
   wsTxQueue: Queue<WalletWebSocketData>;
 
+  /**
+   * Tail of the chain that runs realtime txs, the PROCESSING walk and storage
+   * reloads one at a time (see runOnHistoryChain).
+   */
   newTxPromise: Promise<void>;
 
   // Scanning & sync configuration
@@ -430,6 +442,8 @@ class HathorWallet extends EventEmitter {
 
     // Set to true when stop() method is called
     this.walletStopped = false;
+
+    this.syncGeneration = 0;
 
     if (multisig) {
       this.multisig = {
@@ -665,6 +679,10 @@ class HathorWallet extends EventEmitter {
    */
   async onConnectionChangedState(newState: ConnectionState): Promise<void> {
     if (newState === ConnectionState.CONNECTED) {
+      // Every connection starts a new sync generation. The sync, reload and walk
+      // of an older connection leave the wallet state to this one.
+      this.syncGeneration += 1;
+      const generation = this.syncGeneration;
       this.setState(HathorWallet.SYNCING);
 
       try {
@@ -672,35 +690,52 @@ class HathorWallet extends EventEmitter {
         // otherwise we are reloading data, so we must execute some cleans
         // before loading the full data again
         if (this.firstConnection) {
-          this.firstConnection = false;
-          const scanPolicy = await this.storage.getScanningPolicy();
-          if (scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS) {
-            try {
-              await this.enableSingleAddressMode();
-            } catch (err) {
-              if (err instanceof HasTxOutsideFirstAddressError) {
-                this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: GAP_LIMIT };
-                await this.storage.setScanningPolicyData(this.scanPolicy);
-              } else {
-                throw err;
-              }
+          // The first sync runs on newTxPromise, as a reload does: a reconnect
+          // while it loads queues its reload after it, instead of wiping the
+          // store under it.
+          await this.runOnHistoryChain(async () => {
+            if (this.walletStopped || generation !== this.syncGeneration) {
+              // Overtaken before it started: by stop(), or by a newer
+              // connection, which makes the first sync itself.
+              return;
             }
-          }
-          const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await this.syncHistory(
-            addressesToLoad.nextIndex,
-            addressesToLoad.count,
-            false,
-            this.pinCode ?? undefined
-          );
+            this.firstConnection = false;
+            const scanPolicy = await this.storage.getScanningPolicy();
+            // The check enableSingleAddressMode() makes, without the storage
+            // reload it can run: a reload waits on this chain.
+            if (
+              scanPolicy === SCANNING_POLICY.SINGLE_ADDRESS &&
+              (await this.hasTxOutsideFirstAddress())
+            ) {
+              this.scanPolicy = { policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: GAP_LIMIT };
+              await this.storage.setScanningPolicyData(this.scanPolicy);
+            }
+            const addressesToLoad = await scanPolicyStartAddresses(this.storage);
+            await this.syncHistory(
+              addressesToLoad.nextIndex,
+              addressesToLoad.count,
+              false,
+              this.pinCode ?? undefined
+            );
+          });
         } else {
           if (this.beforeReloadCallback) {
             this.beforeReloadCallback();
           }
           await this.reloadStorage();
         }
+        if (generation !== this.syncGeneration || this.walletStopped) {
+          // A newer connection or stop() overtook this one while it loaded.
+          return;
+        }
         this.setState(HathorWallet.PROCESSING);
       } catch (error) {
+        if (generation !== this.syncGeneration || this.walletStopped) {
+          // Overtaken while it loaded: a newer connection aborts the history
+          // stream an older load waits on. The newer connection owns the state.
+          this.logger.info('Loading the wallet stopped on a replaced connection', { error });
+          return;
+        }
         this.setState(HathorWallet.ERROR);
         this.logger.error('Error loading wallet', { error });
       }
@@ -1680,24 +1715,91 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Process the transactions on the websocket transaction queue as if they just arrived.
+   * Process the transactions on the websocket transaction queue as if they just
+   * arrived, then process the whole history.
    */
   async processTxQueue(): Promise<void> {
-    let wsData = this.wsTxQueue.dequeue();
+    await this.drainWsTxQueue();
+    await this.storage.processHistory(this.pinCode ?? undefined);
+  }
 
+  /**
+   * Process the queued websocket transactions through onNewTx, in order, until
+   * the queue is empty.
+   *
+   * After each message it yields to the event loop and only then dequeues the
+   * next one, so a message parked meanwhile is processed by this call too. Once
+   * it finds the queue empty it returns without yielding to the event loop
+   * again, so no message can be parked between that check and the caller's next
+   * synchronous step.
+   */
+  async drainWsTxQueue(): Promise<void> {
+    let wsData = this.wsTxQueue.dequeue();
     while (wsData !== undefined) {
-      // save new txdata
       await this.onNewTx(wsData);
-      wsData = this.wsTxQueue.dequeue();
       // We should release the event loop for other threads
       // This effectively awaits 0 seconds
       // but it schedule the next iteration to run after other threads.
       await new Promise(resolve => {
         setTimeout(resolve, 0);
       });
+      wsData = this.wsTxQueue.dequeue();
     }
+  }
 
-    await this.storage.processHistory(this.pinCode ?? undefined);
+  /**
+   * Process the whole history again from a realtime tx, as a voided-flag change
+   * requires. It rebuilds every balance and UTXO from scratch, so a READY
+   * wallet reports PROCESSING until it ends: callers that wait for
+   * `isReady()` never read them half rebuilt. If the rebuild fails, the wallet
+   * reports ERROR, as a failed walk does.
+   *
+   * It already runs on the history chain, so it enters PROCESSING without
+   * setState(), which would start a walk that waits for this task. When it
+   * ends, the messages parked meanwhile go back on the chain in their arrival
+   * order, after anything already chained, in the same tick as READY, so none
+   * waits for the next walk. READY comes before onNewTx saves the tx as
+   * FINISHED and emits 'update-tx'.
+   *
+   * A stop(), a disconnect or a new connection that comes meanwhile moves the
+   * state off PROCESSING and owns it from then on. Inside a walk the state is
+   * the walk's, and only the history is processed.
+   *
+   * @param pin The PIN for the shielded decode, as in onNewTx
+   */
+  async processHistoryWhileProcessing(pin?: string): Promise<void> {
+    if (this.state !== HathorWallet.READY) {
+      await this.storage.processHistory(pin);
+      return;
+    }
+    this.state = HathorWallet.PROCESSING;
+    try {
+      this.emit('state', HathorWallet.PROCESSING);
+    } catch (error) {
+      // A failing listener must not keep the wallet from rebuilding and
+      // leaving PROCESSING.
+      this.logger.error('A state listener failed', { error });
+    }
+    let rebuilt = false;
+    try {
+      await this.storage.processHistory(pin);
+      rebuilt = true;
+    } finally {
+      if (this.state === HathorWallet.PROCESSING) {
+        if (rebuilt) {
+          let wsData = this.wsTxQueue.dequeue();
+          while (wsData !== undefined) {
+            this.enqueueOnNewTx(wsData);
+            wsData = this.wsTxQueue.dequeue();
+          }
+          this.setState(HathorWallet.READY);
+        } else {
+          // The balances and UTXOs are half rebuilt. The parked messages wait
+          // for the next walk.
+          this.setState(HathorWallet.ERROR);
+        }
+      }
+    }
   }
 
   /**
@@ -1720,18 +1822,66 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Call the method to process data and resume with the correct state after processing.
+   * The PROCESSING walk: replay the parked websocket txs, process the whole
+   * history, process the txs parked meanwhile, then set READY.
    *
-   * @returns A promise that resolves when the wallet is done processing the tx queue.
+   * It runs as a task on `newTxPromise`, after the realtime txs and the reloads
+   * queued before it, so nothing else rewrites history-derived state while it
+   * runs. A walk that a newer connection, a disconnect or stop() overtook does
+   * not change the wallet state: the reload queued after it replaces what it
+   * processed, and the newer walk sets READY.
+   *
+   * @returns A promise that resolves when the walk is done.
    */
   async onEnterStateProcessing(): Promise<void> {
-    // Started processing state now, so we prepare the local data to support using this facade interchangeable with wallet service facade in both wallets
+    const generation = this.syncGeneration;
+    const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
     try {
-      await this.processTxQueue();
-      this.setState(HathorWallet.READY);
-    } catch (e) {
+      await this.runOnHistoryChain(async () => {
+        if (!isCurrent()) {
+          return;
+        }
+        await this.processTxQueue();
+        if (!isCurrent()) {
+          // The newer walk replays what is still parked.
+          return;
+        }
+        // Process what was parked while processHistory ran. The queue is empty
+        // when this returns and READY is set in the same tick, so no message
+        // stays parked until the next walk.
+        await this.drainWsTxQueue();
+        if (isCurrent() && this.state === HathorWallet.PROCESSING) {
+          this.setState(HathorWallet.READY);
+        }
+      });
+    } catch (error) {
+      if (!isCurrent()) {
+        this.logger.info('Processing the history stopped on a replaced connection', { error });
+        return;
+      }
+      this.logger.error('Error processing the wallet history', { error });
       this.setState(HathorWallet.ERROR);
     }
+  }
+
+  /**
+   * Run a task on `newTxPromise`, after every task queued before it.
+   *
+   * Realtime txs, the PROCESSING walk and the reload of the storage all run
+   * here, one at a time. A task must never await anything that waits for a
+   * task queued after it on this chain.
+   *
+   * @param task The task to run
+   * @returns A promise that settles with the task's own result. The chain
+   *   itself never rejects, so a failed task does not stop the next ones.
+   */
+  runOnHistoryChain<T>(task: () => Promise<T>): Promise<T> {
+    const run = this.newTxPromise.then(task);
+    this.newTxPromise = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
   }
 
   setState(state: WalletState): void {
@@ -1748,6 +1898,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Enqueue the call for onNewTx with the given data.
+   *
+   * It runs on `newTxPromise`, after every realtime tx, walk and reload queued
+   * before it (see runOnHistoryChain).
    *
    * The `.catch` is load-bearing — without it, one rejection inside
    * onNewTx (or any of its downstream awaits: `addTx`, `processNewTx`,
@@ -1777,6 +1930,11 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Process a new transaction received from websocket.
+   *
+   * It runs on `newTxPromise` (see enqueueOnNewTx), or inline in a walk that
+   * already holds it. It does not change the wallet state, so `isReady()` stays
+   * true while a realtime tx is processed, except while a voided-flag change
+   * processes the whole history again (see processHistoryWhileProcessing).
    *
    * @param wsData WebSocket message data containing transaction history
    * @param txPin Optional PIN for this tx's shielded decryption (see
@@ -1826,69 +1984,52 @@ class HathorWallet extends EventEmitter {
     // stored pin for WebSocket-delivered txs.
     const pin = txPin ?? this.pinCode ?? undefined;
 
-    // set state to processing and save current state.
-    const previousState = this.state;
-    this.state = HathorWallet.PROCESSING;
-    try {
-      if (isNewTx) {
-        // Process this single transaction.
-        // Handling new metadatas and deleting utxos that are not available anymore
-        await this.storage.processNewTx(newTx, pin);
-      } else if (storageTx.is_voided !== newTx.is_voided) {
-        // Voided flag changed — a full history reprocess is required to avoid
-        // double-counting from the prior processNewTx.
-        await this.storage.processHistory(pin);
-      } else if (!newTx.is_voided) {
-        // Process other metadata updates (first_block confirmation, height, …).
-        await processMetadataChanged(this.storage, newTx);
-      }
+    if (isNewTx) {
+      // Process this single transaction.
+      // Handling new metadatas and deleting utxos that are not available anymore
+      await this.storage.processNewTx(newTx, pin);
+    } else if (storageTx.is_voided !== newTx.is_voided) {
+      // Voided flag changed — a full history reprocess is required to avoid
+      // double-counting from the prior processNewTx.
+      await this.processHistoryWhileProcessing(pin);
+    } else if (!newTx.is_voided) {
+      // Process other metadata updates (first_block confirmation, height, …).
+      await processMetadataChanged(this.storage, newTx);
+    }
 
-      // If the wallet was stopped while this tx was mid-processing (a concurrent
-      // stop()/logout, possibly with cleanStorage), bail before the final save
-      // and emit: re-inserting the tx would resurrect it — including any decoded
-      // shielded value/blinding restored above — into the storage the user just
-      // wiped, and 'update-tx'/'new-tx' would fire on a closed wallet.
-      if (this.walletStopped) {
-        return;
-      }
+    // If the wallet was stopped while this tx was mid-processing (a concurrent
+    // stop()/logout, possibly with cleanStorage), bail before the final save
+    // and emit: re-inserting the tx would resurrect it — including any decoded
+    // shielded value/blinding restored above — into the storage the user just
+    // wiped, and 'update-tx'/'new-tx' would fire on a closed wallet.
+    if (this.walletStopped) {
+      return;
+    }
 
-      // restore previous state before the final save/emit
-      this.state = previousState;
+    // Flip PROCESSING -> FINISHED. The tx was deliberately saved as PROCESSING
+    // before the branches above so a crash mid-processing is detectable; this
+    // final save publishes the flag. It re-reads the PERSISTED tx (not the
+    // in-scope `newTx`) because storage holds the authoritative
+    // post-processing state — decode markers written in place, enriched
+    // inputs — and after a processHistory branch the local object is stale.
+    // The addTx round-trip also pushes the in-place decode mutations through
+    // an explicit store.saveTx instead of relying on object aliasing.
+    const persisted = await this.storage.getTx(newTx.tx_id);
+    // If the tx vanished under us — a concurrent stop({cleanStorage}) wiped
+    // the store between the walletStopped guard above and this read — do NOT
+    // resurrect it. Re-saving the in-scope `newTx` would re-insert a
+    // value-less (undecoded, wire-form) tx into the cleaned store; a restart
+    // re-adds it correctly from the fullnode.
+    if (!persisted) {
+      return;
+    }
+    persisted.processingStatus = TxHistoryProcessingStatus.FINISHED;
+    await this.storage.addTx(persisted);
 
-      // Flip PROCESSING -> FINISHED. The tx was deliberately saved as PROCESSING
-      // before the branches above so a crash mid-processing is detectable; this
-      // final save publishes the flag. It re-reads the PERSISTED tx (not the
-      // in-scope `newTx`) because storage holds the authoritative
-      // post-processing state — decode markers written in place, enriched
-      // inputs — and after a processHistory branch the local object is stale.
-      // The addTx round-trip also pushes the in-place decode mutations through
-      // an explicit store.saveTx instead of relying on object aliasing.
-      const persisted = await this.storage.getTx(newTx.tx_id);
-      // If the tx vanished under us — a concurrent stop({cleanStorage}) wiped
-      // the store between the walletStopped guard above and this read — do NOT
-      // resurrect it. Re-saving the in-scope `newTx` would re-insert a
-      // value-less (undecoded, wire-form) tx into the cleaned store; a restart
-      // re-adds it correctly from the fullnode.
-      if (!persisted) {
-        return;
-      }
-      persisted.processingStatus = TxHistoryProcessingStatus.FINISHED;
-      await this.storage.addTx(persisted);
-
-      if (isNewTx) {
-        this.emit('new-tx', persisted);
-      } else {
-        this.emit('update-tx', persisted);
-      }
-    } finally {
-      // Safety net: if the block above threw before restoring the state (the
-      // enqueueOnNewTx .catch then logs+swallows it), un-stick it here.
-      // Otherwise the wallet stays at PROCESSING forever and handleWebsocketMsg
-      // parks every later WS tx in wsTxQueue with nothing to drain it. A
-      // deliberate CLOSED from a concurrent stop() is left untouched.
-      if (this.state === HathorWallet.PROCESSING && !this.walletStopped) {
-        this.state = previousState;
-      }
+    if (isNewTx) {
+      this.emit('new-tx', persisted);
+    } else {
+      this.emit('update-tx', persisted);
     }
   }
 
@@ -2062,20 +2203,10 @@ class HathorWallet extends EventEmitter {
     // legacy-only and takes the index of its array position. Nothing is derived
     // HERE, but whatever an entry omits is derived during address loading, along
     // with every index past the injected window. Injection never overwrites: an
-    // index storage already holds is skipped, and a disagreement throws.
+    // index storage already holds is skipped, and a disagreement throws. The
+    // shielded pairs are persisted once the access data is in place (below).
     const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
     await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
-    const injectedShieldedPairs = injectedAddresses
-      .filter(entry => entry.shielded)
-      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
-      // the type but not from the value, and excess-property checks only fire on
-      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
-      // (which the repo's own fixtures are) carries one, and spreading it last
-      // would file this entry's pair under the nested index instead.
-      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
-    if (injectedShieldedPairs.length > 0) {
-      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
-    }
 
     let accessData = await this.storage.getAccessData();
     if (!accessData) {
@@ -2125,6 +2256,22 @@ class HathorWallet extends EventEmitter {
       }
     }
 
+    // The injected shielded pairs are persisted only when the wallet has a
+    // shielded chain, which needs the record's shielded xpubs and a crypto
+    // provider. Without one, nothing on the chain is subscribed or fetched, so
+    // a stored pair would be a shielded address given out and never watched.
+    const injectedShieldedPairs = injectedAddresses
+      .filter(entry => entry.shielded)
+      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
+      // the type but not from the value, and excess-property checks only fire on
+      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
+      // (which the repo's own fixtures are) carries one, and spreading it last
+      // would file this entry's pair under the nested index instead.
+      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
+    if (injectedShieldedPairs.length > 0 && (await getShieldedChainXpubs(this.storage)) !== null) {
+      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
+    }
+
     this.clearSensitiveData();
     this.getTokenData();
     this.walletStopped = false;
@@ -2167,6 +2314,9 @@ class HathorWallet extends EventEmitter {
     // onNewTx cannot pass its walletStopped guard during the wipe and resurrect
     // a tx (with decoded shielded secrets) into the just-cleaned storage.
     this.walletStopped = true;
+    // A sync, reload or walk still running belongs to the session being stopped,
+    // and must not change the state of a later start() on this instance.
+    this.syncGeneration += 1;
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
@@ -3969,37 +4119,54 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Reload all addresses and transactions from the full node.
+   *
+   * The wipe and the resync run as a task on `newTxPromise`: they wait for the
+   * realtime txs and the walk queued before them, and nothing queued after them
+   * sees a half-reloaded store.
    */
   async reloadStorage(): Promise<void> {
+    const generation = this.syncGeneration;
+    // Stop the history stream before queueing the reload. A stream on a dropped
+    // connection ends only when it is aborted, and the task waiting on it may be
+    // queued ahead of the reload: aborting it from inside the reload's own task
+    // would wait for itself.
     await this.conn.onReload();
 
-    // unsub all addresses. getAllAddresses() yields the legacy chain; shielded
-    // receives are subscribed by their on-chain spend-derived P2PKH (the 71-byte
-    // shielded address itself is never subscribed — the fullnode indexes by
-    // on-chain script), so also unsubscribe each shielded record's paired spend
-    // P2PKH (ctMappingAddress). Without this, shielded subscriptions leak on reload.
-    for await (const address of this.storage.getAllAddresses()) {
-      this.conn.unsubscribeAddress(address.base58);
-    }
-    for await (const address of this.storage.getAllAddresses({ legacy: false })) {
-      if (address.ctMappingAddress) {
-        this.conn.unsubscribeAddress(address.ctMappingAddress);
+    await this.runOnHistoryChain(async () => {
+      if (this.walletStopped || generation !== this.syncGeneration) {
+        // A newer connection queued its own reload after this one, and a
+        // stopped wallet has nothing to reload.
+        return;
       }
-    }
-    const accessData = await this.storage.getAccessData();
-    if (accessData != null) {
-      // Clean entire storage
-      await this.storage.cleanStorage(true, true);
-      // Reset access data
-      await this.storage.saveAccessData(accessData);
-    }
-    const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-    await this.syncHistory(
-      addressesToLoad.nextIndex,
-      addressesToLoad.count,
-      false,
-      this.pinCode ?? undefined
-    );
+
+      // unsub all addresses. getAllAddresses() yields the legacy chain; shielded
+      // receives are subscribed by their on-chain spend-derived P2PKH (the 71-byte
+      // shielded address itself is never subscribed — the fullnode indexes by
+      // on-chain script), so also unsubscribe each shielded record's paired spend
+      // P2PKH (ctMappingAddress). Without this, shielded subscriptions leak on reload.
+      for await (const address of this.storage.getAllAddresses()) {
+        this.conn.unsubscribeAddress(address.base58);
+      }
+      for await (const address of this.storage.getAllAddresses({ legacy: false })) {
+        if (address.ctMappingAddress) {
+          this.conn.unsubscribeAddress(address.ctMappingAddress);
+        }
+      }
+      const accessData = await this.storage.getAccessData();
+      if (accessData != null) {
+        // Clean entire storage
+        await this.storage.cleanStorage(true, true);
+        // Reset access data
+        await this.storage.saveAccessData(accessData);
+      }
+      const addressesToLoad = await scanPolicyStartAddresses(this.storage);
+      await this.syncHistory(
+        addressesToLoad.nextIndex,
+        addressesToLoad.count,
+        false,
+        this.pinCode ?? undefined
+      );
+    });
   }
 
   /**

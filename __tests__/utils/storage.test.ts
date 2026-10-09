@@ -30,12 +30,16 @@ import {
   processNewTx,
   processSingleTx,
   processHistory,
+  loadAddresses,
 } from '../../src/utils/storage';
+import * as addressUtils from '../../src/utils/address';
+import { deriveShieldedAddressFromStorage } from '../../src/utils/address';
+import walletUtils from '../../src/utils/wallet';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import { encryptData } from '../../src/utils/crypto';
 import walletApi from '../../src/api/wallet';
 import FullnodeConnection from '../../src/new/connection';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
@@ -1140,7 +1144,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
   function buildStorage({
     gapLimit,
     walletData,
-    spendXpubkey,
+    shieldedXpubs,
+    withProvider,
   }: {
     gapLimit: number;
     walletData: {
@@ -1149,10 +1154,17 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       shieldedLastLoadedAddressIndex: number;
       shieldedLastUsedAddressIndex: number;
     };
-    // undefined => hasShieldedKeys === false (no spendXpubkey on access data)
-    spendXpubkey?: string;
+    // true => the access data carries both the scan and the spend xpub;
+    // false => it carries neither.
+    shieldedXpubs: boolean;
+    // Whether a shielded crypto provider is registered. The wallet has a
+    // shielded chain only with both xpubs and a provider.
+    withProvider: boolean;
   }): Storage {
     const storage = new Storage(new MemoryStore());
+    if (withProvider) {
+      storage.setShieldedCryptoProvider({ id: 'mock' } as unknown as IShieldedCryptoProvider);
+    }
     jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
     jest
       .spyOn(storage, 'getScanningPolicyData')
@@ -1160,10 +1172,10 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       .mockResolvedValue({ policy: 'gap-limit', gapLimit } as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     jest.spyOn(storage, 'getWalletData').mockResolvedValue(walletData as any);
-    jest
-      .spyOn(storage, 'getAccessData')
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .mockResolvedValue((spendXpubkey ? { spendXpubkey } : {}) as any);
+      (shieldedXpubs ? { scanXpubkey: 'xpub-scan', spendXpubkey: 'xpub-spend' } : {}) as any
+    );
     return storage;
   }
 
@@ -1173,11 +1185,11 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
 
-  it('legacy-only wallet (hasShieldedKeys=false): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
-    // No spendXpubkey => hasShieldedKeys === false. The shielded fields below
-    // are deliberately "behind" their target, but must be IGNORED because the
-    // shielded branch is gated on hasShieldedKeys. Result must depend only on
-    // the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
+  it('legacy-only wallet (no shielded chain): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
+    // No shielded xpubs => no shielded chain. The shielded fields below are
+    // deliberately "behind" their target, but must be IGNORED because the
+    // shielded branch is gated on the wallet having a shielded chain. Result
+    // must depend only on the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
     //   legacyTarget = lastUsed + gapLimit = 20
     //   minLastLoaded = lastLoaded = 5 (shielded NOT considered)
     //   nextIndex = 6, count = max(20 - 5, 1) = 15
@@ -1190,7 +1202,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 6, count: 15 });
   });
@@ -1212,7 +1225,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 10,
         shieldedLastUsedAddressIndex: 5,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 11, count: 20 });
   });
@@ -1227,7 +1241,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 40,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1250,7 +1265,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 5,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     const result = await checkGapLimit(storage);
     expect(result).toEqual({ nextIndex: 5, count: 1 });
@@ -1258,8 +1274,25 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     expect(result?.count).toBeGreaterThanOrEqual(1);
   });
 
-  it('hasShieldedKeys === false branch: a lagging shielded chain does NOT trigger a load', async () => {
-    // Legacy fully satisfied; shielded badly behind. With no spendXpubkey the
+  it('both shielded xpubs but no crypto provider: a lagging shielded chain does NOT trigger a load', async () => {
+    // Same wallet data as the next case. Without a provider the wallet has no
+    // shielded chain, so only the legacy chain counts, and it is satisfied.
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 50,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 0,
+        shieldedLastUsedAddressIndex: 30,
+      },
+      shieldedXpubs: true,
+      withProvider: false,
+    });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it('no shielded chain: a lagging shielded chain does NOT trigger a load', async () => {
+    // Legacy fully satisfied; shielded badly behind. With no shielded xpubs the
     // shielded gap is invisible, so the overall result is null.
     const storage = buildStorage({
       gapLimit: 20,
@@ -1269,7 +1302,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 30,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1317,4 +1351,345 @@ describe('apiSyncHistory partial-update emission', () => {
     expect(partialUpdates).toHaveLength(1);
     expect(partialUpdates[0][1]).toEqual({ addressesFound: 40, historyLength: 0 });
   });
+});
+
+describe('shielded chain predicate', () => {
+  // Real shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 30000;
+  const full = walletUtils.generateAccessDataFromSeed(
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+  // The chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  function recordWith({ scan, spend }: { scan: boolean; spend: boolean }) {
+    return {
+      ...full,
+      scanXpubkey: scan ? full.scanXpubkey : undefined,
+      spendXpubkey: spend ? full.spendXpubkey : undefined,
+    };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(
+    [
+      { shape: 'no shielded xpubs', scan: false, spend: false },
+      { shape: 'only the scan xpub', scan: true, spend: false },
+      { shape: 'only the spend xpub', scan: false, spend: true },
+      { shape: 'both shielded xpubs', scan: true, spend: true },
+    ].flatMap(record => [
+      { ...record, withProvider: false, setup: 'no crypto provider' },
+      { ...record, withProvider: true, setup: 'a crypto provider' },
+    ])
+  )(
+    'a record with $shape and $setup: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ scan, spend, withProvider }) => {
+      // The record half is what hasShieldedXpubs reports; the chain also needs
+      // a registered provider.
+      const record = recordWith({ scan, spend });
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(scan && spend);
+      const hasChain = scan && spend && withProvider;
+
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
+
+      // One legacy address per index, plus the spend P2PKH when there is a chain.
+      const loaded = await loadAddresses(0, 1, storage);
+      expect(loaded).toHaveLength(hasChain ? 2 : 1);
+      expect((await storage.getAddressAtIndex(0, { legacy: false })) !== null).toBe(hasChain);
+
+      expect((await deriveShieldedAddressFromStorage(0, storage)) !== null).toBe(hasChain);
+
+      // The legacy chain is satisfied (nothing used, index 0 loaded), and the
+      // shielded chain has used index 0 with a gap limit of 1, so only a wallet
+      // with a shielded chain needs index 1.
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      const nextWindow = await checkGapLimit(storage);
+      expect(nextWindow).toEqual(hasChain ? { nextIndex: 1, count: 1 } : null);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it('a wallet without access data has no shielded chain', async () => {
+    expect(walletUtils.hasShieldedXpubs(null)).toBe(false);
+
+    const storage = new Storage(new MemoryStore());
+    // With a provider registered, the missing record is what rules the chain out.
+    storage.setShieldedCryptoProvider(provider);
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+    // Index 0 is already stored, so loadAddresses derives nothing on the legacy
+    // chain and the shielded check is the only reader of the missing record.
+    await storage.saveAddress({ base58: 'W-legacy-0', bip32AddressIndex: 0 });
+
+    await expect(loadAddresses(0, 1, storage)).resolves.toEqual(['W-legacy-0']);
+    await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
+    await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it(
+    'a provider registered after a load turns the chain on from index 0',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(2);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+
+      storage.setShieldedCryptoProvider(provider);
+      // The same window again: the legacy addresses are stored, and the
+      // shielded pairs are derived from index 0.
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(4);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
+      expect(await storage.getAddressAtIndex(1, { legacy: false })).not.toBeNull();
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each([
+    { setup: 'no crypto provider', withProvider: false, expected: 2 },
+    { setup: 'a crypto provider', withProvider: true, expected: 4 },
+  ])(
+    'apiSyncHistory with $setup subscribes and fetches the history of $expected addresses for two indexes',
+    async ({ withProvider, expected }) => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockResolvedValue({ data: { success: true, history: [], has_more: false } } as never);
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      const subscribed = (connection.subscribeAddresses as jest.Mock).mock.calls.flatMap(
+        call => call[0]
+      );
+      expect(subscribed).toHaveLength(expected);
+      expect(historySpy.mock.calls.flatMap(call => call[0])).toEqual(subscribed);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'apiSyncHistory terminates for a record with only the spend xpub',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(recordWith({ scan: false, spend: true }));
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      // With a provider registered, the missing scan xpub is what rules the chain out.
+      storage.setShieldedCryptoProvider(provider);
+      // A sync that keeps requesting a window it never loads does not end: fail
+      // after a bound instead of hanging the test.
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockImplementation(async () => {
+          if (historySpy.mock.calls.length > 20) {
+            throw new Error('address_history was requested more than 20 times');
+          }
+          return { data: { success: true, history: [], has_more: false } } as never;
+        });
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      // One window of two legacy addresses, one request.
+      expect(historySpy).toHaveBeenCalledTimes(1);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+});
+
+describe('derived address cache', () => {
+  // Real legacy and shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 60000;
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: '123',
+    password: '456',
+    networkName: 'testnet',
+  });
+  // A second wallet, to swap single keys of the first record for its keys.
+  const otherAccessData = walletUtils.generateAccessDataFromSeed(
+    'avocado spot town typical traffic vault danger century property shallow divorce festival spend attack anchor afford rotate green audit adjust fade wagon depart level',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+  // The shielded chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  async function storedAddresses(storage: Storage, count: number) {
+    const records: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      const legacy = await storage.getAddressAtIndex(i);
+      const shielded = await storage.getAddressAtIndex(i, { legacy: false });
+      const spend = shielded?.ctMappingAddress
+        ? await storage.store.getAddress(shielded.ctMappingAddress)
+        : null;
+      records.push({ legacy, shielded, spend });
+    }
+    return records;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it(
+    'loading a window again after the store wipe of a reconnect derives nothing',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      const first = await loadAddresses(0, 3, storage);
+      const firstRecords = await storedAddresses(storage, 3);
+
+      // The store wipe reloadStorage runs on a reconnect.
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const second = await loadAddresses(0, 3, storage);
+
+      expect(legacySpy).not.toHaveBeenCalled();
+      expect(pairSpy).not.toHaveBeenCalled();
+      // The same addresses to subscribe, and the same records on both chains.
+      expect(second).toEqual(first);
+      expect(await storedAddresses(storage, 3)).toEqual(firstRecords);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each(['xpubkey', 'scanXpubkey', 'spendXpubkey'] as const)(
+    'a record whose %s changed derives every index again, from the new keys',
+    async field => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      const changed = { ...accessData, [field]: otherAccessData[field] };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(changed);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const reloaded = await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
+      // The same as a storage that never saw the old record.
+      const fresh = new Storage(new MemoryStore());
+      await fresh.saveAccessData(changed);
+      fresh.setShieldedCryptoProvider(provider);
+      expect(reloaded).toEqual(await loadAddresses(0, 2, fresh));
+      expect(await storedAddresses(storage, 2)).toEqual(await storedAddresses(fresh, 2));
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a network change derives every index again',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      try {
+        await storage.saveAccessData(accessData);
+        const testnetAddresses = await loadAddresses(0, 2, storage);
+
+        // The xpubs are the same on every network, the addresses are not.
+        storage.config.setNetwork('mainnet');
+        await storage.cleanStorage(true, true);
+        await storage.saveAccessData(accessData);
+        const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+
+        const mainnetAddresses = await loadAddresses(0, 2, storage);
+
+        expect(legacySpy).toHaveBeenCalledTimes(2);
+        expect(mainnetAddresses).not.toEqual(testnetAddresses);
+        for (const address of mainnetAddresses) {
+          expect(address.startsWith('H')).toBe(true);
+        }
+      } finally {
+        storage.config.setNetwork('testnet');
+      }
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a change of the multisig configuration derives the P2SH addresses again',
+    async () => {
+      const pubkeys = [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+        key => key.xpubkey
+      );
+      const multisigRecord = walletUtils.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: { pubkeys, numSignatures: 2 },
+      });
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(multisigRecord);
+      const twoOfThree = await loadAddresses(0, 1, storage);
+
+      const threeOfThree = {
+        ...multisigRecord,
+        multisigData: { ...multisigRecord.multisigData!, numSignatures: 3 },
+      };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(threeOfThree);
+      const p2shSpy = jest.spyOn(addressUtils, 'deriveAddressP2SH');
+
+      const reloaded = await loadAddresses(0, 1, storage);
+
+      expect(p2shSpy).toHaveBeenCalledTimes(1);
+      expect(reloaded).not.toEqual(twoOfThree);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'handleStop drops the cached addresses',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      await storage.handleStop();
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
 });
