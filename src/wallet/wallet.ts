@@ -25,7 +25,11 @@ import {
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
-import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
+import {
+  deriveAddressFromXPubP2PKH,
+  fetchVerifiedExternalPrivateKey,
+  toOnChainAddress,
+} from '../utils/address';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
 import { unlockScanXPrivKey } from '../shielded/scanKey';
 import { shieldedAddressError } from '../shielded/capability';
@@ -1918,7 +1922,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       } else if (!this.shieldedEnabled && !typedOutput.shielded) {
         // This path builds the scripts itself: a transparent output to a
         // shielded address pays the spend address it embeds
-        typedOutput.address = this.toOnChainAddress(typedOutput.address!);
+        typedOutput.address = toOnChainAddress(typedOutput.address!, this.network);
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address, this.network);
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
@@ -2474,7 +2478,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Request PIN if not provided
     const pin = options.pinCode || (await this.requestPassword());
 
-    if (await this.isShieldedSpendAddress(this.toOnChainAddress(address), addressIndex)) {
+    if (await this.isShieldedSpendAddress(toOnChainAddress(address, this.network), addressIndex)) {
       // An address of the shielded spend chain signs with the spend key
       const spendXpriv = new bitcore.HDPrivateKey(await this.storage.getSpendXPrivKey(pin));
       return spendXpriv.deriveChild(addressIndex).privateKey;
@@ -2540,7 +2544,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns Promise that resolves with address details including index, transactions count, and seqnum
    */
   async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
-    const onChain = this.toOnChainAddress(address);
+    const onChain = toOnChainAddress(address, this.network);
     const addressDetails = await walletApi.getAddressDetails(this, onChain);
     if (
       onChain !== address &&
@@ -2616,7 +2620,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // The wallet-service knows shielded addresses by their on-chain spend
     // address; the result is keyed by the addresses the caller passed.
-    const onChain = addresses.map(address => this.toOnChainAddress(address));
+    const onChain = addresses.map(address => toOnChainAddress(address, this.network));
     const response = await walletApi.checkAddressesMine(this, onChain);
 
     const result: WalletAddressMap = {};
@@ -2635,22 +2639,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       result[address] = mine;
     }
     return result;
-  }
-
-  /**
-   * Map a shielded address to the on-chain spend address its outputs are
-   * locked to. Other addresses, including malformed ones, are returned as is.
-   */
-  private toOnChainAddress(address: string): string {
-    try {
-      const addressObj = new Address(address, { network: this.network });
-      if (addressObj.isShielded()) {
-        return addressObj.getSpendAddress().base58;
-      }
-    } catch (_e) {
-      // Not a shielded address we can parse: let the wallet-service decide
-    }
-    return address;
   }
 
   /**
