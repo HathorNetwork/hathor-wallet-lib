@@ -626,6 +626,21 @@ describe('websocket refresh', () => {
     expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
   });
 
+  it('handles a shielded output whose script does not decode', async () => {
+    const wallet = await readyWallet();
+    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    const emitted = jest.fn();
+    wallet.on('new-tx', emitted);
+    await wallet.onNewTx(
+      txWith({
+        shielded_outputs: [{ mode: 1, decoded: null }],
+        addresses: [shieldedFixtureAddresses[1].spendBase58],
+      })
+    );
+    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+    expect(emitted).toHaveBeenCalledTimes(1);
+  });
+
   it('does not refresh for an unrelated transaction', async () => {
     const wallet = await readyWallet();
     (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();

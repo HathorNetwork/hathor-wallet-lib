@@ -868,7 +868,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // lists every address the tx involves
       const involved = new Set(newTx.addresses ?? []);
       for (const output of newTx.shielded_outputs ?? []) {
-        if (output.decoded.address) {
+        if (output.decoded?.address) {
           involved.add(output.decoded.address);
         }
       }
