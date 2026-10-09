@@ -226,8 +226,8 @@ export class Storage implements IStorage {
   shieldedDecodeSkippedTxIds?: string[] | null;
 
   // See IStorage.scanXPrivKey: the scan private key, in plain text, from
-  // start() until stop().
-  scanXPrivKey: string | null;
+  // start() until stop(). The constructor defines it as not enumerable.
+  scanXPrivKey!: string | null;
 
   // See IStorage.shieldedView.
   shieldedView: ShieldedViewState;
@@ -255,7 +255,10 @@ export class Storage implements IStorage {
     this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
-    this.scanXPrivKey = null;
+    // Not enumerable, so logging or serializing the storage never prints the
+    // key. A data property, so proxies that forward reads to the storage
+    // (WalletServiceStorageProxy) still read it.
+    Object.defineProperty(this, 'scanXPrivKey', { value: null, writable: true, enumerable: false });
     this.shieldedView = new ShieldedViewState();
     this.logger = getDefaultLogger();
   }

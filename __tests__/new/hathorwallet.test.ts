@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { inspect } from 'util';
 import { z } from 'zod';
 import bitcore from 'bitcore-lib';
 import Address from '../../src/models/address';
@@ -3992,6 +3993,17 @@ describe('the shielded view key from start() to stop()', () => {
     expect(unlockSpy.mock.invocationCallOrder[0]).toBeLessThan(
       stateSpy.mock.invocationCallOrder[connecting]
     );
+    await wallet.stop();
+  }, 60000);
+
+  it('keeps the view key out of what logging the started wallet prints', async () => {
+    const { wallet, storage } = await makeWallet();
+
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+
+    const xpriv = storage.scanXPrivKey;
+    expect(xpriv).toEqual(expect.any(String));
+    expect(inspect(wallet, { depth: null })).not.toContain(xpriv!);
     await wallet.stop();
   }, 60000);
 

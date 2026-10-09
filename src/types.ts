@@ -846,6 +846,8 @@ export interface IStorage {
   // decrypts it with the PIN and keeps it here until stop(), so the wallet
   // decodes its shielded outputs without a PIN. It is never persisted; the
   // spend key stays encrypted in the access data. Null while there is none.
+  // Storage keeps it out of its enumerable properties, so logging or
+  // serializing the storage never prints it.
   scanXPrivKey: string | null;
   // What the started wallet knows about its shielded view, besides the key:
   // why it has no key, the integrity of the record's shielded keys, the sync
