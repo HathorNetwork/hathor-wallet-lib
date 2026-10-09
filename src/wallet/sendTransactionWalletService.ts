@@ -618,7 +618,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       changeShieldedMode: this.changeShieldedMode,
       pin: this.pin,
     });
-    const transaction = await sendTransaction.prepareTx();
+    let transaction: Transaction;
+    try {
+      transaction = await sendTransaction.prepareTx();
+    } finally {
+      adapter.release();
+    }
 
     this.utxosAddressPath = transaction.inputs.map(input => {
       const path = adapter.getAddressPath(input.hash, input.index);

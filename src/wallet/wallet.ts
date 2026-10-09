@@ -83,7 +83,7 @@ import {
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
 } from './types';
-import { OutputKind, ShieldedOutputMode } from '../shielded/types';
+import { ShieldedOutputMode } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
@@ -97,6 +97,7 @@ import {
   HasTxOutsideFirstAddressError,
   ShieldedNotEnabledError,
 } from '../errors';
+import { assertChangeShieldedMode } from '../new/sendTransaction';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
 import {
@@ -1798,16 +1799,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       ) {
         this.failIfShieldedNotEnabled();
       }
-      if (
-        changeShieldedMode !== undefined &&
-        changeShieldedMode !== null &&
-        changeShieldedMode !== OutputKind.TRANSPARENT
-      ) {
-        throw new SendTxError(
-          `Invalid changeShieldedMode '${String(changeShieldedMode)}': expected ` +
-            'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
-        );
-      }
+      // This path does not run the send engine, which checks the mode itself
+      assertChangeShieldedMode(changeShieldedMode);
     }
     const newOptions = {
       inputs: [],

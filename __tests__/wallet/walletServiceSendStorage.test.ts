@@ -240,6 +240,30 @@ describe('utxo pools', () => {
     expect(rewind.mock.calls[0][0]).toEqual(Buffer.alloc(32));
   });
 
+  it('decrypts the scan key once, and again only after it is released', async () => {
+    // A custom-token utxo stays out of the HTR pool, so only getUtxo opens it
+    const outsidePool = { ...shieldedUtxo({ mode: 1, index: 7 }), tokenId: customToken } as Utxo;
+    const { proxy, adapter, storage, provider } = await setup({
+      pools: {
+        shielded: [
+          shieldedUtxo({ mode: 1, index: 5 }),
+          shieldedUtxo({ mode: 1, index: 6 }),
+          outsidePool,
+        ],
+      },
+    });
+    (provider.rewindAmountShieldedOutput as jest.Mock).mockImplementation(async () => ({
+      value: 150n,
+      blindingFactor: bf(1),
+    }));
+    const decrypt = jest.spyOn(storage, 'getScanXPrivKey');
+    await collect(proxy.selectUtxos({ shielded: true }));
+    expect(decrypt).toHaveBeenCalledTimes(1);
+    adapter.release();
+    await proxy.getUtxo({ txId: outsidePool.txId, index: 7 });
+    expect(decrypt).toHaveBeenCalledTimes(2);
+  });
+
   it('fails when the rewound value differs from the server value', async () => {
     const { proxy } = await setup({
       pools: { shielded: [shieldedUtxo({ mode: 1, value: 999 })] },

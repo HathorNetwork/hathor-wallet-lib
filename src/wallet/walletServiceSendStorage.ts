@@ -88,7 +88,9 @@ const IGNORED_MEMBERS = new Set<string | symbol>(['then', 'toJSON', 'asymmetricM
  *
  * - UTXOs come from `GET wallet/tx_outputs`, every unspent output of a token
  *   and kind, paged by value and cached for the send, so selection sees the
- *   same UTXOs a fullnode wallet would.
+ *   same UTXOs a fullnode wallet would. One limit: the server orders a page by
+ *   value only, so when more outputs share one value than a page holds, the
+ *   ones a page leaves out are skipped (see fetchAllOutputs).
  * - Shielded UTXOs are rewound with the wallet's scan key when their pool is
  *   fetched: the engine reads their blinding factors during selection.
  * - Availability is the wallet-service's: pools exclude locked and spent
@@ -149,6 +151,14 @@ export class WalletServiceSendStorage {
         return members[prop as string]();
       },
     });
+  }
+
+  /**
+   * Drop the decrypted scan key once the send is prepared; opening more
+   * shielded utxos decrypts it again.
+   */
+  release(): void {
+    this.scanKey = null;
   }
 
   /**
@@ -323,7 +333,9 @@ export class WalletServiceSendStorage {
       const lastValue = txOutputs[txOutputs.length - 1].value;
       // Start the next page at the last value, to keep the outputs tied with it.
       // When a whole page was already seen, a single value has more outputs than
-      // a page holds: move past it, as no request can return the rest.
+      // a page holds: move past it, as no request can return the rest. Those
+      // outputs are left out; ordering ties by value alone, the server has no
+      // cursor that reaches them.
       smallerThan = added > 0 ? lastValue + 1n : lastValue;
       if (smallerThan <= 1n) {
         break;
