@@ -8,6 +8,7 @@
 import { HDPrivateKey, PublicKey, crypto as bitcoreCrypto } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
+import { WalletServiceSendStorage } from '../../src/wallet/walletServiceSendStorage';
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
@@ -378,5 +379,105 @@ describe('external signers', () => {
     await expect(sendTx.prepareTx()).rejects.toThrow(
       /needs the PIN to open the wallet's shielded utxos/
     );
+  });
+});
+
+describe('caller-supplied shielded inputs', () => {
+  /** The full tx holding the fixture shielded utxos, as the wallet-service proxy returns it. */
+  const fullTxWithShieldedOutputs = (txId: string, count: number) =>
+    ({
+      success: true,
+      tx: {
+        hash: txId,
+        nonce: '0',
+        timestamp: 1,
+        version: 1,
+        weight: 1,
+        parents: [],
+        inputs: [],
+        outputs: [],
+        shielded_outputs: Array.from({ length: count }, () => ({
+          mode: 1,
+          commitment: 'aa',
+          range_proof: 'bb',
+          script: 'cc',
+          token_data: 0,
+          ephemeral_pubkey: 'dd',
+          decoded: {},
+        })),
+        tokens: [],
+        raw: '',
+      },
+      meta: {
+        hash: txId,
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        first_block: null,
+        height: 10,
+        voided_by: [],
+        spent_outputs: [],
+        twins: [],
+        accumulated_weight: 1,
+        score: 1,
+      },
+    }) as never;
+
+  it('builds and signs a send spending a shielded input the caller names', async () => {
+    const input = shieldedHtrUtxo(5, 1);
+    const { wallet } = await setup({ shielded: [input] });
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue(fullTxWithShieldedOutputs(input.txId, 6));
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [{ address: externalAddress, value: 100n, token: NATIVE_TOKEN_UID }],
+      {
+        pinCode: PIN,
+        inputs: [{ txId: input.txId, index: 5 }],
+        changeShieldedMode: OutputKind.TRANSPARENT,
+      }
+    );
+    const tx = await sendTx.prepareTx();
+    expect(tx.inputs.map(i => `${i.hash}:${i.index}`)).toEqual([`${input.txId}:5`]);
+    expect(sendTx.utxosAddressPath).toEqual(["m/44'/280'/2'/0/1"]);
+
+    await sendTx.signTx(PIN);
+    const spendRoot = new HDPrivateKey(decryptData(accessData.spendMainKey!, PIN));
+    const data = tx.inputs[0].data!;
+    const pubkey = data.subarray(1 + data[0] + 1);
+    expect(new PublicKey(pubkey).toString()).toBe(spendRoot.deriveChild(1).publicKey.toString());
+  });
+
+  it('refuses to sign an input whose derivation path it does not know', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 100)] });
+    jest.spyOn(WalletServiceSendStorage.prototype, 'getAddressPath').mockReturnValue(undefined);
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      { pinCode: PIN }
+    );
+    await expect(sendTx.prepareTx()).rejects.toThrow(/Unknown derivation path/);
+  });
+});
+
+describe('change addresses', () => {
+  it('moves the shielded address on once a send pays a shielded change to it', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 1000)] });
+    const before = wallet.getCurrentAddress({}, { legacy: false }).address;
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [
+        {
+          address: externalShieldedAddress,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { pinCode: PIN }
+    );
+    await sendTx.prepareTx();
+    expect(before).toBe(shieldedFixtureAddresses[0].shieldedBase58);
+    expect(wallet.getCurrentAddress({}, { legacy: false }).address).toBe(
+      shieldedFixtureAddresses[1].shieldedBase58
+    );
+    // No transparent change: the legacy address is not used up
+    expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
   });
 });
