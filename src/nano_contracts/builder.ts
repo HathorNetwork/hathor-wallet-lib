@@ -89,6 +89,11 @@ class NanoContractTransactionBuilder {
   // If the contract will pay the transaction fees
   contractPaysFees: boolean;
 
+  // Address for the change outputs the builder creates for the transaction
+  // itself, notably the change of the HTR selected to pay the fee. A deposit
+  // action's own `changeAddress` takes precedence for that action's change.
+  changeAddress: string | null;
+
   get isCreateTokenTransaction(): boolean {
     return this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION;
   }
@@ -114,6 +119,7 @@ class NanoContractTransactionBuilder {
     this.tokenFeeAddedInDeposit = false;
     this.maxFee = null;
     this.contractPaysFees = false;
+    this.changeAddress = null;
   }
 
   /**
@@ -241,6 +247,23 @@ class NanoContractTransactionBuilder {
    */
   setContractPaysFees(pays: boolean): this {
     this.contractPaysFees = pays;
+    return this;
+  }
+
+  /**
+   * Set the change address for the transaction
+   *
+   * Used for the change outputs the builder creates for the transaction itself,
+   * notably the change of the HTR selected to pay the fee. A deposit action's
+   * own `changeAddress` still takes precedence for that action's change output.
+   *
+   * @param address Address to receive the change, or null to use a wallet address
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  setChangeAddress(address: string | null): this {
+    this.changeAddress = address;
     return this;
   }
 
@@ -399,7 +422,7 @@ class NanoContractTransactionBuilder {
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
       const changeAddressStr =
-        changeAddressParam || (await this.wallet.getCurrentAddress()).address;
+        changeAddressParam || this.changeAddress || (await this.wallet.getCurrentAddress()).address;
       outputs.push({
         type: getAddressType(changeAddressStr, this.wallet.getNetworkObject()),
         address: changeAddressStr,
@@ -640,6 +663,14 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError(message);
     }
 
+    // Validated once here rather than at each use site, so a bad address fails
+    // before any utxo is selected instead of from inside fee selection.
+    if (this.changeAddress && !(await this.wallet.isAddressMine(this.changeAddress))) {
+      throw new NanoContractTransactionError(
+        'Transaction change address must belong to the same wallet.'
+      );
+    }
+
     // Validate if the arguments match the expected method arguments
     this.parsedArgs = await validateAndParseBlueprintMethodArgs(
       this.blueprintId,
@@ -783,10 +814,14 @@ class NanoContractTransactionBuilder {
     const outputs: IDataOutput[] = [];
     // Create change output if there's change amount
     if (utxosData.changeAmount && utxosData.changeAmount > 0n) {
-      const changeAddress = await this.wallet.getCurrentAddress();
+      // The fee belongs to the transaction, so this uses the transaction-level
+      // change address only. It deliberately does not fall back to a deposit
+      // action's changeAddress: there may be any number of deposit actions and
+      // none of them owns the fee.
+      const changeAddress = this.changeAddress || (await this.wallet.getCurrentAddress()).address;
       outputs.push({
-        type: getAddressType(changeAddress.address, this.wallet.getNetworkObject()),
-        address: changeAddress.address,
+        type: getAddressType(changeAddress, this.wallet.getNetworkObject()),
+        address: changeAddress,
         value: utxosData.changeAmount,
         timelock: null,
         token: NATIVE_TOKEN_UID,

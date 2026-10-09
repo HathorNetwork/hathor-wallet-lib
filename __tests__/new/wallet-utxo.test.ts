@@ -195,3 +195,96 @@ describe('UTXO Consolidation', () => {
     );
   });
 });
+
+describe('getUtxos ordering', () => {
+  let hathorWallet;
+  const addr = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
+  beforeAll(async () => {
+    hathorWallet = new FakeHathorWallet();
+    await hathorWallet.readyPromise;
+    // Seed HTR UTXOs in a deliberately non-monotonic insertion order so
+    // insertion order differs from any value order.
+    const values = [20n, 50n, 10n, 30n];
+    for (const [i, value] of values.entries()) {
+      // eslint-disable-next-line no-await-in-loop
+      await hathorWallet.storage.store.saveUtxo({
+        txId: `order-tx-${i}`,
+        index: 0,
+        token: '00',
+        address: addr,
+        value,
+        authorities: 0n,
+        timelock: null,
+        type: 1,
+        height: null,
+      });
+    }
+  });
+
+  test('returns UTXOs in value-descending order by default', async () => {
+    const utxoDetails = await hathorWallet.getUtxos();
+    const amounts = utxoDetails.utxos.map(u => u.amount);
+    // The seeded values must come back highest-first, ahead of the 1n
+    // fixture UTXOs, and the whole listing must be non-increasing.
+    expect(amounts.slice(0, 4)).toEqual([50n, 30n, 20n, 10n]);
+    for (let i = 1; i < amounts.length; i++) {
+      expect(amounts[i] <= amounts[i - 1]).toBe(true);
+    }
+  });
+
+  test('max_utxos returns the top-N by value, not insertion order', async () => {
+    const utxoDetails = await hathorWallet.getUtxos({ max_utxos: 2 });
+    expect(utxoDetails.utxos.map(u => u.amount)).toEqual([50n, 30n]);
+  });
+
+  test("an explicit order_by_value: 'asc' override is honored", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({ order_by_value: 'asc' });
+    const amounts = utxoDetails.utxos.map(u => u.amount);
+    for (let i = 1; i < amounts.length; i++) {
+      expect(amounts[i] >= amounts[i - 1]).toBe(true);
+    }
+    expect(amounts[amounts.length - 1]).toBe(50n);
+  });
+});
+
+describe('consolidation UTXO ordering', () => {
+  let hathorWallet;
+  const addr = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
+  // A token of its own, so the fixture's HTR UTXOs are not candidates and the
+  // selection depends only on the seeded values.
+  const token = 'c0n5011da7e0';
+  beforeAll(async () => {
+    hathorWallet = new FakeHathorWallet();
+    await hathorWallet.readyPromise;
+    const values = [20n, 50n, 10n, 30n];
+    for (const [i, value] of values.entries()) {
+      // eslint-disable-next-line no-await-in-loop
+      await hathorWallet.storage.store.saveUtxo({
+        txId: `consolidate-tx-${i}`,
+        index: 0,
+        token,
+        address: addr,
+        value,
+        authorities: 0n,
+        timelock: null,
+        type: 1,
+        height: null,
+      });
+    }
+  });
+
+  test('consolidation takes the smallest UTXOs first when limited', async () => {
+    const data = await hathorWallet.prepareConsolidateUtxosData(addr, { token, max_utxos: 2 });
+    expect(data.utxos.map(u => u.amount)).toEqual([10n, 20n]);
+    expect(data.total_amount).toBe(30n);
+  });
+
+  test('an explicit order_by_value overrides the consolidation default', async () => {
+    const data = await hathorWallet.prepareConsolidateUtxosData(addr, {
+      token,
+      max_utxos: 2,
+      order_by_value: 'desc',
+    });
+    expect(data.utxos.map(u => u.amount)).toEqual([50n, 30n]);
+  });
+});

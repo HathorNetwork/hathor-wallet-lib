@@ -362,6 +362,9 @@ describe('FeeBlueprint Template execution', () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const address1 = await hWallet.getAddressAtIndex(1);
 
+    // The fullnode accepts at most one action of each type per token, so a
+    // single withdrawal of the total pays both outputs: skipOutputs leaves the
+    // outputs to the two token outputs below.
     const template = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'contract', value: contractId })
       .addSetVarAction({ name: 'addr0', value: address0 })
@@ -375,17 +378,13 @@ describe('FeeBlueprint Template execution', () => {
           {
             action: 'withdrawal',
             token: '{fbt}',
-            amount: withdrawal1,
-            address: '{addr0}',
-          },
-          {
-            action: 'withdrawal',
-            token: '{fbt}',
-            amount: withdrawal2,
-            address: '{addr1}',
+            amount: withdrawal1 + withdrawal2,
+            skipOutputs: true,
           },
         ],
       })
+      .addTokenOutput({ address: '{addr0}', amount: withdrawal1, token: '{fbt}' })
+      .addTokenOutput({ address: '{addr1}', amount: withdrawal2, token: '{fbt}' })
       .addUtxoSelect({ fill: feeAmount })
       .addFee({ token: NATIVE_TOKEN_UID, amount: feeAmount })
       .build();
@@ -398,6 +397,13 @@ describe('FeeBlueprint Template execution', () => {
     expect(fbtOutputs.length).toBe(2);
     const amounts = fbtOutputs.map(o => o.value).sort((a, b) => Number(a - b));
     expect(amounts).toEqual([withdrawal1, withdrawal2]);
+
+    // Verify the nano header carries a single FBT withdrawal of the total
+    const nanoHeaders = tx.getNanoHeaders();
+    expect(nanoHeaders.length).toBe(1);
+    expect(nanoHeaders[0].actions.length).toBe(1);
+    expect(nanoHeaders[0].actions[0].type).toBe(NanoContractHeaderActionType.WITHDRAWAL);
+    expect(nanoHeaders[0].actions[0].amount).toBe(withdrawal1 + withdrawal2);
 
     // Verify FeeHeader
     const feeHeader = tx.getFeeHeader();

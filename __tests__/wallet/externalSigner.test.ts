@@ -1,0 +1,552 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+/**
+ * External tx-signing method on the wallet-service facade (HathorWalletServiceWallet).
+ *
+ * Mirrors the HathorWallet external-signer support: an xpub-only wallet (e.g. a passkey wallet)
+ * registers a signer and every signing path signs through it — via the wallet-service storage
+ * proxy — with no pin, never prompting for one and never touching a stored private key.
+ */
+
+import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import NanoContractTransactionBuilder from '../../src/nano_contracts/builder';
+import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
+import walletApi from '../../src/wallet/api/walletApi';
+import Network from '../../src/models/network';
+import Transaction from '../../src/models/transaction';
+import Input from '../../src/models/input';
+import walletUtils from '../../src/utils/wallet';
+import { getAddressFromPubkey } from '../../src/utils/address';
+import {
+  NATIVE_TOKEN_UID,
+  P2PKH_ACCT_PATH,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../src/constants';
+import { PinRequiredError, WalletFromXPubGuard } from '../../src/errors';
+import { EcdsaTxSign, TokenVersion } from '../../src/types';
+
+const seed =
+  'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+const network = new Network('testnet');
+const addresses = [
+  'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+  'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+  'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+];
+const TOKEN_ID = '0000000000000000000000000000000000000000000000000000000000000001';
+const PUBKEY = Buffer.from(`02${'11'.repeat(32)}`, 'hex');
+
+// A signer that produces one deterministic signature per input, like a passkey signer would
+// (the real one derives keys in a ceremony and delegates to transactionUtils.signTxInputs).
+const makeSigner = () =>
+  jest.fn(async (tx: Transaction) => ({
+    inputSignatures: tx.inputs.map((_input, inputIndex) => ({
+      inputIndex,
+      addressIndex: 0,
+      signature: Buffer.from(`sig-${inputIndex}`),
+      pubkey: PUBKEY,
+    })),
+    ncCallerSignature: null,
+  }));
+
+// A signer that leaves the last input unsigned, as when the storage proxy couldn't fetch its spent
+// transaction (a transient fullnode failure) and skipped it.
+const makeSkippingSigner = () =>
+  jest.fn(async (tx: Transaction) => ({
+    inputSignatures: tx.inputs.slice(0, -1).map((_input, inputIndex) => ({
+      inputIndex,
+      addressIndex: 0,
+      signature: Buffer.from(`sig-${inputIndex}`),
+      pubkey: PUBKEY,
+    })),
+    ncCallerSignature: null,
+  }));
+
+const htrUtxo = (txIdSuffix: string, address: string) => ({
+  txId: `${'0'.repeat(60)}${txIdSuffix}`,
+  index: 0,
+  tokenId: NATIVE_TOKEN_UID,
+  address,
+  value: 5n,
+  authorities: 0n,
+  timelock: null,
+  heightlock: null,
+  locked: false,
+  addressPath: "m/44'/280'/0'/0/0",
+});
+
+/** An xpub-only (readonly-storage) facade wallet, started, with access data saved. */
+async function makeXpubWallet() {
+  const xpub = walletUtils.getXPubKeyFromSeed(seed, { networkName: 'testnet' });
+  const requestPassword = jest.fn();
+  const wallet = new HathorWalletServiceWallet({ requestPassword, xpub, network });
+  await wallet.storage.saveAccessData(walletUtils.generateAccessDataFromXpub(xpub));
+  wallet.setState('Ready');
+  wallet.walletId = 'wallet-id';
+  const getMainXPrivKey = jest.spyOn(wallet.storage, 'getMainXPrivKey');
+  return { wallet, requestPassword, getMainXPrivKey };
+}
+
+const expectSignedThroughProxy = (
+  signer: ReturnType<typeof makeSigner>,
+  wallet: HathorWalletServiceWallet,
+  tx: Transaction
+) => {
+  expect(signer).toHaveBeenCalledTimes(1);
+  const [signedTx, storageArg] = signer.mock.calls[0] as unknown as [Transaction, unknown];
+  expect(signedTx).toBe(tx);
+  // The signer gets the wallet-service storage PROXY (it resolves spent outputs and address
+  // indexes through the API), not the raw storage.
+  expect(storageArg).not.toBe(wallet.storage);
+  expect(typeof (storageArg as { getSpentTxs: unknown }).getSpentTxs).toBe('function');
+  for (const input of tx.inputs) {
+    expect(input.data).not.toBeNull();
+    expect(input.data!.length).toBeGreaterThan(0);
+  }
+};
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+describe('setExternalTxSigningMethod / isReadonly', () => {
+  it('an xpub-only wallet is readonly until a signer is registered', async () => {
+    const { wallet } = await makeXpubWallet();
+    expect(wallet.isSignedExternally).toBe(false);
+    await expect(wallet.isReadonly()).resolves.toBe(true);
+
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    expect(wallet.isSignedExternally).toBe(true);
+    expect(wallet.storage.hasTxSignatureMethod()).toBe(true);
+    await expect(wallet.isReadonly()).resolves.toBe(false);
+
+    wallet.setExternalTxSigningMethod(null);
+    expect(wallet.isSignedExternally).toBe(false);
+    await expect(wallet.isReadonly()).resolves.toBe(true);
+  });
+
+  it('isSignedExternally follows the storage, even when it is changed directly', async () => {
+    const { wallet } = await makeXpubWallet();
+
+    wallet.storage.setTxSignatureMethod(makeSigner() as unknown as EcdsaTxSign);
+
+    expect(wallet.isSignedExternally).toBe(true);
+  });
+});
+
+describe('external private-key provider checks', () => {
+  // The key of the wallet's legacy address at `index` (m/44'/280'/0'/0/<index>).
+  const addressKey = (index: number) =>
+    new Mnemonic(seed)
+      .toHDPrivateKey('', network.getNetwork())
+      .deriveNonCompliantChild(P2PKH_ACCT_PATH)
+      .deriveNonCompliantChild(0)
+      .deriveNonCompliantChild(index).privateKey;
+
+  /** An xpub-only wallet built from the account-level or the change-level xpub. */
+  const walletFromXpub = async (level: 'account' | 'change') => {
+    const accountXpub = walletUtils.getXPubKeyFromSeed(seed, { networkName: 'testnet' });
+    const xpub = level === 'account' ? accountXpub : walletUtils.xpubDeriveChild(accountXpub, 0);
+    const wallet = new HathorWalletServiceWallet({ requestPassword: jest.fn(), xpub, network });
+    await wallet.storage.saveAccessData(walletUtils.generateAccessDataFromXpub(xpub));
+    return wallet;
+  };
+
+  // generateAccessDataFromXpub accepts either depth, so the own-address check must too: it
+  // derives from the stored (normalized) access data, not from the constructor's xpub.
+  it.each(['account', 'change'] as const)(
+    'accepts the right key for a wallet built from the %s-level xpub, without asking the service',
+    async level => {
+      const wallet = await walletFromXpub(level);
+      const getAddressAtIndex = jest.spyOn(wallet, 'getAddressAtIndex');
+      wallet.setExternalPrivateKeyMethod(async index => addressKey(index));
+
+      const key = await wallet.getVerifiedExternalPrivateKey(3);
+
+      expect(key.toString()).toBe(addressKey(3).toString());
+      expect(getAddressAtIndex).not.toHaveBeenCalled();
+    }
+  );
+
+  // getPrivateKeyFromAddress checks the key against the REQUESTED address, not the own address at
+  // the index the wallet-service reported: a wrong index must lead to a rejection, never to
+  // signing with another of our keys.
+  it('rejects the key of another of our addresses when the service reports a wrong index', async () => {
+    const wallet = await walletFromXpub('account');
+    wallet.setExternalPrivateKeyMethod(async index => addressKey(index));
+    const requested = getAddressFromPubkey(addressKey(2).publicKey.toString(), network).base58;
+    jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(4); // wrong: the address is at 2
+
+    await expect(wallet.getPrivateKeyFromAddress(requested)).rejects.toThrow(
+      'External private key provider returned a key for the wrong address.'
+    );
+  });
+
+  it('passes the pin on to the provider', async () => {
+    const wallet = await walletFromXpub('account');
+    const provider = jest.fn(async (index: number) => addressKey(index));
+    wallet.setExternalPrivateKeyMethod(provider);
+
+    await wallet.signMessageWithAddress('a message', 0, '123');
+
+    expect(provider).toHaveBeenCalledWith(0, expect.anything(), { pinCode: '123' });
+  });
+
+  it('signMessageWithAddress asks for the pin when neither a pin nor a provider is set', async () => {
+    const { wallet, requestPassword } = await makeXpubWallet();
+    requestPassword.mockResolvedValue('1234');
+    const getAddressPrivKey = jest
+      .spyOn(wallet, 'getAddressPrivKey')
+      .mockResolvedValue({ privateKey: addressKey(0) } as never);
+
+    await expect(wallet.signMessageWithAddress('a message', 0)).resolves.toEqual(
+      expect.any(String)
+    );
+
+    expect(requestPassword).toHaveBeenCalledTimes(1);
+    expect(getAddressPrivKey).toHaveBeenCalledWith('1234', 0);
+  });
+});
+
+describe('setExternalPrivateKeyMethod / hasExternalPrivateKeyMethod', () => {
+  it('reports whether an external private-key provider is registered', async () => {
+    const { wallet } = await makeXpubWallet();
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
+
+    wallet.setExternalPrivateKeyMethod(async () => undefined);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(true);
+    expect(wallet.storage.hasPrivateKeyMethod()).toBe(true);
+
+    wallet.setExternalPrivateKeyMethod(null);
+    expect(wallet.hasExternalPrivateKeyMethod()).toBe(false);
+  });
+});
+
+describe('signTx with an external signer', () => {
+  const makeTx = () =>
+    new Transaction([new Input(`${'0'.repeat(62)}aa`, 0), new Input(`${'0'.repeat(62)}bb`, 1)], []);
+
+  it('signs through the proxy with no pin', async () => {
+    const { wallet, requestPassword, getMainXPrivKey } = await makeXpubWallet();
+    const signer = makeSigner();
+    wallet.setExternalTxSigningMethod(signer as unknown as EcdsaTxSign);
+    const tx = makeTx();
+
+    await wallet.signTx(tx);
+
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(signer.mock.calls[0][2]).toBe('');
+    expect(requestPassword).not.toHaveBeenCalled();
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  it('still rejects an xpub-only wallet without a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    await expect(wallet.signTx(makeTx())).rejects.toThrow(WalletFromXPubGuard);
+  });
+
+  // The public signTx signs only the wallet's own inputs; a counterparty's input (e.g. in a swap)
+  // is legitimately left for the other party to sign.
+  it('leaves an input it cannot sign for the caller, without throwing', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    const tx = makeTx();
+
+    await expect(wallet.signTx(tx)).resolves.toBe(tx);
+    expect(tx.inputs[0].data!.length).toBeGreaterThan(0);
+    expect(tx.inputs[1].data).toBeNull();
+  });
+});
+
+describe('SendTransactionWalletService.signTx with an external signer', () => {
+  it('signs through the wallet without a pin', async () => {
+    const { wallet, getMainXPrivKey } = await makeXpubWallet();
+    const signer = makeSigner();
+    wallet.setExternalTxSigningMethod(signer as unknown as EcdsaTxSign);
+    const tx = new Transaction([new Input(`${'0'.repeat(62)}cc`, 0)], []);
+    const sendTx = new SendTransactionWalletService(wallet, { transaction: tx });
+
+    await expect(sendTx.signTx()).resolves.toBe(tx);
+
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  // Every input of a send is the wallet's own, so an unsigned one means signing failed (e.g. the
+  // proxy couldn't fetch its spent tx).
+  it('rejects a send with an input the signer left unsigned', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    const tx = new Transaction(
+      [new Input(`${'0'.repeat(62)}cc`, 0), new Input(`${'0'.repeat(62)}dd`, 2)],
+      []
+    );
+    const sendTx = new SendTransactionWalletService(wallet, { transaction: tx });
+
+    await expect(sendTx.signTx()).rejects.toThrow(
+      `Could not sign input 1 (${'0'.repeat(62)}dd:2). Please try again.`
+    );
+  });
+});
+
+describe('sendManyOutputsSendTransaction with an external signer', () => {
+  it('never asks for a pin', async () => {
+    const { wallet, requestPassword } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+
+    const sendTx = await wallet.sendManyOutputsSendTransaction([
+      { address: addresses[0], value: 1n, token: NATIVE_TOKEN_UID },
+    ]);
+
+    expect(sendTx).toBeInstanceOf(SendTransactionWalletService);
+    expect(requestPassword).not.toHaveBeenCalled();
+  });
+});
+
+describe('prepare* token/authority methods with an external signer', () => {
+  /** Common stubs for the token methods; each test signs a tx with no pin. */
+  const stubTokenDeps = (wallet: HathorWalletServiceWallet) => {
+    jest.spyOn(wallet, 'getCurrentAddress').mockReturnValue({ address: addresses[0] } as never);
+    jest.spyOn(wallet.storage, 'getToken').mockResolvedValue(null);
+    jest.spyOn(wallet, 'getTokenDetails').mockResolvedValue({
+      tokenInfo: { id: TOKEN_ID, name: 'Token', symbol: 'TKN', version: TokenVersion.DEPOSIT },
+      totalSupply: 1000n,
+      totalTransactions: 1,
+      authorities: { mint: true, melt: true },
+    } as never);
+    jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(2);
+    jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(async (_amount, params) => {
+      if (params?.token === NATIVE_TOKEN_UID) {
+        return { utxos: [htrUtxo('01', addresses[0])], changeAmount: 4n } as never;
+      }
+      return {
+        utxos: [{ ...htrUtxo('02', addresses[1]), tokenId: TOKEN_ID, value: 10n }],
+        changeAmount: 0n,
+      } as never;
+    });
+  };
+  const authority = (mask: bigint) => [
+    { txId: `${'0'.repeat(60)}aa01`, index: 0, address: addresses[2], authorities: mask },
+  ];
+
+  const setup = async () => {
+    const harness = await makeXpubWallet();
+    const signer = makeSigner();
+    harness.wallet.setExternalTxSigningMethod(signer as unknown as EcdsaTxSign);
+    stubTokenDeps(harness.wallet);
+    return { ...harness, signer };
+  };
+
+  it('prepareCreateNewToken', async () => {
+    const { wallet, signer, getMainXPrivKey } = await setup();
+    const tx = await wallet.prepareCreateNewToken('Token', 'TKN', 100n, { signTx: true });
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  it('prepareMintTokensData', async () => {
+    const { wallet, signer, getMainXPrivKey } = await setup();
+    jest.spyOn(wallet, 'getMintAuthority').mockResolvedValue(authority(TOKEN_MINT_MASK) as never);
+    const tx = await wallet.prepareMintTokensData(TOKEN_ID, 100n, { signTx: true });
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  it('prepareMeltTokensData', async () => {
+    const { wallet, signer, getMainXPrivKey } = await setup();
+    jest.spyOn(wallet, 'getMeltAuthority').mockResolvedValue(authority(TOKEN_MELT_MASK) as never);
+    const tx = await wallet.prepareMeltTokensData(TOKEN_ID, 10n, { signTx: true });
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  it('prepareDelegateAuthorityData', async () => {
+    const { wallet, signer, getMainXPrivKey } = await setup();
+    jest.spyOn(wallet, 'getMintAuthority').mockResolvedValue(authority(TOKEN_MINT_MASK) as never);
+    const tx = await wallet.prepareDelegateAuthorityData(TOKEN_ID, 'mint', addresses[1], {});
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+
+  it('rejects a token tx with an input the signer left unsigned', async () => {
+    const { wallet } = await setup();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+
+    await expect(
+      wallet.prepareCreateNewToken('Token', 'TKN', 100n, { signTx: true })
+    ).rejects.toThrow(/Could not sign input 0 \(/);
+  });
+
+  it('prepareDestroyAuthorityData', async () => {
+    const { wallet, signer, getMainXPrivKey } = await setup();
+    jest.spyOn(wallet, 'getMeltAuthority').mockResolvedValue(authority(TOKEN_MELT_MASK) as never);
+    const tx = await wallet.prepareDestroyAuthorityData(TOKEN_ID, 'melt', 1, {});
+    expectSignedThroughProxy(signer, wallet, tx);
+    expect(getMainXPrivKey).not.toHaveBeenCalled();
+  });
+});
+
+describe('nano with an external signer', () => {
+  it('createNanoContractTransaction does not require a pin when a signer is set', async () => {
+    const { wallet } = await makeXpubWallet();
+    // Stop right after the pin check: reaching this stub means the pin guard let it through.
+    jest
+      .spyOn(wallet as never, 'getAddressIndexIfOwned')
+      .mockRejectedValue(new Error('past the pin check') as never);
+
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    await expect(
+      wallet.createNanoContractTransaction('initialize', addresses[0], {})
+    ).rejects.toThrow('past the pin check');
+  });
+
+  it('createNanoContractCreateTokenTransaction does not require a pin when a signer is set', async () => {
+    const { wallet } = await makeXpubWallet();
+    // Stop right after the pin check: reaching this stub means the pin guard let it through.
+    jest
+      .spyOn(wallet as never, 'getAddressIndexIfOwned')
+      .mockRejectedValue(new Error('past the pin check') as never);
+
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    await expect(
+      wallet.createNanoContractCreateTokenTransaction('initialize', addresses[0], {}, {
+        name: 'Token',
+        symbol: 'TKN',
+        amount: 100n,
+      } as never)
+    ).rejects.toThrow('past the pin check');
+  });
+
+  it('createNanoContractCreateTokenTransaction still requires a pin without a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false); // seed-like wallet
+    await expect(
+      wallet.createNanoContractCreateTokenTransaction('initialize', addresses[0], {}, {
+        name: 'Token',
+        symbol: 'TKN',
+        amount: 100n,
+      } as never)
+    ).rejects.toThrow(PinRequiredError);
+  });
+
+  it('createNanoContractTransaction still requires a pin without a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false); // seed-like wallet
+    await expect(
+      wallet.createNanoContractTransaction('initialize', addresses[0], {})
+    ).rejects.toThrow(PinRequiredError);
+  });
+
+  it('prepareNanoSendTransactionWalletService rejects an input the signer left unsigned', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSkippingSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({ index: 0 } as never);
+    const tx = new Transaction(
+      [new Input(`${'0'.repeat(62)}ee`, 0), new Input(`${'0'.repeat(62)}ff`, 1)],
+      []
+    );
+
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).rejects.toThrow(/Could not sign input 1 \(/);
+  });
+
+  // signTransaction copies the signer's ncCallerSignature into every nano header as-is; a nano call
+  // can have no inputs, so the input check alone would miss a missing caller signature.
+  it('prepareNanoSendTransactionWalletService rejects a nano tx without a caller signature', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({ index: 0 } as never);
+    jest.spyOn(wallet, 'signTx').mockImplementation(async tx => tx);
+    const header = { script: null as Buffer | null };
+    const tx = {
+      inputs: [],
+      isNanoContract: () => true,
+      getNanoHeaders: () => [header],
+    } as unknown as Transaction;
+
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).rejects.toThrow('Could not sign the nano contract caller. Please try again.');
+
+    header.script = Buffer.from('caller-signature');
+    await expect(
+      wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null)
+    ).resolves.toBeDefined();
+  });
+
+  it('createNanoContractCreateTokenTransaction keeps signTx: false with a signer', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet as never, 'getAddressIndexIfOwned').mockResolvedValue(0 as never);
+    const builtTx = new Transaction([], []);
+    jest.spyOn(NanoContractTransactionBuilder.prototype, 'build').mockResolvedValue(builtTx);
+    const prepare = jest
+      .spyOn(wallet, 'prepareNanoSendTransactionWalletService')
+      .mockResolvedValue({} as never);
+
+    await wallet.createNanoContractCreateTokenTransaction(
+      'initialize',
+      addresses[0],
+      { blueprintId: 'blueprint', ncId: null },
+      { name: 'Token', symbol: 'TKN', amount: 100n } as never,
+      { signTx: false }
+    );
+
+    expect(prepare).toHaveBeenCalledWith(builtTx, addresses[0], null, { signTx: false });
+  });
+
+  it('prepareNanoSendTransactionWalletService signs with a signer and no pin', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.setExternalTxSigningMethod(makeSigner() as unknown as EcdsaTxSign);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({ index: 0 } as never);
+    const signTx = jest.spyOn(wallet, 'signTx').mockImplementation(async tx => tx);
+    const tx = new Transaction([], []);
+
+    await wallet.prepareNanoSendTransactionWalletService(tx, addresses[0], null);
+
+    expect(signTx).toHaveBeenCalledWith(tx, { pinCode: null });
+  });
+});
+
+describe('refreshFullAuthToken', () => {
+  const authPrivKey = () => {
+    const root = new Mnemonic(seed).toHDPrivateKey('', network.getNetwork());
+    return HathorWalletServiceWallet.deriveAuthPrivateKey(root);
+  };
+
+  it('mints a full token with the auth key without keeping the key', async () => {
+    const { wallet } = await makeXpubWallet();
+    const createAuthToken = jest
+      .spyOn(walletApi, 'createAuthToken')
+      .mockResolvedValue({ success: true, token: 'full-token' } as never);
+    const key = authPrivKey();
+
+    await wallet.refreshFullAuthToken(key);
+
+    expect(createAuthToken).toHaveBeenCalledWith(
+      wallet,
+      expect.any(Number),
+      key.xpubkey,
+      expect.any(String)
+    );
+    expect((wallet as unknown as { authToken: string }).authToken).toBe('full-token');
+    // Later renewals fall back to read-only tokens: the key is not retained.
+    expect((wallet as unknown as { authPrivKey: unknown }).authPrivKey).toBeNull();
+  });
+
+  it('requires a started wallet', async () => {
+    const { wallet } = await makeXpubWallet();
+    wallet.walletId = null;
+    await expect(wallet.refreshFullAuthToken(authPrivKey())).rejects.toThrow(
+      'Wallet not ready yet.'
+    );
+  });
+});

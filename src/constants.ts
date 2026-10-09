@@ -181,6 +181,21 @@ export const TIMEOUT: number = 10000;
 export const SEND_TOKENS_TIMEOUT: number = 300000;
 
 /**
+ * Timeout for wallet-service tx propagation requests in milliseconds.
+ *
+ * Propagating a transaction is far more expensive than a read: the request only
+ * returns once the wallet-service has pushed the tx to the fullnode and written
+ * it to its own storage. The generic TIMEOUT is sized for reads and aborts these
+ * requests while the backend may still be legitimately working on them.
+ *
+ * This is deliberately shorter than the fullnode's SEND_TOKENS_TIMEOUT. Both
+ * cover the same logical operation, but a client that blocks for five minutes on
+ * an unreachable wallet-service is worse than one that fails and lets the caller
+ * decide whether to retry.
+ */
+export const SEND_TX_TIMEOUT: number = 60000;
+
+/**
  * Number of iterations to execute when hashing the password
  *
  * Even though NIST recommeds at least 10,000 iterations (https://pages.nist.gov/800-63-3/sp800-63b.html#sec5),

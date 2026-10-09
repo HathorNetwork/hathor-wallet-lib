@@ -3,7 +3,9 @@ import walletApi from '../../../src/wallet/api/walletApi';
 import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import config from '../../../src/config';
-import { WalletRequestError } from '../../../src/errors';
+import { TxNotFoundError, WalletRequestError } from '../../../src/errors';
+import { axiosInstance } from '../../../src/wallet/api/walletServiceAxios';
+import { SEND_TX_TIMEOUT } from '../../../src/constants';
 
 const seed =
   'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
@@ -12,8 +14,9 @@ const seed =
 const mockAxiosInstance = {
   get: jest.fn(),
   post: jest.fn(),
+  put: jest.fn(),
   delete: jest.fn(),
-} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post' | 'delete'>>;
+} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post' | 'put' | 'delete'>>;
 
 // Mock the axiosInstance function to return our mock instance
 jest.mock('../../../src/wallet/api/walletServiceAxios', () => ({
@@ -775,6 +778,45 @@ describe('walletApi', () => {
     await expect(walletApi.deleteTxProposal(wallet, txProposalId)).rejects.toThrow();
   });
 
+  describe('tx propagation timeout', () => {
+    const txHex = 'cafe';
+    const txProposalId = 'proposal-id';
+
+    test('createTxProposal opts into the send timeout', async () => {
+      mockAxiosInstance.post.mockResolvedValueOnce({
+        status: 201,
+        data: { success: true, txProposalId, inputs: [], outputs: [] },
+      } as AxiosResponse);
+
+      await walletApi.createTxProposal(wallet, txHex);
+
+      expect(axiosInstance).toHaveBeenCalledWith(wallet, true, SEND_TX_TIMEOUT);
+    });
+
+    test('updateTxProposal opts into the send timeout', async () => {
+      mockAxiosInstance.put.mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, txProposalId, txHex },
+      } as AxiosResponse);
+
+      await walletApi.updateTxProposal(wallet, txProposalId, txHex);
+
+      expect(axiosInstance).toHaveBeenCalledWith(wallet, true, SEND_TX_TIMEOUT);
+    });
+
+    test('read requests keep the default timeout', async () => {
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 200,
+        data: { success: true, addresses: [] },
+      } as AxiosResponse);
+
+      await walletApi.getAddresses(wallet, 0);
+
+      // No third argument: axiosInstance falls back to the default TIMEOUT
+      expect(axiosInstance).toHaveBeenCalledWith(wallet, true);
+    });
+  });
+
   test('getHasTxOutsideFirstAddress', async () => {
     // Test successful response with hasTransactions: true
     const mockResponseTrue = {
@@ -837,5 +879,58 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getHasTxOutsideFirstAddress(wallet)).rejects.toThrow();
+  });
+
+  /**
+   * The three proxied fullnode queries share one error contract: whatever the
+   * status code, an `error: 'tx-not-found'` body has to surface as
+   * TxNotFoundError so callers can branch on it, rather than as the generic
+   * WalletRequestError.
+   */
+  describe('proxied fullnode queries surface tx-not-found', () => {
+    const txId = 'tx1';
+    const notFoundBody = { success: false, error: 'tx-not-found' };
+
+    const QUERIES = [
+      {
+        name: 'getFullTxById',
+        call: () => walletApi.getFullTxById(wallet, txId),
+      },
+      {
+        name: 'getTxConfirmationData',
+        call: () => walletApi.getTxConfirmationData(wallet, txId),
+      },
+      {
+        name: 'graphvizNeighborsQuery',
+        call: () => walletApi.graphvizNeighborsQuery(wallet, txId, 'funds', 1),
+      },
+    ];
+
+    test.each(QUERIES)('$name throws TxNotFoundError on a 200 body', async query => {
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 200,
+        data: notFoundBody,
+      } as AxiosResponse);
+
+      await expect(query.call()).rejects.toThrow(TxNotFoundError);
+    });
+
+    test.each(QUERIES)('$name throws TxNotFoundError on a non-200 response', async query => {
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 404,
+        data: notFoundBody,
+      } as AxiosResponse);
+
+      await expect(query.call()).rejects.toThrow(TxNotFoundError);
+    });
+
+    test.each(QUERIES)('$name still throws WalletRequestError otherwise', async query => {
+      mockAxiosInstance.get.mockResolvedValueOnce({
+        status: 503,
+        data: { success: false },
+      } as AxiosResponse);
+
+      await expect(query.call()).rejects.toThrow(WalletRequestError);
+    });
   });
 });

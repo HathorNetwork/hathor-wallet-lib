@@ -7,6 +7,8 @@
 
 import bitcore from 'bitcore-lib';
 import {
+  EcdsaTxSign,
+  PrivateKeyProvider,
   TokenVersion,
   IStorage,
   OutputValueType,
@@ -22,7 +24,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { CreateNanoTxData, CreateNanoTxOptions } from '../nano_contracts/types';
 import NanoContractHeader from '../nano_contracts/header';
-import type { IShieldedCryptoProvider } from '../shielded/types';
+import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -344,6 +346,9 @@ export interface IHathorWallet {
   startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void>;
   getReadOnlyAuthToken(): Promise<string>;
   setShieldedCryptoProvider(provider?: IShieldedCryptoProvider): void;
+  setExternalTxSigningMethod(method: EcdsaTxSign | null): void;
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
+  hasExternalPrivateKeyMethod(): boolean;
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
@@ -354,12 +359,20 @@ export interface IHathorWallet {
   }): Promise<GetHistoryObject[]>;
   sendManyOutputsTransaction(
     outputs: OutputRequestObj[],
-    options: { inputs?: InputRequestObj[]; changeAddress?: string }
+    options: {
+      inputs?: InputRequestObj[];
+      changeAddress?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    }
   ): Promise<Transaction>;
   sendTransaction(
     address: string,
     value: OutputValueType,
-    options: { token?: string; changeAddress?: string }
+    options: {
+      token?: string;
+      changeAddress?: string;
+      changeShieldedMode?: ChangeOutputMode | null;
+    }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string>;
@@ -372,7 +385,7 @@ export interface IHathorWallet {
   ): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type
   getNextAddress(opts?: IAddressChainOptions): AddressInfoObject | Promise<AddressInfoObject>; // FIXME: Should have a single return type;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
-  signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
+  signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string>;
   prepareCreateNewToken(
     name: string,
     symbol: string,
@@ -459,14 +472,14 @@ export interface IHathorWallet {
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<SendTransactionWalletService>;
   createAndSendNanoContractCreateTokenTransaction(
     method: string,
     address: string,
     data: CreateNanoTxData,
     createTokenOptions: CreateTokenOptionsInput,
-    options?: CreateNanoTxOptions
+    options?: Omit<CreateNanoTxOptions, 'changeAddress'>
   ): Promise<Transaction>;
   getNanoHeaderSeqnum(address: string): Promise<number>;
   isAddressMine(address: string): Promise<boolean>;
@@ -821,7 +834,9 @@ export interface FullNodeTxConfirmationDataResponse {
   success: boolean;
   accumulated_weight: number;
   accumulated_bigger: boolean;
-  stop_value: number;
+  // Optional on the fullnode contract too (TransactionAccWeightSuccess in
+  // src/api/schemas/txApi.ts): only present once the tx has a first_block.
+  stop_value?: number;
   confirmation_level: number;
 }
 

@@ -34,6 +34,7 @@ import {
   SCANNING_POLICY,
   INcData,
   EcdsaTxSign,
+  PrivateKeyProvider,
   ITxSignatureData,
   OutputValueType,
   ILogger,
@@ -89,11 +90,19 @@ export class Storage implements IStorage {
 
   utxosSelectedAsInput: Map<string, boolean>;
 
+  /**
+   * The pending ttl timer of each utxo marked as selected. Re-marking or releasing a utxo cancels
+   * its timer, so a stale timer can't clear a later selection of the same utxo.
+   */
+  private utxoSelectionTimers: Map<string, ReturnType<typeof setTimeout>>;
+
   config: Config;
 
   version: ApiVersion | null;
 
   txSignFunc: EcdsaTxSign | null;
+
+  getPrivKeyFunc: PrivateKeyProvider | null;
 
   shieldedCryptoProvider?: IShieldedCryptoProvider;
 
@@ -116,10 +125,12 @@ export class Storage implements IStorage {
   constructor(store: IStore) {
     this.store = store;
     this.utxosSelectedAsInput = new Map<string, boolean>();
+    this.utxoSelectionTimers = new Map<string, ReturnType<typeof setTimeout>>();
     this.config = config;
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
     this.logger = getDefaultLogger();
@@ -189,6 +200,48 @@ export class Storage implements IStorage {
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+  }
+
+  /**
+   * Get the registered tx signing function, if any.
+   * Lets wrappers (e.g. the wallet-service storage proxy) call the external signer with
+   * themselves as the storage argument, which `getTxSignatures` can't do (it passes `this`).
+   * @returns {EcdsaTxSign | null}
+   */
+  getTxSignatureMethod(): EcdsaTxSign | null {
+    return this.txSignFunc;
+  }
+
+  /**
+   * Whether an external private-key provider is registered.
+   * @returns {boolean}
+   */
+  hasPrivateKeyMethod(): boolean {
+    return !!this.getPrivKeyFunc;
+  }
+
+  /**
+   * Set the external private-key provider, or a null value to clear it.
+   * @param getPrivKey The provider function, or null
+   */
+  setPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.getPrivKeyFunc = getPrivKey;
+  }
+
+  /**
+   * Get the private key for an address index from the registered external provider.
+   * @param addressIndex The address' derivation index
+   * @param options Options forwarded to the provider (e.g. pinCode, usually ignored)
+   * @returns {Promise<unknown>} A bitcore PrivateKey
+   */
+  async getExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string } = {}
+  ): Promise<unknown> {
+    if (!this.getPrivKeyFunc) {
+      throw new Error('No external private key method set.');
+    }
+    return this.getPrivKeyFunc(addressIndex, this, options);
   }
 
   /**
@@ -682,6 +735,7 @@ export class Storage implements IStorage {
           address: utxo.address,
           value: utxo.value,
           authorities: utxo.authorities,
+          ...(utxo.shielded ? { shielded: true } : {}),
         });
       }
       if (foundAmount < singleBalance) {
@@ -863,15 +917,22 @@ export class Storage implements IStorage {
     }
 
     const utxoId = `${utxo.txId}:${utxo.index}`;
+    // A previous selection's timer must not clear this one (or a later one): e.g. a send that
+    // failed and released its inputs, then an immediate retry that marks them again.
+    const previousTimer = this.utxoSelectionTimers.get(utxoId);
+    if (previousTimer !== undefined) {
+      clearTimeout(previousTimer);
+      this.utxoSelectionTimers.delete(utxoId);
+    }
     if (markAs) {
       this.utxosSelectedAsInput.set(utxoId, markAs);
       // if a ttl is given, we should reverse
       if (ttl) {
-        setTimeout(() => {
-          if (this.utxosSelectedAsInput.has(utxoId)) {
-            this.utxosSelectedAsInput.delete(utxoId);
-          }
+        const timer = setTimeout(() => {
+          this.utxoSelectionTimers.delete(utxoId);
+          this.utxosSelectedAsInput.delete(utxoId);
         }, ttl);
+        this.utxoSelectionTimers.set(utxoId, timer);
       }
     } else {
       this.utxosSelectedAsInput.delete(utxoId);

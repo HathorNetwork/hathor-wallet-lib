@@ -118,7 +118,7 @@ class PartialTxProposal {
     const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
 
     for (const utxo of utxosDetails.utxos) {
-      this.addInput(utxo.txId, utxo.index, utxo.value, utxo.address, {
+      await this.addInput(utxo.txId, utxo.index, utxo.value, utxo.address, {
         token: utxo.tokenId,
         authorities: utxo.authorities,
         markAsSelected,
@@ -165,8 +165,10 @@ class PartialTxProposal {
    * @param {OutputValueType} [options.authorities=0] Authority information of the UTXO.
    * @param {string|null} [options.address=null] Address that owns the UTXO.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
+   *
+   * @returns {Promise<void>} Resolves once the utxo is marked, so it can't be selected again.
    */
-  addInput(
+  async addInput(
     hash: string,
     index: number,
     value: OutputValueType,
@@ -183,11 +185,13 @@ class PartialTxProposal {
   ) {
     this.resetSignatures();
 
-    if (markAsSelected) {
-      this.storage.utxoSelectAsInput({ txId: hash, index }, true);
-    }
-
+    // Added before the await on purpose: callers that don't await addInput still see the input
+    // in the partial tx synchronously, as before this method was async.
     this.partialTx.addInput(hash, index, value, address, { token, authorities });
+
+    if (markAsSelected) {
+      await this.storage.utxoSelectAsInput({ txId: hash, index }, true);
+    }
   }
 
   /**
@@ -321,11 +325,29 @@ class PartialTxProposal {
   /**
    * Unmark all inputs currently on the partial tx as not `selected_as_input`.
    *
-   * @param {HathorWallet} wallet Wallet of the UTXOs.
+   * Every input is attempted even if one fails, so a single failure doesn't leave the others
+   * reserved; the first failure is then rethrown.
+   *
+   * @returns {Promise<void>} Resolves once all inputs are unmarked.
    */
-  unmarkAsSelected() {
+  async unmarkAsSelected() {
+    let failed = false;
+    let firstError: unknown;
     for (const input of this.partialTx.inputs) {
-      this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      try {
+        await this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
+      } catch (err) {
+        // Log every failure (only the first is rethrown), so it shows which inputs may still be
+        // reserved.
+        this.storage.logger.debug(`Failed to release UTXO ${input.hash}:${input.index}: ${err}`);
+        if (!failed) {
+          failed = true;
+          firstError = err;
+        }
+      }
+    }
+    if (failed) {
+      throw firstError;
     }
   }
 

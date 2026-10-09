@@ -41,7 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction from './sendTransaction';
+import SendTransaction, { ISendDataOutput, ISendOutput, isDataOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -59,13 +59,14 @@ import {
   AddressScanPolicyData,
   AuthorityType,
   EcdsaTxSign,
+  PrivateKeyProvider,
   getDefaultLogger,
   HistorySyncMode,
   IHistoryTx,
   IIndexLimitAddressScanPolicy,
   ILogger,
   IMultisigData,
-  IPrecalculatedShieldedAddress,
+  IPrecalculatedAddress,
   IStorage,
   ITokenData,
   IUtxo,
@@ -87,6 +88,7 @@ import {
   getSupportedSyncMode,
   loadAddressHistory,
   processMetadataChanged,
+  savePrecalculatedLegacyAddresses,
   savePrecalculatedShieldedAddresses,
   scanPolicyStartAddresses,
 } from '../utils/storage';
@@ -96,6 +98,7 @@ import {
   deriveAddressP2PKH,
   deriveAddressP2SH,
   deriveShieldedAddressFromStorage,
+  fetchVerifiedExternalPrivateKey,
   getAddressFromPubkey,
 } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
@@ -163,6 +166,26 @@ const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_MESSAGE_PASSWORD_REQUIRED = 'Password is required.';
 
 /**
+ * Normalize the `preCalculatedAddresses` option into per-index entries.
+ *
+ * Per element, not by classifying the whole array from element 0: a caller that
+ * has a unified fixture for some indexes and only a legacy address for the rest
+ * can mix the two shapes in one list. A string entry is legacy-only and takes
+ * its BIP32 index from its array position (back-compat with a plain `string[]`);
+ * a unified entry passes through by reference, keeping the index it declares.
+ */
+export function normalizePreCalculatedAddresses(
+  input?: (string | IPrecalculatedAddress)[] | null
+): IPrecalculatedAddress[] {
+  if (!input) {
+    return [];
+  }
+  return input.map((entry, index) =>
+    typeof entry === 'string' ? { bip32AddressIndex: index, base58: entry } : entry
+  );
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -212,9 +235,7 @@ class HathorWallet extends EventEmitter {
   password: string | null;
 
   // Address management
-  preCalculatedAddresses: string[] | null;
-
-  preCalculatedShieldedAddresses: IPrecalculatedShieldedAddress[] | null;
+  preCalculatedAddresses: (string | IPrecalculatedAddress)[] | null;
 
   // Connection state
   firstConnection: boolean;
@@ -328,7 +349,6 @@ class HathorWallet extends EventEmitter {
       beforeReloadCallback = null,
       multisig = null,
       preCalculatedAddresses = null,
-      preCalculatedShieldedAddresses = null,
       scanPolicy = null,
       logger = null,
     }: HathorWalletConstructorParams = {} as HathorWalletConstructorParams
@@ -390,7 +410,6 @@ class HathorWallet extends EventEmitter {
     this.password = password;
 
     this.preCalculatedAddresses = preCalculatedAddresses;
-    this.preCalculatedShieldedAddresses = preCalculatedShieldedAddresses;
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
@@ -625,6 +644,17 @@ class HathorWallet extends EventEmitter {
       return false;
     }
     return this.storage.isReadonly();
+  }
+
+  /**
+   * Whether a pin still has to be supplied in order to sign.
+   *
+   * The pin is only used to decrypt the local private key. When an external
+   * tx-signing method is registered (e.g. a hardware or passkey signer),
+   * signatures are produced without it, so the pin is optional in that case.
+   */
+  pinIsRequired(pin: string | null | undefined): boolean {
+    return !pin && !this.storage.hasTxSignatureMethod();
   }
 
   /**
@@ -1352,6 +1382,10 @@ class HathorWallet extends EventEmitter {
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
       only_available_utxos: options.only_available_utxos,
+      // Highest value first by default, so max_utxos keeps the top-N by value
+      // instead of whatever the storage insertion order happens to be.
+      // Consolidation overrides this to smallest-first.
+      order_by_value: options.order_by_value ?? 'desc',
       // Transparent-only by default: getUtxos feeds consolidateUtxos, which
       // spends its results as TRANSPARENT inputs — a shielded UTXO leaking in
       // would be mis-spent. Callers wanting shielded UTXOs opt in explicitly.
@@ -1517,6 +1551,11 @@ class HathorWallet extends EventEmitter {
     // a caller passes shielded:true — the literal after the spread wins.
     const utxoDetails = await this.getUtxos({
       ...options,
+      // Smallest first: consolidation is the only path that clears dust, since
+      // regular sends spend the largest UTXOs first. This decides which UTXOs
+      // survive every limit — max_utxos, max_amount and the max_number_inputs
+      // cap in the loop below. Callers can still override it.
+      order_by_value: options.order_by_value ?? 'asc',
       only_available_utxos: true,
       shielded: false,
     });
@@ -1862,6 +1901,7 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
    *
    * @returns Promise that resolves when transaction is sent
    */
@@ -1878,9 +1918,14 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       ...options,
     };
-    const { token, changeAddress, pinCode } = newOptions;
+    const { token, changeAddress, pinCode, changeShieldedMode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsSendTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsSendTransaction(outputs, {
+      inputs: [],
+      changeAddress,
+      pinCode,
+      changeShieldedMode,
+    });
   }
 
   /**
@@ -1892,6 +1937,7 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
    *
    * @returns Promise that resolves when transaction is sent
    */
@@ -1907,13 +1953,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves with SendTransaction instance
    */
   async sendManyOutputsSendTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<SendTransaction> {
     if (await this.isReadonly()) {
@@ -1929,26 +1976,33 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { inputs, changeAddress, changeShieldedMode } = newOptions;
 
-    // Map ProposedOutput[] to ISendOutput[]. Shielded outputs pass the
+    // Map the proposed outputs to ISendOutput[]. Shielded outputs pass the
     // 71-byte shielded address through as-is — SendTransaction resolves the
     // spend-derived P2PKH and the ECDH scan pubkey internally (and rejects a
     // non-shielded address with a SendTxError at prepare time).
-    const sendOutputs = outputs.map(o => ({
-      address: o.address,
-      value: o.value,
-      token: o.token,
-      // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
-      // for both branches.
-      ...(o.timelock != null ? { timelock: o.timelock } : {}),
-      // Shielded-only field: carry the mode through so SendTransaction resolves
-      // the 71-byte address; absent for transparent outputs.
-      ...(o.shielded ? { shieldedMode: o.shielded } : {}),
-    }));
+    const sendOutputs: ISendOutput[] = outputs.map(o => {
+      // Data outputs have no address: keep their `type` and `data`. Copy them,
+      // as SendTransaction sets `token` on the object it receives.
+      if (isDataOutput(o)) {
+        return { ...o };
+      }
+      return {
+        address: o.address,
+        value: o.value,
+        token: o.token,
+        // Unified `!= null` guard handles timelock 0 (a valid timelock) the same
+        // for shielded and transparent outputs.
+        ...(o.timelock != null ? { timelock: o.timelock } : {}),
+        // Shielded-only field: carry the mode through so SendTransaction resolves
+        // the 71-byte address; absent for transparent outputs.
+        ...(o.shielded ? { shieldedMode: o.shielded } : {}),
+      };
+    });
 
     return new SendTransaction({
       wallet: this,
@@ -1963,13 +2017,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param outputs - Array of proposed outputs
+   * @param outputs - Array of proposed outputs and data outputs
+   *   (`{ type: OutputType.DATA, data: string }`, a utf8 payload)
    * @param options - Options parameters
    *
    * @returns Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(
-    outputs: ProposedOutput[],
+    outputs: Array<ProposedOutput | ISendDataOutput>,
     options: SendManyOutputsOptions = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
@@ -2002,19 +2057,24 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    if (this.preCalculatedAddresses) {
-      for (const [index, addr] of this.preCalculatedAddresses.entries()) {
-        await this.storage.saveAddress({
-          base58: addr,
-          bip32AddressIndex: index,
-        });
-      }
-    }
-
-    if (this.preCalculatedShieldedAddresses) {
-      // Mirrors the legacy injection above: pre-populates the shielded chain so
-      // loadAddresses skips the per-index EC derivation for these indexes.
-      await savePrecalculatedShieldedAddresses(this.storage, this.preCalculatedShieldedAddresses);
+    // Persist the injected pre-calculated addresses. Each entry may carry the
+    // legacy address for its index, the shielded pair, or both; a bare string is
+    // legacy-only and takes the index of its array position. Nothing is derived
+    // HERE, but whatever an entry omits is derived during address loading, along
+    // with every index past the injected window. Injection never overwrites: an
+    // index storage already holds is skipped, and a disagreement throws.
+    const injectedAddresses = normalizePreCalculatedAddresses(this.preCalculatedAddresses);
+    await savePrecalculatedLegacyAddresses(this.storage, injectedAddresses);
+    const injectedShieldedPairs = injectedAddresses
+      .filter(entry => entry.shielded)
+      // `bip32AddressIndex` LAST: `Omit<…, 'bip32AddressIndex'>` drops it from
+      // the type but not from the value, and excess-property checks only fire on
+      // fresh literals — so a caller assigning a whole IPrecalculatedShieldedAddress
+      // (which the repo's own fixtures are) carries one, and spreading it last
+      // would file this entry's pair under the nested index instead.
+      .map(entry => ({ ...entry.shielded!, bip32AddressIndex: entry.bip32AddressIndex }));
+    if (injectedShieldedPairs.length > 0) {
+      await savePrecalculatedShieldedAddresses(this.storage, injectedShieldedPairs);
     }
 
     let accessData = await this.storage.getAccessData();
@@ -2138,6 +2198,33 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Fetch an address private key from the external provider and verify it corresponds to the
+   * requested address. A buggy or mismatched provider could otherwise return the wrong key, which
+   * would sign with the wrong key and could create an unspendable utxo.
+   *
+   * See fetchVerifiedExternalPrivateKey (utils/address) for the checks and `expectedAddress`.
+   * Index-based callers are checked against the legacy address at that index.
+   *
+   * @param addressIndex - Index whose private key to fetch
+   * @param [options.pinCode] - Forwarded to the provider
+   * @param [options.expectedAddress] - The address the key must own, when the caller knows it.
+   *   Used only for verification; it is not forwarded to the provider.
+   * @returns Promise that resolves with the verified private key (a bitcore PrivateKey)
+   */
+  async getVerifiedExternalPrivateKey(
+    addressIndex: number,
+    options: { pinCode?: string; expectedAddress?: string } = {}
+  ): Promise<bitcore.PrivateKey> {
+    return fetchVerifiedExternalPrivateKey(
+      this.storage,
+      this.getNetworkObject(),
+      addressIndex,
+      index => this.getAddressAtIndex(index),
+      options
+    );
+  }
+
+  /**
    * Returns a base64 encoded signed message with an address' private key given an
    * address index
    *
@@ -2147,11 +2234,27 @@ class HathorWallet extends EventEmitter {
    *
    * @returns Promise that resolves with the signed message
    */
-  async signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string> {
-    const addressHDPrivKey = (await this.getAddressPrivKey(pinCode, index)) as {
-      privateKey: unknown;
-    };
-    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
+  async signMessageWithAddress(message: string, index: number, pinCode?: string): Promise<string> {
+    let privateKey: bitcore.PrivateKey;
+    if (this.storage.hasPrivateKeyMethod()) {
+      // External provider (e.g. passkey signer): derive the key on demand by index; no pin needed.
+      // Verified against the wallet's address at this index (see getVerifiedExternalPrivateKey).
+      privateKey = await this.getVerifiedExternalPrivateKey(index, { pinCode });
+    } else {
+      // No external provider: fall back to the stored key, which requires a pin. Mirror
+      // getPrivateKeyFromAddress — use the instance pin when the caller didn't pass one, and throw a
+      // typed PinRequiredError instead of letting `undefined` flow into getMainXPrivKey/decryptData
+      // and surface as an opaque low-level error.
+      const pin = pinCode || this.pinCode;
+      if (!pin) {
+        throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+      }
+      const addressHDPrivKey = (await this.getAddressPrivKey(pin, index)) as {
+        privateKey: bitcore.PrivateKey;
+      };
+      privateKey = addressHDPrivKey.privateKey;
+    }
+    const signedMessage = signMessage(message, privateKey);
 
     return signedMessage;
   }
@@ -2207,10 +2310,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    // The pin is only used to decrypt the local key for signing. When an external tx-signing
-    // method is registered (e.g. a passkey signer), signing does not use it, so it is optional
-    // — mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2411,7 +2511,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2449,7 +2549,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       mintOptions
     );
-    return transactionUtils.prepareTransaction(txData, pin, this.storage, {
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage, {
       signTx: newOptions.signTx,
     });
   }
@@ -2527,7 +2627,7 @@ class HathorWallet extends EventEmitter {
     };
 
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -2563,7 +2663,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       meltOptions
     );
-    return transactionUtils.prepareTransaction(txData, pin, this.storage, {
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage, {
       signTx: newOptions.signTx,
     });
   }
@@ -2631,7 +2731,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { createAnother: true, pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { createAnother } = newOptions;
@@ -2667,7 +2767,7 @@ class HathorWallet extends EventEmitter {
       createAnother
     );
 
-    return transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage);
   }
 
   /**
@@ -2747,7 +2847,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs: IUtxo[];
@@ -2781,7 +2881,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
-    return transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin ?? '', this.storage);
   }
 
   /**
@@ -3174,10 +3274,10 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-    const signatures = await this.storage.getTxSignatures(tx, pin);
+    const signatures = await this.storage.getTxSignatures(tx, pin ?? '');
     const sigInfoArray: ISignature[] = [];
     for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
@@ -3208,10 +3308,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('signTx');
     }
     const pinCode = options.pinCode ?? this.pinCode;
-    // The pin is only used to decrypt the local private key. When an external tx-signing
-    // method is registered (e.g. a hardware or passkey signer), signatures are produced
-    // without it, so the pin is optional in that case.
-    if (!pinCode && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pinCode)) {
       throw new Error('Pin code is required to sign a transaction');
     }
 
@@ -3539,14 +3636,16 @@ class HathorWallet extends EventEmitter {
     data: FullnodeCreateNanoTxData,
     options: CreateNanoTxOptions = {}
   ): Promise<SendTransaction> {
-    if (await this.storage.isReadonly()) {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
 
     // Only require PIN if we're actually signing
-    if (newOptions.signTx !== false && !pin) {
+    if (newOptions.signTx !== false && this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3579,9 +3678,14 @@ class HathorWallet extends EventEmitter {
       builder.setContractPaysFees(newOptions.contractPaysFees);
     }
 
+    // Set the transaction change address if declared
+    if (newOptions.changeAddress) {
+      builder.setChangeAddress(newOptions.changeAddress);
+    }
+
     const nc = await builder.build();
     if (newOptions.signTx !== false) {
-      return prepareNanoSendTransaction(nc, pin!, this.storage);
+      return prepareNanoSendTransaction(nc, pin ?? '', this.storage);
     }
 
     return new SendTransaction({
@@ -3604,7 +3708,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<Transaction | null> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
@@ -3630,7 +3734,7 @@ class HathorWallet extends EventEmitter {
     address: string,
     data: FullnodeCreateNanoTxData,
     createTokenOptions: CreateNanoTokenTxOptions,
-    options: CreateNanoTxOptions = {}
+    options: Omit<CreateNanoTxOptions, 'changeAddress'> = {}
   ): Promise<SendTransaction> {
     // Use the wallet-level isReadonly() (not storage.isReadonly()): it returns false when an
     // external tx-signing method is registered, so an xpub-only passkey wallet is allowed here and
@@ -3640,9 +3744,7 @@ class HathorWallet extends EventEmitter {
     }
     const newOptions = { pinCode: null, signTx: true, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    // Optional when an external tx-signing method is registered (e.g. a passkey signer) —
-    // mirrors signTx.
-    if (!pin && !this.storage.hasTxSignatureMethod()) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3740,18 +3842,34 @@ class HathorWallet extends EventEmitter {
    *                          Optional but required if not set in instance
    */
   async getPrivateKeyFromAddress(address: string, options = {}): Promise<unknown> {
-    if (await this.storage.isReadonly()) {
+    // A readonly wallet with no external provider cannot produce a private key for any address.
+    // Keep this first so an xpub-only wallet hits WalletFromXPubGuard (not AddressError) even for an
+    // unknown address, while a passkey wallet (readonly + external provider) still passes through.
+    if ((await this.storage.isReadonly()) && !this.storage.hasPrivateKeyMethod()) {
       throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
-    }
-    const newOptions = { pinCode: null, ...options };
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
+    }
+
+    // External provider path (e.g. passkey signer): no stored key and no pin are needed.
+    if (this.storage.hasPrivateKeyMethod()) {
+      // Verify the key against the requested address, not just the legacy address at its index
+      // (a shielded-spend address shares its index with a legacy one).
+      return this.getVerifiedExternalPrivateKey(addressIndex, {
+        ...options,
+        expectedAddress: address,
+      });
+    }
+
+    // Internal path: derive from the stored key. The wallet is guaranteed non-readonly here (the
+    // guard above only lets a non-readonly wallet reach this point without an external provider).
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     const xprivkey = await this.storage.getMainXPrivKey(pin);
@@ -3769,6 +3887,26 @@ class HathorWallet extends EventEmitter {
   setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set an external private-key provider used by getPrivateKeyFromAddress (and therefore by
+   * message and oracle-data signing). Lets a keyless wallet (e.g. a passkey signer) supply the
+   * address private key on demand. NOTE: this intentionally does NOT flip isSignedExternally /
+   * isReadonly — it does not enable transaction sending, which uses the tx-signing method.
+   *
+   * @param getPrivKey The external provider, or null to clear
+   */
+  setExternalPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void {
+    this.storage.setPrivateKeyMethod(getPrivKey);
+  }
+
+  /**
+   * Whether an external private-key provider is registered (see setExternalPrivateKeyMethod),
+   * i.e. whether this wallet can sign messages and oracle data without a stored key.
+   */
+  hasExternalPrivateKeyMethod(): boolean {
+    return this.storage.hasPrivateKeyMethod();
   }
 
   /**
@@ -3883,10 +4021,10 @@ class HathorWallet extends EventEmitter {
     const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
     if (newOptions.signTx) {
       const pin = newOptions.pinCode || this.pinCode;
-      if (!pin) {
+      if (this.pinIsRequired(pin)) {
         throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
       }
-      await transactionUtils.signTransaction(tx, this.storage, pin);
+      await transactionUtils.signTransaction(tx, this.storage, pin ?? '');
       tx.prepareToSend(transactionUtils.getWeightConstantsFromStorage(this.storage));
     }
     return tx;
@@ -3937,12 +4075,14 @@ class HathorWallet extends EventEmitter {
     address: string,
     options: CreateOnChainBlueprintTxOptions = {}
   ): Promise<SendTransaction> {
-    if (await this.storage.isReadonly()) {
+    // this.isReadonly(), not storage.isReadonly(): an xpub-only wallet with an
+    // external signer can sign, and the storage-level check cannot see that.
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
     }
     const newOptions = { pinCode: null, ...options };
     const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
+    if (this.pinIsRequired(pin)) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
@@ -3962,7 +4102,7 @@ class HathorWallet extends EventEmitter {
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
 
-    return prepareNanoSendTransaction(tx, pin, this.storage);
+    return prepareNanoSendTransaction(tx, pin ?? '', this.storage);
   }
 
   /**

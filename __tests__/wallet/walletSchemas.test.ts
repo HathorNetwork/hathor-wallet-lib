@@ -493,6 +493,20 @@ describe('Wallet API Schemas', () => {
       expect(() => fullNodeTxConfirmationDataResponseSchema.parse(validData)).not.toThrow();
     });
 
+    it('should accept a response without stop_value', () => {
+      // The fullnode only computes stop_value once the transaction has a
+      // first_block, so it is absent for any not-yet-confirmed transaction.
+      const dataWithoutStopValue = {
+        success: true,
+        accumulated_weight: 1,
+        accumulated_bigger: true,
+        confirmation_level: 1,
+      };
+      expect(() =>
+        fullNodeTxConfirmationDataResponseSchema.parse(dataWithoutStopValue)
+      ).not.toThrow();
+    });
+
     it('should reject invalid full node tx confirmation data response', () => {
       const invalidData = {
         success: true,

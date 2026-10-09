@@ -97,6 +97,18 @@ export type EcdsaTxSign = (
   pinCode: string
 ) => Promise<ITxSignatureData>;
 
+/**
+ * Method signature for an external provider that returns the private key for one of the
+ * wallet's addresses (by derivation index). Registered by clients that hold no local key
+ * (e.g. a passkey signer) so message and oracle-data signing can obtain a key on demand.
+ * Returns a bitcore PrivateKey (typed as unknown here, matching the rest of the lib).
+ */
+export type PrivateKeyProvider = (
+  addressIndex: number,
+  storage: IStorage,
+  options?: { pinCode?: string }
+) => Promise<unknown>;
+
 export type HistorySyncFunction = (
   startIndex: number,
   count: number,
@@ -164,6 +176,36 @@ export interface IPrecalculatedShieldedAddress {
   /** Compressed spend child pubkey, hex */
   spendPubkey: string;
 }
+
+/**
+ * A pre-calculated address for a single BIP32 index, injected at wallet start
+ * to skip live EC derivation for the chains actually supplied.
+ *
+ * An index may carry the legacy chain address, the shielded pair, or both —
+ * some fixed-seed wallets have committed shielded pairs but no legacy list, so
+ * a shielded-only entry has to be expressible. Whichever chain an entry omits
+ * is derived live for that index during address loading, as are indexes past
+ * the injected window.
+ *
+ * Both chains for one index travel together here; passing a plain `string[]` of
+ * legacy addresses is still accepted (legacy-only, back-compat).
+ */
+export type IPrecalculatedAddress = { bip32AddressIndex: number } & (
+  | {
+      /** The legacy chain address (P2PKH, or P2SH for multisig wallets). */
+      base58: string;
+      /** The shielded pair for this index (present for shielded wallets). */
+      shielded?: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+  | {
+      /**
+       * Shielded-only: this index has no pre-calculated legacy address, so the
+       * legacy chain is derived live for it while the shielded pair is reused.
+       */
+      base58?: undefined;
+      shielded: Omit<IPrecalculatedShieldedAddress, 'bip32AddressIndex'>;
+    }
+);
 
 export interface IAddressMetadata {
   numTransactions: number;
@@ -442,6 +484,13 @@ export interface IDataInput {
   token: string;
   address: string;
   data?: string;
+  /**
+   * True when this input spends a shielded UTXO. The fullnode cannot attribute
+   * a shielded input to a token (its value — and for fully-shielded, its token
+   * — is hidden in commitments), so fee accounting must skip it; see
+   * Fee.calculate.
+   */
+  shielded?: boolean;
 }
 
 interface IDataTokenCreationTx {
@@ -798,7 +847,13 @@ export interface IStorage {
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void;
+  // Optional so custom IStorage implementations keep type-checking.
+  getTxSignatureMethod?(): EcdsaTxSign | null;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
+
+  hasPrivateKeyMethod(): boolean;
+  setPrivateKeyMethod(getPrivKey: PrivateKeyProvider | null): void;
+  getExternalPrivateKey(addressIndex: number, options?: { pinCode?: string }): Promise<unknown>;
 
   // Address methods
   getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<IAddressInfo & IAddressMetadata>;

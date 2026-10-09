@@ -345,3 +345,24 @@ test('getNetworkFromFullNodeNetwork', () => {
   expect(helpers.getNetworkFromFullNodeNetwork('nano-testnet-alpha')).toBe('testnet');
   expect(helpers.getNetworkFromFullNodeNetwork('privatenet')).toBe('privatenet');
 });
+
+test('getDataInputFromUtxo carries the shielded marker', () => {
+  const base = {
+    txId: 'a'.repeat(64),
+    index: 0,
+    token: '00',
+    address: 'W-addr',
+    value: 10n,
+    authorities: 0n,
+    timelock: null,
+    type: 1,
+    height: null,
+  };
+
+  // Transparent UTXO: no flag on the input.
+  expect(helpers.getDataInputFromUtxo(base as never)).not.toHaveProperty('shielded');
+
+  // Shielded UTXO: the flag must survive the mapping — fee accounting reads it.
+  const shielded = helpers.getDataInputFromUtxo({ ...base, shielded: true } as never);
+  expect(shielded.shielded).toBe(true);
+});
