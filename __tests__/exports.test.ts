@@ -231,6 +231,17 @@ import {
   type ISendDataOutput,
 
   // ============================================================
+  // Shielded view types from src/shielded/types.ts
+  // ============================================================
+  type IShieldedCapability,
+  type ShieldedCapabilityLevel,
+  type ShieldedCapabilityReason,
+  type ShieldedCapabilityCause,
+  type IShieldedUndecodedSummary,
+  type IShieldedUnlockResult,
+  type ShieldedViewKeyInput,
+
+  // ============================================================
   // Header types from src/headers/types.ts
   // ============================================================
   VertexHeaderId,
@@ -280,6 +291,7 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from '../src/lib';
+import * as lib from '../src/lib';
 /* eslint-enable @typescript-eslint/no-unused-vars */
 
 // ============================================================
@@ -556,6 +568,36 @@ describe('exported header utilities', () => {
 // ============================================================
 
 describe('type-only exports compile correctly', () => {
+  it('should allow constructing the shielded capability types', () => {
+    const level: ShieldedCapabilityLevel = 'watch';
+    const reason: ShieldedCapabilityReason = 'locked';
+    const cause: ShieldedCapabilityCause = 'wrong-pin';
+    const undecoded: IShieldedUndecodedSummary = {
+      txIds: ['00'],
+      locked: 1,
+      unreadable: 0,
+      error: 0,
+    };
+    const capability: IShieldedCapability = {
+      level,
+      reason,
+      cause,
+      canReceive: false,
+      canSpend: true,
+      historyComplete: true,
+      undecoded,
+    };
+    expect(capability.undecoded.locked).toBe(1);
+
+    const input: ShieldedViewKeyInput = { pinCode: '123' };
+    const unlocked: IShieldedUnlockResult = {
+      capability,
+      reprocessed: Promise.resolve(capability),
+    };
+    expect(input.pinCode).toBe('123');
+    expect(unlocked.capability).toBe(capability);
+  });
+
   it('should allow constructing IAddressInfo', () => {
     const addr: IAddressInfo = {
       base58: 'WYBwT3xLpDnHNtYZiU5WfQhWbHyJMBrATq',
@@ -677,5 +719,21 @@ describe('type-only exports compile correctly', () => {
       calls: [],
     };
     expect(stateParams.id).toBe('nc-123');
+  });
+});
+
+describe('internal shielded view helpers', () => {
+  it('are not exported', () => {
+    for (const name of [
+      'shieldedSessionOf',
+      'ShieldedSession',
+      'SessionClosedError',
+      'classifyExtendedKey',
+      'decodeShieldedOutputs',
+      'computeShieldedCapability',
+    ]) {
+      expect(lib).not.toHaveProperty(name);
+      expect(lib.shielded).not.toHaveProperty(name);
+    }
   });
 });

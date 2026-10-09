@@ -44,6 +44,8 @@ import {
   IAddressChainOptions,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
+import { assertNoPrivateKeyMaterial } from '../shielded/keys';
+import { shieldedSessionOf } from '../shielded/session';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -159,6 +161,47 @@ export function clearDerivedAddressCache(storage: IStorage): void {
   derivedAddressCaches.delete(storage);
 }
 
+/**
+ * The txs being processed on each storage object (decoded and credited, see
+ * `processNewTx` in the storage utils), which Storage.handleStop waits for
+ * before it cleans the storage.
+ */
+const txsInProcessing = new WeakMap<IStorage, Set<Promise<unknown>>>();
+
+/**
+ * Keep `processing`, the processing of one tx on `storage`, in the set that
+ * Storage.handleStop waits for, until it settles.
+ *
+ * @param storage The wallet storage
+ * @param processing The processing of the tx
+ * @returns `processing`
+ */
+export function trackTxProcessing<T>(storage: IStorage, processing: Promise<T>): Promise<T> {
+  let running = txsInProcessing.get(storage);
+  if (!running) {
+    running = new Set();
+    txsInProcessing.set(storage, running);
+  }
+  const txs = running;
+  txs.add(processing);
+  const settled = () => {
+    txs.delete(processing);
+  };
+  processing.then(settled, settled);
+  return processing;
+}
+
+/**
+ * Wait until no tx is being processed on `storage`, counting the txs whose
+ * processing starts while it waits. Their failures belong to their own callers.
+ */
+async function txProcessingSettled(storage: IStorage): Promise<void> {
+  const running = txsInProcessing.get(storage);
+  while (running && running.size > 0) {
+    await Promise.allSettled([...running]);
+  }
+}
+
 export class Storage implements IStorage {
   store: IStore;
 
@@ -270,10 +313,16 @@ export class Storage implements IStorage {
 
   /**
    * Set the tx signing function
+   *
+   * Setting or clearing it also clears the declaration that the signer signs
+   * shielded spend inputs (see `HathorWallet.setExternalTxSigningMethod`): a
+   * declaration belongs to the signer it was made with.
+   *
    * @param txSign The signing function, or a null value to clear it
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+    shieldedSessionOf(this).setSpendSigner(false);
   }
 
   /**
@@ -603,6 +652,9 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param pinCode The PIN that unlocks the scan key, once for the whole
+   *   history, to decode the wallet's shielded outputs while the shielded
+   *   session holds no key. The session's key is used when it holds one.
    * @returns {Promise<void>}
    */
   async processHistory(pinCode?: string): Promise<void> {
@@ -615,6 +667,10 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param tx The transaction to process
+   * @param pinCode The PIN that unlocks the scan key to decode the wallet's
+   *   shielded outputs of `tx` while the shielded session holds no key. The
+   *   session's key is used when it holds one.
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
@@ -1089,10 +1145,17 @@ export class Storage implements IStorage {
   /**
    * Save the access data, initializing the wallet.
    *
+   * The access data is persisted as it is, so a record with private key
+   * material in the clear in a top-level field (an HDPrivateKey, a Buffer, a
+   * string that is or starts like an extended private key, or an object that
+   * holds buffers) is refused and nothing is written. Encrypted keys and public
+   * strings are saved as before.
+   *
    * @param {IWalletAccessData} data The wallet access data
    * @returns {Promise<void>}
    */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
+    assertNoPrivateKeyMaterial(data);
     return this.store.saveAccessData(data);
   }
 
@@ -1273,6 +1336,12 @@ export class Storage implements IStorage {
     // The addresses loadAddresses derived belong to this wallet session. Drop
     // them before anything that can throw.
     clearDerivedAddressCache(this);
+    // The shielded session ends with the wallet, whatever the options, before
+    // any step below can throw or await. A start() on this storage while those
+    // steps await, by the next wallet that uses it, keeps the session it opens.
+    // cleanStorage does not end the session: a reconnect cleans the storage of
+    // a running wallet.
+    shieldedSessionOf(this).close();
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -1281,6 +1350,11 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses || cleanTokens) {
+      // A tx that passed its last check of the session before it was closed
+      // is still being credited. The clean waits for it, so it removes what
+      // the tx writes. A tx whose processing starts after the close writes
+      // nothing.
+      await txProcessingSettled(this);
       await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }
   }

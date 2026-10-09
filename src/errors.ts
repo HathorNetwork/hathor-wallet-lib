@@ -101,12 +101,13 @@ export class MaximumNumberOutputsError extends Error {}
 
 /**
  * Thrown by processNewTx when decoding a tx's owned shielded outputs fails
- * SYSTEMICALLY (wrong PIN, or a missing/corrupt scan key) — as opposed to a
- * per-output rewind failure, which processShieldedOutputs handles internally.
- * It is a distinct type so callers can tell "this tx's shielded side could not
- * be decoded" apart from an unrelated failure (store write, corrupt nano/OCB
- * entry): the reload walk (processHistory) skips ONLY this error and rethrows
- * everything else. Carries the original error as `cause`.
+ * SYSTEMICALLY: an unexpected error, such as a failed store read, stopped the
+ * decode. A failure of one output stays with that output, and a missing or
+ * wrong PIN leaves the outputs locked; neither throws. It is a distinct type
+ * so callers can tell "this tx's shielded side could not be decoded" apart from
+ * an unrelated failure (store write, corrupt nano/OCB entry): the reload walk
+ * (processHistory) skips ONLY this error and rethrows everything else. Carries
+ * the original error as `cause`.
  *
  * @memberof Errors
  * @inner
@@ -315,7 +316,17 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_WRONG_PASSWORD
   | ErrorMessages.SHIELDED_WRONG_PIN
   | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH
-  | ErrorMessages.SHIELDED_MULTISIG;
+  | ErrorMessages.SHIELDED_NO_KEYS
+  | ErrorMessages.SHIELDED_CORRUPT_KEY
+  | ErrorMessages.SHIELDED_KEY_MISMATCH
+  | ErrorMessages.SHIELDED_INVALID_KEY
+  | ErrorMessages.SHIELDED_NOT_STARTED
+  | ErrorMessages.SHIELDED_MULTISIG
+  | ErrorMessages.SHIELDED_LOCKED
+  | ErrorMessages.SHIELDED_INTEGRITY
+  | ErrorMessages.SHIELDED_NO_PROVIDER
+  | ErrorMessages.SHIELDED_NOT_SUPPORTED
+  | ErrorMessages.SHIELDED_NOT_READY;
 
 /**
  * Error thrown when the shielded keys cannot be derived or used with the

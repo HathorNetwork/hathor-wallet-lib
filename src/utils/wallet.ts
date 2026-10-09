@@ -826,6 +826,15 @@ const wallet = {
    * that differs from the rest of the record. Nothing is written unless every
    * check passes.
    *
+   * With `replaceShieldedKeys`, a record that already has the four fields gets
+   * them derived again and replaced, after the same checks. This repairs a
+   * record whose encrypted scan key is corrupt or is not the key of its scan
+   * xpub (the `corrupt-key` and `key-mismatch` causes of the shielded
+   * capability): save the record, then unlock the view key of the running
+   * wallet with `HathorWallet.unlockShieldedView`.
+   *
+   * @param options.replaceShieldedKeys Derive the shielded fields again even
+   *   when the record has all four, replacing them. Defaults to false.
    * @throws {ShieldedKeyError} `shielded-wrong-password` when the password does
    *   not decrypt the words, `shielded-wrong-pin` when the PIN does not decrypt
    *   `mainKey`, and `shielded-passphrase-mismatch` when the root does not
@@ -838,14 +847,21 @@ const wallet = {
       password,
       passphrase = '',
       networkName,
-    }: { pin: string; password: string; passphrase?: string; networkName: string }
+      replaceShieldedKeys = false,
+    }: {
+      pin: string;
+      password: string;
+      passphrase?: string;
+      networkName: string;
+      replaceShieldedKeys?: boolean;
+    }
   ): boolean {
     const hasAll =
       !!accessData.scanXpubkey &&
       !!accessData.scanMainKey &&
       !!accessData.spendXpubkey &&
       !!accessData.spendMainKey;
-    if (hasAll) return false;
+    if (hasAll && !replaceShieldedKeys) return false;
     if (!accessData.words) return false;
     // A multisig wallet has no shielded keys (see hasShieldedXpubs).
     if (accessData.walletType !== WalletType.P2PKH) return false;
