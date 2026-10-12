@@ -30,12 +30,19 @@ import {
   processNewTx,
   processSingleTx,
   processHistory,
+  loadAddresses,
 } from '../../src/utils/storage';
+import * as addressUtils from '../../src/utils/address';
+import { deriveShieldedAddressFromStorage } from '../../src/utils/address';
+import walletUtils from '../../src/utils/wallet';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
+import * as cryptoUtils from '../../src/utils/crypto';
 import { encryptData } from '../../src/utils/crypto';
 import walletApi from '../../src/api/wallet';
 import FullnodeConnection from '../../src/new/connection';
-import { ShieldedOutputMode } from '../../src/shielded/types';
+import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
+import { unlockScanXPrivKey } from '../../src/shielded/scanKey';
+import { ShieldedDecodeSystemicError } from '../../src/errors';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
@@ -969,16 +976,21 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
   it('rejects the output and saves no UTXO when the cross-check fails', async () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
+    // A real record, so the PIN unlocks a scan key that matches its
+    // scanXpubkey and the rewind runs.
+    await storage.saveAccessData(
+      walletUtils.generateAccessDataFromSeed(walletUtils.generateWalletWords(), {
+        pin: 'pin',
+        password: 'password',
+        networkName: 'testnet',
+      })
+    );
     await store.saveAddress({
       base58: SHIELDED_ADDR,
       bip32AddressIndex: 3,
       publicKey: '02'.repeat(33),
       addressType: 'shielded-spend',
     });
-
-    // A real chain-level xpriv so scan-key derivation succeeds and rewind runs.
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
-    jest.spyOn(storage, 'getScanXPrivKey').mockResolvedValue(mockXpriv);
 
     // Wire a crypto provider whose createAssetCommitment returns a value that
     // does NOT match the on-chain asset_commitment → cross-check fails.
@@ -1000,7 +1012,8 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
       deriveEcdhSharedSecret: jest.fn(),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
-    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+    jest.spyOn(storage.logger, 'debug').mockImplementation(() => undefined);
+    jest.spyOn(storage.logger, 'warn').mockImplementation(() => undefined);
 
     const tx = buildTx();
     const result = await processNewTx(storage, tx, { currentHeight: 105, pinCode: 'pin' });
@@ -1009,10 +1022,140 @@ describe('processNewTx — FullShielded token cross-check rejection', () => {
     expect(result.shieldedMaxAddressIndex).toBe(-1);
     expect(tx.shielded_outputs![0].value).toBeUndefined();
     expect(await store.getUtxo({ txId: TX_ID, index: 0 })).toBeNull();
-    expect(storage.logger.error).toHaveBeenCalledWith(
+    expect(storage.shieldedCryptoProvider!.rewindFullShieldedOutput).toHaveBeenCalled();
+    // The output's detail is logged at debug level, and the tx's undecoded
+    // outputs in one line at warn level.
+    expect(storage.logger.debug).toHaveBeenCalledWith(
       expect.stringContaining('cross-check failed')
     );
+    expect(storage.logger.warn).toHaveBeenCalledWith(
+      `Shielded outputs of the wallet in tx ${TX_ID} could not be decoded: ` +
+        '0 locked, 1 unreadable, 0 in error'
+    );
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [TX_ID],
+      locked: 0,
+      unreadable: 1,
+      error: 0,
+    });
+  }, 30000);
+});
+
+describe('processNewTx — shielded outputs of a multisig wallet', () => {
+  // The PIN decrypts a real scan key here.
+  const DECODE_TEST_TIMEOUT = 30000;
+  const PIN = '123';
+  const LEGACY_ADDR = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+  const SPEND_ADDR = 'WdmDUMp8KvzhWB7KLgguA2wBiKsh4Ha8eX';
+  const TX_ID = 'dd00ee11ff22003344556677889900aabbccddeeff00112233445566778899aa';
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const p2pkhRecord = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: PIN,
+    password: '456',
+    networkName: 'testnet',
   });
+  // A multisig record that an older version gave the shielded keys of its root,
+  // which are the keys of the P2PKH record of the same seed.
+  const olderMultisigRecord = {
+    ...walletUtils.generateAccessDataFromSeed(seed, {
+      pin: PIN,
+      password: '456',
+      networkName: 'testnet',
+      multisig: {
+        pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+          key => key.xpubkey
+        ),
+        numSignatures: 2,
+      },
+    }),
+    scanXpubkey: p2pkhRecord.scanXpubkey,
+    scanMainKey: p2pkhRecord.scanMainKey,
+    spendXpubkey: p2pkhRecord.spendXpubkey,
+    spendMainKey: p2pkhRecord.spendMainKey,
+  };
+
+  // A tx that pays the wallet's legacy address with a transparent output, and
+  // with a shielded output the spend address of a stored shielded pair.
+  const buildTx = (): IHistoryTx =>
+    ({
+      tx_id: TX_ID,
+      version: 1,
+      timestamp: 1,
+      is_voided: false,
+      nonce: 0,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: [
+        {
+          value: 50n,
+          token_data: 0,
+          token: NATIVE_TOKEN_UID,
+          decoded: { address: LEGACY_ADDR, timelock: null },
+          script: '',
+          spent_by: null,
+        },
+      ],
+      shielded_outputs: [
+        {
+          mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          commitment: 'aa'.repeat(33),
+          range_proof: 'bb'.repeat(10),
+          script: '',
+          token_data: 0,
+          ephemeral_pubkey: 'cc'.repeat(33),
+          decoded: { address: SPEND_ADDR, timelock: null },
+          spent_by: null,
+        },
+      ],
+    }) as unknown as IHistoryTx;
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each([
+    { walletType: WalletType.P2PKH, record: p2pkhRecord, decodeAttempts: 1 },
+    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, decodeAttempts: 0 },
+  ])(
+    '$walletType wallet with a stored shielded pair: a decode is attempted $decodeAttempts time(s), and the transparent output is credited',
+    async ({ walletType, record, decodeAttempts }) => {
+      expect(record.walletType).toBe(walletType);
+      const store = new MemoryStore();
+      const storage = new Storage(store);
+      await storage.saveAccessData(record);
+      await store.saveAddress({ base58: LEGACY_ADDR, bip32AddressIndex: 0 });
+      // The spend address of a shielded pair stored for the wallet, as an older
+      // version stored for multisig wallets too.
+      await store.saveAddress({
+        base58: SPEND_ADDR,
+        bip32AddressIndex: 3,
+        publicKey: '02'.repeat(33),
+        addressType: 'shielded-spend',
+      });
+      // The output does not open, which the decode logs and moves past.
+      const rewind = jest.fn().mockRejectedValue(new Error('the output does not open'));
+      storage.setShieldedCryptoProvider({
+        rewindAmountShieldedOutput: rewind,
+      } as unknown as IShieldedCryptoProvider);
+      jest.spyOn(storage.logger, 'debug').mockImplementation(() => undefined);
+      const scanKeySpy = jest.spyOn(storage, 'getScanXPrivKey');
+      const tx = buildTx();
+
+      await processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
+
+      expect(scanKeySpy).toHaveBeenCalledTimes(decodeAttempts);
+      expect(rewind).toHaveBeenCalledTimes(decodeAttempts);
+      expect(tx.shielded_outputs![0].value).toBeUndefined();
+      const utxo = await store.getUtxo({ txId: TX_ID, index: 0 });
+      expect(utxo?.value).toBe(50n);
+      expect(utxo?.address).toBe(LEGACY_ADDR);
+    },
+    DECODE_TEST_TIMEOUT
+  );
 });
 
 describe('processMetadataChanged — shielded UTXO preservation (SEPARATED model)', () => {
@@ -1140,7 +1283,9 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
   function buildStorage({
     gapLimit,
     walletData,
-    spendXpubkey,
+    shieldedXpubs,
+    withProvider,
+    walletType = WalletType.P2PKH,
   }: {
     gapLimit: number;
     walletData: {
@@ -1149,10 +1294,19 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       shieldedLastLoadedAddressIndex: number;
       shieldedLastUsedAddressIndex: number;
     };
-    // undefined => hasShieldedKeys === false (no spendXpubkey on access data)
-    spendXpubkey?: string;
+    // true => the access data carries both the scan and the spend xpub;
+    // false => it carries neither.
+    shieldedXpubs: boolean;
+    // Whether a shielded crypto provider is registered. The wallet has a
+    // shielded chain only with both xpubs and a provider.
+    withProvider: boolean;
+    // Only a P2PKH wallet has a shielded chain.
+    walletType?: WalletType;
   }): Storage {
     const storage = new Storage(new MemoryStore());
+    if (withProvider) {
+      storage.setShieldedCryptoProvider({ id: 'mock' } as unknown as IShieldedCryptoProvider);
+    }
     jest.spyOn(storage, 'getScanningPolicy').mockResolvedValue(SCANNING_POLICY.GAP_LIMIT);
     jest
       .spyOn(storage, 'getScanningPolicyData')
@@ -1160,10 +1314,11 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
       .mockResolvedValue({ policy: 'gap-limit', gapLimit } as any);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     jest.spyOn(storage, 'getWalletData').mockResolvedValue(walletData as any);
-    jest
-      .spyOn(storage, 'getAccessData')
+    jest.spyOn(storage, 'getAccessData').mockResolvedValue({
+      walletType,
+      ...(shieldedXpubs ? { scanXpubkey: 'xpub-scan', spendXpubkey: 'xpub-spend' } : {}),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .mockResolvedValue((spendXpubkey ? { spendXpubkey } : {}) as any);
+    } as any);
     return storage;
   }
 
@@ -1173,11 +1328,11 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
 
-  it('legacy-only wallet (hasShieldedKeys=false): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
-    // No spendXpubkey => hasShieldedKeys === false. The shielded fields below
-    // are deliberately "behind" their target, but must be IGNORED because the
-    // shielded branch is gated on hasShieldedKeys. Result must depend only on
-    // the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
+  it('legacy-only wallet (no shielded chain): reproduces single-chain behavior; shieldedTarget collapses to legacyTarget', async () => {
+    // No shielded xpubs => no shielded chain. The shielded fields below are
+    // deliberately "behind" their target, but must be IGNORED because the
+    // shielded branch is gated on the wallet having a shielded chain. Result
+    // must depend only on the legacy chain (lastUsed=0, lastLoaded=5, gapLimit=20):
     //   legacyTarget = lastUsed + gapLimit = 20
     //   minLastLoaded = lastLoaded = 5 (shielded NOT considered)
     //   nextIndex = 6, count = max(20 - 5, 1) = 15
@@ -1190,7 +1345,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 6, count: 15 });
   });
@@ -1212,7 +1368,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 10,
         shieldedLastUsedAddressIndex: 5,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 11, count: 20 });
   });
@@ -1227,7 +1384,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 40,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
@@ -1250,7 +1408,8 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 5,
         shieldedLastUsedAddressIndex: 0,
       },
-      spendXpubkey: 'xpub-spend',
+      shieldedXpubs: true,
+      withProvider: true,
     });
     const result = await checkGapLimit(storage);
     expect(result).toEqual({ nextIndex: 5, count: 1 });
@@ -1258,8 +1417,25 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
     expect(result?.count).toBeGreaterThanOrEqual(1);
   });
 
-  it('hasShieldedKeys === false branch: a lagging shielded chain does NOT trigger a load', async () => {
-    // Legacy fully satisfied; shielded badly behind. With no spendXpubkey the
+  it('both shielded xpubs but no crypto provider: a lagging shielded chain does NOT trigger a load', async () => {
+    // Same wallet data as the next case. Without a provider the wallet has no
+    // shielded chain, so only the legacy chain counts, and it is satisfied.
+    const storage = buildStorage({
+      gapLimit: 20,
+      walletData: {
+        lastLoadedAddressIndex: 50,
+        lastUsedAddressIndex: 0,
+        shieldedLastLoadedAddressIndex: 0,
+        shieldedLastUsedAddressIndex: 30,
+      },
+      shieldedXpubs: true,
+      withProvider: false,
+    });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it('no shielded chain: a lagging shielded chain does NOT trigger a load', async () => {
+    // Legacy fully satisfied; shielded badly behind. With no shielded xpubs the
     // shielded gap is invisible, so the overall result is null.
     const storage = buildStorage({
       gapLimit: 20,
@@ -1269,10 +1445,39 @@ describe('checkGapLimit — dual-chain (legacy + shielded) gap-limit logic', () 
         shieldedLastLoadedAddressIndex: 0,
         shieldedLastUsedAddressIndex: 30,
       },
-      spendXpubkey: undefined,
+      shieldedXpubs: false,
+      withProvider: true,
     });
     await expect(checkGapLimit(storage)).resolves.toBeNull();
   });
+
+  it.each([
+    {
+      walletType: WalletType.P2PKH,
+      loads: 'indexes 1 to 50',
+      expected: { nextIndex: 1, count: 50 },
+    },
+    { walletType: WalletType.MULTISIG, loads: 'nothing', expected: null },
+  ])(
+    '$walletType record with both shielded xpubs and a provider: a lagging shielded chain loads $loads',
+    async ({ walletType, expected }) => {
+      // Legacy fully satisfied; shielded badly behind. A multisig record that an
+      // older version gave shielded xpubs still has no shielded chain.
+      const storage = buildStorage({
+        gapLimit: 20,
+        walletData: {
+          lastLoadedAddressIndex: 50,
+          lastUsedAddressIndex: 0,
+          shieldedLastLoadedAddressIndex: 0,
+          shieldedLastUsedAddressIndex: 30,
+        },
+        shieldedXpubs: true,
+        withProvider: true,
+        walletType,
+      });
+      await expect(checkGapLimit(storage)).resolves.toEqual(expected);
+    }
+  );
 });
 
 describe('apiSyncHistory partial-update emission', () => {
@@ -1317,4 +1522,807 @@ describe('apiSyncHistory partial-update emission', () => {
     expect(partialUpdates).toHaveLength(1);
     expect(partialUpdates[0][1]).toEqual({ addressesFound: 40, historyLength: 0 });
   });
+});
+
+describe('shielded chain predicate', () => {
+  // Real shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 30000;
+  const full = walletUtils.generateAccessDataFromSeed(
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+  // The chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  function recordWith({ scan, spend }: { scan: boolean; spend: boolean }) {
+    return {
+      ...full,
+      scanXpubkey: scan ? full.scanXpubkey : undefined,
+      spendXpubkey: spend ? full.spendXpubkey : undefined,
+    };
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it.each(
+    [
+      { shape: 'no shielded xpubs', scan: false, spend: false },
+      { shape: 'only the scan xpub', scan: true, spend: false },
+      { shape: 'only the spend xpub', scan: false, spend: true },
+      { shape: 'both shielded xpubs', scan: true, spend: true },
+    ].flatMap(record => [
+      { ...record, withProvider: false, setup: 'no crypto provider' },
+      { ...record, withProvider: true, setup: 'a crypto provider' },
+    ])
+  )(
+    'a record with $shape and $setup: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ scan, spend, withProvider }) => {
+      // The record half is what hasShieldedXpubs reports; the chain also needs
+      // a registered provider.
+      const record = recordWith({ scan, spend });
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(scan && spend);
+      const hasChain = scan && spend && withProvider;
+
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
+
+      // One legacy address per index, plus the spend P2PKH when there is a chain.
+      const loaded = await loadAddresses(0, 1, storage);
+      expect(loaded).toHaveLength(hasChain ? 2 : 1);
+      expect((await storage.getAddressAtIndex(0, { legacy: false })) !== null).toBe(hasChain);
+
+      expect((await deriveShieldedAddressFromStorage(0, storage)) !== null).toBe(hasChain);
+
+      // The legacy chain is satisfied (nothing used, index 0 loaded), and the
+      // shielded chain has used index 0 with a gap limit of 1, so only a wallet
+      // with a shielded chain needs index 1.
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      const nextWindow = await checkGapLimit(storage);
+      expect(nextWindow).toEqual(hasChain ? { nextIndex: 1, count: 1 } : null);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  // A multisig record that an older version gave shielded keys: it derived them
+  // from the root of every wallet created from a seed, multisig included, so
+  // they are the same keys as the P2PKH record of the same seed.
+  const olderMultisigRecord = {
+    ...walletUtils.generateAccessDataFromSeed(
+      'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind',
+      {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: {
+          pubkeys: [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+            key => key.xpubkey
+          ),
+          numSignatures: 2,
+        },
+      }
+    ),
+    scanXpubkey: full.scanXpubkey,
+    scanMainKey: full.scanMainKey,
+    spendXpubkey: full.spendXpubkey,
+    spendMainKey: full.spendMainKey,
+  };
+
+  it.each([
+    { walletType: WalletType.P2PKH, record: full, hasChain: true },
+    { walletType: WalletType.MULTISIG, record: olderMultisigRecord, hasChain: false },
+  ])(
+    'a $walletType record with both shielded xpubs and a crypto provider: loadAddresses, checkGapLimit and deriveShieldedAddressFromStorage agree',
+    async ({ walletType, record, hasChain }) => {
+      expect(record.walletType).toBe(walletType);
+      expect(walletUtils.hasShieldedXpubs(record)).toBe(hasChain);
+
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(record);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      storage.setShieldedCryptoProvider(provider);
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      // One legacy address per index, plus the spend P2PKH when there is a chain.
+      const loaded = await loadAddresses(0, 1, storage);
+      expect(loaded).toHaveLength(hasChain ? 2 : 1);
+      expect(pairSpy).toHaveBeenCalledTimes(hasChain ? 1 : 0);
+      expect((await storage.getAddressAtIndex(0, { legacy: false })) !== null).toBe(hasChain);
+
+      expect((await deriveShieldedAddressFromStorage(0, storage)) !== null).toBe(hasChain);
+
+      // The legacy chain is satisfied, and the shielded chain has used index 0
+      // with a gap limit of 1, so only a wallet with a shielded chain needs index 1.
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      await expect(checkGapLimit(storage)).resolves.toEqual(
+        hasChain ? { nextIndex: 1, count: 1 } : null
+      );
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it('a wallet without access data has no shielded chain', async () => {
+    expect(walletUtils.hasShieldedXpubs(null)).toBe(false);
+
+    const storage = new Storage(new MemoryStore());
+    // With a provider registered, the missing record is what rules the chain out.
+    storage.setShieldedCryptoProvider(provider);
+    await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+    // Index 0 is already stored, so loadAddresses derives nothing on the legacy
+    // chain and the shielded check is the only reader of the missing record.
+    await storage.saveAddress({ base58: 'W-legacy-0', bip32AddressIndex: 0 });
+
+    await expect(loadAddresses(0, 1, storage)).resolves.toEqual(['W-legacy-0']);
+    await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
+    await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+    await expect(checkGapLimit(storage)).resolves.toBeNull();
+  });
+
+  it(
+    'a started wallet that found the record shielded keys inconsistent has no shielded chain',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 1 });
+      storage.setShieldedCryptoProvider(provider);
+      storage.shieldedView.started = true;
+      storage.shieldedView.integrity = 'key-mismatch';
+
+      await expect(loadAddresses(0, 1, storage)).resolves.toHaveLength(1);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+      await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
+      await storage.store.setLastUsedAddressIndex(0, { legacy: false });
+      await expect(checkGapLimit(storage)).resolves.toBeNull();
+
+      // The chain is back once the integrity failure is cleared.
+      storage.shieldedView.integrity = null;
+      await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.not.toBeNull();
+      await expect(checkGapLimit(storage)).resolves.toEqual({ nextIndex: 1, count: 1 });
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a provider registered after a load turns the chain on from index 0',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(2);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).toBeNull();
+
+      storage.setShieldedCryptoProvider(provider);
+      // The same window again: the legacy addresses are stored, and the
+      // shielded pairs are derived from index 0.
+      await expect(loadAddresses(0, 2, storage)).resolves.toHaveLength(4);
+      expect(await storage.getAddressAtIndex(0, { legacy: false })).not.toBeNull();
+      expect(await storage.getAddressAtIndex(1, { legacy: false })).not.toBeNull();
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each([
+    { setup: 'no crypto provider', withProvider: false, expected: 2 },
+    { setup: 'a crypto provider', withProvider: true, expected: 4 },
+  ])(
+    'apiSyncHistory with $setup subscribes and fetches the history of $expected addresses for two indexes',
+    async ({ withProvider, expected }) => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(full);
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      if (withProvider) {
+        storage.setShieldedCryptoProvider(provider);
+      }
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockResolvedValue({ data: { success: true, history: [], has_more: false } } as never);
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      const subscribed = (connection.subscribeAddresses as jest.Mock).mock.calls.flatMap(
+        call => call[0]
+      );
+      expect(subscribed).toHaveLength(expected);
+      expect(historySpy.mock.calls.flatMap(call => call[0])).toEqual(subscribed);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'apiSyncHistory terminates for a record with only the spend xpub',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      await storage.saveAccessData(recordWith({ scan: false, spend: true }));
+      await storage.setScanningPolicyData({ policy: SCANNING_POLICY.GAP_LIMIT, gapLimit: 2 });
+      // With a provider registered, the missing scan xpub is what rules the chain out.
+      storage.setShieldedCryptoProvider(provider);
+      // A sync that keeps requesting a window it never loads does not end: fail
+      // after a bound instead of hanging the test.
+      const historySpy = jest
+        .spyOn(walletApi, 'getAddressHistoryForAwait')
+        .mockImplementation(async () => {
+          if (historySpy.mock.calls.length > 20) {
+            throw new Error('address_history was requested more than 20 times');
+          }
+          return { data: { success: true, history: [], has_more: false } } as never;
+        });
+      const connection = {
+        subscribeAddresses: jest.fn(),
+        emit: jest.fn(),
+      } as unknown as FullnodeConnection;
+
+      await apiSyncHistory(0, 2, storage, connection);
+
+      // One window of two legacy addresses, one request.
+      expect(historySpy).toHaveBeenCalledTimes(1);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+});
+
+describe('derived address cache', () => {
+  // Real legacy and shielded EC derivation runs here, which jest's vm sandbox slows down.
+  const DERIVATION_TEST_TIMEOUT = 60000;
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: '123',
+    password: '456',
+    networkName: 'testnet',
+  });
+  // A second wallet, to swap single keys of the first record for its keys.
+  const otherAccessData = walletUtils.generateAccessDataFromSeed(
+    'avocado spot town typical traffic vault danger century property shallow divorce festival spend attack anchor afford rotate green audit adjust fade wagon depart level',
+    { pin: '123', password: '456', networkName: 'testnet' }
+  );
+  // The shielded chain only needs a provider to be registered; loading never calls it.
+  const provider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
+
+  async function storedAddresses(storage: Storage, count: number) {
+    const records: unknown[] = [];
+    for (let i = 0; i < count; i++) {
+      const legacy = await storage.getAddressAtIndex(i);
+      const shielded = await storage.getAddressAtIndex(i, { legacy: false });
+      const spend = shielded?.ctMappingAddress
+        ? await storage.store.getAddress(shielded.ctMappingAddress)
+        : null;
+      records.push({ legacy, shielded, spend });
+    }
+    return records;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it(
+    'loading a window again after the store wipe of a reconnect derives nothing',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      const first = await loadAddresses(0, 3, storage);
+      const firstRecords = await storedAddresses(storage, 3);
+
+      // The store wipe reloadStorage runs on a reconnect.
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const second = await loadAddresses(0, 3, storage);
+
+      expect(legacySpy).not.toHaveBeenCalled();
+      expect(pairSpy).not.toHaveBeenCalled();
+      // The same addresses to subscribe, and the same records on both chains.
+      expect(second).toEqual(first);
+      expect(await storedAddresses(storage, 3)).toEqual(firstRecords);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it.each(['xpubkey', 'scanXpubkey', 'spendXpubkey'] as const)(
+    'a record whose %s changed derives every index again, from the new keys',
+    async field => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      const changed = { ...accessData, [field]: otherAccessData[field] };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(changed);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      const reloaded = await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
+      // The same as a storage that never saw the old record.
+      const fresh = new Storage(new MemoryStore());
+      await fresh.saveAccessData(changed);
+      fresh.setShieldedCryptoProvider(provider);
+      expect(reloaded).toEqual(await loadAddresses(0, 2, fresh));
+      expect(await storedAddresses(storage, 2)).toEqual(await storedAddresses(fresh, 2));
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a network change derives every index again',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      try {
+        await storage.saveAccessData(accessData);
+        const testnetAddresses = await loadAddresses(0, 2, storage);
+
+        // The xpubs are the same on every network, the addresses are not.
+        storage.config.setNetwork('mainnet');
+        await storage.cleanStorage(true, true);
+        await storage.saveAccessData(accessData);
+        const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+
+        const mainnetAddresses = await loadAddresses(0, 2, storage);
+
+        expect(legacySpy).toHaveBeenCalledTimes(2);
+        expect(mainnetAddresses).not.toEqual(testnetAddresses);
+        for (const address of mainnetAddresses) {
+          expect(address.startsWith('H')).toBe(true);
+        }
+      } finally {
+        storage.config.setNetwork('testnet');
+      }
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'a change of the multisig configuration derives the P2SH addresses again',
+    async () => {
+      const pubkeys = [new HDPrivateKey(), new HDPrivateKey(), new HDPrivateKey()].map(
+        key => key.xpubkey
+      );
+      const multisigRecord = walletUtils.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName: 'testnet',
+        multisig: { pubkeys, numSignatures: 2 },
+      });
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(multisigRecord);
+      const twoOfThree = await loadAddresses(0, 1, storage);
+
+      const threeOfThree = {
+        ...multisigRecord,
+        multisigData: { ...multisigRecord.multisigData!, numSignatures: 3 },
+      };
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(threeOfThree);
+      const p2shSpy = jest.spyOn(addressUtils, 'deriveAddressP2SH');
+
+      const reloaded = await loadAddresses(0, 1, storage);
+
+      expect(p2shSpy).toHaveBeenCalledTimes(1);
+      expect(reloaded).not.toEqual(twoOfThree);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+
+  it(
+    'handleStop drops the cached addresses',
+    async () => {
+      const storage = new Storage(new MemoryStore());
+      storage.config.setNetwork('testnet');
+      await storage.saveAccessData(accessData);
+      storage.setShieldedCryptoProvider(provider);
+      await loadAddresses(0, 2, storage);
+
+      await storage.handleStop();
+      await storage.cleanStorage(true, true);
+      await storage.saveAccessData(accessData);
+      const legacySpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH');
+      const pairSpy = jest.spyOn(addressUtils, 'deriveShieldedAddressPair');
+
+      await loadAddresses(0, 2, storage);
+
+      expect(legacySpy).toHaveBeenCalledTimes(2);
+      expect(pairSpy).toHaveBeenCalledTimes(2);
+    },
+    DERIVATION_TEST_TIMEOUT
+  );
+});
+
+describe('decoding shielded outputs: the scan key in memory first, a PIN only while there is none', () => {
+  const SEED =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const PIN = '123';
+  const RECEIVE_TX = 'c1'.repeat(32);
+  const OTHER_TX = 'c2'.repeat(32);
+  // An address of another wallet.
+  const FOREIGN_ADDRESS = 'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f';
+  // The outputs the provider opens: paid to the wallet's shielded address at
+  // `addressIndex`, they open with that address's scan key only.
+  const OPENS_AT_0 = '0a'.repeat(33);
+  const OPENS_AT_1 = '0b'.repeat(33);
+  const OPENINGS: Record<string, { addressIndex: number; value: bigint }> = {
+    [OPENS_AT_0]: { addressIndex: 0, value: 50n },
+    [OPENS_AT_1]: { addressIndex: 1, value: 30n },
+  };
+  // Paid to the wallet's address at index 0, but opens with no key.
+  const OPENS_NEVER = '0c'.repeat(33);
+
+  let fixture: { accessData: string; childKeys: string[] } | null = null;
+  /** The test seed's record, and the scan keys of its first two addresses, as bitcore derives them. */
+  function walletFixture() {
+    if (!fixture) {
+      const accessData = walletUtils.generateAccessDataFromSeed(SEED, {
+        pin: PIN,
+        password: '456',
+        networkName: 'testnet',
+      });
+      const scanKey = walletUtils
+        .getXPrivKeyFromSeed(SEED, { networkName: 'testnet' })
+        .deriveChild("m/44'/280'/1'")
+        .deriveChild(0);
+      fixture = {
+        accessData: JSON.stringify(accessData),
+        childKeys: [0, 1].map(i => scanKey.deriveChild(i).privateKey.toBuffer().toString('hex')),
+      };
+    }
+    return fixture;
+  }
+
+  function makeProvider(): IShieldedCryptoProvider {
+    const { childKeys } = walletFixture();
+    return {
+      generateRandomBlindingFactor: jest.fn(),
+      createAmountShieldedOutput: jest.fn(),
+      createShieldedOutputWithBothBlindings: jest.fn(),
+      rewindAmountShieldedOutput: jest
+        .fn()
+        .mockImplementation(async (privkey: Buffer, _ephemeral: Buffer, commitment: Buffer) => {
+          const opening = OPENINGS[commitment.toString('hex')];
+          if (!opening || privkey.toString('hex') !== childKeys[opening.addressIndex]) {
+            throw new Error('rewind failed');
+          }
+          return { value: opening.value, blindingFactor: Buffer.alloc(32, 0x0b) };
+        }),
+      rewindFullShieldedOutput: jest.fn(),
+      computeBalancingBlindingFactor: jest.fn(),
+      deriveTag: jest.fn(),
+      createAssetCommitment: jest.fn(),
+      createSurjectionProof: jest.fn(),
+      deriveEcdhSharedSecret: jest.fn(),
+    } as unknown as IShieldedCryptoProvider;
+  }
+
+  /** A storage with the test seed's record and the first two indexes of both chains. */
+  async function setup() {
+    const storage = new Storage(new MemoryStore());
+    await storage.saveAccessData(JSON.parse(walletFixture().accessData));
+    const provider = makeProvider();
+    storage.setShieldedCryptoProvider(provider);
+    await loadAddresses(0, 2, storage);
+    const legacy = (await storage.getAddressAtIndex(0))!.base58;
+    const spend: string[] = [];
+    for (const index of [0, 1]) {
+      spend.push((await storage.getAddressAtIndex(index, { legacy: false }))!.ctMappingAddress!);
+    }
+    jest.spyOn(storage.logger, 'info').mockImplementation(() => undefined);
+    jest.spyOn(storage.logger, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(storage.logger, 'error').mockImplementation(() => undefined);
+    return { storage, provider, legacy, spend };
+  }
+
+  /** What start() does: keep the scan key the PIN unlocks in memory. */
+  async function keepScanKeyInMemory(storage: Storage) {
+    /* eslint-disable no-param-reassign */
+    storage.shieldedView.started = true;
+    storage.scanXPrivKey = await unlockScanXPrivKey(storage, PIN);
+    /* eslint-enable no-param-reassign */
+  }
+
+  /** A tx paying 7 HTR to `transparentTo` and each shielded output to its address. */
+  function receiveTx(
+    txId: string,
+    transparentTo: string | null,
+    shielded: Array<[string, string]>,
+    timestamp = 1
+  ): IHistoryTx {
+    return {
+      tx_id: txId,
+      version: 1,
+      weight: 1,
+      timestamp,
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      inputs: [],
+      height: 100,
+      tokens: [],
+      outputs: transparentTo
+        ? [
+            {
+              value: 7n,
+              token: NATIVE_TOKEN_UID,
+              token_data: 0,
+              script: '',
+              decoded: { type: 'P2PKH', address: transparentTo, timelock: null },
+              spent_by: null,
+            },
+          ]
+        : [],
+      shielded_outputs: shielded.map(([address, commitment]) => ({
+        mode: ShieldedOutputMode.AMOUNT_SHIELDED,
+        commitment,
+        range_proof: 'bb'.repeat(10),
+        script: '',
+        token_data: 0,
+        ephemeral_pubkey: '02'.repeat(33),
+        decoded: { type: 'P2PKH', address, timelock: null },
+        spent_by: null,
+      })),
+    } as unknown as IHistoryTx;
+  }
+
+  async function htrBalance(storage: Storage): Promise<bigint> {
+    return (await storage.store.getTokenMeta(NATIVE_TOKEN_UID))?.balance.tokens.unlocked ?? 0n;
+  }
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('decodes with the scan key in memory, whatever PIN the call gives', async () => {
+    const { storage, legacy, spend } = await setup();
+    await keepScanKeyInMemory(storage);
+    const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
+    const tx = receiveTx(RECEIVE_TX, legacy, [
+      [spend[0], OPENS_AT_0],
+      [FOREIGN_ADDRESS, OPENS_AT_1],
+    ]);
+    await storage.addTx(tx);
+
+    // The PIN a dApp request passes, which is not the wallet's.
+    await processNewTx(storage, tx, { currentHeight: 105, pinCode: '111111' });
+
+    expect(unlockSpy).not.toHaveBeenCalled();
+    expect(tx.shielded_outputs![0].value).toBe(50n);
+    expect(tx.shielded_outputs![1].value).toBeUndefined();
+    expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBe(50n);
+    expect(await htrBalance(storage)).toBe(57n);
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [],
+      locked: 0,
+      unreadable: 0,
+      error: 0,
+    });
+  }, 60000);
+
+  it('decodes with a correct PIN while no key is in memory, and keeps none', async () => {
+    const { storage, legacy, spend } = await setup();
+    const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
+    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
+    await storage.addTx(tx);
+
+    await processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
+
+    expect(unlockSpy).toHaveBeenCalledTimes(1);
+    expect(tx.shielded_outputs![0].value).toBe(50n);
+    expect(await htrBalance(storage)).toBe(57n);
+    // The PIN is a one-off: the key it unlocks is not kept in memory.
+    expect(storage.scanXPrivKey).toBeNull();
+  }, 60000);
+
+  it('credits the transparent outputs and counts the wallet outputs locked for a wrong PIN', async () => {
+    const { storage, legacy, spend } = await setup();
+    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
+    await storage.addTx(tx);
+
+    await expect(
+      processNewTx(storage, tx, { currentHeight: 105, pinCode: '999' })
+    ).resolves.toMatchObject({ legacyMaxAddressIndex: 0, shieldedMaxAddressIndex: -1 });
+
+    expect(tx.shielded_outputs![0].value).toBeUndefined();
+    expect(await htrBalance(storage)).toBe(7n);
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [RECEIVE_TX],
+      locked: 1,
+      unreadable: 0,
+      error: 0,
+    });
+    expect(storage.logger.warn).toHaveBeenCalledWith(expect.stringContaining('shielded-wrong-pin'));
+    expect(storage.logger.info).toHaveBeenCalledWith(
+      `Shielded outputs of the wallet in tx ${RECEIVE_TX} could not be decoded: ` +
+        '1 locked, 0 unreadable, 0 in error'
+    );
+  }, 60000);
+
+  it.each([
+    ['an empty PIN', ''],
+    ['a null PIN', null],
+    ['no PIN', undefined],
+  ])(
+    'does not try %s',
+    async (_name, pinCode) => {
+      const { storage, legacy, spend } = await setup();
+      const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
+      const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
+      await storage.addTx(tx);
+
+      await processNewTx(storage, tx, {
+        currentHeight: 105,
+        pinCode: pinCode as string | undefined,
+      });
+
+      expect(unlockSpy).not.toHaveBeenCalled();
+      expect(await htrBalance(storage)).toBe(7n);
+      expect(storage.shieldedView.undecodedSummary().locked).toBe(1);
+    },
+    60000
+  );
+
+  it('counts the wallet outputs locked without a crypto provider', async () => {
+    const { storage, legacy, spend } = await setup();
+    storage.setShieldedCryptoProvider(undefined);
+    const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
+    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
+    await storage.addTx(tx);
+
+    await processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN });
+
+    expect(unlockSpy).not.toHaveBeenCalled();
+    expect(await htrBalance(storage)).toBe(7n);
+    expect(storage.shieldedView.undecodedSummary()).toMatchObject({ locked: 1 });
+  }, 60000);
+
+  it('counts an output of the wallet that does not open as unreadable, and ignores other wallets', async () => {
+    const { storage, spend } = await setup();
+    await keepScanKeyInMemory(storage);
+    const tx = receiveTx(RECEIVE_TX, null, [
+      [spend[0], OPENS_NEVER],
+      [FOREIGN_ADDRESS, OPENS_AT_1],
+      [spend[1], OPENS_AT_1],
+    ]);
+    await storage.addTx(tx);
+
+    await processNewTx(storage, tx, { currentHeight: 105 });
+
+    expect(tx.shielded_outputs!.map(output => output.value)).toEqual([undefined, undefined, 30n]);
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [RECEIVE_TX],
+      locked: 0,
+      unreadable: 1,
+      error: 0,
+    });
+    expect(storage.logger.warn).toHaveBeenCalledWith(
+      `Shielded outputs of the wallet in tx ${RECEIVE_TX} could not be decoded: ` +
+        '0 locked, 1 unreadable, 0 in error'
+    );
+  }, 60000);
+
+  it('decrypts the key once per walk, and records the undecoded outputs again on each walk', async () => {
+    const { storage, spend } = await setup();
+    await storage.addTx(receiveTx(RECEIVE_TX, null, [[spend[0], OPENS_AT_0]], 1));
+    await storage.addTx(receiveTx(OTHER_TX, null, [[spend[1], OPENS_AT_1]], 2));
+    const view = storage.shieldedView;
+    view.recordUndecoded('an-earlier-tx', { locked: 3, unreadable: 0, error: 0 });
+    const unlockSpy = jest.spyOn(storage, 'getScanXPrivKey');
+    const decryptSpy = jest.spyOn(cryptoUtils, 'decryptData');
+
+    await processHistory(storage, { pinCode: '999' });
+
+    // A wrong PIN is tried once, not for each tx.
+    expect(unlockSpy).toHaveBeenCalledTimes(1);
+    expect(view.undecodedSummary()).toEqual({
+      txIds: [RECEIVE_TX, OTHER_TX],
+      locked: 2,
+      unreadable: 0,
+      error: 0,
+    });
+    expect(storage.logger.info).toHaveBeenCalledWith(
+      'Shielded outputs of the wallet in 2 tx(s) of the history could not be decoded: ' +
+        '2 locked, 0 unreadable, 0 in error'
+    );
+
+    unlockSpy.mockClear();
+    decryptSpy.mockClear();
+    await processHistory(storage, { pinCode: PIN });
+
+    expect(unlockSpy).toHaveBeenCalledTimes(1);
+    expect(decryptSpy).toHaveBeenCalledTimes(1);
+    expect(view.undecodedSummary()).toEqual({ txIds: [], locked: 0, unreadable: 0, error: 0 });
+    expect((await storage.getTx(RECEIVE_TX))!.shielded_outputs![0].value).toBe(50n);
+    expect((await storage.getTx(OTHER_TX))!.shielded_outputs![0].value).toBe(30n);
+    expect(await htrBalance(storage)).toBe(80n);
+  }, 60000);
+
+  it('keeps an unexpected failure to unlock systemic, and counts the output in error', async () => {
+    const { storage, legacy, spend } = await setup();
+    jest.spyOn(storage, 'getScanXPrivKey').mockRejectedValue(new Error('IndexedDB read failed'));
+    const tx = receiveTx(RECEIVE_TX, legacy, [[spend[0], OPENS_AT_0]]);
+    await storage.addTx(tx);
+
+    await expect(
+      processNewTx(storage, tx, { currentHeight: 105, pinCode: PIN })
+    ).rejects.toBeInstanceOf(ShieldedDecodeSystemicError);
+
+    expect(await htrBalance(storage)).toBe(0n);
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [RECEIVE_TX],
+      locked: 0,
+      unreadable: 0,
+      error: 1,
+    });
+  }, 60000);
+
+  it('counts the wallet outputs of a tx the walk skips in error', async () => {
+    const { storage, spend } = await setup();
+    await storage.addTx(receiveTx(RECEIVE_TX, null, [[spend[0], OPENS_AT_0]], 1));
+    jest.spyOn(storage, 'getScanXPrivKey').mockRejectedValue(new Error('IndexedDB read failed'));
+
+    await processHistory(storage, { pinCode: PIN });
+
+    expect(storage.shieldedDecodeSkippedTxIds).toEqual([RECEIVE_TX]);
+    expect(storage.shieldedView.undecodedSummary()).toEqual({
+      txIds: [RECEIVE_TX],
+      locked: 0,
+      unreadable: 0,
+      error: 1,
+    });
+    expect(storage.logger.warn).toHaveBeenCalledWith(
+      'Shielded outputs of the wallet in 1 tx(s) of the history could not be decoded: ' +
+        '0 locked, 0 unreadable, 1 in error'
+    );
+  }, 60000);
+
+  it('decodes the same values with the scan key in memory and with the PIN', async () => {
+    const decodedWith = async (useMemoryKey: boolean) => {
+      const { storage, legacy, spend } = await setup();
+      if (useMemoryKey) {
+        await keepScanKeyInMemory(storage);
+      }
+      await storage.addTx(
+        receiveTx(RECEIVE_TX, legacy, [
+          [spend[0], OPENS_AT_0],
+          [spend[1], OPENS_AT_1],
+        ])
+      );
+      await processHistory(storage, { pinCode: useMemoryKey ? undefined : PIN });
+      const utxos: IUtxo[] = [];
+      for await (const utxo of storage.selectUtxos({ token: NATIVE_TOKEN_UID })) {
+        utxos.push(utxo);
+      }
+      return {
+        outputs: (await storage.getTx(RECEIVE_TX))!.shielded_outputs,
+        balance: await htrBalance(storage),
+        utxos,
+      };
+    };
+
+    const withPin = await decodedWith(false);
+    const withMemoryKey = await decodedWith(true);
+
+    expect(withMemoryKey).toEqual(withPin);
+    expect(withPin.balance).toBe(87n);
+    expect(withPin.utxos.map(utxo => [utxo.index, utxo.value, utxo.shielded])).toEqual([
+      [0, 7n, undefined],
+      [1, 50n, true],
+      [2, 30n, true],
+    ]);
+  }, 60000);
 });

@@ -11,7 +11,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { encryptData } from '../../src/utils/crypto';
-import { IHistoryTx, TokenVersion, WalletType } from '../../src/types';
+import { IAddressChainOptions, IHistoryTx, TokenVersion, WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';
 
 test('default values', async () => {
@@ -118,6 +118,45 @@ test('addressIter chain-selection (legacy vs shielded)', async () => {
   await expect(store.addressCount()).resolves.toEqual(3);
   await expect(store.addressCount({ legacy: true })).resolves.toEqual(3);
   await expect(store.addressCount({ legacy: false })).resolves.toEqual(2);
+});
+
+describe('only legacy: false selects the shielded chain', () => {
+  // Every read decides the chain as setCurrentAddressIndex and the wallet's
+  // shielded-chain checks do. A value an untyped caller may pass, such as 0 or
+  // '', reads the legacy chain like the default does.
+  async function storeWithBothChains() {
+    const store = new MemoryStore();
+    await store.saveAddress({ base58: 'leg-0', bip32AddressIndex: 0 });
+    await store.saveAddress({ base58: 'leg-1', bip32AddressIndex: 1 });
+    await store.saveAddress({ base58: 'shi-0', bip32AddressIndex: 0, addressType: 'shielded' });
+    return store;
+  }
+
+  async function basesOf(iter: AsyncGenerator<{ base58: string }>) {
+    const bases: string[] = [];
+    for await (const info of iter) bases.push(info.base58);
+    return bases;
+  }
+
+  test.each([undefined, null, true, 0, ''])('legacy: %p reads the legacy chain', async legacy => {
+    const store = await storeWithBothChains();
+    const opts = { legacy } as unknown as IAddressChainOptions;
+
+    await expect(basesOf(store.addressIter(opts))).resolves.toEqual(['leg-0', 'leg-1']);
+    await expect(store.addressCount(opts)).resolves.toEqual(2);
+    await expect(store.getAddressAtIndex(0, opts)).resolves.toMatchObject({ base58: 'leg-0' });
+    await expect(store.getCurrentAddress(false, opts)).resolves.toEqual('leg-0');
+  });
+
+  test('legacy: false reads the shielded chain', async () => {
+    const store = await storeWithBothChains();
+    const opts = { legacy: false };
+
+    await expect(basesOf(store.addressIter(opts))).resolves.toEqual(['shi-0']);
+    await expect(store.addressCount(opts)).resolves.toEqual(1);
+    await expect(store.getAddressAtIndex(0, opts)).resolves.toMatchObject({ base58: 'shi-0' });
+    await expect(store.getCurrentAddress(false, opts)).resolves.toEqual('shi-0');
+  });
 });
 
 test('history methods', async () => {

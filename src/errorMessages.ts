@@ -38,4 +38,29 @@ export enum ErrorMessages {
   // When PIN is required in a method and not set
   PIN_REQUIRED = 'pin-required',
   HAS_TX_OUTSIDE_FIRST_ADDRESS = 'has-tx-outside-first-address',
+  // Shielded key errors (ShieldedKeyError.errorCode)
+  // The password does not decrypt the words the shielded keys are derived from
+  SHIELDED_WRONG_PASSWORD = 'shielded-wrong-password',
+  // The PIN does not decrypt the wallet's keys
+  SHIELDED_WRONG_PIN = 'shielded-wrong-pin',
+  // The words and passphrase give a root that does not derive the wallet's own keys
+  SHIELDED_PASSPHRASE_MISMATCH = 'shielded-passphrase-mismatch',
+  // The record has no encrypted scan key, or no scan xpub to check it against
+  SHIELDED_NO_KEYS = 'shielded-no-keys',
+  // The PIN decrypts the scan key record, but it holds no valid extended private key
+  SHIELDED_CORRUPT_KEY = 'shielded-corrupt-key',
+  // The scan key the PIN decrypts is not the key of the record's scan xpub
+  SHIELDED_KEY_MISMATCH = 'shielded-key-mismatch',
+  // The wallet is not started, or it was stopped or started again meanwhile
+  SHIELDED_NOT_STARTED = 'shielded-not-started',
+  // The wallet is multisig, whose shielded keys are single-signature keys
+  SHIELDED_MULTISIG = 'shielded-multisig',
+  // The wallet's scan key is not unlocked, so it cannot decode its shielded outputs
+  SHIELDED_LOCKED = 'shielded-locked',
+  // The wallet's shielded keys do not match each other, so they are not used
+  SHIELDED_INTEGRITY = 'shielded-integrity',
+  // No shielded crypto provider is registered
+  SHIELDED_NO_PROVIDER = 'shielded-no-provider',
+  // The wallet cannot process its history in its current state
+  SHIELDED_NOT_READY = 'shielded-not-ready',
 }

@@ -38,7 +38,13 @@ import {
   deriveShieldedAddressPair,
   getAddressFromPubkey,
 } from './address';
-import { processShieldedOutputs } from '../shielded/processing';
+import { getShieldedChainXpubs } from './shieldedChain';
+import {
+  decodeShieldedOutputs,
+  logUndecodedOutputs,
+  undecodedCountsOf,
+} from '../shielded/processing';
+import { ScanKeyOfPass, scanKeyOfPass } from '../shielded/scanKey';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
@@ -50,7 +56,11 @@ import {
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
-import { getDefaultAddressMeta } from '../storage/storage';
+import {
+  getDefaultAddressMeta,
+  getDerivedAddressCache,
+  trackTxProcessing,
+} from '../storage/storage';
 import { AddressError, ShieldedDecodeSystemicError } from '../errors';
 
 /**
@@ -99,17 +109,21 @@ export async function loadAddresses(
 ): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
-
-  // Shielded derivation setup, hoisted out of the loop: wallets without
-  // scan/spend xpubs (read-only, pre-shielded) skip the whole shielded branch,
-  // and for wallets that have them the parent HDPublicKeys are parsed ONCE per
-  // call — bitcore's xpub parsing is expensive and identical for every index.
-  const scanXpub = await storage.getScanXPubKey();
-  const spendXpub = await storage.getSpendXPubKey();
-  const hasShieldedKeys = !!scanXpub && !!spendXpub;
-  const scanHdPub = hasShieldedKeys ? new HDPublicKey(scanXpub) : null;
-  const spendHdPub = hasShieldedKeys ? new HDPublicKey(spendXpub) : null;
   const networkName = storage.config.getNetwork().name;
+
+  // Addresses an earlier call derived for this storage. A reconnect wipes the
+  // stored addresses (reloadStorage) and loads the same windows again, so the
+  // cached records are saved again instead of being derived again. Records are
+  // copied in and out, so the store never shares an object with the cache.
+  const derived = getDerivedAddressCache(storage, await storage.getAccessData(), networkName);
+
+  // Shielded derivation setup: wallets without a shielded chain (read-only,
+  // pre-shielded, no crypto provider) skip the whole shielded branch. For
+  // wallets that have one, the parent HDPublicKeys are parsed ONCE per call, at
+  // the first index that has to be derived — bitcore's xpub parsing is
+  // expensive and identical for every index.
+  const shieldedXpubs = await getShieldedChainXpubs(storage);
+  let shieldedParents: { scan: HDPublicKey; spend: HDPublicKey } | null = null;
 
   for (let i = startIndex; i < stopIndex; i++) {
     const storageAddr = await storage.getAddressAtIndex(i);
@@ -117,23 +131,30 @@ export async function loadAddresses(
       // This address is already generated, we can skip legacy derivation
       addresses.push(storageAddr.base58);
     } else {
-      // derive legacy address at index i
+      // derive legacy address at index i, unless an earlier call already did
+      const cachedLegacy = derived?.get(i)?.legacy;
       let address: IAddressInfo;
-      if ((await storage.getWalletType()) === 'p2pkh') {
-        address = await deriveAddressP2PKH(i, storage);
+      if (cachedLegacy) {
+        address = { ...cachedLegacy };
       } else {
-        address = await deriveAddressP2SH(i, storage);
+        if ((await storage.getWalletType()) === 'p2pkh') {
+          address = await deriveAddressP2PKH(i, storage);
+        } else {
+          address = await deriveAddressP2SH(i, storage);
+        }
+        derived?.set(i, { ...derived.get(i), legacy: { ...address } });
       }
       await storage.saveAddress(address);
       addresses.push(address.base58);
     }
 
-    // Generate the shielded address pair at the same BIP32 index (when shielded
-    // keys are available). Like the legacy branch above, an index already in
-    // storage (a previous load, or pre-calculated/injected addresses) skips the
-    // EC derivation entirely — re-walks from index 0 happen on every sync/reload,
-    // so without this skip the whole window would be re-derived each time.
-    if (hasShieldedKeys) {
+    // Generate the shielded address pair at the same BIP32 index (when the
+    // wallet has a shielded chain). Like the legacy branch above, an index
+    // already in storage (a previous load, or pre-calculated/injected addresses)
+    // skips the EC derivation entirely — re-walks from index 0 happen on every
+    // sync/reload, so without this skip the whole window would be re-derived
+    // each time.
+    if (shieldedXpubs) {
       const existingShielded = await storage.getAddressAtIndex(i, { legacy: false });
       if (existingShielded?.addressType === 'shielded' && existingShielded.ctMappingAddress) {
         // Already derived/injected: re-push the paired on-chain spend address
@@ -148,17 +169,38 @@ export async function loadAddresses(
         //     is what the branch above needs to push for subscription;
         //   - a store that ignores the { legacy: false } option and returns the
         //     legacy record instead (IStore is a public interface).
-        // Re-deriving is the safe recovery for all of these: the derivation is
-        // a pure function of the xpubs and the index, so it reproduces the
-        // exact same pair, and the isAddressMine guards below make the saves
-        // idempotent — whichever half already exists is skipped and the missing
-        // half is filled in.
-        const { shieldedAddress, spendAddress } = deriveShieldedAddressPair(
-          scanHdPub!,
-          spendHdPub!,
-          i,
-          networkName
-        );
+        // Re-deriving (or reusing the pair an earlier call derived) is the safe
+        // recovery for all of these: the derivation is a pure function of the
+        // xpubs and the index, so it reproduces the exact same pair, and the
+        // isAddressMine guards below make the saves idempotent — whichever half
+        // already exists is skipped and the missing half is filled in.
+        const cachedPair = derived?.get(i)?.shielded;
+        let shieldedAddress: IAddressInfo;
+        let spendAddress: IAddressInfo;
+        if (cachedPair) {
+          shieldedAddress = { ...cachedPair.shieldedAddress };
+          spendAddress = { ...cachedPair.spendAddress };
+        } else {
+          if (!shieldedParents) {
+            shieldedParents = {
+              scan: new HDPublicKey(shieldedXpubs.scanXpubkey),
+              spend: new HDPublicKey(shieldedXpubs.spendXpubkey),
+            };
+          }
+          ({ shieldedAddress, spendAddress } = deriveShieldedAddressPair(
+            shieldedParents.scan,
+            shieldedParents.spend,
+            i,
+            networkName
+          ));
+          derived?.set(i, {
+            ...derived.get(i),
+            shielded: {
+              shieldedAddress: { ...shieldedAddress },
+              spendAddress: { ...spendAddress },
+            },
+          });
+        }
         if (!(await storage.isAddressMine(shieldedAddress.base58))) {
           await storage.saveAddress(shieldedAddress);
         }
@@ -295,6 +337,8 @@ export async function savePrecalculatedShieldedAddresses(
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
+ * @param {string} [pinCode] The PIN that unlocks the scan key to decode the
+ *   wallet's shielded outputs, while no scan key is in memory
  */
 export async function apiSyncHistory(
   startIndex: number,
@@ -573,10 +617,12 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // loaded range, so a wallet receiving on shielded indexes beyond the
   // legacy-used range would never load (and thus never decrypt) them.
   const legacyNeedMore = lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex;
-  // Only check the shielded gap when shielded keys are available.
-  const hasShieldedKeys = !!(await storage.getAccessData())?.spendXpubkey;
+  // Only check the shielded gap when the wallet has a shielded chain, decided
+  // by the same check loadAddresses uses: a shielded gap on a chain that
+  // loadAddresses never derives would request the same window forever.
+  const hasShieldedChain = (await getShieldedChainXpubs(storage)) !== null;
   const shieldedNeedMore =
-    hasShieldedKeys && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
+    hasShieldedChain && shieldedLastUsedAddressIndex + gapLimit > shieldedLastLoadedAddressIndex;
 
   if (!legacyNeedMore && !shieldedNeedMore) {
     return null;
@@ -586,7 +632,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   // lagging chain catches up, and extend up to whichever target is furthest.
   const legacyTarget = legacyNeedMore ? lastUsedAddressIndex + gapLimit : lastLoadedAddressIndex;
   let shieldedTarget: number;
-  if (!hasShieldedKeys) {
+  if (!hasShieldedChain) {
     shieldedTarget = legacyTarget;
   } else if (shieldedNeedMore) {
     shieldedTarget = shieldedLastUsedAddressIndex + gapLimit;
@@ -594,7 +640,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     shieldedTarget = shieldedLastLoadedAddressIndex;
   }
   const maxTarget = Math.max(legacyTarget, shieldedTarget);
-  const minLastLoaded = hasShieldedKeys
+  const minLastLoaded = hasShieldedChain
     ? Math.min(lastLoadedAddressIndex, shieldedLastLoadedAddressIndex)
     : lastLoadedAddressIndex;
 
@@ -610,8 +656,16 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  * History processing is a complex and nuanced method so we created a utility to avoid errors on other store implementations.
  * This utility only uses the store methods so it can be used by any store implementation.
  *
+ * The wallet's shielded outputs are decoded with the scan key the storage
+ * keeps in memory (`storage.scanXPrivKey`). While it holds none, `pinCode`
+ * unlocks the key once for the whole walk. The walk records again which of the
+ * wallet's shielded outputs stay undecoded, and logs one line about them.
+ *
  * @param {IStorage} storage Storage instance.
  * @param {{rewardLock: number}} [options={}] Use this configuration when processing the storage
+ * @param {string} [options.pinCode] The PIN that unlocks the scan key while the
+ *   storage holds none. An empty PIN and null are not tried, and a PIN that
+ *   unlocks no key leaves the wallet's shielded outputs counted locked.
  * @async
  * @returns {Promise<void>}
  */
@@ -620,8 +674,13 @@ export async function processHistory(
   { rewardLock, pinCode }: { rewardLock?: number; pinCode?: string } = {}
 ): Promise<void> {
   const { store } = storage;
+  // The scan key of this walk: the one in memory, or the one the PIN unlocks,
+  // at most once for every tx of the walk.
+  const scanKey = scanKeyOfPass(storage, pinCode);
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
   await store.cleanMetadata();
+  // The walk records again which of the wallet's shielded outputs stay undecoded.
+  storage.shieldedView.undecoded.clear();
 
   const nowTs = Math.floor(Date.now() / 1000);
   const currentHeight = await store.getCurrentHeight();
@@ -645,25 +704,30 @@ export async function processHistory(
   const skippedTxIds: string[] = [];
   for await (const tx of store.historyIter(undefined, { order: 'asc' })) {
     try {
-      const processedData = await processNewTx(storage, tx, {
-        rewardLock,
-        nowTs,
-        currentHeight,
-        pinCode,
-      });
+      // Storage.handleStop waits for the tx's crediting before it cleans.
+      const processedData = await trackTxProcessing(
+        storage,
+        processNewTx(storage, tx, {
+          rewardLock,
+          nowTs,
+          currentHeight,
+          scanKey,
+        })
+      );
       legacyMaxIndexUsed = Math.max(legacyMaxIndexUsed, processedData.legacyMaxAddressIndex);
       shieldedMaxIndexUsed = Math.max(shieldedMaxIndexUsed, processedData.shieldedMaxAddressIndex);
       for (const token of processedData.tokens) {
         tokens.add(token);
       }
     } catch (e) {
-      // SCOPED skip: only a systemic shielded-decode failure (wrong PIN /
-      // missing scan key) is skipped so it can't strand the whole reload after
-      // cleanMetadata() wiped the metadata — that throw fires BEFORE any
-      // crediting, so the skip is atomic. Every OTHER error (a store-write
-      // failure, a corrupt nano/OCB entry) is rethrown to fail LOUD: swallowing
-      // those would leave the wallet READY with partially-credited or empty
-      // balances, the exact silent-stranded outcome this walk must avoid.
+      // SCOPED skip: only a systemic shielded-decode failure (the scan key or
+      // the store could not be read) is skipped so it can't strand the whole
+      // reload after cleanMetadata() wiped the metadata — that throw fires
+      // BEFORE any crediting, so the skip is atomic. Every OTHER error (a
+      // store-write failure, a corrupt nano/OCB entry) is
+      // rethrown to fail LOUD: swallowing those would leave the wallet READY
+      // with partially-credited or empty balances, the exact silent-stranded
+      // outcome this walk must avoid.
       if (!(e instanceof ShieldedDecodeSystemicError)) {
         throw e;
       }
@@ -671,7 +735,7 @@ export async function processHistory(
       // updateWalletMetadataFromProcessedTxData below, so a skip can also shrink
       // gap-limit discovery. Record it and surface a summary after the walk
       // rather than relying on a per-tx log line — nothing else retries this
-      // path automatically (a correct-PIN reload does).
+      // path automatically (the next walk does).
       skippedTxIds.push(tx.tx_id);
       storage.logger.error(
         'Shielded decode failed during history reload, skipping tx',
@@ -697,12 +761,25 @@ export async function processHistory(
   if (skippedTxIds.length > 0) {
     storage.logger.error(
       `processHistory finished with ${skippedTxIds.length} shielded tx(s) skipped ` +
-        `(undecodable — wrong PIN or missing scan key). Balances are understated and ` +
-        `gap-limit discovery may be short until a reload with a valid PIN.`
+        `(the scan key or the store could not be read). Balances are understated and ` +
+        `gap-limit discovery may be short until the history is processed again.`
     );
   }
+  const undecoded = storage.shieldedView.undecodedSummary();
+  logUndecodedOutputs(storage.logger, `${undecoded.txIds.length} tx(s) of the history`, undecoded);
 }
 
+/**
+ * Process one new transaction, as a realtime tx, and update the wallet data
+ * with what it used.
+ *
+ * @param storage Storage instance.
+ * @param tx The transaction to process
+ * @param [options.rewardLock] The reward lock of the network
+ * @param [options.pinCode] The PIN that unlocks the scan key to decode the
+ *   wallet's shielded outputs of `tx`, while no scan key is in memory
+ *   (see processNewTx)
+ */
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
@@ -713,12 +790,16 @@ export async function processSingleTx(
   const currentHeight = await store.getCurrentHeight();
 
   const tokens = new Set<string>();
-  const processedData = await processNewTx(storage, tx, {
-    rewardLock,
-    nowTs,
-    currentHeight,
-    pinCode,
-  });
+  // Storage.handleStop waits for the tx's crediting before it cleans.
+  const processedData = await trackTxProcessing(
+    storage,
+    processNewTx(storage, tx, {
+      rewardLock,
+      nowTs,
+      currentHeight,
+      pinCode,
+    })
+  );
   const legacyMaxIndexUsed = processedData.legacyMaxAddressIndex;
   const shieldedMaxIndexUsed = processedData.shieldedMaxAddressIndex;
   for (const token of processedData.tokens) {
@@ -993,6 +1074,83 @@ async function updateWalletMetadataFromProcessedTxData(
 }
 
 /**
+ * Decode the wallet's shielded outputs of `tx` that are not decoded yet, save
+ * the tx when any was, and record on `storage.shieldedView` which of the
+ * wallet's outputs stay undecoded.
+ *
+ * A failure of one output stays with it: an output that does not open is
+ * counted unreadable, and the wallet's outputs are counted locked while there
+ * is no key or no crypto provider. Nothing of that throws.
+ *
+ * @param storage The wallet storage
+ * @param tx The tx to decode (mutated in place)
+ * @param getScanKey The scan key of the pass
+ * @param options.logUndecoded Whether to log the tx's undecoded outputs; a walk
+ *   logs them once for all its txs instead
+ * @throws {ShieldedDecodeSystemicError} When an unexpected error, such as a
+ *   failed store read, stopped the decode. The outputs it left undecoded are
+ *   counted in error.
+ */
+async function decodeWalletShieldedOutputs(
+  storage: IStorage,
+  tx: IHistoryTx,
+  getScanKey: ScanKeyOfPass,
+  { logUndecoded }: { logUndecoded: boolean }
+): Promise<void> {
+  const view = storage.shieldedView;
+  // Skip only when EVERY slot is already decoded (`value !== undefined`, the
+  // SEPARATED decoded marker): gating per-slot lets a tx with one
+  // still-undecoded owned slot (e.g. a transient rewind failure on a prior
+  // pass) complete its decoding, while the decode itself skips the slots
+  // already done.
+  const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
+  if (!hasUndecodedSlot) {
+    view.recordUndecoded(tx.tx_id, { locked: 0, unreadable: 0, error: 0 });
+    return;
+  }
+
+  const outcome = await decodeShieldedOutputs(
+    storage,
+    tx,
+    storage.shieldedCryptoProvider ?? null,
+    getScanKey
+  );
+  const counts = undecodedCountsOf(outcome);
+  view.recordUndecoded(tx.tx_id, counts);
+
+  if (outcome.failure) {
+    // A SYSTEMIC failure: the scan key or the store could not be read. Wrap it
+    // in a TYPED error so callers can distinguish "this tx's shielded side is
+    // undecodable" from any other failure (store write, corrupt nano/OCB
+    // entry):
+    //   - the REALTIME single-tx caller (processSingleTx <- onNewTx's isNewTx
+    //     path) lets it propagate, keeping the tx PROCESSING (retryable on the
+    //     next reload/sync; the WS queue survives via enqueueOnNewTx's .catch);
+    //   - the RELOAD caller (processHistory) skips ONLY this typed error and
+    //     rethrows everything else — so a store/nano failure still fails loud
+    //     instead of being swallowed as a silent per-tx skip.
+    storage.logger.error(
+      'Unexpected error processing shielded outputs for tx',
+      tx.tx_id,
+      '- wallet may be missing shielded funds.',
+      outcome.failure.cause
+    );
+    throw new ShieldedDecodeSystemicError(
+      `Systemic shielded-decode failure for tx ${tx.tx_id} (the scan key or the store could not be read)`,
+      outcome.failure.cause
+    );
+  }
+  if (outcome.decoded.length > 0) {
+    // Persist the in-place decoded fields so later reads (getTxBalance,
+    // re-processing) see the owned-marker fields without re-decrypting.
+    await storage.store.saveTx(tx);
+  }
+  if (logUndecoded) {
+    logUndecodedOutputs(storage.logger, `tx ${tx.tx_id}`, counts);
+  }
+}
+
+/**
  * Process a new transaction, adding or creating the metadata for the addresses and tokens involved.
  * Will update relevant wallet data and utxos.
  * The return object contains the max address index used and the tokens found in the transaction.
@@ -1003,8 +1161,19 @@ async function updateWalletMetadataFromProcessedTxData(
  * @param {number} [options.rewardLock] The reward lock of the network
  * @param {number} [options.nowTs] The current timestamp
  * @param {number} [options.currentHeight] The current height of the best chain
- * @param {string} [options.pinCode] PIN code for shielded-output decryption
+ * @param {string} [options.pinCode] The PIN that unlocks the scan key while the
+ *   storage holds none in memory; the key in memory decodes the tx when there
+ *   is one. An empty PIN and null are not tried. A missing PIN, or one that
+ *   unlocks no key, throws nothing: the transparent outputs are credited and
+ *   the wallet's shielded outputs are counted locked.
+ * @param {ScanKeyOfPass} [options.scanKey] The scan key of the walk this tx is
+ *   part of. A walk passes it so the PIN is unlocked once for all its txs, and
+ *   logs the undecoded outputs once for all of them. Without it, the tx is a
+ *   pass of its own, with `pinCode` as its PIN, and logs its own line.
  * @returns {Promise<{ legacyMaxAddressIndex: number, shieldedMaxAddressIndex: number, tokens: Set<string> }>}
+ * @throws {ShieldedDecodeSystemicError} When the tx's shielded outputs could
+ *   not be decoded for an unexpected reason, such as a failed store read.
+ *   Nothing was credited.
  */
 export async function processNewTx(
   storage: IStorage,
@@ -1014,7 +1183,14 @@ export async function processNewTx(
     nowTs,
     currentHeight,
     pinCode,
-  }: { rewardLock?: number; nowTs?: number; currentHeight?: number; pinCode?: string } = {}
+    scanKey,
+  }: {
+    rewardLock?: number;
+    nowTs?: number;
+    currentHeight?: number;
+    pinCode?: string;
+    scanKey?: ScanKeyOfPass;
+  } = {}
 ): Promise<{
   legacyMaxAddressIndex: number;
   shieldedMaxAddressIndex: number;
@@ -1031,6 +1207,10 @@ export async function processNewTx(
   }
 
   const { store } = storage;
+
+  // The scan key of the pass. A tx is a pass of its own unless a walk passed
+  // its key.
+  const getScanKey = scanKey ?? scanKeyOfPass(storage, pinCode);
 
   if (tx.is_voided && tx.nc_id && tx.first_block && tx.nc_seqnum != null) {
     // If a nano transaction is voided but has first block
@@ -1217,54 +1397,19 @@ export async function processNewTx(
     await store.editAddressMeta(address, addressMeta);
   }
 
-  // Decrypt wallet-owned shielded outputs IN PLACE before the output loops so
-  // the owned-shielded loop can credit them. Skip only when EVERY slot is
-  // already decoded (`value !== undefined`, the SEPARATED decoded marker):
-  // gating per-slot lets a tx with one still-undecoded owned slot (e.g. a
-  // transient rewind failure on a prior pass) complete its decoding, while
-  // processShieldedOutputs itself no-ops the slots already done.
-  const hasUndecodedSlot = (tx.shielded_outputs ?? []).some(so => so.value === undefined);
+  // Decode the wallet's shielded outputs IN PLACE before the output loops so
+  // the owned-shielded loop can credit them, with the key in memory, or with
+  // the PIN while there is none.
+  // A multisig wallet decodes nothing: it has no shielded keys (see
+  // refuseMultisigShieldedKeys), so its scan key is not asked for. The outputs
+  // it never decoded stay undecoded and uncredited. The shielded pairs an older
+  // version stored for it, and the history decoded and credited with them, are
+  // dropped when the wallet starts (see dropMultisigShieldedState).
   if (
-    hasUndecodedSlot &&
-    storage.shieldedCryptoProvider &&
-    tx.shielded_outputs?.length &&
-    pinCode !== undefined
+    !tx.shielded_outputs?.length ||
+    (await storage.getAccessData())?.walletType !== WalletType.MULTISIG
   ) {
-    try {
-      const decoded = await processShieldedOutputs(
-        storage,
-        tx,
-        storage.shieldedCryptoProvider,
-        pinCode
-      );
-      if (decoded.length > 0) {
-        // Persist the in-place decoded fields so later reads (getTxBalance,
-        // re-processing) see the owned-marker fields without re-decrypting.
-        await store.saveTx(tx);
-      }
-    } catch (e) {
-      // processShieldedOutputs handles per-output rewind failures internally, so
-      // a throw here is a SYSTEMIC failure (wrong PIN, missing/corrupt scan key).
-      // Wrap it in a TYPED error so callers can distinguish "this tx's shielded
-      // side is undecodable" from any other failure (store write, corrupt
-      // nano/OCB entry):
-      //   - the REALTIME single-tx caller (processSingleTx <- onNewTx's isNewTx
-      //     path) lets it propagate, keeping the tx PROCESSING (retryable on the
-      //     next reload/sync; the WS queue survives via enqueueOnNewTx's .catch);
-      //   - the RELOAD caller (processHistory) skips ONLY this typed error and
-      //     rethrows everything else — so a store/nano failure still fails loud
-      //     instead of being swallowed as a silent per-tx skip.
-      storage.logger.error(
-        'Unexpected error processing shielded outputs for tx',
-        tx.tx_id,
-        '- wallet may be missing shielded funds.',
-        e
-      );
-      throw new ShieldedDecodeSystemicError(
-        `Systemic shielded-decode failure for tx ${tx.tx_id} (wrong PIN or missing/corrupt scan key)`,
-        e
-      );
-    }
+    await decodeWalletShieldedOutputs(storage, tx, getScanKey, { logUndecoded: !scanKey });
   }
 
   // Transparent outputs: on-chain index === position in tx.outputs[].

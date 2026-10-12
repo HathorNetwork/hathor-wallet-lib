@@ -21,6 +21,7 @@ import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
 import { deriveShieldedAddress } from './shieldedAddress';
 import { WalletError } from '../errors';
+import { getShieldedChainXpubs } from './shieldedChain';
 
 /**
  * Parse address and return its OUTPUT SCRIPT type.
@@ -311,18 +312,17 @@ export function deriveShieldedAddressPair(
  * 1. The shielded address (user-facing, 71-byte format)
  * 2. The spend-derived P2PKH address (on-chain, for matching incoming txs)
  *
- * Returns null if the wallet doesn't have shielded key material.
+ * Returns null when the wallet has no shielded chain (see getShieldedChainXpubs).
  */
 export async function deriveShieldedAddressFromStorage(
   index: number,
   storage: IStorage
 ): Promise<{ shieldedAddress: IAddressInfo; spendAddress: IAddressInfo } | null> {
-  const scanXpub = await storage.getScanXPubKey();
-  const spendXpub = await storage.getSpendXPubKey();
-  if (!scanXpub || !spendXpub) {
+  const xpubs = await getShieldedChainXpubs(storage);
+  if (!xpubs) {
     return null;
   }
 
   const networkName = storage.config.getNetwork().name;
-  return deriveShieldedAddressPair(scanXpub, spendXpub, index, networkName);
+  return deriveShieldedAddressPair(xpubs.scanXpubkey, xpubs.spendXpubkey, index, networkName);
 }

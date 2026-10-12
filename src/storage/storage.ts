@@ -44,6 +44,7 @@ import {
   IAddressChainOptions,
 } from '../types';
 import type { IShieldedCryptoProvider } from '../shielded/types';
+import { ShieldedViewState } from '../shielded/view';
 import transactionUtils from '../utils/transaction';
 import {
   processHistory as processHistoryUtil,
@@ -55,6 +56,7 @@ import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
+import { refuseMultisigShieldedKeys } from '../utils/shieldedChain';
 import {
   NATIVE_TOKEN_UID,
   MAX_INPUTS,
@@ -85,6 +87,120 @@ export function getDefaultAddressMeta(): IAddressMetadata {
   };
 }
 
+/**
+ * Addresses `loadAddresses` derived for one BIP32 index: the legacy address,
+ * and the shielded pair (the shielded address and its on-chain spend P2PKH).
+ */
+export interface IDerivedIndexAddresses {
+  legacy?: IAddressInfo;
+  shielded?: { shieldedAddress: IAddressInfo; spendAddress: IAddressInfo };
+}
+
+/**
+ * The addresses `loadAddresses` derived, by storage object, together with the
+ * key they were derived under.
+ *
+ * `reloadStorage` wipes the stored addresses on every reconnect and loads the
+ * same windows again. `loadAddresses` reads this cache before deriving, so the
+ * reload saves the cached records instead of deriving them again. The cache
+ * lives in memory only and holds public data. Keying it by the storage object,
+ * instead of adding a member to `Storage`, makes it work for any `IStorage`
+ * and keeps it out of anything that serializes the storage.
+ */
+const derivedAddressCaches = new WeakMap<
+  IStorage,
+  { key: string; byIndex: Map<number, IDerivedIndexAddresses> }
+>();
+
+/**
+ * Get the addresses `loadAddresses` derived for `storage`, by BIP32 index.
+ *
+ * A derived address depends on the network, the wallet type, the legacy xpub or
+ * the multisig configuration, and the shielded xpubs. When any of them differs
+ * from what the cached addresses were derived from (a migration, a key import,
+ * another wallet or another network on the same storage), every entry is
+ * dropped.
+ *
+ * @param storage The wallet storage
+ * @param accessData The access data the addresses are derived from
+ * @param networkName The network the addresses are encoded for
+ * @returns The cached addresses, or null for a storage without access data
+ */
+export function getDerivedAddressCache(
+  storage: IStorage,
+  accessData: IWalletAccessData | null,
+  networkName: string
+): Map<number, IDerivedIndexAddresses> | null {
+  if (!accessData) {
+    return null;
+  }
+  const key = JSON.stringify([
+    networkName,
+    accessData.walletType,
+    accessData.xpubkey,
+    accessData.multisigData?.numSignatures ?? null,
+    accessData.multisigData?.pubkeys ?? null,
+    accessData.scanXpubkey ?? null,
+    accessData.spendXpubkey ?? null,
+  ]);
+  let cache = derivedAddressCaches.get(storage);
+  if (!cache || cache.key !== key) {
+    cache = { key, byIndex: new Map() };
+    derivedAddressCaches.set(storage, cache);
+  }
+  return cache.byIndex;
+}
+
+/**
+ * Drop every address cached for `storage` by `loadAddresses`.
+ *
+ * @param storage The wallet storage
+ */
+export function clearDerivedAddressCache(storage: IStorage): void {
+  derivedAddressCaches.delete(storage);
+}
+
+/**
+ * The txs being processed on each storage object (decoded and credited, see
+ * `processNewTx` in the storage utils), which Storage.handleStop waits for
+ * before it cleans the storage.
+ */
+const txsInProcessing = new WeakMap<IStorage, Set<Promise<unknown>>>();
+
+/**
+ * Keep `processing`, the processing of one tx on `storage`, in the set that
+ * Storage.handleStop waits for, until it settles.
+ *
+ * @param storage The wallet storage
+ * @param processing The processing of the tx
+ * @returns `processing`
+ */
+export function trackTxProcessing<T>(storage: IStorage, processing: Promise<T>): Promise<T> {
+  let running = txsInProcessing.get(storage);
+  if (!running) {
+    running = new Set();
+    txsInProcessing.set(storage, running);
+  }
+  const txs = running;
+  txs.add(processing);
+  const settled = () => {
+    txs.delete(processing);
+  };
+  processing.then(settled, settled);
+  return processing;
+}
+
+/**
+ * Wait until no tx is being processed on `storage`, counting the txs whose
+ * processing starts while it waits. Their failures belong to their own callers.
+ */
+async function txProcessingSettled(storage: IStorage): Promise<void> {
+  const running = txsInProcessing.get(storage);
+  while (running && running.size > 0) {
+    await Promise.allSettled([...running]);
+  }
+}
+
 export class Storage implements IStorage {
   store: IStore;
 
@@ -110,6 +226,13 @@ export class Storage implements IStorage {
   // processHistory when some owned shielded txs could not be decoded.
   shieldedDecodeSkippedTxIds?: string[] | null;
 
+  // See IStorage.scanXPrivKey: the scan private key, in plain text, from
+  // start() until stop(). The constructor defines it as not enumerable.
+  scanXPrivKey!: string | null;
+
+  // See IStorage.shieldedView.
+  shieldedView: ShieldedViewState;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -133,6 +256,11 @@ export class Storage implements IStorage {
     this.getPrivKeyFunc = null;
     this.shieldedCryptoProvider = undefined;
     this.shieldedDecodeSkippedTxIds = null;
+    // Not enumerable, so logging or serializing the storage never prints the
+    // key. A data property, so proxies that forward reads to the storage
+    // (WalletServiceStorageProxy) still read it.
+    Object.defineProperty(this, 'scanXPrivKey', { value: null, writable: true, enumerable: false });
+    this.shieldedView = new ShieldedViewState();
     this.logger = getDefaultLogger();
   }
 
@@ -196,10 +324,16 @@ export class Storage implements IStorage {
 
   /**
    * Set the tx signing function
+   *
+   * Setting or clearing it also clears the declaration that the signer signs
+   * shielded spend inputs (see `HathorWallet.setExternalTxSigningMethod`): a
+   * declaration belongs to the signer it was made with.
+   *
    * @param txSign The signing function, or a null value to clear it
    */
   setTxSignatureMethod(txSign: EcdsaTxSign | null): void {
     this.txSignFunc = txSign;
+    this.shieldedView.spendSigner = false;
   }
 
   /**
@@ -529,6 +663,9 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param pinCode The PIN that unlocks the scan key, once for the whole
+   *   history, to decode the wallet's shielded outputs while no scan key is in
+   *   memory (`scanXPrivKey`). The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processHistory(pinCode?: string): Promise<void> {
@@ -541,6 +678,10 @@ export class Storage implements IStorage {
 
   /**
    * Process the transaction history to calculate the metadata.
+   * @param tx The transaction to process
+   * @param pinCode The PIN that unlocks the scan key to decode the wallet's
+   *   shielded outputs of `tx` while no scan key is in memory (`scanXPrivKey`).
+   *   The key in memory is used when there is one.
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx, pinCode?: string): Promise<void> {
@@ -1102,9 +1243,13 @@ export class Storage implements IStorage {
   /**
    * Get the scan chain xprivkey for shielded ECDH.
    * Uses account 1' (m/44'/280'/1'/0), separate from legacy (account 0').
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     if (!accessData.scanMainKey) {
       throw new Error('Scan private key is not present on this wallet.');
     }
@@ -1114,9 +1259,13 @@ export class Storage implements IStorage {
   /**
    * Get the spend chain xprivkey for shielded UTXO signing.
    * Uses account 2' (m/44'/280'/2'/0).
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     if (!accessData.spendMainKey) {
       throw new Error('Spend private key is not present on this wallet.');
     }
@@ -1127,9 +1276,13 @@ export class Storage implements IStorage {
    * Get the scan chain xpubkey for shielded address derivation.
    * Uses account 1' (m/44'/280'/1'/0).
    * Returns undefined if wallet was created before shielded feature.
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getScanXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     return accessData.scanXpubkey;
   }
 
@@ -1137,9 +1290,13 @@ export class Storage implements IStorage {
    * Get the spend chain xpubkey for shielded address derivation.
    * Uses account 2' (m/44'/280'/2'/0).
    * Returns undefined if wallet was created before shielded feature.
+   *
+   * @throws {ShieldedKeyError} `shielded-multisig` for a multisig wallet, which
+   *   has no shielded keys
    */
   async getSpendXPubKey(): Promise<string | undefined> {
     const accessData = await this._getValidAccessData();
+    refuseMultisigShieldedKeys(accessData);
     return accessData.spendXpubkey;
   }
 
@@ -1180,6 +1337,14 @@ export class Storage implements IStorage {
     cleanAddresses?: boolean;
     cleanTokens?: boolean;
   } = {}): Promise<void> {
+    // The addresses loadAddresses derived belong to this wallet session. Drop
+    // them before anything that can throw.
+    clearDerivedAddressCache(this);
+    // The scan key in memory and the shielded view end with the wallet, whatever
+    // the options, before any step below can throw or await.
+    this.scanXPrivKey = null;
+    this.shieldedView.started = false;
+    this.shieldedView.reset();
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -1188,6 +1353,9 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses || cleanTokens) {
+      // A tx still being credited when the wallet stopped is waited for, so
+      // the clean removes what it writes.
+      await txProcessingSettled(this);
       await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }
   }

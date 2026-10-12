@@ -244,7 +244,10 @@ export interface DestroyAuthorityOptions {
 
 /**
  * Options for starting the wallet
- * @property pinCode PIN code to decrypt the private key
+ * @property pinCode PIN code to decrypt the private key. start() also decrypts
+ *   the shielded view key with it, which the wallet keeps in memory until
+ *   stop(); a PIN that does not decrypt it leaves the wallet's shielded
+ *   outputs locked, without failing the start (see unlockShieldedView).
  * @property password Password to decrypt the seed
  */
 export interface WalletStartOptions {
