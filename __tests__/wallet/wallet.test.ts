@@ -3103,6 +3103,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 
@@ -3155,6 +3156,7 @@ describe('getUtxos', () => {
       maxOutputs: 1,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 
@@ -3249,6 +3251,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
 
     // Mock the second call (amount_bigger_than: 100)
@@ -3297,6 +3300,7 @@ describe('getUtxos', () => {
       maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
+      kind: 'transparent',
     });
   });
 

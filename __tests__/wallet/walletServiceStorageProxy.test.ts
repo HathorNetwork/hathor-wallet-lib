@@ -277,6 +277,27 @@ describe('WalletServiceStorageProxy', () => {
       expect(wallet.getFullTxById).toHaveBeenCalledWith('tx123');
     });
 
+    it('should keep an input that spends a shielded output', async () => {
+      const shieldedInput = {
+        type: 'shielded',
+        mode: 1,
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        token_data: 0,
+        tx_id: 'input-tx',
+        index: 3,
+      };
+      (wallet.getFullTxById as jest.Mock).mockResolvedValue({
+        ...mockFullTxResponse,
+        tx: { ...mockFullTxResponse.tx, inputs: [shieldedInput] },
+      });
+
+      const result = await proxiedStorage.getTx('tx123');
+
+      expect(result!.inputs).toEqual([shieldedInput]);
+    });
+
     it('should return null when transaction fetch fails', async () => {
       (wallet.getFullTxById as jest.Mock).mockRejectedValue(new Error('Transaction not found'));
 
