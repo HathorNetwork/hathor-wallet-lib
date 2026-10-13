@@ -76,7 +76,10 @@ function makeProvider(): IShieldedCryptoProvider {
   } as unknown as IShieldedCryptoProvider;
 }
 
-async function setup({ pools = {} }: { pools?: { transparent?: Utxo[]; shielded?: Utxo[] } } = {}) {
+async function setup({
+  pools = {},
+  shieldedKeys = true,
+}: { pools?: { transparent?: Utxo[]; shielded?: Utxo[] }; shieldedKeys?: boolean } = {}) {
   const storage = new Storage(new MemoryStore());
   await storage.saveAccessData(accessData);
   const provider = makeProvider();
@@ -88,7 +91,7 @@ async function setup({ pools = {} }: { pools?: { transparent?: Utxo[]; shielded?
     storage,
   });
   wallet.setState('Ready');
-  (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = true;
+  (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = shieldedKeys;
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockResolvedValue(buildShieldedNewAddressesResponse() as never);
@@ -634,5 +637,70 @@ describe('getTx', () => {
     const tx = await proxy.getTx(ownedEntry.txId);
     expect(tx!.shielded_outputs![1].value).toBe(150n);
     await expect(proxy.getUtxo({ txId: ownedEntry.txId, index: 2 })).rejects.toThrow(/proposal/);
+  });
+});
+
+describe('a wallet whose keys this session did not register', () => {
+  const owned = shieldedUtxo({ mode: 1, index: 5, shieldedIndex: 1 });
+
+  it('offers no shielded utxos and never fetches them', async () => {
+    const { proxy, txOutputsSpy } = await setup({
+      shieldedKeys: false,
+      pools: { transparent: [transparentUtxo()], shielded: [owned] },
+    });
+    const utxos = await collect(proxy.selectUtxos({}));
+    expect(utxos.map(u => u.index)).toEqual([0]);
+    await expect(collect(proxy.selectUtxos({ shielded: true }))).resolves.toEqual([]);
+    expect(txOutputsSpy.mock.calls.map(([, options]) => options?.kind)).not.toContain('shielded');
+  });
+
+  it('refuses to spend a shielded utxo, saying why', async () => {
+    const { proxy } = await setup({ shieldedKeys: false, pools: { shielded: [owned] } });
+    await expect(proxy.getUtxo({ txId: owned.txId, index: 5 })).rejects.toThrow(
+      /shielded keys are not registered in this session/
+    );
+  });
+
+  it('leaves the shielded outputs of a tx undecoded', async () => {
+    const { proxy, wallet } = await setup({ shieldedKeys: false, pools: { shielded: [owned] } });
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue({
+      success: true,
+      tx: {
+        hash: owned.txId,
+        nonce: '0',
+        timestamp: 1,
+        version: 1,
+        weight: 1,
+        parents: [],
+        inputs: [],
+        outputs: [],
+        shielded_outputs: Array.from({ length: 6 }, () => ({
+          mode: 1,
+          commitment: 'aa',
+          range_proof: 'bb',
+          script: 'cc',
+          token_data: 0,
+          ephemeral_pubkey: 'dd',
+          decoded: {},
+        })),
+        tokens: [],
+        raw: '',
+      },
+      meta: {
+        hash: owned.txId,
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        first_block: null,
+        height: 10,
+        voided_by: [],
+        spent_outputs: [],
+        twins: [],
+        accumulated_weight: 1,
+        score: 1,
+      },
+    } as unknown as FullNodeTxResponse);
+    const tx = await proxy.getTx(owned.txId);
+    expect(tx!.shielded_outputs![5].value).toBeUndefined();
   });
 });

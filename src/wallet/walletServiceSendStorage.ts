@@ -231,7 +231,10 @@ export class WalletServiceSendStorage {
     }
     const kinds: UtxoKind[] = [];
     if (options.shielded !== true) kinds.push('transparent');
-    if (options.shielded !== false) kinds.push('shielded');
+    // Shielded utxos are offered only when this session registered the
+    // wallet's shielded keys: only then does the service support spending them
+    // and the scan key that opens them is in memory
+    if (options.shielded !== false && this.wallet.isShieldedEnabled()) kinds.push('shielded');
 
     let utxos: IUtxo[] = [];
     for (const kind of kinds) {
@@ -347,12 +350,12 @@ export class WalletServiceSendStorage {
    */
   private async getUtxo({ txId, index }: IUtxoId): Promise<IUtxo> {
     const utxo = await this.findOwnUtxo(txId, index);
-    if (!utxo) {
-      throw new SendTxError(`Utxo ${txId}:${index} is not an unspent output of this wallet.`);
-    }
     const unavailable = this.unavailable.get(utxoKey(txId, index));
     if (unavailable) {
       throw new SendTxError(`Utxo ${txId}:${index} ${unavailable}.`);
+    }
+    if (!utxo) {
+      throw new SendTxError(`Utxo ${txId}:${index} is not an unspent output of this wallet.`);
     }
     return utxo;
   }
@@ -378,6 +381,15 @@ export class WalletServiceSendStorage {
       throw e;
     }
     if (!entry || (entry.kind === 'shielded' && entry.recoveryState !== RECOVERED)) {
+      return null;
+    }
+    if (entry.kind === 'shielded' && !this.wallet.isShieldedEnabled()) {
+      // Left unopened: the session has no scan key, and the service may not
+      // support spending it (see selectUtxos)
+      this.unavailable.set(
+        utxoKey(txId, index),
+        'is shielded, and the shielded keys are not registered in this session'
+      );
       return null;
     }
     return this.toUtxo(entry);
