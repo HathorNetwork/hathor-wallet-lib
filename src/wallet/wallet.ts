@@ -28,6 +28,7 @@ import { retryOnTransientWalletError } from './walletServiceRetry';
 import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
 import { unlockScanXPrivKey } from '../shielded/scanKey';
+import { shieldedAddressError } from '../shielded/capability';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -92,7 +93,6 @@ import {
   PinRequiredError,
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
-  ShieldedNotEnabledError,
   ShieldedKeyError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
@@ -1155,7 +1155,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async *getAllAddresses(opts?: IAddressChainOptions): AsyncGenerator<GetAddressesObject> {
     this.failIfWalletNotReady();
     if (isShieldedChain(opts)) {
-      this.failIfShieldedNotEnabled();
+      if (!this.shieldedEnabled) {
+        // As the fullnode facade: a wallet without shielded keys has none
+        return;
+      }
       // Shielded rows also carry the on-chain `spendAddress`
       const data = await walletApi.getShieldedAddresses(this);
       for (const address of data.addresses) {
@@ -1170,13 +1173,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Throw if the wallet did not register shielded keys.
+   * Throw if the wallet did not register shielded keys, with the error the
+   * fullnode facade gives.
    */
   private failIfShieldedNotEnabled(): void {
     if (!this.shieldedEnabled) {
-      throw new ShieldedNotEnabledError(
-        'This wallet has no shielded keys. Only wallets started from a seed support shielded addresses.'
-      );
+      throw shieldedAddressError('no-shielded-keys');
     }
   }
 
@@ -3675,7 +3677,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async getAddressPathForIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
     if (isShieldedChain(opts)) {
-      this.failIfShieldedNotEnabled();
       return `${SHIELDED_SPEND_ACCT_PATH}/0/${index}`;
     }
     const walletType = await this.storage.getWalletType();

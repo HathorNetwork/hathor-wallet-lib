@@ -13,7 +13,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { ShieldedNotEnabledError, WalletError } from '../../src/errors';
+import { ShieldedKeyError, WalletError } from '../../src/errors';
 import { IWalletAccessData, TokenVersion } from '../../src/types';
 import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
@@ -432,7 +432,7 @@ describe('address chain options', () => {
     const wallet = await readyWallet({ shielded: false });
     expect(walletApi.getNewAddresses).toHaveBeenCalledTimes(1);
     expect(walletApi.getShieldedNewAddresses).not.toHaveBeenCalled();
-    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(ShieldedNotEnabledError);
+    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(ShieldedKeyError);
   });
 
   it('moves the shielded cursor independently of the legacy one', async () => {
@@ -502,18 +502,29 @@ describe('address chain options', () => {
     await expect(wallet.getAddressPathForIndex(7)).resolves.toBe("m/44'/280'/0'/0/7");
   });
 
-  it('refuses every shielded address method on a legacy-only wallet', async () => {
+  it('answers like the fullnode facade on a wallet without shielded keys', async () => {
     const wallet = await readyWallet({ shielded: false });
-    await expect(wallet.getAddressAtIndex(0, { legacy: false })).rejects.toThrow(
-      ShieldedNotEnabledError
+    const noKeys = expect.objectContaining({
+      errorCode: 'shielded-no-keys',
+      message: 'The wallet record has no shielded keys.',
+    });
+    await expect(wallet.getAddressAtIndex(0, { legacy: false })).rejects.toEqual(noKeys);
+    await expect(wallet.getAddressAtIndex(0, { legacy: false })).rejects.toBeInstanceOf(
+      ShieldedKeyError
     );
-    await expect(wallet.getAddressPathForIndex(0, { legacy: false })).rejects.toThrow(
-      ShieldedNotEnabledError
+    expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(ShieldedKeyError);
+    expect(() => wallet.getNextAddress({ legacy: false })).toThrow(
+      'The wallet record has no shielded keys.'
     );
-    await expect(wallet.getAllAddresses({ legacy: false }).next()).rejects.toThrow(
-      ShieldedNotEnabledError
+    // The fullnode facade lists no shielded address and still gives the path
+    const listed = [];
+    for await (const row of wallet.getAllAddresses({ legacy: false })) {
+      listed.push(row);
+    }
+    expect(listed).toEqual([]);
+    await expect(wallet.getAddressPathForIndex(0, { legacy: false })).resolves.toBe(
+      "m/44'/280'/2'/0/0"
     );
-    expect(() => wallet.getNextAddress({ legacy: false })).toThrow(ShieldedNotEnabledError);
   });
 });
 
