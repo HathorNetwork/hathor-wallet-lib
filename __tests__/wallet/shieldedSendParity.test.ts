@@ -22,6 +22,7 @@ import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
+import { decryptData } from '../../src/utils/crypto';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import { IDataTx, IUtxo, IWalletAccessData, TokenVersion } from '../../src/types';
 import {
@@ -435,7 +436,7 @@ async function buildWithWalletService(
   });
   wallet.setState('Ready');
   (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = true;
-  jest.spyOn(walletApi, 'getShieldedNewAddresses').mockResolvedValue({
+  jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
     ...buildShieldedNewAddressesResponse([0, 1, 2]),
     legacyAddresses: [{ address: ownChange, index: 5, addressPath: "m/44'/280'/0'/0/5" }],
   });
@@ -468,6 +469,11 @@ async function buildWithWalletService(
     success: true,
     addresses: Object.fromEntries(addresses.map(a => [a, owned.has(a)])),
   }));
+  // The index the service has for one of the wallet's spend addresses
+  jest.spyOn(walletApi, 'getAddressDetails').mockImplementation(async (_w, address) => {
+    const index = shieldedFixtureAddresses.findIndex(a => a.spendBase58 === address);
+    return { success: true, data: { address, index, transactions: 0, seqnum: 0 } };
+  });
   jest.spyOn(walletApi, 'getTokenDetails').mockImplementation(async (_w, uid) => ({
     success: true,
     details: {
@@ -478,7 +484,8 @@ async function buildWithWalletService(
     },
   }));
 
-  const adapter = new WalletServiceSendStorage(wallet, PIN);
+  storage.scanXPrivKey = decryptData(accessData.scanMainKey!, PIN);
+  const adapter = new WalletServiceSendStorage(wallet);
   const sendTransaction = new SendTransaction({
     storage: adapter.createProxy(),
     outputs: engineOutputs(scenario.outputs),

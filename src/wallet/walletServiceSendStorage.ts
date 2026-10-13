@@ -27,6 +27,7 @@ import {
 } from '../constants';
 import { SendTxError, TxNotFoundError, WalletError, WalletRequestError } from '../errors';
 import { deriveScanChildPrivkey, rewindShieldedOutput } from '../shielded/rewind';
+import { parseScanXPrivKey } from '../shielded/scanKey';
 import { ShieldedOutputMode } from '../shielded/types';
 import { convertFullNodeToHistoryTx } from './walletServiceStorageProxy';
 import walletApi from './api/walletApi';
@@ -103,8 +104,6 @@ const IGNORED_MEMBERS = new Set<string | symbol>(['then', 'toJSON', 'asymmetricM
 export class WalletServiceSendStorage {
   private readonly wallet: HathorWalletServiceWallet;
 
-  private readonly pin: string;
-
   private readonly storage: IStorage;
 
   private readonly pools = new Map<string, Promise<IUtxo[]>>();
@@ -126,9 +125,8 @@ export class WalletServiceSendStorage {
 
   private scanKey: HDPrivateKey | null = null;
 
-  constructor(wallet: HathorWalletServiceWallet, pin: string) {
+  constructor(wallet: HathorWalletServiceWallet) {
     this.wallet = wallet;
-    this.pin = pin;
     this.storage = wallet.storage;
   }
 
@@ -154,8 +152,8 @@ export class WalletServiceSendStorage {
   }
 
   /**
-   * Drop the decrypted scan key once the send is prepared; opening more
-   * shielded utxos decrypts it again.
+   * Drop the adapter's parsed scan key once the send is prepared; opening
+   * more shielded utxos parses it again from the wallet's key in memory.
    */
   release(): void {
     this.scanKey = null;
@@ -315,7 +313,6 @@ export class WalletServiceSendStorage {
         kind,
         skipSpent: true,
         ignoreLocked: true,
-        authority: 0n,
         maxOutputs: PAGE_SIZE,
         ...(smallerThan !== undefined ? { smallerThan: smallerThan.toString() } : {}),
       });
@@ -423,7 +420,15 @@ export class WalletServiceSendStorage {
     token: string
   ): Promise<Pick<IUtxo, 'shielded' | 'blindingFactor' | 'assetBlindingFactor'>> {
     if (!this.scanKey) {
-      this.scanKey = new HDPrivateKey(await this.storage.getScanXPrivKey(this.pin));
+      // The scan key start() keeps in memory for the wallet session
+      const { scanXPrivKey } = this.storage;
+      if (!scanXPrivKey) {
+        throw new SendTxError(
+          'The wallet has no shielded view key in memory, so its shielded utxos cannot be opened. ' +
+            'Start the wallet with its PIN.'
+        );
+      }
+      this.scanKey = parseScanXPrivKey(scanXPrivKey);
     }
     const privkey = deriveScanChildPrivkey(this.scanKey, entry.shieldedIndex);
     try {

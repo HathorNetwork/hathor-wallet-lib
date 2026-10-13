@@ -90,9 +90,11 @@ async function setup({ pools = {} }: { pools?: { transparent?: Utxo[]; shielded?
   wallet.setState('Ready');
   (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = true;
   jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockResolvedValue(buildShieldedNewAddressesResponse());
+    .spyOn(walletApi, 'getNewAddresses')
+    .mockResolvedValue(buildShieldedNewAddressesResponse() as never);
   await (wallet as unknown as { getNewAddresses: () => Promise<void> }).getNewAddresses();
+  // start() keeps the scan key in memory for the session
+  storage.scanXPrivKey = decryptData(accessData.scanMainKey!, PIN);
 
   const txOutputsSpy = jest
     .spyOn(walletApi, 'getTxOutputs')
@@ -111,7 +113,7 @@ async function setup({ pools = {} }: { pools?: { transparent?: Utxo[]; shielded?
       };
     });
 
-  const adapter = new WalletServiceSendStorage(wallet, PIN);
+  const adapter = new WalletServiceSendStorage(wallet);
   return { wallet, storage, provider, adapter, proxy: adapter.createProxy(), txOutputsSpy };
 }
 
@@ -188,7 +190,6 @@ describe('utxo pools', () => {
       kind: 'transparent',
       skipSpent: true,
       ignoreLocked: true,
-      authority: 0n,
       maxOutputs: 255,
     });
   });
@@ -240,28 +241,43 @@ describe('utxo pools', () => {
     expect(rewind.mock.calls[0][0]).toEqual(Buffer.alloc(32));
   });
 
-  it('decrypts the scan key once, and again only after it is released', async () => {
+  it('opens shielded utxos with the scan key kept in memory, without the PIN', async () => {
+    const { proxy, storage } = await setup({
+      pools: { shielded: [shieldedUtxo({ mode: 1, index: 5 })] },
+    });
+    const decrypt = jest.spyOn(storage, 'getScanXPrivKey');
+    const utxos = await collect(proxy.selectUtxos({ shielded: true }));
+    expect(utxos).toHaveLength(1);
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+
+  it('says why it cannot open shielded utxos without the scan key in memory', async () => {
+    const { proxy, storage } = await setup({
+      pools: { shielded: [shieldedUtxo({ mode: 1, index: 5 })] },
+    });
+    storage.scanXPrivKey = null;
+    await expect(collect(proxy.selectUtxos({ shielded: true }))).rejects.toThrow(
+      /no shielded view key in memory/
+    );
+  });
+
+  it('keeps no parsed scan key after release', async () => {
     // A custom-token utxo stays out of the HTR pool, so only getUtxo opens it
     const outsidePool = { ...shieldedUtxo({ mode: 1, index: 7 }), tokenId: customToken } as Utxo;
     const { proxy, adapter, storage, provider } = await setup({
-      pools: {
-        shielded: [
-          shieldedUtxo({ mode: 1, index: 5 }),
-          shieldedUtxo({ mode: 1, index: 6 }),
-          outsidePool,
-        ],
-      },
+      pools: { shielded: [shieldedUtxo({ mode: 1, index: 5 }), outsidePool] },
     });
     (provider.rewindAmountShieldedOutput as jest.Mock).mockImplementation(async () => ({
       value: 150n,
       blindingFactor: bf(1),
     }));
-    const decrypt = jest.spyOn(storage, 'getScanXPrivKey');
     await collect(proxy.selectUtxos({ shielded: true }));
-    expect(decrypt).toHaveBeenCalledTimes(1);
     adapter.release();
-    await proxy.getUtxo({ txId: outsidePool.txId, index: 7 });
-    expect(decrypt).toHaveBeenCalledTimes(2);
+    // The wallet's own key is untouched, so opening more utxos still works
+    await expect(proxy.getUtxo({ txId: outsidePool.txId, index: 7 })).resolves.toMatchObject({
+      shielded: true,
+    });
+    expect(storage.scanXPrivKey).not.toBeNull();
   });
 
   it('fails when the rewound value differs from the server value', async () => {

@@ -11,6 +11,8 @@ import Input from '../models/input';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeInput, FullNodeShieldedInput, FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
+import tokensUtils from '../utils/tokens';
+import { NATIVE_TOKEN_UID } from '../constants';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
 
 /**
@@ -244,6 +246,9 @@ export function convertFullNodeToHistoryTx(fullTxResponse: FullNodeTxResponse): 
     ) as IHistoryTx['inputs'],
     outputs: tx.outputs.map(output => ({
       ...output,
+      // The fullnode gives an output's token only through token_data, which
+      // indexes the tx's token list (0 is HTR)
+      token: output.token ?? tokenOfTokenData(output.token_data, tx.tokens),
       decoded: {
         ...output.decoded,
         type: output.decoded.type ?? undefined,
@@ -263,4 +268,9 @@ function isShieldedInput(
   input: FullNodeInput | FullNodeShieldedInput
 ): input is FullNodeShieldedInput {
   return (input as { type?: unknown }).type === 'shielded';
+}
+
+function tokenOfTokenData(tokenData: number, txTokens: { uid: string }[]): string | undefined {
+  const tokenIndex = tokensUtils.getTokenIndexFromData(tokenData);
+  return tokenIndex === 0 ? NATIVE_TOKEN_UID : txTokens[tokenIndex - 1]?.uid;
 }
