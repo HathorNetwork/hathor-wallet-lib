@@ -514,6 +514,8 @@ export const walletStatusResponseSchema = baseResponseSchema.extend({
     readyAt: z.number().nullable(),
     shieldedMaxGap: z.number().nullable().optional(),
     lastUsedShieldedIndex: z.number().nullable().optional(),
+    legacyStatus: z.string().optional(),
+    shieldedStatus: z.string().optional(),
   }),
   error: z.string().optional(),
   ignoredFields: z.array(z.string()).optional(),

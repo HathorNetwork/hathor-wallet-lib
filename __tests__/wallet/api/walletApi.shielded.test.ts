@@ -192,6 +192,48 @@ describe('walletApi shielded support', () => {
       expect(err.request).toBeUndefined();
     });
 
+    it('returns the status when only the shielded load reached the retry cap', async () => {
+      const data = {
+        success: false,
+        error: 'wallet-max-retries',
+        status: {
+          ...statusBody.status,
+          status: 'error',
+          legacyStatus: 'ready',
+          shieldedStatus: 'error',
+        },
+      };
+      mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
+      await expect(createWallet()).resolves.toMatchObject({
+        status: { legacyStatus: 'ready', shieldedStatus: 'error' },
+      });
+    });
+
+    it('rejects wallet-max-retries when the legacy load failed', async () => {
+      const data = {
+        success: false,
+        error: 'wallet-max-retries',
+        status: {
+          ...statusBody.status,
+          status: 'error',
+          legacyStatus: 'error',
+          shieldedStatus: 'error',
+        },
+      };
+      mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
+      await expect(createWallet()).rejects.toThrow('Error creating wallet.');
+    });
+
+    it('rejects wallet-max-retries from a service that does not report the two sides', async () => {
+      const data = {
+        success: false,
+        error: 'wallet-max-retries',
+        status: { ...statusBody.status, status: 'error' },
+      };
+      mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
+      await expect(createWallet()).rejects.toThrow('Error creating wallet.');
+    });
+
     it('still accepts wallet-already-loaded', async () => {
       const data = { ...statusBody, success: false, error: 'wallet-already-loaded' };
       mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);

@@ -275,6 +275,15 @@ const walletApi = {
       // If it was already loaded, we have to check if it's ready
       return parseSchema(response.data, walletStatusResponseSchema);
     }
+    if (
+      response.status === 400 &&
+      response.data.error === 'wallet-max-retries' &&
+      response.data.status?.legacyStatus === 'ready'
+    ) {
+      // Only the shielded load failed for good: the legacy wallet still works,
+      // and the caller decides whether to go on without the shielded side
+      return parseSchema(response.data, walletStatusResponseSchema);
+    }
     const cause = { status: response.status, data: response.data };
     if (response.status === 409 && response.data?.error === 'shielded-keys-conflict') {
       throw new ShieldedKeysConflictError(

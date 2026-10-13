@@ -17,6 +17,8 @@ import { ShieldedKeyError, WalletError } from '../../src/errors';
 import { IWalletAccessData, TokenVersion } from '../../src/types';
 import type { IShieldedCryptoProvider } from '../../src/shielded/types';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
+import helpers from '../../src/utils/helpers';
+import { ErrorMessages } from '../../src/errorMessages';
 import {
   shieldedFixtureSeed,
   shieldedFixtureAddresses,
@@ -313,6 +315,63 @@ describe('registration depends on the service', () => {
     await wallet.start({ pinCode: PIN });
     expect(createWalletSpy.mock.calls[0][7]).toBeNull();
     expect(wallet.isShieldedEnabled()).toBe(false);
+  });
+});
+
+describe('a failed shielded load', () => {
+  const splitStatus = (status: string, legacyStatus: string, shieldedStatus: string) => {
+    const response = statusResponse(status);
+    return { ...response, status: { ...response.status, legacyStatus, shieldedStatus } };
+  };
+
+  it('starts legacy-only when only the shielded side failed', async () => {
+    createWalletSpy.mockResolvedValue(splitStatus('error', 'ready', 'error'));
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(createWalletSpy.mock.calls[0][7]).not.toBeNull();
+    expect(wallet.isReady()).toBe(true);
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('starts legacy-only when the shielded side fails while polling', async () => {
+    pollSpy.mockRestore();
+    jest.spyOn(helpers, 'sleep').mockResolvedValue(undefined);
+    createWalletSpy.mockResolvedValue(splitStatus('creating', 'ready', 'creating'));
+    const statusSpy = jest
+      .spyOn(walletApi, 'getWalletStatus')
+      .mockResolvedValueOnce(splitStatus('creating', 'ready', 'creating') as never)
+      .mockResolvedValueOnce(splitStatus('error', 'ready', 'error') as never);
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(statusSpy).toHaveBeenCalledTimes(2);
+    expect(wallet.isReady()).toBe(true);
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('starts legacy-only without waiting for the wallet to be ready', async () => {
+    createWalletSpy.mockResolvedValue(splitStatus('error', 'ready', 'error'));
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD, waitReady: false });
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('fails when the legacy side failed too', async () => {
+    createWalletSpy.mockResolvedValue(splitStatus('error', 'error', 'error'));
+    const wallet = buildSeedWallet();
+    await expect(wallet.start({ pinCode: PIN, password: PASSWORD })).rejects.toThrow(
+      ErrorMessages.WALLET_STATUS_ERROR
+    );
+  });
+
+  it('fails on an error from a service that does not report the two sides', async () => {
+    createWalletSpy.mockResolvedValue(statusResponse('error'));
+    const wallet = buildSeedWallet();
+    await expect(wallet.start({ pinCode: PIN, password: PASSWORD })).rejects.toThrow(
+      ErrorMessages.WALLET_STATUS_ERROR
+    );
   });
 });
 

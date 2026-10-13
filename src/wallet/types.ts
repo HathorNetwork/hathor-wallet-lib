@@ -157,6 +157,8 @@ export interface WalletStatus {
   readyAt: number | null; // wallet timestamp when it got ready
   shieldedMaxGap?: number | null; // gap limit of the shielded chain, null when not registered
   lastUsedShieldedIndex?: number | null; // last used shielded address index
+  legacyStatus?: string; // status of the legacy side alone, from services that report it
+  shieldedStatus?: string; // status of the shielded side alone ('none' without shielded keys)
 }
 
 export interface AddressesResponseData {

@@ -80,6 +80,7 @@ import {
   ShieldedRegistrationFields,
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
+  WalletStatus,
 } from './types';
 import { OutputKind } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
@@ -135,6 +136,16 @@ const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
 // Wallet status values returned by the wallet-service API
 const WS_STATUS_READY = 'ready';
 const WS_STATUS_CREATING = 'creating';
+const WS_STATUS_ERROR = 'error';
+
+/**
+ * Whether the shielded side alone failed to load. The unified status is then
+ * 'error', but the legacy wallet is ready. Older services do not report the
+ * two sides, which reads as false.
+ */
+function isShieldedOnlyLoadFailure(status: WalletStatus): boolean {
+  return status.legacyStatus === WS_STATUS_READY && status.shieldedStatus === WS_STATUS_ERROR;
+}
 
 // Bounded retry budget for the wallet-service auth-token renewal.
 //
@@ -547,6 +558,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const ignoredFields = data.ignoredFields ?? [];
     this.shieldedEnabled = shielded !== null && !ignoredFields.some(field => field in shielded);
     this.storage.scanXPrivKey = this.shieldedEnabled ? scanXpriv : null;
+    if (isShieldedOnlyLoadFailure(data.status)) {
+      this.continueWithoutShielded(data.status);
+    }
 
     // Populate `storage.version` with the fullnode network constants.
     // Without this, `prepareToSend` would always fall back to the hardcoded
@@ -571,9 +585,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // If the wallet status is creating, we should wait until it is ready
       // before continuing
       await this.pollForWalletStatus();
-    } else if (data.status.status !== WS_STATUS_READY) {
+    } else if (data.status.status !== WS_STATUS_READY && !isShieldedOnlyLoadFailure(data.status)) {
       // At this stage, if the wallet is not 'ready' or 'creating' we should
-      // throw an error as there are only three states: 'ready', 'creating' or 'error'
+      // throw an error as there are only three states: 'ready', 'creating' or 'error'.
+      // A wallet whose shielded load alone failed still has a ready legacy side
       throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {
         cause: { state: data.status },
       });
@@ -587,6 +602,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // interceptor can obtain a token without needing the PIN.
     await this.onWalletReady();
     this.clearSensitiveData();
+  }
+
+  /**
+   * Run this session legacy-only after the service failed to load the shielded
+   * side, so the legacy wallet stays usable.
+   */
+  private continueWithoutShielded(status: WalletStatus): void {
+    this.shieldedEnabled = false;
+    this.storage.scanXPrivKey = null;
+    this.storage.logger.warn(
+      `The wallet-service failed to load the shielded side of wallet ${status.walletId}; ` +
+        'the wallet runs without shielded support in this session.'
+    );
   }
 
   /**
@@ -1047,6 +1075,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       lastError = undefined;
       lastState = data.status;
       if (data.status.status === WS_STATUS_READY) {
+        return;
+      }
+      if (isShieldedOnlyLoadFailure(data.status)) {
+        this.continueWithoutShielded(data.status);
         return;
       }
       // Only possible states are 'ready', 'creating' and 'error'. If status
