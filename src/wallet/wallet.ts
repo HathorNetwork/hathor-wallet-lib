@@ -2369,8 +2369,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns Promise that resolves with address details including index, transactions count, and seqnum
    */
   async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
-    const addressDetails = await walletApi.getAddressDetails(this, this.toOnChainAddress(address));
+    const onChain = this.toOnChainAddress(address);
+    const addressDetails = await walletApi.getAddressDetails(this, onChain);
+    if (
+      onChain !== address &&
+      !(await this.isOwnShieldedAddress(address, addressDetails.data.index))
+    ) {
+      throw new WalletError(`${address} is not an address of this wallet.`);
+    }
     return addressDetails.data;
+  }
+
+  /**
+   * Whether a shielded address is this wallet's at an index of its spend
+   * chain. The wallet-service matches a shielded address by its spend half
+   * only, so the whole address, scan key included, is compared with the one
+   * the wallet derives there.
+   */
+  private async isOwnShieldedAddress(address: string, index: number): Promise<boolean> {
+    const [scanXpub, spendXpub] = await Promise.all([
+      this.storage.getScanXPubKey(),
+      this.storage.getSpendXPubKey(),
+    ]);
+    if (!scanXpub || !spendXpub) {
+      return false;
+    }
+    return deriveShieldedAddress(scanXpub, spendXpub, index, this.network.name).base58 === address;
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -2425,11 +2449,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const response = await walletApi.checkAddressesMine(this, onChain);
 
     const result: WalletAddressMap = {};
-    addresses.forEach((address, i) => {
-      if (onChain[i] in response.addresses) {
-        result[address] = response.addresses[onChain[i]];
+    for (const [i, address] of addresses.entries()) {
+      if (!(onChain[i] in response.addresses)) {
+        continue;
       }
-    });
+      let mine = response.addresses[onChain[i]];
+      if (mine && onChain[i] !== address) {
+        // A shielded address: its spend half is the wallet's, check the rest
+        // eslint-disable-next-line no-await-in-loop -- shielded addresses are few
+        const { data } = await walletApi.getAddressDetails(this, onChain[i]);
+        // eslint-disable-next-line no-await-in-loop
+        mine = await this.isOwnShieldedAddress(address, data.index);
+      }
+      result[address] = mine;
+    }
     return result;
   }
 

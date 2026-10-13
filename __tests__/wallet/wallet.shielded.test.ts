@@ -6,6 +6,7 @@
  */
 
 import { HDPrivateKey, HDPublicKey } from 'bitcore-lib';
+import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -377,12 +378,15 @@ describe('setShieldedCryptoProvider', () => {
  */
 const readyWallet = async ({ shielded = true, singleAddress = false } = {}) => {
   const storage = new Storage(new MemoryStore());
-  // xpub-only access data is enough for these tests and skips seed derivation
-  await storage.saveAccessData(
-    walletUtils.generateAccessDataFromXpub(
-      rootKey().deriveNonCompliantChild("m/44'/280'/0'").xpubkey
-    )
+  // xpub-only access data, with the shielded xpubs, is enough for these tests
+  // and skips the seed's key encryption
+  const root = rootKey();
+  const accessData = walletUtils.generateAccessDataFromXpub(
+    root.deriveNonCompliantChild("m/44'/280'/0'").xpubkey
   );
+  accessData.scanXpubkey = root.deriveChild("m/44'/280'/1'/0").xpubkey;
+  accessData.spendXpubkey = root.deriveChild("m/44'/280'/2'/0").xpubkey;
+  await storage.saveAccessData(accessData);
   const wallet = new HathorWalletServiceWallet({
     requestPassword: jest.fn(),
     seed: shieldedFixtureSeed,
@@ -523,6 +527,10 @@ describe('address lookups accept shielded addresses', () => {
       success: true,
       addresses: { [spend(0)]: true, [legacyFixtureAddress]: false },
     });
+    jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+      success: true,
+      data: { address: spend(0), index: 0, transactions: 0, seqnum: 0 },
+    });
     await expect(wallet.checkAddressesMine([ct(0), legacyFixtureAddress])).resolves.toEqual({
       [ct(0)]: true,
       [legacyFixtureAddress]: false,
@@ -539,6 +547,46 @@ describe('address lookups accept shielded addresses', () => {
     });
     await expect(wallet.getAddressIndex(ct(1))).resolves.toBe(1);
     expect(detailsSpy).toHaveBeenCalledWith(wallet, spend(1));
+  });
+
+  describe("an address with this wallet's spend key but another scan key", () => {
+    const foreignScan = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x5e), 'testnet').publicKey;
+    const forged = encodeShieldedAddress(
+      foreignScan.toBuffer(),
+      Buffer.from(shieldedFixtureAddresses[1].spendPubkey, 'hex'),
+      network
+    );
+
+    const mockServer = () => {
+      // The service only knows the spend half, which is the wallet's
+      jest.spyOn(walletApi, 'checkAddressesMine').mockResolvedValue({
+        success: true,
+        addresses: { [spend(1)]: true },
+      });
+      jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+        success: true,
+        data: { address: spend(1), index: 1, transactions: 0, seqnum: 0 },
+      });
+    };
+
+    it("is not the wallet's", async () => {
+      const wallet = await readyWallet();
+      mockServer();
+      await expect(wallet.checkAddressesMine([forged, ct(1)])).resolves.toEqual({
+        [forged]: false,
+        [ct(1)]: true,
+      });
+      await expect(wallet.isAddressMine(forged)).resolves.toBe(false);
+    });
+
+    it('has no index or details in the wallet', async () => {
+      const wallet = await readyWallet();
+      mockServer();
+      await expect(wallet.getAddressIndex(forged)).resolves.toBeNull();
+      await expect(wallet.getAddressDetails(forged)).rejects.toThrow(
+        /not an address of this wallet/
+      );
+    });
   });
 
   it('passes malformed addresses through for the server to reject', async () => {
