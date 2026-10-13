@@ -145,6 +145,7 @@ export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
   error?: string | undefined; // Optional error code when there is a problem creating the wallet
+  ignoredFields?: string[]; // Request fields the service does not know and dropped
 }
 
 export interface WalletStatus {
@@ -797,6 +798,8 @@ export interface FullNodeVersionData {
   rewardSpendMinBlocks: number;
   maxNumberInputs: number;
   maxNumberOutputs: number;
+  /** The wallet-service accepts shielded key registration; absent means it does not. */
+  shieldedOutputsEnabled?: boolean;
 }
 
 export interface TxByIdTokenData {

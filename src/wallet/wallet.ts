@@ -27,6 +27,7 @@ import walletApi from './api/walletApi';
 import { retryOnTransientWalletError } from './walletServiceRetry';
 import { deriveAddressFromXPubP2PKH, fetchVerifiedExternalPrivateKey } from '../utils/address';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
+import { unlockScanXPrivKey } from '../shielded/scanKey';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -92,6 +93,7 @@ import {
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
   ShieldedNotEnabledError,
+  ShieldedKeyError,
 } from '../errors';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
@@ -504,7 +506,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     await this.addShieldedKeysToAccessData(accessData, pinCode, password);
-    this.shieldedEnabled = HathorWalletServiceWallet.hasShieldedKeys(accessData);
+
+    // Read /version first: the shielded keys go only to a service that
+    // advertises shielded support
+    const versionData = await this.fetchVersionData();
+    const scanXpriv =
+      versionData?.shieldedOutputsEnabled === true
+        ? await this.unlockScanKeyForRegistration(accessData, pinCode)
+        : null;
 
     const {
       xpub,
@@ -515,7 +524,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress,
       authDerivedPrivKey,
       shielded,
-    } = await this.generateCreateWalletAuthData(accessData, pinCode);
+    } = await this.generateCreateWalletAuthData(accessData, pinCode, scanXpriv);
     this.firstAddress = firstAddress;
 
     this.xpub = xpub;
@@ -534,6 +543,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.walletId = data.status.walletId;
 
+    // A service that dropped the shielded fields did not register them
+    const ignoredFields = data.ignoredFields ?? [];
+    this.shieldedEnabled = shielded !== null && !ignoredFields.some(field => field in shielded);
+    this.storage.scanXPrivKey = this.shieldedEnabled ? scanXpriv : null;
+
     // Populate `storage.version` with the fullnode network constants.
     // Without this, `prepareToSend` would always fall back to the hardcoded
     // mainnet TX_WEIGHT_CONSTANTS, ignoring the connected network's reported
@@ -545,7 +559,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // the field. Otherwise non-blocking-startup callers would silently
     // fall back to TX_WEIGHT_CONSTANTS forever, defeating the purpose of
     // this feature.
-    await this.populateStorageVersion();
+    this.populateStorageVersion(versionData);
 
     // If waitReady is false, return immediately after wallet creation
     if (!waitReady) {
@@ -651,30 +665,69 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * warning rather than silently dropping the error so a regression here is
    * visible in logs instead of producing surprisingly-mined transactions.
    */
-  private async populateStorageVersion(): Promise<void> {
+  private populateStorageVersion(v: FullNodeVersionData | null): void {
+    if (!v) {
+      return;
+    }
+    const apiVersion: ApiVersion = {
+      version: v.version,
+      network: v.network,
+      min_weight: v.minWeight,
+      min_tx_weight: v.minTxWeight,
+      min_tx_weight_coefficient: v.minTxWeightCoefficient,
+      min_tx_weight_k: v.minTxWeightK,
+      token_deposit_percentage: v.tokenDepositPercentage,
+      token_deposit_percentage_numerator: v.tokenDepositPercentageNumerator,
+      token_deposit_percentage_denominator: v.tokenDepositPercentageDenominator,
+      reward_spend_min_blocks: v.rewardSpendMinBlocks,
+      max_number_inputs: v.maxNumberInputs,
+      max_number_outputs: v.maxNumberOutputs,
+      decimal_places: DECIMAL_PLACES,
+      native_token: null,
+    };
+    this.storage.setApiVersion(apiVersion);
+  }
+
+  /**
+   * The connected wallet-service's /version data, or null when it cannot be
+   * read. Non-fatal: the failure is logged, the wallet registers legacy-only
+   * and `prepareToSend` falls back to `TX_WEIGHT_CONSTANTS`.
+   */
+  private async fetchVersionData(): Promise<FullNodeVersionData | null> {
     try {
-      const v = await this.getVersionData();
-      const apiVersion: ApiVersion = {
-        version: v.version,
-        network: v.network,
-        min_weight: v.minWeight,
-        min_tx_weight: v.minTxWeight,
-        min_tx_weight_coefficient: v.minTxWeightCoefficient,
-        min_tx_weight_k: v.minTxWeightK,
-        token_deposit_percentage: v.tokenDepositPercentage,
-        token_deposit_percentage_numerator: v.tokenDepositPercentageNumerator,
-        token_deposit_percentage_denominator: v.tokenDepositPercentageDenominator,
-        reward_spend_min_blocks: v.rewardSpendMinBlocks,
-        max_number_inputs: v.maxNumberInputs,
-        max_number_outputs: v.maxNumberOutputs,
-        decimal_places: DECIMAL_PLACES,
-        native_token: null,
-      };
-      this.storage.setApiVersion(apiVersion);
+      return await this.getVersionData();
     } catch (e) {
       this.storage.logger.warn(
         `wallet-service /version fetch failed during start(): ${e instanceof Error ? e.message : String(e)}`
       );
+      return null;
+    }
+  }
+
+  /**
+   * The scan xpriv to register, checked against the record's scan xpub, or
+   * null when the record has no shielded keys or the key cannot be unlocked.
+   * As in the fullnode facade, a key problem never fails start(): the wallet
+   * registers legacy-only and logs why.
+   */
+  private async unlockScanKeyForRegistration(
+    accessData: IWalletAccessData,
+    pinCode: string
+  ): Promise<string | null> {
+    if (!HathorWalletServiceWallet.hasShieldedKeys(accessData)) {
+      return null;
+    }
+    try {
+      return await unlockScanXPrivKey(this.storage, pinCode);
+    } catch (error) {
+      if (!(error instanceof ShieldedKeyError)) {
+        throw error;
+      }
+      this.storage.logger.warn(
+        `The shielded view key was not unlocked at start (${error.errorCode}); ` +
+          'the wallet registers without shielded keys.'
+      );
+      return null;
     }
   }
 
@@ -696,7 +749,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async generateCreateWalletAuthData(
     accessData: IWalletAccessData,
-    pinCode: string
+    pinCode: string,
+    scanXpriv: string | null = null
   ): Promise<CreateWalletAuthData> {
     let privKey: bitcore.HDPrivateKey;
     let privKeyAccountPath: bitcore.HDPrivateKey;
@@ -768,13 +822,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress,
       authDerivedPrivKey,
-      shielded: this.generateShieldedRegistration(
-        accessData,
-        pinCode,
-        timestampNow,
-        walletId,
-        authDerivedPrivKey
-      ),
+      shielded: scanXpriv
+        ? this.generateShieldedRegistration(
+            accessData,
+            pinCode,
+            scanXpriv,
+            timestampNow,
+            walletId,
+            authDerivedPrivKey
+          )
+        : null,
     };
   }
 
@@ -791,14 +848,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private generateShieldedRegistration(
     accessData: IWalletAccessData,
     pinCode: string,
+    scanXpriv: string,
     timestamp: number,
     walletId: string,
     authPrivKey: bitcore.HDPrivateKey
-  ): ShieldedRegistrationFields | null {
-    if (!HathorWalletServiceWallet.hasShieldedKeys(accessData)) {
-      return null;
-    }
-    const scanXpriv = decryptData(accessData.scanMainKey!, pinCode);
+  ): ShieldedRegistrationFields {
     const spendPrivKey = new bitcore.HDPrivateKey(decryptData(accessData.spendMainKey!, pinCode));
     const spendXpub = spendPrivKey.xpubkey;
     if (spendXpub !== accessData.spendXpubkey) {

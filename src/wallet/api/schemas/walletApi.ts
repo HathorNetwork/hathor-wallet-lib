@@ -330,6 +330,9 @@ export const fullNodeVersionDataSchema = z
     genesisBlockHash: z.string().nullable().optional(),
     genesisTx1Hash: z.string().nullable().optional(),
     genesisTx2Hash: z.string().nullable().optional(),
+    // The wallet-service's own flag: it accepts shielded key registration.
+    // Absent on services without it.
+    shieldedOutputsEnabled: z.boolean().optional(),
   })
   .passthrough();
 
@@ -498,6 +501,7 @@ export const walletStatusResponseSchema = baseResponseSchema.extend({
     lastUsedShieldedIndex: z.number().nullable().optional(),
   }),
   error: z.string().optional(),
+  ignoredFields: z.array(z.string()).optional(),
 });
 
 /**

@@ -49,6 +49,22 @@ const addressOf = (key: HDPrivateKey | HDPublicKey) =>
   key.publicKey.toAddress(network.getNetwork()).toString();
 
 let createWalletSpy: jest.SpyInstance;
+let versionSpy: jest.SpyInstance;
+
+/** GET /version data; a service with shielded support adds shieldedOutputsEnabled. */
+const versionData = (extra: Record<string, unknown> = {}) => ({
+  timestamp: 0,
+  version: '0.0.0',
+  network: 'testnet',
+  minWeight: 8,
+  minTxWeight: 8,
+  minTxWeightCoefficient: 0,
+  minTxWeightK: 0,
+  rewardSpendMinBlocks: 1,
+  maxNumberInputs: 255,
+  maxNumberOutputs: 255,
+  ...extra,
+});
 let pollSpy: jest.SpyInstance;
 
 beforeEach(() => {
@@ -67,7 +83,9 @@ beforeEach(() => {
   jest
     .spyOn(walletApi, 'getShieldedNewAddresses')
     .mockImplementation(() => Promise.resolve(buildShieldedNewAddressesResponse()));
-  jest.spyOn(walletApi, 'getVersionData').mockRejectedValue(new Error('no version in tests'));
+  versionSpy = jest
+    .spyOn(walletApi, 'getVersionData')
+    .mockResolvedValue(versionData({ shieldedOutputsEnabled: true }));
   createWalletSpy = jest
     .spyOn(walletApi, 'createWallet')
     .mockImplementation(() => Promise.resolve(statusResponse()));
@@ -222,6 +240,71 @@ describe('shielded registration on start', () => {
     const scanXpriv = decryptData(accessData.scanMainKey!, PIN);
     const strings = Object.values(wallet).filter(v => typeof v === 'string');
     expect(strings).not.toContain(scanXpriv);
+  });
+});
+
+describe('registration depends on the service', () => {
+  it('reads /version before registering', async () => {
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(versionSpy.mock.invocationCallOrder[0]).toBeLessThan(
+      createWalletSpy.mock.invocationCallOrder[0]
+    );
+  });
+
+  it('registers legacy-only with a service that does not advertise shielded support', async () => {
+    versionSpy.mockResolvedValue(versionData());
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(createWalletSpy.mock.calls[0][7]).toBeNull();
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('registers legacy-only when /version cannot be read', async () => {
+    versionSpy.mockRejectedValue(new Error('unreachable'));
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(createWalletSpy.mock.calls[0][7]).toBeNull();
+    expect(wallet.isShieldedEnabled()).toBe(false);
+  });
+
+  it('is not shielded when the service ignored the shielded fields', async () => {
+    createWalletSpy.mockResolvedValue({
+      ...statusResponse(),
+      ignoredFields: ['scanXpriv', 'spendXpub'],
+    });
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    expect(createWalletSpy.mock.calls[0][7]).not.toBeNull();
+    expect(wallet.isShieldedEnabled()).toBe(false);
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('keeps the scan key in memory from start until stop', async () => {
+    const wallet = buildSeedWallet();
+    await wallet.start({ pinCode: PIN, password: PASSWORD });
+    const accessData = await wallet.storage.getAccessData();
+    expect(wallet.storage.scanXPrivKey).toBe(decryptData(accessData.scanMainKey!, PIN));
+    expect(createWalletSpy.mock.calls[0][7].scanXpriv).toBe(wallet.storage.scanXPrivKey);
+    await wallet.stop();
+    expect(wallet.storage.scanXPrivKey).toBeNull();
+  });
+
+  it('registers legacy-only when the scan key does not match the record', async () => {
+    const storage = new Storage(new MemoryStore());
+    const accessData = walletUtils.generateAccessDataFromSeed(shieldedFixtureSeed, {
+      networkName: 'testnet',
+      password: PASSWORD,
+      pin: PIN,
+    });
+    // The record's scan xpub belongs to another key
+    accessData.scanXpubkey = accessData.spendXpubkey;
+    await storage.saveAccessData(accessData);
+    const wallet = buildSeedWallet(storage);
+    await wallet.start({ pinCode: PIN });
+    expect(createWalletSpy.mock.calls[0][7]).toBeNull();
+    expect(wallet.isShieldedEnabled()).toBe(false);
   });
 });
 
