@@ -16,15 +16,20 @@ import {
   legacyFixtureAddress,
 } from '../__mock_helpers__/shielded-ws.fixtures';
 
-async function setup(shielded: boolean) {
+async function setup(shielded: boolean, { storedKeys = true } = {}) {
   const storage = new Storage(new MemoryStore());
-  await storage.saveAccessData(
-    walletUtils.generateAccessDataFromSeed(shieldedFixtureSeed, {
-      networkName: 'testnet',
-      password: 'password',
-      pin: '1234',
-    })
-  );
+  const accessData = walletUtils.generateAccessDataFromSeed(shieldedFixtureSeed, {
+    networkName: 'testnet',
+    password: 'password',
+    pin: '1234',
+  });
+  if (!storedKeys) {
+    delete accessData.scanXpubkey;
+    delete accessData.scanMainKey;
+    delete accessData.spendXpubkey;
+    delete accessData.spendMainKey;
+  }
+  await storage.saveAccessData(accessData);
   const wallet = new HathorWalletServiceWallet({
     requestPassword: jest.fn(),
     seed: shieldedFixtureSeed,
@@ -61,8 +66,22 @@ describe('getAddressInfo on the shielded spend chain', () => {
     expect(info?.addressType).toBeUndefined();
   });
 
-  it('does not mark addresses of a wallet without shielded keys', async () => {
+  it('marks a spend address when this session did not register the keys', async () => {
+    // The service keeps the spend chain from an earlier start
     const { wallet, proxy } = await setup(false);
+    jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({
+      address: shieldedFixtureAddresses[3].spendBase58,
+      index: 3,
+      transactions: 1,
+      seqnum: 0,
+    });
+    await expect(
+      proxy.getAddressInfo(shieldedFixtureAddresses[3].spendBase58)
+    ).resolves.toMatchObject({ bip32AddressIndex: 3, addressType: 'shielded-spend' });
+  });
+
+  it('does not mark addresses of a wallet without shielded keys', async () => {
+    const { wallet, proxy } = await setup(false, { storedKeys: false });
     jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({
       address: shieldedFixtureAddresses[3].spendBase58,
       index: 3,

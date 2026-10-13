@@ -2059,8 +2059,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Whether an on-chain address is the wallet's shielded spend address at an
    * index. The wallet-service reports an address index without its chain.
+   *
+   * @internal Used by WalletServiceStorageProxy to sign with the spend key.
    */
-  private async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
+  async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
     // Decided by the stored keys, not by whether this session registered
     // them: the service keeps the spend chain from an earlier start, so a
     // legacy-only session still holds outputs on spend addresses

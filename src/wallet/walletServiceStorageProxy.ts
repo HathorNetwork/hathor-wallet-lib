@@ -13,7 +13,6 @@ import { FullNodeInput, FullNodeShieldedInput, FullNodeTxResponse } from './type
 import transactionUtils from '../utils/transaction';
 import tokensUtils from '../utils/tokens';
 import { NATIVE_TOKEN_UID } from '../constants';
-import { deriveShieldedAddress } from '../utils/shieldedAddress';
 
 /**
  * Storage proxy that implements missing storage methods for wallet service
@@ -101,7 +100,8 @@ export class WalletServiceStorageProxy {
     }
 
     return {
-      ...((await this.isShieldedSpendAddress(addressDetails.address, addressDetails.index))
+      // Signing then uses the spend key
+      ...((await this.wallet.isShieldedSpendAddress(addressDetails.address, addressDetails.index))
         ? { addressType: 'shielded-spend' as const }
         : {}),
       bip32AddressIndex: addressDetails.index,
@@ -113,31 +113,6 @@ export class WalletServiceStorageProxy {
       // to implement an API to fetch the balance for all tokens given an address
       balance: new Map(),
     };
-  }
-
-  /**
-   * Whether an address is the wallet's shielded spend address at an index, so
-   * signing uses the spend key. The wallet-service does not say which chain an
-   * address index belongs to, so the spend address is derived to compare.
-   */
-  private async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
-    if (!this.wallet.isShieldedEnabled()) {
-      return false;
-    }
-    const [scanXpub, spendXpub] = await Promise.all([
-      this.originalStorage.getScanXPubKey(),
-      this.originalStorage.getSpendXPubKey(),
-    ]);
-    if (!scanXpub || !spendXpub) {
-      return false;
-    }
-    const { spendAddress } = deriveShieldedAddress(
-      scanXpub,
-      spendXpub,
-      index,
-      this.wallet.network.name
-    );
-    return spendAddress === address;
   }
 
   /**
