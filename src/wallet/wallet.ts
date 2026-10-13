@@ -2030,19 +2030,38 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * index. The wallet-service reports an address index without its chain.
    */
   private async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
-    if (!this.shieldedEnabled) {
-      return false;
-    }
-    const [scanXpub, spendXpub] = await Promise.all([
-      this.storage.getScanXPubKey(),
-      this.storage.getSpendXPubKey(),
-    ]);
-    if (!scanXpub || !spendXpub) {
+    // Decided by the stored keys, not by whether this session registered
+    // them: the service keeps the spend chain from an earlier start, so a
+    // legacy-only session still holds outputs on spend addresses
+    const xpubs = await this.getStoredShieldedXpubs();
+    if (!xpubs) {
       return false;
     }
     return (
-      deriveShieldedAddress(scanXpub, spendXpub, index, this.network.name).spendAddress === address
+      deriveShieldedAddress(xpubs.scanXpub, xpubs.spendXpub, index, this.network.name)
+        .spendAddress === address
     );
+  }
+
+  /**
+   * The record's shielded scan and spend xpubs, or null when it has none (or
+   * the wallet has no record yet).
+   */
+  private async getStoredShieldedXpubs(): Promise<{ scanXpub: string; spendXpub: string } | null> {
+    let scanXpub: string | undefined;
+    let spendXpub: string | undefined;
+    try {
+      [scanXpub, spendXpub] = await Promise.all([
+        this.storage.getScanXPubKey(),
+        this.storage.getSpendXPubKey(),
+      ]);
+    } catch (e) {
+      if (e instanceof UninitializedWalletError) {
+        return null;
+      }
+      throw e;
+    }
+    return scanXpub && spendXpub ? { scanXpub, spendXpub } : null;
   }
 
   /**
@@ -2482,14 +2501,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * the wallet derives there.
    */
   private async isOwnShieldedAddress(address: string, index: number): Promise<boolean> {
-    const [scanXpub, spendXpub] = await Promise.all([
-      this.storage.getScanXPubKey(),
-      this.storage.getSpendXPubKey(),
-    ]);
-    if (!scanXpub || !spendXpub) {
+    const xpubs = await this.getStoredShieldedXpubs();
+    if (!xpubs) {
       return false;
     }
-    return deriveShieldedAddress(scanXpub, spendXpub, index, this.network.name).base58 === address;
+    return (
+      deriveShieldedAddress(xpubs.scanXpub, xpubs.spendXpub, index, this.network.name).base58 ===
+      address
+    );
   }
 
   // eslint-disable-next-line class-methods-use-this

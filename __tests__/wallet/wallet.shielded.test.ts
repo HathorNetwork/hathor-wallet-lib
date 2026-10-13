@@ -810,6 +810,7 @@ describe('websocket refresh', () => {
 describe('signing with keys on the shielded spend chain', () => {
   let fullAccessData: IWalletAccessData;
   const spend = (i: number) => shieldedFixtureAddresses[i].spendBase58;
+  const authorityTxId = '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f';
 
   beforeAll(() => {
     fullAccessData = walletUtils.generateAccessDataFromSeed(shieldedFixtureSeed, {
@@ -819,12 +820,18 @@ describe('signing with keys on the shielded spend chain', () => {
     });
   });
 
-  const walletWithKeys = async () => {
+  /**
+   * A wallet whose record holds shielded keys. `registered` is whether this
+   * session registered them: a session can start legacy-only (no /version
+   * flag, /version unreadable) while the service still holds the spend chain
+   * from an earlier start, so its outputs still sit on spend addresses.
+   */
+  const walletWithKeys = async (registered: boolean) => {
     const storage = new Storage(new MemoryStore());
     await storage.saveAccessData(fullAccessData);
     const wallet = buildSeedWallet(storage);
     wallet.setState('Ready');
-    (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = true;
+    (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = registered;
     return wallet;
   };
 
@@ -833,13 +840,12 @@ describe('signing with keys on the shielded spend chain', () => {
 
   const signerPubkey = (data: Buffer) => data.subarray(1 + data[0] + 1).toString('hex');
 
-  it('signs an authority held on a spend address with the spend key', async () => {
-    const wallet = await walletWithKeys();
+  const mockAuthorityOnSpendAddress = () => {
     jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
       success: true,
       txOutputs: [
         {
-          txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+          txId: authorityTxId,
           index: 0,
           tokenId: '01',
           address: spend(1),
@@ -856,20 +862,52 @@ describe('signing with keys on the shielded spend chain', () => {
       success: true,
       data: { address: spend(1), index: 1, transactions: 1, seqnum: 0 },
     });
-    const tx = await wallet.prepareDelegateAuthorityData('01', 'mint', legacyFixtureAddress, {
-      createAnother: false,
-      pinCode: PIN,
+  };
+
+  describe.each([
+    ['registered in this session', true],
+    ['registered on an earlier start only', false],
+  ])('shielded keys %s', (_label, registered) => {
+    it('signs a delegated authority held on a spend address with the spend key', async () => {
+      const wallet = await walletWithKeys(registered);
+      mockAuthorityOnSpendAddress();
+      const tx = await wallet.prepareDelegateAuthorityData('01', 'mint', legacyFixtureAddress, {
+        createAnother: false,
+        pinCode: PIN,
+      });
+      expect(signerPubkey(tx.inputs[0].data!)).toBe(spendKey(1).publicKey.toString());
     });
-    expect(signerPubkey(tx.inputs[0].data!)).toBe(spendKey(1).publicKey.toString());
+
+    it('signs a destroyed authority held on a spend address with the spend key', async () => {
+      const wallet = await walletWithKeys(registered);
+      mockAuthorityOnSpendAddress();
+      const tx = await wallet.prepareDestroyAuthorityData('01', 'mint', 1, { pinCode: PIN });
+      expect(signerPubkey(tx.inputs[0].data!)).toBe(spendKey(1).publicKey.toString());
+    });
+
+    it('gives the spend key of a spend address', async () => {
+      const wallet = await walletWithKeys(registered);
+      mockAuthorityOnSpendAddress();
+      const key = await wallet.getPrivateKeyFromAddress(spend(1), { pinCode: PIN });
+      expect(key.toString()).toBe(spendKey(1).privateKey.toString());
+    });
   });
 
-  it('gives the spend key of a spend address', async () => {
-    const wallet = await walletWithKeys();
-    jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
-      success: true,
-      data: { address: spend(1), index: 1, transactions: 1, seqnum: 0 },
-    });
+  it('uses the legacy key when the record has no shielded keys', async () => {
+    const storage = new Storage(new MemoryStore());
+    const legacyOnly = { ...fullAccessData };
+    delete legacyOnly.scanXpubkey;
+    delete legacyOnly.scanMainKey;
+    delete legacyOnly.spendXpubkey;
+    delete legacyOnly.spendMainKey;
+    await storage.saveAccessData(legacyOnly);
+    const wallet = buildSeedWallet(storage);
+    wallet.setState('Ready');
+    mockAuthorityOnSpendAddress();
     const key = await wallet.getPrivateKeyFromAddress(spend(1), { pinCode: PIN });
-    expect(key.toString()).toBe(spendKey(1).privateKey.toString());
+    const legacyKey = new HDPrivateKey(await storage.getMainXPrivKey(PIN)).deriveNonCompliantChild(
+      1
+    );
+    expect(key.toString()).toBe(legacyKey.privateKey.toString());
   });
 });
