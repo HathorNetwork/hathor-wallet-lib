@@ -8,7 +8,6 @@
 /* eslint-disable max-classes-per-file -- AddressPathMap is a private helper tightly coupled to SendTransactionWalletService */
 import { EventEmitter } from 'events';
 import { shuffle } from 'lodash';
-import bitcore, { util } from 'bitcore-lib';
 import tokensUtils from '../utils/tokens';
 import transactionUtils from '../utils/transaction';
 import walletApi from './api/walletApi';
@@ -21,12 +20,7 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import {
-  DEFAULT_NATIVE_TOKEN_CONFIG,
-  FEE_PER_OUTPUT,
-  NATIVE_TOKEN_UID,
-  SHIELDED_SPEND_ACCT_PATH,
-} from '../constants';
+import { DEFAULT_NATIVE_TOKEN_CONFIG, FEE_PER_OUTPUT, NATIVE_TOKEN_UID } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,
@@ -40,7 +34,7 @@ import {
 import { IDataInput, IDataOutputWithToken, IDataTx, TokenVersion } from '../types';
 import { FeeHeader, Header } from '../headers';
 import SendTransaction, { ISendOutput } from '../new/sendTransaction';
-import { ChangeOutputMode } from '../shielded/types';
+import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { WalletServiceSendStorage } from './walletServiceSendStorage';
 
 type optionsType = {
@@ -217,6 +211,16 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @returns {Promise<IDataTx>} A promise that resolves with the prepared transaction data.
    */
   async prepareTxData(): Promise<IDataTx> {
+    if (
+      this.outputs.some(output => !!output.shielded) ||
+      isShieldedChangeMode(this.changeShieldedMode)
+    ) {
+      // This builder makes transparent outputs only: refuse rather than send
+      // a requested shielded output or change in the clear
+      throw new SendTxError(
+        'prepareTxData builds no shielded outputs; use prepareTx for a send with shielded outputs or a shielded change.'
+      );
+    }
     // 1. Calculate total output amount for each token
     const tokenAmountMap: TokenMap = {};
     for (const output of this.outputs) {
@@ -460,7 +464,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async prepareTx(): Promise<Transaction> {
     this.emit('prepare-tx-start');
-    if (this.wallet.isShieldedEnabled()) {
+    if (this.usesSharedEngine()) {
       return this.prepareTxWithSharedEngine();
     }
     // We get the full outputs amount for each token
@@ -595,21 +599,30 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   }
 
   /**
+   * Whether this send is built by the fullnode facade's send engine: every
+   * send of a wallet with shielded keys, and a send of any wallet that asks
+   * for shielded outputs or a shielded change, as in the fullnode facade. A
+   * wallet without shielded keys can send shielded outputs; the engine
+   * refuses a shielded change it has no address for.
+   */
+  private usesSharedEngine(): boolean {
+    return (
+      this.wallet.isShieldedEnabled() ||
+      this.outputs.some(output => !!output.shielded) ||
+      isShieldedChangeMode(this.changeShieldedMode)
+    );
+  }
+
+  /**
    * Prepare the transaction with the fullnode facade's send engine, reading
    * the wallet through a wallet-service storage adapter. Wallets with shielded
    * keys use it for every send, so they get the shielded selection and change
    * rules and can send to and spend shielded outputs.
    */
   private async prepareTxWithSharedEngine(): Promise<Transaction> {
-    if (!this.pin) {
-      // The PIN unlocks the scan key that opens shielded utxos, so an external
-      // signer alone cannot drive this send
-      throw new SendTxError(
-        "A wallet with shielded keys needs the PIN to open the wallet's shielded utxos; " +
-          'sending without it (e.g. with an external signer) is not supported.'
-      );
-    }
-    const adapter = new WalletServiceSendStorage(this.wallet, this.pin);
+    // Preparing needs no PIN: shielded utxos open with the scan key the
+    // wallet keeps in memory from start(). The PIN is needed only to sign.
+    const adapter = new WalletServiceSendStorage(this.wallet);
     const sendTransaction = new SendTransaction({
       storage: adapter.createProxy(),
       outputs: this.outputs.map(toEngineOutput),
@@ -961,22 +974,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       );
     }
     this.emit('sign-tx-start');
-    const dataToSignHash = this.transaction.getDataToSignHash();
-    const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
-    const spendsShielded = this.utxosAddressPath.some(isShieldedSpendPath);
-    const spendXprivkey = spendsShielded
-      ? new bitcore.HDPrivateKey(await this.wallet.storage.getSpendXPrivKey(pinToUse))
-      : null;
-
-    for (const [idx, inputObj] of this.transaction.inputs.entries()) {
-      const path = this.utxosAddressPath[idx];
-      // the wallet service returns the full BIP44 path, but we only need the address index:
-      const addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(path);
-      const inputData = isShieldedSpendPath(path)
-        ? getShieldedSpendInputData(spendXprivkey!, dataToSignHash, addressIndex)
-        : this.wallet.getInputData(xprivkey, dataToSignHash, addressIndex);
-      inputObj.setData(inputData);
-    }
+    // Each input is signed by the key of its path: the spend key for the
+    // shielded spend chain, the legacy key otherwise
+    await this.wallet.signInputsByPath(this.transaction, pinToUse, this.utxosAddressPath);
 
     // Now that the tx is completed with the data of the input
     // we can add the timestamp and calculate the weight
@@ -1192,31 +1192,8 @@ function txProposalErrorMessage(err: WalletRequestError): string {
   return 'Error sending tx proposal.';
 }
 
-/**
- * Whether a derivation path is on the shielded spend chain (m/44'/280'/2').
- */
-function isShieldedSpendPath(path: string): boolean {
-  return path.startsWith(`${SHIELDED_SPEND_ACCT_PATH}/`);
-}
-
-/**
- * Input data spending a shielded output: its on-chain script is a P2PKH of
- * the spend key at the address index. Shielded keys use compliant BIP32
- * derivation, unlike the legacy chain.
- */
-function getShieldedSpendInputData(
-  spendXprivkey: bitcore.HDPrivateKey,
-  dataToSignHash: Buffer,
-  addressIndex: number
-): Buffer {
-  const derivedKey = spendXprivkey.deriveChild(addressIndex);
-  const arr = [];
-  helpers.pushDataToStack(
-    arr,
-    transactionUtils.getSignature(dataToSignHash, derivedKey.privateKey)
-  );
-  helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
-  return util.buffer.concat(arr);
+function isShieldedChangeMode(mode: ChangeOutputMode | null): boolean {
+  return mode === ShieldedOutputMode.AMOUNT_SHIELDED || mode === ShieldedOutputMode.FULLY_SHIELDED;
 }
 
 /**

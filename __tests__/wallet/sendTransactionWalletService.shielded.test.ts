@@ -15,12 +15,7 @@ import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData } from '../../src/utils/crypto';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
-import {
-  ShieldedChangeUnavailableError,
-  ShieldedNotEnabledError,
-  SendTxError,
-  WalletRequestError,
-} from '../../src/errors';
+import { ShieldedChangeUnavailableError, SendTxError, WalletRequestError } from '../../src/errors';
 import { IWalletAccessData } from '../../src/types';
 import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
@@ -90,14 +85,20 @@ async function setup({
   });
   wallet.setState('Ready');
   (wallet as unknown as { shieldedEnabled: boolean }).shieldedEnabled = shieldedKeys;
+  const legacyAddresses = [
+    { address: legacyFixtureAddress, index: 5, addressPath: "m/44'/280'/0'/0/5" },
+  ];
   jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockResolvedValue(buildShieldedNewAddressesResponse(unusedShieldedIndexes));
-  jest.spyOn(walletApi, 'getNewAddresses').mockResolvedValue({
-    success: true,
-    addresses: [{ address: legacyFixtureAddress, index: 5, addressPath: "m/44'/280'/0'/0/5" }],
-  });
+    .spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation((async (_wallet: unknown, opts?: { legacy?: boolean }) =>
+      opts?.legacy === false
+        ? { ...buildShieldedNewAddressesResponse(unusedShieldedIndexes), legacyAddresses }
+        : { success: true, addresses: legacyAddresses }) as never);
   await (wallet as unknown as { getNewAddresses: () => Promise<void> }).getNewAddresses();
+  if (shieldedKeys) {
+    // start() keeps the scan key in memory for the session
+    storage.scanXPrivKey = decryptData(accessData.scanMainKey!, PIN);
+  }
 
   jest.spyOn(walletApi, 'getTxOutputs').mockImplementation(async (_w, options = {}) => {
     const all = [...transparent, ...shielded];
@@ -178,11 +179,12 @@ describe('sends from a wallet with shielded keys go through the shared engine', 
 
   it('rejects an unknown change mode', async () => {
     const { wallet } = await setup({ transparent: [htrUtxo(0, 1000)] });
-    const sendTx = await wallet.sendManyOutputsSendTransaction(
-      [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
-      { pinCode: PIN, changeShieldedMode: 'bogus' as never }
-    );
-    await expect(sendTx.prepareTx()).rejects.toThrow(/changeShieldedMode/);
+    await expect(
+      wallet.sendManyOutputsSendTransaction(
+        [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+        { pinCode: PIN, changeShieldedMode: 'bogus' as never }
+      )
+    ).rejects.toThrow(/Invalid changeShieldedMode 'bogus'/);
   });
 
   it('spends a shielded utxo and signs it with the spend key of its index', async () => {
@@ -262,31 +264,36 @@ describe('shielded change the wallet cannot host', () => {
 });
 
 describe('wallets without shielded keys', () => {
-  it('refuse shielded outputs', async () => {
-    const { wallet } = await setup({ shieldedKeys: false });
-    await expect(
-      wallet.sendManyOutputsSendTransaction(
-        [
-          {
-            address: externalShieldedAddress,
-            value: 50n,
-            token: NATIVE_TOKEN_UID,
-            shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
-          },
-        ],
-        { pinCode: PIN }
-      )
-    ).rejects.toThrow(ShieldedNotEnabledError);
+  it('send shielded outputs through the send engine, as the fullnode facade', async () => {
+    const { wallet, legacySelection } = await setup({
+      shieldedKeys: false,
+      transparent: [htrUtxo(0, 1000)],
+    });
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [
+        {
+          address: externalShieldedAddress,
+          value: 50n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { pinCode: PIN, changeShieldedMode: OutputKind.TRANSPARENT }
+    );
+    const tx = await sendTx.prepareTx();
+    expect(legacySelection).not.toHaveBeenCalled();
+    expect(tx.shieldedOutputs.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('refuse a shielded change mode', async () => {
-    const { wallet } = await setup({ shieldedKeys: false });
-    await expect(
-      wallet.sendManyOutputsSendTransaction(
-        [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
-        { pinCode: PIN, changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED }
-      )
-    ).rejects.toThrow(ShieldedNotEnabledError);
+  it('refuse a shielded change with ShieldedChangeUnavailableError', async () => {
+    const { wallet } = await setup({ shieldedKeys: false, transparent: [htrUtxo(0, 1000)] });
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      { pinCode: PIN, changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED }
+    );
+    const err = await sendTx.prepareTx().catch(e => e);
+    expect(err).toBeInstanceOf(ShieldedChangeUnavailableError);
+    expect(err).toBeInstanceOf(SendTxError);
   });
 
   it('keep the legacy send path', async () => {
@@ -369,16 +376,47 @@ describe('wallets without shielded keys and new-format addresses', () => {
   });
 });
 
-describe('external signers', () => {
-  it('cannot send from a wallet with shielded keys without the PIN', async () => {
-    const { wallet } = await setup({ transparent: [htrUtxo(0, 100)] });
+describe('preparing without the PIN', () => {
+  it('prepares a send that reads shielded utxos, for a fee preview before the PIN', async () => {
+    const { wallet, storage } = await setup({ shielded: [shieldedHtrUtxo(5, 1)] });
+    const decrypt = jest.spyOn(storage, 'getScanXPrivKey');
     const sendTx = new SendTransactionWalletService(wallet, {
-      outputs: [{ type: 'p2pkh', address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      outputs: [{ type: 'p2pkh', address: externalAddress, value: 100n, token: NATIVE_TOKEN_UID }],
+      changeShieldedMode: OutputKind.TRANSPARENT,
       pin: null,
     });
-    await expect(sendTx.prepareTx()).rejects.toThrow(
-      /needs the PIN to open the wallet's shielded utxos/
-    );
+    const tx = await sendTx.prepareTx();
+    expect(tx.inputs).toHaveLength(1);
+    expect(decrypt).not.toHaveBeenCalled();
+  });
+});
+
+describe('prepareTxData', () => {
+  it('refuses a shielded output instead of sending it in the clear', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 1000)] });
+    const sendTx = new SendTransactionWalletService(wallet, {
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: externalShieldedAddress,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      pin: PIN,
+    });
+    await expect(sendTx.prepareTxData()).rejects.toThrow(/builds no shielded outputs/);
+  });
+
+  it('refuses a shielded change mode', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 1000)] });
+    const sendTx = new SendTransactionWalletService(wallet, {
+      outputs: [{ type: 'p2pkh', address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+      pin: PIN,
+    });
+    await expect(sendTx.prepareTxData()).rejects.toThrow(/builds no shielded outputs/);
   });
 });
 
@@ -479,5 +517,86 @@ describe('change addresses', () => {
     );
     // No transparent change: the legacy address is not used up
     expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
+  });
+});
+
+describe('caller-supplied transparent inputs', () => {
+  it('reads the token of the spent output from its token_data', async () => {
+    const input = htrUtxo(0, 100);
+    const { wallet } = await setup({ transparent: [input] });
+    // The fullnode gives the funding tx's outputs a token_data, but no token
+    jest.spyOn(wallet, 'getFullTxById').mockResolvedValue({
+      success: true,
+      tx: {
+        hash: input.txId,
+        nonce: '0',
+        timestamp: 1,
+        version: 1,
+        weight: 1,
+        parents: [],
+        inputs: [],
+        outputs: [
+          {
+            value: 100n,
+            token_data: 0,
+            script: '',
+            decoded: { type: 'P2PKH', address: legacyFixtureAddress },
+          },
+        ],
+        tokens: [],
+        raw: '',
+      },
+      meta: {
+        hash: input.txId,
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        first_block: null,
+        height: 10,
+        voided_by: [],
+        spent_outputs: [],
+        twins: [],
+        accumulated_weight: 1,
+        score: 1,
+      },
+    } as never);
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [{ address: externalAddress, value: 30n, token: NATIVE_TOKEN_UID }],
+      { pinCode: PIN, inputs: [{ txId: input.txId, index: 0 }] }
+    );
+    const tx = await sendTx.prepareTx();
+    expect(tx.inputs.map(i => `${i.hash}:${i.index}`)).toEqual([`${input.txId}:0`]);
+  });
+});
+
+describe("a change address with this wallet's spend key and another scan key", () => {
+  it('is refused as not from the wallet', async () => {
+    const { wallet } = await setup({ transparent: [htrUtxo(0, 1000)] });
+    jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+      success: true,
+      data: {
+        address: shieldedFixtureAddresses[1].spendBase58,
+        index: 1,
+        transactions: 0,
+        seqnum: 0,
+      },
+    });
+    const forged = encodeShieldedAddress(
+      otherRoot.deriveChild("m/0'/9").publicKey.toBuffer(),
+      Buffer.from(shieldedFixtureAddresses[1].spendPubkey, 'hex'),
+      network
+    );
+    const sendTx = await wallet.sendManyOutputsSendTransaction(
+      [
+        {
+          address: externalShieldedAddress,
+          value: 100n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { pinCode: PIN, changeAddress: forged }
+    );
+    await expect(sendTx.prepareTx()).rejects.toThrow(/not from the wallet/);
   });
 });

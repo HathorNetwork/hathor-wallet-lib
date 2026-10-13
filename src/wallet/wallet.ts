@@ -86,7 +86,6 @@ import {
   GetSplitBalanceObject,
   WalletStatus,
 } from './types';
-import { ShieldedOutputMode } from '../shielded/types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
   SendTxError,
@@ -1875,21 +1874,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
     }
     const { changeShieldedMode } = options;
-    if (!this.shieldedEnabled) {
-      // Without shielded keys the wallet neither builds nor receives shielded
-      // outputs: refuse them rather than send transparently.
-      if (outputs.some(output => 'shielded' in output && output.shielded)) {
-        this.failIfShieldedNotEnabled();
-      }
-      if (
-        changeShieldedMode === ShieldedOutputMode.AMOUNT_SHIELDED ||
-        changeShieldedMode === ShieldedOutputMode.FULLY_SHIELDED
-      ) {
-        this.failIfShieldedNotEnabled();
-      }
-      // This path does not run the send engine, which checks the mode itself
-      assertChangeShieldedMode(changeShieldedMode);
-    }
+    // Checked here too, for the sends the send engine does not build
+    assertChangeShieldedMode(changeShieldedMode);
     const newOptions = {
       inputs: [],
       changeAddress: null,
@@ -2032,11 +2018,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Sign each input with the key of its address path: the spend key for the
    * shielded spend chain, the legacy key otherwise.
    */
-  private async signInputsByPath(
-    tx: Transaction,
-    pinCode: string,
-    addressPaths: string[]
-  ): Promise<void> {
+  /**
+   * @internal Used by SendTransactionWalletService to sign the sends it builds.
+   */
+  async signInputsByPath(tx: Transaction, pinCode: string, addressPaths: string[]): Promise<void> {
     const dataToSignHash = tx.getDataToSignHash();
     const xprivkey = await this.storage.getMainXPrivKey(pinCode);
     let spendXpriv: bitcore.HDPrivateKey | null = null;
