@@ -75,6 +75,13 @@ function withoutRequestBody(err: unknown): unknown {
       err.config.data = undefined;
     }
     err.request = undefined;
+    // A response carries its own copies of the request and its config
+    if (err.response) {
+      err.response.request = undefined;
+      if (err.response.config) {
+        err.response.config.data = undefined;
+      }
+    }
     /* eslint-enable no-param-reassign */
   }
   return err;

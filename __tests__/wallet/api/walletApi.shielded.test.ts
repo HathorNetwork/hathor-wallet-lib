@@ -165,6 +165,33 @@ describe('walletApi shielded support', () => {
       expect(JSON.stringify(err.toJSON())).not.toContain(shielded.scanXpriv);
     });
 
+    it('keeps the scan key out of an error with a response', async () => {
+      const config = { data: JSON.stringify({ scanXpriv: shielded.scanXpriv }) } as never;
+      const request = { _header: 'POST /wallet/init', outputData: [shielded.scanXpriv] };
+      const failure = new AxiosError(
+        'Request failed with status code 500',
+        'ERR_BAD_RESPONSE',
+        config,
+        request,
+        {
+          status: 500,
+          statusText: 'Internal Server Error',
+          headers: {},
+          data: { success: false },
+          config: { ...(config as object), headers: {} } as never,
+          request,
+        }
+      );
+      mockAxiosInstance.post.mockRejectedValueOnce(failure);
+      const err = await createWallet().catch(e => e);
+      expect(err).toBe(failure);
+      expect(err.response.status).toBe(500);
+      expect(err.response.request).toBeUndefined();
+      expect(JSON.stringify(err.response.config ?? {})).not.toContain(shielded.scanXpriv);
+      expect(JSON.stringify(err.config ?? {})).not.toContain(shielded.scanXpriv);
+      expect(err.request).toBeUndefined();
+    });
+
     it('still accepts wallet-already-loaded', async () => {
       const data = { ...statusBody, success: false, error: 'wallet-already-loaded' };
       mockAxiosInstance.post.mockResolvedValueOnce({ status: 400, data } as AxiosResponse);
