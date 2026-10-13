@@ -1957,6 +1957,93 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Whether a derivation path is on the shielded spend chain (m/44'/280'/2').
+   */
+  static isShieldedSpendPath(path: string): boolean {
+    return path.startsWith(`${SHIELDED_SPEND_ACCT_PATH}/`);
+  }
+
+  /**
+   * Input data spending an output locked to the shielded spend chain: signed
+   * by the spend key at the address index. Shielded keys use compliant BIP32
+   * derivation, unlike the legacy chain.
+   */
+  static getSpendInputData(
+    spendXpriv: bitcore.HDPrivateKey,
+    dataToSignHash: Buffer,
+    addressIndex: number
+  ): Buffer {
+    const derivedKey = spendXpriv.deriveChild(addressIndex);
+    const arr = [];
+    helpers.pushDataToStack(arr, transaction.getSignature(dataToSignHash, derivedKey.privateKey));
+    helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
+    return util.buffer.concat(arr);
+  }
+
+  /**
+   * Sign each input with the key of its address path: the spend key for the
+   * shielded spend chain, the legacy key otherwise.
+   */
+  private async signInputsByPath(
+    tx: Transaction,
+    pinCode: string,
+    addressPaths: string[]
+  ): Promise<void> {
+    const dataToSignHash = tx.getDataToSignHash();
+    const xprivkey = await this.storage.getMainXPrivKey(pinCode);
+    let spendXpriv: bitcore.HDPrivateKey | null = null;
+    for (const [idx, inputObj] of tx.inputs.entries()) {
+      const path = addressPaths[idx];
+      const addressIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(path);
+      if (HathorWalletServiceWallet.isShieldedSpendPath(path)) {
+        if (!spendXpriv) {
+          // eslint-disable-next-line no-await-in-loop -- decrypted once, on the first spend input
+          spendXpriv = new bitcore.HDPrivateKey(await this.storage.getSpendXPrivKey(pinCode));
+        }
+        inputObj.setData(
+          HathorWalletServiceWallet.getSpendInputData(spendXpriv, dataToSignHash, addressIndex)
+        );
+      } else {
+        inputObj.setData(this.getInputData(xprivkey, dataToSignHash, addressIndex));
+      }
+    }
+  }
+
+  /**
+   * The derivation path of an address holding an authority of the wallet.
+   */
+  private async getAuthorityAddressPath(address: string): Promise<string> {
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new Error(`Authority address ${address} not found in wallet`);
+    }
+    if (await this.isShieldedSpendAddress(address, addressIndex)) {
+      return `${SHIELDED_SPEND_ACCT_PATH}/0/${addressIndex}`;
+    }
+    return `${P2PKH_ACCT_PATH}/0/${addressIndex}`;
+  }
+
+  /**
+   * Whether an on-chain address is the wallet's shielded spend address at an
+   * index. The wallet-service reports an address index without its chain.
+   */
+  private async isShieldedSpendAddress(address: string, index: number): Promise<boolean> {
+    if (!this.shieldedEnabled) {
+      return false;
+    }
+    const [scanXpub, spendXpub] = await Promise.all([
+      this.storage.getScanXPubKey(),
+      this.storage.getSpendXPubKey(),
+    ]);
+    if (!scanXpub || !spendXpub) {
+      return false;
+    }
+    return (
+      deriveShieldedAddress(scanXpub, spendXpub, index, this.network.name).spendAddress === address
+    );
+  }
+
+  /**
    * Return if wallet is ready to be used
    *
    * @memberof HathorWalletServiceWallet
@@ -2309,6 +2396,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Request PIN if not provided
     const pin = options.pinCode || (await this.requestPassword());
 
+    if (await this.isShieldedSpendAddress(this.toOnChainAddress(address), addressIndex)) {
+      // An address of the shielded spend chain signs with the spend key
+      const spendXpriv = new bitcore.HDPrivateKey(await this.storage.getSpendXPrivKey(pin));
+      return spendXpriv.deriveChild(addressIndex).privateKey;
+    }
+
     // Get the HD private key for this address
     const addressHDPrivKey = await this.getAddressPrivKey(pin, addressIndex);
 
@@ -2657,22 +2750,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (this.storage.hasTxSignatureMethod()) {
         await this.signInputsExternally(tx, newOptions.pinCode);
       } else {
-        const dataToSignHash = tx.getDataToSignHash();
-
         if (!newOptions.pinCode) {
           throw new Error('PIN not specified in prepareCreateNewToken options');
         }
 
-        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
-
-        for (const [idx, inputObj] of tx.inputs.entries()) {
-          const inputData = this.getInputData(
-            xprivkey,
-            dataToSignHash,
-            HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
-          );
-          inputObj.setData(inputData);
-        }
+        await this.signInputsByPath(tx, newOptions.pinCode, utxosAddressPath);
       }
     }
 
@@ -2948,24 +3030,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // 3. Create inputs from utxos and track address indexes for signing
+    // 3. Create inputs from utxos and track address paths for signing
     const inputsObj: Input[] = [];
-    const addressIndexes: number[] = [];
+    const addressPaths: string[] = [];
 
     // Add HTR inputs
     for (const utxo of utxos) {
       inputsObj.push(helpers.parseToInput(utxo));
-      const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
-      addressIndexes.push(addrIndex);
+      addressPaths.push(utxo.addressPath);
     }
 
-    // Add mint authority input and resolve its address index
+    // Add mint authority input and resolve its address path
     inputsObj.push(helpers.parseToInput(mintUtxo));
-    const mintUtxoAddressIndex = await this.getAddressIndex(mintUtxo.address);
-    if (mintUtxoAddressIndex === null) {
-      throw new Error(`Authority address ${mintUtxo.address} not found in wallet`);
-    }
-    addressIndexes.push(mintUtxoAddressIndex);
+    addressPaths.push(await this.getAuthorityAddressPath(mintUtxo.address));
 
     if (changeAmount) {
       // c. HTR change output
@@ -2980,18 +3057,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (this.storage.hasTxSignatureMethod()) {
         await this.signInputsExternally(tx, newOptions.pinCode);
       } else {
-        const dataToSignHash = tx.getDataToSignHash();
-
         if (!newOptions.pinCode) {
           throw new Error('PIN not specified in prepareMintTokensData options');
         }
 
-        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
-
-        for (const [idx, inputObj] of tx.inputs.entries()) {
-          const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
-          inputObj.setData(inputData);
-        }
+        await this.signInputsByPath(tx, newOptions.pinCode, addressPaths);
       }
     }
 
@@ -3092,24 +3162,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // it's safe to assume that we have an utxo in the array
     const meltUtxo = meltAuthorities[0];
 
-    // 4. Create inputs from utxos and track address indexes for signing
+    // 4. Create inputs from utxos and track address paths for signing
     const inputsObj: Input[] = [];
-    const addressIndexes: number[] = [];
+    const addressPaths: string[] = [];
 
     // Add token inputs
     for (const utxo of tokenUtxos) {
       inputsObj.push(helpers.parseToInput(utxo));
-      const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
-      addressIndexes.push(addrIndex);
+      addressPaths.push(utxo.addressPath);
     }
 
-    // Add melt authority input and resolve its address index
+    // Add melt authority input and resolve its address path
     inputsObj.push(helpers.parseToInput(meltUtxo));
-    const meltUtxoAddressIndex = await this.getAddressIndex(meltUtxo.address);
-    if (meltUtxoAddressIndex === null) {
-      throw new Error(`Authority address ${meltUtxo.address} not found in wallet`);
-    }
-    addressIndexes.push(meltUtxoAddressIndex);
+    addressPaths.push(await this.getAuthorityAddressPath(meltUtxo.address));
 
     // Create outputs
     const outputsObj: Output[] = [];
@@ -3168,8 +3233,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // Add HTR inputs
       for (const utxo of htrUtxos) {
         inputsObj.push(helpers.parseToInput(utxo));
-        const addrIndex = HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath);
-        addressIndexes.push(addrIndex);
+        addressPaths.push(utxo.addressPath);
       }
 
       // Htr isn't billable, so we can append it here after calculating the fee
@@ -3187,18 +3251,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (this.storage.hasTxSignatureMethod()) {
         await this.signInputsExternally(tx, newOptions.pinCode);
       } else {
-        const dataToSignHash = tx.getDataToSignHash();
-
         if (!newOptions.pinCode) {
           throw new Error('PIN not specified in prepareMeltTokensData options');
         }
 
-        const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
-
-        for (const [idx, inputObj] of tx.inputs.entries()) {
-          const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndexes[idx]);
-          inputObj.setData(inputData);
-        }
+        await this.signInputsByPath(tx, newOptions.pinCode, addressPaths);
       }
     }
 
@@ -3385,16 +3442,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new Error('PIN not specified in prepareDelegateAuthorityData options');
       }
 
-      const xprivkey = await this.storage.getMainXPrivKey(pinCode);
-
-      // Set input data
-      const dataToSignHash = tx.getDataToSignHash();
-      const addressIndex = await this.getAddressIndex(utxo.address);
-      if (addressIndex === null) {
-        throw new Error(`Authority address ${utxo.address} not found in wallet`);
-      }
-      const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
-      inputsObj[0].setData(inputData);
+      await this.signInputsByPath(tx, pinCode, [await this.getAuthorityAddressPath(utxo.address)]);
     }
 
     tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
@@ -3463,23 +3511,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (this.storage.hasTxSignatureMethod()) {
       await this.signInputsExternally(tx, pinCode);
     } else {
-      // Set input data
-      const dataToSignHash = tx.getDataToSignHash();
-
       if (!pinCode) {
         throw new Error('PIN not specified in prepareDestroyAuthorityData options');
       }
 
-      const xprivkey = await this.storage.getMainXPrivKey(pinCode);
-
-      for (const [idx, inputObj] of tx.inputs.entries()) {
-        const addressIndex = await this.getAddressIndex(ret.utxos[idx].address);
-        if (addressIndex === null) {
-          throw new Error(`Authority address ${ret.utxos[idx].address} not found in wallet`);
-        }
-        const inputData = this.getInputData(xprivkey, dataToSignHash, addressIndex);
-        inputObj.setData(inputData);
+      const addressPaths: string[] = [];
+      for (const utxo of ret.utxos) {
+        // eslint-disable-next-line no-await-in-loop -- one lookup per authority input
+        addressPaths.push(await this.getAuthorityAddressPath(utxo.address));
       }
+      await this.signInputsByPath(tx, pinCode, addressPaths);
     }
 
     tx.prepareToSend(transaction.getWeightConstantsFromStorage(this.storage));
