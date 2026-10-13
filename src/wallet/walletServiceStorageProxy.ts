@@ -9,7 +9,7 @@ import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
 import Transaction from '../models/transaction';
 import Input from '../models/input';
 import HathorWalletServiceWallet from './wallet';
-import { FullNodeTxResponse } from './types';
+import { FullNodeInput, FullNodeShieldedInput, FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
 
 /**
@@ -201,13 +201,18 @@ export class WalletServiceStorageProxy {
       timestamp: tx.timestamp,
       is_voided: meta.voided_by.length > 0,
       nonce: Number.parseInt(tx.nonce ?? '0', 10),
-      inputs: tx.inputs.map(input => ({
-        ...input,
-        decoded: {
-          ...input.decoded,
-          type: input.decoded.type ?? undefined,
-        },
-      })) as IHistoryTx['inputs'],
+      inputs: tx.inputs.map(input =>
+        // An input that spends a shielded output has no decoded script
+        isShieldedInput(input)
+          ? input
+          : {
+              ...input,
+              decoded: {
+                ...input.decoded,
+                type: input.decoded.type ?? undefined,
+              },
+            }
+      ) as IHistoryTx['inputs'],
       outputs: tx.outputs.map(output => ({
         ...output,
         decoded: {
@@ -224,4 +229,10 @@ export class WalletServiceStorageProxy {
       ...(shieldedOutputs ? { shielded_outputs: shieldedOutputs } : {}),
     };
   }
+}
+
+function isShieldedInput(
+  input: FullNodeInput | FullNodeShieldedInput
+): input is FullNodeShieldedInput {
+  return (input as { type?: unknown }).type === 'shielded';
 }

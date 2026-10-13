@@ -358,6 +358,21 @@ export const fullNodeInputSchema = z.object({
 });
 
 /**
+ * Schema for a full node transaction input that spends a shielded output. The
+ * fullnode serializes it from the spent shielded output, plus `tx_id` and
+ * `index`: its value (and, when fully shielded, its token) stay hidden.
+ */
+export const fullNodeShieldedInputSchema = z
+  .object({
+    type: z.literal('shielded'),
+    commitment: z.string(),
+    range_proof: z.string(),
+    tx_id: txIdSchema,
+    index: z.number(),
+  })
+  .passthrough();
+
+/**
  * Schema for full node transaction outputs.
  * Represents the outputs of a transaction as seen by the full node.
  */
@@ -424,7 +439,7 @@ export const fullNodeTxSchema = z.object({
   weight: z.number(),
   signal_bits: z.number().optional(),
   parents: z.array(z.string()),
-  inputs: z.array(fullNodeInputSchema),
+  inputs: z.array(z.union([fullNodeShieldedInputSchema, fullNodeInputSchema])),
   outputs: z.array(fullNodeOutputSchema),
   shielded_outputs: z.array(fullnodeTxApiShieldedOutputSchema).nullish(),
   tokens: z.array(fullNodeTokenSchema),

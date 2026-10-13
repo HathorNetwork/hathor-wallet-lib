@@ -258,6 +258,53 @@ describe('fullNodeTxResponseSchema keeps shielded data', () => {
   });
 });
 
+describe('fullNodeTxResponseSchema inputs that spend shielded outputs', () => {
+  it('parses an input carrying the spent shielded output instead of its value', () => {
+    // hathor-core serializes such an input from the spent shielded output
+    const shieldedInput = {
+      type: 'shielded',
+      mode: 2,
+      commitment: 'aa',
+      range_proof: 'bb',
+      script: 'cc',
+      ephemeral_pubkey: 'dd',
+      asset_commitment: 'ee',
+      surjection_proof: 'ff',
+      tx_id: '00000000c3c4a3a1d7a7d2e5b3b6e1f4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0',
+      index: 3,
+    };
+    const parsed = fullNodeTxResponseSchema.parse({
+      success: true,
+      tx: {
+        hash: 'tx1',
+        nonce: '0',
+        timestamp: 1,
+        version: 1,
+        weight: 1,
+        parents: [],
+        inputs: [shieldedInput],
+        outputs: [],
+        tokens: [],
+        raw: '',
+      },
+      meta: {
+        hash: 'tx1',
+        spent_outputs: [],
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        voided_by: [],
+        twins: [],
+        accumulated_weight: 1,
+        score: 1,
+        height: 1,
+        first_block: null,
+      },
+    });
+    expect(parsed.tx.inputs[0]).toMatchObject({ type: 'shielded', commitment: 'aa', index: 3 });
+  });
+});
+
 describe('wsTransactionSchema shielded fields', () => {
   it('keeps shielded_outputs and addresses', () => {
     const payload = {

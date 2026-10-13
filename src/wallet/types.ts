@@ -871,6 +871,21 @@ export interface FullNodeInput {
   spent_by?: string | null;
 }
 
+/**
+ * An input that spends a shielded output, as the fullnode serializes it: the
+ * spent shielded output's fields, without its value.
+ */
+export interface FullNodeShieldedInput {
+  type: 'shielded';
+  commitment: string;
+  // eslint-disable-next-line camelcase
+  range_proof: string;
+  // eslint-disable-next-line camelcase
+  tx_id: string;
+  index: number;
+  [key: string]: unknown;
+}
+
 export interface FullNodeOutput {
   value: OutputValueType;
   token_data: number;
@@ -890,7 +905,7 @@ export interface FullNodeTx {
   weight: number;
   signal_bits?: number;
   parents: string[];
-  inputs: FullNodeInput[];
+  inputs: (FullNodeInput | FullNodeShieldedInput)[];
   outputs: FullNodeOutput[];
   // eslint-disable-next-line camelcase
   shielded_outputs?: IHistoryShieldedOutput[] | null;
