@@ -1160,7 +1160,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         return;
       }
       // Shielded rows also carry the on-chain `spendAddress`
-      const data = await walletApi.getShieldedAddresses(this);
+      const data = await walletApi.getAddresses(this, undefined, { legacy: false });
       for (const address of data.addresses) {
         yield address;
       }
@@ -1214,7 +1214,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
     if (this.shieldedEnabled) {
       // One request returns the unused addresses of both chains
-      const data = await walletApi.getShieldedNewAddresses(this);
+      const data = await walletApi.getNewAddresses(this, { legacy: false });
       this.newAddresses = data.legacyAddresses;
       this.indexToUse = 0;
       const spendByIndex = new Map(data.spendAddresses.map(a => [a.index, a.address]));
@@ -1252,7 +1252,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     if (opts.split) {
       // Each amount split into its transparent and shielded parts
-      const data = await walletApi.getSplitBalances(this, token);
+      const data = await walletApi.getBalances(this, token, { split: true });
       return data.balances;
     }
     const data = await walletApi.getBalances(this, token);
@@ -2093,7 +2093,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getAddressAtIndex(index: number, opts?: IAddressChainOptions): Promise<string> {
     if (isShieldedChain(opts)) {
       this.failIfShieldedNotEnabled();
-      const { addresses } = await walletApi.getShieldedAddresses(this, index);
+      const { addresses } = await walletApi.getAddresses(this, index, { legacy: false });
       if (addresses.length <= 0) {
         throw new Error('Error getting wallet shielded addresses.');
       }

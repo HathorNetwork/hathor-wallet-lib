@@ -51,6 +51,14 @@ const addressOf = (key: HDPrivateKey | HDPublicKey) =>
 
 let createWalletSpy: jest.SpyInstance;
 let versionSpy: jest.SpyInstance;
+// What `GET wallet/addresses/new?legacy=false` answers in these tests
+let shieldedNewAddresses: ReturnType<typeof buildShieldedNewAddressesResponse>;
+
+/** Calls to walletApi.getNewAddresses for the shielded chain, or for the legacy one. */
+const newAddressesCalls = (legacy: boolean) =>
+  (walletApi.getNewAddresses as jest.Mock).mock.calls.filter(
+    ([, opts]) => (opts?.legacy === false) === !legacy
+  ).length;
 
 /** GET /version data; a service with shielded support adds shieldedOutputsEnabled. */
 const versionData = (extra: Record<string, unknown> = {}) => ({
@@ -78,12 +86,11 @@ beforeEach(() => {
     .mockImplementation(async function mockRenew(this: HathorWalletServiceWallet) {
       this.authToken = 'mocked-token';
     });
+  shieldedNewAddresses = buildShieldedNewAddressesResponse();
   jest
     .spyOn(walletApi, 'getNewAddresses')
-    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
-  jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockImplementation(() => Promise.resolve(buildShieldedNewAddressesResponse()));
+    .mockImplementation((async (_wallet: unknown, opts?: { legacy?: boolean }) =>
+      opts?.legacy === false ? shieldedNewAddresses : { success: true, addresses: [] }) as never);
   versionSpy = jest
     .spyOn(walletApi, 'getVersionData')
     .mockResolvedValue(versionData({ shieldedOutputsEnabled: true }));
@@ -403,22 +410,27 @@ const readyWallet = async ({ shielded = true, singleAddress = false } = {}) => {
 describe('address chain options', () => {
   const ct = (i: number) => shieldedFixtureAddresses[i].shieldedBase58;
   const spend = (i: number) => shieldedFixtureAddresses[i].spendBase58;
+  let shieldedRows: ReturnType<typeof buildShieldedAddressRow>[];
 
   beforeEach(() => {
-    jest.spyOn(walletApi, 'getShieldedAddresses').mockResolvedValue({
-      success: true,
-      addresses: [buildShieldedAddressRow(0, 2), buildShieldedAddressRow(1)],
-    });
-    jest.spyOn(walletApi, 'getAddresses').mockResolvedValue({
-      success: true,
-      addresses: [{ address: legacyFixtureAddress, index: 0, transactions: 0 }],
-    });
+    shieldedRows = [buildShieldedAddressRow(0, 2), buildShieldedAddressRow(1)];
+    jest.spyOn(walletApi, 'getAddresses').mockImplementation((async (
+      _wallet: unknown,
+      _index?: number,
+      opts?: { legacy?: boolean }
+    ) =>
+      opts?.legacy === false
+        ? { success: true, addresses: shieldedRows }
+        : {
+            success: true,
+            addresses: [{ address: legacyFixtureAddress, index: 0, transactions: 0 }],
+          }) as never);
   });
 
   it('fills both unused-address lists from one request', async () => {
     const wallet = await readyWallet();
-    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
-    expect(walletApi.getNewAddresses).not.toHaveBeenCalled();
+    expect(newAddressesCalls(false)).toBe(1);
+    expect(newAddressesCalls(true)).toBe(0);
     expect(wallet.getCurrentAddress().address).toBe(legacyFixtureAddress);
     expect(wallet.getCurrentAddress({}, { legacy: false })).toEqual({
       address: ct(0),
@@ -430,8 +442,8 @@ describe('address chain options', () => {
 
   it('keeps legacy-only wallets on the legacy request', async () => {
     const wallet = await readyWallet({ shielded: false });
-    expect(walletApi.getNewAddresses).toHaveBeenCalledTimes(1);
-    expect(walletApi.getShieldedNewAddresses).not.toHaveBeenCalled();
+    expect(newAddressesCalls(true)).toBe(1);
+    expect(newAddressesCalls(false)).toBe(0);
     expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(ShieldedKeyError);
   });
 
@@ -458,9 +470,7 @@ describe('address chain options', () => {
   });
 
   it('fails clearly when the server has no unused shielded address', async () => {
-    (walletApi.getShieldedNewAddresses as jest.Mock).mockResolvedValue({
-      ...buildShieldedNewAddressesResponse([]),
-    });
+    shieldedNewAddresses = buildShieldedNewAddressesResponse([]);
     const wallet = await readyWallet();
     expect(() => wallet.getCurrentAddress({}, { legacy: false })).toThrow(
       /no unused shielded address/
@@ -481,17 +491,14 @@ describe('address chain options', () => {
     }
     expect(rows.map(r => r.address)).toEqual([ct(0), ct(1)]);
     expect(rows[0]).toMatchObject({ spendAddress: spend(0), transactions: 2 });
-    expect(walletApi.getAddresses).not.toHaveBeenCalled();
+    expect(walletApi.getAddresses).not.toHaveBeenCalledWith(wallet, undefined, undefined);
   });
 
   it('gets the shielded address at an index', async () => {
-    (walletApi.getShieldedAddresses as jest.Mock).mockResolvedValue({
-      success: true,
-      addresses: [buildShieldedAddressRow(1)],
-    });
+    shieldedRows = [buildShieldedAddressRow(1)];
     const wallet = await readyWallet();
     await expect(wallet.getAddressAtIndex(1, { legacy: false })).resolves.toBe(ct(1));
-    expect(walletApi.getShieldedAddresses).toHaveBeenCalledWith(wallet, 1);
+    expect(walletApi.getAddresses).toHaveBeenCalledWith(wallet, 1, { legacy: false });
   });
 
   it('builds the spend-chain path for a shielded index', async () => {
@@ -614,7 +621,7 @@ describe('balance and history', () => {
   it('returns the merged balance by default', async () => {
     const wallet = await readyWallet();
     const body = buildSplitBalanceResponse();
-    jest.spyOn(walletApi, 'getBalances').mockResolvedValue({
+    const getSpy = jest.spyOn(walletApi, 'getBalances').mockResolvedValue({
       success: true,
       balances: [
         {
@@ -624,15 +631,14 @@ describe('balance and history', () => {
         },
       ],
     });
-    const splitSpy = jest.spyOn(walletApi, 'getSplitBalances');
     const [balance] = await wallet.getBalance('00');
     expect(balance.balance).toEqual({ unlocked: 3500n, locked: 0n });
-    expect(splitSpy).not.toHaveBeenCalled();
+    expect(getSpy).toHaveBeenCalledWith(wallet, '00');
   });
 
   it('returns the split balance on request', async () => {
     const wallet = await readyWallet();
-    const getSpy = jest.spyOn(walletApi, 'getSplitBalances').mockResolvedValue({
+    const getSpy = jest.spyOn(walletApi, 'getBalances').mockResolvedValue({
       success: true,
       balances: [
         {
@@ -646,7 +652,7 @@ describe('balance and history', () => {
       ],
     });
     const [balance] = await wallet.getBalance('00', { split: true });
-    expect(getSpy).toHaveBeenCalledWith(wallet, '00');
+    expect(getSpy).toHaveBeenCalledWith(wallet, '00', { split: true });
     expect(balance.balance.unlocked).toEqual({ transparent: 1000n, shielded: 2500n, total: 3500n });
   });
 
@@ -753,24 +759,24 @@ describe('websocket refresh', () => {
 
   it('refreshes when a shielded output pays a listed shielded address', async () => {
     const wallet = await readyWallet();
-    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    (walletApi.getNewAddresses as jest.Mock).mockClear();
     const spend = shieldedFixtureAddresses[1].spendBase58;
     await wallet.onNewTx(
       txWith({ shielded_outputs: [{ mode: 1, decoded: { address: spend } }], addresses: [spend] })
     );
-    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+    expect(newAddressesCalls(false)).toBe(1);
   });
 
   it('refreshes when only the involved addresses name a listed spend address', async () => {
     const wallet = await readyWallet();
-    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    (walletApi.getNewAddresses as jest.Mock).mockClear();
     await wallet.onNewTx(txWith({ addresses: [shieldedFixtureAddresses[2].spendBase58] }));
-    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+    expect(newAddressesCalls(false)).toBe(1);
   });
 
   it('handles a shielded output whose script does not decode', async () => {
     const wallet = await readyWallet();
-    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    (walletApi.getNewAddresses as jest.Mock).mockClear();
     const emitted = jest.fn();
     wallet.on('new-tx', emitted);
     await wallet.onNewTx(
@@ -779,13 +785,13 @@ describe('websocket refresh', () => {
         addresses: [shieldedFixtureAddresses[1].spendBase58],
       })
     );
-    expect(walletApi.getShieldedNewAddresses).toHaveBeenCalledTimes(1);
+    expect(newAddressesCalls(false)).toBe(1);
     expect(emitted).toHaveBeenCalledTimes(1);
   });
 
   it('does not refresh for an unrelated transaction', async () => {
     const wallet = await readyWallet();
-    (walletApi.getShieldedNewAddresses as jest.Mock).mockClear();
+    (walletApi.getNewAddresses as jest.Mock).mockClear();
     const emitted = jest.fn();
     wallet.on('new-tx', emitted);
     await wallet.onNewTx(
@@ -796,7 +802,7 @@ describe('websocket refresh', () => {
         addresses: [shieldedFixtureAddresses[5].spendBase58],
       })
     );
-    expect(walletApi.getShieldedNewAddresses).not.toHaveBeenCalled();
+    expect(newAddressesCalls(false)).toBe(0);
     expect(emitted).toHaveBeenCalledTimes(1);
   });
 });

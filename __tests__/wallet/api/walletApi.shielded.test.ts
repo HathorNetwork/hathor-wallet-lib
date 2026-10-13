@@ -173,22 +173,22 @@ describe('walletApi shielded support', () => {
   });
 
   describe('read parameters', () => {
-    it('getShieldedAddresses asks for the shielded chain', async () => {
+    it('getAddresses asks for the shielded chain', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
         status: 200,
         data: { success: true, addresses: [buildShieldedAddressRow(0)] },
       } as AxiosResponse);
-      const result = await walletApi.getShieldedAddresses(wallet);
+      const result = await walletApi.getAddresses(wallet, undefined, { legacy: false });
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('wallet/addresses?legacy=false');
       expect(result.addresses[0]).toMatchObject({ spendAddress: expect.any(String) });
     });
 
-    it('getShieldedAddresses combines index and legacy', async () => {
+    it('getAddresses combines index and legacy', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
         status: 200,
         data: { success: true, addresses: [buildShieldedAddressRow(2)] },
       } as AxiosResponse);
-      await walletApi.getShieldedAddresses(wallet, 2);
+      await walletApi.getAddresses(wallet, 2, { legacy: false });
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('wallet/addresses?index=2&legacy=false');
     });
 
@@ -201,23 +201,23 @@ describe('walletApi shielded support', () => {
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('wallet/addresses?index=3');
     });
 
-    it('getShieldedNewAddresses asks for the shielded chain', async () => {
+    it('getNewAddresses asks for the shielded chain', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
         status: 200,
         data: buildShieldedNewAddressesResponse(),
       } as AxiosResponse);
-      const result = await walletApi.getShieldedNewAddresses(wallet);
+      const result = await walletApi.getNewAddresses(wallet, { legacy: false });
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('wallet/addresses/new?legacy=false');
       expect(result.spendAddresses).toHaveLength(3);
       expect(result.legacyAddresses).toHaveLength(1);
     });
 
-    it('getSplitBalances asks for the split balance', async () => {
+    it('getBalances asks for the split balance', async () => {
       mockAxiosInstance.get.mockResolvedValueOnce({
         status: 200,
         data: buildSplitBalanceResponse(),
       } as AxiosResponse);
-      const result = await walletApi.getSplitBalances(wallet, '00');
+      const result = await walletApi.getBalances(wallet, '00', { split: true });
       expect(mockAxiosInstance.get).toHaveBeenCalledWith('wallet/balances', {
         params: { token_id: '00', split: true },
       });

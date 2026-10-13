@@ -95,6 +95,107 @@ const SHIELDED_REGISTRATION_FIELDS: unknown[] = [
  * @namespace ApiWallet
  */
 
+/**
+ * The wallet's addresses, or the one at `index`. With `{ legacy: false }`,
+ * its shielded addresses, each with the on-chain spend address it pays.
+ */
+async function getAddresses(
+  wallet: HathorWalletServiceWallet,
+  index?: number,
+  opts?: { legacy?: true }
+): Promise<AddressesResponseData>;
+async function getAddresses(
+  wallet: HathorWalletServiceWallet,
+  index: number | undefined,
+  opts: { legacy: false }
+): Promise<ShieldedAddressesResponseData>;
+async function getAddresses(
+  wallet: HathorWalletServiceWallet,
+  index?: number,
+  opts: { legacy?: boolean } = {}
+): Promise<AddressesResponseData | ShieldedAddressesResponseData> {
+  const shielded = opts.legacy === false;
+  const query = [
+    ...(isNumber(index) ? [`index=${index}`] : []),
+    ...(shielded ? ['legacy=false'] : []),
+  ];
+  const url = `wallet/addresses${query.length > 0 ? `?${query.join('&')}` : ''}`;
+  const axios = await axiosInstance(wallet, true);
+  const response = await axios.get(url);
+
+  if (response.status === 200 && response.data.success === true) {
+    return shielded
+      ? parseSchema(response.data, shieldedAddressesResponseSchema)
+      : parseSchema(response.data, addressesResponseSchema);
+  }
+
+  throw new WalletRequestError('Error getting wallet addresses.');
+}
+
+/**
+ * The wallet's unused addresses. With `{ legacy: false }`, the unused
+ * shielded addresses, their on-chain spend addresses and the unused legacy
+ * addresses, in one request.
+ */
+async function getNewAddresses(
+  wallet: HathorWalletServiceWallet,
+  opts?: { legacy?: true }
+): Promise<NewAddressesResponseData>;
+async function getNewAddresses(
+  wallet: HathorWalletServiceWallet,
+  opts: { legacy: false }
+): Promise<ShieldedNewAddressesResponseData>;
+async function getNewAddresses(
+  wallet: HathorWalletServiceWallet,
+  opts: { legacy?: boolean } = {}
+): Promise<NewAddressesResponseData | ShieldedNewAddressesResponseData> {
+  const shielded = opts.legacy === false;
+  const axios = await axiosInstance(wallet, true);
+  const response = await axios.get(`wallet/addresses/new${shielded ? '?legacy=false' : ''}`);
+  if (response.status === 200 && response.data.success === true) {
+    return shielded
+      ? parseSchema(response.data, shieldedNewAddressesResponseSchema)
+      : parseSchema(response.data, newAddressesResponseSchema);
+  }
+  throw new WalletRequestError('Error getting wallet addresses to use.');
+}
+
+/**
+ * The wallet's balances, of one token or all. With `{ split: true }`, each
+ * amount is split into its transparent and shielded parts.
+ */
+async function getBalances(
+  wallet: HathorWalletServiceWallet,
+  token?: string | null,
+  opts?: { split?: false }
+): Promise<BalanceResponseData>;
+async function getBalances(
+  wallet: HathorWalletServiceWallet,
+  token: string | null,
+  opts: { split: true }
+): Promise<SplitBalanceResponseData>;
+async function getBalances(
+  wallet: HathorWalletServiceWallet,
+  token: string | null = null,
+  opts: { split?: boolean } = {}
+): Promise<BalanceResponseData | SplitBalanceResponseData> {
+  const data: { params: { token_id?: string; split?: true } } = { params: {} };
+  if (token) {
+    data.params.token_id = token;
+  }
+  if (opts.split) {
+    data.params.split = true;
+  }
+  const axios = await axiosInstance(wallet, true);
+  const response = await axios.get('wallet/balances', data);
+  if (response.status === 200 && response.data.success === true) {
+    return opts.split
+      ? parseSchema(response.data, splitBalanceResponseSchema)
+      : parseSchema(response.data, balanceResponseSchema);
+  }
+  throw new WalletRequestError('Error getting wallet balance.');
+}
+
 const walletApi = {
   async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponseData> {
     const axios = await axiosInstance(wallet, true);
@@ -199,36 +300,7 @@ const walletApi = {
     throw new WalletRequestError('Error creating wallet.', { cause });
   },
 
-  async getAddresses(
-    wallet: HathorWalletServiceWallet,
-    index?: number
-  ): Promise<AddressesResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const path = isNumber(index) ? `?index=${index}` : '';
-    const url = `wallet/addresses${path}`;
-    const response = await axios.get(url);
-
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, addressesResponseSchema);
-    }
-
-    throw new WalletRequestError('Error getting wallet addresses.');
-  },
-
-  async getShieldedAddresses(
-    wallet: HathorWalletServiceWallet,
-    index?: number
-  ): Promise<ShieldedAddressesResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const indexQuery = isNumber(index) ? `index=${index}&` : '';
-    const response = await axios.get(`wallet/addresses?${indexQuery}legacy=false`);
-
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, shieldedAddressesResponseSchema);
-    }
-
-    throw new WalletRequestError('Error getting wallet shielded addresses.');
-  },
+  getAddresses,
 
   async getAddressDetails(
     wallet: HathorWalletServiceWallet,
@@ -259,29 +331,7 @@ const walletApi = {
     throw new WalletRequestError('Error checking wallet addresses.');
   },
 
-  async getNewAddresses(wallet: HathorWalletServiceWallet): Promise<NewAddressesResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/addresses/new');
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, newAddressesResponseSchema);
-    }
-    throw new WalletRequestError('Error getting wallet addresses to use.');
-  },
-
-  /**
-   * Get the unused shielded addresses, together with their on-chain spend
-   * addresses and the unused legacy addresses, in a single request.
-   */
-  async getShieldedNewAddresses(
-    wallet: HathorWalletServiceWallet
-  ): Promise<ShieldedNewAddressesResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/addresses/new?legacy=false');
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, shieldedNewAddressesResponseSchema);
-    }
-    throw new WalletRequestError('Error getting wallet shielded addresses to use.');
-  },
+  getNewAddresses,
 
   async getTokenDetails(
     wallet: HathorWalletServiceWallet,
@@ -296,41 +346,7 @@ const walletApi = {
     throw new WalletRequestError(`Error getting token ${tokenId} details.`);
   },
 
-  async getBalances(
-    wallet: HathorWalletServiceWallet,
-    token: string | null = null
-  ): Promise<BalanceResponseData> {
-    const data: { params: { token_id?: string } } = { params: {} };
-    if (token) {
-      data.params.token_id = token;
-    }
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/balances', data);
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, balanceResponseSchema);
-    }
-    throw new WalletRequestError('Error getting wallet balance.');
-  },
-
-  /**
-   * Get the wallet balances with each amount split into its transparent and
-   * shielded parts.
-   */
-  async getSplitBalances(
-    wallet: HathorWalletServiceWallet,
-    token: string | null = null
-  ): Promise<SplitBalanceResponseData> {
-    const data: { params: { token_id?: string; split: true } } = { params: { split: true } };
-    if (token) {
-      data.params.token_id = token;
-    }
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/balances', data);
-    if (response.status === 200 && response.data.success === true) {
-      return parseSchema(response.data, splitBalanceResponseSchema);
-    }
-    throw new WalletRequestError('Error getting wallet balance.');
-  },
+  getBalances,
 
   async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
     const axios = await axiosInstance(wallet, true);

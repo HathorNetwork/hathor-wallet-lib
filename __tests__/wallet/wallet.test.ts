@@ -2849,12 +2849,6 @@ test('start', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
-  // Seed wallets register shielded keys, so they fetch both address chains at once
-  jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockImplementation(() =>
-      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
-    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
@@ -2957,12 +2951,6 @@ test('getAddressPrivKey', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
-  // Seed wallets register shielded keys, so they fetch both address chains at once
-  jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockImplementation(() =>
-      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
-    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
@@ -3020,12 +3008,6 @@ test('signMessageWithAddress', async () => {
   jest
     .spyOn(walletApi, 'getNewAddresses')
     .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
-  // Seed wallets register shielded keys, so they fetch both address chains at once
-  jest
-    .spyOn(walletApi, 'getShieldedNewAddresses')
-    .mockImplementation(() =>
-      Promise.resolve({ success: true, addresses: [], spendAddresses: [], legacyAddresses: [] })
-    );
   jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
     Promise.resolve({
       success: true,
