@@ -52,6 +52,8 @@ import SendTransactionWalletService, {
   assertAllInputsSigned,
   assertNanoCallerSigned,
 } from './sendTransactionWalletService';
+import { openShieldedOutput, sessionScanKey } from './walletServiceSendStorage';
+import { ensureHex } from '../utils/buffer';
 import {
   AddressInfoObject,
   GetBalanceObject,
@@ -85,6 +87,7 @@ import {
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
   WalletStatus,
+  ShieldedUtxo,
 } from './types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
@@ -98,8 +101,10 @@ import {
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
   ShieldedKeyError,
+  TxNotFoundError,
 } from '../errors';
 import { assertChangeShieldedMode } from '../new/sendTransaction';
+import type { ShieldedOpeningEntry } from '../new/types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
 import {
@@ -171,6 +176,57 @@ enum walletState {
   NOT_STARTED = 'Not started',
   LOADING = 'Loading',
   READY = 'Ready',
+}
+
+/**
+ * The on-chain fields of a shielded output, as the fullnode serializes it in
+ * `tx.shielded_outputs` or, without the ephemeral pubkey, in a shielded input:
+ * hex or base64, where the wallet-service's are hex.
+ */
+interface OnChainShieldedFields {
+  commitment: string;
+  // eslint-disable-next-line camelcase
+  range_proof: string;
+  // eslint-disable-next-line camelcase
+  ephemeral_pubkey?: string;
+  // eslint-disable-next-line camelcase
+  asset_commitment?: unknown;
+  mode?: unknown;
+}
+
+/**
+ * Whether a wallet-service shielded output carries the on-chain fields: the
+ * fields its opening is derived from and verified against.
+ */
+function matchesOnChain(entry: ShieldedUtxo, onChain: OnChainShieldedFields): boolean {
+  const same = (serviceHex: unknown, wire: unknown) =>
+    typeof serviceHex === 'string' &&
+    typeof wire === 'string' &&
+    serviceHex.toLowerCase() === ensureHex(wire).toLowerCase();
+  return (
+    same(entry.commitment, onChain.commitment) &&
+    same(entry.rangeProof, onChain.range_proof) &&
+    (onChain.ephemeral_pubkey === undefined ||
+      same(entry.ephemeralPubkey, onChain.ephemeral_pubkey)) &&
+    (onChain.mode === undefined || entry.mode === onChain.mode) &&
+    (entry.mode !== 2 ||
+      onChain.asset_commitment === undefined ||
+      same(entry.assetCommitment, onChain.asset_commitment))
+  );
+}
+
+/**
+ * The wallet-service's refusal of a tx_outputs lookup for an output of another
+ * wallet (403 `tx-output-not-in-wallet`); any other refusal is a failure.
+ */
+function isTxOutputNotInWallet(e: unknown): boolean {
+  if (!(e instanceof WalletRequestError) || !e.cause || !('status' in e.cause)) {
+    return false;
+  }
+  const { status, data } = e.cause;
+  return (
+    status === 403 && (data as { error?: unknown } | null)?.error === 'tx-output-not-in-wallet'
+  );
 }
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
@@ -3643,6 +3699,113 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
 
     return walletApi.getFullTxById(this, txId);
+  }
+
+  /**
+   * Get the unblinding factors for shielded outputs in a transaction, in the
+   * shape the fullnode facade's `getShieldedUnblindingForTx` returns.
+   *
+   * Returns one entry per shielded output of the tx **the wallet owns**, and
+   * one per shielded input spending an output the wallet owned. Outputs paid
+   * to others are left out: disclosing their blinding factors would leak the
+   * recipient's amount and token. Ownership is the wallet-service's: it lists
+   * an output of this wallet, spent or not, only once it has recovered it with
+   * the wallet's scan key. The wallet then opens it with the scan key in
+   * memory, so the openings are the ones the fullnode facade derives.
+   *
+   * Indexes follow the fullnode facade: an output's on-chain absolute index
+   * (`len(transparent_outputs) + shielded_index`), an input's position.
+   *
+   * @throws {ShieldedKeyError} `no-shielded-keys` when the wallet did not
+   *   register shielded keys in this session
+   */
+  async getShieldedUnblindingForTx(
+    txId: string
+  ): Promise<{ outputs: ShieldedOpeningEntry[]; inputs: ShieldedOpeningEntry[] }> {
+    this.failIfWalletNotReady();
+    this.failIfShieldedNotEnabled();
+
+    let response: FullNodeTxResponse;
+    try {
+      response = await this.getFullTxById(txId);
+    } catch (e) {
+      if (e instanceof TxNotFoundError) {
+        return { outputs: [], inputs: [] };
+      }
+      throw e;
+    }
+    const { tx } = response;
+
+    const scanKey = sessionScanKey(this.storage);
+    const openingOf = async (
+      outputTxId: string,
+      outputIndex: number,
+      onChain: OnChainShieldedFields
+    ): Promise<Omit<ShieldedOpeningEntry, 'index'> | null> => {
+      const entry = await this.getOwnShieldedOutput(outputTxId, outputIndex);
+      if (!entry) return null;
+      // The opening is published under this tx's index, so it must be of the
+      // output this tx carries, never of another output the service maps here
+      if (!matchesOnChain(entry, onChain)) {
+        throw new WalletError(
+          `The wallet-service's shielded output ${outputTxId}:${outputIndex} is not the one ` +
+            `transaction ${txId} carries at that position.`
+        );
+      }
+      const opened = await openShieldedOutput(this.storage, scanKey, entry);
+      return {
+        value: opened.value,
+        token: opened.token,
+        vbf: opened.blindingFactor,
+        ...(opened.assetBlindingFactor ? { abf: opened.assetBlindingFactor } : {}),
+      };
+    };
+
+    const outputs: ShieldedOpeningEntry[] = [];
+    const transparentCount = tx.outputs.length;
+    for (const [s, shieldedOutput] of (tx.shielded_outputs ?? []).entries()) {
+      const index = transparentCount + s;
+      // eslint-disable-next-line no-await-in-loop -- few shielded outputs per tx
+      const opening = await openingOf(txId, index, shieldedOutput);
+      if (opening) outputs.push({ index, ...opening });
+    }
+
+    const inputs: ShieldedOpeningEntry[] = [];
+    for (const [index, input] of tx.inputs.entries()) {
+      // The fullnode marks every input that spends a shielded output
+      if (!('type' in input) || input.type !== 'shielded') continue;
+      // eslint-disable-next-line no-await-in-loop -- few shielded inputs per tx
+      const opening = await openingOf(input.tx_id, input.index, input);
+      if (opening) inputs.push({ index, ...opening });
+    }
+
+    return { outputs, inputs };
+  }
+
+  /**
+   * A shielded output of this wallet, spent or not, as `GET wallet/tx_outputs`
+   * returns it; `null` when the wallet-service has none at that position for
+   * this wallet (another wallet's output, a transparent one, or one it has not
+   * recovered).
+   */
+  private async getOwnShieldedOutput(txId: string, index: number): Promise<ShieldedUtxo | null> {
+    let txOutputs: Utxo[];
+    try {
+      ({ txOutputs } = await walletApi.getTxOutputs(this, {
+        txId,
+        index,
+        skipSpent: false,
+        kind: 'shielded',
+      }));
+    } catch (e) {
+      if (isTxOutputNotInWallet(e)) {
+        return null;
+      }
+      throw e;
+    }
+    const entry = txOutputs.find(o => o.txId === txId && o.index === index);
+    // Only recovered outputs have a value the wallet-service vouches for
+    return entry?.kind === 'shielded' && entry.recoveryState === 'recovered' ? entry : null;
   }
 
   async getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
