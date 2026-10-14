@@ -125,7 +125,7 @@ import type {
   ShieldedViewKeyInput,
 } from '../shielded/types';
 import type { ShieldedViewCause } from '../shielded/view';
-import { unlockScanXPrivKey } from '../shielded/scanKey';
+import { checkScanXPrivKey, unlockScanXPrivKey } from '../shielded/scanKey';
 import {
   computeShieldedCapability,
   shieldedAddressError,
@@ -2658,7 +2658,7 @@ class HathorWallet extends EventEmitter {
       // Until the first sync tells the mode it used, the configured one.
       view.syncMode = this.historySyncMode;
       view.cause = shieldedMigrationFailure;
-      await this.unlockShieldedViewAtStart(pinCode);
+      await this.unlockShieldedViewAtStart(pinCode, options.shieldedScanXPrivKey);
 
       // The injected shielded pairs are persisted only when the wallet has a
       // shielded chain, which needs a P2PKH record with both shielded xpubs, a
@@ -2726,11 +2726,20 @@ class HathorWallet extends EventEmitter {
    * unlocked for a multisig wallet, whose record holds single-signature shielded
    * keys, or for a record without shielded keys.
    *
+   * A scan key given to start() is used instead of the PIN: it is checked
+   * against the record's scanXpubkey, and one that does not match leaves the
+   * key locked with the `key-mismatch` cause, since the record itself is
+   * consistent.
+   *
    * @param pinCode The PIN given to start(), or else the constructor PIN
+   * @param scanXPrivKey The scan key given to start(), if any
    * @throws {ShieldedKeyError} `shielded-not-started` when stop() ran while the
    *   key was unlocked
    */
-  async unlockShieldedViewAtStart(pinCode: string | null | undefined): Promise<void> {
+  async unlockShieldedViewAtStart(
+    pinCode: string | null | undefined,
+    scanXPrivKey?: string | null
+  ): Promise<void> {
     const view = this.storage.shieldedView;
     const accessData = await this.storage.getAccessData();
     if (
@@ -2740,35 +2749,54 @@ class HathorWallet extends EventEmitter {
     ) {
       return;
     }
-    if (!accessData.scanMainKey || !pinCode) {
+    let xpriv: string;
+    if (scanXPrivKey) {
+      try {
+        xpriv = checkScanXPrivKey(scanXPrivKey, accessData.scanXpubkey);
+      } catch (error) {
+        if (!(error instanceof ShieldedKeyError)) {
+          throw error;
+        }
+        view.cause =
+          error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH
+            ? 'key-mismatch'
+            : SHIELDED_UNLOCK_FAILURE_CAUSES[error.errorCode] ?? 'error';
+        this.logger.warn(
+          `The shielded view key given at start was not used (${error.errorCode}); ` +
+            'shielded outputs stay undecoded until it is.'
+        );
+        return;
+      }
+    } else if (!accessData.scanMainKey || !pinCode) {
       view.cause = 'not-supplied';
       this.logger.info('The shielded view key was not supplied at start.');
       return;
-    }
-
-    let xpriv: string;
-    try {
-      xpriv = await unlockScanXPrivKey(this.storage, pinCode);
-    } catch (error) {
-      let reason: string;
-      if (error instanceof ShieldedKeyError) {
-        reason = error.errorCode;
-        if (error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH) {
-          view.integrity = 'key-mismatch';
+    } else {
+      try {
+        xpriv = await unlockScanXPrivKey(this.storage, pinCode);
+      } catch (error) {
+        let reason: string;
+        if (error instanceof ShieldedKeyError) {
+          reason = error.errorCode;
+          if (error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH) {
+            view.integrity = 'key-mismatch';
+          } else {
+            view.cause = SHIELDED_UNLOCK_FAILURE_CAUSES[error.errorCode] ?? 'error';
+          }
         } else {
-          view.cause = SHIELDED_UNLOCK_FAILURE_CAUSES[error.errorCode] ?? 'error';
+          // The name only: a message can carry the data that failed to parse.
+          reason = error instanceof Error ? error.name : typeof error;
+          view.cause = 'error';
         }
-      } else {
-        // The name only: a message can carry the data that failed to parse.
-        reason = error instanceof Error ? error.name : typeof error;
-        view.cause = 'error';
+        this.logger.warn(
+          `The shielded view key was not unlocked at start (${reason}); ` +
+            'shielded outputs stay undecoded until it is.'
+        );
+        return;
       }
-      this.logger.warn(
-        `The shielded view key was not unlocked at start (${reason}); ` +
-          'shielded outputs stay undecoded until it is.'
-      );
-      return;
     }
+    // Both keys: stop() may have run during the store reads above, and it
+    // already dropped the key this would put back.
     if (this.walletStopped) {
       throw new ShieldedKeyError(
         ErrorMessages.SHIELDED_NOT_STARTED,
@@ -2777,7 +2805,11 @@ class HathorWallet extends EventEmitter {
     }
     this.storage.scanXPrivKey = xpriv;
     view.cause = null;
-    view.integrity = null;
+    // Only the record's own key clears an integrity failure: a key from
+    // outside the record says nothing about whether the record is consistent.
+    if (!scanXPrivKey) {
+      view.integrity = null;
+    }
   }
 
   /**
@@ -2930,7 +2962,13 @@ class HathorWallet extends EventEmitter {
    * and the shielded chain is loaded; `reprocessed` then resolves with
    * `capability`.
    *
+   * The scan key itself can be given instead of the PIN, for a wallet whose
+   * record holds no encrypted scan key, such as an xpub-only wallet: it is
+   * checked against the record's scanXpubkey in the same way, and kept in
+   * memory only.
+   *
    * @param input.pinCode The wallet's PIN
+   * @param input.scanXPrivKey Or the scan key (m/44'/280'/1'/0) itself
    * @returns The shielded capability now, and once the history is decoded
    * @throws {ShieldedKeyError} Nothing changes, except on a key mismatch:
    *   - `shielded-not-started` before start(), after stop(), and when stop()
@@ -2942,8 +2980,11 @@ class HathorWallet extends EventEmitter {
    *   - `shielded-wrong-pin` when the PIN does not decrypt the scan key;
    *   - `shielded-corrupt-key` when the record holds no valid scan key;
    *   - `shielded-key-mismatch` when the scan key is not the key of the
-   *     record's scanXpubkey. The record's shielded keys are then not used
-   *     until it is repaired: the capability is none, integrity.
+   *     record's scanXpubkey. When the PIN decrypted it, the record's shielded
+   *     keys are then not used until it is repaired: the capability is none,
+   *     integrity. A given `scanXPrivKey` that does not match changes nothing.
+   *   - `shielded-integrity` when a `scanXPrivKey` is given during such an
+   *     integrity failure: only the repair below ends it.
    *
    *   A seed wallet repairs both records by deriving the shielded keys again:
    *   `walletUtils.migrateShieldedAccessData` with `replaceShieldedKeys`,
@@ -2963,33 +3004,52 @@ class HathorWallet extends EventEmitter {
         'A multisig wallet has no shielded view key: its shielded keys are single-signature keys.'
       );
     }
-    if (!accessData?.scanMainKey || !walletUtils.hasShieldedXpubs(accessData)) {
-      throw new ShieldedKeyError(
-        ErrorMessages.SHIELDED_NO_KEYS,
-        'The wallet record has no shielded view key.'
-      );
-    }
-    if (typeof input?.pinCode !== 'string' || input.pinCode.length === 0) {
-      throw new ShieldedKeyError(
-        ErrorMessages.SHIELDED_WRONG_PIN,
-        'The PIN does not decrypt the shielded view key.'
-      );
-    }
-
     let xpriv: string;
-    try {
-      xpriv = await unlockScanXPrivKey(this.storage, input.pinCode);
-    } catch (error) {
-      if (
-        error instanceof ShieldedKeyError &&
-        error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH &&
-        !this.walletStopped
-      ) {
-        // The record's own scan key and scan xpub disagree.
-        view.integrity = 'key-mismatch';
-        this.queueShieldedCapabilityEvent();
+    if (input && 'scanXPrivKey' in input) {
+      if (!walletUtils.hasShieldedXpubs(accessData)) {
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_NO_KEYS,
+          'The wallet record has no shielded xpubs to check the view key against.'
+        );
       }
-      throw error;
+      // A key from outside the record that does not match it says nothing
+      // about the record, so a mismatch changes nothing.
+      xpriv = checkScanXPrivKey(input.scanXPrivKey, accessData.scanXpubkey);
+      // Nor does a key that matches it: a record whose own keys disagree stays
+      // untrusted until migrateShieldedAccessData repairs it.
+      if (view.integrity !== null) {
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_INTEGRITY,
+          "The wallet record's shielded keys do not match each other."
+        );
+      }
+    } else {
+      if (!accessData?.scanMainKey || !walletUtils.hasShieldedXpubs(accessData)) {
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_NO_KEYS,
+          'The wallet record has no shielded view key.'
+        );
+      }
+      if (typeof input?.pinCode !== 'string' || input.pinCode.length === 0) {
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_WRONG_PIN,
+          'The PIN does not decrypt the shielded view key.'
+        );
+      }
+      try {
+        xpriv = await unlockScanXPrivKey(this.storage, input.pinCode);
+      } catch (error) {
+        if (
+          error instanceof ShieldedKeyError &&
+          error.errorCode === ErrorMessages.SHIELDED_KEY_MISMATCH &&
+          !this.walletStopped
+        ) {
+          // The record's own scan key and scan xpub disagree.
+          view.integrity = 'key-mismatch';
+          this.queueShieldedCapabilityEvent();
+        }
+        throw error;
+      }
     }
     if (this.walletStopped) {
       throw new ShieldedKeyError(

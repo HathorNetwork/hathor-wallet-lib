@@ -65,6 +65,36 @@ export function parseScanXPrivKey(xpriv: string): HDPrivateKey {
 }
 
 /**
+ * Check that a scan private key given from outside the record, such as one an
+ * xpub-only wallet derives from its root, is the key of the record's scan xpub.
+ *
+ * The xpubs are compared as serialized, network version bytes included, as for
+ * the key the PIN decrypts.
+ *
+ * @param xpriv The scan xpriv
+ * @param scanXpubkey The record's scan xpub
+ * @returns The scan xpriv
+ * @throws {ShieldedKeyError}
+ *   - `shielded-corrupt-key` when it is not an extended private key;
+ *   - `shielded-key-mismatch` when it is not the key of the scan xpub.
+ */
+export function checkScanXPrivKey(xpriv: unknown, scanXpubkey: string): string {
+  if (typeof xpriv !== 'string' || xpriv.length === 0) {
+    throw new ShieldedKeyError(
+      ErrorMessages.SHIELDED_CORRUPT_KEY,
+      'The shielded view key given is not an extended private key.'
+    );
+  }
+  if (parseScanXPrivKey(xpriv).xpubkey !== scanXpubkey) {
+    throw new ShieldedKeyError(
+      ErrorMessages.SHIELDED_KEY_MISMATCH,
+      'The shielded view key given does not match the scan xpub of the wallet record.'
+    );
+  }
+  return xpriv;
+}
+
+/**
  * Decrypt the wallet's scan private key (xpriv) with its PIN, and check that it
  * is the key of the record's scanXpubkey.
  *

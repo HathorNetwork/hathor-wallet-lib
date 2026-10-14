@@ -17,8 +17,12 @@ export type ShieldedUndecodedCounts = Pick<
   'locked' | 'unreadable' | 'error'
 >;
 
-/** Why the wallet holds no scan key, or why its record has no shielded keys. */
-export type ShieldedViewCause = Exclude<ShieldedCapabilityCause, 'key-mismatch'>;
+/**
+ * Why the wallet holds no scan key, or why its record has no shielded keys.
+ * `key-mismatch` is one only for a scan key given to start() that does not
+ * match the record; a record whose own keys do not match sets `integrity`.
+ */
+export type ShieldedViewCause = ShieldedCapabilityCause;
 
 /**
  * What a started wallet knows about its shielded view, besides the scan key
