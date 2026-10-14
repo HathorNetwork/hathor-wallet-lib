@@ -14,8 +14,15 @@ import { WalletFromXPubGuard } from '../../src/errors';
 import helpers from '../../src/utils/helpers';
 import { OutputKind, ShieldedOutputMode } from '../../src/shielded/types';
 
-// Mock the helpers module
-jest.mock('../../src/utils/helpers');
+// Stub only getOutputTypeFromAddress. Automocking the whole module loads it a
+// second time, and with it a second bitcore-lib, which bitcore refuses.
+jest.mock('../../src/utils/helpers', () => {
+  const actual = jest.requireActual('../../src/utils/helpers').default;
+  return {
+    __esModule: true,
+    default: { ...actual, getOutputTypeFromAddress: jest.fn() },
+  };
+});
 const mockHelpers = helpers as jest.Mocked<typeof helpers>;
 
 describe('sendManyOutputsSendTransaction', () => {
@@ -149,7 +156,7 @@ describe('sendManyOutputsSendTransaction', () => {
     expect(sendTx).toBeInstanceOf(SendTransactionWalletService);
   });
 
-  it('should refuse a shielded change mode, since it builds no shielded outputs', async () => {
+  it('should hand a shielded change mode to the send engine, which checks it', async () => {
     const outputs = [
       {
         address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
@@ -162,9 +169,7 @@ describe('sendManyOutputsSendTransaction', () => {
       wallet.sendManyOutputsSendTransaction(outputs, {
         changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
       })
-    ).rejects.toThrow(
-      "Unsupported changeShieldedMode '1': the wallet service only supports OutputKind.TRANSPARENT."
-    );
+    ).resolves.toBeInstanceOf(SendTransactionWalletService);
   });
 
   it('should accept the transparent change mode', async () => {
@@ -184,13 +189,13 @@ describe('sendManyOutputsSendTransaction', () => {
   });
 
   it('should pass the change mode on from sendTransaction', async () => {
-    await expect(
-      wallet.sendTransaction('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', 10n, {
-        changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
-      })
-    ).rejects.toThrow(
-      "Unsupported changeShieldedMode '2': the wallet service only supports OutputKind.TRANSPARENT."
-    );
+    const spy = jest.spyOn(wallet, 'sendManyOutputsTransaction').mockResolvedValue({} as never);
+    await wallet.sendTransaction('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', 10n, {
+      changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+    });
+    expect(spy.mock.calls[0][1]).toMatchObject({
+      changeShieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+    });
   });
 
   it('should throw WalletFromXPubGuard when wallet is readonly', async () => {
