@@ -50,7 +50,9 @@ import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
 import transaction from '../../src/utils/transaction';
 import txApi from '../../src/api/txApi';
 import { OutputType } from '../../src/wallet/types';
+import type HathorWallet from '../../src/new/wallet';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';
+import FakeHathorWallet from '../__mock_helpers__/fake_hathorwallet';
 
 // The message of the error that fails a send whose change stands in for a
 // missing shielded input, and so must be shielded, when the change cannot be:
@@ -9430,6 +9432,81 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
           }).prepareTxData()
         ).rejects.toThrow('A multisig wallet cannot use a new-format change address.');
       });
+    });
+  });
+
+  /**
+   * A multisig wallet has no shielded address to receive a shielded change: the
+   * change resolver refuses one from the wallet type, before it reads an
+   * address. The tests above, whose wallet gives out a shielded address, are
+   * the control.
+   */
+  describe('a multisig wallet', () => {
+    async function* selectUtxoMock(options: IUtxoFilterOptions) {
+      if (options.token === NATIVE_TOKEN_UID) {
+        yield {
+          txId: 'htr-tx',
+          index: 0,
+          value: 100n,
+          token: NATIVE_TOKEN_UID,
+          address: 'htr-addr',
+          authorities: 0n,
+        };
+      } else if (options.token === CUSTOM_TOKEN) {
+        yield {
+          txId: 'custom-tx',
+          index: 0,
+          value: 30n,
+          token: CUSTOM_TOKEN,
+          address: 'custom-addr',
+          authorities: 0n,
+        };
+      }
+    }
+
+    async function multisigWallet(): Promise<HathorWallet> {
+      const storage = buildStorage(selectUtxoMock);
+      jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.MULTISIG);
+      const legacy = new HDPrivateKey();
+      await storage.saveAccessData({
+        xpubkey: legacy.xpubkey,
+        walletType: WalletType.MULTISIG,
+        walletFlags: 0,
+        multisigData: {
+          pubkey: legacy.publicKey.toString('hex'),
+          pubkeys: [legacy.xpubkey, new HDPrivateKey().xpubkey],
+          numSignatures: 2,
+        },
+      });
+      const wallet = new FakeHathorWallet() as unknown as HathorWallet;
+      wallet.storage = storage;
+      return wallet;
+    }
+
+    it.each([
+      // Converted before the fee is calculated.
+      { change: 'custom-token change', token: CUSTOM_TOKEN },
+      // Converted after the HTR selection.
+      { change: 'HTR change', token: NATIVE_TOKEN_UID },
+    ])('refuses to shield the $change', async ({ token }) => {
+      const sendTransaction = new SendTransaction({
+        wallet: await multisigWallet(),
+        outputs: [
+          {
+            address: buildShieldedAddr(1),
+            value: 10n,
+            token,
+            shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+          },
+        ],
+        changeShieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED,
+      });
+
+      const refused = sendTransaction.prepareTxData();
+      await expect(refused).rejects.toThrow(
+        'A shielded change is not supported for multisig wallets.'
+      );
+      await expect(refused).rejects.toBeInstanceOf(ShieldedChangeUnavailableError);
     });
   });
 });

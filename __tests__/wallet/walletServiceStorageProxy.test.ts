@@ -260,6 +260,8 @@ describe('WalletServiceStorageProxy', () => {
           {
             value: 100,
             token_data: 0,
+            // Filled from token_data: the fullnode gives the output no token
+            token: '00',
             decoded: {
               type: 'P2PKH',
               address: 'WAddress2',
@@ -275,6 +277,43 @@ describe('WalletServiceStorageProxy', () => {
         token_symbol: 'TT',
       });
       expect(wallet.getFullTxById).toHaveBeenCalledWith('tx123');
+    });
+
+    it('should give each output the token its token_data points to', async () => {
+      const output = mockFullTxResponse.tx.outputs[0];
+      (wallet.getFullTxById as jest.Mock).mockResolvedValue({
+        ...mockFullTxResponse,
+        tx: {
+          ...mockFullTxResponse.tx,
+          // token_data 1 is the tx's first token; 129 is its authority output
+          outputs: [{ ...output, token_data: 1 }, { ...output, token_data: 129 }, output],
+        },
+      });
+
+      const result = await proxiedStorage.getTx('tx123');
+
+      expect(result!.outputs.map(o => o.token)).toEqual(['token1', 'token1', '00']);
+    });
+
+    it('should keep an input that spends a shielded output', async () => {
+      const shieldedInput = {
+        type: 'shielded',
+        mode: 1,
+        commitment: 'aa',
+        range_proof: 'bb',
+        script: 'cc',
+        token_data: 0,
+        tx_id: 'input-tx',
+        index: 3,
+      };
+      (wallet.getFullTxById as jest.Mock).mockResolvedValue({
+        ...mockFullTxResponse,
+        tx: { ...mockFullTxResponse.tx, inputs: [shieldedInput] },
+      });
+
+      const result = await proxiedStorage.getTx('tx123');
+
+      expect(result!.inputs).toEqual([shieldedInput]);
     });
 
     it('should return null when transaction fetch fails', async () => {

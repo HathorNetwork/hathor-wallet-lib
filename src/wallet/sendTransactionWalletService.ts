@@ -33,6 +33,9 @@ import {
 } from './types';
 import { IDataInput, IDataOutputWithToken, IDataTx, TokenVersion } from '../types';
 import { FeeHeader, Header } from '../headers';
+import SendTransaction, { ISendOutput } from '../new/sendTransaction';
+import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
+import { WalletServiceSendStorage } from './walletServiceSendStorage';
 
 type optionsType = {
   outputs?: OutputSendTransaction[];
@@ -40,6 +43,7 @@ type optionsType = {
   changeAddress?: string | null;
   transaction?: Transaction | null;
   pin?: string | null;
+  changeShieldedMode?: ChangeOutputMode | null;
 };
 
 /**
@@ -150,6 +154,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // PIN to load the seed from memory
   private pin: string | null;
 
+  // Change-output mode for the shared send engine (wallets with shielded keys)
+  private changeShieldedMode: ChangeOutputMode | null;
+
   // Data for the transaction after it's prepared
   public fullTxData: IDataTx | null;
 
@@ -169,6 +176,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       inputs: [],
       changeAddress: null,
       transaction: null,
+      changeShieldedMode: null,
       ...options,
     };
 
@@ -179,6 +187,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.transaction = newOptions.transaction!;
     this.mineTransaction = null;
     this.pin = newOptions.pin!;
+    this.changeShieldedMode = newOptions.changeShieldedMode ?? null;
     this.fullTxData = null;
     this.utxosAddressPath = [];
     this._feeAmount = 0n;
@@ -202,6 +211,16 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @returns {Promise<IDataTx>} A promise that resolves with the prepared transaction data.
    */
   async prepareTxData(): Promise<IDataTx> {
+    if (
+      this.outputs.some(output => !!output.shielded) ||
+      isShieldedChangeMode(this.changeShieldedMode)
+    ) {
+      // This builder makes transparent outputs only: refuse rather than send
+      // a requested shielded output or change in the clear
+      throw new SendTxError(
+        'prepareTxData builds no shielded outputs; use prepareTx for a send with shielded outputs or a shielded change.'
+      );
+    }
     // 1. Calculate total output amount for each token
     const tokenAmountMap: TokenMap = {};
     for (const output of this.outputs) {
@@ -445,6 +464,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async prepareTx(): Promise<Transaction> {
     this.emit('prepare-tx-start');
+    if (this.usesSharedEngine()) {
+      return this.prepareTxWithSharedEngine();
+    }
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
     // in case it's not sent and (ii) create the token array of the tx
@@ -571,6 +593,63 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
 
     this.utxosAddressPath = utxosAddressPath;
+    this._currentStep = 'prepared';
+    this.emit('prepare-tx-end', this.transaction);
+    return this.transaction;
+  }
+
+  /**
+   * Whether this send is built by the fullnode facade's send engine: every
+   * send of a wallet with shielded keys, and a send of any wallet that asks
+   * for shielded outputs or a shielded change, as in the fullnode facade. A
+   * wallet without shielded keys can send shielded outputs; the engine
+   * refuses a shielded change it has no address for.
+   */
+  private usesSharedEngine(): boolean {
+    return (
+      this.wallet.isShieldedEnabled() ||
+      this.outputs.some(output => !!output.shielded) ||
+      isShieldedChangeMode(this.changeShieldedMode)
+    );
+  }
+
+  /**
+   * Prepare the transaction with the fullnode facade's send engine, reading
+   * the wallet through a wallet-service storage adapter. Wallets with shielded
+   * keys use it for every send, so they get the shielded selection and change
+   * rules and can send to and spend shielded outputs.
+   */
+  private async prepareTxWithSharedEngine(): Promise<Transaction> {
+    // Preparing needs no PIN: shielded utxos open with the scan key the
+    // wallet keeps in memory from start(). The PIN is needed only to sign.
+    const adapter = new WalletServiceSendStorage(this.wallet);
+    const sendTransaction = new SendTransaction({
+      storage: adapter.createProxy(),
+      outputs: this.outputs.map(toEngineOutput),
+      inputs: this.inputs,
+      changeAddress: this.changeAddress,
+      changeShieldedMode: this.changeShieldedMode,
+      pin: this.pin,
+    });
+    let transaction: Transaction;
+    try {
+      transaction = await sendTransaction.prepareTx();
+    } finally {
+      adapter.release();
+    }
+
+    this.utxosAddressPath = transaction.inputs.map(input => {
+      const path = adapter.getAddressPath(input.hash, input.index);
+      if (!path) {
+        throw new SendTxError(`Unknown derivation path for input ${input.hash}:${input.index}.`);
+      }
+      return path;
+    });
+    this.fullTxData = sendTransaction.fullTxData;
+    if (this.fullTxData) {
+      adapter.markChangeAddressesUsed(this.fullTxData);
+    }
+    this.transaction = transaction;
     this._currentStep = 'prepared';
     this.emit('prepare-tx-end', this.transaction);
     return this.transaction;
@@ -895,18 +974,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       );
     }
     this.emit('sign-tx-start');
-    const dataToSignHash = this.transaction.getDataToSignHash();
-    const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
-
-    for (const [idx, inputObj] of this.transaction.inputs.entries()) {
-      const inputData = this.wallet.getInputData(
-        xprivkey,
-        dataToSignHash,
-        // the wallet service returns the full BIP44 path, but we only need the address path:
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(this.utxosAddressPath[idx])
-      );
-      inputObj.setData(inputData);
-    }
+    // Each input is signed by the key of its path: the spend key for the
+    // shielded spend chain, the legacy key otherwise
+    await this.wallet.signInputsByPath(this.transaction, pinToUse, this.utxosAddressPath);
 
     // Now that the tx is completed with the data of the input
     // we can add the timestamp and calculate the weight
@@ -1003,9 +1073,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       return this.transaction;
     } catch (err) {
       if (err instanceof WalletRequestError) {
-        const errMessage = 'Error sending tx proposal.';
+        const errMessage = txProposalErrorMessage(err);
         this.emit('send-error', errMessage);
-        throw new SendTxError(errMessage);
+        const sendError = new SendTxError(errMessage);
+        (sendError as SendTxError & { cause?: unknown }).cause = err;
+        throw sendError;
       } else {
         throw err;
       }
@@ -1097,6 +1169,49 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       throw err;
     }
   }
+}
+
+/**
+ * Messages for the tx proposal refusals a caller can act on.
+ */
+const TX_PROPOSAL_ERROR_MESSAGES: Record<string, string> = {
+  'inputs-shielded-unsupported':
+    'The wallet-service does not accept shielded inputs yet, so shielded utxos cannot be spent.',
+  'inputs-already-used': 'Some inputs are already used by another transaction proposal. Try again.',
+  'inputs-not-found': 'Some inputs are not unspent outputs of this wallet.',
+  'inputs-not-in-wallet': 'Some inputs do not belong to this wallet.',
+};
+
+function txProposalErrorMessage(err: WalletRequestError): string {
+  const { cause } = err;
+  const code =
+    cause && 'data' in cause ? (cause.data as { error?: unknown } | undefined)?.error : undefined;
+  if (typeof code === 'string' && code in TX_PROPOSAL_ERROR_MESSAGES) {
+    return TX_PROPOSAL_ERROR_MESSAGES[code];
+  }
+  return 'Error sending tx proposal.';
+}
+
+function isShieldedChangeMode(mode: ChangeOutputMode | null): boolean {
+  return mode === ShieldedOutputMode.AMOUNT_SHIELDED || mode === ShieldedOutputMode.FULLY_SHIELDED;
+}
+
+/**
+ * The send engine's output for a wallet-service output request. The facade's
+ * pre-computed `type` is not passed on: the engine derives it from the address
+ * (and a 71-byte address has no transparent type).
+ */
+function toEngineOutput(output: OutputSendTransaction): ISendOutput {
+  if (output.type === OutputType.DATA) {
+    return { type: OutputType.DATA, data: output.data! };
+  }
+  return {
+    address: output.address!,
+    value: output.value,
+    token: output.token,
+    ...(output.timelock != null ? { timelock: output.timelock } : {}),
+    ...(output.shielded ? { shieldedMode: output.shielded } : {}),
+  };
 }
 
 export default SendTransactionWalletService;

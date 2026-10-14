@@ -212,12 +212,9 @@ export async function generateMultisigWalletHelper(parameters) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    // Both chains for each index travel together in the unified array. The
-    // multisig seeds are fixed in-repo, so their shielded pairs are committed
-    // fixtures.
+    // Legacy addresses only: a multisig wallet has no shielded chain.
     preCalculatedAddresses: mergePrecalculatedAddresses(
-      parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
-      parameters.preCalculatedShieldedAddresses || getPrecalculatedShieldedForSeed(seed)
+      parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses
     ),
     multisig: {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,

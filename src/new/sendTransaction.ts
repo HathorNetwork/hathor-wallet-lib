@@ -92,6 +92,26 @@ export interface ISendDataOutput {
   token?: string;
 }
 
+/**
+ * Throw for a `changeShieldedMode` that is not a change mode. Every change
+ * output follows an explicit change mode, so an unknown value must fail rather
+ * than act as one of the shielded modes.
+ */
+export function assertChangeShieldedMode(mode: unknown): void {
+  if (
+    mode !== null &&
+    mode !== undefined &&
+    mode !== OutputKind.TRANSPARENT &&
+    mode !== ShieldedOutputMode.AMOUNT_SHIELDED &&
+    mode !== ShieldedOutputMode.FULLY_SHIELDED
+  ) {
+    throw new SendTxError(
+      `Invalid changeShieldedMode '${String(mode)}': expected ` +
+        'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
+    );
+  }
+}
+
 export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
   return 'type' in output && output.type === OutputType.DATA;
 }
@@ -300,21 +320,7 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
-    // Every change output follows an explicit change mode, so an unknown value
-    // must fail here rather than act as one of the shielded modes.
-    const requestedChangeMode: unknown = this.changeShieldedMode;
-    if (
-      requestedChangeMode !== null &&
-      requestedChangeMode !== undefined &&
-      requestedChangeMode !== OutputKind.TRANSPARENT &&
-      requestedChangeMode !== ShieldedOutputMode.AMOUNT_SHIELDED &&
-      requestedChangeMode !== ShieldedOutputMode.FULLY_SHIELDED
-    ) {
-      throw new SendTxError(
-        `Invalid changeShieldedMode '${String(requestedChangeMode)}': expected ` +
-          'OutputKind.TRANSPARENT, AMOUNT_SHIELDED or FULLY_SHIELDED.'
-      );
-    }
+    assertChangeShieldedMode(this.changeShieldedMode);
     const HTR_UID = NATIVE_TOKEN_UID;
     const network = this.storage.config.getNetwork();
     const txData: IDataTx = {

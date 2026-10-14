@@ -248,12 +248,22 @@ export async function pollForTx(walletForPolling: HathorWalletServiceWallet, txI
  * Requires `tx` to have at least one wallet-owned output (e.g. a change output),
  * which holds for the change-producing sends this guards.
  *
+ * It also waits for the wall clock to pass `tx.timestamp`. The next send spends
+ * `tx`'s change, and a tx may not share the timestamp of a tx it spends
+ * (1-second granularity). When the index catches up within that second, the
+ * fullnode rejects the next send with "full validation failed: tx=... timestamp=T,
+ * spent_tx=... timestamp=T", which also surfaces as `Error sending tx proposal`.
+ *
  * @param wallet Service wallet to poll
  * @param tx The just-sent transaction whose effects must be reflected
  */
 export async function pollForUtxoConsistency(
   wallet: HathorWalletServiceWallet,
-  tx: { hash?: string | null; inputs: { hash: string; index: number }[] }
+  tx: {
+    hash?: string | null;
+    timestamp?: number | null;
+    inputs: { hash: string; index: number }[];
+  }
 ): Promise<void> {
   // A mined tx is required: without a hash there is no tx to reflect, and the
   // predicate below could never become true — fail fast instead of exhausting
@@ -276,6 +286,14 @@ export async function pollForUtxoConsistency(
     20,
     500
   );
+
+  if (tx.timestamp != null) {
+    const timeToWait = (tx.timestamp + 1) * 1000 - Date.now();
+    if (timeToWait > 0) {
+      loggers.test!.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+      await delay(timeToWait + 10);
+    }
+  }
 }
 
 /**

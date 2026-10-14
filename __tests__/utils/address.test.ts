@@ -20,8 +20,13 @@ import {
   deriveAddressP2SH,
   getAddressFromPubkey,
   fetchVerifiedExternalPrivateKey,
+  toOnChainAddress,
 } from '../../src/utils/address';
 import { encodeShieldedAddress } from '../../src/utils/shieldedAddress';
+import { IShieldedCryptoProvider } from '../../src/shielded/types';
+
+// Shielded derivation from storage only needs a provider to be registered.
+const mockShieldedProvider = { id: 'mock' } as unknown as IShieldedCryptoProvider;
 
 /* eslint-disable @typescript-eslint/no-unused-vars -- These variables also serve as a documentation, even if unused */
 const seed =
@@ -213,6 +218,8 @@ test('deriveShieldedAddressFromStorage returns null when shielded keys unavailab
   const { encryptData } = await import('../../src/utils/crypto');
   const store = new MemoryStore();
   const storage = new Storage(store);
+  // With a provider registered, the missing xpubs are what rule the chain out.
+  storage.setShieldedCryptoProvider(mockShieldedProvider);
 
   // Provide minimal access data WITHOUT shielded keys (legacy-only wallet)
   const xpriv = new HDPrivateKey();
@@ -235,6 +242,8 @@ test('deriveShieldedAddressFromStorage returns paired shielded + spend records',
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork('testnet');
+  // The shielded chain needs a registered crypto provider.
+  storage.setShieldedCryptoProvider(mockShieldedProvider);
   const networkName = storage.config.getNetwork().name;
 
   // Independent scan and spend public chains (the wallet derives both from
@@ -281,6 +290,25 @@ test('deriveShieldedAddressFromStorage returns paired shielded + spend records',
   // Both records share the BIP32 index; the spend address is the on-chain
   // P2PKH while the shielded address is the user-facing encoded form.
   expect(result!.shieldedAddress.base58).not.toEqual(result!.spendAddress.base58);
+});
+
+test('deriveShieldedAddressFromStorage returns null without a shielded crypto provider', async () => {
+  const { deriveShieldedAddressFromStorage } = await import('../../src/utils/address');
+  const { encryptData } = await import('../../src/utils/crypto');
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const xpriv = new HDPrivateKey();
+  // Both shielded xpubs, but no provider registered.
+  await store.saveAccessData({
+    xpubkey: xpriv.xpubkey,
+    mainKey: encryptData(xpriv.xprivkey, '123'),
+    walletType: 'p2pkh' as const,
+    walletFlags: 0,
+    scanXpubkey: new HDPrivateKey().xpubkey,
+    spendXpubkey: new HDPrivateKey().xpubkey,
+  });
+
+  await expect(deriveShieldedAddressFromStorage(0, storage)).resolves.toBeNull();
 });
 
 describe('fetchVerifiedExternalPrivateKey', () => {
@@ -340,5 +368,32 @@ describe('fetchVerifiedExternalPrivateKey', () => {
     await expect(
       fetchVerifiedExternalPrivateKey(storage, network, 0, async index => addressAt(index))
     ).rejects.toThrow('External private key provider must return a bitcore PrivateKey.');
+  });
+});
+
+describe('toOnChainAddress', () => {
+  const network = new Network('testnet');
+  const root = HDPrivateKey.fromSeed(Buffer.alloc(32, 0x4c), 'testnet');
+  const spendPubkey = root.deriveChild("m/1'/0").publicKey;
+  const shieldedAddress = encodeShieldedAddress(
+    root.deriveChild("m/0'/0").publicKey.toBuffer(),
+    spendPubkey.toBuffer(),
+    network
+  );
+
+  it('maps a shielded address to the spend P2PKH it embeds', () => {
+    expect(toOnChainAddress(shieldedAddress, network)).toBe(
+      new Address(shieldedAddress, { network }).getSpendAddress().base58
+    );
+  });
+
+  it('keeps a legacy address', () => {
+    expect(toOnChainAddress('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', network)).toBe(
+      'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx'
+    );
+  });
+
+  it('keeps a malformed address for the caller to reject', () => {
+    expect(toOnChainAddress('not-an-address', network)).toBe('not-an-address');
   });
 });

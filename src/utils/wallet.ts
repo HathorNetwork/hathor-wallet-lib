@@ -18,7 +18,8 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import { OP_0 } from '../opcodes';
-import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError, ShieldedKeyError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 import Network from '../models/network';
 import helpers from './helpers';
 
@@ -30,6 +31,30 @@ import {
   WALLET_FLAGS,
 } from '../types';
 import { encryptData, decryptData } from './crypto';
+
+/**
+ * Whether `key` is the extended public key serialized in `xpubkey`: the same
+ * public key and chain code. Network version bytes are not compared, so the
+ * same key serialized for another network matches.
+ *
+ * @param key The extended public key
+ * @param xpubkey The serialized extended public key to compare with
+ * @returns true when both are the same key
+ */
+function isSameExtendedPublicKey(key: HDPublicKey, xpubkey: string): boolean {
+  if (key.xpubkey === xpubkey) {
+    return true;
+  }
+  let other: HDPublicKey;
+  try {
+    other = new HDPublicKey(xpubkey);
+  } catch {
+    return false;
+  }
+  const a = key.toObject();
+  const b = other.toObject();
+  return a.publicKey === b.publicKey && a.chainCode === b.chainCode;
+}
 
 const wallet = {
   /**
@@ -624,7 +649,9 @@ const wallet = {
     // Derive shielded scan and spend keys if root key is available.
     // Scan (account 1') and spend (account 2') use separate derivation paths from legacy (account 0')
     // so the scan key only grants view access, not spending authority over legacy funds.
-    if (argXpriv.depth === 0) {
+    // A multisig wallet gets none: they would be this participant's single-signature
+    // keys (see hasShieldedXpubs).
+    if (argXpriv.depth === 0 && walletType === WalletType.P2PKH) {
       const scanAcctXpriv = argXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
       const scanXpriv = scanAcctXpriv.deriveChild(0);
       accessData.scanXpubkey = scanXpriv.xpubkey;
@@ -707,14 +734,7 @@ const wallet = {
       };
     }
 
-    // Derive shielded scan (account 1') and spend (account 2') keys.
-    // Separate from legacy (account 0') so scan key only grants view access.
-    const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
-    const scanXpriv = scanAcctXpriv.deriveChild(0);
-    const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
-    const spendXpriv = spendAcctXpriv.deriveChild(0);
-
-    return {
+    const accessData: IWalletAccessData = {
       walletType,
       multisigData,
       xpubkey: xpriv.xpubkey,
@@ -723,18 +743,58 @@ const wallet = {
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
-      scanXpubkey: scanXpriv.xpubkey,
-      scanMainKey: encryptData(scanXpriv.xprivkey, pin),
-      spendXpubkey: spendXpriv.xpubkey,
-      spendMainKey: encryptData(spendXpriv.xprivkey, pin),
     };
+
+    // Derive shielded scan (account 1') and spend (account 2') keys.
+    // Separate from legacy (account 0') so scan key only grants view access.
+    // A multisig wallet gets none: they would be this participant's
+    // single-signature keys (see hasShieldedXpubs).
+    if (walletType === WalletType.P2PKH) {
+      const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
+      const scanXpriv = scanAcctXpriv.deriveChild(0);
+      const spendAcctXpriv = rootXpriv.deriveChild(SHIELDED_SPEND_ACCT_PATH);
+      const spendXpriv = spendAcctXpriv.deriveChild(0);
+      accessData.scanXpubkey = scanXpriv.xpubkey;
+      accessData.scanMainKey = encryptData(scanXpriv.xprivkey, pin);
+      accessData.spendXpubkey = spendXpriv.xpubkey;
+      accessData.spendMainKey = encryptData(spendXpriv.xprivkey, pin);
+    }
+
+    return accessData;
+  },
+
+  /**
+   * Whether an access-data record has a shielded chain: a P2PKH record that
+   * carries both shielded xpubs, scan and spend.
+   *
+   * Shielded addresses are derived from the pair, so a record with only one of
+   * them has no shielded chain. A multisig record has none either, even when an
+   * older version stored the pair in it: shielded keys are derived from the
+   * wallet's own root, which on a multisig wallet belongs to one participant,
+   * so that participant alone could spend what is sent to a shielded address,
+   * without the other signatures the wallet requires. This is the record half
+   * of the check the wallet makes before deriving, subscribing or gap-scanning
+   * the shielded chain, and apps can call it before `start()`.
+   *
+   * @param accessData The wallet access data, or null for a wallet without one
+   * @returns true for a P2PKH record with both xpubs
+   */
+  hasShieldedXpubs(
+    accessData: IWalletAccessData | null
+  ): accessData is IWalletAccessData & { scanXpubkey: string; spendXpubkey: string } {
+    return (
+      accessData?.walletType === WalletType.P2PKH &&
+      !!accessData.scanXpubkey &&
+      !!accessData.spendXpubkey
+    );
   },
 
   /**
    * Re-derive the shielded scan/spend keys on an access-data record that was
    * persisted before shielded support existed. No-op if the record already
-   * has all four shielded fields, or if the record lacks the encrypted seed
-   * (xpub-only wallets have nothing to derive from).
+   * has all four shielded fields, if the record lacks the encrypted seed
+   * (xpub-only wallets have nothing to derive from), or if it is not a P2PKH
+   * record: a multisig wallet has no shielded keys (see `hasShieldedXpubs`).
    *
    * The derivation MUST exactly match what `generateAccessDataFromSeed`
    * produces for a fresh wallet (same paths, same encryption) so that a
@@ -755,13 +815,30 @@ const wallet = {
    * (index=-1)". Running this migration on the next `wallet.start()` fixes
    * the state permanently.
    *
-   * IMPORTANT: `passphrase` must be the wallet's original BIP39 passphrase.
-   * A different passphrase derives the shielded keys from a different root
-   * than the wallet's legacy keys — and this is NOT detectable here, since
-   * BIP39 passphrases are unverifiable by design (any passphrase yields a
-   * valid seed). The PIN, however, IS cross-checked against `mainKey` below
-   * so the new blobs can never be encrypted under a PIN that differs from
-   * the rest of the record.
+   * `passphrase` must be the wallet's original BIP39 passphrase. A passphrase
+   * cannot be checked on its own (any passphrase yields a valid seed), so the
+   * root it gives is checked instead: it must derive the record's own legacy
+   * change key (`xpubkey`), on the P2PKH path.
+   * Otherwise the shielded keys would come from another root than the
+   * wallet's legacy keys, and a restore from the words and the right
+   * passphrase would not find the shielded funds. The PIN is cross-checked
+   * against `mainKey`, so the new blobs can never be encrypted under a PIN
+   * that differs from the rest of the record. Nothing is written unless every
+   * check passes.
+   *
+   * With `replaceShieldedKeys`, a record that already has the four fields gets
+   * them derived again and replaced, after the same checks. This repairs a
+   * record whose encrypted scan key is corrupt or is not the key of its scan
+   * xpub (the `corrupt-key` and `key-mismatch` causes of the shielded
+   * capability): save the record, then unlock the view key of the running
+   * wallet with `HathorWallet.unlockShieldedView`.
+   *
+   * @param options.replaceShieldedKeys Derive the shielded fields again even
+   *   when the record has all four, replacing them. Defaults to false.
+   * @throws {ShieldedKeyError} `shielded-wrong-password` when the password does
+   *   not decrypt the words, `shielded-wrong-pin` when the PIN does not decrypt
+   *   `mainKey`, and `shielded-passphrase-mismatch` when the root does not
+   *   derive `xpubkey`.
    */
   migrateShieldedAccessData(
     accessData: IWalletAccessData,
@@ -770,15 +847,24 @@ const wallet = {
       password,
       passphrase = '',
       networkName,
-    }: { pin: string; password: string; passphrase?: string; networkName: string }
+      replaceShieldedKeys = false,
+    }: {
+      pin: string;
+      password: string;
+      passphrase?: string;
+      networkName: string;
+      replaceShieldedKeys?: boolean;
+    }
   ): boolean {
     const hasAll =
       !!accessData.scanXpubkey &&
       !!accessData.scanMainKey &&
       !!accessData.spendXpubkey &&
       !!accessData.spendMainKey;
-    if (hasAll) return false;
+    if (hasAll && !replaceShieldedKeys) return false;
     if (!accessData.words) return false;
+    // A multisig wallet has no shielded keys (see hasShieldedXpubs).
+    if (accessData.walletType !== WalletType.P2PKH) return false;
 
     // `decryptData` throws InvalidPasswdError / DecryptionError. We wrap it
     // here so the operator sees the *specific* failure mode — the wallet
@@ -791,38 +877,50 @@ const wallet = {
     try {
       words = decryptData(accessData.words, password);
     } catch (e) {
-      // Project tsconfig predates ES2022 ErrorOptions; attach `cause` via
-      // property assignment so the original InvalidPasswdError/DecryptionError
-      // is still recoverable from `(err as Error & { cause? }).cause`.
-      const wrapped = new Error(
+      // The original InvalidPasswdError/DecryptionError stays in `cause`; it
+      // carries no key material.
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_WRONG_PASSWORD,
         'Shielded migration requires the wallet password (not PIN) to decrypt the seed. ' +
-          'Ensure you provided the password and not the PIN, then retry wallet.start.'
+          'Ensure you provided the password and not the PIN, then retry wallet.start.',
+        e
       );
-      (wrapped as Error & { cause?: unknown }).cause = e;
-      throw wrapped;
     }
 
     // Cross-check the PIN against the record's existing key material before
     // writing anything: without this, a mismatched PIN silently produces
     // scan/spend blobs encrypted under a DIFFERENT pin than mainKey — the
     // wallet then fails to decrypt its shielded keys on every unlock, with
-    // no hint that the migration was the cause. BIP39 passphrases cannot be
-    // validated the same way (see doc comment), but the PIN can and must be.
+    // no hint that the migration was the cause.
     if (accessData.mainKey) {
       try {
         decryptData(accessData.mainKey, pin);
       } catch (e) {
-        const wrapped = new Error(
+        throw new ShieldedKeyError(
+          ErrorMessages.SHIELDED_WRONG_PIN,
           'Shielded migration PIN does not match the wallet mainKey. ' +
-            'The new shielded keys must be encrypted under the same PIN as the rest of the record.'
+            'The new shielded keys must be encrypted under the same PIN as the rest of the record.',
+          e
         );
-        (wrapped as Error & { cause?: unknown }).cause = e;
-        throw wrapped;
       }
     }
 
     const code = new Mnemonic(words);
     const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
+
+    // The passphrase cannot be checked on its own, but the root it gives must
+    // derive the record's own legacy change key, on the P2PKH path
+    // generateAccessDataFromSeed uses.
+    const legacyXpub = rootXpriv
+      .deriveNonCompliantChild(P2PKH_ACCT_PATH)
+      .deriveNonCompliantChild(0).hdPublicKey;
+    if (!isSameExtendedPublicKey(legacyXpub, accessData.xpubkey)) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH,
+        'Shielded migration passphrase does not match the wallet: the words and passphrase ' +
+          'do not derive the wallet xpubkey. Provide the passphrase the wallet was created with.'
+      );
+    }
 
     // Paths + encryption must match `generateAccessDataFromSeed` exactly.
     const scanAcctXpriv = rootXpriv.deriveChild(SHIELDED_SCAN_ACCT_PATH);
