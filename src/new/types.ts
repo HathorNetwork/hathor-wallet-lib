@@ -260,6 +260,13 @@ export interface WalletStartOptions {
    * of the PIN to unlock the shielded view key: it is checked against the
    * record's `scanXpubkey` and kept in memory only, until stop(). A key that
    * does not match starts the wallet without it.
+   *
+   * start() reads the shielded xpubs from the record and never adds them to an
+   * existing one. An xpub-only wallet gets them in its record when it is
+   * created, from `walletUtils.generateAccessDataFromXpub(xpub, shieldedXpubs)`
+   * saved before start(); a record that predates them is upgraded by saving it
+   * again with `scanXpubkey` and `spendXpubkey` set (from
+   * `walletUtils.deriveShieldedXpubs`) before start().
    */
   shieldedScanXPrivKey?: string | null;
 }
