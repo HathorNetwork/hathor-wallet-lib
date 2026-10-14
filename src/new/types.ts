@@ -253,6 +253,15 @@ export interface DestroyAuthorityOptions {
 export interface WalletStartOptions {
   pinCode?: string | null;
   password?: string | null;
+  /**
+   * The shielded scan private key (m/44'/280'/1'/0), for a wallet whose record
+   * holds no encrypted scan key, such as an xpub-only wallet (see
+   * `walletUtils.deriveShieldedScanXPrivKey`). When given, it is used instead
+   * of the PIN to unlock the shielded view key: it is checked against the
+   * record's `scanXpubkey` and kept in memory only, until stop(). A key that
+   * does not match starts the wallet without it.
+   */
+  shieldedScanXPrivKey?: string | null;
 }
 
 /**
