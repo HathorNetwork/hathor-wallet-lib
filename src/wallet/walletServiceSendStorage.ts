@@ -414,7 +414,7 @@ export class WalletServiceSendStorage {
       height: null,
     };
     if (entry.kind === 'shielded') {
-      Object.assign(utxo, await this.rewind(entry, token));
+      Object.assign(utxo, await this.rewind(entry));
     }
     const key = utxoKey(entry.txId, entry.index);
     this.knownUtxos.set(key, utxo);
@@ -428,54 +428,17 @@ export class WalletServiceSendStorage {
   }
 
   private async rewind(
-    entry: ShieldedUtxo,
-    token: string
+    entry: ShieldedUtxo
   ): Promise<Pick<IUtxo, 'shielded' | 'blindingFactor' | 'assetBlindingFactor'>> {
     if (!this.scanKey) {
-      // The scan key start() keeps in memory for the wallet session
-      const { scanXPrivKey } = this.storage;
-      if (!scanXPrivKey) {
-        throw new SendTxError(
-          'The wallet has no shielded view key in memory, so its shielded utxos cannot be opened. ' +
-            'Start the wallet with its PIN.'
-        );
-      }
-      this.scanKey = parseScanXPrivKey(scanXPrivKey);
+      this.scanKey = sessionScanKey(this.storage, SendTxError);
     }
-    const privkey = deriveScanChildPrivkey(this.scanKey, entry.shieldedIndex);
-    try {
-      const tokenUid = token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : token;
-      const rewound = await rewindShieldedOutput(
-        this.storage.getShieldedCryptoProvider(),
-        privkey,
-        {
-          ephemeralPubkey: Buffer.from(entry.ephemeralPubkey, 'hex'),
-          commitment: Buffer.from(entry.commitment, 'hex'),
-          rangeProof: Buffer.from(entry.rangeProof, 'hex'),
-          ...(entry.mode === 2
-            ? {
-                mode: ShieldedOutputMode.FULLY_SHIELDED,
-                assetCommitment: Buffer.from(entry.assetCommitment, 'hex'),
-              }
-            : { mode: ShieldedOutputMode.AMOUNT_SHIELDED, tokenUid }),
-        }
-      );
-      if (rewound.value !== entry.value || rewound.tokenUid !== tokenUid) {
-        throw new SendTxError(
-          `Shielded utxo ${entry.txId}:${entry.index} does not open to the amount and token ` +
-            'the wallet-service reports.'
-        );
-      }
-      return {
-        shielded: true,
-        blindingFactor: rewound.blindingFactor.toString('hex'),
-        ...(rewound.assetBlindingFactor
-          ? { assetBlindingFactor: rewound.assetBlindingFactor.toString('hex') }
-          : {}),
-      };
-    } finally {
-      privkey.fill(0);
-    }
+    const opened = await openShieldedOutput(this.storage, this.scanKey, entry, SendTxError);
+    return {
+      shielded: true,
+      blindingFactor: opened.blindingFactor,
+      ...(opened.assetBlindingFactor ? { assetBlindingFactor: opened.assetBlindingFactor } : {}),
+    };
   }
 
   /**
@@ -584,6 +547,70 @@ export class WalletServiceSendStorage {
       symbol: tokenInfo.symbol,
       version: tokenInfo.version,
     };
+  }
+}
+
+/**
+ * The scan key start() keeps in memory for the wallet session, parsed.
+ * Throws `ErrorClass` when there is none.
+ */
+export function sessionScanKey(
+  storage: IStorage,
+  ErrorClass: new (message: string) => Error = WalletError
+): HDPrivateKey {
+  const { scanXPrivKey } = storage;
+  if (!scanXPrivKey) {
+    throw new ErrorClass(
+      'The wallet has no shielded view key in memory, so its shielded utxos cannot be opened. ' +
+        'Start the wallet with its PIN.'
+    );
+  }
+  return parseScanXPrivKey(scanXPrivKey);
+}
+
+/**
+ * Open one of the wallet's shielded outputs, as `GET wallet/tx_outputs`
+ * returns it, with the scan key: recover its blinding factors and check that
+ * it opens to the value and token the wallet-service reports. Throws
+ * `ErrorClass` when it does not.
+ */
+export async function openShieldedOutput(
+  storage: IStorage,
+  scanKey: HDPrivateKey,
+  entry: ShieldedUtxo,
+  ErrorClass: new (message: string) => Error = WalletError
+): Promise<{ value: bigint; token: string; blindingFactor: string; assetBlindingFactor?: string }> {
+  const token = entry.tokenId === '00' ? NATIVE_TOKEN_UID : entry.tokenId;
+  const tokenUid = token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : token;
+  const privkey = deriveScanChildPrivkey(scanKey, entry.shieldedIndex);
+  try {
+    const rewound = await rewindShieldedOutput(storage.getShieldedCryptoProvider(), privkey, {
+      ephemeralPubkey: Buffer.from(entry.ephemeralPubkey, 'hex'),
+      commitment: Buffer.from(entry.commitment, 'hex'),
+      rangeProof: Buffer.from(entry.rangeProof, 'hex'),
+      ...(entry.mode === 2
+        ? {
+            mode: ShieldedOutputMode.FULLY_SHIELDED,
+            assetCommitment: Buffer.from(entry.assetCommitment, 'hex'),
+          }
+        : { mode: ShieldedOutputMode.AMOUNT_SHIELDED, tokenUid }),
+    });
+    if (rewound.value !== entry.value || rewound.tokenUid !== tokenUid) {
+      throw new ErrorClass(
+        `Shielded utxo ${entry.txId}:${entry.index} does not open to the amount and token ` +
+          'the wallet-service reports.'
+      );
+    }
+    return {
+      value: entry.value,
+      token,
+      blindingFactor: rewound.blindingFactor.toString('hex'),
+      ...(rewound.assetBlindingFactor
+        ? { assetBlindingFactor: rewound.assetBlindingFactor.toString('hex') }
+        : {}),
+    };
+  } finally {
+    privkey.fill(0);
   }
 }
 
