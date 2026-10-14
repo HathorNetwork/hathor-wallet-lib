@@ -233,6 +233,24 @@ describe('startReadOnly with the shielded xpubs', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringMatching(/shielded status: unknown/));
   });
 
+  it('keeps waiting through failed status requests that are not in a row', async () => {
+    const { wallet, statusSpy } = setup({
+      statuses: [
+        new WalletRequestError('transient'),
+        walletStatus('creating'),
+        new WalletRequestError('transient'),
+        walletStatus('creating'),
+        new WalletRequestError('transient'),
+        walletStatus('ready'),
+      ],
+    });
+
+    await wallet.startReadOnly({ shieldedXpubs });
+
+    expect(statusSpy).toHaveBeenCalledTimes(6);
+    expect(wallet.isShieldedEnabled()).toBe(true);
+  });
+
   it('fails the start on a status error that is not a request error, without polling', async () => {
     const { wallet, statusSpy } = setup({ statuses: [new TypeError('network down')] });
 

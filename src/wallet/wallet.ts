@@ -136,7 +136,7 @@ const WALLET_STATUS_POLLING_INTERVAL = 1000;
 
 // Maximum number of polling attempts before timing out
 const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
-// How many failed `wallet/status` requests startReadOnly tolerates while it
+// How many `wallet/status` requests in a row may fail while startReadOnly
 // waits for the shielded side, before it runs legacy-only.
 const MAX_SHIELDED_STATUS_REQUEST_ERRORS = 3;
 
@@ -1992,8 +1992,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * `wallet/status`, polled while the service still loads it. A failed load,
    * a wallet registered without shielded keys, a service that does not report
    * the shielded side, a status that never settles and a status request that
-   * fails a few times all leave the wallet legacy-only, which is logged. Any
-   * error other than a WalletRequestError is thrown.
+   * fails a few times in a row all leave the wallet legacy-only, which is
+   * logged. Any error other than a WalletRequestError is thrown.
    */
   private async isShieldedSideReady(): Promise<boolean> {
     let status: WalletStatus | undefined;
@@ -2001,6 +2001,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
       try {
         ({ status } = await walletApi.getWalletStatus(this));
+        requestErrors = 0;
       } catch (err) {
         if (!(err instanceof WalletRequestError)) {
           throw err;
