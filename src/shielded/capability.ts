@@ -19,12 +19,17 @@ import type {
 /** The reasons a level below `view` can have. */
 type ShieldedAddressRefusalReason = Exclude<ShieldedCapabilityReason, 'no-spend-authority'>;
 
-/** The causes of a wallet that holds no scan key. */
+/**
+ * The causes of a wallet that holds no scan key. `key-mismatch` is one only
+ * for a scan key given to start() that does not match the record; a record
+ * whose own keys do not match is an integrity failure instead.
+ */
 const LOCK_CAUSES: ReadonlySet<ShieldedCapabilityCause> = new Set<ShieldedCapabilityCause>([
   'not-supplied',
   'wrong-pin',
   'corrupt-key',
   'error',
+  'key-mismatch',
 ]);
 
 /** The causes of a failed migration, which leaves the record without shielded keys. */

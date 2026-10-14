@@ -115,4 +115,50 @@ describeShieldedSend('[Service-specific] shielded sends', () => {
     const [after] = await receiver.getBalance(NATIVE_TOKEN_UID, { split: true });
     expect(after.balance.unlocked.total).toBeLessThan(30n);
   });
+
+  it('gives the openings of its own shielded outputs and of the inputs spending them', async () => {
+    const sender = await startWallet();
+    const receiver = await startWallet();
+    await GenesisWalletServiceHelper.injectFunds(sender.getCurrentAddress().address, 100n, sender);
+
+    const shieldedTx = await sender.sendManyOutputsTransaction(
+      [
+        {
+          address: receiver.getCurrentAddress({}, { legacy: false }).address,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        },
+      ],
+      { pinCode }
+    );
+    await pollForTx(receiver, shieldedTx.hash!);
+    await pollUntilCondition(
+      async () => (await receiver.getUtxos({ shielded: true })).utxos.length > 0,
+      'received shielded utxo indexed'
+    );
+
+    const received = await receiver.getShieldedUnblindingForTx(shieldedTx.hash!);
+    expect(received.inputs).toEqual([]);
+    expect(received.outputs).toEqual([
+      expect.objectContaining({ value: 30n, token: NATIVE_TOKEN_UID, vbf: expect.any(String) }),
+    ]);
+    const [opening] = received.outputs;
+    expect(opening.index).toBeGreaterThanOrEqual(shieldedTx.outputs.length);
+    // The sender knows nothing it may disclose about the receiver's output
+    const sent = await sender.getShieldedUnblindingForTx(shieldedTx.hash!);
+    expect(sent.outputs.map(o => o.index)).not.toContain(opening.index);
+
+    // Spending it, the receiver discloses the same opening for the input
+    const unshieldTx = await receiver.sendManyOutputsTransaction(
+      [{ address: sender.getCurrentAddress().address, value: 10n, token: NATIVE_TOKEN_UID }],
+      { pinCode }
+    );
+    await pollForTx(sender, unshieldTx.hash!);
+    const spending = await receiver.getShieldedUnblindingForTx(unshieldTx.hash!);
+    const inputIndex = unshieldTx.inputs.findIndex(
+      input => input.hash === shieldedTx.hash && input.index === opening.index
+    );
+    expect(spending.inputs).toContainEqual({ ...opening, index: inputIndex });
+  });
 });

@@ -31,7 +31,7 @@ import {
   toOnChainAddress,
 } from '../utils/address';
 import { deriveShieldedAddress } from '../utils/shieldedAddress';
-import { unlockScanXPrivKey } from '../shielded/scanKey';
+import { checkScanXPrivKey, unlockScanXPrivKey } from '../shielded/scanKey';
 import { shieldedAddressError } from '../shielded/capability';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -52,6 +52,8 @@ import SendTransactionWalletService, {
   assertAllInputsSigned,
   assertNanoCallerSigned,
 } from './sendTransactionWalletService';
+import { openShieldedOutput, sessionScanKey } from './walletServiceSendStorage';
+import { ensureHex } from '../utils/buffer';
 import {
   AddressInfoObject,
   GetBalanceObject,
@@ -85,6 +87,7 @@ import {
   ShieldedAddressInfoObject,
   GetSplitBalanceObject,
   WalletStatus,
+  ShieldedUtxo,
 } from './types';
 import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
 import {
@@ -98,8 +101,10 @@ import {
   TokenNotFoundError,
   HasTxOutsideFirstAddressError,
   ShieldedKeyError,
+  TxNotFoundError,
 } from '../errors';
 import { assertChangeShieldedMode } from '../new/sendTransaction';
+import type { ShieldedOpeningEntry } from '../new/types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import NanoContractHeader from '../nano_contracts/header';
 import {
@@ -136,6 +141,9 @@ const WALLET_STATUS_POLLING_INTERVAL = 1000;
 
 // Maximum number of polling attempts before timing out
 const MAX_WALLET_STATUS_POLL_ATTEMPTS = 60;
+// How many `wallet/status` requests in a row may fail while startReadOnly
+// waits for the shielded side, before it runs legacy-only.
+const MAX_SHIELDED_STATUS_REQUEST_ERRORS = 3;
 
 // Wallet status values returned by the wallet-service API
 const WS_STATUS_READY = 'ready';
@@ -171,6 +179,57 @@ enum walletState {
   NOT_STARTED = 'Not started',
   LOADING = 'Loading',
   READY = 'Ready',
+}
+
+/**
+ * The on-chain fields of a shielded output, as the fullnode serializes it in
+ * `tx.shielded_outputs` or, without the ephemeral pubkey, in a shielded input:
+ * hex or base64, where the wallet-service's are hex.
+ */
+interface OnChainShieldedFields {
+  commitment: string;
+  // eslint-disable-next-line camelcase
+  range_proof: string;
+  // eslint-disable-next-line camelcase
+  ephemeral_pubkey?: string;
+  // eslint-disable-next-line camelcase
+  asset_commitment?: unknown;
+  mode?: unknown;
+}
+
+/**
+ * Whether a wallet-service shielded output carries the on-chain fields: the
+ * fields its opening is derived from and verified against.
+ */
+function matchesOnChain(entry: ShieldedUtxo, onChain: OnChainShieldedFields): boolean {
+  const same = (serviceHex: unknown, wire: unknown) =>
+    typeof serviceHex === 'string' &&
+    typeof wire === 'string' &&
+    serviceHex.toLowerCase() === ensureHex(wire).toLowerCase();
+  return (
+    same(entry.commitment, onChain.commitment) &&
+    same(entry.rangeProof, onChain.range_proof) &&
+    (onChain.ephemeral_pubkey === undefined ||
+      same(entry.ephemeralPubkey, onChain.ephemeral_pubkey)) &&
+    (onChain.mode === undefined || entry.mode === onChain.mode) &&
+    (entry.mode !== 2 ||
+      onChain.asset_commitment === undefined ||
+      same(entry.assetCommitment, onChain.asset_commitment))
+  );
+}
+
+/**
+ * The wallet-service's refusal of a tx_outputs lookup for an output of another
+ * wallet (403 `tx-output-not-in-wallet`); any other refusal is a failure.
+ */
+function isTxOutputNotInWallet(e: unknown): boolean {
+  if (!(e instanceof WalletRequestError) || !e.cause || !('status' in e.cause)) {
+    return false;
+  }
+  const { status, data } = e.cause;
+  return (
+    status === 403 && (data as { error?: unknown } | null)?.error === 'tx-output-not-in-wallet'
+  );
 }
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
@@ -1643,13 +1702,75 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * With a signer set, transactions are signed through it — via the wallet-service storage proxy —
    * and no pin is needed, even when the storage holds only the xpub. Mirrors HathorWallet.
    *
+   * The signer gets the inputs that spend shielded outputs as the fullnode
+   * facade gives them, with the 'spend' request (see signTxInputs): the storage
+   * proxy marks an input on the shielded spend chain 'shielded-spend' from the
+   * stored shielded xpubs. `options.shieldedSpend` is accepted so callers can
+   * register a signer the same way on both facades; this facade has no
+   * shielded capability to gate on it, so it changes nothing here.
+   *
    * @param method The external tx-signing method, or null to clear it
+   * @param [options.shieldedSpend] Whether the method signs the inputs that
+   *   spend shielded outputs. Accepted for symmetry with HathorWallet; unused.
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  setExternalTxSigningMethod(method: EcdsaTxSign | null): void {
+  setExternalTxSigningMethod(
+    method: EcdsaTxSign | null,
+    options: { shieldedSpend?: boolean } = {}
+  ): void {
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set the shielded scan private key the wallet keeps in memory, or null to
+   * drop it. Sends need it to read the value of the shielded outputs they
+   * spend. A wallet started from its seed sets it at start(); a read-only
+   * wallet started with its shielded xpubs (startReadOnly) gets it here, from
+   * a key derived from its root while the root is at hand (see
+   * walletUtils.deriveShieldedScanXPrivKey). It is never persisted, and stop()
+   * drops it.
+   *
+   * @param xpriv The scan xpriv (m/44'/280'/1'/0), or null to drop it
+   * @throws {ShieldedKeyError}
+   *   - `shielded-not-started` when the wallet is not started, or stop() runs
+   *     during the call;
+   *   - `shielded-no-keys` when the record has no scan xpub to check it against;
+   *   - `shielded-corrupt-key` when it is not an extended private key;
+   *   - `shielded-key-mismatch` when it is not the key of the record's scan
+   *     xpub. The key in memory is then left as it was.
+   */
+  async setShieldedScanKey(xpriv: string | null): Promise<void> {
+    if (xpriv === null) {
+      this.storage.scanXPrivKey = null;
+      return;
+    }
+    this.failIfShieldedKeyNotStarted();
+    const accessData = await this.storage.getAccessData();
+    if (!accessData?.scanXpubkey) {
+      throw new ShieldedKeyError(
+        ErrorMessages.SHIELDED_NO_KEYS,
+        'The wallet record has no shielded scan xpub to check the view key against.'
+      );
+    }
+    const checked = checkScanXPrivKey(xpriv, accessData.scanXpubkey);
+    // stop() may have run during the read above, and it already dropped the
+    // key this would put back.
+    this.failIfShieldedKeyNotStarted();
+    this.storage.scanXPrivKey = checked;
+  }
+
+  /**
+   * Refuse to keep a scan key in memory for a wallet that is not started: stop()
+   * drops it, and nothing would drop one set after.
+   *
+   * @throws {ShieldedKeyError} `shielded-not-started`
+   */
+  private failIfShieldedKeyNotStarted(): void {
+    if (this.state === walletState.NOT_STARTED || this.walletId === null) {
+      throw new ShieldedKeyError(ErrorMessages.SHIELDED_NOT_STARTED, 'The wallet is not started.');
+    }
   }
 
   /**
@@ -1792,18 +1913,36 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Start wallet in read-only mode using only the xpubkey
    * This allows querying wallet data without needing private keys or authentication
    *
+   * With `shieldedXpubs`, the wallet's shielded scan and spend xpubs (see
+   * walletUtils.deriveShieldedXpubs), the wallet uses its shielded chain when
+   * the wallet-service registered it: the xpubs are kept on the access data,
+   * and the shielded side is enabled when `wallet/status` reports it ready
+   * and the shielded address the service has at index 0 is the one of these
+   * xpubs. While the service still loads it, the status is polled; when its
+   * load failed, the service has no shielded keys for the wallet or other
+   * ones, the wallet runs legacy-only in this session. Sends that spend shielded outputs also
+   * need the scan key in memory (setShieldedScanKey).
+   *
    * @param options.skipAddressFetch - If true, skips fetching gap addresses (faster startup, ~300ms-1s saved)
+   * @param options.shieldedXpubs - The wallet's shielded scan and spend xpubs
    * @throws {WalletRequestError} If wallet is not initialized or not ready
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async startReadOnly(options?: { skipAddressFetch?: boolean }): Promise<void> {
+  async startReadOnly(options?: {
+    skipAddressFetch?: boolean;
+    shieldedXpubs?: { scanXpubkey: string; spendXpubkey: string };
+  }): Promise<void> {
     if (!this.xpub) {
       throw new Error('xpub is required to start wallet in read-only mode.');
     }
 
     const skipAddressFetch = options?.skipAddressFetch || false;
+    const shieldedXpubs = options?.shieldedXpubs;
+    if (shieldedXpubs && (!shieldedXpubs.scanXpubkey || !shieldedXpubs.spendXpubkey)) {
+      throw new Error('The shielded scan and spend xpubs must be given together.');
+    }
 
     this.setState(walletState.LOADING);
 
@@ -1816,8 +1955,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Save accessData for read-only wallet
     // This is required for methods like getAddressPathForIndex() that need walletType
-    const accessData = walletUtils.generateAccessDataFromXpub(this.xpub);
+    const accessData = walletUtils.generateAccessDataFromXpub(this.xpub, {
+      scanXpubkey: shieldedXpubs?.scanXpubkey,
+      spendXpubkey: shieldedXpubs?.spendXpubkey,
+    });
     await this.storage.saveAccessData(accessData);
+    this.shieldedEnabled = false;
 
     // Poll for read-only auth token. The RO token endpoint (no auth required)
     // returns 400 while the wallet is still 'creating'. We retry WalletRequestError
@@ -1849,7 +1992,102 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         { cause: { source: lastError } }
       );
     }
+    if (shieldedXpubs) {
+      this.shieldedEnabled =
+        (await this.isShieldedSideReady()) && (await this.serviceHasShieldedXpubs(shieldedXpubs));
+    }
     await this.onWalletReady(skipAddressFetch);
+  }
+
+  /**
+   * Whether the shielded keys the wallet-service registered for this wallet
+   * are the given xpubs, by the shielded address at index 0 it reports. The
+   * local xpubs decide which inputs are signed on the spend chain and which
+   * scan key is accepted, while the service decides the addresses and utxos,
+   * so a wallet whose two sides differ (stale xpubs, a root of another
+   * network) runs legacy-only, which is logged.
+   *
+   * @param shieldedXpubs The wallet's shielded scan and spend xpubs
+   */
+  private async serviceHasShieldedXpubs(shieldedXpubs: {
+    scanXpubkey: string;
+    spendXpubkey: string;
+  }): Promise<boolean> {
+    const expected = deriveShieldedAddress(
+      shieldedXpubs.scanXpubkey,
+      shieldedXpubs.spendXpubkey,
+      0,
+      this.network.name
+    );
+    let registered: { address: string; spendAddress: string } | undefined;
+    try {
+      ({
+        addresses: [registered],
+      } = await walletApi.getAddresses(this, 0, { legacy: false }));
+    } catch (err) {
+      if (!(err instanceof WalletRequestError)) {
+        throw err;
+      }
+    }
+    if (
+      registered?.address === expected.base58 &&
+      registered?.spendAddress === expected.spendAddress
+    ) {
+      return true;
+    }
+    this.storage.logger.warn(
+      `The shielded keys the wallet-service has for wallet ${this.walletId} ` +
+        `${registered ? 'are not the given shielded xpubs' : 'could not be checked'}; ` +
+        'the wallet runs without shielded support in this session.'
+    );
+    return false;
+  }
+
+  /**
+   * Whether the wallet-service has the shielded side of this wallet ready, by
+   * `wallet/status`, polled while the service still loads it. A failed load,
+   * a wallet registered without shielded keys, a service that does not report
+   * the shielded side, a status that never settles and a status request that
+   * fails a few times in a row all leave the wallet legacy-only, which is
+   * logged. Any error other than a WalletRequestError is thrown.
+   */
+  private async isShieldedSideReady(): Promise<boolean> {
+    let status: WalletStatus | undefined;
+    let requestErrors = 0;
+    for (let attempt = 0; attempt < MAX_WALLET_STATUS_POLL_ATTEMPTS; attempt++) {
+      try {
+        ({ status } = await walletApi.getWalletStatus(this));
+        requestErrors = 0;
+      } catch (err) {
+        if (!(err instanceof WalletRequestError)) {
+          throw err;
+        }
+        status = undefined;
+        // A service that keeps refusing the request is not loading anything:
+        // only the shielded load is waited for, not a failing endpoint.
+        requestErrors += 1;
+        if (requestErrors >= MAX_SHIELDED_STATUS_REQUEST_ERRORS) {
+          break;
+        }
+      }
+      if (status?.shieldedStatus === WS_STATUS_READY) {
+        return true;
+      }
+      if (status && isShieldedOnlyLoadFailure(status)) {
+        this.continueWithoutShielded(status);
+        return false;
+      }
+      if (status && status.shieldedStatus !== WS_STATUS_CREATING) {
+        break;
+      }
+      await helpers.sleep(WALLET_STATUS_POLLING_INTERVAL);
+    }
+    this.storage.logger.warn(
+      `The wallet-service has no ready shielded side for wallet ${this.walletId} ` +
+        `(shielded status: ${status?.shieldedStatus ?? 'unknown'}); ` +
+        'the wallet runs without shielded support in this session.'
+    );
+    return false;
   }
 
   /**
@@ -3643,6 +3881,113 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
 
     return walletApi.getFullTxById(this, txId);
+  }
+
+  /**
+   * Get the unblinding factors for shielded outputs in a transaction, in the
+   * shape the fullnode facade's `getShieldedUnblindingForTx` returns.
+   *
+   * Returns one entry per shielded output of the tx **the wallet owns**, and
+   * one per shielded input spending an output the wallet owned. Outputs paid
+   * to others are left out: disclosing their blinding factors would leak the
+   * recipient's amount and token. Ownership is the wallet-service's: it lists
+   * an output of this wallet, spent or not, only once it has recovered it with
+   * the wallet's scan key. The wallet then opens it with the scan key in
+   * memory, so the openings are the ones the fullnode facade derives.
+   *
+   * Indexes follow the fullnode facade: an output's on-chain absolute index
+   * (`len(transparent_outputs) + shielded_index`), an input's position.
+   *
+   * @throws {ShieldedKeyError} `no-shielded-keys` when the wallet did not
+   *   register shielded keys in this session
+   */
+  async getShieldedUnblindingForTx(
+    txId: string
+  ): Promise<{ outputs: ShieldedOpeningEntry[]; inputs: ShieldedOpeningEntry[] }> {
+    this.failIfWalletNotReady();
+    this.failIfShieldedNotEnabled();
+
+    let response: FullNodeTxResponse;
+    try {
+      response = await this.getFullTxById(txId);
+    } catch (e) {
+      if (e instanceof TxNotFoundError) {
+        return { outputs: [], inputs: [] };
+      }
+      throw e;
+    }
+    const { tx } = response;
+
+    const scanKey = sessionScanKey(this.storage);
+    const openingOf = async (
+      outputTxId: string,
+      outputIndex: number,
+      onChain: OnChainShieldedFields
+    ): Promise<Omit<ShieldedOpeningEntry, 'index'> | null> => {
+      const entry = await this.getOwnShieldedOutput(outputTxId, outputIndex);
+      if (!entry) return null;
+      // The opening is published under this tx's index, so it must be of the
+      // output this tx carries, never of another output the service maps here
+      if (!matchesOnChain(entry, onChain)) {
+        throw new WalletError(
+          `The wallet-service's shielded output ${outputTxId}:${outputIndex} is not the one ` +
+            `transaction ${txId} carries at that position.`
+        );
+      }
+      const opened = await openShieldedOutput(this.storage, scanKey, entry);
+      return {
+        value: opened.value,
+        token: opened.token,
+        vbf: opened.blindingFactor,
+        ...(opened.assetBlindingFactor ? { abf: opened.assetBlindingFactor } : {}),
+      };
+    };
+
+    const outputs: ShieldedOpeningEntry[] = [];
+    const transparentCount = tx.outputs.length;
+    for (const [s, shieldedOutput] of (tx.shielded_outputs ?? []).entries()) {
+      const index = transparentCount + s;
+      // eslint-disable-next-line no-await-in-loop -- few shielded outputs per tx
+      const opening = await openingOf(txId, index, shieldedOutput);
+      if (opening) outputs.push({ index, ...opening });
+    }
+
+    const inputs: ShieldedOpeningEntry[] = [];
+    for (const [index, input] of tx.inputs.entries()) {
+      // The fullnode marks every input that spends a shielded output
+      if (!('type' in input) || input.type !== 'shielded') continue;
+      // eslint-disable-next-line no-await-in-loop -- few shielded inputs per tx
+      const opening = await openingOf(input.tx_id, input.index, input);
+      if (opening) inputs.push({ index, ...opening });
+    }
+
+    return { outputs, inputs };
+  }
+
+  /**
+   * A shielded output of this wallet, spent or not, as `GET wallet/tx_outputs`
+   * returns it; `null` when the wallet-service has none at that position for
+   * this wallet (another wallet's output, a transparent one, or one it has not
+   * recovered).
+   */
+  private async getOwnShieldedOutput(txId: string, index: number): Promise<ShieldedUtxo | null> {
+    let txOutputs: Utxo[];
+    try {
+      ({ txOutputs } = await walletApi.getTxOutputs(this, {
+        txId,
+        index,
+        skipSpent: false,
+        kind: 'shielded',
+      }));
+    } catch (e) {
+      if (isTxOutputNotInWallet(e)) {
+        return null;
+      }
+      throw e;
+    }
+    const entry = txOutputs.find(o => o.txId === txId && o.index === index);
+    // Only recovered outputs have a value the wallet-service vouches for
+    return entry?.kind === 'shielded' && entry.recoveryState === 'recovered' ? entry : null;
   }
 
   async getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
