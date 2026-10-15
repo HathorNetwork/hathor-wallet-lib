@@ -228,7 +228,9 @@ export interface IShieldedAddressParts {
  * - `wrong-pin`: the PIN does not decrypt the scan key;
  * - `corrupt-key`: the PIN decrypts the scan key record, but it holds no valid
  *   extended private key;
- * - `error`: unlocking failed with an unexpected error, such as a store read.
+ * - `error`: unlocking failed with an unexpected error, such as a store read;
+ * - `key-mismatch`: the scan key given to start() (`shieldedScanXPrivKey`) is
+ *   not the key of the record's `scanXpubkey`.
  *
  * The record has no shielded keys because the migration that adds them failed:
  * - `wrong-password`: the password does not decrypt the words;
@@ -236,7 +238,8 @@ export interface IShieldedAddressParts {
  * - `passphrase-mismatch`: the words and passphrase do not derive the wallet's
  *   own keys.
  *
- * The record is inconsistent, so its shielded keys are not used:
+ * The record is inconsistent, so its shielded keys are not used (the
+ * `integrity` reason):
  * - `key-mismatch`: the scan key the PIN decrypts is not the key of the
  *   record's `scanXpubkey`.
  *
@@ -364,10 +367,15 @@ export interface IShieldedCapability {
 }
 
 /**
- * What unlocks the shielded view key of a running wallet: the wallet's PIN,
- * which decrypts the scan key of its record.
+ * What unlocks the shielded view key of a running wallet:
+ * - `pinCode`: the wallet's PIN, which decrypts the scan key of its record;
+ * - `scanXPrivKey`: the scan key itself (m/44'/280'/1'/0), for a wallet whose
+ *   record holds no encrypted scan key, such as an xpub-only wallet that
+ *   derives it from its root while the root is at hand (see
+ *   `walletUtils.deriveShieldedScanXPrivKey`). It is checked against the
+ *   record's `scanXpubkey` and kept in memory only.
  */
-export type ShieldedViewKeyInput = { pinCode: string };
+export type ShieldedViewKeyInput = { pinCode: string } | { scanXPrivKey: string };
 
 /**
  * The result of unlocking the shielded view key of a running wallet.

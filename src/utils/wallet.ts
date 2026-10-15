@@ -56,6 +56,30 @@ function isSameExtendedPublicKey(key: HDPublicKey, xpubkey: string): boolean {
   return a.publicKey === b.publicKey && a.chainCode === b.chainCode;
 }
 
+/**
+ * The root key to derive the shielded keys from, on `networkName` when given.
+ *
+ * @throws {Error} when the key is not a root key
+ */
+function shieldedRootKey(rootXpriv: HDPrivateKey | string, networkName?: string): HDPrivateKey {
+  const root = typeof rootXpriv === 'string' ? new HDPrivateKey(rootXpriv) : rootXpriv;
+  if (root.depth !== 0) {
+    throw new Error('The shielded keys are derived from the root key (depth 0).');
+  }
+  if (!networkName) {
+    return root;
+  }
+  const { chainCode, privateKey } = root.toObject();
+  return new HDPrivateKey({
+    network: new Network(networkName).bitcoreNetwork,
+    depth: 0,
+    parentFingerPrint: 0,
+    childIndex: 0,
+    chainCode,
+    privateKey,
+  });
+}
+
 const wallet = {
   /**
    * Get the wallet id given the change path xpubkey
@@ -496,12 +520,33 @@ const wallet = {
    * @param {Object} [options={}] Options to generate the access data.
    * @param {IMultisigData|undefined} [options.multisig=undefined] MultiSig data of the wallet
    * @param {boolean} [options.hardware=false] If the wallet is a hardware wallet
+   * @param {string} [options.scanXpubkey] The shielded scan xpub (m/44'/280'/1'/0), from deriveShieldedXpubs
+   * @param {string} [options.spendXpubkey] The shielded spend xpub (m/44'/280'/2'/0), from deriveShieldedXpubs
+   *
+   * The shielded xpubs are on hardened paths, so they cannot come from the xpub
+   * itself: they are derived from the root key beforehand (see
+   * deriveShieldedXpubs) and kept on the record, as public data, so a read-only
+   * wallet has a shielded chain. They are given together or not at all, and a
+   * multisig record gets none (see hasShieldedXpubs).
    * @returns {IWalletAccessData}
    */
   generateAccessDataFromXpub(
     xpubkey: string,
-    { multisig, hardware = false }: { multisig?: IMultisigData; hardware?: boolean } = {}
+    {
+      multisig,
+      hardware = false,
+      scanXpubkey,
+      spendXpubkey,
+    }: {
+      multisig?: IMultisigData;
+      hardware?: boolean;
+      scanXpubkey?: string;
+      spendXpubkey?: string;
+    } = {}
   ): IWalletAccessData {
+    if (!scanXpubkey !== !spendXpubkey) {
+      throw new Error('The shielded scan and spend xpubs must be given together.');
+    }
     let walletFlags = 0 | WALLET_FLAGS.READONLY;
     if (hardware) {
       walletFlags |= WALLET_FLAGS.HARDWARE;
@@ -548,7 +593,7 @@ const wallet = {
       throw new Error('Invalid xpub');
     }
 
-    return {
+    const accessData: IWalletAccessData = {
       // Change path hdpublickey in string format
       xpubkey: xpub.xpubkey,
       walletType,
@@ -556,6 +601,58 @@ const wallet = {
       // We force the readonly flag because we are starting a wallet without the private key
       walletFlags,
     };
+
+    if (scanXpubkey && spendXpubkey && walletType === WalletType.P2PKH) {
+      // Throws on a key that is not an extended public key
+      accessData.scanXpubkey = new HDPublicKey(scanXpubkey).xpubkey;
+      accessData.spendXpubkey = new HDPublicKey(spendXpubkey).xpubkey;
+    }
+
+    return accessData;
+  },
+
+  /**
+   * The shielded scan and spend xpubs of a root key: the change-level keys of
+   * the scan (m/44'/280'/1'/0) and spend (m/44'/280'/2'/0) accounts, derived as
+   * generateAccessDataFromSeed derives them. Both accounts are hardened, so an
+   * xpub-only wallet gets them from its root while the root is at hand, and
+   * passes them to generateAccessDataFromXpub.
+   *
+   * The scan key a wallet is given later is checked against `scanXpubkey` as
+   * serialized, so both are derived from the same root, on the same network
+   * (see deriveShieldedScanXPrivKey).
+   *
+   * @param rootXpriv The root key (depth 0), as an HDPrivateKey or an xpriv
+   * @param networkName The network to serialize the keys for. Defaults to the
+   *   network of the root key.
+   * @returns The scan and spend xpubs
+   */
+  deriveShieldedXpubs(
+    rootXpriv: HDPrivateKey | string,
+    networkName?: string
+  ): { scanXpubkey: string; spendXpubkey: string } {
+    const root = shieldedRootKey(rootXpriv, networkName);
+    return {
+      scanXpubkey: root.deriveChild(SHIELDED_SCAN_ACCT_PATH).deriveChild(0).xpubkey,
+      spendXpubkey: root.deriveChild(SHIELDED_SPEND_ACCT_PATH).deriveChild(0).xpubkey,
+    };
+  },
+
+  /**
+   * The shielded scan private key of a root key (m/44'/280'/1'/0), the key
+   * HathorWallet.unlockShieldedView, the `shieldedScanXPrivKey` start option
+   * and HathorWalletServiceWallet.setShieldedScanKey take. It is the view key
+   * of every shielded output of the wallet, so it is kept in memory only.
+   *
+   * @param rootXpriv The root key (depth 0), as an HDPrivateKey or an xpriv
+   * @param networkName The network to serialize the key for. Defaults to the
+   *   network of the root key; it must be the one deriveShieldedXpubs used.
+   * @returns The scan xpriv
+   */
+  deriveShieldedScanXPrivKey(rootXpriv: HDPrivateKey | string, networkName?: string): string {
+    return shieldedRootKey(rootXpriv, networkName)
+      .deriveChild(SHIELDED_SCAN_ACCT_PATH)
+      .deriveChild(0).xprivkey;
   },
 
   /**

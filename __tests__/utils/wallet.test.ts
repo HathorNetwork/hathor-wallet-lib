@@ -493,6 +493,100 @@ test('access data from xpub', () => {
   }).toThrow('Invalid xpub');
 });
 
+describe('shielded keys of an xpub-only wallet', () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  test.each(['testnet', 'mainnet'])(
+    'derives from the root the %s shielded keys of the seed record',
+    networkName => {
+      const record = wallet.generateAccessDataFromSeed(seed, {
+        pin: '123',
+        password: '456',
+        networkName,
+      });
+      const root = wallet.getXPrivKeyFromSeed(seed, { networkName });
+      const expected = { scanXpubkey: record.scanXpubkey, spendXpubkey: record.spendXpubkey };
+
+      // The key the record encrypts, whatever network its xpriv is serialized for
+      const recordScanKey = new HDPrivateKey(decryptData(record.scanMainKey!, '123'));
+
+      expect(wallet.deriveShieldedXpubs(root)).toEqual(expected);
+      expect(wallet.deriveShieldedXpubs(root.xprivkey)).toEqual(expected);
+      const scanKey = new HDPrivateKey(wallet.deriveShieldedScanXPrivKey(root));
+      expect(scanKey.privateKey.toString()).toBe(recordScanKey.privateKey.toString());
+      expect(scanKey.xpubkey).toBe(record.scanXpubkey);
+      expect(scanKey.network.name).toBe(`htr-${networkName}`);
+
+      // A root serialized for another network gives the keys of `networkName`
+      const otherRoot = wallet.getXPrivKeyFromSeed(seed, {
+        networkName: networkName === 'testnet' ? 'mainnet' : 'testnet',
+      });
+      expect(wallet.deriveShieldedXpubs(otherRoot, networkName)).toEqual(expected);
+      expect(wallet.deriveShieldedScanXPrivKey(otherRoot.xprivkey, networkName)).toBe(
+        scanKey.xprivkey
+      );
+    }
+  );
+
+  test('derives only from a root key', () => {
+    const account = wallet.getXPrivKeyFromSeed(seed).deriveNonCompliantChild("m/44'/280'/0'");
+    expect(() => wallet.deriveShieldedXpubs(account)).toThrow(/root key/);
+    expect(() => wallet.deriveShieldedScanXPrivKey(account.xprivkey)).toThrow(/root key/);
+  });
+
+  test('keeps the shielded xpubs on the access data from xpub', () => {
+    const root = wallet.getXPrivKeyFromSeed(seed);
+    const xpubs = wallet.deriveShieldedXpubs(root);
+    const accountXpub = root.deriveNonCompliantChild("m/44'/280'/0'").xpubkey;
+
+    const accessData = wallet.generateAccessDataFromXpub(accountXpub, xpubs);
+
+    expect(accessData).toMatchObject({
+      walletType: WalletType.P2PKH,
+      walletFlags: WALLET_FLAGS.READONLY,
+      ...xpubs,
+    });
+    expect(accessData.scanMainKey).toBeUndefined();
+    expect(accessData.spendMainKey).toBeUndefined();
+    expect(wallet.hasShieldedXpubs(accessData)).toBe(true);
+    // Without them, the record is as before
+    expect(wallet.generateAccessDataFromXpub(accountXpub)).not.toHaveProperty('scanXpubkey');
+    expect(wallet.generateAccessDataFromXpub(accountXpub)).not.toHaveProperty('spendXpubkey');
+  });
+
+  test('refuses one shielded xpub without the other, and a key that is not an xpub', () => {
+    const root = wallet.getXPrivKeyFromSeed(seed);
+    const { scanXpubkey, spendXpubkey } = wallet.deriveShieldedXpubs(root);
+    const accountXpub = root.deriveNonCompliantChild("m/44'/280'/0'").xpubkey;
+
+    expect(() => wallet.generateAccessDataFromXpub(accountXpub, { scanXpubkey })).toThrow(
+      'The shielded scan and spend xpubs must be given together.'
+    );
+    expect(() => wallet.generateAccessDataFromXpub(accountXpub, { spendXpubkey })).toThrow(
+      'The shielded scan and spend xpubs must be given together.'
+    );
+    expect(() =>
+      wallet.generateAccessDataFromXpub(accountXpub, { scanXpubkey: 'invalid', spendXpubkey })
+    ).toThrow();
+  });
+
+  test('gives a multisig record no shielded xpubs', () => {
+    const root = wallet.getXPrivKeyFromSeed(seed);
+    const xpubs = wallet.deriveShieldedXpubs(root);
+    const accountXpub = root.deriveNonCompliantChild("m/45'/280'/0'").xpubkey;
+
+    const accessData = wallet.generateAccessDataFromXpub(accountXpub, {
+      multisig: { numSignatures: 1, pubkeys: [accountXpub] },
+      ...xpubs,
+    });
+
+    expect(accessData.walletType).toBe(WalletType.MULTISIG);
+    expect(accessData.scanXpubkey).toBeUndefined();
+    expect(accessData.spendXpubkey).toBeUndefined();
+  });
+});
+
 test('access data from xpriv', () => {
   const xprivkeyRoot =
     'htpr4yPomy8kcy5uFJFugmAscbbeih6Cir9ZVaTCSKaCmbAgos8Ymq5BxVDpddzdfbwEnofgFJG3qkMbGS9RMexgju6C2Z9K63c5kJdkWZAwcf2';
