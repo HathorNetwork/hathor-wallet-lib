@@ -6,7 +6,6 @@
  */
 
 import { HDPrivateKey } from 'bitcore-lib';
-import { PRIVATE_KEY_SIZE_BYTES } from '../constants';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from './types';
 
 /**
@@ -57,12 +56,20 @@ export class ShieldedRewindError extends Error {
  * Compliant BIP32 derivation, matching the scan public key in the shielded
  * address (shieldedAddress.ts). Shielded keys are new, so unlike the legacy
  * P2PKH chain they do not need deriveNonCompliantChild.
+ *
+ * @throws {Error} when the index is not an address index, a non-negative
+ *   integer below 2^31, as deriveShieldedAddress does
  */
-export function deriveScanChildPrivkey(scanHdPrivKey: HDPrivateKey, addressIndex: number): Buffer {
-  // { size } zero-pads keys with leading zeros
-  return scanHdPrivKey.deriveChild(addressIndex).privateKey.toBuffer({
-    size: PRIVATE_KEY_SIZE_BYTES,
-  });
+export function deriveScanChildPrivKey(scanHdPrivKey: HDPrivateKey, addressIndex: number): Buffer {
+  // From an index of 2^31 or more, bitcore would derive a hardened child, the
+  // key of no address, and it truncates a fractional index.
+  if (!Number.isInteger(addressIndex) || addressIndex < 0 || addressIndex >= 0x80000000) {
+    throw new Error(
+      `Invalid BIP32 address index: expected a non-negative integer < 2^31, got ${addressIndex}`
+    );
+  }
+  // bitcore pads the key to 32 bytes
+  return scanHdPrivKey.deriveChild(addressIndex).privateKey.toBuffer();
 }
 
 /**

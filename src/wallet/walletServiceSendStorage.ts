@@ -26,7 +26,7 @@ import {
   NATIVE_TOKEN_UID_HEX,
 } from '../constants';
 import { SendTxError, TxNotFoundError, WalletError, WalletRequestError } from '../errors';
-import { deriveScanChildPrivkey, rewindShieldedOutput } from '../shielded/rewind';
+import { deriveScanChildPrivKey, rewindShieldedOutput } from '../shielded/rewind';
 import { parseScanXPrivKey } from '../shielded/scanKey';
 import { ShieldedOutputMode } from '../shielded/types';
 import { convertFullNodeToHistoryTx } from './walletServiceStorageProxy';
@@ -582,7 +582,7 @@ export async function openShieldedOutput(
 ): Promise<{ value: bigint; token: string; blindingFactor: string; assetBlindingFactor?: string }> {
   const token = entry.tokenId === '00' ? NATIVE_TOKEN_UID : entry.tokenId;
   const tokenUid = token === NATIVE_TOKEN_UID ? NATIVE_TOKEN_UID_HEX : token;
-  const privkey = deriveScanChildPrivkey(scanKey, entry.shieldedIndex);
+  const privkey = deriveScanChildPrivKey(scanKey, entry.shieldedIndex);
   try {
     const rewound = await rewindShieldedOutput(storage.getShieldedCryptoProvider(), privkey, {
       ephemeralPubkey: Buffer.from(entry.ephemeralPubkey, 'hex'),
