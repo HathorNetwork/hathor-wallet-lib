@@ -14,6 +14,7 @@
  * the import will fail.
  */
 
+import { PrivateKey } from 'bitcore-lib';
 /* eslint-disable @typescript-eslint/no-unused-vars -- Imports are intentionally exhaustive to validate the public API surface at compile time. */
 import {
   // ============================================================
@@ -719,6 +720,58 @@ describe('type-only exports compile correctly', () => {
       calls: [],
     };
     expect(stateParams.id).toBe('nc-123');
+  });
+});
+
+describe('exported shielded scan-key helpers', () => {
+  const SEED =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const PIN = '123';
+  const NETWORK = 'testnet';
+  const accessData = walletUtils.generateAccessDataFromSeed(SEED, {
+    pin: PIN,
+    password: PIN,
+    networkName: NETWORK,
+  });
+  const root = walletUtils.getXPrivKeyFromSeed(SEED, { networkName: NETWORK });
+
+  it('derive the scan key of each shielded address from the scan xpriv a wallet exports', () => {
+    // A seed wallet stores and exports its scan xpriv with bitcore's livenet
+    // version bytes. One derived from a Hathor root key carries the network's.
+    // Both hold the same key.
+    const exportedXpriv = cryptoUtils.decryptData(accessData.scanMainKey!, PIN);
+    const derivedXpriv = walletUtils.deriveShieldedScanXPrivKey(root, NETWORK);
+    expect(exportedXpriv.startsWith('xprv')).toBe(true);
+    expect(derivedXpriv.startsWith('tnpr')).toBe(true);
+
+    // The scan key of index 116 starts with a zero byte.
+    const indexes = [0, 7, 20, 116];
+    const scanPubkeys = indexes.map(
+      index =>
+        addressUtils.deriveShieldedAddressPair(
+          accessData.scanXpubkey!,
+          accessData.spendXpubkey!,
+          index,
+          NETWORK
+        ).shieldedAddress.publicKey
+    );
+    for (const xpriv of [exportedXpriv, derivedXpriv]) {
+      const scanKey = lib.shielded.parseScanXPrivKey(xpriv);
+      const derived = indexes.map(index => {
+        const childKey = lib.shielded.deriveScanChildPrivKey(scanKey, index);
+        expect(childKey).toHaveLength(32);
+        return new PrivateKey(childKey.toString('hex')).toPublicKey().toString();
+      });
+      expect(derived).toEqual(scanPubkeys);
+    }
+  }, 30000);
+
+  it('refuse a key that is not an extended private key', () => {
+    for (const input of ['', accessData.scanXpubkey!, 'not a key']) {
+      expect(() => lib.shielded.parseScanXPrivKey(input)).toThrow(
+        expect.objectContaining({ name: 'ShieldedKeyError', errorCode: 'shielded-corrupt-key' })
+      );
+    }
   });
 });
 
