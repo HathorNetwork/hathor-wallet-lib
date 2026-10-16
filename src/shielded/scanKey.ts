@@ -43,6 +43,10 @@ export async function decryptScanXPrivKey(storage: IStorage, pinCode: string): P
 /**
  * The scan key an xpriv holds.
  *
+ * The network version bytes are not checked. A seed wallet stores its scan
+ * xpriv with bitcore's livenet bytes, and the same key serialized for any
+ * network derives the same children.
+ *
  * @throws {ShieldedKeyError} `shielded-corrupt-key` when it is not an extended
  *   private key
  */
@@ -53,12 +57,13 @@ export function parseScanXPrivKey(xpriv: string): HDPrivateKey {
   } catch {
     key = null;
   }
-  // bitcore also reads some extended public keys as private ones. Only a
-  // private key serializes back to the text it was read from.
+  // bitcore reads extended public keys as private ones, and builds a random key
+  // from an empty input or a network name. Only a key it parsed serializes
+  // back to the text it was read from.
   if (!key || key.xprivkey !== xpriv) {
     throw new ShieldedKeyError(
       ErrorMessages.SHIELDED_CORRUPT_KEY,
-      'The shielded view key of the wallet record is not an extended private key.'
+      'The shielded view key is not an extended private key.'
     );
   }
   return key;
