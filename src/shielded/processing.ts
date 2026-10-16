@@ -12,7 +12,7 @@ import tokenUtils from '../utils/tokens';
 import { IShieldedCryptoProvider, IProcessedShieldedOutput, ShieldedOutputMode } from './types';
 import type { ShieldedUndecodedCounts } from './view';
 import { ScanKeyOfPass, decryptScanXPrivKey, parseScanXPrivKey } from './scanKey';
-import { deriveScanChildPrivKey, rewindShieldedOutput, ShieldedRewindError } from './rewind';
+import { deriveScanChildPrivkey, rewindShieldedOutput, ShieldedRewindError } from './rewind';
 
 /**
  * Resolve the 32-byte hex token UID (NATIVE_TOKEN_UID_HEX for HTR) from an
@@ -53,13 +53,13 @@ export function resolveTokenUid(tokenData: number | undefined, tx: IHistoryTx): 
  * The scan key uses a separate account (m/44'/280'/1'/0) from legacy P2PKH (account 0').
  * Returns the raw 32-byte private key for ECDH, or undefined if not derivable.
  */
-function tryDeriveScanChildPrivKey(
+function tryDeriveScanChildPrivkey(
   scanHdPrivKey: HDPrivateKey,
   addressIndex: number,
   logger: ILogger
 ): Buffer | undefined {
   try {
-    return deriveScanChildPrivKey(scanHdPrivKey, addressIndex);
+    return deriveScanChildPrivkey(scanHdPrivKey, addressIndex);
   } catch (e) {
     logger.warn('Failed to derive scan private key for shielded output at index', addressIndex, e);
     return undefined;
@@ -200,7 +200,7 @@ async function decodeOwnedOutput(
   }
 
   // Derive this address's scan private key (ECDH).
-  const privkey = tryDeriveScanChildPrivKey(scanKey, owned.addressIndex, storage.logger);
+  const privkey = tryDeriveScanChildPrivkey(scanKey, owned.addressIndex, storage.logger);
   if (!privkey) {
     return null;
   }

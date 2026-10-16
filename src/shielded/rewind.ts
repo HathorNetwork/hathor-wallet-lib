@@ -60,7 +60,7 @@ export class ShieldedRewindError extends Error {
  * @throws {Error} when the index is not an address index, a non-negative
  *   integer below 2^31, as deriveShieldedAddress does
  */
-export function deriveScanChildPrivKey(scanHdPrivKey: HDPrivateKey, addressIndex: number): Buffer {
+export function deriveScanChildPrivkey(scanHdPrivKey: HDPrivateKey, addressIndex: number): Buffer {
   // From an index of 2^31 or more, bitcore would derive a hardened child, the
   // key of no address, and it truncates a fractional index.
   if (!Number.isInteger(addressIndex) || addressIndex < 0 || addressIndex >= 0x80000000) {

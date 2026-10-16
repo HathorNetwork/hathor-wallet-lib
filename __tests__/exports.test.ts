@@ -758,7 +758,7 @@ describe('exported shielded scan-key helpers', () => {
     for (const xpriv of [exportedXpriv, derivedXpriv]) {
       const scanKey = lib.shielded.parseScanXPrivKey(xpriv);
       const derived = indexes.map(index => {
-        const childKey = lib.shielded.deriveScanChildPrivKey(scanKey, index);
+        const childKey = lib.shielded.deriveScanChildPrivkey(scanKey, index);
         expect(childKey).toHaveLength(32);
         return new PrivateKey(childKey.toString('hex')).toPublicKey().toString();
       });
