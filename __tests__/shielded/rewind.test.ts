@@ -8,7 +8,7 @@
 import { HDPrivateKey } from 'bitcore-lib';
 import {
   rewindShieldedOutput,
-  deriveScanChildPrivKey,
+  deriveScanChildPrivkey,
   ShieldedRewindError,
 } from '../../src/shielded/rewind';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
@@ -126,10 +126,10 @@ describe('rewindShieldedOutput', () => {
   });
 });
 
-describe('deriveScanChildPrivKey', () => {
+describe('deriveScanChildPrivkey', () => {
   it('derives the compliant child as a 32-byte buffer', () => {
     const scan = new HDPrivateKey();
-    expect(deriveScanChildPrivKey(scan, 3)).toEqual(
+    expect(deriveScanChildPrivkey(scan, 3)).toEqual(
       scan.deriveChild(3).privateKey.toBuffer({ size: 32 })
     );
   });
@@ -137,7 +137,7 @@ describe('deriveScanChildPrivKey', () => {
   it('refuses an index that is not an address index', () => {
     const scan = new HDPrivateKey();
     for (const index of [-1, 1.5, 2 ** 31, NaN]) {
-      expect(() => deriveScanChildPrivKey(scan, index)).toThrow('Invalid BIP32 address index');
+      expect(() => deriveScanChildPrivkey(scan, index)).toThrow('Invalid BIP32 address index');
     }
   });
 });
