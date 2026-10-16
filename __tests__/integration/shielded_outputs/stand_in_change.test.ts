@@ -229,7 +229,10 @@ async function startWalletWithoutShieldedKeys(): Promise<HathorWallet> {
   );
   // The external signer, not a stored key, makes the wallet spendable.
   expect(await wallet.isReadonly()).toBe(false);
-  await expect(shieldedAddr(wallet, 0)).rejects.toThrow('Shielded keys not available');
+  await expect(shieldedAddr(wallet, 0)).rejects.toMatchObject({
+    name: 'ShieldedKeyError',
+    errorCode: 'shielded-no-keys',
+  });
   return wallet;
 }
 
