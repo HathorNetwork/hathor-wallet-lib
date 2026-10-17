@@ -213,6 +213,24 @@ describe('[Fullnode-specific] start', () => {
     }
   });
 
+  it('should leave the genesis wallet ready to send again after funding a wallet that has not started', async () => {
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    const walletData = await adapter.getPrecalculatedWallet();
+
+    const txHash = await adapter.injectFundsBeforeStart(walletData.addresses[0], 1n);
+
+    // The genesis wallet already holds the tx, so a test retried right after this call can
+    // spend the change.
+    const tx = await gWallet.getTx(txHash);
+    expect(tx).not.toBeNull();
+    // The change stays on the first genesis address: change sent to a new address makes every
+    // running genesis wallet derive more addresses, which blocks the test process.
+    const changeAddresses = tx!.outputs
+      .map(output => output.decoded.address)
+      .filter(address => address !== walletData.addresses[0]);
+    expect(changeAddresses).toStrictEqual([WALLET_CONSTANTS.genesis.addresses[0]]);
+  });
+
   it('should start a multisig wallet', async () => {
     const walletConfig = {
       seed: multisigWalletsData.words[0],

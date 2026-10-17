@@ -1,0 +1,171 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ *
+ * Group V — Negative tests: combinations the protocol must reject.
+ *
+ * These pin the boundary cases where wallet-lib or hathor-core actively
+ * refuses a tx that's structurally invalid for the shielded protocol.
+ * If a future change accidentally accepts one of them, the tests fail.
+ *
+ * Pattern: each test attempts a malformed flow and asserts an error is
+ * raised, either client-side (wallet-lib refuses to build the tx) or
+ * server-side (fullnode rejects on push_tx).
+ */
+
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import {
+  generateWalletHelper,
+  stopAllWallets,
+  waitForTxReceived,
+  waitUntilNextTimestamp,
+} from '../helpers/wallet.helper';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { OutputKind, ShieldedOutputMode } from '../../../src/shielded/types';
+import { bumpShieldedTestTimeout } from '../configuration/test-constants';
+
+bumpShieldedTestTimeout();
+
+describe('shielded outputs — Group V: protocol-level rejections', () => {
+  jest.setTimeout(300_000);
+
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  /**
+   * V.1 — `sendManyOutputsTransaction` cannot emit a single shielded
+   * output. The protocol requires a minimum of 2 shielded outputs to
+   * prevent trivial commitment-matching attacks (anti-decoy), so the
+   * wallet-lib gives a lone output a second one: it splits the output, or
+   * shields the HTR change. A 1-unit output cannot be split, and with the
+   * change pinned transparent there is nothing to shield, so the tx is
+   * refused.
+   */
+  it('V.1 — single shielded output is rejected client-side', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const sbB = await walletB.getAddressAtIndex(0, { legacy: false });
+    await expect(
+      walletA.sendManyOutputsTransaction(
+        [
+          {
+            address: sbB,
+            value: 1n,
+            token: NATIVE_TOKEN_UID,
+            shielded: ShieldedOutputMode.FULLY_SHIELDED,
+          },
+        ],
+        { changeShieldedMode: OutputKind.TRANSPARENT }
+      )
+    ).rejects.toThrow(/two shielded outputs the protocol requires/i);
+  });
+
+  // V.2 is now a POSITIVE test (TCT/shielded-HTR works after the upstream
+  // dispatch fix) and lives in `mint_melt_shielded.test.ts` as `S.0`.
+
+  /**
+   * V.3 — Sending a shielded output to a LEGACY (P2PKH) address is
+   * rejected. Shielded outputs require the recipient's scan_pubkey,
+   * which legacy P2PKH addresses don't carry — there's no way to
+   * construct the ECDH shared secret.
+   */
+  it('V.3 — shielded output to a legacy address is rejected', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    const legacyB = await walletB.getAddressAtIndex(0, { legacy: true });
+    await expect(
+      walletA.sendManyOutputsTransaction([
+        {
+          address: legacyB,
+          value: 30n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+        {
+          address: legacyB,
+          value: 20n,
+          token: NATIVE_TOKEN_UID,
+          shielded: ShieldedOutputMode.FULLY_SHIELDED,
+        },
+      ])
+    ).rejects.toThrow();
+  });
+
+  /**
+   * V.4 — A chained second send must auto-select a fresh UTXO (the change
+   * of the first send) rather than re-spending the already-spent shielded
+   * UTXO. The positive assertions are the point: if the wallet re-used the
+   * spent UTXO, the fullnode would reject tx2 and the test would fail.
+   */
+  it('V.4 — chained send auto-selects a fresh UTXO instead of re-spending a spent shielded UTXO', async () => {
+    const walletA = await generateWalletHelper();
+    const walletB = await generateWalletHelper();
+    const walletC = await generateWalletHelper();
+
+    const fundA = await walletA.getAddressAtIndex(0, { legacy: true });
+    await GenesisWalletHelper.injectFunds(walletA, fundA, 100n);
+
+    // Shield the ENTIRE spendable balance: 60n + 36n outputs + 4n fee
+    // (2 x FEE_PER_FULL_SHIELDED_OUTPUT) consume the 100n funding exactly,
+    // leaving no transparent change — so the sends below cannot be satisfied
+    // by anything but shielded UTXOs.
+    const sbA0 = await walletA.getAddressAtIndex(2, { legacy: false });
+    const sbA1 = await walletA.getAddressAtIndex(3, { legacy: false });
+    const seedTx = await walletA.sendManyOutputsTransaction([
+      {
+        address: sbA0,
+        value: 60n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+      {
+        address: sbA1,
+        value: 36n,
+        token: NATIVE_TOKEN_UID,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      },
+    ]);
+    await waitForTxReceived(walletA, seedTx!.hash!);
+    await waitUntilNextTimestamp(walletA, seedTx!.hash!);
+    // Fixture precondition: no transparent outputs on the seed tx, so every
+    // input referencing it below is necessarily a shielded slot.
+    const seedStored = await walletA.getTx(seedTx!.hash!);
+    expect(seedStored!.outputs).toHaveLength(0);
+
+    // First send — must be funded by a shielded UTXO from the seed tx.
+    const addrB = await walletB.getAddressAtIndex(0, { legacy: true });
+    const tx1 = await walletA.sendTransaction(addrB, 25n);
+    expect(tx1).not.toBeNull();
+    await waitForTxReceived(walletA, tx1!.hash!);
+    const tx1Stored = await walletA.getTx(tx1!.hash!);
+    const tx1SeedInputs = tx1Stored!.inputs.filter(i => i.tx_id === seedTx!.hash!);
+    expect(tx1SeedInputs.length).toBeGreaterThan(0);
+    const tx1SpentKeys = new Set(tx1Stored!.inputs.map(i => `${i.tx_id}:${i.index}`));
+
+    // Second send chained — the wallet must select a FRESH UTXO (tx1's
+    // change, or the untouched seed output), never re-offer what tx1
+    // already consumed. A re-spend would be rejected by the fullnode, and
+    // the explicit input check below fails even if a regression produced a
+    // locally-accepted duplicate selection.
+    const addrC = await walletC.getAddressAtIndex(0, { legacy: true });
+    const tx2 = await walletA.sendTransaction(addrC, 5n);
+    expect(tx2).not.toBeNull();
+    await waitForTxReceived(walletC, tx2!.hash!);
+    const tx2Stored = await walletA.getTx(tx2!.hash!);
+    for (const input of tx2Stored!.inputs) {
+      expect(tx1SpentKeys.has(`${input.tx_id}:${input.index}`)).toBe(false);
+    }
+  });
+});

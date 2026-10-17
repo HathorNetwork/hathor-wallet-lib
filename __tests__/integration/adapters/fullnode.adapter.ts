@@ -32,7 +32,7 @@ import {
 } from '../helpers/wallet-precalculation.helper';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import type { WalletStopOptions } from '../../../src/new/types';
-import { FULLNODE_URL, NETWORK_NAME } from '../configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from '../configuration/test-constants';
 import type { FullNodeTxResponse } from '../../../src/wallet/types';
 import type {
   FuzzyWalletType,
@@ -205,13 +205,22 @@ export class FullnodeWalletTestAdapter implements IWalletTestAdapter {
    * Cannot delegate to {@link injectFunds} because that method polls both the
    * genesis and the destination wallet for tx confirmation — but the destination
    * wallet isn't running yet, so polling it would hang or fail.
+   *
+   * Like {@link GenesisWalletHelper.injectFunds}, it keeps the change on the first
+   * genesis address, since change sent to a new address makes every running genesis
+   * wallet derive more addresses. It also waits for the genesis wallet to register
+   * the tx, so the next genesis send can spend the change.
    */
   async injectFundsBeforeStart(address: string, amount: bigint): Promise<string> {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    const result = await gWallet.sendTransaction(address, amount);
+    const result = await gWallet.sendTransaction(address, amount, {
+      changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
+    });
     if (!result || !result.hash) {
       throw new Error('injectFundsBeforeStart: transaction had no hash');
     }
+    await waitForTxReceived(gWallet, result.hash);
+    await waitUntilNextTimestamp(gWallet, result.hash);
     return result.hash;
   }
 
