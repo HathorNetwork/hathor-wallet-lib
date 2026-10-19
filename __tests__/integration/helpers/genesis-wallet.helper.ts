@@ -142,6 +142,22 @@ export class GenesisWalletHelper {
   }
 
   /**
+   * Stops the genesis wallet, if one is running. Each test file starts its own, and all files
+   * run in the same process, so a genesis wallet left running keeps syncing every genesis
+   * transaction the later files send. The next {@link GenesisWalletHelper.getSingleton} call
+   * starts a new one.
+   * @return {Promise<void>}
+   */
+  static async stop(): Promise<void> {
+    if (!singleton) {
+      return;
+    }
+    const { hWallet } = singleton;
+    singleton = null;
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  }
+
+  /**
    * An easy way to send HTR to another wallet's address for testing.
    * @param {HathorWallet} destinationWallet Wallet object that we are sending the funds to
    * @param {string} address
@@ -167,8 +183,12 @@ export class GenesisWalletHelper {
    * @return {Promise<void>}
    */
   static async clearListeners(): Promise<void> {
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet.removeAllListeners('new-tx');
+    // With no genesis wallet running there is nothing to clear, and starting one here would
+    // leave it running.
+    if (!singleton) {
+      return;
+    }
+    singleton.hWallet.removeAllListeners('new-tx');
   }
 }
 
