@@ -264,8 +264,12 @@ export class GenesisWalletServiceHelper {
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
     const gWallet = await GenesisWalletServiceHelper.getSingleton();
+    // Like GenesisWalletHelper, keep the change on the first genesis address: the fullnode
+    // genesis wallets share this seed, and change sent to a new genesis address makes each of
+    // them derive more addresses.
     const fundTx = await gWallet.sendTransaction(address, amount, {
       pinCode: GenesisWalletServiceHelper.pinCode,
+      changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
     });
 
     // Ensure the transaction was sent from the Genesis perspective
