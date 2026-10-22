@@ -2437,7 +2437,11 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
-   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
+   * @param options.shielded - Shielded mode (AMOUNT_SHIELDED or FULLY_SHIELDED) of the
+   *   output, whose address must then be a shielded address
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction.
+   *   Absent or null with `shielded` set: the automatic rules shield the change of the output's
+   *   token in the output's mode
    *
    * @returns Promise that resolves when transaction is sent
    */
@@ -2454,8 +2458,10 @@ class HathorWallet extends EventEmitter {
       changeAddress: null,
       ...options,
     };
-    const { token, changeAddress, pinCode, changeShieldedMode } = newOptions;
-    const outputs = [{ address, value, token }];
+    const { token, changeAddress, pinCode, shielded, changeShieldedMode } = newOptions;
+    // With no change mode, the automatic rules shield the change of a shielded
+    // output's token in its mode, as all of that token's outputs are shielded.
+    const outputs = [{ address, value, token, ...(shielded != null ? { shielded } : {}) }];
     return this.sendManyOutputsSendTransaction(outputs, {
       inputs: [],
       changeAddress,
@@ -2473,7 +2479,11 @@ class HathorWallet extends EventEmitter {
    * @param options.changeAddress - Address of the change output
    * @param options.token - Token uid
    * @param options.pinCode - PIN to decrypt the private key
-   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction
+   * @param options.shielded - Shielded mode (AMOUNT_SHIELDED or FULLY_SHIELDED) of the
+   *   output, whose address must then be a shielded address
+   * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction.
+   *   Absent or null with `shielded` set: the automatic rules shield the change of the output's
+   *   token in the output's mode
    *
    * @returns Promise that resolves when transaction is sent
    */

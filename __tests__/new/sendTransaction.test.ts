@@ -2357,6 +2357,105 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     expect(result.inputs.map(i => i.txId).sort()).toEqual(['custom-tx', 'htr-tx']);
   });
 
+  describe('HathorWallet.sendTransaction with a shielded output', () => {
+    // The wallet's transparent UTXOs, served as storage serves them: none from
+    // the shielded pool.
+    const pool = [
+      { txId: 'htr-tx', index: 0, value: 10n, token: NATIVE_TOKEN_UID, authorities: 0n },
+      { txId: 'custom-tx', index: 0, value: 30n, token: CUSTOM_TOKEN, authorities: 0n },
+    ].map(u => ({ ...u, address: `${u.txId}-addr` }));
+    async function* selectUtxoMock(options: IUtxoFilterOptions) {
+      if (options.shielded === true) {
+        return;
+      }
+      let list = pool.filter(u => u.token === (options.token ?? NATIVE_TOKEN_UID));
+      if (options.filter_method) list = list.filter(u => options.filter_method!(u as never));
+      if (options.max_utxos !== undefined) list = list.slice(0, options.max_utxos);
+      yield* list as never;
+    }
+    const buildPoolStorage = () => {
+      const storage = buildStorage(selectUtxoMock);
+      jest
+        .spyOn(storage, 'getUtxo')
+        .mockImplementation(
+          async ({ txId, index }) => pool.find(u => u.txId === txId && u.index === index) as never
+        );
+      return storage;
+    };
+
+    const buildFacade = (storage: Storage): HathorWallet => {
+      withShieldedAddress(storage, buildShieldedAddr(0));
+      jest.spyOn(storage, 'isReadonly').mockResolvedValue(false);
+      const hWallet = new FakeHathorWallet() as unknown as HathorWallet;
+      hWallet.storage = storage;
+      hWallet.pinCode = '123';
+      return hWallet;
+    };
+
+    test('shields the change of the sent token in the output mode', async () => {
+      const hWallet = buildFacade(buildPoolStorage());
+      const sendTransaction = await hWallet.sendTransactionInstance(buildShieldedAddr(1), 10n, {
+        token: CUSTOM_TOKEN,
+        shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The recipient (10n) and the custom-token change (20n), both fully shielded.
+      const shielded = result.shieldedOutputs!.map(o => [o.value, o.token, o.shieldedMode]);
+      expect(shielded.sort((a, b) => Number((a[0] as bigint) - (b[0] as bigint)))).toEqual([
+        [10n, CUSTOM_TOKEN, ShieldedOutputMode.FULLY_SHIELDED],
+        [20n, CUSTOM_TOKEN, ShieldedOutputMode.FULLY_SHIELDED],
+      ]);
+      // The HTR left from the fee (10n - 2 * 2n) stays transparent: no HTR output
+      // is shielded, so shielding it would hide nothing.
+      expect(result.outputs).toEqual([
+        expect.objectContaining({ value: 6n, token: NATIVE_TOKEN_UID }),
+      ]);
+    });
+
+    test('shields the change of an HTR send in the output mode', async () => {
+      const hWallet = buildFacade(buildPoolStorage());
+      const sendTransaction = await hWallet.sendTransactionInstance(buildShieldedAddr(1), 5n, {
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The recipient (5n) and the HTR change (10n - 5n - 2 * 1n), both
+      // amount-shielded: no transparent output is left.
+      const shielded = result.shieldedOutputs!.map(o => [o.value, o.token, o.shieldedMode]);
+      expect(shielded.sort((a, b) => Number((a[0] as bigint) - (b[0] as bigint)))).toEqual([
+        [3n, NATIVE_TOKEN_UID, ShieldedOutputMode.AMOUNT_SHIELDED],
+        [5n, NATIVE_TOKEN_UID, ShieldedOutputMode.AMOUNT_SHIELDED],
+      ]);
+      expect(result.outputs).toHaveLength(0);
+    });
+
+    test('a shielded change that fails still suggests keeping it transparent', async () => {
+      const legacyChangeAddress = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
+      const storage = buildPoolStorage();
+      jest
+        .spyOn(storage, 'isAddressMine')
+        .mockImplementation(async address => address === legacyChangeAddress);
+      const hWallet = buildFacade(storage);
+      const sendTransaction = await hWallet.sendTransactionInstance(buildShieldedAddr(1), 10n, {
+        token: CUSTOM_TOKEN,
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+        changeAddress: legacyChangeAddress,
+      });
+
+      await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+        new SendTxError(
+          "The change must be shielded (all of its token's outputs are shielded, or the " +
+            'transaction spends a shielded UTXO), and a legacy change address cannot receive it. ' +
+            'Use a new-format change address, or changeShieldedMode: OutputKind.TRANSPARENT to ' +
+            'keep the change transparent.'
+        )
+      );
+    });
+  });
+
   test('A1b — shielded outputs are shuffled (change not at a predictable index)', async () => {
     async function* selectUtxoMock(options: IUtxoFilterOptions) {
       if (options.token === NATIVE_TOKEN_UID) {
