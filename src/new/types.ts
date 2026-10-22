@@ -429,12 +429,17 @@ export interface ProposedInput {
 
 /**
  * Options for sending a transaction with a single output
- * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions
+ * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or
+ *   FULLY_SHIELDED) of the output, whose address must then be a shielded address
+ * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions.
+ *   Absent or null with `shielded` set: every change output is shielded in the
+ *   output's mode
  */
 export interface SendTransactionFullnodeOptions {
   changeAddress?: string | null;
   token?: string;
   pinCode?: string | null;
+  shielded?: ShieldedOutputMode;
   changeShieldedMode?: ChangeOutputMode | null;
 }
 

@@ -112,6 +112,18 @@ export function assertChangeShieldedMode(mode: unknown): void {
   }
 }
 
+/**
+ * Throw for a `shieldedMode` of an output that is not a shielded mode, rather
+ * than let it fail deep in the crypto layer with an opaque error.
+ */
+export function assertShieldedOutputMode(mode: unknown): void {
+  if (mode !== ShieldedOutputMode.AMOUNT_SHIELDED && mode !== ShieldedOutputMode.FULLY_SHIELDED) {
+    throw new SendTxError(
+      `Invalid shieldedMode '${String(mode)}': expected AMOUNT_SHIELDED or FULLY_SHIELDED.`
+    );
+  }
+}
+
 export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
   return 'type' in output && output.type === OutputType.DATA;
 }
@@ -357,17 +369,8 @@ export default class SendTransaction extends EventEmitter implements ISendTransa
         // address) — so direct SendTransaction consumers never pre-derive
         // anything. Mirrors convertHtrChangeIfRequested's own resolution.
         // isShieldedOutput only asserts the field exists, not that its value is
-        // a valid mode. Reject an unknown mode here rather than let it fail
-        // deep in the crypto layer with an opaque error.
-        if (
-          output.shieldedMode !== ShieldedOutputMode.AMOUNT_SHIELDED &&
-          output.shieldedMode !== ShieldedOutputMode.FULLY_SHIELDED
-        ) {
-          throw new SendTxError(
-            `Invalid shieldedMode '${String(output.shieldedMode)}': expected AMOUNT_SHIELDED or ` +
-              `FULLY_SHIELDED.`
-          );
-        }
+        // a valid mode.
+        assertShieldedOutputMode(output.shieldedMode);
         const shieldedAddressObj = new Address(output.address, { network });
         if (!shieldedAddressObj.isShielded()) {
           throw new SendTxError(

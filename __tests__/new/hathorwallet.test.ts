@@ -363,6 +363,115 @@ test('sendTransactionInstance passes the change mode on to the send', async () =
   expect(sendTx.changeShieldedMode).toBe(OutputKind.TRANSPARENT);
 });
 
+test('sendTransactionInstance keeps the output and its change transparent by default', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendTransactionInstance('transparent-addr', 10n);
+
+  expect(sendTx.outputs).toEqual([
+    { address: 'transparent-addr', value: 10n, token: NATIVE_TOKEN_UID },
+  ]);
+  // No change mode: the automatic rules decide.
+  expect(sendTx.changeShieldedMode).toBeNull();
+});
+
+test.each([ShieldedOutputMode.AMOUNT_SHIELDED, ShieldedOutputMode.FULLY_SHIELDED])(
+  'sendTransactionInstance shields the output and its change in mode %s',
+  async mode => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = {
+      isReadonly: jest.fn().mockResolvedValue(false),
+    };
+    hWallet.pinCode = '123';
+
+    const sendTx = await hWallet.sendTransactionInstance('shielded-addr', 10n, {
+      token: '01',
+      shielded: mode,
+    });
+
+    expect(sendTx.outputs).toEqual([
+      { address: 'shielded-addr', value: 10n, token: '01', shieldedMode: mode },
+    ]);
+    expect(sendTx.changeShieldedMode).toBe(mode);
+  }
+);
+
+test('sendTransactionInstance shields the change in the output mode when the change mode is null', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendTransactionInstance('shielded-addr', 10n, {
+    shielded: ShieldedOutputMode.FULLY_SHIELDED,
+    changeShieldedMode: null,
+  });
+
+  expect(sendTx.changeShieldedMode).toBe(ShieldedOutputMode.FULLY_SHIELDED);
+});
+
+test.each([ShieldedOutputMode.AMOUNT_SHIELDED, OutputKind.TRANSPARENT])(
+  'sendTransactionInstance lets the caller pick change mode %s for a shielded output',
+  async changeMode => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = {
+      isReadonly: jest.fn().mockResolvedValue(false),
+    };
+    hWallet.pinCode = '123';
+
+    const sendTx = await hWallet.sendTransactionInstance('shielded-addr', 10n, {
+      shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      changeShieldedMode: changeMode,
+    });
+
+    expect(sendTx.outputs[0]).toMatchObject({
+      shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+    });
+    expect(sendTx.changeShieldedMode).toBe(changeMode);
+  }
+);
+
+test('sendTransactionInstance rejects an unknown shielded mode', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  await expect(
+    hWallet.sendTransactionInstance('shielded-addr', 10n, {
+      shielded: 'transparent' as unknown as ShieldedOutputMode,
+    })
+  ).rejects.toThrow("Invalid shieldedMode 'transparent'");
+});
+
+test('sendTransaction runs the shielded send', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+  const runSpy = jest.spyOn(SendTransaction.prototype, 'run').mockResolvedValue(null);
+
+  try {
+    await hWallet.sendTransaction('shielded-addr', 10n, {
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    });
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    const sendTx = runSpy.mock.contexts[0] as SendTransaction;
+    expect(sendTx.outputs[0]).toMatchObject({ shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED });
+    expect(sendTx.changeShieldedMode).toBe(ShieldedOutputMode.AMOUNT_SHIELDED);
+  } finally {
+    runSpy.mockRestore();
+  }
+});
+
 test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.storage = {
