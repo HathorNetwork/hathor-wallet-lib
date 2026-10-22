@@ -17,6 +17,7 @@ import {
 import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
+import type { SplitWalletServiceBalance } from '../wallet/types';
 import Address from '../models/address';
 
 /**
@@ -526,6 +527,16 @@ export interface GetBalanceFullnodeFacadeReturnType {
     unlocked: { mint: bigint; melt: bigint };
     locked: { mint: bigint; melt: bigint };
   };
+}
+
+/**
+ * Return type for getBalance(token, { split: true }): each amount split into
+ * its transparent and shielded parts, in the shape the wallet-service facade
+ * returns them.
+ */
+export interface GetSplitBalanceFullnodeFacadeReturnType
+  extends Omit<GetBalanceFullnodeFacadeReturnType, 'balance'> {
+  balance: SplitWalletServiceBalance;
 }
 
 /**
