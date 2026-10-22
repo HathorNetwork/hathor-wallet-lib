@@ -432,8 +432,8 @@ export interface ProposedInput {
  * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or
  *   FULLY_SHIELDED) of the output, whose address must then be a shielded address
  * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions.
- *   Absent or null with `shielded` set: every change output is shielded in the
- *   output's mode
+ *   Absent or null with `shielded` set: the automatic rules shield the change of
+ *   the output's token in the output's mode
  */
 export interface SendTransactionFullnodeOptions {
   changeAddress?: string | null;

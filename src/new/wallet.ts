@@ -41,12 +41,7 @@ import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
-import SendTransaction, {
-  assertShieldedOutputMode,
-  ISendDataOutput,
-  ISendOutput,
-  isDataOutput,
-} from './sendTransaction';
+import SendTransaction, { ISendDataOutput, ISendOutput, isDataOutput } from './sendTransaction';
 import Network from '../models/network';
 import {
   AddressError,
@@ -2410,7 +2405,8 @@ class HathorWallet extends EventEmitter {
    * @param options.shielded - Shielded mode (AMOUNT_SHIELDED or FULLY_SHIELDED) of the
    *   output, whose address must then be a shielded address
    * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction.
-   *   Absent or null with `shielded` set: every change output is shielded in the output's mode
+   *   Absent or null with `shielded` set: the automatic rules shield the change of the output's
+   *   token in the output's mode
    *
    * @returns Promise that resolves when transaction is sent
    */
@@ -2428,19 +2424,14 @@ class HathorWallet extends EventEmitter {
       ...options,
     };
     const { token, changeAddress, pinCode, shielded, changeShieldedMode } = newOptions;
-    if (shielded != null) {
-      // Checked here, as an unknown mode would otherwise become the change mode
-      // and fail as an invalid changeShieldedMode the caller never passed.
-      assertShieldedOutputMode(shielded);
-    }
+    // With no change mode, the automatic rules shield the change of a shielded
+    // output's token in its mode, as all of that token's outputs are shielded.
     const outputs = [{ address, value, token, ...(shielded != null ? { shielded } : {}) }];
     return this.sendManyOutputsSendTransaction(outputs, {
       inputs: [],
       changeAddress,
       pinCode,
-      // A shielded output's change is shielded in its mode unless the caller
-      // picks another change mode.
-      changeShieldedMode: changeShieldedMode ?? shielded ?? null,
+      changeShieldedMode,
     });
   }
 
@@ -2456,7 +2447,8 @@ class HathorWallet extends EventEmitter {
    * @param options.shielded - Shielded mode (AMOUNT_SHIELDED or FULLY_SHIELDED) of the
    *   output, whose address must then be a shielded address
    * @param options.changeShieldedMode - Change-output mode, as in sendManyOutputsSendTransaction.
-   *   Absent or null with `shielded` set: every change output is shielded in the output's mode
+   *   Absent or null with `shielded` set: the automatic rules shield the change of the output's
+   *   token in the output's mode
    *
    * @returns Promise that resolves when transaction is sent
    */
