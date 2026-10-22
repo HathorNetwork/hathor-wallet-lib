@@ -234,6 +234,12 @@ export interface ITokenMetadata {
 
 export interface IBalance {
   tokens: ITokenBalance;
+  /**
+   * The shielded part of `tokens`, kept on token metadata only. The transparent
+   * part is `tokens - shielded`. Authorities are never shielded. A record saved
+   * before this field existed has none: read it as zero.
+   */
+  shielded?: ITokenBalance;
   authorities: IAuthoritiesBalance;
 }
 

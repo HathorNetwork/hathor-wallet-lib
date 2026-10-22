@@ -88,6 +88,24 @@ export function getDefaultAddressMeta(): IAddressMetadata {
 }
 
 /**
+ * Metadata of a token the wallet holds nothing of yet. Its balance has the
+ * shielded bucket, so the shielded part of the totals is kept from the start.
+ */
+export function getDefaultTokenMeta(): ITokenMetadata {
+  return {
+    numTransactions: 0,
+    balance: {
+      tokens: { unlocked: 0n, locked: 0n },
+      shielded: { unlocked: 0n, locked: 0n },
+      authorities: {
+        mint: { unlocked: 0n, locked: 0n },
+        melt: { unlocked: 0n, locked: 0n },
+      },
+    },
+  };
+}
+
+/**
  * Addresses `loadAddresses` derived for one BIP32 index: the legacy address,
  * and the shielded pair (the shielded address and its on-chain spend P2PKH).
  */
