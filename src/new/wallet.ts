@@ -144,6 +144,7 @@ import {
   GetAuthorityOptions,
   GetAvailableUtxosOptions,
   GetBalanceFullnodeFacadeReturnType,
+  GetSplitBalanceFullnodeFacadeReturnType,
   GetTokenDetailsFullnodeFacadeReturnType,
   GetTxByIdFullnodeFacadeReturnType,
   GetTxHistoryFullnodeFacadeReturnType,
@@ -1203,13 +1204,25 @@ class HathorWallet extends EventEmitter {
    * Get balance for a token
    *
    * @param token
+   * @param [opts.split] Split each amount into its transparent and shielded
+   *   parts. It reads the same token metadata as the plain balance.
    *
    * @return Array of balance for each token
    *
    * @memberof HathorWallet
    * @inner
    * */
-  async getBalance(token: string | null = null): Promise<GetBalanceFullnodeFacadeReturnType[]> {
+  async getBalance(token?: string | null): Promise<GetBalanceFullnodeFacadeReturnType[]>;
+
+  async getBalance(
+    token: string | null,
+    opts: { split: true }
+  ): Promise<GetSplitBalanceFullnodeFacadeReturnType[]>;
+
+  async getBalance(
+    token: string | null = null,
+    opts: { split?: boolean } = {}
+  ): Promise<GetBalanceFullnodeFacadeReturnType[] | GetSplitBalanceFullnodeFacadeReturnType[]> {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
     if (token === null) {
@@ -1235,25 +1248,47 @@ class HathorWallet extends EventEmitter {
         symbol: '',
       };
     }
+    const result = {
+      token: {
+        id: tokenData.uid,
+        name: tokenData.name,
+        symbol: tokenData.symbol,
+        version: tokenData.version,
+      },
+      balance: tokenData.balance!.tokens,
+      transactions: tokenData.numTransactions,
+      lockExpires: null,
+      tokenAuthorities: {
+        unlocked: {
+          mint: tokenData.balance!.authorities.mint.unlocked,
+          melt: tokenData.balance!.authorities.melt.unlocked,
+        },
+        locked: {
+          mint: tokenData.balance!.authorities.mint.locked,
+          melt: tokenData.balance!.authorities.melt.locked,
+        },
+      },
+    };
+    if (!opts.split) {
+      return [result];
+    }
+    // The shielded part is kept next to the totals, so the transparent part is
+    // the difference.
+    const { tokens } = tokenData.balance!;
+    const shielded = tokenData.balance!.shielded ?? { unlocked: 0n, locked: 0n };
     return [
       {
-        token: {
-          id: tokenData.uid,
-          name: tokenData.name,
-          symbol: tokenData.symbol,
-          version: tokenData.version,
-        },
-        balance: tokenData.balance!.tokens,
-        transactions: tokenData.numTransactions,
-        lockExpires: null,
-        tokenAuthorities: {
+        ...result,
+        balance: {
           unlocked: {
-            mint: tokenData.balance!.authorities.mint.unlocked,
-            melt: tokenData.balance!.authorities.melt.unlocked,
+            transparent: tokens.unlocked - shielded.unlocked,
+            shielded: shielded.unlocked,
+            total: tokens.unlocked,
           },
           locked: {
-            mint: tokenData.balance!.authorities.mint.locked,
-            melt: tokenData.balance!.authorities.melt.locked,
+            transparent: tokens.locked - shielded.locked,
+            shielded: shielded.locked,
+            total: tokens.locked,
           },
         },
       },
