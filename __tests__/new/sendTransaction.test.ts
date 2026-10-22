@@ -2358,27 +2358,30 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
   });
 
   describe('HathorWallet.sendTransaction with a shielded output', () => {
+    // The wallet's transparent UTXOs, served as storage serves them: none from
+    // the shielded pool.
+    const pool = [
+      { txId: 'htr-tx', index: 0, value: 10n, token: NATIVE_TOKEN_UID, authorities: 0n },
+      { txId: 'custom-tx', index: 0, value: 30n, token: CUSTOM_TOKEN, authorities: 0n },
+    ].map(u => ({ ...u, address: `${u.txId}-addr` }));
     async function* selectUtxoMock(options: IUtxoFilterOptions) {
-      if (options.token === NATIVE_TOKEN_UID) {
-        yield {
-          txId: 'htr-tx',
-          index: 0,
-          value: 10n,
-          token: NATIVE_TOKEN_UID,
-          address: 'htr-addr',
-          authorities: 0n,
-        };
-      } else if (options.token === CUSTOM_TOKEN) {
-        yield {
-          txId: 'custom-tx',
-          index: 0,
-          value: 30n,
-          token: CUSTOM_TOKEN,
-          address: 'custom-addr',
-          authorities: 0n,
-        };
+      if (options.shielded === true) {
+        return;
       }
+      let list = pool.filter(u => u.token === (options.token ?? NATIVE_TOKEN_UID));
+      if (options.filter_method) list = list.filter(u => options.filter_method!(u as never));
+      if (options.max_utxos !== undefined) list = list.slice(0, options.max_utxos);
+      yield* list as never;
     }
+    const buildPoolStorage = () => {
+      const storage = buildStorage(selectUtxoMock);
+      jest
+        .spyOn(storage, 'getUtxo')
+        .mockImplementation(
+          async ({ txId, index }) => pool.find(u => u.txId === txId && u.index === index) as never
+        );
+      return storage;
+    };
 
     const buildFacade = (storage: Storage): HathorWallet => {
       withShieldedAddress(storage, buildShieldedAddr(0));
@@ -2390,7 +2393,7 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
     };
 
     test('shields the change of the sent token in the output mode', async () => {
-      const hWallet = buildFacade(buildStorage(selectUtxoMock));
+      const hWallet = buildFacade(buildPoolStorage());
       const sendTransaction = await hWallet.sendTransactionInstance(buildShieldedAddr(1), 10n, {
         token: CUSTOM_TOKEN,
         shielded: ShieldedOutputMode.FULLY_SHIELDED,
@@ -2411,9 +2414,27 @@ describe('changeShieldedMode applies to all change outputs (prepareTxData)', () 
       ]);
     });
 
+    test('shields the change of an HTR send in the output mode', async () => {
+      const hWallet = buildFacade(buildPoolStorage());
+      const sendTransaction = await hWallet.sendTransactionInstance(buildShieldedAddr(1), 5n, {
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      });
+
+      const result = await sendTransaction.prepareTxData();
+
+      // The recipient (5n) and the HTR change (10n - 5n - 2 * 1n), both
+      // amount-shielded: no transparent output is left.
+      const shielded = result.shieldedOutputs!.map(o => [o.value, o.token, o.shieldedMode]);
+      expect(shielded.sort((a, b) => Number((a[0] as bigint) - (b[0] as bigint)))).toEqual([
+        [3n, NATIVE_TOKEN_UID, ShieldedOutputMode.AMOUNT_SHIELDED],
+        [5n, NATIVE_TOKEN_UID, ShieldedOutputMode.AMOUNT_SHIELDED],
+      ]);
+      expect(result.outputs).toHaveLength(0);
+    });
+
     test('a shielded change that fails still suggests keeping it transparent', async () => {
       const legacyChangeAddress = 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi';
-      const storage = buildStorage(selectUtxoMock);
+      const storage = buildPoolStorage();
       jest
         .spyOn(storage, 'isAddressMine')
         .mockImplementation(async address => address === legacyChangeAddress);
