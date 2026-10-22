@@ -5,11 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
 import { Address, Script } from 'bitcore-lib';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
-import testConfig from '../configuration/test.config';
+import { ithService } from './ith-service';
 import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 import { loggers } from '../utils/logger.util';
 import { IPrecalculatedAddress, IPrecalculatedShieldedAddress } from '../../../src/types';
@@ -266,20 +265,17 @@ export class WalletPrecalculationHelper {
    */
   // eslint-disable-next-line class-methods-use-this -- kept as an instance method to preserve the precalculationHelpers.test call sites
   async getPrecalculatedWallet(): Promise<PrecalculatedWalletData> {
-    const { data } = await axios.get(`${testConfig.walletProviderUrl}/simpleWallet`);
-    // Fail loudly with the raw payload if it ever returns an unexpected shape — otherwise a malformed
-    // response surfaces as a confusing error deep inside wallet construction.
-    if (!data?.words || !Array.isArray(data?.addresses)) {
-      throw new Error(`Wallet provider returned an unexpected response: ${JSON.stringify(data)}`);
-    }
+    // Routed through ithService, which owns the timeout, retry and response
+    // shape validation for every call to the helper.
+    const { words, addresses, shieldedAddresses } = await ithService.getSimpleWallet();
     return {
       isUsed: true,
-      words: data.words,
-      addresses: data.addresses,
+      words,
+      addresses,
       // Optional: newer wallet-provider versions also precalculate the shielded
       // address pairs, sparing the wallet the per-index EC derivation (slow
       // under jest). Absent on older providers — the wallet then derives live.
-      ...(Array.isArray(data.shieldedAddresses) && { shieldedAddresses: data.shieldedAddresses }),
+      ...(Array.isArray(shieldedAddresses) && { shieldedAddresses }),
     };
   }
 }
