@@ -133,4 +133,11 @@ describe('deriveScanChildPrivkey', () => {
       scan.deriveChild(3).privateKey.toBuffer({ size: 32 })
     );
   });
+
+  it('refuses an index that is not an address index', () => {
+    const scan = new HDPrivateKey();
+    for (const index of [-1, 1.5, 2 ** 31, NaN]) {
+      expect(() => deriveScanChildPrivkey(scan, index)).toThrow('Invalid BIP32 address index');
+    }
+  });
 });

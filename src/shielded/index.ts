@@ -22,6 +22,11 @@ export type {
 export { encodeShieldedUnblindingPayload } from './unblinding';
 export type { IShieldedUnblindingEntry } from './unblinding';
 
+// For tools given a wallet's scan xpriv, such as an explorer: read the key,
+// then derive the scan private key of each address index.
+export { parseScanXPrivKey } from './scanKey';
+export { deriveScanChildPrivkey } from './rewind';
+
 // Provider implementations live with their respective ct-crypto packages:
 //   - Node:    @hathor/ct-crypto-node    → createDefaultShieldedCryptoProvider()
 //   - Browser: @hathor/ct-crypto-wasm    → createBrowserShieldedCryptoProvider()
