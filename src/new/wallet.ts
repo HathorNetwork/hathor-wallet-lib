@@ -35,6 +35,7 @@ import {
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
+import { defaultCreateRequestInstance } from '../api/axiosInstance';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
 import { signMessage } from '../utils/crypto';
@@ -279,6 +280,38 @@ export function normalizePreCalculatedAddresses(
   return input.map((entry, index) =>
     typeof entry === 'string' ? { bip32AddressIndex: index, base58: entry } : entry
   );
+}
+
+/**
+ * Ask the fullnode for its best block height, the `blocks` field of GET getmininginfo.
+ *
+ * The request is best-effort, so it goes through the library's own request
+ * instance: an error handler that an app registers for its requests, such as the
+ * desktop wallet's request-error modal, does not run for it. It never rejects.
+ *
+ * @returns The height, or why there is none: the request failed, or the fullnode
+ *   answered success false, which it does while it has no synced peer
+ */
+async function fetchNetworkHeight(): Promise<
+  { height: number } | { height: null; reason: string; details: Record<string, unknown> }
+> {
+  try {
+    const { data } = await defaultCreateRequestInstance().get('getmininginfo');
+    if (data?.success && Number.isSafeInteger(data.blocks) && data.blocks >= 0) {
+      return { height: data.blocks };
+    }
+    return {
+      height: null,
+      reason: 'The fullnode did not give its best block height, as when it has no synced peer',
+      details: { message: data?.message },
+    };
+  } catch (error) {
+    return {
+      height: null,
+      reason: 'Could not get the best block height from the fullnode',
+      details: { error },
+    };
+  }
 }
 
 /**
@@ -2728,12 +2761,33 @@ class HathorWallet extends EventEmitter {
       this.queueShieldedCapabilityEvent();
       this.setState(HathorWallet.CONNECTING);
 
+      // The first history walk reads the network height once to tell which block
+      // rewards are still reward-locked, and nothing locks a reward again once it
+      // counted unlocked. The websocket brings the height only with the fullnode's
+      // dashboard metrics, sent every second and not on connect, so a walk that
+      // ends before them would count every recent reward unlocked. The height is
+      // asked for while the version is.
+      const generation = this.syncGeneration;
+      const networkHeight = fetchNetworkHeight();
       const info = await new Promise<ApiVersion>((resolve, reject) => {
         versionApi.getVersion(resolve).catch(error => reject(error));
       });
       if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
         this.storage.setApiVersion(info);
         await this.storage.saveNativeToken();
+        const result = await networkHeight;
+        // A stop() while the height was asked for leaves the storage to the next start().
+        if (!this.walletStopped && generation === this.syncGeneration) {
+          if (result.height === null) {
+            this.logger.warn(
+              `${result.reason}. If the history loads before the websocket gives the height, block rewards still inside the reward lock count as unlocked until they leave it.`,
+              result.details
+            );
+          } else {
+            // It also replaces a height that a persistent store kept from an earlier session.
+            await this.storage.setCurrentHeight(result.height);
+          }
+        }
 
         // Note: shielded crypto provider is not auto-detected. Clients that need
         // shielded support MUST install the appropriate crypto package
