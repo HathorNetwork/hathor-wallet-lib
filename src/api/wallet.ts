@@ -6,7 +6,7 @@
  */
 
 import { AxiosResponse } from 'axios';
-import { createRequestInstance } from './axiosInstance';
+import { createRequestInstance, defaultCreateRequestInstance } from './axiosInstance';
 import { SEND_TOKENS_TIMEOUT } from '../constants';
 import { transformJsonBigIntResponse } from '../utils/bigint';
 import {
@@ -15,6 +15,16 @@ import {
   GeneralTokenInfoSchema,
   generalTokenInfoSchema,
 } from './schemas/wallet';
+
+/**
+ * The fields of GET getmininginfo that the wallet reads, as the fullnode sends them.
+ * getMiningInfoBestEffort does not validate the response, so callers check each value.
+ */
+export interface MiningInfoBestEffortResponse {
+  success?: boolean;
+  blocks?: number;
+  message?: string;
+}
 
 /**
  * Api calls for wallet
@@ -217,6 +227,25 @@ const walletApi = {
           return Promise.reject(res);
         }
       );
+  },
+
+  /**
+   * Get mining info for a best-effort request.
+   *
+   * It goes through the library's own request instance, so an error handler that
+   * an app registers for its requests, such as the desktop wallet's request-error
+   * modal, does not run for it. The timeout goes with the request, because the
+   * instance factory sets no timeout at all when it is given one.
+   *
+   * @param timeout Timeout of the request in milliseconds
+   *
+   * @return The response data, not validated
+   * @memberof ApiWallet
+   * @inner
+   */
+  async getMiningInfoBestEffort(timeout: number): Promise<MiningInfoBestEffortResponse> {
+    const { data } = await defaultCreateRequestInstance().get('getmininginfo', { timeout });
+    return data;
   },
 
   /**

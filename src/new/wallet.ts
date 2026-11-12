@@ -36,7 +36,6 @@ import {
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
-import { defaultCreateRequestInstance } from '../api/axiosInstance';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
 import { signMessage } from '../utils/crypto';
@@ -286,12 +285,10 @@ export function normalizePreCalculatedAddresses(
 /**
  * Ask the fullnode for its best block height, the `blocks` field of GET getmininginfo.
  *
- * The request is best-effort, so it goes through the library's own request
- * instance: an error handler that an app registers for its requests, such as the
- * desktop wallet's request-error modal, does not run for it. It never rejects.
- *
- * It gives up after NETWORK_HEIGHT_TIMEOUT. The timeout goes with the request:
- * the instance factory sets no timeout at all when it is given one.
+ * The request is best-effort. It goes through walletApi.getMiningInfoBestEffort, so
+ * an error handler that an app registers for its requests, such as the desktop
+ * wallet's request-error modal, does not run for it, and it gives up after
+ * NETWORK_HEIGHT_TIMEOUT. It never rejects.
  *
  * @returns The height, or why there is none: the request failed, or the fullnode
  *   answered success false, which it does while it has no synced peer
@@ -300,11 +297,15 @@ async function fetchNetworkHeight(): Promise<
   { height: number } | { height: null; reason: string; details: Record<string, unknown> }
 > {
   try {
-    const { data } = await defaultCreateRequestInstance().get('getmininginfo', {
-      timeout: NETWORK_HEIGHT_TIMEOUT,
-    });
-    if (data?.success && Number.isSafeInteger(data.blocks) && data.blocks >= 0) {
-      return { height: data.blocks };
+    const data = await walletApi.getMiningInfoBestEffort(NETWORK_HEIGHT_TIMEOUT);
+    const blocks = data?.blocks;
+    if (
+      data?.success &&
+      typeof blocks === 'number' &&
+      Number.isSafeInteger(blocks) &&
+      blocks >= 0
+    ) {
+      return { height: blocks };
     }
     return {
       height: null,
