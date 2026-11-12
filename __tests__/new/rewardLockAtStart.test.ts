@@ -66,16 +66,23 @@ describe('network height at start()', () => {
     axiosMock.onGet('getmininginfo').reply(200, data);
   }
 
-  /** The getmininginfo answer waits until release() is called. */
+  /** The getmininginfo answer waits until release() is called, before or after the request. */
   function deferMiningInfo(data: unknown) {
-    let release: () => void = () => {};
+    let released = false;
+    let answer: () => void = () => {};
     axiosMock.onGet('getmininginfo').reply(
       () =>
         new Promise(resolve => {
-          release = () => resolve([200, data]);
+          answer = () => resolve([200, data]);
+          if (released) {
+            answer();
+          }
         })
     );
-    return () => release();
+    return () => {
+      released = true;
+      answer();
+    };
   }
 
   function miningInfoRequests() {
@@ -155,6 +162,7 @@ describe('network height at start()', () => {
     });
 
     const starting = hWallet.start();
+    await until(() => miningInfoRequests() === 1, 'the height request');
     await settle();
     expect(conn.start).not.toHaveBeenCalled();
 
@@ -260,7 +268,7 @@ describe('network height at start()', () => {
     const { hWallet, storage, conn } = buildWallet();
 
     const starting = hWallet.start();
-    await settle();
+    await until(() => miningInfoRequests() === 1, 'the height request');
     await hWallet.stop();
     release();
     await expect(starting).resolves.toBeDefined();
@@ -286,7 +294,7 @@ describe('network height at start()', () => {
     const { hWallet, storage, conn } = buildWallet();
 
     const first = hWallet.start();
-    await settle();
+    await until(() => requests === 1, 'the first height request');
     await hWallet.stop();
     await hWallet.start();
     expect(conn.start).toHaveBeenCalledTimes(1);
@@ -295,6 +303,33 @@ describe('network height at start()', () => {
     await expect(first).resolves.toBeDefined();
 
     expect(requests).toBe(2);
+    expect(conn.start).toHaveBeenCalledTimes(1);
+    await expect(storage.getCurrentHeight()).resolves.toBe(6000);
+  });
+
+  it('leaves the session of the start() that followed the stop() to it when the old one fails', async () => {
+    mockVersion();
+    // The first version request fails only after the second start() connected.
+    let failFirst: () => void = () => {};
+    const getVersion = jest.spyOn(versionApi, 'getVersion').mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          failFirst = () => reject(new Error('Network Error'));
+        }) as never
+    );
+    mockMiningInfo({ success: true, blocks: 6000 });
+    const { hWallet, storage, conn } = buildWallet();
+
+    const first = hWallet.start();
+    await until(() => getVersion.mock.calls.length === 1, 'the first version request');
+    await hWallet.stop();
+    await hWallet.start();
+    expect(storage.shieldedView.started).toBe(true);
+
+    failFirst();
+    await expect(first).rejects.toThrow('Network Error');
+
+    expect(storage.shieldedView.started).toBe(true);
     expect(conn.start).toHaveBeenCalledTimes(1);
     await expect(storage.getCurrentHeight()).resolves.toBe(6000);
   });

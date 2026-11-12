@@ -2722,6 +2722,9 @@ class HathorWallet extends EventEmitter {
     this.clearSensitiveData();
     this.getTokenData();
     this.walletStopped = false;
+    // False once a stop() comes while this start() awaits, even if another start() follows it.
+    const generation = this.syncGeneration;
+    const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
 
     // The scan key stays in memory, in storage.scanXPrivKey, until stop().
     // Whatever fails before the connection starts drops it again, since apps
@@ -2767,9 +2770,6 @@ class HathorWallet extends EventEmitter {
       // dashboard metrics, sent every second and not on connect, so a walk that
       // ends before them would count every recent reward unlocked. The height is
       // asked for while the version is.
-      const generation = this.syncGeneration;
-      // False once a stop() came while this start() awaited, even if another start() followed it.
-      const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
       const networkHeight = fetchNetworkHeight();
       const info = await new Promise<ApiVersion>((resolve, reject) => {
         versionApi.getVersion(resolve).catch(error => reject(error));
@@ -2811,8 +2811,9 @@ class HathorWallet extends EventEmitter {
       return info;
     } catch (error) {
       // A wallet that was stopped meanwhile already dropped its key, and the
-      // storage may hold the view of the next wallet that started on it.
-      if (!this.walletStopped) {
+      // storage may hold the view of the next wallet that started on it, or of
+      // a start() that followed the stop() on this one.
+      if (isCurrent()) {
         this.storage.scanXPrivKey = null;
         view.started = false;
         view.reset();
