@@ -188,6 +188,11 @@ export const getOracleInputData = async (
  * transaction would be a valid input signature for it. A 32-byte value is therefore refused; a
  * nano contract result signed through getOracleInputData is always longer (32-byte id + result).
  *
+ * So raw signed data of exactly 32 bytes cannot be signed with an address oracle, since it cannot
+ * be told apart from a signature hash. That is always the case for RawSignedData[VertexId],
+ * [ContractId] and [BlueprintId], which are 32 raw bytes, and for any other type when the value
+ * happens to serialize to 32 bytes, such as a str or bytes of 31 bytes.
+ *
  * @param oracleData Oracle data
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
