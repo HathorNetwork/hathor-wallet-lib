@@ -426,9 +426,11 @@ export const SHIELDED_SCAN_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
 export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
 
 /**
- * Account path reserved for Hathor Next keys. Hathor Next derives its view, spend and
- * session keys from this one hardened account node, so they stay separate from the
- * P2PKH (0') and shielded (1', 2') keys. Never reuse it for another key family.
+ * Account path reserved for the Hathor Next keys Hathor Wallet derives: its Hathor Next view,
+ * spend and session keys all come from this one hardened account node, so they stay separate
+ * from the P2PKH (0') and shielded (1', 2') keys. The Hathor Next wallet app uses account 0' for
+ * the same words, so the two apps never hold keys to the same outputs. Never reuse it for
+ * another key family.
  */
 export const HATHOR_NEXT_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/3'`;
 
