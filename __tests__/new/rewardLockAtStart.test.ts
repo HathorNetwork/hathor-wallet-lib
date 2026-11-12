@@ -14,7 +14,7 @@ import {
   registerNewCreateRequestInstance,
 } from '../../src/api/axiosInstance';
 import { handleWsDashboard } from '../../src/utils/connection';
-import { NATIVE_TOKEN_UID } from '../../src/constants';
+import { NATIVE_TOKEN_UID, NETWORK_HEIGHT_TIMEOUT } from '../../src/constants';
 import { ConnectionState } from '../../src/wallet/types';
 import { IHistoryTx, ILogger } from '../../src/types';
 
@@ -173,6 +173,18 @@ describe('network height at start()', () => {
     expect(heightAtConnect).toBe(1234);
   });
 
+  it('asks for the height with its own timeout', async () => {
+    mockVersion();
+    mockMiningInfo({ success: true, blocks: 1234 });
+    const { hWallet } = buildWallet();
+
+    await hWallet.start();
+
+    // The adapter records each request with the timeout axios applied to it.
+    const request = axiosMock.history.get.find(r => r.url === 'getmininginfo');
+    expect(request?.timeout).toBe(NETWORK_HEIGHT_TIMEOUT);
+  });
+
   it('replaces a height kept from an earlier session', async () => {
     mockVersion();
     mockMiningInfo({ success: true, blocks: 50 });
@@ -200,6 +212,7 @@ describe('network height at start()', () => {
   it.each([
     { failure: 'an HTTP error', fail: () => axiosMock.onGet('getmininginfo').reply(500) },
     { failure: 'a network error', fail: () => axiosMock.onGet('getmininginfo').networkError() },
+    { failure: 'a timeout', fail: () => axiosMock.onGet('getmininginfo').timeout() },
   ])('still connects after $failure', async ({ fail }) => {
     mockVersion();
     fail();

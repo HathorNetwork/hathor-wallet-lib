@@ -196,6 +196,15 @@ export const SEND_TOKENS_TIMEOUT: number = 300000;
 export const SEND_TX_TIMEOUT: number = 60000;
 
 /**
+ * Timeout for the network height request at wallet start, in milliseconds.
+ *
+ * The request runs alongside the version request and is best-effort: without an
+ * answer the wallet connects as before. This bounds how long a fullnode, or a
+ * proxy, that accepts the request and never answers can hold the connection back.
+ */
+export const NETWORK_HEIGHT_TIMEOUT: number = 5000;
+
+/**
  * Number of iterations to execute when hashing the password
  *
  * Even though NIST recommeds at least 10,000 iterations (https://pages.nist.gov/800-63-3/sp800-63b.html#sec5),

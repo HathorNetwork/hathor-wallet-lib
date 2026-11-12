@@ -32,6 +32,7 @@ import {
   P2SH_ACCT_PATH,
   SHIELDED_SPEND_ACCT_PATH,
   GAP_LIMIT,
+  NETWORK_HEIGHT_TIMEOUT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
@@ -289,6 +290,9 @@ export function normalizePreCalculatedAddresses(
  * instance: an error handler that an app registers for its requests, such as the
  * desktop wallet's request-error modal, does not run for it. It never rejects.
  *
+ * It gives up after NETWORK_HEIGHT_TIMEOUT. The timeout goes with the request:
+ * the instance factory sets no timeout at all when it is given one.
+ *
  * @returns The height, or why there is none: the request failed, or the fullnode
  *   answered success false, which it does while it has no synced peer
  */
@@ -296,7 +300,9 @@ async function fetchNetworkHeight(): Promise<
   { height: number } | { height: null; reason: string; details: Record<string, unknown> }
 > {
   try {
-    const { data } = await defaultCreateRequestInstance().get('getmininginfo');
+    const { data } = await defaultCreateRequestInstance().get('getmininginfo', {
+      timeout: NETWORK_HEIGHT_TIMEOUT,
+    });
     if (data?.success && Number.isSafeInteger(data.blocks) && data.blocks >= 0) {
       return { height: data.blocks };
     }
