@@ -2768,6 +2768,8 @@ class HathorWallet extends EventEmitter {
       // ends before them would count every recent reward unlocked. The height is
       // asked for while the version is.
       const generation = this.syncGeneration;
+      // False once a stop() came while this start() awaited, even if another start() followed it.
+      const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
       const networkHeight = fetchNetworkHeight();
       const info = await new Promise<ApiVersion>((resolve, reject) => {
         versionApi.getVersion(resolve).catch(error => reject(error));
@@ -2777,7 +2779,7 @@ class HathorWallet extends EventEmitter {
         await this.storage.saveNativeToken();
         const result = await networkHeight;
         // A stop() while the height was asked for leaves the storage to the next start().
-        if (!this.walletStopped && generation === this.syncGeneration) {
+        if (isCurrent()) {
           if (result.height === null) {
             this.logger.warn(
               `${result.reason}. If the history loads before the websocket gives the height, block rewards still inside the reward lock count as unlocked until they leave it.`,
@@ -2795,6 +2797,10 @@ class HathorWallet extends EventEmitter {
         // verifier-only) and register the provider explicitly via
         // `wallet.setShieldedCryptoProvider(...)` before starting the wallet.
 
+        // A stopped wallet stays disconnected, and a start() after the stop() connects it.
+        if (!isCurrent()) {
+          return info;
+        }
         this.conn.start();
       } else {
         this.setState(HathorWallet.CLOSED);

@@ -254,18 +254,49 @@ describe('network height at start()', () => {
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
-  it('does not store the height of a start() that stop() interrupted', async () => {
+  it('neither stores the height nor connects for a start() that stop() interrupted', async () => {
     mockVersion();
     const release = deferMiningInfo({ success: true, blocks: 5000 });
-    const { hWallet, storage } = buildWallet();
+    const { hWallet, storage, conn } = buildWallet();
 
     const starting = hWallet.start();
     await settle();
     await hWallet.stop();
     release();
-    await starting;
+    await expect(starting).resolves.toBeDefined();
 
+    expect(conn.start).not.toHaveBeenCalled();
     await expect(storage.getCurrentHeight()).resolves.toBe(0);
+  });
+
+  it('leaves the height and the connection to the start() that followed the stop()', async () => {
+    mockVersion();
+    // The first start() gets its height only after the second one connected.
+    let releaseFirst: () => void = () => {};
+    let requests = 0;
+    axiosMock.onGet('getmininginfo').reply(() => {
+      requests += 1;
+      if (requests === 1) {
+        return new Promise(resolve => {
+          releaseFirst = () => resolve([200, { success: true, blocks: 5000 }]);
+        });
+      }
+      return [200, { success: true, blocks: 6000 }];
+    });
+    const { hWallet, storage, conn } = buildWallet();
+
+    const first = hWallet.start();
+    await settle();
+    await hWallet.stop();
+    await hWallet.start();
+    expect(conn.start).toHaveBeenCalledTimes(1);
+
+    releaseFirst();
+    await expect(first).resolves.toBeDefined();
+
+    expect(requests).toBe(2);
+    expect(conn.start).toHaveBeenCalledTimes(1);
+    await expect(storage.getCurrentHeight()).resolves.toBe(6000);
   });
 
   describe('block rewards in the first walk', () => {
