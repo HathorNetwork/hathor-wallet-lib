@@ -12,7 +12,11 @@ import {
   processShieldedOutputs,
   decodeShieldedOutputs,
 } from '../../src/shielded/processing';
-import { NATIVE_TOKEN_UID_HEX, NATIVE_TOKEN_UID } from '../../src/constants';
+import {
+  NATIVE_TOKEN_UID_HEX,
+  NATIVE_TOKEN_UID,
+  SHIELDED_SCAN_ACCT_PATH,
+} from '../../src/constants';
 import {
   ShieldedOutputMode,
   IShieldedOutput,
@@ -20,6 +24,11 @@ import {
 } from '../../src/shielded/types';
 import { IHistoryTx, IHistoryShieldedOutput } from '../../src/types';
 import { DecryptionError, InvalidPasswdError, ShieldedKeyError } from '../../src/errors';
+
+/** A random scan key, at the scan key's path (m/44'/280'/1'/0) of a random root. */
+function randomScanKey(): HDPrivateKey {
+  return new HDPrivateKey().deriveChild(SHIELDED_SCAN_ACCT_PATH).deriveChild(0);
+}
 
 function makeShieldedOutput(overrides: Partial<IShieldedOutput> = {}): IHistoryShieldedOutput {
   return {
@@ -289,9 +298,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
       getAddressInfo: jest.fn().mockImplementation(async (addr: string) => ({
         bip32AddressIndex: addr === 'addr1' ? 0 : 1,
       })),
-      getScanXPrivKey: jest
-        .fn()
-        .mockResolvedValue(new HDPrivateKey().deriveNonCompliantChild(0).xprivkey),
+      getScanXPrivKey: jest.fn().mockResolvedValue(randomScanKey().xprivkey),
       logger: { warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
     } as any;
     const keysSeen: Buffer[] = [];
@@ -319,8 +326,8 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
   });
 
   it('decodes with the key its PIN unlocks, not with the scan key in memory', async () => {
-    const memoryKey = new HDPrivateKey().deriveNonCompliantChild(0);
-    const pinKey = new HDPrivateKey().deriveNonCompliantChild(0);
+    const memoryKey = randomScanKey();
+    const pinKey = randomScanKey();
     const expectedChild = pinKey.deriveChild(0).privateKey.toBuffer().toString('hex');
     const tx = makeHistoryTx({
       shielded_outputs: [makeShieldedOutput({ decoded: { type: 'P2PKH', address: 'addr1' } })],
@@ -365,7 +372,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
 
     // Mock a valid scan xpriv so key derivation succeeds and rewind is actually called.
     // A real xpriv at depth 1 (chain-level) so deriveNonCompliantChild(index) works
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
 
     const storage = {
       isAddressMine: jest.fn().mockResolvedValue(true),
@@ -397,7 +404,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
       outputs: [{ value: 5n } as any],
     });
 
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
     const bf = Buffer.alloc(32, 0x07);
 
     const storage = {
@@ -435,7 +442,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
       outputs: [],
     });
 
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
     const storage = {
       isAddressMine: jest.fn().mockResolvedValue(true),
       getAddressInfo: jest.fn().mockResolvedValue({ bip32AddressIndex: 0 }),
@@ -474,7 +481,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     });
 
     // addr1 is ours and succeeds, addr2 is unknown, addr3 is ours but rewind fails
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
 
     const storage = {
       isAddressMine: jest
@@ -532,7 +539,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     });
     const tx = makeHistoryTx({ shielded_outputs: [so], outputs: [] });
 
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
     const matchingAc = Buffer.from('dd'.repeat(33), 'hex');
     const abf = Buffer.alloc(32, 0x04);
 
@@ -573,7 +580,7 @@ describe('processShieldedOutputs (SEPARATED model — write in place)', () => {
     });
     const tx = makeHistoryTx({ shielded_outputs: [so], outputs: [] });
 
-    const mockXpriv = new HDPrivateKey().deriveNonCompliantChild(0).xprivkey;
+    const mockXpriv = randomScanKey().xprivkey;
 
     const storage = {
       isAddressMine: jest.fn().mockResolvedValue(true),
