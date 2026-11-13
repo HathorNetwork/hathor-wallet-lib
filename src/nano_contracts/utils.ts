@@ -124,6 +124,7 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  * @param argType Full method argument type string, e.g. 'SignedData[str]'
  * @param value Value to sign
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If `contractId` is not 64 hex characters, checked before `value`
  */
 export async function getOracleSignedDataFromUser(
   oracleData: Buffer,
@@ -133,6 +134,7 @@ export async function getOracleSignedDataFromUser(
   wallet: IHathorWallet,
   options: { pinCode?: string } = {}
 ) {
+  parseNanoContractId(contractId);
   const field = getFieldParser(argType, wallet.getNetworkObject());
   if (!isSignedDataField(field)) {
     throw new Error('Type is not SignedData');
@@ -153,12 +155,27 @@ export async function getOracleSignedDataFromUser(
 }
 
 /**
+ * Parse a nano contract id, which is 32 bytes. Buffer.from(..., 'hex') stops at the first invalid
+ * character instead of failing, so anything other than 64 hex characters would silently give a
+ * shorter prefix (see unsafeGetOracleInputData for why the length matters).
+ *
+ * @throws {OracleParseError} If `contractId` is not a string of 64 hex characters
+ */
+function parseNanoContractId(contractId: string): Buffer {
+  if (typeof contractId !== 'string' || !/^[0-9a-f]{64}$/i.test(contractId)) {
+    throw new OracleParseError('Invalid nano contract id: expected 64 hex characters.');
+  }
+  return Buffer.from(contractId, 'hex');
+}
+
+/**
  * Get oracle input data
  *
  * @param oracleData Oracle data
  * @param contractId Id of the nano contract being invoked
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If `contractId` is not 64 hex characters
  */
 export const getOracleInputData = async (
   oracleData: Buffer,
@@ -167,13 +184,7 @@ export const getOracleInputData = async (
   wallet: IHathorWallet,
   options: { pinCode?: string } = {}
 ) => {
-  // A nano contract id is 32 bytes. Buffer.from(..., 'hex') stops at the first invalid character
-  // instead of failing, so anything other than 64 hex characters would silently sign a shorter
-  // prefix (see unsafeGetOracleInputData for why the length matters).
-  if (typeof contractId !== 'string' || !/^[0-9a-f]{64}$/i.test(contractId)) {
-    throw new OracleParseError('Invalid nano contract id: expected 64 hex characters.');
-  }
-  const ncId = Buffer.from(contractId, 'hex');
+  const ncId = parseNanoContractId(contractId);
   const actualValue = Buffer.concat([ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet, options);
 };
@@ -196,6 +207,7 @@ export const getOracleInputData = async (
  * @param oracleData Oracle data
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If the oracle is an address and `resultSerialized` is 32 bytes
  */
 export const unsafeGetOracleInputData = async (
   oracleData: Buffer,

@@ -74,7 +74,9 @@ describe('oracle input data', () => {
     const tx = spendOracleFunds(1000n);
     const sighash = crypto.Hash.sha256(tx.getDataToSign());
 
-    await expect(unsafeGetOracleInputData(oracle, sighash, wallet)).rejects.toThrow(LENGTH_ERROR);
+    const result = unsafeGetOracleInputData(oracle, sighash, wallet);
+    await expect(result).rejects.toBeInstanceOf(OracleParseError);
+    await expect(result).rejects.toThrow(LENGTH_ERROR);
     expect(getPrivateKeyFromAddress).not.toHaveBeenCalled();
   });
 
@@ -119,6 +121,18 @@ describe('oracle input data', () => {
       getOracleSignedDataFromUser(oracle, ncId as never, 'SignedData[str]', '/', wallet)
     ).rejects.toThrow(NC_ID_ERROR);
     expect(getPrivateKeyFromAddress).not.toHaveBeenCalled();
+  });
+
+  it('reports a malformed contract id before a malformed value', async () => {
+    const result = getOracleSignedDataFromUser(
+      oracle,
+      'ab'.repeat(30),
+      'SignedData[int]',
+      'x',
+      wallet
+    );
+    await expect(result).rejects.toBeInstanceOf(OracleParseError);
+    await expect(result).rejects.toThrow(NC_ID_ERROR);
   });
 
   it('refuses a valid contract id with an empty result, which is 32 bytes', async () => {
