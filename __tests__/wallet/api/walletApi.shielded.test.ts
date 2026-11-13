@@ -7,6 +7,7 @@
 
 import { AxiosError, AxiosInstance, AxiosResponse } from 'axios';
 import walletApi from '../../../src/wallet/api/walletApi';
+import { walletTxOutputSchema } from '../../../src/wallet/api/schemas/walletApi';
 import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import { ShieldedKeysConflictError, WalletRequestError } from '../../../src/errors';
@@ -303,6 +304,15 @@ describe('walletApi shielded support', () => {
         params: { tokenId: '00', kind: 'shielded' },
       });
       expect(result.txOutputs[0].kind).toBe('shielded');
+    });
+
+    it('accepts only an address index as the shieldedIndex of a shielded output', () => {
+      expect(() => walletTxOutputSchema.parse(buildShieldedTxOutputEntry())).not.toThrow();
+      for (const shieldedIndex of [-1, 1.5]) {
+        expect(() =>
+          walletTxOutputSchema.parse(buildShieldedTxOutputEntry({ shieldedIndex }))
+        ).toThrow();
+      }
     });
   });
 

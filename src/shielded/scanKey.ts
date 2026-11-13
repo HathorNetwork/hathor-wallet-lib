@@ -9,6 +9,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import { DecryptionError, InvalidPasswdError, ShieldedKeyError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import type { IStorage } from '../types';
+import { SHIELDED_SCAN_ACCT_PATH, SHIELDED_SCAN_KEY_DEPTH } from '../constants';
 
 /**
  * Decrypt the wallet's scan private key (xpriv) with its PIN, without checking
@@ -41,29 +42,58 @@ export async function decryptScanXPrivKey(storage: IStorage, pinCode: string): P
 }
 
 /**
+ * A parsed scan key (m/44'/280'/1'/0), as `parseScanXPrivKey` returns it.
+ *
+ * Treat it as an opaque handle, and only pass it to `deriveScanChildPrivkey`.
+ * It holds the private key: don't log it, since its `toString()` gives the
+ * xpriv.
+ */
+export type ShieldedScanKey = HDPrivateKey;
+
+/**
  * The scan key an xpriv holds.
+ *
+ * Whitespace around the xpriv is ignored, as a pasted key often carries it.
  *
  * The network version bytes are not checked. A seed wallet stores its scan
  * xpriv with bitcore's livenet bytes, and the same key serialized for any
- * network derives the same children.
+ * network derives the same children. The version bytes must still be those of
+ * a known network.
  *
- * @throws {ShieldedKeyError} `shielded-corrupt-key` when it is not an extended
- *   private key
+ * Only the depth and the child index of the scan key can be checked: a key at
+ * another path with depth 4 and child index 0 is accepted, and opens nothing.
+ *
+ * @throws {ShieldedKeyError}
+ *   - `shielded-corrupt-key` when it is not an extended private key;
+ *   - `shielded-not-scan-key` when it is an extended private key, but not one
+ *     at the depth and child index of a scan key, such as a root key.
  */
-export function parseScanXPrivKey(xpriv: string): HDPrivateKey {
+export function parseScanXPrivKey(xpriv: string): ShieldedScanKey {
+  const text = typeof xpriv === 'string' ? xpriv.trim() : '';
   let key: HDPrivateKey | null;
   try {
-    key = new HDPrivateKey(xpriv);
+    key = new HDPrivateKey(text);
   } catch {
+    // The error isn't kept as the cause: bitcore's errors can quote the input,
+    // which is a private key.
     key = null;
   }
   // bitcore reads extended public keys as private ones, and builds a random key
   // from an empty input or a network name. Only a key it parsed serializes
-  // back to the text it was read from.
-  if (!key || key.xprivkey !== xpriv) {
+  // back to the text it was read from. It also parses version bytes of no
+  // known network, and leaves such a key without a network, which it then
+  // fails to derive children from.
+  if (!key || key.xprivkey !== text || !key.network) {
     throw new ShieldedKeyError(
       ErrorMessages.SHIELDED_CORRUPT_KEY,
       'The shielded view key is not an extended private key.'
+    );
+  }
+  // bitcore gives the child index only through toObject().
+  if (key.depth !== SHIELDED_SCAN_KEY_DEPTH || key.toObject().childIndex !== 0) {
+    throw new ShieldedKeyError(
+      ErrorMessages.SHIELDED_NOT_SCAN_KEY,
+      `The shielded view key is not a scan key: expected the extended private key at ${SHIELDED_SCAN_ACCT_PATH}/0.`
     );
   }
   return key;
@@ -78,25 +108,28 @@ export function parseScanXPrivKey(xpriv: string): HDPrivateKey {
  *
  * @param xpriv The scan xpriv
  * @param scanXpubkey The record's scan xpub
- * @returns The scan xpriv
+ * @returns The scan xpriv, without the whitespace around it
  * @throws {ShieldedKeyError}
  *   - `shielded-corrupt-key` when it is not an extended private key;
+ *   - `shielded-not-scan-key` when it is not at the depth and child index of
+ *     a scan key;
  *   - `shielded-key-mismatch` when it is not the key of the scan xpub.
  */
 export function checkScanXPrivKey(xpriv: unknown, scanXpubkey: string): string {
-  if (typeof xpriv !== 'string' || xpriv.length === 0) {
+  if (typeof xpriv !== 'string' || xpriv.trim().length === 0) {
     throw new ShieldedKeyError(
       ErrorMessages.SHIELDED_CORRUPT_KEY,
       'The shielded view key given is not an extended private key.'
     );
   }
-  if (parseScanXPrivKey(xpriv).xpubkey !== scanXpubkey) {
+  const key = parseScanXPrivKey(xpriv);
+  if (key.xpubkey !== scanXpubkey) {
     throw new ShieldedKeyError(
       ErrorMessages.SHIELDED_KEY_MISMATCH,
       'The shielded view key given does not match the scan xpub of the wallet record.'
     );
   }
-  return xpriv;
+  return key.xprivkey;
 }
 
 /**

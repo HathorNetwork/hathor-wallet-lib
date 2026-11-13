@@ -23,9 +23,19 @@ export { encodeShieldedUnblindingPayload } from './unblinding';
 export type { IShieldedUnblindingEntry } from './unblinding';
 
 // For tools given a wallet's scan xpriv, such as an explorer: read the key,
-// then derive the scan private key of each address index.
+// derive the scan private key of each address index, and rewind the shielded
+// outputs those keys received.
 export { parseScanXPrivKey } from './scanKey';
-export { deriveScanChildPrivkey } from './rewind';
+export type { ShieldedScanKey } from './scanKey';
+export { deriveScanChildPrivkey, rewindShieldedOutput, ShieldedRewindError } from './rewind';
+export type {
+  IShieldedOutputOpening,
+  IRewoundShieldedOutput,
+  ShieldedRewindFailure,
+} from './rewind';
+// What a provider throws when a key did not receive the output it rewinds. It
+// is re-exported so callers check it against the copy the providers use.
+export { ScanMissError } from '@hathor/ct-crypto-provider';
 
 // Provider implementations live with their respective ct-crypto packages:
 //   - Node:    @hathor/ct-crypto-node    → createDefaultShieldedCryptoProvider()

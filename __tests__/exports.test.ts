@@ -14,8 +14,8 @@
  * the import will fail.
  */
 
-import { PrivateKey } from 'bitcore-lib';
 /* eslint-disable @typescript-eslint/no-unused-vars -- Imports are intentionally exhaustive to validate the public API surface at compile time. */
+import { HDPrivateKey, PrivateKey, encoding } from 'bitcore-lib';
 import {
   // ============================================================
   // Core types from src/types.ts
@@ -735,7 +735,7 @@ describe('exported shielded scan-key helpers', () => {
   });
   const root = walletUtils.getXPrivKeyFromSeed(SEED, { networkName: NETWORK });
 
-  it('derive the scan key of each shielded address from the scan xpriv a wallet exports', () => {
+  it('derives the scan key of each shielded address from the scan xpriv a wallet exports', () => {
     // A seed wallet stores and exports its scan xpriv with bitcore's livenet
     // version bytes. One derived from a Hathor root key carries the network's.
     // Both hold the same key.
@@ -766,12 +766,54 @@ describe('exported shielded scan-key helpers', () => {
     }
   }, 30000);
 
-  it('refuse a key that is not an extended private key', () => {
-    for (const input of ['', accessData.scanXpubkey!, 'not a key']) {
-      expect(() => lib.shielded.parseScanXPrivKey(input)).toThrow(
-        expect.objectContaining({ name: 'ShieldedKeyError', errorCode: 'shielded-corrupt-key' })
+  const scanXpriv = () => cryptoUtils.decryptData(accessData.scanMainKey!, PIN);
+  const keyError = (errorCode: string) =>
+    expect.objectContaining({ name: 'ShieldedKeyError', errorCode });
+
+  it('ignores the whitespace around a pasted key', () => {
+    const xpriv = scanXpriv();
+    const key = lib.shielded.parseScanXPrivKey(`  ${xpriv}\n`);
+    expect(key.xprivkey).toBe(xpriv);
+  });
+
+  it('rejects a key that is not an extended private key', () => {
+    for (const input of ['', '   ', accessData.scanXpubkey!, 'not a key', 'testnet']) {
+      expect(() => lib.shielded.parseScanXPrivKey(input)).toThrow(keyError('shielded-corrupt-key'));
+    }
+  });
+
+  it('rejects an extended private key whose version bytes are of no known network', () => {
+    // bitcore parses such a key, and serializes it back to the same text, but
+    // fails to derive its children.
+    const payload = encoding.Base58Check.decode(scanXpriv());
+    payload.writeUInt32BE(0xdeadbeef, 0);
+    expect(() => lib.shielded.parseScanXPrivKey(encoding.Base58Check.encode(payload))).toThrow(
+      keyError('shielded-corrupt-key')
+    );
+  });
+
+  it('rejects an extended private key that is not a scan key', () => {
+    const rootKey = new HDPrivateKey(root);
+    const notScanKeys = [
+      rootKey, // the root, at depth 0
+      rootKey.deriveChild("m/44'/280'/1'"), // the scan account, at depth 3
+      rootKey.deriveChild("m/44'/280'/1'/1"), // depth 4, but child 1
+      rootKey.deriveChild("m/44'/280'/1'/0'"), // depth 4, but hardened
+      rootKey.deriveChild("m/44'/280'/1'/0/0"), // an address's key, at depth 5
+    ];
+    for (const key of notScanKeys) {
+      expect(() => lib.shielded.parseScanXPrivKey(key.xprivkey)).toThrow(
+        keyError('shielded-not-scan-key')
       );
     }
+  });
+
+  it('rewinds the shielded outputs a scan key received', () => {
+    expect(lib.shielded.rewindShieldedOutput).toBeInstanceOf(Function);
+    const error = new lib.shielded.ShieldedRewindError('non-positive-value', 'zero');
+    expect(error).toBeInstanceOf(Error);
+    expect(error.reason).toBe('non-positive-value');
+    expect(new lib.shielded.ScanMissError()).toBeInstanceOf(Error);
   });
 });
 

@@ -327,6 +327,7 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH
   | ErrorMessages.SHIELDED_NO_KEYS
   | ErrorMessages.SHIELDED_CORRUPT_KEY
+  | ErrorMessages.SHIELDED_NOT_SCAN_KEY
   | ErrorMessages.SHIELDED_KEY_MISMATCH
   | ErrorMessages.SHIELDED_NOT_STARTED
   | ErrorMessages.SHIELDED_MULTISIG

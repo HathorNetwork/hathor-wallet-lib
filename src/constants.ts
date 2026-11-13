@@ -358,6 +358,15 @@ export const TX_HASH_SIZE_BYTES: number = 32;
 export const COMPRESSED_PUBKEY_SIZE_BYTES: number = 33;
 
 /**
+ * Byte length of a raw secp256k1 private key (a 32-byte scalar).
+ *
+ * @deprecated Nothing in wallet-lib reads it, and it will be removed in the
+ * next major release. bitcore's `PrivateKey.toBuffer()` already pads a key to
+ * 32 bytes, so no size needs to be passed.
+ */
+export const PRIVATE_KEY_SIZE_BYTES: number = 32;
+
+/**
  * Maximum number of retries allowed when an error different
  * from client timeout happens when loading wallet history
  */
@@ -408,6 +417,13 @@ export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
  * prevents compromising legacy address signing keys when debugging shielded decryption.
  */
 export const SHIELDED_SCAN_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/1'`;
+
+/**
+ * Depth of the shielded scan key, the child 0 of SHIELDED_SCAN_ACCT_PATH
+ * (m/44'/280'/1'/0). Each shielded address uses the scan key's child at its
+ * address index.
+ */
+export const SHIELDED_SCAN_KEY_DEPTH = 4;
 
 /**
  * Account path for shielded spend keys (signing/spending authority).
