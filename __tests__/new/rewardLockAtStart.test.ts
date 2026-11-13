@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { EventEmitter } from 'events';
 import HathorWallet from '../../src/new/wallet';
 import Connection from '../../src/new/connection';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -50,6 +51,8 @@ describe('network height at start()', () => {
       subscribeAddresses: jest.fn(),
       unsubscribeAddress: jest.fn(),
       emit: jest.fn(),
+      // Where the dashboard messages come from; nothing emits them unless a test does.
+      websocket: new EventEmitter(),
     };
   }
 
@@ -432,9 +435,15 @@ describe('network height at start()', () => {
     const recentId = 'aa'.repeat(32);
     const oldId = 'bb'.repeat(32);
 
-    async function syncWithRewards() {
+    async function syncWithRewards({
+      miningInfo = () => mockMiningInfo({ success: true, blocks: HEIGHT }),
+      whileSyncing = async () => {},
+    }: {
+      miningInfo?: () => void;
+      whileSyncing?: (ctx: ReturnType<typeof buildWallet>) => Promise<void>;
+    } = {}) {
       mockVersion('testnet', 300);
-      mockMiningInfo({ success: true, blocks: HEIGHT });
+      miningInfo();
       const ctx = buildWallet();
       await ctx.hWallet.start();
       const address0 = await ctx.hWallet.getAddressAtIndex(0);
@@ -454,8 +463,10 @@ describe('network height at start()', () => {
         },
       })) as never);
 
-      // No dashboard message comes: the walk only has the height start() stored.
-      await ctx.hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+      // Unless whileSyncing sends one, no dashboard message comes.
+      const syncing = ctx.hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+      await whileSyncing(ctx);
+      await syncing;
       await until(() => ctx.hWallet.isReady(), 'the first walk');
       return { ...ctx, address0 };
     }
@@ -466,13 +477,47 @@ describe('network height at start()', () => {
     }
 
     it('counts a reward inside the reward lock as locked at READY', async () => {
+      const wait = jest.spyOn(HathorWallet.prototype, 'waitNetworkHeightFromWebsocket');
       const { hWallet, store, address0 } = await syncWithRewards();
 
+      // With the height from start(), the sync does not wait for the websocket.
+      expect(wait).not.toHaveBeenCalled();
       await expect(htrBalance(hWallet)).resolves.toEqual({ unlocked: REWARD, locked: REWARD });
       expect([...store.lockedUtxos.keys()]).toEqual([`${recentId}:0`]);
       const info = await hWallet.getAddressInfo(address0);
       expect(info.total_amount_locked).toBe(REWARD);
       expect(info.total_amount_available).toBe(REWARD);
+
+      await hWallet.stop();
+    }, 30000);
+
+    it('takes the height from the websocket when start() got none', async () => {
+      const { hWallet, store, logger } = await syncWithRewards({
+        miningInfo: () => axiosMock.onGet('getmininginfo').reply(500),
+        whileSyncing: async ({ conn }) => {
+          await until(() => conn.websocket.listenerCount('dashboard') === 1, 'the wait');
+          conn.websocket.emit('dashboard', { best_block_height: HEIGHT });
+        },
+      });
+
+      await expect(htrBalance(hWallet)).resolves.toEqual({ unlocked: REWARD, locked: REWARD });
+      expect([...store.lockedUtxos.keys()]).toEqual([`${recentId}:0`]);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn.mock.calls[0][0]).toMatch(/waits up to 2 s for the websocket/);
+
+      await hWallet.stop();
+    }, 30000);
+
+    it('loads the history without a height when the websocket gives none in time either', async () => {
+      const { hWallet, conn, logger } = await syncWithRewards({
+        miningInfo: () => axiosMock.onGet('getmininginfo').reply(500),
+      });
+
+      // The race this cannot close: the recent reward counts unlocked.
+      await expect(htrBalance(hWallet)).resolves.toEqual({ unlocked: 2n * REWARD, locked: 0n });
+      expect(conn.websocket.listenerCount('dashboard')).toBe(0);
+      expect(logger.warn).toHaveBeenCalledTimes(2);
+      expect(logger.warn.mock.calls[1][0]).toMatch(/^The websocket gave no network height/);
 
       await hWallet.stop();
     }, 30000);

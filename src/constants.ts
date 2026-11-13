@@ -205,6 +205,15 @@ export const SEND_TX_TIMEOUT: number = 60000;
 export const NETWORK_HEIGHT_TIMEOUT: number = 5000;
 
 /**
+ * How long the first history sync waits for the network height from the
+ * websocket when the request at wallet start gave none, in milliseconds.
+ *
+ * The fullnode sends the height in its dashboard metrics every second, so a
+ * connected fullnode sends one well within this. Without one the sync goes on.
+ */
+export const NETWORK_HEIGHT_WS_TIMEOUT: number = 2000;
+
+/**
  * Number of iterations to execute when hashing the password
  *
  * Even though NIST recommeds at least 10,000 iterations (https://pages.nist.gov/800-63-3/sp800-63b.html#sec5),
