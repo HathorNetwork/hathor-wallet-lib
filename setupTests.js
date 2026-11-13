@@ -50,6 +50,16 @@ mock.onGet('version').reply((config) => ([200, {
     token_deposit_percentage: 0.01,
   }]));
 
+// HathorWallet.start() asks for the best block height. Height 0 is the MemoryStore
+// default, so wallets in tests start from the same height as before.
+mock.onGet('getmininginfo').reply(() => ([200, {
+    success: true,
+    blocks: 0,
+    hashrate: 0,
+    difficulty: 1,
+    mined_tokens: 6400,
+  }]));
+
 expect.extend({
   toMatchBuffer(received, expected) {
     let pass;

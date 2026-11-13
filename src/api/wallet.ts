@@ -6,7 +6,7 @@
  */
 
 import { AxiosResponse } from 'axios';
-import { createRequestInstance } from './axiosInstance';
+import { createRequestInstance, defaultCreateRequestInstance } from './axiosInstance';
 import { SEND_TOKENS_TIMEOUT } from '../constants';
 import { transformJsonBigIntResponse } from '../utils/bigint';
 import {
@@ -14,7 +14,19 @@ import {
   addressHistorySchema,
   GeneralTokenInfoSchema,
   generalTokenInfoSchema,
+  miningInfoHeightSchema,
 } from './schemas/wallet';
+
+/**
+ * The fullnode's best block height from GET getmininginfo, or why it gave none.
+ */
+export type MiningInfoBestEffortResponse =
+  | { height: number }
+  | {
+      height: null;
+      /** What the fullnode answered instead: its message, or why the answer is not valid. */
+      message: string;
+    };
 
 /**
  * Api calls for wallet
@@ -217,6 +229,37 @@ const walletApi = {
           return Promise.reject(res);
         }
       );
+  },
+
+  /**
+   * Get the fullnode's best block height from its mining info, for a request
+   * whose failure the caller tolerates.
+   *
+   * It goes through the library's own request instance, not one an app
+   * registered, so an app's error handler, such as the desktop wallet's
+   * request-error modal, does not run for it. The app's headers and
+   * interceptors do not apply either, so a fullnode that needs them refuses it.
+   * The base URL is the same. The timeout goes with the request, because the
+   * instance factory sets no timeout at all when it is given one.
+   *
+   * @param timeout Timeout of the request in milliseconds
+   *
+   * @return The height, or why the fullnode gave none: it answered success
+   *   false, or an answer without a valid height
+   * @throws When the request fails or times out
+   * @memberof ApiWallet
+   * @inner
+   */
+  async getMiningInfoBestEffort(timeout: number): Promise<MiningInfoBestEffortResponse> {
+    const { data } = await defaultCreateRequestInstance().get('getmininginfo', { timeout });
+    const parsed = miningInfoHeightSchema.safeParse(data);
+    if (!parsed.success) {
+      return { height: null, message: `Invalid response: ${parsed.error.message}` };
+    }
+    if (!parsed.data.success) {
+      return { height: null, message: parsed.data.message ?? 'success false' };
+    }
+    return { height: parsed.data.blocks };
   },
 
   /**

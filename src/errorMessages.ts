@@ -38,6 +38,8 @@ export enum ErrorMessages {
   // When PIN is required in a method and not set
   PIN_REQUIRED = 'pin-required',
   HAS_TX_OUTSIDE_FIRST_ADDRESS = 'has-tx-outside-first-address',
+  // A stop() came while start() was running (WalletStoppedError.errorCode)
+  WALLET_STOPPED = 'wallet-stopped',
   // Shielded key errors (ShieldedKeyError.errorCode)
   // The password does not decrypt the words the shielded keys are derived from
   SHIELDED_WRONG_PASSWORD = 'shielded-wrong-password',

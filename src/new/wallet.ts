@@ -32,9 +32,12 @@ import {
   P2SH_ACCT_PATH,
   SHIELDED_SPEND_ACCT_PATH,
   GAP_LIMIT,
+  NETWORK_HEIGHT_TIMEOUT,
+  NETWORK_HEIGHT_WS_TIMEOUT,
 } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
+import { updateNetworkHeight } from '../utils/connection';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
 import { signMessage } from '../utils/crypto';
@@ -52,6 +55,7 @@ import {
   TxNotFoundError,
   WalletError,
   WalletFromXPubGuard,
+  WalletStoppedError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
@@ -282,6 +286,45 @@ export function normalizePreCalculatedAddresses(
 }
 
 /**
+ * Ask the fullnode for its best block height, the `blocks` field of GET getmininginfo.
+ *
+ * The request is best-effort. It goes through walletApi.getMiningInfoBestEffort, so
+ * an error handler that an app registers for its requests, such as the desktop
+ * wallet's request-error modal, does not run for it, and it gives up after
+ * NETWORK_HEIGHT_TIMEOUT. It never rejects.
+ *
+ * @returns The height, or why there is none: the request failed, or the fullnode
+ *   answered success false, which it does while it has no synced peer
+ */
+async function fetchNetworkHeight(): Promise<
+  { height: number } | { height: null; reason: string; details: Record<string, unknown> }
+> {
+  try {
+    const result = await walletApi.getMiningInfoBestEffort(NETWORK_HEIGHT_TIMEOUT);
+    if (result.height !== null) {
+      return { height: result.height };
+    }
+    return {
+      height: null,
+      reason: 'The fullnode did not give its best block height, as when it has no synced peer',
+      details: { message: result.message },
+    };
+  } catch (error) {
+    // Not the error itself: an axios error carries the whole request config.
+    const { message, code, response } = (error ?? {}) as {
+      message?: string;
+      code?: string;
+      response?: { status?: number };
+    };
+    return {
+      height: null,
+      reason: 'Could not get the best block height from the fullnode',
+      details: { message, code, status: response?.status },
+    };
+  }
+}
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -344,6 +387,12 @@ class HathorWallet extends EventEmitter {
 
   // Connection state
   firstConnection: boolean;
+
+  /**
+   * True when the request at start() gave no network height, so the first
+   * history sync waits a moment for the websocket to give it.
+   */
+  networkHeightUnknown: boolean;
 
   walletStopped: boolean;
 
@@ -564,6 +613,7 @@ class HathorWallet extends EventEmitter {
     // The reload must execute some cleanups, that's why it's important
     // to differentiate both actions
     this.firstConnection = true;
+    this.networkHeightUnknown = false;
 
     // Debug mode. It is used to include debugging information
     // when a problem occurs.
@@ -812,6 +862,49 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Wait for the first network height the websocket gives, in the fullnode's
+   * dashboard metrics, and store it. It gives up after NETWORK_HEIGHT_WS_TIMEOUT.
+   *
+   * The first history walk reads the network height once to tell which block
+   * rewards are still reward-locked, and the fullnode sends the dashboard
+   * metrics every second, not on connect. start() asks the fullnode for the
+   * height, and the first sync calls this only when that gave none.
+   *
+   * @returns Whether a height came before the timeout
+   */
+  async waitNetworkHeightFromWebsocket(): Promise<boolean> {
+    const { websocket } = this.conn;
+    if (!websocket) {
+      return false;
+    }
+    const height = await new Promise<number | null>(resolve => {
+      // stop() closes the websocket, which removes this listener: the timeout ends the wait.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const onDashboard = (data: { best_block_height?: unknown }): void => {
+        const value = data?.best_block_height;
+        if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+          return;
+        }
+        clearTimeout(timer);
+        websocket.removeListener('dashboard', onDashboard);
+        resolve(value);
+      };
+      timer = setTimeout(() => {
+        websocket.removeListener('dashboard', onDashboard);
+        resolve(null);
+      }, NETWORK_HEIGHT_WS_TIMEOUT);
+      websocket.on('dashboard', onDashboard);
+    });
+    if (height === null) {
+      return false;
+    }
+    // The dashboard handler stores it too, without being awaited: this makes
+    // sure it is stored before the walk reads it.
+    await updateNetworkHeight(this.storage, height);
+    return true;
+  }
+
+  /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
@@ -830,6 +923,17 @@ class HathorWallet extends EventEmitter {
         // otherwise we are reloading data, so we must execute some cleans
         // before loading the full data again
         if (this.firstConnection) {
+          // Without a height, the walk would count every recent block reward unlocked.
+          if (
+            this.networkHeightUnknown &&
+            !(await this.waitNetworkHeightFromWebsocket()) &&
+            generation === this.syncGeneration &&
+            !this.walletStopped
+          ) {
+            this.logger.warn(
+              `The websocket gave no network height within ${NETWORK_HEIGHT_WS_TIMEOUT / 1000} s either. Block rewards still inside the reward lock count as unlocked until they leave it.`
+            );
+          }
           // The first sync runs on newTxPromise, as a reload does: a reconnect
           // while it loads queues its reload after it, instead of wiping the
           // store under it.
@@ -840,6 +944,7 @@ class HathorWallet extends EventEmitter {
               return;
             }
             this.firstConnection = false;
+            this.networkHeightUnknown = false;
             const scanPolicy = await this.storage.getScanningPolicy();
             // The check enableSingleAddressMode() makes, without the storage
             // reload it can run: a reload waits on this chain.
@@ -2581,6 +2686,8 @@ class HathorWallet extends EventEmitter {
    * Connect to the server and start emitting events.
    *
    * @param optionsParams Options parameters for starting the wallet
+   * @throws WalletStoppedError when stop() comes before it connects, even if
+   *   another start() follows the stop(). The wallet does not connect.
    */
   async start(optionsParams: WalletStartOptions = {}): Promise<ApiVersion> {
     const options = { pinCode: null, password: null, ...optionsParams };
@@ -2593,6 +2700,10 @@ class HathorWallet extends EventEmitter {
     if (this.seed && !password) {
       throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
     }
+
+    // stop() moves the generation on, so it tells a stop() that comes during the
+    // awaits below, before walletStopped is cleared.
+    const generation = this.syncGeneration;
 
     // Check database consistency
     await this.storage.store.validate();
@@ -2688,7 +2799,12 @@ class HathorWallet extends EventEmitter {
 
     this.clearSensitiveData();
     this.getTokenData();
+    if (generation !== this.syncGeneration) {
+      throw new WalletStoppedError();
+    }
     this.walletStopped = false;
+    // False once a stop() comes while this start() awaits, even if another start() follows it.
+    const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
 
     // The scan key stays in memory, in storage.scanXPrivKey, until stop().
     // Whatever fails before the connection starts drops it again, since apps
@@ -2728,12 +2844,33 @@ class HathorWallet extends EventEmitter {
       this.queueShieldedCapabilityEvent();
       this.setState(HathorWallet.CONNECTING);
 
+      // The first history walk reads the network height once to tell which block
+      // rewards are still reward-locked, and nothing locks a reward again once it
+      // counted unlocked. The websocket brings the height only with the fullnode's
+      // dashboard metrics, sent every second and not on connect, so a walk that
+      // ends before them would count every recent reward unlocked. The height is
+      // asked for while the version is.
+      const networkHeight = fetchNetworkHeight();
       const info = await new Promise<ApiVersion>((resolve, reject) => {
         versionApi.getVersion(resolve).catch(error => reject(error));
       });
       if (info.network.indexOf(this.conn.getCurrentNetwork()) >= 0) {
         this.storage.setApiVersion(info);
         await this.storage.saveNativeToken();
+        const result = await networkHeight;
+        // A stop() while the height was asked for leaves the storage to the next start().
+        if (isCurrent()) {
+          this.networkHeightUnknown = result.height === null;
+          if (result.height === null) {
+            this.logger.warn(
+              `${result.reason}. The first history sync waits up to ${NETWORK_HEIGHT_WS_TIMEOUT / 1000} s for the websocket to give it.`,
+              result.details
+            );
+          } else {
+            // It also replaces a height that a persistent store kept from an earlier session.
+            await this.storage.setCurrentHeight(result.height);
+          }
+        }
 
         // Note: shielded crypto provider is not auto-detected. Clients that need
         // shielded support MUST install the appropriate crypto package
@@ -2741,6 +2878,15 @@ class HathorWallet extends EventEmitter {
         // verifier-only) and register the provider explicitly via
         // `wallet.setShieldedCryptoProvider(...)` before starting the wallet.
 
+        // A stopped wallet stays disconnected, and a start() after the stop() connects it.
+        if (!isCurrent()) {
+          throw new WalletStoppedError();
+        }
+        // stop() closes the websocket, which drops every listener on it, and
+        // conn.start() adds back only its own. Without the dashboard handler a
+        // wallet started again on this instance keeps the height stored above,
+        // and the rewards it locked never unlock.
+        this.conn.startControlHandlers(this.storage);
         this.conn.start();
       } else {
         this.setState(HathorWallet.CLOSED);
@@ -2751,13 +2897,17 @@ class HathorWallet extends EventEmitter {
       return info;
     } catch (error) {
       // A wallet that was stopped meanwhile already dropped its key, and the
-      // storage may hold the view of the next wallet that started on it.
-      if (!this.walletStopped) {
+      // storage may hold the view of the next wallet that started on it, or of
+      // a start() that followed the stop() on this one.
+      if (isCurrent()) {
         this.storage.scanXPrivKey = null;
         view.started = false;
         view.reset();
+        throw error;
       }
-      throw error;
+      // Whatever failed, the stop() came first, so the caller gets the one error
+      // that tells it, as when this start() would have connected.
+      throw error instanceof WalletStoppedError ? error : new WalletStoppedError(error);
     }
   }
 
