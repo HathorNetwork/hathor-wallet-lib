@@ -432,6 +432,32 @@ export const SHIELDED_SCAN_KEY_DEPTH = 4;
 export const SHIELDED_SPEND_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/2'`;
 
 /**
+ * BIP44 account index reserved for the Hathor Next keys Hathor Wallet derives. The Hathor Next
+ * wallet SDK takes this number (not a path) as its `account_index`. Never reuse it for another
+ * key family.
+ */
+export const HATHOR_NEXT_ACCOUNT_INDEX = 3;
+
+/**
+ * Account path of the Hathor Next keys Hathor Wallet derives (see HATHOR_NEXT_ACCOUNT_INDEX).
+ *
+ * The Hathor Next SDK derives the view, spend and session keys from this one hardened account
+ * node. wallet-lib does not derive them itself. The Hathor Next wallet app uses account 0' for
+ * the same seed words. So Hathor Wallet's Hathor Next keys never match the app's, and the same
+ * seed opens a different Hathor Next wallet in each app.
+ *
+ * Account 0' is also the P2PKH account (P2PKH_ACCT_PATH). For almost every seed, the Hathor
+ * Next app's key material is that same BIP32 node. It derives different keys on a different
+ * curve, so the two never own the same outputs, but anyone holding the app's account node can
+ * also derive the P2PKH keys.
+ *
+ * Anything that derives this node in wallet-lib must use standard BIP32 (`deriveChild`), not
+ * `deriveNonCompliantChild` (used for P2PKH), or some seeds will derive a different node than
+ * the Hathor Next SDK.
+ */
+export const HATHOR_NEXT_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/${HATHOR_NEXT_ACCOUNT_INDEX}'`;
+
+/**
  * String to be prefixed before signed messages using bitcore-message
  */
 export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
