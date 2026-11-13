@@ -53,6 +53,7 @@ import {
   TxNotFoundError,
   WalletError,
   WalletFromXPubGuard,
+  WalletStoppedError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
@@ -2621,6 +2622,8 @@ class HathorWallet extends EventEmitter {
    * Connect to the server and start emitting events.
    *
    * @param optionsParams Options parameters for starting the wallet
+   * @throws WalletStoppedError when stop() comes before it connects, even if
+   *   another start() follows the stop(). The wallet does not connect.
    */
   async start(optionsParams: WalletStartOptions = {}): Promise<ApiVersion> {
     const options = { pinCode: null, password: null, ...optionsParams };
@@ -2633,6 +2636,10 @@ class HathorWallet extends EventEmitter {
     if (this.seed && !password) {
       throw new Error(ERROR_MESSAGE_PASSWORD_REQUIRED);
     }
+
+    // stop() moves the generation on, so it tells a stop() that comes during the
+    // awaits below, before walletStopped is cleared.
+    const generation = this.syncGeneration;
 
     // Check database consistency
     await this.storage.store.validate();
@@ -2728,9 +2735,11 @@ class HathorWallet extends EventEmitter {
 
     this.clearSensitiveData();
     this.getTokenData();
+    if (generation !== this.syncGeneration) {
+      throw new WalletStoppedError();
+    }
     this.walletStopped = false;
     // False once a stop() comes while this start() awaits, even if another start() follows it.
-    const generation = this.syncGeneration;
     const isCurrent = (): boolean => !this.walletStopped && generation === this.syncGeneration;
 
     // The scan key stays in memory, in storage.scanXPrivKey, until stop().
@@ -2806,7 +2815,7 @@ class HathorWallet extends EventEmitter {
 
         // A stopped wallet stays disconnected, and a start() after the stop() connects it.
         if (!isCurrent()) {
-          return info;
+          throw new WalletStoppedError();
         }
         // stop() closes the websocket, which drops every listener on it, and
         // conn.start() adds back only its own. Without the dashboard handler a
@@ -2829,8 +2838,11 @@ class HathorWallet extends EventEmitter {
         this.storage.scanXPrivKey = null;
         view.started = false;
         view.reset();
+        throw error;
       }
-      throw error;
+      // Whatever failed, the stop() came first, so the caller gets the one error
+      // that tells it, as when this start() would have connected.
+      throw error instanceof WalletStoppedError ? error : new WalletStoppedError(error);
     }
   }
 

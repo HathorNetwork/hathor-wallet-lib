@@ -16,6 +16,7 @@ import {
 } from '../../src/api/axiosInstance';
 import { handleWsDashboard } from '../../src/utils/connection';
 import { NATIVE_TOKEN_UID, NETWORK_HEIGHT_TIMEOUT } from '../../src/constants';
+import { WalletStoppedError } from '../../src/errors';
 import { ConnectionState } from '../../src/wallet/types';
 import { IHistoryTx, ILogger } from '../../src/types';
 
@@ -284,7 +285,7 @@ describe('network height at start()', () => {
     await until(() => miningInfoRequests() === 1, 'the height request');
     await hWallet.stop();
     release();
-    await expect(starting).resolves.toBeDefined();
+    await expect(starting).rejects.toThrow(WalletStoppedError);
 
     expect(conn.start).not.toHaveBeenCalled();
     await expect(storage.getCurrentHeight()).resolves.toBe(0);
@@ -313,7 +314,7 @@ describe('network height at start()', () => {
     expect(conn.start).toHaveBeenCalledTimes(1);
 
     releaseFirst();
-    await expect(first).resolves.toBeDefined();
+    await expect(first).rejects.toThrow(WalletStoppedError);
 
     expect(requests).toBe(2);
     expect(conn.start).toHaveBeenCalledTimes(1);
@@ -340,11 +341,38 @@ describe('network height at start()', () => {
     expect(storage.shieldedView.started).toBe(true);
 
     failFirst();
-    await expect(first).rejects.toThrow('Network Error');
+    await expect(first).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: new Error('Network Error'),
+    });
 
     expect(storage.shieldedView.started).toBe(true);
     expect(conn.start).toHaveBeenCalledTimes(1);
     await expect(storage.getCurrentHeight()).resolves.toBe(6000);
+  });
+
+  it('does not connect a wallet that stop() stopped before start() cleared walletStopped', async () => {
+    mockVersion();
+    const { hWallet, store, conn } = buildWallet();
+    let validated: () => void = () => {};
+    let validating = false;
+    jest.spyOn(store, 'validate').mockImplementationOnce(
+      () =>
+        new Promise<void>(resolve => {
+          validating = true;
+          validated = resolve;
+        })
+    );
+
+    const starting = hWallet.start();
+    await until(() => validating, 'the store validation');
+    await hWallet.stop();
+    validated();
+
+    await expect(starting).rejects.toThrow(WalletStoppedError);
+    expect(hWallet.walletStopped).toBe(true);
+    expect(miningInfoRequests()).toBe(0);
+    expect(conn.start).not.toHaveBeenCalled();
   });
 
   it('takes the height from the dashboard messages after a stop() and another start()', async () => {

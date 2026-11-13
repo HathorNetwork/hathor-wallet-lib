@@ -4262,7 +4262,7 @@ describe('the shielded view key from start() to stop()', () => {
     expect(shielded.active).toBe(false);
   }, 60000);
 
-  it('rejects start() with shielded-not-started, and keeps no key, when stop() runs during the unlock', async () => {
+  it('rejects start() with wallet-stopped, and keeps no key, when stop() runs during the unlock', async () => {
     const { wallet, storage, shielded, conn } = await makeWallet();
     const readKey = storage.getScanXPrivKey.bind(storage);
     const unlocking = gate();
@@ -4278,7 +4278,10 @@ describe('the shielded view key from start() to stop()', () => {
     const stopping = wallet.stop();
     unlocking.open();
 
-    await expect(starting).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+    await expect(starting).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+    });
     await stopping;
     expect(shielded.active).toBe(false);
     expect(shielded.hasKey).toBe(false);
@@ -4351,7 +4354,10 @@ describe('the shielded view key from start() to stop()', () => {
     await next.start({ pinCode: PIN, password: PASSWORD });
     failVersion(new Error('server unreachable'));
 
-    await expect(firstStart).rejects.toThrow('server unreachable');
+    await expect(firstStart).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: new Error('server unreachable'),
+    });
     expect(shielded.active).toBe(true);
     expect(shielded.hasKey).toBe(true);
     await next.stop();
@@ -4375,7 +4381,10 @@ describe('the shielded view key from start() to stop()', () => {
     await next.start({ pinCode: PIN, password: PASSWORD });
     unlocking.open();
 
-    await expect(firstStart).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+    await expect(firstStart).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+    });
     expect(shielded.active).toBe(true);
     expect(shielded.hasKey).toBe(true);
     await next.stop();
@@ -5812,7 +5821,10 @@ describe('the shielded view key from start() to stop()', () => {
       const stopping = wallet.stop();
       reading.open();
 
-      await expect(starting).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+      await expect(starting).rejects.toMatchObject({
+        errorCode: 'wallet-stopped',
+        cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+      });
       await stopping;
       expect(storage.scanXPrivKey).toBeNull();
       expect(shielded.hasKey).toBe(false);
