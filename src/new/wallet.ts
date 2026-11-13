@@ -300,26 +300,26 @@ async function fetchNetworkHeight(): Promise<
   { height: number } | { height: null; reason: string; details: Record<string, unknown> }
 > {
   try {
-    const data = await walletApi.getMiningInfoBestEffort(NETWORK_HEIGHT_TIMEOUT);
-    const blocks = data?.blocks;
-    if (
-      data?.success &&
-      typeof blocks === 'number' &&
-      Number.isSafeInteger(blocks) &&
-      blocks >= 0
-    ) {
-      return { height: blocks };
+    const result = await walletApi.getMiningInfoBestEffort(NETWORK_HEIGHT_TIMEOUT);
+    if (result.height !== null) {
+      return { height: result.height };
     }
     return {
       height: null,
       reason: 'The fullnode did not give its best block height, as when it has no synced peer',
-      details: { message: data?.message },
+      details: { message: result.message },
     };
   } catch (error) {
+    // Not the error itself: an axios error carries the whole request config.
+    const { message, code, response } = (error ?? {}) as {
+      message?: string;
+      code?: string;
+      response?: { status?: number };
+    };
     return {
       height: null,
       reason: 'Could not get the best block height from the fullnode',
-      details: { error },
+      details: { message, code, status: response?.status },
     };
   }
 }

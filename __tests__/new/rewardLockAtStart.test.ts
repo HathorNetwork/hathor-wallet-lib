@@ -238,10 +238,22 @@ describe('network height at start()', () => {
   });
 
   it.each([
-    { failure: 'an HTTP error', fail: () => axiosMock.onGet('getmininginfo').reply(500) },
-    { failure: 'a network error', fail: () => axiosMock.onGet('getmininginfo').networkError() },
-    { failure: 'a timeout', fail: () => axiosMock.onGet('getmininginfo').timeout() },
-  ])('still connects after $failure', async ({ fail }) => {
+    {
+      failure: 'an HTTP error',
+      fail: () => axiosMock.onGet('getmininginfo').reply(500),
+      details: { status: 500 },
+    },
+    {
+      failure: 'a network error',
+      fail: () => axiosMock.onGet('getmininginfo').networkError(),
+      details: { message: 'Network Error' },
+    },
+    {
+      failure: 'a timeout',
+      fail: () => axiosMock.onGet('getmininginfo').timeout(),
+      details: { code: 'ECONNABORTED' },
+    },
+  ])('still connects after $failure', async ({ fail, details }) => {
     mockVersion();
     fail();
     const { hWallet, storage, conn, logger } = await buildWallet();
@@ -253,28 +265,54 @@ describe('network height at start()', () => {
     await expect(storage.getCurrentHeight()).resolves.toBe(7);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn.mock.calls[0][0]).toMatch(/^Could not get the best block height/);
+    // The message and the code, not the axios error and the request config it carries.
+    const logged = logger.warn.mock.calls[0][1];
+    expect(Object.keys(logged).sort()).toEqual(['code', 'message', 'status']);
+    expect(logged).toMatchObject(details);
   });
 
   it.each([
-    { answer: 'success false', data: { success: false, message: 'Node still syncing' } },
-    { answer: 'no blocks field', data: { success: true } },
-    { answer: 'a negative height', data: { success: true, blocks: -1 } },
-    { answer: 'a non-integer height', data: { success: true, blocks: '1234' } },
-  ])('keeps the stored height and connects when the fullnode answers $answer', async ({ data }) => {
-    mockVersion();
-    mockMiningInfo(data);
-    const { hWallet, storage, conn, logger } = await buildWallet();
-    await storage.setCurrentHeight(7);
+    {
+      answer: 'success false',
+      data: { success: false, message: 'Node still syncing' },
+      message: /^Node still syncing$/,
+    },
+    {
+      answer: 'success false without a message',
+      data: { success: false },
+      message: /^success false$/,
+    },
+    { answer: 'no blocks field', data: { success: true }, message: /^Invalid response/ },
+    {
+      answer: 'a negative height',
+      data: { success: true, blocks: -1 },
+      message: /^Invalid response/,
+    },
+    {
+      answer: 'a non-integer height',
+      data: { success: true, blocks: '1234' },
+      message: /^Invalid response/,
+    },
+    { answer: 'no success field', data: { blocks: 1234 }, message: /^Invalid response/ },
+  ])(
+    'keeps the stored height and connects when the fullnode answers $answer',
+    async ({ data, message }) => {
+      mockVersion();
+      mockMiningInfo(data);
+      const { hWallet, storage, conn, logger } = await buildWallet();
+      await storage.setCurrentHeight(7);
 
-    await hWallet.start();
+      await hWallet.start();
 
-    expect(conn.start).toHaveBeenCalledTimes(1);
-    await expect(storage.getCurrentHeight()).resolves.toBe(7);
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    expect(logger.warn.mock.calls[0][0]).toMatch(
-      /^The fullnode did not give its best block height/
-    );
-  });
+      expect(conn.start).toHaveBeenCalledTimes(1);
+      await expect(storage.getCurrentHeight()).resolves.toBe(7);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+      expect(logger.warn.mock.calls[0][0]).toMatch(
+        /^The fullnode did not give its best block height/
+      );
+      expect(logger.warn.mock.calls[0][1]).toEqual({ message: expect.stringMatching(message) });
+    }
+  );
 
   it('stores no height on the wrong network', async () => {
     mockVersion('mainnet');
