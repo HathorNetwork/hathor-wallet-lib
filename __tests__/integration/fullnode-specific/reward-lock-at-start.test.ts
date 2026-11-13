@@ -22,6 +22,7 @@
 
 import HathorWallet from '../../../src/new/wallet';
 import Connection from '../../../src/new/connection';
+import walletApi, { MiningInfoBestEffortResponse } from '../../../src/api/wallet';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { HistorySyncMode } from '../../../src/types';
 import {
@@ -64,6 +65,41 @@ function holdDashboardMessages(connection: Connection) {
       }
     },
   };
+}
+
+/**
+ * Lets exactly one of the fullnode's dashboard messages reach the wallet: the first one sent once
+ * the wallet is syncing, when its first history sync waits for the network height. The others are
+ * dropped, so the height the wallet stores stays the one this message carried.
+ *
+ * @returns The height that message carried
+ */
+function deliverOneDashboardMessageOnceSyncing(connection: Connection, wallet: HathorWallet) {
+  const { websocket } = connection;
+  if (!websocket) {
+    throw new Error('The connection has no websocket');
+  }
+  const deliver = websocket.emit.bind(websocket);
+  let syncing = false;
+  let delivered = false;
+  wallet.on('state', state => {
+    if (state === HathorWallet.SYNCING) {
+      syncing = true;
+    }
+  });
+  return new Promise<number>(resolve => {
+    jest.spyOn(websocket, 'emit').mockImplementation((event, ...args) => {
+      if (event !== 'dashboard') {
+        return deliver(event, ...args);
+      }
+      if (!syncing || delivered) {
+        return true;
+      }
+      delivered = true;
+      resolve((args[0] as { best_block_height: number }).best_block_height);
+      return deliver(event, ...args);
+    });
+  });
 }
 
 async function waitForHeight(wallet: HathorWallet, height: number, timeout = 30000) {
@@ -167,6 +203,76 @@ describe('[Fullnode] block rewards inside the reward lock at start', () => {
         unlocked: block.reward,
         locked: 0n,
       });
+    }
+  );
+
+  const noHeightAtStart: [string, () => Promise<MiningInfoBestEffortResponse>][] = [
+    [
+      'the fullnode answers without its height',
+      () => Promise.resolve({ height: null, message: 'no synced peer' }),
+    ],
+    [
+      'the height request fails',
+      () =>
+        Promise.reject(Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })),
+    ],
+  ];
+
+  it.each(noHeightAtStart)(
+    'should take the network height from the websocket before the first history walk when %s',
+    async (_case, answer) => {
+      const heightRequest = jest
+        .spyOn(walletApi, 'getMiningInfoBestEffort')
+        .mockImplementation(answer);
+      const walletData = await precalculationHelpers.test!.getPrecalculatedWallet();
+      const connection = generateConnection();
+      wallet = new HathorWallet({
+        seed: walletData.words,
+        connection,
+        password: DEFAULT_PASSWORD,
+        pinCode: DEFAULT_PIN_CODE,
+        preCalculatedAddresses: mergePrecalculatedAddresses(
+          walletData.addresses,
+          walletData.shieldedAddresses
+        ),
+        scanPolicy: getGapLimitConfig(),
+      });
+      const websocketHeight = deliverOneDashboardMessageOnceSyncing(connection, wallet);
+      const warn = jest.spyOn(wallet.logger, 'warn');
+
+      // The reward is mined when the wallet connects, before the first history walk.
+      const mined: Promise<MinedBlock>[] = [];
+      const connect = connection.start.bind(connection);
+      jest.spyOn(connection, 'start').mockImplementation(() => {
+        const mining = mineBlockTo(walletData.addresses[0]);
+        mined.push(mining);
+        mining.then(
+          () => connect(),
+          () => connect()
+        );
+      });
+
+      await wallet.start();
+      expect(mined).toHaveLength(1);
+      const [block] = await Promise.all([mined[0], waitForWalletReady(wallet)]);
+
+      // start() got no height and said the first sync would wait for the websocket's, which came.
+      expect(heightRequest).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('waits up to'), expect.anything());
+      expect(warn).not.toHaveBeenCalledWith(expect.stringContaining('either'));
+
+      // The walk ran with the height of the one dashboard message the wallet got.
+      const height = await websocketHeight;
+      expect(height).toBeGreaterThanOrEqual(block.height);
+      expect(await wallet.storage.getCurrentHeight()).toBe(height);
+      expect(await wallet.storage.getTx(block.txId)).toMatchObject({ height: block.height });
+
+      // The test network mines a block a second and locks rewards for one block, so that height
+      // may already be past the lock. The reward counts as locked exactly when it is not.
+      const rewardLock = wallet.storage.version!.reward_spend_min_blocks;
+      const locked = height < block.height + rewardLock ? block.reward : 0n;
+      const [{ balance }] = await wallet.getBalance(NATIVE_TOKEN_UID);
+      expect(balance).toEqual({ unlocked: block.reward - locked, locked });
     }
   );
 });
