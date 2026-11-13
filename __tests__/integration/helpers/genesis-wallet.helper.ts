@@ -5,12 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 /* eslint max-classes-per-file: ["error", 2] */
-import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from '../configuration/test-constants';
 import { getPrecalculatedShieldedForSeed } from '../configuration/precalculated-shielded-addresses';
 import { mergePrecalculatedAddresses } from './wallet-precalculation.helper';
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import {
+  registerShieldedProvider,
+  waitForTxReceived,
+  waitForWalletReady,
+  waitUntilNextTimestamp,
+} from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay, getGapLimitConfig } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
@@ -46,7 +51,7 @@ export class GenesisWalletHelper {
     const { words } = WALLET_CONSTANTS.genesis;
     const pin = '123456';
     const connection = new Connection({
-      network: 'testnet',
+      network: NETWORK_NAME,
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
       logger: console, // Add required logger parameter
@@ -67,6 +72,9 @@ export class GenesisWalletHelper {
         ),
         scanPolicy: getGapLimitConfig(),
       });
+      // Direct construction bypasses generateWalletHelper, so the shielded
+      // crypto provider must be wired in explicitly.
+      registerShieldedProvider(this.hWallet);
       await this.hWallet.start();
 
       // Only return the positive response after the wallet is ready
@@ -134,6 +142,22 @@ export class GenesisWalletHelper {
   }
 
   /**
+   * Stops the genesis wallet, if one is running. Each test file starts its own, and all files
+   * run in the same process, so a genesis wallet left running keeps syncing every genesis
+   * transaction the later files send. The next {@link GenesisWalletHelper.getSingleton} call
+   * starts a new one.
+   * @return {Promise<void>}
+   */
+  static async stop(): Promise<void> {
+    if (!singleton) {
+      return;
+    }
+    const { hWallet } = singleton;
+    singleton = null;
+    await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+  }
+
+  /**
    * An easy way to send HTR to another wallet's address for testing.
    * @param {HathorWallet} destinationWallet Wallet object that we are sending the funds to
    * @param {string} address
@@ -159,8 +183,12 @@ export class GenesisWalletHelper {
    * @return {Promise<void>}
    */
   static async clearListeners(): Promise<void> {
-    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet.removeAllListeners('new-tx');
+    // With no genesis wallet running there is nothing to clear, and starting one here would
+    // leave it running.
+    if (!singleton) {
+      return;
+    }
+    singleton.hWallet.removeAllListeners('new-tx');
   }
 }
 
@@ -236,8 +264,12 @@ export class GenesisWalletServiceHelper {
     destinationWallet?: HathorWalletServiceWallet
   ): Promise<Transaction> {
     const gWallet = await GenesisWalletServiceHelper.getSingleton();
+    // Like GenesisWalletHelper, keep the change on the first genesis address: the fullnode
+    // genesis wallets share this seed, and change sent to a new genesis address makes each of
+    // them derive more addresses.
     const fundTx = await gWallet.sendTransaction(address, amount, {
       pinCode: GenesisWalletServiceHelper.pinCode,
+      changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
     });
 
     // Ensure the transaction was sent from the Genesis perspective

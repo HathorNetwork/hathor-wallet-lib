@@ -35,7 +35,8 @@ import { WalletFromXPubGuard } from '../../../src/errors';
 import { decryptData } from '../../../src/utils/crypto';
 import walletUtils from '../../../src/utils/wallet';
 import Network from '../../../src/models/network';
-import { NETWORK_NAME } from '../configuration/test-constants';
+import { NETWORK_NAME, WALLET_CONSTANTS } from '../configuration/test-constants';
+import { GenesisWalletServiceHelper } from '../helpers/genesis-wallet.helper';
 import { buildWalletInstance, emptyWallet } from '../helpers/service-facade.helper';
 import { ServiceWalletTestAdapter } from '../adapters/service.adapter';
 import { deriveXpubFromSeed } from '../utils/core.util';
@@ -172,5 +173,21 @@ describe('[Service-specific] start', () => {
     await expect(w.signTx()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createNanoContractTransaction()).rejects.toThrow(WalletFromXPubGuard);
     await expect(w.createNanoContractCreateTokenTransaction()).rejects.toThrow(WalletFromXPubGuard);
+  });
+});
+
+describe('[Service-specific] genesis funding', () => {
+  it('should keep the genesis change on the first genesis address when funding a wallet', async () => {
+    const walletData = await adapter.getPrecalculatedWallet();
+    const txHash = await adapter.injectFundsBeforeStart(walletData.addresses[0], 1n);
+
+    const gWallet = await GenesisWalletServiceHelper.getSingleton();
+    const { tx } = await gWallet.getFullTxById(txHash);
+    // The fullnode genesis wallets share this seed. Change sent to a new genesis address makes
+    // each of them, running or started later, derive more addresses, which blocks the test process.
+    const changeAddresses = tx.outputs
+      .map(output => output.decoded.address)
+      .filter(address => address !== walletData.addresses[0]);
+    expect(changeAddresses).toStrictEqual([WALLET_CONSTANTS.genesis.addresses[0]]);
   });
 });
