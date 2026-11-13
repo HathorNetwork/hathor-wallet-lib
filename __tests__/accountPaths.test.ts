@@ -6,6 +6,8 @@
  */
 
 import {
+  HATHOR_BIP44_CODE,
+  HATHOR_NEXT_ACCOUNT_INDEX,
   HATHOR_NEXT_ACCT_PATH,
   P2PKH_ACCT_PATH,
   SHIELDED_SCAN_ACCT_PATH,
@@ -23,7 +25,7 @@ describe('BIP44 account paths', () => {
     expect(new Set(paths).size).toBe(paths.length);
   });
 
-  it('reserves account 3 for Hathor Next', () => {
-    expect(HATHOR_NEXT_ACCT_PATH).toBe("m/44'/280'/3'");
+  it('builds the Hathor Next path from its hardened account index', () => {
+    expect(HATHOR_NEXT_ACCT_PATH).toBe(`m/44'/${HATHOR_BIP44_CODE}'/${HATHOR_NEXT_ACCOUNT_INDEX}'`);
   });
 });
