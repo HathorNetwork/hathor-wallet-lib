@@ -19,7 +19,8 @@ import { handleWsDashboard } from '../../src/utils/connection';
 import { NATIVE_TOKEN_UID, NETWORK_HEIGHT_TIMEOUT } from '../../src/constants';
 import { WalletStoppedError } from '../../src/errors';
 import { ConnectionState } from '../../src/wallet/types';
-import { IHistoryTx, ILogger } from '../../src/types';
+import { IHistoryTx, ILogger, IWalletAccessData } from '../../src/types';
+import walletUtils from '../../src/utils/wallet';
 
 /**
  * The network height a wallet uses to count block rewards as reward-locked.
@@ -94,9 +95,21 @@ describe('network height at start()', () => {
     return axiosMock.history.get.filter(request => request.url === 'getmininginfo').length;
   }
 
-  function buildWallet<C = ReturnType<typeof makeConn>>(conn: C = makeConn() as C) {
+  // Deriving the access data from the seed takes seconds, so each wallet starts
+  // from a copy of the one this file derives once.
+  let accessData: IWalletAccessData;
+  beforeAll(() => {
+    accessData = walletUtils.generateAccessDataFromSeed(seed, {
+      pin: '123',
+      password: '456',
+      networkName: 'testnet',
+    });
+  });
+
+  async function buildWallet<C = ReturnType<typeof makeConn>>(conn: C = makeConn() as C) {
     const store = new MemoryStore();
     const storage = new Storage(store);
+    await storage.saveAccessData(structuredClone(accessData));
     const logger = makeLogger();
     const hWallet = new HathorWallet({
       seed,
@@ -110,6 +123,9 @@ describe('network height at start()', () => {
     return { hWallet, store, storage, conn, logger };
   }
 
+  /** A wallet buildWallet made on the mock connection. */
+  type MockWallet = Awaited<ReturnType<typeof buildWallet<ReturnType<typeof makeConn>>>>;
+
   async function until(condition: () => boolean, what: string): Promise<void> {
     for (let i = 0; i < 500; i++) {
       if (condition()) {
@@ -122,9 +138,10 @@ describe('network height at start()', () => {
     throw new Error(`Timed out waiting for ${what}`);
   }
 
-  async function settle(): Promise<void> {
+  /** Let every pending promise chain run, including the axios mock's answers. */
+  async function flush(): Promise<void> {
     await new Promise(resolve => {
-      setTimeout(resolve, 50);
+      setImmediate(resolve);
     });
   }
 
@@ -142,7 +159,7 @@ describe('network height at start()', () => {
   it('stores the fullnode height before the websocket starts', async () => {
     mockVersion();
     mockMiningInfo({ success: true, blocks: 1234 });
-    const { hWallet, store, conn, logger } = buildWallet();
+    const { hWallet, store, conn, logger } = await buildWallet();
     let heightAtConnect: number | undefined;
     conn.start.mockImplementation(() => {
       heightAtConnect = store.walletData.bestBlockHeight;
@@ -159,15 +176,22 @@ describe('network height at start()', () => {
   it('waits for a height that comes after the version', async () => {
     mockVersion();
     const release = deferMiningInfo({ success: true, blocks: 1234 });
-    const { hWallet, store, conn } = buildWallet();
+    const { hWallet, store, storage, conn } = await buildWallet();
     let heightAtConnect: number | undefined;
     conn.start.mockImplementation(() => {
       heightAtConnect = store.walletData.bestBlockHeight;
     });
+    // The last step before start() waits for the height.
+    let versionDone = false;
+    const saveNativeToken = storage.saveNativeToken.bind(storage);
+    jest.spyOn(storage, 'saveNativeToken').mockImplementation(async () => {
+      await saveNativeToken();
+      versionDone = true;
+    });
 
     const starting = hWallet.start();
-    await until(() => miningInfoRequests() === 1, 'the height request');
-    await settle();
+    await until(() => versionDone && miningInfoRequests() === 1, 'the version');
+    await flush();
     expect(conn.start).not.toHaveBeenCalled();
 
     release();
@@ -180,7 +204,7 @@ describe('network height at start()', () => {
   it('asks for the height with its own timeout', async () => {
     mockVersion();
     mockMiningInfo({ success: true, blocks: 1234 });
-    const { hWallet } = buildWallet();
+    const { hWallet } = await buildWallet();
 
     await hWallet.start();
 
@@ -192,7 +216,7 @@ describe('network height at start()', () => {
   it('replaces a height kept from an earlier session', async () => {
     mockVersion();
     mockMiningInfo({ success: true, blocks: 50 });
-    const { hWallet, storage } = buildWallet();
+    const { hWallet, storage } = await buildWallet();
     await storage.setCurrentHeight(99999);
 
     await hWallet.start();
@@ -205,7 +229,7 @@ describe('network height at start()', () => {
     mockMiningInfo({ success: true, blocks: 1234 });
     const appInstance = jest.fn(defaultCreateRequestInstance);
     registerNewCreateRequestInstance(appInstance);
-    const { hWallet, storage } = buildWallet();
+    const { hWallet, storage } = await buildWallet();
 
     await hWallet.start();
 
@@ -220,7 +244,7 @@ describe('network height at start()', () => {
   ])('still connects after $failure', async ({ fail }) => {
     mockVersion();
     fail();
-    const { hWallet, storage, conn, logger } = buildWallet();
+    const { hWallet, storage, conn, logger } = await buildWallet();
     await storage.setCurrentHeight(7);
 
     await expect(hWallet.start()).resolves.toBeDefined();
@@ -239,7 +263,7 @@ describe('network height at start()', () => {
   ])('keeps the stored height and connects when the fullnode answers $answer', async ({ data }) => {
     mockVersion();
     mockMiningInfo(data);
-    const { hWallet, storage, conn, logger } = buildWallet();
+    const { hWallet, storage, conn, logger } = await buildWallet();
     await storage.setCurrentHeight(7);
 
     await hWallet.start();
@@ -255,7 +279,7 @@ describe('network height at start()', () => {
   it('stores no height on the wrong network', async () => {
     mockVersion('mainnet');
     mockMiningInfo({ success: true, blocks: 1234 });
-    const { hWallet, storage, conn } = buildWallet();
+    const { hWallet, storage, conn } = await buildWallet();
 
     await expect(hWallet.start()).rejects.toThrow('Wrong network');
 
@@ -268,11 +292,11 @@ describe('network height at start()', () => {
       .spyOn(versionApi, 'getVersion')
       .mockImplementation(() => Promise.reject(new Error('Network Error')) as never);
     const release = deferMiningInfo({ success: false, message: 'Node still syncing' });
-    const { hWallet, storage, conn, logger } = buildWallet();
+    const { hWallet, storage, conn, logger } = await buildWallet();
 
     await expect(hWallet.start()).rejects.toThrow('Network Error');
     release();
-    await settle();
+    await flush();
 
     expect(conn.start).not.toHaveBeenCalled();
     await expect(storage.getCurrentHeight()).resolves.toBe(0);
@@ -282,7 +306,7 @@ describe('network height at start()', () => {
   it('neither stores the height nor connects for a start() that stop() interrupted', async () => {
     mockVersion();
     const release = deferMiningInfo({ success: true, blocks: 5000 });
-    const { hWallet, storage, conn } = buildWallet();
+    const { hWallet, storage, conn } = await buildWallet();
 
     const starting = hWallet.start();
     await until(() => miningInfoRequests() === 1, 'the height request');
@@ -308,7 +332,7 @@ describe('network height at start()', () => {
       }
       return [200, { success: true, blocks: 6000 }];
     });
-    const { hWallet, storage, conn } = buildWallet();
+    const { hWallet, storage, conn } = await buildWallet();
 
     const first = hWallet.start();
     await until(() => requests === 1, 'the first height request');
@@ -335,7 +359,7 @@ describe('network height at start()', () => {
         }) as never
     );
     mockMiningInfo({ success: true, blocks: 6000 });
-    const { hWallet, storage, conn } = buildWallet();
+    const { hWallet, storage, conn } = await buildWallet();
 
     const first = hWallet.start();
     await until(() => getVersion.mock.calls.length === 1, 'the first version request');
@@ -356,7 +380,7 @@ describe('network height at start()', () => {
 
   it('does not connect a wallet that stop() stopped before start() cleared walletStopped', async () => {
     mockVersion();
-    const { hWallet, store, conn } = buildWallet();
+    const { hWallet, store, conn } = await buildWallet();
     let validated: () => void = () => {};
     let validating = false;
     jest.spyOn(store, 'validate').mockImplementationOnce(
@@ -390,7 +414,7 @@ describe('network height at start()', () => {
     });
     const ws = conn.websocket!;
     jest.spyOn(ws, 'setup').mockImplementation(() => {});
-    const { hWallet, store } = buildWallet(conn);
+    const { hWallet, store } = await buildWallet(conn);
 
     await hWallet.start();
     await hWallet.stop();
@@ -440,11 +464,11 @@ describe('network height at start()', () => {
       whileSyncing = async () => {},
     }: {
       miningInfo?: () => void;
-      whileSyncing?: (ctx: ReturnType<typeof buildWallet>) => Promise<void>;
+      whileSyncing?: (ctx: MockWallet) => Promise<void>;
     } = {}) {
       mockVersion('testnet', 300);
       miningInfo();
-      const ctx = buildWallet();
+      const ctx = await buildWallet();
       await ctx.hWallet.start();
       const address0 = await ctx.hWallet.getAddressAtIndex(0);
       // A reward 10 blocks old, still inside the 300-block lock, and one 400

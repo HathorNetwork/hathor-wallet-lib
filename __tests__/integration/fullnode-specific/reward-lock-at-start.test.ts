@@ -20,13 +20,10 @@
  * reward it needs from the fullnode's block template, paying a fresh wallet.
  */
 
-import axios from 'axios';
 import HathorWallet from '../../../src/new/wallet';
 import Connection from '../../../src/new/connection';
-import Output from '../../../src/models/output';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { HistorySyncMode } from '../../../src/types';
-import { FULLNODE_URL } from '../configuration/test-constants';
 import {
   mergePrecalculatedAddresses,
   precalculationHelpers,
@@ -37,13 +34,8 @@ import {
   generateConnection,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
+import { fullnodeHeight, MinedBlock, mineBlockTo } from '../helpers/mining.helper';
 import { delay, getGapLimitConfig } from '../utils/core.util';
-
-interface MinedBlock {
-  txId: string;
-  height: number;
-  reward: bigint;
-}
 
 /**
  * Keeps the websocket from delivering the fullnode's dashboard messages, which carry the network
@@ -72,85 +64,6 @@ function holdDashboardMessages(connection: Connection) {
       }
     },
   };
-}
-
-/** The best block height of the fullnode, asked for without the wallet-lib. */
-async function fullnodeHeight(): Promise<number> {
-  const { data } = await axios.get(`${FULLNODE_URL}getmininginfo`);
-  if (!data.success) {
-    throw new Error(`The fullnode did not give its height: ${JSON.stringify(data)}`);
-  }
-  return data.blocks;
-}
-
-/**
- * Mines a block on top of the fullnode's best block that pays its reward to `address`. The
- * fullnode refuses a block whose parent is no longer its best block, so when the dev miner adds a
- * block first, the block is mined again from a fresh template.
- */
-async function mineBlockTo(address: string): Promise<MinedBlock> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data: template } = await axios.get(`${FULLNODE_URL}get_block_template`, {
-      params: { address },
-    });
-    const { height } = template.metadata;
-    const outputs = template.outputs.map(
-      (output: { value: number; token_data: number; script: string }) =>
-        new Output(BigInt(output.value), Buffer.from(output.script, 'base64'), {
-          tokenData: output.token_data,
-        })
-    );
-    const data = Buffer.from(template.data, 'base64');
-    const graph = Buffer.alloc(13);
-    graph.writeDoubleBE(template.weight, 0);
-    graph.writeUInt32BE(template.timestamp, 8);
-    graph.writeUInt8(template.parents.length, 12);
-    const blockWithoutNonce = Buffer.concat([
-      Buffer.from([template.signal_bits, template.version, outputs.length]),
-      ...outputs.flatMap((output: Output) => output.serialize()),
-      graph,
-      ...template.parents.map((parent: string) => Buffer.from(parent, 'hex')),
-      Buffer.from([data.length]),
-      data,
-    ]);
-
-    // The test network mines with weight 1, so about half the nonces solve a block. The fullnode
-    // answers a nonce that does not with an error, and a block whose parent is no longer its best
-    // block with `result: false`.
-    let accepted: boolean | null = null;
-    let lastError: unknown = null;
-    for (let nonce = 0; nonce < 64 && accepted === null; nonce += 1) {
-      const nonceBytes = Buffer.alloc(16);
-      nonceBytes.writeUInt32BE(nonce, 12);
-      const response = await axios.post(
-        `${FULLNODE_URL}submit_block`,
-        { hexdata: Buffer.concat([blockWithoutNonce, nonceBytes]).toString('hex') },
-        { validateStatus: () => true }
-      );
-      if (response.status === 200) {
-        accepted = response.data.result === true;
-      } else {
-        lastError = response.data;
-      }
-    }
-    if (accepted === null) {
-      throw new Error(
-        `No nonce solved the block at height ${height}: ${JSON.stringify(lastError)}`
-      );
-    }
-
-    if (accepted) {
-      const { data: history } = await axios.get(
-        `${FULLNODE_URL}thin_wallet/address_history?addresses[]=${address}`
-      );
-      const block = history.history.find((tx: { height?: number }) => tx.height === height);
-      if (!block) {
-        throw new Error(`The block mined at height ${height} is not in the history of ${address}`);
-      }
-      return { txId: block.tx_id, height, reward: outputs[0].value };
-    }
-  }
-  throw new Error('The dev miner added a block before every block the test mined');
 }
 
 async function waitForHeight(wallet: HathorWallet, height: number, timeout = 30000) {
@@ -222,7 +135,10 @@ describe('[Fullnode] block rewards inside the reward lock at start', () => {
       jest.spyOn(connection, 'start').mockImplementation(() => {
         const mining = mineBlockTo(walletData.addresses[0]);
         mined.push(mining);
-        mining.then(connect, connect);
+        mining.then(
+          () => connect(),
+          () => connect()
+        );
       });
 
       const heightBeforeStart = await fullnodeHeight();
