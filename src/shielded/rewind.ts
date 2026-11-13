@@ -5,9 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from 'bitcore-lib';
-import { PRIVATE_KEY_SIZE_BYTES } from '../constants';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from './types';
+import type { ShieldedScanKey } from './scanKey';
 
 /**
  * The on-chain data needed to rewind one shielded output.
@@ -57,12 +56,27 @@ export class ShieldedRewindError extends Error {
  * Compliant BIP32 derivation, matching the scan public key in the shielded
  * address (shieldedAddress.ts). Shielded keys are new, so unlike the legacy
  * P2PKH chain they do not need deriveNonCompliantChild.
+ *
+ * The returned buffer is a private key: zero it (`fill(0)`) once done with it.
+ *
+ * @param scanHdPrivKey The scan key, from `parseScanXPrivKey`
+ * @param addressIndex The index of the shielded address
+ * @throws {Error} when the index is not an address index, a non-negative
+ *   integer below 2^31, as deriveShieldedAddress does
  */
-export function deriveScanChildPrivkey(scanHdPrivKey: HDPrivateKey, addressIndex: number): Buffer {
-  // { size } zero-pads keys with leading zeros
-  return scanHdPrivKey.deriveChild(addressIndex).privateKey.toBuffer({
-    size: PRIVATE_KEY_SIZE_BYTES,
-  });
+export function deriveScanChildPrivkey(
+  scanHdPrivKey: ShieldedScanKey,
+  addressIndex: number
+): Buffer {
+  // From an index of 2^31 or more, bitcore would derive a hardened child, the
+  // key of no address, and it truncates a fractional index.
+  if (!Number.isInteger(addressIndex) || addressIndex < 0 || addressIndex >= 0x80000000) {
+    throw new Error(
+      `Invalid BIP32 address index: expected a non-negative integer < 2^31, got ${addressIndex}`
+    );
+  }
+  // bitcore pads the key to 32 bytes
+  return scanHdPrivKey.deriveChild(addressIndex).privateKey.toBuffer();
 }
 
 /**
@@ -72,8 +86,15 @@ export function deriveScanChildPrivkey(scanHdPrivKey: HDPrivateKey, addressIndex
  * A FullShielded result is accepted only when the recovered token and asset
  * blinding factor reproduce the on-chain asset commitment; otherwise the
  * output was built wrongly or forged. A non-positive value means a corrupted
- * rewind. Both throw {@link ShieldedRewindError}; provider failures (the output
- * is not this wallet's) propagate as thrown by the provider.
+ * rewind. Both throw {@link ShieldedRewindError}; provider failures propagate
+ * as thrown by the provider. An output the key did not receive fails with the
+ * provider's `ScanMissError` (exported on the `shielded` namespace) when the
+ * provider recognises the case.
+ *
+ * The provider's rewind already checks that the recovered value and blinding
+ * factor open the value commitment, so that is not checked again here.
+ *
+ * The blinding factors returned are secret: zero them once done with them.
  */
 export async function rewindShieldedOutput(
   cryptoProvider: IShieldedCryptoProvider,

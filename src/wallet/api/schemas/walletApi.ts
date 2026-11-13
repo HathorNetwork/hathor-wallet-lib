@@ -583,7 +583,7 @@ const shieldedTxOutputBaseShape = {
   ...txOutputBaseShape,
   kind: z.literal('shielded'),
   recoveryState: z.string(),
-  shieldedIndex: z.number(),
+  shieldedIndex: z.number().int().nonnegative(),
   ctAddress: ShieldedAddressSchema,
   commitment: hexSchema,
   ephemeralPubkey: hexSchema,

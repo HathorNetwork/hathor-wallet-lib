@@ -124,6 +124,7 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  * @param argType Full method argument type string, e.g. 'SignedData[str]'
  * @param value Value to sign
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If `contractId` is not 64 hex characters, checked before `value`
  */
 export async function getOracleSignedDataFromUser(
   oracleData: Buffer,
@@ -133,6 +134,7 @@ export async function getOracleSignedDataFromUser(
   wallet: IHathorWallet,
   options: { pinCode?: string } = {}
 ) {
+  parseNanoContractId(contractId);
   const field = getFieldParser(argType, wallet.getNetworkObject());
   if (!isSignedDataField(field)) {
     throw new Error('Type is not SignedData');
@@ -153,12 +155,27 @@ export async function getOracleSignedDataFromUser(
 }
 
 /**
+ * Parse a nano contract id, which is 32 bytes. Buffer.from(..., 'hex') stops at the first invalid
+ * character instead of failing, so anything other than 64 hex characters would silently give a
+ * shorter prefix (see unsafeGetOracleInputData for why the length matters).
+ *
+ * @throws {OracleParseError} If `contractId` is not a string of 64 hex characters
+ */
+function parseNanoContractId(contractId: string): Buffer {
+  if (typeof contractId !== 'string' || !/^[0-9a-f]{64}$/i.test(contractId)) {
+    throw new OracleParseError('Invalid nano contract id: expected 64 hex characters.');
+  }
+  return Buffer.from(contractId, 'hex');
+}
+
+/**
  * Get oracle input data
  *
  * @param oracleData Oracle data
  * @param contractId Id of the nano contract being invoked
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If `contractId` is not 64 hex characters
  */
 export const getOracleInputData = async (
   oracleData: Buffer,
@@ -167,7 +184,7 @@ export const getOracleInputData = async (
   wallet: IHathorWallet,
   options: { pinCode?: string } = {}
 ) => {
-  const ncId = Buffer.from(contractId, 'hex');
+  const ncId = parseNanoContractId(contractId);
   const actualValue = Buffer.concat([ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet, options);
 };
@@ -176,9 +193,21 @@ export const getOracleInputData = async (
  * [unsafe] Get oracle input data, signs received data raw.
  * This is meant to be used for RawSignedData
  *
+ * When the oracle is an address, this signs sha256(resultSerialized) with the address' key and
+ * returns it as P2PKH input data. A transaction input signature is the same over
+ * sha256(sha256(dataToSign)), so a 32-byte resultSerialized equal to sha256(dataToSign) of some
+ * transaction would be a valid input signature for it. A 32-byte value is therefore refused; a
+ * nano contract result signed through getOracleInputData is always longer (32-byte id + result).
+ *
+ * So raw signed data of exactly 32 bytes cannot be signed with an address oracle, since it cannot
+ * be told apart from a signature hash. That is always the case for RawSignedData[VertexId],
+ * [ContractId] and [BlueprintId], which are 32 raw bytes, and for any other type when the value
+ * happens to serialize to 32 bytes, such as a str or bytes of 31 bytes.
+ *
  * @param oracleData Oracle data
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
+ * @throws {OracleParseError} If the oracle is an address and `resultSerialized` is 32 bytes
  */
 export const unsafeGetOracleInputData = async (
   oracleData: Buffer,
@@ -189,6 +218,11 @@ export const unsafeGetOracleInputData = async (
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
   if (parsedOracleScript && !(parsedOracleScript instanceof ScriptData)) {
+    if (resultSerialized.length === 32) {
+      throw new OracleParseError(
+        'Refusing to sign 32 bytes of oracle data: it could be a transaction signature hash.'
+      );
+    }
     // A readonly (xpub-only) wallet can still sign here when an external private-key provider
     // is registered (e.g. a passkey signer); getPrivateKeyFromAddress will use it below.
     const isReadonly = await wallet.storage.isReadonly();
