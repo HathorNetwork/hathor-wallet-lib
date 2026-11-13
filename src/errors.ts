@@ -219,6 +219,29 @@ export type WalletRequestErrorCause =
   | { source: WalletRequestError };
 
 /**
+ * Error thrown by start() when stop() comes while it runs, even if another
+ * start() follows the stop(). The wallet this start() began does not connect,
+ * and the state belongs to the stop(), or to the start() that followed it.
+ *
+ * An app that stopped the wallet itself, to replace it or to change networks,
+ * can ignore it. `cause` holds the error the interrupted start() failed with,
+ * when it failed instead of returning.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class WalletStoppedError extends WalletError {
+  cause: unknown;
+
+  constructor(cause?: unknown) {
+    super('The wallet was stopped while it was starting.');
+    this.name = 'WalletStoppedError';
+    this.errorCode = ErrorMessages.WALLET_STOPPED;
+    this.cause = cause;
+  }
+}
+
+/**
  * Error thrown when executing wallet requests.
  *
  * The {@link cause} is currently optional to permit incremental adoption: not
@@ -327,6 +350,7 @@ export type ShieldedKeyErrorCode =
   | ErrorMessages.SHIELDED_PASSPHRASE_MISMATCH
   | ErrorMessages.SHIELDED_NO_KEYS
   | ErrorMessages.SHIELDED_CORRUPT_KEY
+  | ErrorMessages.SHIELDED_NOT_SCAN_KEY
   | ErrorMessages.SHIELDED_KEY_MISMATCH
   | ErrorMessages.SHIELDED_NOT_STARTED
   | ErrorMessages.SHIELDED_MULTISIG

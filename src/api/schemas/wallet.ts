@@ -24,6 +24,20 @@ export const addressHistorySchema = z.discriminatedUnion('success', [
 
 export type AddressHistorySchema = z.infer<typeof addressHistorySchema>;
 
+/**
+ * The fields of GET getmininginfo that give the fullnode's best block height. The
+ * fullnode answers success false while it has no synced peer.
+ */
+export const miningInfoHeightSchema = z.discriminatedUnion('success', [
+  z
+    .object({
+      success: z.literal(true),
+      blocks: z.number().int().nonnegative().safe(),
+    })
+    .passthrough(),
+  z.object({ success: z.literal(false), message: z.string().optional() }).passthrough(),
+]);
+
 export const mintMeltUtxoSchema = z
   .object({
     tx_id: z.string(),

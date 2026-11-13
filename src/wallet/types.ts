@@ -484,6 +484,7 @@ export interface IHathorWallet {
     options: {
       token?: string;
       changeAddress?: string;
+      shielded?: ShieldedOutputMode;
       changeShieldedMode?: ChangeOutputMode | null;
     }
   ): Promise<Transaction>;

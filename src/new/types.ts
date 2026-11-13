@@ -17,6 +17,7 @@ import {
 import { ChangeOutputMode, ShieldedOutputMode } from '../shielded/types';
 import { NanoContractAction } from '../nano_contracts/types';
 import WalletConnection from './connection';
+import type { SplitWalletServiceBalance } from '../wallet/types';
 import Address from '../models/address';
 
 /**
@@ -429,12 +430,17 @@ export interface ProposedInput {
 
 /**
  * Options for sending a transaction with a single output
- * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions
+ * @property shielded Optional shielded output mode (AMOUNT_SHIELDED or
+ *   FULLY_SHIELDED) of the output, whose address must then be a shielded address
+ * @property changeShieldedMode The change-output mode, as in SendManyOutputsOptions.
+ *   Absent or null with `shielded` set: the automatic rules shield the change of
+ *   the output's token in the output's mode
  */
 export interface SendTransactionFullnodeOptions {
   changeAddress?: string | null;
   token?: string;
   pinCode?: string | null;
+  shielded?: ShieldedOutputMode;
   changeShieldedMode?: ChangeOutputMode | null;
 }
 
@@ -526,6 +532,16 @@ export interface GetBalanceFullnodeFacadeReturnType {
     unlocked: { mint: bigint; melt: bigint };
     locked: { mint: bigint; melt: bigint };
   };
+}
+
+/**
+ * Return type for getBalance(token, { split: true }): each amount split into
+ * its transparent and shielded parts, in the shape the wallet-service facade
+ * returns them.
+ */
+export interface GetSplitBalanceFullnodeFacadeReturnType
+  extends Omit<GetBalanceFullnodeFacadeReturnType, 'balance'> {
+  balance: SplitWalletServiceBalance;
 }
 
 /**

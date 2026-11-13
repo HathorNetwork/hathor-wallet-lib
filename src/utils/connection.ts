@@ -7,16 +7,24 @@
 
 import { IStorage } from '../types';
 
+/**
+ * Store a network height the fullnode sent, and unlock the block rewards that
+ * leave the reward lock at it. A height equal to the stored one changes nothing.
+ *
+ * @param storage The wallet storage
+ * @param height The network height
+ */
+export async function updateNetworkHeight(storage: IStorage, height: number): Promise<void> {
+  const currentHeight = await storage.getCurrentHeight();
+  if (height !== currentHeight) {
+    await storage.setCurrentHeight(height);
+    storage.unlockUtxos(height);
+  }
+}
+
 export function handleWsDashboard(storage: IStorage) {
   return (data: { best_block_height: number }) => {
-    // update network height
-    const height = data.best_block_height;
-    storage.getCurrentHeight().then(currentHeight => {
-      if (height !== currentHeight) {
-        storage.setCurrentHeight(height);
-        storage.unlockUtxos(height);
-      }
-    });
+    updateNetworkHeight(storage, data.best_block_height);
   };
 }
 

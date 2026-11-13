@@ -198,6 +198,23 @@ describe('sendManyOutputsSendTransaction', () => {
     });
   });
 
+  it('should send a shielded output from sendTransaction, leaving the change to the rules', async () => {
+    const spy = jest.spyOn(wallet, 'sendManyOutputsTransaction').mockResolvedValue({} as never);
+    await wallet.sendTransaction('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx', 10n, {
+      token: '01',
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    });
+    expect(spy.mock.calls[0][0]).toEqual([
+      {
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+        shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+      },
+    ]);
+    expect(spy.mock.calls[0][1].changeShieldedMode).toBeUndefined();
+  });
+
   it('should throw WalletFromXPubGuard when wallet is readonly', async () => {
     wallet.storage.isReadonly = jest.fn().mockResolvedValue(true);
 

@@ -58,6 +58,7 @@ import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wal
 import CreateTokenTransaction from '../models/create_token_transaction';
 import {
   getDefaultAddressMeta,
+  getDefaultTokenMeta,
   getDerivedAddressCache,
   trackTxProcessing,
 } from '../storage/storage';
@@ -1151,6 +1152,21 @@ async function decodeWalletShieldedOutputs(
 }
 
 /**
+ * Add `value` to the shielded part of a token's balance. A record saved before
+ * the lib kept that part has no `shielded` bucket: it is left without one, read
+ * as zero, and gets it the next time the history is processed.
+ */
+function addShieldedBalance(
+  balance: IBalance,
+  lock: 'locked' | 'unlocked',
+  value: OutputValueType
+): void {
+  if (!balance.shielded) return;
+  // eslint-disable-next-line no-param-reassign
+  balance.shielded[lock] += value;
+}
+
+/**
  * Process a new transaction, adding or creating the metadata for the addresses and tokens involved.
  * Will update relevant wallet data and utxos.
  * The return object contains the max address index used and the tokens found in the transaction.
@@ -1313,7 +1329,7 @@ export async function processNewTx(
       addressMeta = getDefaultAddressMeta();
     }
     if (!tokenMeta) {
-      tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
+      tokenMeta = getDefaultTokenMeta();
     }
     if (!addressMeta.balance.has(output.token)) {
       // Add the current token to the address balance if not present
@@ -1357,12 +1373,13 @@ export async function processNewTx(
           addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
         }
       }
-    } else if (isLocked) {
-      tokenMeta.balance.tokens.locked += output.value;
-      addressMeta.balance.get(output.token)!.tokens.locked += output.value;
     } else {
-      tokenMeta.balance.tokens.unlocked += output.value;
-      addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
+      const lock = isLocked ? 'locked' : 'unlocked';
+      tokenMeta.balance.tokens[lock] += output.value;
+      addressMeta.balance.get(output.token)!.tokens[lock] += output.value;
+      if (isShielded) {
+        addShieldedBalance(tokenMeta.balance, lock, output.value);
+      }
     }
 
     // Add utxo to the storage if unspent
@@ -1500,7 +1517,7 @@ export async function processNewTx(
       addressMeta = getDefaultAddressMeta();
     }
     if (!tokenMeta) {
-      tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
+      tokenMeta = getDefaultTokenMeta();
     }
     if (!addressMeta.balance.has(input.token)) {
       // Add the current token to the address balance if not present
@@ -1523,6 +1540,12 @@ export async function processNewTx(
     } else {
       tokenMeta.balance.tokens.unlocked -= input.value;
       addressMeta.balance.get(input.token)!.tokens.unlocked -= input.value;
+      // The input's type, not its address type, says the spent output is
+      // shielded: a transparent output paid to a shielded address's spend
+      // P2PKH is at a `shielded-spend` address too.
+      if (transactionUtils.isShieldedInputEntry(input)) {
+        addShieldedBalance(tokenMeta.balance, 'unlocked', -input.value);
+      }
     }
 
     // save address and token metadata
@@ -1670,7 +1693,7 @@ export async function processUtxoUnlock(
     addressMeta = getDefaultAddressMeta();
   }
   if (!tokenMeta) {
-    tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
+    tokenMeta = getDefaultTokenMeta();
   }
   if (!addressMeta.balance.has(output.token)) {
     // Add the current token to the address balance if not present
@@ -1706,6 +1729,10 @@ export async function processUtxoUnlock(
     // Add to the unlocked balance
     tokenMeta.balance.tokens.unlocked += output.value;
     addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
+    if (resolved.kind === 'shielded') {
+      addShieldedBalance(tokenMeta.balance, 'locked', -output.value);
+      addShieldedBalance(tokenMeta.balance, 'unlocked', output.value);
+    }
   }
 
   await store.editTokenMeta(output.token, tokenMeta);

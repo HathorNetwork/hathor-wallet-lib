@@ -363,6 +363,87 @@ test('sendTransactionInstance passes the change mode on to the send', async () =
   expect(sendTx.changeShieldedMode).toBe(OutputKind.TRANSPARENT);
 });
 
+test('sendTransactionInstance keeps the output and its change transparent by default', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+
+  const sendTx = await hWallet.sendTransactionInstance('transparent-addr', 10n);
+
+  expect(sendTx.outputs).toEqual([
+    { address: 'transparent-addr', value: 10n, token: NATIVE_TOKEN_UID },
+  ]);
+  // No change mode: the automatic rules decide.
+  expect(sendTx.changeShieldedMode).toBeNull();
+});
+
+test.each([ShieldedOutputMode.AMOUNT_SHIELDED, ShieldedOutputMode.FULLY_SHIELDED])(
+  'sendTransactionInstance sends a %s output and leaves its change to the rules',
+  async mode => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = {
+      isReadonly: jest.fn().mockResolvedValue(false),
+    };
+    hWallet.pinCode = '123';
+
+    const sendTx = await hWallet.sendTransactionInstance('shielded-addr', 10n, {
+      token: '01',
+      shielded: mode,
+    });
+
+    expect(sendTx.outputs).toEqual([
+      { address: 'shielded-addr', value: 10n, token: '01', shieldedMode: mode },
+    ]);
+    // No explicit change mode: the rules shield the change in the output's mode,
+    // and their errors can still suggest keeping it transparent.
+    expect(sendTx.changeShieldedMode).toBeNull();
+  }
+);
+
+test.each([ShieldedOutputMode.AMOUNT_SHIELDED, OutputKind.TRANSPARENT])(
+  'sendTransactionInstance passes change mode %s on for a shielded output',
+  async changeMode => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = {
+      isReadonly: jest.fn().mockResolvedValue(false),
+    };
+    hWallet.pinCode = '123';
+
+    const sendTx = await hWallet.sendTransactionInstance('shielded-addr', 10n, {
+      shielded: ShieldedOutputMode.FULLY_SHIELDED,
+      changeShieldedMode: changeMode,
+    });
+
+    expect(sendTx.outputs[0]).toMatchObject({
+      shieldedMode: ShieldedOutputMode.FULLY_SHIELDED,
+    });
+    expect(sendTx.changeShieldedMode).toBe(changeMode);
+  }
+);
+
+test('sendTransaction runs the shielded send', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  };
+  hWallet.pinCode = '123';
+  const runSpy = jest.spyOn(SendTransaction.prototype, 'run').mockResolvedValue(null);
+
+  try {
+    await hWallet.sendTransaction('shielded-addr', 10n, {
+      shielded: ShieldedOutputMode.AMOUNT_SHIELDED,
+    });
+
+    expect(runSpy).toHaveBeenCalledTimes(1);
+    const sendTx = runSpy.mock.contexts[0] as SendTransaction;
+    expect(sendTx.outputs[0]).toMatchObject({ shieldedMode: ShieldedOutputMode.AMOUNT_SHIELDED });
+  } finally {
+    runSpy.mockRestore();
+  }
+});
+
 test('sendManyOutputsSendTransaction keeps data outputs untouched', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.storage = {
@@ -806,6 +887,7 @@ test('getAddressPrivKey', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -849,6 +931,7 @@ test('signMessageWithAddress', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -897,6 +980,7 @@ async function makeStartedWallet() {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -1136,6 +1220,7 @@ test('start', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -3692,6 +3777,7 @@ describe('start() with a record that predates shielded support', () => {
         getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
         on: jest.fn(),
         start: jest.fn(),
+        startControlHandlers: jest.fn(),
         getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
       };
       const hWallet = new FakeHathorWallet();
@@ -4176,7 +4262,7 @@ describe('the shielded view key from start() to stop()', () => {
     expect(shielded.active).toBe(false);
   }, 60000);
 
-  it('rejects start() with shielded-not-started, and keeps no key, when stop() runs during the unlock', async () => {
+  it('rejects start() with wallet-stopped, and keeps no key, when stop() runs during the unlock', async () => {
     const { wallet, storage, shielded, conn } = await makeWallet();
     const readKey = storage.getScanXPrivKey.bind(storage);
     const unlocking = gate();
@@ -4192,7 +4278,10 @@ describe('the shielded view key from start() to stop()', () => {
     const stopping = wallet.stop();
     unlocking.open();
 
-    await expect(starting).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+    await expect(starting).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+    });
     await stopping;
     expect(shielded.active).toBe(false);
     expect(shielded.hasKey).toBe(false);
@@ -4265,7 +4354,10 @@ describe('the shielded view key from start() to stop()', () => {
     await next.start({ pinCode: PIN, password: PASSWORD });
     failVersion(new Error('server unreachable'));
 
-    await expect(firstStart).rejects.toThrow('server unreachable');
+    await expect(firstStart).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: new Error('server unreachable'),
+    });
     expect(shielded.active).toBe(true);
     expect(shielded.hasKey).toBe(true);
     await next.stop();
@@ -4289,7 +4381,10 @@ describe('the shielded view key from start() to stop()', () => {
     await next.start({ pinCode: PIN, password: PASSWORD });
     unlocking.open();
 
-    await expect(firstStart).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+    await expect(firstStart).rejects.toMatchObject({
+      errorCode: 'wallet-stopped',
+      cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+    });
     expect(shielded.active).toBe(true);
     expect(shielded.hasKey).toBe(true);
     await next.stop();
@@ -5726,7 +5821,10 @@ describe('the shielded view key from start() to stop()', () => {
       const stopping = wallet.stop();
       reading.open();
 
-      await expect(starting).rejects.toMatchObject({ errorCode: 'shielded-not-started' });
+      await expect(starting).rejects.toMatchObject({
+        errorCode: 'wallet-stopped',
+        cause: expect.objectContaining({ errorCode: 'shielded-not-started' }),
+      });
       await stopping;
       expect(storage.scanXPrivKey).toBeNull();
       expect(shielded.hasKey).toBe(false);
@@ -5988,6 +6086,7 @@ describe('multisig wallets and shielded keys', () => {
       getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
       on: jest.fn(),
       start: jest.fn(),
+      startControlHandlers: jest.fn(),
       getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
     };
     hWallet.getTokenData = jest.fn();

@@ -89,7 +89,11 @@ import {
   WalletStatus,
   ShieldedUtxo,
 } from './types';
-import type { ChangeOutputMode, IShieldedCryptoProvider } from '../shielded/types';
+import type {
+  ChangeOutputMode,
+  IShieldedCryptoProvider,
+  ShieldedOutputMode,
+} from '../shielded/types';
 import {
   SendTxError,
   UtxoError,
@@ -2179,6 +2183,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Creates and send a simple transaction with one output
    *
+   * `options.shielded` sends the output shielded in that mode (AMOUNT_SHIELDED or
+   * FULLY_SHIELDED) to the shielded address; with no `changeShieldedMode`, the
+   * automatic rules shield the change of its token in the same mode.
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
@@ -2189,6 +2197,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       token?: string;
       changeAddress?: string;
       pinCode?: string;
+      shielded?: ShieldedOutputMode;
       changeShieldedMode?: ChangeOutputMode | null;
     } = {}
   ): Promise<Transaction> {
@@ -2198,8 +2207,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       changeAddress: undefined,
       ...options,
     };
-    const { token, changeAddress, pinCode, changeShieldedMode } = newOptions;
-    const outputs = [{ address, value, token }];
+    const { token, changeAddress, pinCode, shielded, changeShieldedMode } = newOptions;
+    const outputs = [{ address, value, token, ...(shielded != null ? { shielded } : {}) }];
     return this.sendManyOutputsTransaction(outputs, {
       inputs: [],
       changeAddress,

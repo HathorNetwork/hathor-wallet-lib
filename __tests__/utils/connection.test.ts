@@ -6,7 +6,11 @@
  */
 
 import { MemoryStore, Storage } from '../../src/storage';
-import { handleSubscribeAddress, handleWsDashboard } from '../../src/utils/connection';
+import {
+  handleSubscribeAddress,
+  handleWsDashboard,
+  updateNetworkHeight,
+} from '../../src/utils/connection';
 
 test('handle ws dashboard', async () => {
   const store = new MemoryStore();
@@ -22,6 +26,24 @@ test('handle ws dashboard', async () => {
   });
   expect(storage.setCurrentHeight).toHaveBeenCalled();
   expect(await storage.getCurrentHeight()).toEqual(100);
+});
+
+test('updateNetworkHeight stores a new height before it unlocks at it', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const unlockUtxos = jest.spyOn(storage, 'unlockUtxos').mockImplementation(async height => {
+    // The height is already stored when the unlock pass starts.
+    expect(await storage.getCurrentHeight()).toEqual(height);
+  });
+
+  await updateNetworkHeight(storage, 100);
+  expect(await storage.getCurrentHeight()).toEqual(100);
+  expect(unlockUtxos).toHaveBeenCalledTimes(1);
+  expect(unlockUtxos).toHaveBeenCalledWith(100);
+
+  // The same height again changes nothing.
+  await updateNetworkHeight(storage, 100);
+  expect(unlockUtxos).toHaveBeenCalledTimes(1);
 });
 
 test('handle subscribe address', () => {
