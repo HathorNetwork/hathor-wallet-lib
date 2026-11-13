@@ -887,6 +887,7 @@ test('getAddressPrivKey', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -930,6 +931,7 @@ test('signMessageWithAddress', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -978,6 +980,7 @@ async function makeStartedWallet() {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
   jest.spyOn(versionApi, 'getVersion').mockImplementation(resolve => {
@@ -1217,6 +1220,7 @@ test('start', async () => {
     getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
     on: jest.fn(),
     start: jest.fn(),
+    startControlHandlers: jest.fn(),
     getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
   };
 
@@ -3773,6 +3777,7 @@ describe('start() with a record that predates shielded support', () => {
         getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
         on: jest.fn(),
         start: jest.fn(),
+        startControlHandlers: jest.fn(),
         getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
       };
       const hWallet = new FakeHathorWallet();
@@ -6069,6 +6074,7 @@ describe('multisig wallets and shielded keys', () => {
       getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
       on: jest.fn(),
       start: jest.fn(),
+      startControlHandlers: jest.fn(),
       getCurrentNetwork: jest.fn().mockReturnValue('testnet'),
     };
     hWallet.getTokenData = jest.fn();

@@ -2808,6 +2808,11 @@ class HathorWallet extends EventEmitter {
         if (!isCurrent()) {
           return info;
         }
+        // stop() closes the websocket, which drops every listener on it, and
+        // conn.start() adds back only its own. Without the dashboard handler a
+        // wallet started again on this instance keeps the height stored above,
+        // and the rewards it locked never unlock.
+        this.conn.startControlHandlers(this.storage);
         this.conn.start();
       } else {
         this.setState(HathorWallet.CLOSED);

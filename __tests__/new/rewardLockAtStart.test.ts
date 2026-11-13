@@ -6,6 +6,7 @@
  */
 
 import HathorWallet from '../../src/new/wallet';
+import Connection from '../../src/new/connection';
 import { MemoryStore, Storage } from '../../src/storage';
 import versionApi from '../../src/api/version';
 import walletApi from '../../src/api/wallet';
@@ -89,10 +90,9 @@ describe('network height at start()', () => {
     return axiosMock.history.get.filter(request => request.url === 'getmininginfo').length;
   }
 
-  function buildWallet() {
+  function buildWallet<C = ReturnType<typeof makeConn>>(conn: C = makeConn() as C) {
     const store = new MemoryStore();
     const storage = new Storage(store);
-    const conn = makeConn();
     const logger = makeLogger();
     const hWallet = new HathorWallet({
       seed,
@@ -345,6 +345,31 @@ describe('network height at start()', () => {
     expect(storage.shieldedView.started).toBe(true);
     expect(conn.start).toHaveBeenCalledTimes(1);
     await expect(storage.getCurrentHeight()).resolves.toBe(6000);
+  });
+
+  it('takes the height from the dashboard messages after a stop() and another start()', async () => {
+    mockVersion();
+    mockMiningInfo({ success: true, blocks: 100 });
+    // A real connection, whose websocket never opens: stop() closes it, which
+    // drops every listener on it, as with a fullnode.
+    const conn = new Connection({
+      network: 'testnet',
+      servers: ['https://fullnode/v1a/'],
+      logger: makeLogger(),
+    });
+    const ws = conn.websocket!;
+    jest.spyOn(ws, 'setup').mockImplementation(() => {});
+    const { hWallet, store } = buildWallet(conn);
+
+    await hWallet.start();
+    await hWallet.stop();
+    await hWallet.start();
+    expect(store.walletData.bestBlockHeight).toBe(100);
+
+    ws.emit('dashboard', { best_block_height: 500 });
+    await until(() => store.walletData.bestBlockHeight === 500, 'the dashboard height');
+
+    await hWallet.stop();
   });
 
   describe('block rewards in the first walk', () => {
