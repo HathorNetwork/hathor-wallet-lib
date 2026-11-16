@@ -181,6 +181,17 @@ beforeAll(async () => {
   global.UPGRADE_TEST_V2_BLUEPRINT_ID = sharedState.blueprintIds.UPGRADE_TEST_V2_BLUEPRINT_ID;
 });
 
+// Each test file starts its own genesis wallet, and all files run in this one process. Stop it
+// when the file ends, or it keeps running while the later files send from the genesis seed.
+afterAll(async () => {
+  try {
+    await GenesisWalletHelper.stop();
+  } catch (e) {
+    // A failed stop is logged, not thrown, so it can't fail a file whose tests passed.
+    loggers.test?.warn('Failed to stop the genesis wallet', { error: e?.message });
+  }
+});
+
 expect.extend({
   toMatchBuffer(received, expected) {
     let pass;

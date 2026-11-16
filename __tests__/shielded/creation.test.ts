@@ -8,6 +8,7 @@
 import { createShieldedOutputs } from '../../src/shielded/creation';
 import { IShieldedCryptoProvider, ShieldedOutputMode } from '../../src/shielded/types';
 import Network from '../../src/models/network';
+import { MAX_RANGE_PROOF_SIZE, MAX_SURJECTION_PROOF_SIZE } from '../../src/constants';
 
 function makeMockProvider(
   overrides: Partial<IShieldedCryptoProvider> = {}
@@ -472,5 +473,87 @@ describe('createShieldedOutputs — security hardening', () => {
     });
     const proposals = [makeProposal(), makeProposal()];
     await expect(createShieldedOutputs(proposals, provider, network)).resolves.toHaveLength(2);
+  });
+
+  // assertProviderProof bounds a provider-returned proof to [1, maxLen] and
+  // requires it to be a byte view. The fullnode rejects out-of-bounds proofs
+  // anyway, but guarding here surfaces the cause instead of a confusing
+  // post-build / post-submit failure. Cover each rejection branch + both caps.
+  it('rejects provider output with an oversized rangeProof', async () => {
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(33, 0x03),
+        rangeProof: Buffer.alloc(MAX_RANGE_PROOF_SIZE + 1, 0x04), // over the cap
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    // Thrown inside the per-output try → rewrapped, original preserved as cause.
+    expect(err.cause?.message ?? err.message).toContain('rangeProof');
+  });
+
+  it('rejects provider output with an empty rangeProof', async () => {
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(33, 0x03),
+        rangeProof: Buffer.alloc(0), // length < 1
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.cause?.message ?? err.message).toContain('rangeProof');
+  });
+
+  it('rejects provider output whose rangeProof is a string (not a byte view)', async () => {
+    // A length-only guard would wave a long-enough string through; the
+    // `instanceof Uint8Array` gate rejects anything that is not a byte view.
+    const provider = makeMockProvider({
+      createAmountShieldedOutput: jest.fn().mockResolvedValue({
+        ephemeralPubkey: Buffer.alloc(33, 0x02),
+        commitment: Buffer.alloc(33, 0x03),
+        rangeProof: 'a'.repeat(10), // a string, not a Buffer/Uint8Array
+        blindingFactor: Buffer.alloc(32, 0x05),
+      }),
+    });
+    const proposals = [makeProposal(), makeProposal()];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network
+    ).catch(e => e);
+    expect(err.cause?.message ?? err.message).toContain('rangeProof');
+  });
+
+  it('rejects a FullShielded output with an oversized surjectionProof', async () => {
+    // FullShielded outputs run the same guard on the (larger-capped) surjection
+    // proof; rangeProof stays valid so we isolate the surjectionProof branch.
+    const provider = makeMockProvider({
+      createSurjectionProof: jest
+        .fn()
+        .mockResolvedValue(Buffer.alloc(MAX_SURJECTION_PROOF_SIZE + 1, 0x0b)),
+    });
+    const proposals = [
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+      makeProposal({ shieldedMode: ShieldedOutputMode.FULLY_SHIELDED }),
+    ];
+    const err: Error & { cause?: Error } = await createShieldedOutputs(
+      proposals,
+      provider,
+      network,
+      [{ tokenUid: '00' }]
+    ).catch(e => e);
+    expect(err.cause?.message ?? err.message).toContain('surjectionProof');
   });
 });
